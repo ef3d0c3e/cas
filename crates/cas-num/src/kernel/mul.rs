@@ -30,7 +30,7 @@ pub(crate) const SQR_TOOM3_THRESHOLD: usize = 192;
 
 /// `a * b + c` as a double limb, returned as `(low, high)`; cannot overflow.
 #[inline]
-fn mul_add(a: Limb, b: Limb, c: Limb) -> (Limb, Limb) {
+pub(super) fn mul_add(a: Limb, b: Limb, c: Limb) -> (Limb, Limb) {
     let t = u128::from(a) * u128::from(b) + u128::from(c);
     split(t)
 }
@@ -68,6 +68,21 @@ pub fn addmul_1(r: &mut [Limb], a: &[Limb], b: Limb) -> Limb {
         // a * b + r + carry <= (2^64 - 1)^2 + 2 (2^64 - 1) = 2^128 - 1.
         let t = u128::from(a) * u128::from(b) + u128::from(*r) + u128::from(carry);
         (*r, carry) = split(t);
+    }
+    carry
+}
+
+/// `r -= a * b` for a single limb `b` and equal lengths; returns the borrow limb
+/// (the amount still to subtract above the top of `r`).
+pub fn submul_1(r: &mut [Limb], a: &[Limb], b: Limb) -> Limb {
+    assert_eq!(r.len(), a.len(), "submul_1: length mismatch");
+    let mut carry = 0;
+    for (r, &a) in r.iter_mut().zip(a) {
+        let (lo, hi) = mul_add(a, b, carry);
+        let borrow;
+        (*r, borrow) = r.overflowing_sub(lo);
+        // hi = 2^64 - 1 forces lo = 0 and no borrow, so this cannot overflow.
+        carry = hi + Limb::from(borrow);
     }
     carry
 }

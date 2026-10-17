@@ -2,6 +2,7 @@
 
 mod bits;
 mod convert;
+mod div;
 mod limb_vec;
 mod mul;
 mod ops;

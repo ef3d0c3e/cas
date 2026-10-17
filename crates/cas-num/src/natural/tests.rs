@@ -308,6 +308,73 @@ differential! {
         gmp: a.to_rug() * b,
     }
 
+    fn div(a in strategy::natural(), d in divisor()) {
+        ours: all_forms!(a.to_natural(), /, /=, d.to_natural()),
+        gmp: a.to_rug() / d.to_rug(),
+    }
+
+    fn rem(a in strategy::natural(), d in divisor()) {
+        ours: all_forms!(a.to_natural(), %, %=, d.to_natural()),
+        gmp: a.to_rug() % d.to_rug(),
+    }
+
+    fn div_rem_large(a in natural_beyond_thresholds(), d in natural_beyond_thresholds()) {
+        ours: a.to_natural().div_rem(&d.to_natural()),
+        gmp: a.to_rug().div_rem(d.to_rug()),
+    }
+
+    fn checked_div_rem(a in strategy::natural(), d in strategy::natural()) {
+        ours: a.to_natural().checked_div_rem(&d.to_natural()),
+        gmp: (!d.is_zero()).then(|| a.to_rug().div_rem(d.to_rug())),
+    }
+
+    fn div_limb(a in strategy::natural(), d in strategy::top_limb()) {
+        ours: all_forms_prim!(a.to_natural(), /, /=, d),
+        gmp: a.to_rug() / d,
+    }
+
+    fn rem_limb(a in strategy::natural(), d in strategy::top_limb()) {
+        ours: {
+            let x = a.to_natural();
+            let r = &x % d;
+            prop_assert_eq!(x.clone() % d, r);
+            prop_assert_eq!(x.div_rem_limb(d).1, r);
+            let mut y = x;
+            y %= d;
+            prop_assert_eq!(y, Natural::from(r));
+            r
+        },
+        gmp: a.to_rug() % d,
+    }
+
+    fn div_exact(q in strategy::natural(), d in divisor()) {
+        ours: (q.to_natural() * d.to_natural()).div_exact(&d.to_natural()),
+        gmp: q.to_rug(),
+    }
+
+    fn div_exact_limb(q in strategy::natural(), d in strategy::top_limb()) {
+        ours: (q.to_natural() * d).div_exact_limb(d),
+        gmp: q.to_rug(),
+    }
+
+    fn is_divisible_by(a in strategy::natural(), d in strategy::natural()) {
+        ours: a.to_natural().is_divisible_by(&d.to_natural()),
+        gmp: a.to_rug().is_divisible(&d.to_rug()),
+    }
+
+    /// Multiples, and multiples plus one: both answers occur often.
+    fn is_divisible_by_shaped(q in strategy::natural(), d in divisor(), plus_one in any::<bool>()) {
+        ours: {
+            let a = q.to_natural() * d.to_natural() + Limb::from(plus_one);
+            let d = d.to_natural();
+            if let [x] = d.limbs() {
+                prop_assert_eq!(a.is_divisible_by_limb(*x), a.is_divisible_by(&d));
+            }
+            a.is_divisible_by(&d)
+        },
+        gmp: (q.to_rug() * d.to_rug() + u32::from(plus_one)).is_divisible(&d.to_rug()),
+    }
+
     fn square(a in prop_oneof![strategy::natural(), natural_beyond_thresholds()]) {
         ours: {
             let x = a.to_natural();
@@ -318,6 +385,15 @@ differential! {
         },
         gmp: a.to_rug().square(),
     }
+}
+
+/// A non-zero natural, sometimes with few limbs relative to `natural()`.
+fn divisor() -> BoxedStrategy<Mag> {
+    prop_oneof![
+        strategy::natural().prop_filter("non-zero", |d| !d.is_zero()),
+        strategy::natural_with_len(1..=3usize),
+    ]
+    .boxed()
 }
 
 /// A natural of up to three times the largest multiplication threshold.
@@ -367,6 +443,14 @@ proptest! {
         let (x, y, z) = (a.to_natural(), b.to_natural(), c.to_natural());
         prop_assert_eq!(&(&x * &y) * &z, &x * &(&y * &z));
         prop_assert_eq!(&x * &(&y + &z), &(&x * &y) + &(&x * &z));
+    }
+
+    #[test]
+    fn div_rem_identity(a in strategy::natural(), d in divisor()) {
+        let (x, y) = (a.to_natural(), d.to_natural());
+        let (q, r) = x.div_rem(&y);
+        prop_assert!(r < y);
+        prop_assert_eq!(&q * &y + &r, x);
     }
 
     #[test]
@@ -432,4 +516,36 @@ fn hex_formatting() {
 #[test]
 fn natural_is_small() {
     assert_eq!(size_of::<Natural>(), 32);
+}
+
+#[test]
+#[should_panic(expected = "attempt to divide by zero")]
+fn div_by_zero_panics() {
+    let _ = Natural::one() / Natural::ZERO;
+}
+
+#[test]
+#[should_panic(expected = "attempt to divide by zero")]
+fn rem_by_zero_limb_panics() {
+    let _ = Natural::one() % 0;
+}
+
+#[test]
+#[should_panic(expected = "division is not exact")]
+fn div_exact_panics_when_inexact() {
+    let _ = Natural::from(u128::MAX).div_exact(&Natural::from(1u128 << 64));
+}
+
+#[test]
+#[should_panic(expected = "division is not exact")]
+fn div_exact_limb_panics_when_inexact() {
+    let _ = Natural::from(7u64).div_exact_limb(2);
+}
+
+#[test]
+fn zero_divides_only_zero() {
+    assert!(Natural::ZERO.is_divisible_by(&Natural::ZERO));
+    assert!(!Natural::one().is_divisible_by(&Natural::ZERO));
+    assert!(Natural::ZERO.is_divisible_by_limb(0));
+    assert!(!Natural::one().is_divisible_by_limb(0));
 }

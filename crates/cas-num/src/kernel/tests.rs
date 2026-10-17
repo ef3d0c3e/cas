@@ -179,4 +179,5 @@ fn cmp_orders_by_length_first() {
     assert_eq!(cmp(&[], &[]), Ordering::Equal);
 }
 
+mod div;
 mod mul;

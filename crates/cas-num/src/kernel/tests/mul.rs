@@ -267,7 +267,7 @@ fn short_scratch_panics() {
 }
 
 /// Nanoseconds per call of `f`: best of 5 runs of at least 10 ms each.
-fn time(mut f: impl FnMut()) -> f64 {
+pub(super) fn time(mut f: impl FnMut()) -> f64 {
     use std::time::{Duration, Instant};
     let mut iters = 1u32;
     loop {
