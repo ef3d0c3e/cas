@@ -8,8 +8,11 @@ use std::sync::atomic::AtomicU64;
 
 use foldhash::fast::{FixedState, FoldHasher};
 
+use crate::attributes::Attributes;
+use crate::builtin;
 use crate::expr::{Expr, Repr};
 use crate::intern;
+use crate::symbol::Symbol;
 
 /// A hash-consed node. Created only by the interner, which holds a weak
 /// reference to every live node; [`Drop`] removes it.
@@ -71,12 +74,34 @@ pub(crate) struct Flags(u16);
 
 impl Flags {
     pub(crate) const NONE: Flags = Flags(0);
-    /// Known to be a number. Only number atoms for now; builtin
-    /// `NumericFunction` heads propagate it once they exist (CAS-20).
+    /// Known to be a number: a number atom, a builtin constant, or a
+    /// builtin `NUMERIC_FUNCTION` applied to at least one argument, all
+    /// numeric. Arity is not checked. Sound but incomplete: user numeric
+    /// functions are the evaluator's business.
     pub(crate) const NUMERIC: Flags = Flags(1);
+    /// Contains a pattern construct ([`builtin::is_pattern_head`]), so it may
+    /// match more than itself.
+    pub(crate) const HAS_PATTERN: Flags = Flags(2);
 
     pub(crate) fn contains(self, other: Flags) -> bool {
         self.0 & other.0 == other.0
+    }
+
+    fn set(&mut self, other: Flags, on: bool) {
+        if on {
+            self.0 |= other.0;
+        }
+    }
+
+    pub(crate) fn of_symbol(s: Symbol) -> Flags {
+        let constant = s
+            .builtin_attributes()
+            .is_some_and(|a| a.contains(Attributes::CONSTANT));
+        if constant {
+            Flags::NUMERIC
+        } else {
+            Flags::NONE
+        }
     }
 }
 
@@ -117,13 +142,24 @@ impl Key<'_> {
             Key::String(_) => Meta::atom(Flags::NONE, 0),
             Key::Apply { head, args } => {
                 let mut m = head.meta();
+                let head_sym = head.as_symbol();
+                let mut numeric = !args.is_empty()
+                    && head_sym
+                        .and_then(Symbol::builtin_attributes)
+                        .is_some_and(|a| a.contains(Attributes::NUMERIC_FUNCTION));
+                let mut pattern = m.flags.contains(Flags::HAS_PATTERN)
+                    || head_sym.is_some_and(builtin::is_pattern_head);
                 for a in args {
                     let am = a.meta();
                     m.depth = m.depth.max(am.depth);
                     m.size = m.size.saturating_add(am.size);
                     m.symbols |= am.symbols;
+                    numeric &= am.flags.contains(Flags::NUMERIC);
+                    pattern |= am.flags.contains(Flags::HAS_PATTERN);
                 }
                 m.flags = Flags::NONE;
+                m.flags.set(Flags::NUMERIC, numeric);
+                m.flags.set(Flags::HAS_PATTERN, pattern);
                 m.depth = m.depth.saturating_add(1);
                 m.size = m.size.saturating_add(1);
                 m

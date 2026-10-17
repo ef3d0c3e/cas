@@ -5,13 +5,17 @@
 //!
 //! - [`Expr`]: the expression handle, 16 bytes; symbols and `i64` integers are
 //!   inline, everything else is interned.
-//! - [`Symbol`]: permanent, interned names.
+//! - [`Symbol`]: permanent, interned names; the builtins (`Symbol::PLUS`, …)
+//!   have fixed ids and fixed [`Attributes`].
 
+mod attributes;
+mod builtin;
 mod expr;
 mod intern;
 mod node;
 mod symbol;
 
+pub use attributes::Attributes;
 pub use expr::{Expr, View};
 pub use intern::{InternerStats, interner_stats};
 pub use symbol::Symbol;

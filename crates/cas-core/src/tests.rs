@@ -15,7 +15,7 @@ use proptest::prelude::*;
 use crate::expr::Repr;
 use crate::intern::{self, entries_with_hash};
 use crate::node::Key;
-use crate::{Expr, Symbol, View};
+use crate::{Attributes, Expr, Symbol, View};
 
 fn sym(name: &str) -> Expr {
     Symbol::new(name).into()
@@ -173,6 +173,117 @@ fn metadata() {
     assert!(!Expr::from(1).may_contain(y.as_symbol().unwrap()));
     assert!(Expr::from(1).is_numeric());
     assert!(!x.is_numeric() && !gx.is_numeric() && !Expr::string("1").is_numeric());
+}
+
+#[test]
+fn builtins_have_fixed_ids() {
+    let builtins: Vec<Symbol> = Symbol::builtins().collect();
+    assert!(builtins.len() > 20);
+    for (i, &s) in builtins.iter().enumerate() {
+        assert_eq!(s.id() as usize, i);
+        assert!(s.is_builtin());
+        assert_eq!(Symbol::new(s.name()), s, "{s:?} interns to its constant");
+    }
+    let names: std::collections::HashSet<&str> = builtins.iter().map(|s| s.name()).collect();
+    assert_eq!(names.len(), builtins.len(), "names are unique");
+    assert_eq!(Symbol::PLUS.name(), "Plus");
+    assert_eq!(Symbol::BLANK_NULL_SEQUENCE.name(), "BlankNullSequence");
+    assert!(!Symbol::new("builtins_user").is_builtin());
+}
+
+#[test]
+fn builtin_attributes() {
+    use Attributes as A;
+    let attrs = |s: Symbol| s.builtin_attributes().unwrap();
+    for s in Symbol::builtins() {
+        assert!(attrs(s).contains(A::PROTECTED), "{s:?} is protected");
+    }
+    let arith =
+        A::FLAT | A::ORDERLESS | A::ONE_IDENTITY | A::LISTABLE | A::NUMERIC_FUNCTION | A::PROTECTED;
+    assert_eq!(attrs(Symbol::PLUS), arith);
+    assert_eq!(attrs(Symbol::TIMES), arith);
+    assert_eq!(
+        attrs(Symbol::POWER),
+        A::ONE_IDENTITY | A::LISTABLE | A::NUMERIC_FUNCTION | A::PROTECTED
+    );
+    assert_eq!(attrs(Symbol::PI), A::CONSTANT | A::PROTECTED);
+    assert_eq!(attrs(Symbol::LIST), A::PROTECTED);
+    assert_eq!(attrs(Symbol::HOLD), A::HOLD_ALL | A::PROTECTED);
+    assert_eq!(attrs(Symbol::PATTERN), A::HOLD_FIRST | A::PROTECTED);
+    assert_eq!(attrs(Symbol::PATTERN_TEST), A::HOLD_REST | A::PROTECTED);
+    assert_eq!(A::HOLD_ALL, A::HOLD_FIRST | A::HOLD_REST);
+    assert_eq!(
+        Symbol::new("builtin_attributes_f").builtin_attributes(),
+        None
+    );
+}
+
+#[test]
+fn attributes_set_operations_and_debug() {
+    use Attributes as A;
+    let a = A::FLAT | A::HOLD_FIRST;
+    assert!(a.contains(A::FLAT) && !a.contains(A::HOLD_ALL));
+    assert!(a.contains(A::NONE) && A::NONE.is_empty() && A::default().is_empty());
+    assert_eq!(a & A::HOLD_ALL, A::HOLD_FIRST);
+    let mut b = a;
+    b |= A::HOLD_REST;
+    assert!(b.contains(A::HOLD_ALL));
+    assert_eq!(format!("{:?}", A::NONE), "None");
+    assert_eq!(format!("{a:?}"), "Flat | HoldFirst");
+    assert_eq!(format!("{b:?}"), "Flat | HoldAll");
+    assert_eq!(
+        format!("{:?}", Symbol::PLUS.builtin_attributes().unwrap()),
+        "Flat | Orderless | OneIdentity | Listable | NumericFunction | Protected"
+    );
+}
+
+#[test]
+fn numeric_propagates_through_builtin_functions() {
+    let (plus, sin, pi) = (
+        Symbol::PLUS.into(),
+        Symbol::SIN.into(),
+        Expr::from(Symbol::PI),
+    );
+    let (f, x) = (sym("numeric_f"), sym("numeric_x"));
+    let one = Expr::from(1);
+    assert!(pi.is_numeric() && Expr::from(Symbol::E).is_numeric());
+    assert!(!Expr::from(Symbol::PLUS).is_numeric());
+    let sum = Expr::apply(&plus, &[one.clone(), pi.clone()]);
+    assert!(sum.is_numeric());
+    assert!(Expr::apply(&sin, std::slice::from_ref(&sum)).is_numeric());
+    assert!(!Expr::apply(&plus, &[one.clone(), x.clone()]).is_numeric());
+    assert!(!Expr::apply(&plus, &[one.clone(), Expr::string("1")]).is_numeric());
+    assert!(
+        !Expr::apply(&f, std::slice::from_ref(&one)).is_numeric(),
+        "user heads are unknown"
+    );
+    assert!(!Expr::apply(&plus, &[]).is_numeric(), "no arguments");
+    let list = Expr::apply(&Symbol::LIST.into(), std::slice::from_ref(&one));
+    assert!(!list.is_numeric());
+    // A compound head is not a numeric function, even if numeric itself.
+    assert!(!Expr::apply(&sum, &[one]).is_numeric());
+}
+
+#[test]
+fn has_pattern_propagates() {
+    let blank = Expr::apply(&Symbol::BLANK.into(), &[]);
+    let (f, x) = (sym("pattern_f"), sym("pattern_x"));
+    assert!(blank.has_pattern());
+    assert!(
+        !Expr::from(Symbol::BLANK).has_pattern(),
+        "the bare symbol is literal"
+    );
+    assert!(!Expr::apply(&f, &[Expr::from(Symbol::BLANK)]).has_pattern());
+    let px = Expr::apply(&Symbol::PATTERN.into(), &[x.clone(), blank.clone()]);
+    let deep = Expr::apply(&f, &[x.clone(), Expr::apply(&f, std::slice::from_ref(&px))]);
+    assert!(px.has_pattern() && deep.has_pattern());
+    assert!(
+        Expr::apply(&blank, std::slice::from_ref(&x)).has_pattern(),
+        "through the head"
+    );
+    let alt = Expr::apply(&Symbol::ALTERNATIVES.into(), &[x.clone(), f.clone()]);
+    assert!(alt.has_pattern());
+    assert!(!Expr::apply(&f, &[x, Expr::from(1), Expr::string("_")]).has_pattern());
 }
 
 #[test]
@@ -384,10 +495,16 @@ fn dead_and_live_entries_coexist() {
     }
 }
 
+/// The model's symbols: user symbols and builtins with each kind of flag.
+const SYMS: [&str; 8] = [
+    "prop_0", "prop_1", "prop_2", "Plus", "Sin", "Pi", "Blank", "Pattern",
+];
+
 /// A plain model of an expression.
 #[derive(Clone, PartialEq, Debug)]
 enum Tree {
-    Sym(u8),
+    /// An index into [`SYMS`].
+    Sym(usize),
     Int(i64),
     Str(String),
     Apply(Box<Tree>, Vec<Tree>),
@@ -395,7 +512,7 @@ enum Tree {
 
 fn tree() -> impl Strategy<Value = Tree> {
     let leaf = prop_oneof![
-        (0u8..6).prop_map(Tree::Sym),
+        (0..SYMS.len()).prop_map(Tree::Sym),
         prop_oneof![
             Just(0i64),
             Just(1),
@@ -415,7 +532,7 @@ fn tree() -> impl Strategy<Value = Tree> {
 
 fn build(t: &Tree) -> Expr {
     match t {
-        Tree::Sym(i) => sym(&format!("prop_{i}")),
+        Tree::Sym(i) => sym(SYMS[*i]),
         Tree::Int(x) => Expr::from(*x),
         Tree::Str(s) => Expr::string(s),
         Tree::Apply(h, a) => Expr::apply(&build(h), &a.iter().map(build).collect::<Vec<_>>()),
@@ -424,7 +541,7 @@ fn build(t: &Tree) -> Expr {
 
 fn unbuild(e: &Expr) -> Tree {
     match e.view() {
-        View::Symbol(s) => Tree::Sym(s.name()["prop_".len()..].parse().unwrap()),
+        View::Symbol(s) => Tree::Sym(SYMS.iter().position(|&n| n == s.name()).unwrap()),
         View::Int(x) => Tree::Int(x),
         View::String(s) => Tree::Str(s.to_owned()),
         View::Apply { head, args } => {
@@ -448,7 +565,31 @@ fn model_depth_size(t: &Tree) -> (u16, u32) {
     }
 }
 
-fn symbols(t: &Tree, out: &mut Vec<u8>) {
+fn model_numeric(t: &Tree) -> bool {
+    match t {
+        Tree::Int(_) => true,
+        Tree::Sym(i) => SYMS[*i] == "Pi",
+        Tree::Apply(h, a) => {
+            matches!(**h, Tree::Sym(i) if ["Plus", "Sin"].contains(&SYMS[i]))
+                && !a.is_empty()
+                && a.iter().all(model_numeric)
+        }
+        Tree::Str(_) => false,
+    }
+}
+
+fn model_has_pattern(t: &Tree) -> bool {
+    match t {
+        Tree::Apply(h, a) => {
+            matches!(**h, Tree::Sym(i) if ["Blank", "Pattern"].contains(&SYMS[i]))
+                || model_has_pattern(h)
+                || a.iter().any(model_has_pattern)
+        }
+        _ => false,
+    }
+}
+
+fn symbols(t: &Tree, out: &mut Vec<usize>) {
     match t {
         Tree::Sym(i) => out.push(*i),
         Tree::Apply(h, a) => {
@@ -484,9 +625,10 @@ proptest! {
         let mut syms = Vec::new();
         symbols(&t, &mut syms);
         for i in syms {
-            let s = Symbol::new(&format!("prop_{i}"));
+            let s = Symbol::new(SYMS[i]);
             prop_assert!(e.may_contain(s), "{:?} lacks {:?}", e, s);
         }
-        prop_assert_eq!(e.is_numeric(), matches!(t, Tree::Int(_)));
+        prop_assert_eq!(e.is_numeric(), model_numeric(&t));
+        prop_assert_eq!(e.has_pattern(), model_has_pattern(&t));
     }
 }

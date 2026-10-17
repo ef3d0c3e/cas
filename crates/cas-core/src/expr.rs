@@ -173,16 +173,26 @@ impl Expr {
         self.meta().symbols & bit == bit
     }
 
-    /// Whether the expression is known to be a number. Only number atoms for
-    /// now; numeric functions of numbers follow with the builtins (CAS-20).
+    /// Whether the expression is known to be a number, without evaluating:
+    /// a number, a builtin constant such as `Pi`, or a builtin numeric
+    /// function (`Plus`, `Sin`, …) of such. `false` means unknown: a user
+    /// function can also be numeric.
     #[must_use]
     pub fn is_numeric(&self) -> bool {
         self.meta().flags.contains(Flags::NUMERIC)
     }
 
+    /// Whether the expression contains a pattern construct (`Blank[]`,
+    /// `Pattern[x, …]`, `Alternatives[…]`, …). If not, it matches only
+    /// itself.
+    #[must_use]
+    pub fn has_pattern(&self) -> bool {
+        self.meta().flags.contains(Flags::HAS_PATTERN)
+    }
+
     pub(crate) fn meta(&self) -> Meta {
         match &self.0 {
-            Repr::Symbol(s) => Meta::atom(Flags::NONE, symbol_bit(*s)),
+            Repr::Symbol(s) => Meta::atom(Flags::of_symbol(*s), symbol_bit(*s)),
             Repr::Int(_) => Meta::atom(Flags::NUMERIC, 0),
             Repr::Node(n) => n.meta,
         }
