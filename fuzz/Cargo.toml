@@ -1,0 +1,58 @@
+[package]
+name = "cas-num-fuzz"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.85"
+license = "GPL-3.0-only"
+publish = false
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+arbitrary = "1.4.1"
+cas-num = { path = "../crates/cas-num" }
+libfuzzer-sys = "0.4.13"
+rug = { version = "1.30.0", default-features = false, features = ["integer", "rational", "std"] }
+
+# Not part of the main workspace: fuzzing needs nightly and its own profile.
+[workspace]
+members = ["."]
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "natural"
+path = "fuzz_targets/natural.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "integer"
+path = "fuzz_targets/integer.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "rational"
+path = "fuzz_targets/rational.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "radix"
+path = "fuzz_targets/radix.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "number_theory"
+path = "fuzz_targets/number_theory.rs"
+test = false
+doc = false
+bench = false

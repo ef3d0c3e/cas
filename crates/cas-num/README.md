@@ -38,6 +38,12 @@ Measurements are short (20 samples, 1 s) so that the whole sweep stays in minute
 threshold, run its group alone, or use the dedicated `tune_*` tests (`tune_mul`, `tune_div`,
 `tune_redc`). Criterion keeps the previous run in `target/criterion` and reports changes against it.
 
+## Fuzzing
+
+libFuzzer targets live in [`/fuzz`](../../fuzz/README.md), outside the workspace (cargo-fuzz needs
+nightly): `cd fuzz && cargo fuzz run -O natural`. They cover the same operations against GMP with
+fuzzer-chosen inputs.
+
 ## Differential testing against GMP
 
 Every operation is checked against GMP on generated inputs. The harness lives in
