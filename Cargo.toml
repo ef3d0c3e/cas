@@ -1,0 +1,23 @@
+[workspace]
+resolver = "3"
+members = ["crates/*"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "GPL-3.0-only"
+authors = ["ef3d0c3e <ef3d0c3e@pundalik.org>"]
+publish = false
+
+[workspace.dependencies]
+cas-num = { path = "crates/cas-num" }
+cas-core = { path = "crates/cas-core" }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }

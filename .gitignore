@@ -1,0 +1,5 @@
+/target/
+
+# Local MCP config contains a live Lific API token — never commit.
+.mcp.json
+.claude/settings.local.json
