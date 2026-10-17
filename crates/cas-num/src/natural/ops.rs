@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 use super::Natural;
-use super::limb_vec::LimbVec;
+use super::limb_vec::{INLINE, LimbVec};
 use crate::{Limb, kernel};
 
 const SUB_OVERFLOW: &str = "attempt to subtract with overflow";
@@ -79,10 +79,19 @@ impl Add<&Natural> for &Natural {
         } else {
             (rhs.limbs(), self.limbs())
         };
-        let mut r = LimbVec::zeroed(a.len());
-        let carry = kernel::add(r.as_mut_slice(), a, b);
-        if carry != 0 {
-            r.push(carry);
+        // Room for the carry limb up front: pushing it onto an exactly sized
+        // heap buffer would reallocate and copy the whole sum.
+        let n = a.len();
+        let mut r = LimbVec::zeroed(if n <= INLINE { n } else { n + 1 });
+        let carry = kernel::add(&mut r.as_mut_slice()[..n], a, b);
+        if n <= INLINE {
+            if carry != 0 {
+                r.push(carry);
+            }
+        } else if carry != 0 {
+            r.as_mut_slice()[n] = carry;
+        } else {
+            r.truncate(n);
         }
         Natural::from_limb_vec(r)
     }

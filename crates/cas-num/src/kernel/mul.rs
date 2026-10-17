@@ -116,14 +116,14 @@ pub fn sqr_basecase(r: &mut [Limb], a: &[Limb]) {
     }
     let out = shl_assign(r, 1);
     debug_assert_eq!(out, 0);
-    let mut carry = 0;
+    let mut carry = false;
     for (i, &x) in a.iter().enumerate() {
         let (lo, hi) = mul_add(x, x, 0);
         let c;
         (r[2 * i], c) = super::adc(r[2 * i], lo, carry);
         (r[2 * i + 1], carry) = super::adc(r[2 * i + 1], hi, c);
     }
-    debug_assert_eq!(carry, 0);
+    debug_assert!(!carry);
 }
 
 /// Scratch limbs [`mul`] needs for operands of `an` and `bn` limbs.

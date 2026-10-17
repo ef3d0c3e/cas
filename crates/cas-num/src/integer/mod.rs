@@ -69,6 +69,13 @@ impl Integer {
         }
     }
 
+    /// A value the caller knows does not fit an `i64`, skipping the check
+    /// [`Integer::from_parts`] makes.
+    fn big(negative: bool, mag: Natural) -> Self {
+        debug_assert!(small_value(negative, &mag).is_none());
+        Integer(Repr::Big(Box::new(Big { negative, mag })))
+    }
+
     /// Sign and magnitude (`false` for zero).
     #[must_use]
     pub fn into_parts(self) -> (bool, Natural) {

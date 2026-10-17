@@ -159,6 +159,28 @@ fn edge_cases() {
     );
 }
 
+/// Powers of the radix and their neighbours, from one digit to several
+/// divide-and-conquer levels: `radix^e + 1` has a long run of zero chunks
+/// between non-zero ones, which only padding emits.
+#[test]
+fn to_string_radix_powers() {
+    for radix in [3u32, 7, 10, 36] {
+        let max_digits = TO_STRING_DC_THRESHOLD * 4 * 64;
+        let mut e = 0u32;
+        while (e as usize) < max_digits {
+            let p = Integer::from(Integer::u_pow_u(radix, e));
+            for v in [p.clone() - 1u32, p.clone(), p + 1u32] {
+                if v < 0 {
+                    continue;
+                }
+                let ours = Mag::from_rug(&v).to_natural().to_string_radix(radix);
+                assert_eq!(ours, v.to_string_radix(i32::try_from(radix).unwrap()));
+            }
+            e = if e < 64 { e + 1 } else { e + e / 3 };
+        }
+    }
+}
+
 #[test]
 #[should_panic(expected = "radix must be in 2..=36")]
 fn radix_37_panics() {
@@ -169,4 +191,44 @@ fn radix_37_panics() {
 #[should_panic(expected = "radix must be in 2..=36")]
 fn radix_1_panics() {
     let _ = Natural::from_str_radix("0", 1);
+}
+
+/// Times the decimal basecase against one divide-and-conquer split (a
+/// division by the nearest power `base^(2^i)` and the basecase on both
+/// halves), to place `TO_STRING_DC_THRESHOLD`. Run with
+/// `cargo test --release -p cas-num tune_to_string -- --ignored --nocapture`.
+#[test]
+#[ignore = "benchmark"]
+fn tune_to_string() {
+    use std::time::Instant;
+    let (base, k) = super::big_base(10);
+    let digits = super::Digits { radix: 10, base, k };
+    for n in [8, 12, 16, 20, 24, 28, 32, 40, 48, 64, 96] {
+        let x = Natural::from_limbs(&vec![0x9e37_79b9_7f4a_7c15; n]);
+        let mut power = Natural::from(base);
+        while power.square().limb_len() <= n.div_ceil(2) {
+            power = power.square();
+        }
+        let time = |f: &dyn Fn() -> Vec<u8>| {
+            let reps = 2_000_000 / (n * n);
+            let start = Instant::now();
+            for _ in 0..reps {
+                std::hint::black_box(f());
+            }
+            start.elapsed().as_secs_f64() * 1e9 / f64::from(u32::try_from(reps).unwrap())
+        };
+        let basecase = time(&|| {
+            let mut out = Vec::new();
+            digits.basecase(x.limbs(), None, &mut out);
+            out
+        });
+        let split = time(&|| {
+            let (q, r) = x.div_rem(&power);
+            let mut out = Vec::new();
+            digits.basecase(q.limbs(), None, &mut out);
+            digits.basecase(r.limbs(), None, &mut out);
+            out
+        });
+        println!("n = {n:3}: basecase {basecase:8.0} ns, split {split:8.0} ns");
+    }
 }

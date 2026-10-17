@@ -15,7 +15,7 @@ use crate::error::{ParseErrorKind, ParseNumberError};
 use crate::{Limb, kernel};
 
 /// Limbs from which [`Natural::to_string_radix`] splits by divide and conquer.
-pub(crate) const TO_STRING_DC_THRESHOLD: usize = 30;
+pub(crate) const TO_STRING_DC_THRESHOLD: usize = 16;
 
 /// Digits from which parsing splits by divide and conquer.
 pub(crate) const FROM_STRING_DC_THRESHOLD: usize = 600;
@@ -139,7 +139,20 @@ impl Digits {
     /// Appends the digits of `x` to `out`, left-padded with zeros to `pad`
     /// digits if given (`x` must fit), or without leading zeros otherwise.
     fn basecase(&self, x: &[Limb], pad: Option<usize>, out: &mut Vec<u8>) {
-        let mut chunks = Vec::new();
+        if let [] | [_] = x {
+            // A limb is below base^2: at most two chunks, with no division
+            // pass and no allocation.
+            let x = x.first().copied().unwrap_or(0);
+            let chunks = [x % self.base, x / self.base];
+            let n = if chunks[1] != 0 {
+                2
+            } else {
+                usize::from(chunks[0] != 0)
+            };
+            return self.push_chunks(&chunks[..n], pad, out);
+        }
+        // Chunks of `k` digits, least significant first.
+        let mut chunks = Vec::with_capacity(x.len() * 2);
         let mut a = x.to_vec();
         let mut t = vec![0; a.len()];
         while !a.is_empty() {
@@ -149,30 +162,43 @@ impl Digits {
             a.truncate(n);
             a.truncate(kernel::normalized_len(&a));
         }
-        let mut digits = Vec::with_capacity(chunks.len() * self.k);
-        for (i, &c) in chunks.iter().enumerate().rev() {
-            let width = if i + 1 == chunks.len() { 0 } else { self.k };
-            self.push_chunk(c, width, &mut digits);
-        }
-        if let Some(pad) = pad {
-            assert!(digits.len() <= pad, "value does not fit its padding");
-            out.resize(out.len() + pad - digits.len(), 0);
-        }
-        out.extend(digits);
+        self.push_chunks(&chunks, pad, out);
     }
 
-    /// Appends the digits of a chunk `c < base`, left-padded to `width`.
-    fn push_chunk(&self, mut c: Limb, width: usize, out: &mut Vec<u8>) {
-        let mut buf = [0u8; 64];
-        let mut n = 0;
-        let r = Limb::from(self.radix);
-        while c != 0 {
-            buf[n] = u8::try_from(c % r).expect("a digit is below 36");
-            c /= r;
-            n += 1;
+    /// Appends the digits of the number with chunks `chunks` (least
+    /// significant first, the top one non-zero), padded as for
+    /// [`Digits::basecase`].
+    fn push_chunks(&self, chunks: &[Limb], pad: Option<usize>, out: &mut Vec<u8>) {
+        let mut buf = [0; Limb::BITS as usize];
+        let Some((&top, rest)) = chunks.split_last() else {
+            out.resize(out.len() + pad.unwrap_or(0), 0);
+            return;
+        };
+        let top = self.chunk_digits(top, &mut buf);
+        let len = top.len() + self.k * rest.len();
+        if let Some(pad) = pad {
+            assert!(len <= pad, "value does not fit its padding");
+            out.resize(out.len() + pad - len, 0);
         }
-        out.resize(out.len() + width.saturating_sub(n), 0);
-        out.extend(buf[..n].iter().rev());
+        out.extend_from_slice(top);
+        for &c in rest.iter().rev() {
+            let d = self.chunk_digits(c, &mut buf);
+            out.resize(out.len() + self.k - d.len(), 0);
+            out.extend_from_slice(d);
+        }
+    }
+
+    /// The digits of a chunk `c < base` without leading zeros (none for
+    /// zero), written to the end of `buf`.
+    ///
+    /// Radix 10 gets its own copy of the loop, where the division by the
+    /// constant compiles to a multiplication; a division by a variable is a
+    /// hardware `div` per digit, which dominated small conversions.
+    fn chunk_digits<'b>(&self, c: Limb, buf: &'b mut [u8; Limb::BITS as usize]) -> &'b [u8] {
+        match self.radix {
+            10 => chunk_digits_in(c, 10, buf),
+            r => chunk_digits_in(c, Limb::from(r), buf),
+        }
     }
 
     /// Appends the digits of `x < powers[level]` (`powers[i] = base^(2^i)`),
@@ -197,6 +223,21 @@ impl Digits {
         self.dc(&q, powers, level - 1, pad.map(|p| p - low), out);
         self.dc(&r, powers, level - 1, Some(low), out);
     }
+}
+
+#[allow(
+    clippy::inline_always,
+    reason = "inlined into each call, so that a constant radix divides by multiplication"
+)]
+#[inline(always)]
+fn chunk_digits_in(mut c: Limb, r: Limb, buf: &mut [u8; Limb::BITS as usize]) -> &[u8] {
+    let mut i = buf.len();
+    while c != 0 {
+        i -= 1;
+        buf[i] = u8::try_from(c % r).expect("a digit is below 36");
+        c /= r;
+    }
+    &buf[i..]
 }
 
 /// Digits of non-zero `x` in radix `2^bits`.

@@ -31,20 +31,158 @@ pub use mul::{
     sqr_scratch_len, submul_1,
 };
 
-/// `a + b + carry`, returning `(sum, carry_out)`; `carry` must be 0 or 1.
+/// `a + b + carry`, returning `(sum, carry_out)`.
+///
+/// The carry is a `bool` so that LLVM lowers a chain of these to `adc`
+/// instructions; with a `Limb` carry it materialises every carry with `setb`.
 #[inline]
-const fn adc(a: Limb, b: Limb, carry: Limb) -> (Limb, Limb) {
+const fn adc(a: Limb, b: Limb, carry: bool) -> (Limb, bool) {
     let (s, c1) = a.overflowing_add(b);
-    let (s, c2) = s.overflowing_add(carry);
-    (s, (c1 | c2) as Limb)
+    let (s, c2) = s.overflowing_add(carry as Limb);
+    (s, c1 | c2)
 }
 
-/// `a - b - borrow`, returning `(difference, borrow_out)`; `borrow` must be 0 or 1.
+/// `a - b - borrow`, returning `(difference, borrow_out)`; see [`adc`].
 #[inline]
-const fn sbb(a: Limb, b: Limb, borrow: Limb) -> (Limb, Limb) {
+const fn sbb(a: Limb, b: Limb, borrow: bool) -> (Limb, bool) {
     let (d, b1) = a.overflowing_sub(b);
-    let (d, b2) = d.overflowing_sub(borrow);
-    (d, (b1 | b2) as Limb)
+    let (d, b2) = d.overflowing_sub(borrow as Limb);
+    (d, b1 | b2)
+}
+
+/// Limbs per block of [`chain`]: the carry stays in the flags within a block
+/// and is saved and restored once per block, around the loop counter update.
+const CHAIN_BLOCK: usize = 16;
+
+/// One block of `K` steps, fully unrolled.
+#[allow(
+    clippy::inline_always,
+    reason = "the carry stays in the flags only once inlined"
+)]
+#[inline(always)]
+fn chain_block<const K: usize>(
+    r: &mut [Limb],
+    a: &[Limb],
+    b: &[Limb],
+    mut carry: bool,
+    step: impl Fn(Limb, Limb, bool) -> (Limb, bool),
+) -> bool {
+    let r: &mut [Limb; K] = r.try_into().expect("block length");
+    let a: &[Limb; K] = a.try_into().expect("block length");
+    let b: &[Limb; K] = b.try_into().expect("block length");
+    for i in 0..K {
+        (r[i], carry) = step(a[i], b[i], carry);
+    }
+    carry
+}
+
+/// `r[i], carry = step(a[i], b[i], carry)` over equal lengths from carry
+/// `false`, returning the final carry.
+///
+/// Blocks of [`CHAIN_BLOCK`] limbs, then blocks of 8, 4, 2 and 1 for the
+/// tail, so that every length runs as straight-line `adc`/`sbb` chains. The
+/// loop splits the operands at a multiple of the block first: with the
+/// lengths left to the chunk iterators, LLVM emits a second exit test inside
+/// the loop and loses the carry flag on the first limb of each block.
+#[allow(
+    clippy::inline_always,
+    reason = "the carry stays in the flags only once inlined"
+)]
+#[inline(always)]
+fn chain(
+    r: &mut [Limb],
+    a: &[Limb],
+    b: &[Limb],
+    step: impl Fn(Limb, Limb, bool) -> (Limb, bool) + Copy,
+) -> bool {
+    debug_assert!(r.len() == a.len() && a.len() == b.len());
+    let m = r.len() - r.len() % CHAIN_BLOCK;
+    let (r_hi, mut r) = r.split_at_mut(m);
+    let (a_hi, mut a) = a.split_at(m);
+    let (b_hi, mut b) = b.split_at(m);
+    let mut carry = false;
+    for ((r, a), b) in r_hi
+        .chunks_exact_mut(CHAIN_BLOCK)
+        .zip(a_hi.chunks_exact(CHAIN_BLOCK))
+        .zip(b_hi.chunks_exact(CHAIN_BLOCK))
+    {
+        carry = chain_block::<CHAIN_BLOCK>(r, a, b, carry, step);
+    }
+    macro_rules! tail {
+        ($($k:literal)*) => {$(
+            if r.len() >= $k {
+                let (r0, r1) = r.split_at_mut($k);
+                let (a0, a1) = a.split_at($k);
+                let (b0, b1) = b.split_at($k);
+                carry = chain_block::<$k>(r0, a0, b0, carry, step);
+                (r, a, b) = (r1, a1, b1);
+            }
+        )*};
+    }
+    tail!(8 4 2);
+    if let (Some(r), Some(&a), Some(&b)) = (r.first_mut(), a.first(), b.first()) {
+        (*r, carry) = step(a, b, carry);
+    }
+    carry
+}
+
+/// [`chain_block`] in place: `a[i], carry = step(a[i], b[i], carry)`.
+#[allow(
+    clippy::inline_always,
+    reason = "the carry stays in the flags only once inlined"
+)]
+#[inline(always)]
+fn chain_block_assign<const K: usize>(
+    a: &mut [Limb],
+    b: &[Limb],
+    mut carry: bool,
+    step: impl Fn(Limb, Limb, bool) -> (Limb, bool),
+) -> bool {
+    let a: &mut [Limb; K] = a.try_into().expect("block length");
+    let b: &[Limb; K] = b.try_into().expect("block length");
+    for i in 0..K {
+        (a[i], carry) = step(a[i], b[i], carry);
+    }
+    carry
+}
+
+/// [`chain`] in place: `a[i], carry = step(a[i], b[i], carry)`.
+#[allow(
+    clippy::inline_always,
+    reason = "the carry stays in the flags only once inlined"
+)]
+#[inline(always)]
+fn chain_assign(
+    a: &mut [Limb],
+    b: &[Limb],
+    step: impl Fn(Limb, Limb, bool) -> (Limb, bool) + Copy,
+) -> bool {
+    debug_assert_eq!(a.len(), b.len());
+    let m = a.len() - a.len() % CHAIN_BLOCK;
+    let (a_hi, mut a) = a.split_at_mut(m);
+    let (b_hi, mut b) = b.split_at(m);
+    let mut carry = false;
+    for (a, b) in a_hi
+        .chunks_exact_mut(CHAIN_BLOCK)
+        .zip(b_hi.chunks_exact(CHAIN_BLOCK))
+    {
+        carry = chain_block_assign::<CHAIN_BLOCK>(a, b, carry, step);
+    }
+    macro_rules! tail {
+        ($($k:literal)*) => {$(
+            if a.len() >= $k {
+                let (a0, a1) = a.split_at_mut($k);
+                let (b0, b1) = b.split_at($k);
+                carry = chain_block_assign::<$k>(a0, b0, carry, step);
+                (a, b) = (a1, b1);
+            }
+        )*};
+    }
+    tail!(8 4 2);
+    if let (Some(a), Some(&b)) = (a.first_mut(), b.first()) {
+        (*a, carry) = step(*a, b, carry);
+    }
+    carry
 }
 
 /// `r = a + b` for equal lengths; returns the carry (0 or 1).
@@ -53,21 +191,13 @@ pub fn add_n(r: &mut [Limb], a: &[Limb], b: &[Limb]) -> Limb {
         r.len() == a.len() && a.len() == b.len(),
         "add_n: length mismatch"
     );
-    let mut carry = 0;
-    for ((r, &a), &b) in r.iter_mut().zip(a).zip(b) {
-        (*r, carry) = adc(a, b, carry);
-    }
-    carry
+    Limb::from(chain(r, a, b, adc))
 }
 
 /// `a += b` for equal lengths; returns the carry (0 or 1).
 pub fn add_n_assign(a: &mut [Limb], b: &[Limb]) -> Limb {
     assert_eq!(a.len(), b.len(), "add_n_assign: length mismatch");
-    let mut carry = 0;
-    for (a, &b) in a.iter_mut().zip(b) {
-        (*a, carry) = adc(*a, b, carry);
-    }
-    carry
+    Limb::from(chain_assign(a, b, adc))
 }
 
 /// `r = a + b` for a single limb `b`; returns the carry (0 or 1).
@@ -76,10 +206,14 @@ pub fn add_n_assign(a: &mut [Limb], b: &[Limb]) -> Limb {
 pub fn add_1(r: &mut [Limb], a: &[Limb], b: Limb) -> Limb {
     assert_eq!(r.len(), a.len(), "add_1: length mismatch");
     let mut carry = b;
-    for (r, &a) in r.iter_mut().zip(a) {
+    for i in 0..a.len() {
         let c;
-        (*r, c) = a.overflowing_add(carry);
-        carry = Limb::from(c);
+        (r[i], c) = a[i].overflowing_add(carry);
+        if !c {
+            r[i + 1..].copy_from_slice(&a[i + 1..]);
+            return 0;
+        }
+        carry = 1;
     }
     carry
 }
@@ -128,21 +262,13 @@ pub fn sub_n(r: &mut [Limb], a: &[Limb], b: &[Limb]) -> Limb {
         r.len() == a.len() && a.len() == b.len(),
         "sub_n: length mismatch"
     );
-    let mut borrow = 0;
-    for ((r, &a), &b) in r.iter_mut().zip(a).zip(b) {
-        (*r, borrow) = sbb(a, b, borrow);
-    }
-    borrow
+    Limb::from(chain(r, a, b, sbb))
 }
 
 /// `a -= b` for equal lengths; returns the borrow (0 or 1).
 pub fn sub_n_assign(a: &mut [Limb], b: &[Limb]) -> Limb {
     assert_eq!(a.len(), b.len(), "sub_n_assign: length mismatch");
-    let mut borrow = 0;
-    for (a, &b) in a.iter_mut().zip(b) {
-        (*a, borrow) = sbb(*a, b, borrow);
-    }
-    borrow
+    Limb::from(chain_assign(a, b, sbb))
 }
 
 /// `r = a - b` for a single limb `b`; returns the borrow (0 or 1).
@@ -151,10 +277,14 @@ pub fn sub_n_assign(a: &mut [Limb], b: &[Limb]) -> Limb {
 pub fn sub_1(r: &mut [Limb], a: &[Limb], b: Limb) -> Limb {
     assert_eq!(r.len(), a.len(), "sub_1: length mismatch");
     let mut borrow = b;
-    for (r, &a) in r.iter_mut().zip(a) {
+    for i in 0..a.len() {
         let c;
-        (*r, c) = a.overflowing_sub(borrow);
-        borrow = Limb::from(c);
+        (r[i], c) = a[i].overflowing_sub(borrow);
+        if !c {
+            r[i + 1..].copy_from_slice(&a[i + 1..]);
+            return 0;
+        }
+        borrow = 1;
     }
     Limb::from(borrow != 0)
 }

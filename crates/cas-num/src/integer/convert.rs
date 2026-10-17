@@ -37,7 +37,7 @@ impl From<u128> for Integer {
     fn from(x: u128) -> Integer {
         match i64::try_from(x) {
             Ok(x) => Integer(Repr::Small(x)),
-            Err(_) => Integer::from_parts(false, Natural::from(x)),
+            Err(_) => Integer::big(false, Natural::from(x)),
         }
     }
 }
@@ -46,7 +46,7 @@ impl From<i128> for Integer {
     fn from(x: i128) -> Integer {
         match i64::try_from(x) {
             Ok(x) => Integer(Repr::Small(x)),
-            Err(_) => Integer::from_parts(x < 0, Natural::from(x.unsigned_abs())),
+            Err(_) => Integer::big(x < 0, Natural::from(x.unsigned_abs())),
         }
     }
 }

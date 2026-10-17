@@ -181,6 +181,46 @@ fn carry_ripples_through_all_ones() {
     }
 }
 
+/// Every length through three blocks of the carry chain and every tail split,
+/// with a carry (or borrow) entering at each position and rippling through
+/// the block and tail seams to the top.
+#[test]
+fn carry_chain_crosses_every_seam() {
+    for n in 0..=3 * CHAIN_BLOCK + 15 {
+        for start in 0..=n {
+            // a = 2^64 - 1 from `start` up, b = 1 at `start`: the sum carries
+            // from `start` out of the top; a - b borrows nowhere, b - a from
+            // `start` out of the top.
+            let mut a = vec![0x5555_5555_5555_5555; n];
+            a[start..].fill(Limb::MAX);
+            let mut b = vec![0x2222_2222_2222_2222; n];
+            if start < n {
+                b[start] = 1;
+                b[start + 1..].fill(0);
+            }
+            for (x, y) in [(&a, &b), (&b, &a)] {
+                let mut sum = vec![0; n];
+                let carry = add_n(&mut sum, x, y);
+                assert_eq!((val(&sum), carry), {
+                    let (r, q) = split_at_limbs(val(x) + val(y), n);
+                    (r, q.to_u64().unwrap())
+                });
+                let mut diff = vec![0; n];
+                let borrow = sub_n(&mut diff, x, y);
+                let d = val(x) - val(y);
+                assert_eq!(val(&diff), d.clone().rem_euc(base_pow(n)), "n = {n}");
+                assert_eq!(borrow, Limb::from(d < 0), "n = {n}, start = {start}");
+                let mut x2 = x.clone();
+                assert_eq!(add_n_assign(&mut x2, y), carry);
+                assert_eq!(x2, sum);
+                let mut x2 = x.clone();
+                assert_eq!(sub_n_assign(&mut x2, y), borrow);
+                assert_eq!(x2, diff);
+            }
+        }
+    }
+}
+
 #[test]
 #[should_panic(expected = "length mismatch")]
 fn length_mismatch_panics() {

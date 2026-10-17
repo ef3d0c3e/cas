@@ -1,13 +1,14 @@
 //! Conversions between [`Natural`] and primitive integers.
 
 use super::Natural;
+use super::limb_vec::LimbVec;
 use crate::{Limb, OutOfRangeError};
 
 macro_rules! from_unsigned {
     ($($t:ty),*) => {$(
         impl From<$t> for Natural {
             fn from(x: $t) -> Natural {
-                Natural::from_limbs(&[Limb::try_from(x).expect("fits a limb")])
+                Natural::from_limb_vec(LimbVec::from_pair(Limb::try_from(x).expect("fits a limb"), 0))
             }
         }
     )*};
@@ -20,7 +21,7 @@ impl From<u128> for Natural {
     fn from(x: u128) -> Natural {
         let lo = x as Limb;
         let hi = (x >> Limb::BITS) as Limb;
-        Natural::from_limbs(&[lo, hi])
+        Natural::from_limb_vec(LimbVec::from_pair(lo, hi))
     }
 }
 

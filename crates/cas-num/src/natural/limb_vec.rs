@@ -50,6 +50,17 @@ impl LimbVec {
         }
     }
 
+    /// The normalised limbs of `hi * 2^64 + lo`, inline. A fixed-size write,
+    /// so the conversions from primitives avoid `from_slice`'s `memcpy` call.
+    pub(crate) fn from_pair(lo: Limb, hi: Limb) -> Self {
+        const { assert!(INLINE >= 2) };
+        let mut buf = [0; INLINE];
+        buf[0] = lo;
+        buf[1] = hi;
+        let len = if hi != 0 { 2 } else { u8::from(lo != 0) };
+        LimbVec::Inline { len, buf }
+    }
+
     /// Takes ownership of `limbs`, moving them inline if they fit.
     pub(crate) fn from_vec(limbs: Vec<Limb>) -> Self {
         if limbs.len() <= INLINE {
