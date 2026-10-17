@@ -22,7 +22,6 @@ pub(crate) struct Node {
     pub(crate) meta: Meta,
     /// `StateId` of the context state this node was last found to be a fixpoint
     /// in; 0 for never.
-    #[expect(dead_code, reason = "read and written by the Context (CAS-27)")]
     pub(crate) eval_stamp: AtomicU64,
     pub(crate) kind: Kind,
 }

@@ -62,6 +62,11 @@ impl Attributes {
         Attributes(self.0 & other.0)
     }
 
+    #[must_use]
+    pub const fn difference(self, other: Attributes) -> Attributes {
+        Attributes(self.0 & !other.0)
+    }
+
     /// Whether every attribute of `other` is in `self`.
     #[must_use]
     pub const fn contains(self, other: Attributes) -> bool {
@@ -111,7 +116,7 @@ impl fmt::Debug for Attributes {
                 }
                 f.write_str(name)?;
                 first = false;
-                rest = Attributes(rest.0 & !a.0);
+                rest = rest.difference(a);
             }
         }
         Ok(())

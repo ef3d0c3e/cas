@@ -7,15 +7,19 @@
 //!   inline, everything else is interned.
 //! - [`Symbol`]: permanent, interned names; the builtins (`Symbol::PLUS`, …)
 //!   have fixed ids and fixed [`Attributes`].
+//! - [`Context`]: values, user attributes and assumptions; scopes are child
+//!   values. Evaluation goes through a context.
 
 mod attributes;
 mod builtin;
+mod context;
 mod expr;
 mod intern;
 mod node;
 mod symbol;
 
 pub use attributes::Attributes;
+pub use context::{Context, ContextError, EvalError, Limits, StateId};
 pub use expr::{Expr, View};
 pub use intern::{InternerStats, interner_stats};
 pub use symbol::Symbol;
