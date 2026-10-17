@@ -4,6 +4,7 @@ mod convert;
 mod div;
 mod gcd;
 mod ops;
+mod radix;
 
 #[cfg(test)]
 mod tests;
@@ -198,13 +199,6 @@ impl Ord for Integer {
 impl PartialOrd for Integer {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-/// Hexadecimal until radix conversion lands (CAS-9).
-impl fmt::Debug for Integer {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self:#x}")
     }
 }
 

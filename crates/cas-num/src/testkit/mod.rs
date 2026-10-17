@@ -67,6 +67,15 @@ macro_rules! to_rug_identity {
 
 to_rug_identity!(bool, Ordering);
 
+/// Strings (radix conversion) compare as they are.
+impl ToRug for String {
+    type Rug = String;
+
+    fn to_rug(&self) -> String {
+        self.clone()
+    }
+}
+
 impl<T: ToRug + ?Sized> ToRug for &T {
     type Rug = T::Rug;
 

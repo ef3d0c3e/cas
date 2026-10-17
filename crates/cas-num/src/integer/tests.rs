@@ -306,7 +306,7 @@ fn layout_is_sixteen_bytes() {
 
 #[test]
 fn hex_formatting() {
-    assert_eq!(format!("{:?}", Integer::from(-255)), "-0xff");
+    assert_eq!(format!("{:?}", Integer::from(-255)), "-255");
     assert_eq!(format!("{:x}", Integer::from(u128::MAX)), "f".repeat(32));
     assert_eq!(
         format!("{:#X}", Integer::from(-(1i128 << 64))),

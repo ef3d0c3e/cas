@@ -7,6 +7,7 @@ mod gcd;
 mod limb_vec;
 mod mul;
 mod ops;
+mod radix;
 
 #[cfg(test)]
 mod tests;
@@ -17,6 +18,7 @@ use std::hash::{Hash, Hasher};
 
 use crate::{Limb, kernel};
 use limb_vec::LimbVec;
+pub(crate) use radix::check_radix;
 
 /// An arbitrary-precision natural number (non-negative integer).
 ///
@@ -123,7 +125,8 @@ impl Natural {
     fn debug_check(&self) {
         debug_assert!(
             kernel::is_normalized(self.limbs()),
-            "unnormalised Natural: {self:?}"
+            "unnormalised Natural, limbs {:x?}",
+            self.limbs()
         );
     }
 }
@@ -151,13 +154,6 @@ impl Ord for Natural {
 impl PartialOrd for Natural {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
-    }
-}
-
-/// Hexadecimal until radix conversion lands (CAS-9).
-impl fmt::Debug for Natural {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{self:#x}")
     }
 }
 

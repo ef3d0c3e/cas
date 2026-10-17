@@ -476,7 +476,7 @@ fn hex_formatting() {
     let x = Natural::from(0x1_0000_0000_0000_00ab_u128);
     assert_eq!(format!("{x:x}"), "100000000000000ab");
     assert_eq!(format!("{x:#X}"), "0x100000000000000AB");
-    assert_eq!(format!("{:?}", Natural::ZERO), "0x0");
+    assert_eq!(format!("{:?}", Natural::ZERO), "0");
     assert_eq!(format!("{:>6x}", Natural::from(255u64)), "    ff");
 }
 

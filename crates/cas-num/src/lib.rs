@@ -14,7 +14,7 @@ mod integer;
 pub mod kernel;
 mod natural;
 
-pub use error::OutOfRangeError;
+pub use error::{OutOfRangeError, ParseErrorKind, ParseNumberError};
 pub use integer::{Integer, Rounding};
 pub use natural::Natural;
 

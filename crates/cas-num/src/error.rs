@@ -13,3 +13,43 @@ impl fmt::Display for OutOfRangeError {
 }
 
 impl std::error::Error for OutOfRangeError {}
+
+/// Parsing a number from a string failed.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ParseNumberError {
+    kind: ParseErrorKind,
+}
+
+/// Why parsing a number failed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ParseErrorKind {
+    /// The string is empty.
+    Empty,
+    /// A character is not a digit of the radix, or a sign has no digits
+    /// after it.
+    InvalidDigit,
+}
+
+impl ParseNumberError {
+    pub(crate) fn new(kind: ParseErrorKind) -> Self {
+        ParseNumberError { kind }
+    }
+
+    /// The reason parsing failed.
+    #[must_use]
+    pub fn kind(&self) -> ParseErrorKind {
+        self.kind
+    }
+}
+
+impl fmt::Display for ParseNumberError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self.kind {
+            ParseErrorKind::Empty => "cannot parse number from empty string",
+            ParseErrorKind::InvalidDigit => "invalid digit found in string",
+        })
+    }
+}
+
+impl std::error::Error for ParseNumberError {}
