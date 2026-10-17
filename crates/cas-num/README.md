@@ -20,6 +20,24 @@ Correctness is the primary goal. The design is in Lific page `CAS-DOC-2`.
 | `modular` | Ring objects holding a modulus and its constants, with plain element values. `ModWord`: any modulus that fits a limb, elements `u64` in `0..n`, products reduced by one 2-by-1 division with a precomputed reciprocal (Möller–Granlund); `add`, `sub`, `neg`, `mul`, `pow`, `inv`, `reduce*`. `ModRing`/`Residue`: any modulus; odd moduli use Montgomery form, reduced one limb at a time (`redc_1`) or, from `REDC_N_THRESHOLD` limbs, by two full multiplications with `-n^(-1) mod R` (`redc_n`); even moduli store plain values and divide. `pow` uses a sliding window of up to 6 bits. `crt` solves two congruences with any moduli (`None` if incompatible); `CrtBasis` reconstructs from residues modulo pairwise coprime word moduli by Garner's algorithm, in `0..M` or symmetric. `rational_reconstruction` (Wang's algorithm, bounds `2 N D < m`, default `N = D`). Retune with `cargo test --release -p cas-num tune_redc -- --ignored --nocapture`. |
 | `prime` | `Natural::primality() -> Primality` (`Prime` proven, `ProbablePrime`, `NotPrime`): table lookup below 2^16; trial division by the primes below 2^12 (one remainder per group of primes whose product fits a limb); below 2^64 Miller–Rabin with Sinclair's seven bases (deterministic); above, Baillie–PSW (base-2 Miller–Rabin plus a strong Lucas test with Selfridge's parameters). `is_strong_probable_prime(base)`, `next_prime`, `Integer::jacobi`. `factor()` / `factor_with_effort(rho_iterations) -> Factorization`: trial division by the primes below 2^16, perfect powers through their base, Brent's variant of Pollard's rho (`ModWord` or `ModRing`, GCD every 128 steps); factors are sorted, merged and labelled, and composites that resist the effort stay labelled `NotPrime`. |
 
+## Benchmarks
+
+`benches/num.rs` (criterion, with GMP via `rug` as the baseline) times every op twice, as
+`op/ours/n` and `op/gmp/n`, on the same deterministic pseudo-random `n`-limb inputs:
+
+```sh
+cargo bench -p cas-num                              # everything, sizes 1, 2, 4 … 4096 limbs
+cargo bench -p cas-num -- '^mul/'                   # one group
+CAS_BENCH_MAX_LIMBS=100000 cargo bench -p cas-num -- '^(mul|sqr)/'   # the full sweep
+```
+
+Groups: `add`, `mul`, `sqr`, `div_rem` (2n by n limbs), `gcd`, `pow_mod` (odd modulus, full-size
+exponent, up to 64 limbs), `primality` (an n-limb prime, up to 64 limbs), `to_string`, `from_str`, and
+`small`: batches of 512 sums and products of values below 2^63, against GMP and plain `i128`.
+Measurements are short (20 samples, 1 s) so that the whole sweep stays in minutes. For tuning a
+threshold, run its group alone, or use the dedicated `tune_*` tests (`tune_mul`, `tune_div`,
+`tune_redc`). Criterion keeps the previous run in `target/criterion` and reports changes against it.
+
 ## Differential testing against GMP
 
 Every operation is checked against GMP on generated inputs. The harness lives in
