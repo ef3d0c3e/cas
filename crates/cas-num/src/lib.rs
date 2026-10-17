@@ -13,9 +13,12 @@
 //! - [`Primality`], [`Factorization`]: primality tests and factorisation,
 //!   as methods of [`Natural`] ([`Natural::primality`],
 //!   [`Natural::factor`]).
+//! - [`algebra`]: ring, Euclidean-domain and field traits on ring objects,
+//!   with instances for ℤ, ℚ, ℤ/nℤ and 𝔽ₚ.
 //! - [`modular`]: residues modulo word-size and multi-precision moduli,
 //!   Chinese remaindering and rational reconstruction.
 
+pub mod algebra;
 mod error;
 mod integer;
 pub mod kernel;
