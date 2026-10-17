@@ -13,6 +13,9 @@ publish = false
 [workspace.dependencies]
 cas-num = { path = "crates/cas-num" }
 cas-core = { path = "crates/cas-core" }
+foldhash = { version = "0.2.0", default-features = false }
+hashbrown = { version = "0.16.1", default-features = false }
+proptest = "1.11.0"
 
 [workspace.lints.rust]
 unsafe_code = "deny"
