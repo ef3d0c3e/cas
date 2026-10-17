@@ -1,5 +1,6 @@
-//! Multiplication kernels: single-limb products, schoolbook, Karatsuba and
-//! Toom-3, plus dedicated squaring.
+//! Multiplication kernels: single-limb products, schoolbook, Karatsuba,
+//! Toom-3 and number-theoretic transforms ([`super::ntt`]), plus dedicated
+//! squaring.
 //!
 //! [`mul`] and [`sqr`] pick the algorithm by operand size. The recursive
 //! algorithms work in a caller-provided scratch slice of at least
@@ -15,7 +16,7 @@
     reason = "the algorithms use the textbook names (a, b, r, n, s, t)"
 )]
 
-use super::{add_1_assign, add_assign, cmp_n, shl_assign, shr_assign, sub_assign, sub_n};
+use super::{add_1_assign, add_assign, cmp_n, ntt, shl_assign, shr_assign, sub_assign, sub_n};
 use crate::Limb;
 
 /// Smallest shorter-operand length at which [`mul`] uses Karatsuba instead of
@@ -23,10 +24,16 @@ use crate::Limb;
 pub(crate) const MUL_KARATSUBA_THRESHOLD: usize = 16;
 /// Smallest shorter-operand length at which [`mul`] uses Toom-3.
 pub(crate) const MUL_TOOM3_THRESHOLD: usize = 144;
+/// Smallest shorter-operand length at which [`mul`] uses the NTT. Tuned with
+/// `tune_ntt`; the NTT's cost is a staircase (see [`super::ntt`]), so above
+/// this it is ahead on average rather than at every length.
+pub(crate) const MUL_NTT_THRESHOLD: usize = 3328;
 /// Smallest length at which [`sqr`] uses Karatsuba squaring.
 pub(crate) const SQR_KARATSUBA_THRESHOLD: usize = 44;
 /// Smallest length at which [`sqr`] uses Toom-3 squaring.
 pub(crate) const SQR_TOOM3_THRESHOLD: usize = 192;
+/// Smallest length at which [`sqr`] uses the NTT.
+pub(crate) const SQR_NTT_THRESHOLD: usize = 1792;
 
 /// `a * b + c` as a double limb, returned as `(low, high)`; cannot overflow.
 #[inline]
@@ -143,6 +150,7 @@ pub fn mul_scratch_len(an: usize, bn: usize) -> usize {
         }
         Algorithm::Karatsuba => karatsuba_scratch_len(an, bn, false),
         Algorithm::Toom3 => toom3_scratch_len(an, bn, false),
+        Algorithm::Ntt => ntt::mul_scratch_len(an, bn),
     }
 }
 
@@ -153,6 +161,7 @@ pub fn sqr_scratch_len(n: usize) -> usize {
         Algorithm::Basecase | Algorithm::Chunked => 0,
         Algorithm::Karatsuba => karatsuba_scratch_len(n, n, true),
         Algorithm::Toom3 => toom3_scratch_len(n, n, true),
+        Algorithm::Ntt => ntt::sqr_scratch_len(n),
     }
 }
 
@@ -188,6 +197,7 @@ pub(crate) enum Algorithm {
     Chunked,
     Karatsuba,
     Toom3,
+    Ntt,
 }
 
 /// The algorithm [`mul`] uses for `an >= bn`.
@@ -198,6 +208,8 @@ pub(crate) fn algorithm(an: usize, bn: usize) -> Algorithm {
     } else if bn <= an.div_ceil(2) {
         // Karatsuba needs b's high half to be non-empty.
         Algorithm::Chunked
+    } else if bn >= MUL_NTT_THRESHOLD {
+        Algorithm::Ntt
     } else if bn >= MUL_TOOM3_THRESHOLD && bn > 2 * an.div_ceil(3) {
         Algorithm::Toom3
     } else {
@@ -211,8 +223,10 @@ pub(crate) fn sqr_algorithm(n: usize) -> Algorithm {
         Algorithm::Basecase
     } else if n < SQR_TOOM3_THRESHOLD {
         Algorithm::Karatsuba
-    } else {
+    } else if n < SQR_NTT_THRESHOLD {
         Algorithm::Toom3
+    } else {
+        Algorithm::Ntt
     }
 }
 
@@ -223,6 +237,7 @@ fn mul_unchecked(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]) {
         Algorithm::Chunked => mul_chunked(r, a, b, scratch),
         Algorithm::Karatsuba => karatsuba(r, a, b, scratch, false),
         Algorithm::Toom3 => toom3(r, a, b, scratch, false),
+        Algorithm::Ntt => ntt::mul(r, a, b, scratch),
     }
 }
 
@@ -231,6 +246,7 @@ fn sqr_unchecked(r: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) {
         Algorithm::Basecase | Algorithm::Chunked => sqr_basecase(r, a),
         Algorithm::Karatsuba => karatsuba(r, a, a, scratch, true),
         Algorithm::Toom3 => toom3(r, a, a, scratch, true),
+        Algorithm::Ntt => ntt::sqr(r, a, scratch),
     }
 }
 

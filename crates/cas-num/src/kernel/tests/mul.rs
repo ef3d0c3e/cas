@@ -10,9 +10,9 @@ use rug::Integer;
 use super::{split_at_limbs, val};
 use crate::Limb;
 use crate::kernel::mul::{
-    Algorithm, MUL_KARATSUBA_THRESHOLD, MUL_TOOM3_THRESHOLD, SQR_KARATSUBA_THRESHOLD,
-    SQR_TOOM3_THRESHOLD, algorithm, karatsuba, karatsuba_scratch_len, sqr_algorithm, toom3,
-    toom3_scratch_len,
+    Algorithm, MUL_KARATSUBA_THRESHOLD, MUL_NTT_THRESHOLD, MUL_TOOM3_THRESHOLD,
+    SQR_KARATSUBA_THRESHOLD, SQR_NTT_THRESHOLD, SQR_TOOM3_THRESHOLD, algorithm, karatsuba,
+    karatsuba_scratch_len, sqr_algorithm, toom3, toom3_scratch_len,
 };
 use crate::kernel::{
     addmul_1, mul, mul_1, mul_1_assign, mul_basecase, mul_scratch_len, sqr, sqr_basecase,
@@ -72,6 +72,7 @@ fn mul_thresholds() -> Vec<usize> {
         MUL_TOOM3_THRESHOLD,
         3 * MUL_KARATSUBA_THRESHOLD,
         3 * MUL_TOOM3_THRESHOLD,
+        MUL_NTT_THRESHOLD,
     ]
 }
 
@@ -154,8 +155,14 @@ differential! {
     }
 
     fn sqr_matches(
-        a in len_around(&[1, SQR_KARATSUBA_THRESHOLD, SQR_TOOM3_THRESHOLD, 3 * SQR_TOOM3_THRESHOLD])
-            .prop_flat_map(strategy::raw_limbs),
+        a in len_around(&[
+            1,
+            SQR_KARATSUBA_THRESHOLD,
+            SQR_TOOM3_THRESHOLD,
+            3 * SQR_TOOM3_THRESHOLD,
+            SQR_NTT_THRESHOLD,
+        ])
+        .prop_flat_map(strategy::raw_limbs),
     ) {
         ours: run_sqr(&a),
         gmp: val(&a).square(),
@@ -215,9 +222,11 @@ proptest! {
 /// Each algorithm, including nested Toom-3 and chunking, on all-ones operands
 /// (the worst case for carries), with the dispatcher's choice checked.
 #[test]
+#[allow(clippy::many_single_char_names, reason = "one letter per threshold")]
 fn every_algorithm_on_all_ones() {
     let k = MUL_KARATSUBA_THRESHOLD;
     let t = MUL_TOOM3_THRESHOLD;
+    let f = MUL_NTT_THRESHOLD;
     let cases = [
         (k - 1, k - 1, Algorithm::Basecase),
         (k, k, Algorithm::Karatsuba),
@@ -227,6 +236,10 @@ fn every_algorithm_on_all_ones() {
         (t + t / 2, t, Algorithm::Karatsuba),
         (3 * t + 1, 3 * t, Algorithm::Toom3),
         (5 * t + 3, 2 * t, Algorithm::Chunked),
+        (f - 1, f - 1, Algorithm::Toom3),
+        (f, f, Algorithm::Ntt),
+        (2 * f - 2, f, Algorithm::Ntt),
+        (2 * f + 1, f, Algorithm::Chunked),
     ];
     let mut seen = HashSet::new();
     for (an, bn, expected) in cases {
@@ -235,18 +248,57 @@ fn every_algorithm_on_all_ones() {
         let (a, b) = (vec![Limb::MAX; an], vec![Limb::MAX; bn]);
         assert_eq!(run_mul(&a, &b).to_rug(), val(&a) * val(&b), "({an}, {bn})");
     }
-    assert_eq!(seen.len(), 4);
+    assert_eq!(seen.len(), 5);
 
     for n in [
         SQR_KARATSUBA_THRESHOLD - 1,
         SQR_KARATSUBA_THRESHOLD,
         SQR_TOOM3_THRESHOLD,
         3 * SQR_TOOM3_THRESHOLD + 1,
+        SQR_NTT_THRESHOLD,
     ] {
         let a = vec![Limb::MAX; n];
         assert_eq!(run_sqr(&a).to_rug(), val(&a).square(), "{n}");
     }
     assert_eq!(sqr_algorithm(SQR_TOOM3_THRESHOLD), Algorithm::Toom3);
+    assert_eq!(sqr_algorithm(SQR_NTT_THRESHOLD - 1), Algorithm::Toom3);
+    assert_eq!(sqr_algorithm(SQR_NTT_THRESHOLD), Algorithm::Ntt);
+}
+
+/// Products of about 10^5 limbs through the dispatcher (the NTT, chunked
+/// NTT, and squaring), on pseudo-random and all-ones operands, against GMP.
+#[test]
+fn mul_at_1e5_limbs() {
+    let mut state = 0x0123_4567_89ab_cdef_u64;
+    let mut random = |n: usize| -> Vec<Limb> {
+        (0..n)
+            .map(|_| {
+                // xorshift64*
+                state ^= state >> 12;
+                state ^= state << 25;
+                state ^= state >> 27;
+                state.wrapping_mul(0x2545_f491_4f6c_dd1d)
+            })
+            .collect()
+    };
+    let a = random(100_000);
+    let b = random(99_999);
+    let c = random(30_000);
+    let ones = vec![Limb::MAX; 100_000];
+    for (x, y) in [(&a, &b), (&a, &c), (&ones, &ones), (&ones, &a)] {
+        assert_eq!(
+            run_mul(x, y).to_rug(),
+            val(x) * val(y),
+            "({}, {})",
+            x.len(),
+            y.len()
+        );
+    }
+    assert_eq!(algorithm(a.len(), b.len()), Algorithm::Ntt);
+    assert_eq!(algorithm(a.len(), c.len()), Algorithm::Chunked);
+    for x in [&a, &ones] {
+        assert_eq!(run_sqr(x).to_rug(), val(x).square());
+    }
 }
 
 #[test]
@@ -343,6 +395,57 @@ fn tune_mul() {
         let gmp = time(|| drop(black_box(Integer::from(black_box(&gx) * black_box(&gy)))));
         let ours_sq = time(|| drop(black_box(black_box(&x).square())));
         let gmp_sq = time(|| drop(black_box(Integer::from(black_box(&gx).square_ref()))));
+        println!(
+            "{n} {ours:.0} {gmp:.0} {:.2} | {ours_sq:.0} {gmp_sq:.0} {:.2}",
+            ours / gmp,
+            ours_sq / gmp_sq
+        );
+    }
+}
+
+/// The Toom-3 / NTT crossover and a comparison with GMP at NTT sizes. Not a
+/// correctness test; run with
+/// `cargo test --release -p cas-num tune_ntt -- --ignored --nocapture`.
+#[test]
+#[ignore = "benchmark"]
+#[allow(clippy::many_single_char_names, reason = "as in tune_mul")]
+fn tune_ntt() {
+    use std::hint::black_box;
+
+    use crate::kernel::ntt;
+
+    let operand = |n: usize, seed: u64| -> Vec<Limb> {
+        (0..n as u64)
+            .map(|i| (i ^ seed).wrapping_mul(0x9e37_79b9_7f4a_7c15) ^ 0x5555)
+            .collect()
+    };
+    println!("n  toom3  ntt | toom3_sqr  ntt_sqr   (us)");
+    for n in [
+        256, 512, 768, 1024, 1280, 1536, 1792, 2048, 2304, 2560, 2816, 3072, 3328, 3584, 3840,
+        4096, 6144, 8192,
+    ] {
+        let (a, b) = (operand(n, 1), operand(n, 2));
+        let mut r = vec![0; 2 * n];
+        let mut s = vec![0; toom3_scratch_len(n, n, false).max(ntt::mul_scratch_len(n, n))];
+        let t = time(|| toom3(&mut r, black_box(&a), black_box(&b), &mut s, false)) / 1e3;
+        let f = time(|| ntt::mul(&mut r, black_box(&a), black_box(&b), &mut s)) / 1e3;
+        let ts = time(|| toom3(&mut r, black_box(&a), black_box(&a), &mut s, true)) / 1e3;
+        let fs = time(|| ntt::sqr(&mut r, black_box(&a), &mut s)) / 1e3;
+        println!("{n} {t:.1} {f:.1} | {ts:.1} {fs:.1}");
+    }
+
+    println!("n  ours_mul  gmp_mul  ratio | ours_sqr  gmp_sqr  ratio   (us, with allocation)");
+    for n in [4096, 8192, 16384, 32768, 65536, 100_000, 131_072, 262_144] {
+        let (a, b) = (operand(n, 3), operand(n, 4));
+        let (x, y) = (
+            crate::Natural::from_limbs(&a),
+            crate::Natural::from_limbs(&b),
+        );
+        let (gx, gy) = (val(&a), val(&b));
+        let ours = time(|| drop(black_box(black_box(&x) * black_box(&y)))) / 1e3;
+        let gmp = time(|| drop(black_box(Integer::from(black_box(&gx) * black_box(&gy))))) / 1e3;
+        let ours_sq = time(|| drop(black_box(black_box(&x).square()))) / 1e3;
+        let gmp_sq = time(|| drop(black_box(Integer::from(black_box(&gx).square_ref())))) / 1e3;
         println!(
             "{n} {ours:.0} {gmp:.0} {:.2} | {ours_sq:.0} {gmp_sq:.0} {:.2}",
             ours / gmp,
