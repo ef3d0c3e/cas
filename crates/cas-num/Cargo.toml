@@ -7,6 +7,11 @@ rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
 publish.workspace = true
+readme = "README.md"
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+proptest = "1.11.0"
+rug = { version = "1.30.0", default-features = false, features = ["integer", "rational", "std"] }
