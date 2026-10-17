@@ -4,7 +4,8 @@
 //! "Expression design" page in Lific (`CAS-DOC-3`).
 //!
 //! - [`Expr`]: the expression handle, 16 bytes; symbols and `i64` integers are
-//!   inline, everything else is interned.
+//!   inline, everything else is interned. `Ord` is the canonical order that
+//!   evaluation sorts `Orderless` arguments into (see `order.rs`).
 //! - [`Symbol`]: permanent, interned names; the builtins (`Symbol::PLUS`, …)
 //!   have fixed ids and fixed [`Attributes`].
 //! - [`Context`]: values, user attributes and assumptions; scopes are child
@@ -16,6 +17,7 @@ mod context;
 mod expr;
 mod intern;
 mod node;
+mod order;
 mod symbol;
 
 pub use attributes::Attributes;
