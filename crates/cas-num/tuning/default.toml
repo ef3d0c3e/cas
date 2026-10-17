@@ -1,34 +1,36 @@
+# Written by cas-tune on 2026-10-18 on an idle machine (623 s, 242 builds,
+# median timing noise 0.6%).
 # Algorithm thresholds for cas-num, embedded at build time (see build.rs).
 # Sizes are in limbs unless noted. Measured on the development machine;
 # `cargo run --release -p cas-tune` writes a file for yours.
 
 # Multiplication: the shorter operand's length from which each algorithm is
 # used (kernel/mul.rs).
-mul_karatsuba_threshold = 16
-mul_toom3_threshold = 144
-mul_ntt_threshold = 3328
+mul_karatsuba_threshold = 17
+mul_toom3_threshold = 105
+mul_ntt_threshold = 3470
 
 # Squaring (kernel/mul.rs).
-sqr_karatsuba_threshold = 44
-sqr_toom3_threshold = 192
-sqr_ntt_threshold = 1792
+sqr_karatsuba_threshold = 35
+sqr_toom3_threshold = 118
+sqr_ntt_threshold = 1730
 
 # NTT (kernel/ntt.rs): transforms of at most this many coefficients run
 # layer by layer; longer ones split in halves first.
-ntt_block = 1024
+ntt_block = 4096
 # A product wraps around a halved transform when the recomputed top product
 # is at most 1/ntt_wrap_fraction of the transform.
 ntt_wrap_fraction = 1
 
 # Division (kernel/div.rs): divisor length from which divide and conquer is
 # used.
-dc_div_threshold = 40
+dc_div_threshold = 17
 
 # Montgomery reduction (modular/ring.rs): modulus length from which REDC
 # multiplies by -n^-1 mod R instead of eliminating one limb at a time.
-redc_n_threshold = 144
+redc_n_threshold = 70
 
 # Radix conversion (natural/radix.rs): limbs from which to_string, and
 # digits from which parsing, split by divide and conquer.
-to_string_dc_threshold = 16
-from_string_dc_threshold = 600
+to_string_dc_threshold = 15
+from_string_dc_threshold = 6939
