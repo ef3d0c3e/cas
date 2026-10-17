@@ -91,6 +91,14 @@ impl<A: ToRug, B: ToRug> ToRug for (A, B) {
     }
 }
 
+impl<A: ToRug, B: ToRug, C: ToRug> ToRug for (A, B, C) {
+    type Rug = (A::Rug, B::Rug, C::Rug);
+
+    fn to_rug(&self) -> Self::Rug {
+        (self.0.to_rug(), self.1.to_rug(), self.2.to_rug())
+    }
+}
+
 impl ToRug for Natural {
     type Rug = Integer;
 

@@ -22,7 +22,10 @@ pub(crate) mod mul;
 
 pub(crate) mod div;
 
+pub(crate) mod gcd;
+
 pub use div::{div_rem, div_rem_1, div_rem_scratch_len, divexact_1, rem_1};
+pub use gcd::gcd_1;
 pub use mul::{
     addmul_1, mul, mul_1, mul_1_assign, mul_basecase, mul_scratch_len, sqr, sqr_basecase,
     sqr_scratch_len, submul_1,

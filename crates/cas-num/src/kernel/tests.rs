@@ -142,6 +142,20 @@ differential! {
         ours: bit_length(a.limbs()),
         gmp: a.to_rug().significant_bits(),
     }
+
+    /// Single limbs; clearing the low `k` bits of both makes them share a
+    /// factor of `2^k`.
+    fn gcd_1_matches(a in strategy::limb(), b in strategy::limb(), k in 0..64u32) {
+        ours: {
+            let (a, b) = (a & (u64::MAX << k), b & (u64::MAX << k));
+            (gcd_1(a, b), gcd_1(b, a))
+        },
+        gmp: {
+            let (a, b) = (a & (u64::MAX << k), b & (u64::MAX << k));
+            let g = Integer::from(a).gcd(&Integer::from(b));
+            (g.clone(), g)
+        },
+    }
 }
 
 #[test]

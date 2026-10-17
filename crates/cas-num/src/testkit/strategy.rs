@@ -8,6 +8,7 @@
 use proptest::collection::vec;
 use proptest::prelude::*;
 
+use super::ToRug;
 use super::model::{Mag, Signed};
 
 /// Default size bound, in limbs, for the unparameterised strategies.
@@ -216,4 +217,41 @@ pub(crate) fn integer() -> BoxedStrategy<Signed> {
         2 => any::<i64>().prop_map(Signed::from_i64),
     ]
     .boxed()
+}
+
+/// Pairs of naturals for GCD tests, in either order: independent values
+/// (mostly coprime), values sharing a large common factor, consecutive
+/// Fibonacci numbers (Euclid's worst case: every quotient is 1), a value and
+/// a multiple of it, equal values, and values sharing their leading limbs
+/// (where Lehmer's leading-bit estimates are least informative).
+pub(crate) fn gcd_pair(max_limbs: usize) -> BoxedStrategy<(Mag, Mag)> {
+    assert!(max_limbs >= 3);
+    let third = max_limbs / 3;
+    let product = |x: &Mag, y: &Mag| Mag::from_rug(&(x.to_rug() * y.to_rug()));
+    let fib_max = u32::try_from(64 * max_limbs * 36 / 25).expect("index fits u32");
+    let pairs = prop_oneof![
+        3 => (natural_up_to(max_limbs), natural_up_to(max_limbs)),
+        3 => (natural_up_to(third), natural_up_to(third), natural_up_to(third))
+            .prop_map(move |(a, b, c)| (product(&a, &c), product(&b, &c))),
+        2 => (0..fib_max).prop_map(|n| {
+            let f = |k| Mag::from_rug(&rug::Integer::from(rug::Integer::fibonacci(k)));
+            (f(n + 1), f(n))
+        }),
+        1 => (natural_up_to(2 * third), natural_up_to(third))
+            .prop_map(move |(a, k)| (product(&a, &k), a)),
+        1 => natural_up_to(max_limbs).prop_map(|a| (a.clone(), a)),
+        2 => (2..=max_limbs)
+            .prop_flat_map(|n| {
+                let m = || natural_with_len(Just(n));
+                (m(), m(), 1..n)
+            })
+            .prop_map(|(a, b, low)| {
+                let mut limbs = a.limbs().to_vec();
+                limbs[..low].copy_from_slice(&b.limbs()[..low]);
+                (a, Mag::from_limbs(limbs))
+            }),
+    ];
+    (pairs, any::<bool>())
+        .prop_map(|((a, b), swap)| if swap { (b, a) } else { (a, b) })
+        .boxed()
 }

@@ -10,8 +10,9 @@ Correctness is the primary goal. The design is in Lific page `CAS-DOC-2`.
 | `kernel` | GMP `mpn`-style limb kernels on slices: add/sub (`_n`, `_1`, mixed length, in-place), compare, shifts, bitwise ops, bit counts. No allocation, no normalisation; carries and borrows are returned. |
 | `kernel` (multiplication) | `mul_1`, `addmul_1`, schoolbook `mul_basecase`/`sqr_basecase`, and `mul`/`sqr`, which pick schoolbook, Karatsuba or Toom-3 by size and cut very unbalanced operands into balanced chunks. The recursive algorithms work in caller-provided scratch (`mul_scratch_len`, `sqr_scratch_len`). Thresholds are in `kernel/mul.rs`; retune with `cargo test --release -p cas-num tune_mul -- --ignored --nocapture`. |
 | `kernel` (division) | `div_rem_1`/`rem_1` (Möller–Granlund reciprocal), `divexact_1` (Hensel), and `div_rem`: Knuth's algorithm D with a 3-by-2 quotient estimate, or Burnikel–Ziegler divide and conquer from `DC_DIV_THRESHOLD` limbs, in caller-provided scratch (`div_rem_scratch_len`). The word-level primitives are also compiled for 8- and 16-bit words in tests, where every boundary case is reachable. Retune with `cargo test --release -p cas-num tune_div -- --ignored --nocapture`. |
-| `Natural` | Unsigned arbitrary precision integer, limbs stored inline up to 192 bits and on the heap beyond. `std` operators in all owned/borrowed forms (`+ - * / %`, bitwise), `checked_sub*`, `square`, `div_rem`, `div_exact`, `is_divisible_by`, single-limb variants, shifts by `u64`, bit queries, primitive conversions. |
-| `Integer` | Signed integer, layout E: `Small(i64)` inline (never allocates) or a boxed sign and `Natural` magnitude, canonical (boxed iff outside `i64`), 16 bytes. Inline operands use `checked_*` with an `i128` fallback; results are demoted when they fit. `+ - * / %` in all forms (`/`, `%` truncate), `checked_div_rem` with a `Rounding` (`Trunc`, `Floor`, `Ceil`, `Euclid`) and named `div_rem_*` variants, `div_exact`, `is_divisible_by`, sign queries, conversions. |
+| `kernel` (gcd) | `gcd_1`: binary GCD of two limbs. |
+| `Natural` | Unsigned arbitrary precision integer, limbs stored inline up to 192 bits and on the heap beyond. `std` operators in all owned/borrowed forms (`+ - * / %`, bitwise), `checked_sub*`, `square`, `div_rem`, `div_exact`, `is_divisible_by`, single-limb variants, shifts by `u64`, bit queries, primitive conversions. `gcd` and `lcm` by Lehmer's algorithm (Knuth's Algorithm L on the leading 63 bits, with a full division step when the leading bits cannot decide a quotient), finished by the binary GCD once the smaller operand fits a limb. |
+| `Integer` | Signed integer, layout E: `Small(i64)` inline (never allocates) or a boxed sign and `Natural` magnitude, canonical (boxed iff outside `i64`), 16 bytes. Inline operands use `checked_*` with an `i128` fallback; results are demoted when they fit. `+ - * / %` in all forms (`/`, `%` truncate), `checked_div_rem` with a `Rounding` (`Trunc`, `Floor`, `Ceil`, `Euclid`) and named `div_rem_*` variants, `div_exact`, `is_divisible_by`, sign queries, conversions. `gcd`, `lcm`, `gcd_ext` (the same cofactors as GMP's `mpz_gcdext`) and `mod_inverse` (in `0..|m|`). |
 
 ## Differential testing against GMP
 
@@ -70,4 +71,7 @@ generators weight such inputs heavily:
   negative).
 - `signed_near_i64_bounds()`: within ±3 of `0`, `±2^31`, `±2^32`, `±2^62`, `±2^63`, `±2^64`,
   `±2^65`, `±2^127`, `±2^128`, the promotion edges of `Integer`'s inline fast path.
+- `gcd_pair(max_limbs)`: pairs for GCD tests: independent values, values with a large common
+  factor, consecutive Fibonacci numbers, a value and a multiple of it, equal values, and values
+  sharing their leading limbs.
 - `integer()`: a mix of `signed()`, `signed_near_i64_bounds()` and any `i64`.

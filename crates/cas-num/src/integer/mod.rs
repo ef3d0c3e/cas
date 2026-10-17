@@ -2,6 +2,7 @@
 
 mod convert;
 mod div;
+mod gcd;
 mod ops;
 
 #[cfg(test)]
