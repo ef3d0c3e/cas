@@ -24,6 +24,8 @@ use rug::Integer;
 
 pub(crate) use model::{Mag, Signed};
 
+use crate::Natural;
+
 /// Maps a value of ours to the equivalent GMP value, for comparison.
 ///
 /// Implemented by every cas-num type and by the primitive types operations
@@ -86,6 +88,21 @@ impl<A: ToRug, B: ToRug> ToRug for (A, B) {
 
     fn to_rug(&self) -> Self::Rug {
         (self.0.to_rug(), self.1.to_rug())
+    }
+}
+
+impl ToRug for Natural {
+    type Rug = Integer;
+
+    fn to_rug(&self) -> Integer {
+        Integer::from_digits(self.limbs(), rug::integer::Order::Lsf)
+    }
+}
+
+impl Mag {
+    /// The same value as a [`Natural`].
+    pub(crate) fn to_natural(&self) -> Natural {
+        Natural::from_limbs(self.limbs())
     }
 }
 

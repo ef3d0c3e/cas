@@ -3,6 +3,13 @@
 Arbitrary-precision integers, rationals, modular and ball arithmetic for the CAS engine.
 Correctness is the primary goal. The design is in Lific page `CAS-DOC-2`.
 
+## Layout
+
+| Module | Contents |
+|---|---|
+| `kernel` | GMP `mpn`-style limb kernels on slices: add/sub (`_n`, `_1`, mixed length, in-place), compare, shifts, bitwise ops, bit counts. No allocation, no normalisation; carries and borrows are returned. |
+| `Natural` | Unsigned arbitrary precision integer, limbs stored inline up to 192 bits and on the heap beyond. `std` operators in all owned/borrowed forms, `checked_sub*`, shifts by `u64`, bit queries, primitive conversions. |
+
 ## Differential testing against GMP
 
 Every operation is checked against GMP on generated inputs. The harness lives in

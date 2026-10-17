@@ -157,3 +157,30 @@ pub(crate) fn unbalanced_pair(max_limbs: usize) -> BoxedStrategy<(Mag, Mag)> {
         .prop_map(|(long, short, swap)| if swap { (short, long) } else { (long, short) })
         .boxed()
 }
+
+/// Raw limbs of exactly `len` limbs for kernel tests: unlike the `natural`
+/// strategies, high limbs may be zero (kernels must not assume normalisation).
+pub(crate) fn raw_limbs(len: usize) -> BoxedStrategy<Vec<u64>> {
+    prop_oneof![
+        4 => vec(limb(), len),
+        2 => vec(prop_oneof![6 => Just(0u64), 1 => limb()], len),
+        1 => Just(vec![u64::MAX; len]),
+        1 => Just(vec![0; len]),
+    ]
+    .boxed()
+}
+
+/// Two raw limb vectors of the same length in `0..=max_limbs`.
+pub(crate) fn raw_pair_same_len(max_limbs: usize) -> BoxedStrategy<(Vec<u64>, Vec<u64>)> {
+    prop_oneof![1 => Just(0), 8 => len_up_to(max_limbs)]
+        .prop_flat_map(|n| (raw_limbs(n), raw_limbs(n)))
+        .boxed()
+}
+
+/// Raw limb vectors `(a, b)` with `b.len() <= a.len() <= max_limbs`.
+pub(crate) fn raw_pair_longer_first(max_limbs: usize) -> BoxedStrategy<(Vec<u64>, Vec<u64>)> {
+    prop_oneof![1 => Just(0), 8 => len_up_to(max_limbs)]
+        .prop_flat_map(|n| (Just(n), 0..=n))
+        .prop_flat_map(|(n, m)| (raw_limbs(n), raw_limbs(m)))
+        .boxed()
+}
