@@ -8,10 +8,13 @@
 //!   evaluation sorts `Orderless` arguments into (see `order.rs`).
 //! - [`Symbol`]: permanent, interned names; the builtins (`Symbol::PLUS`, …)
 //!   have fixed ids and fixed [`Attributes`].
+//! - [`build`]: operators (`x + 2 * y.pow(3)`), [`Expr::call`] and the
+//!   builtin functions, for building expressions from Rust without a context.
 //! - [`Context`]: values, user attributes and assumptions; scopes are child
 //!   values. Evaluation goes through a context.
 
 mod attributes;
+pub mod build;
 mod builtin;
 mod context;
 mod expr;

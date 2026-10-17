@@ -16,9 +16,10 @@ use crate::symbol::Symbol;
 /// inline payloads compare by value and nodes by address. Cloning is a copy
 /// or a reference-count increment.
 ///
-/// Construction is purely structural: [`Expr::apply`] interns exactly the
-/// head and arguments it is given. Canonicalisation (flattening, sorting,
-/// arithmetic) is evaluation's job.
+/// [`Expr::apply`] is purely structural: it interns exactly the head and
+/// arguments it is given. The builder ([`Expr::call`], the operators in
+/// [`build`](crate::build)) also flattens and sorts builtin `Flat` and
+/// `Orderless` heads; arithmetic is evaluation's job.
 ///
 /// ```
 /// use cas_core::{Expr, Symbol, View};
