@@ -123,6 +123,15 @@ impl Integer {
         matches!(self.0, Repr::Small(1))
     }
 
+    /// Bits of `|self|`, without leading zeros (0 for zero).
+    #[must_use]
+    pub fn bit_length(&self) -> u64 {
+        match &self.0 {
+            Repr::Small(x) => u64::from(u64::BITS - x.unsigned_abs().leading_zeros()),
+            Repr::Big(b) => b.mag.bit_length(),
+        }
+    }
+
     /// The value as an `i64`, if it fits (the inline representation).
     #[must_use]
     pub fn to_i64(&self) -> Option<i64> {

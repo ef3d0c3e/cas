@@ -129,6 +129,17 @@ impl ToRug for crate::Integer {
     }
 }
 
+impl ToRug for crate::Rational {
+    type Rug = rug::Rational;
+
+    /// Also checks the canonical form, so every differential test of a
+    /// `Rational` result checks it.
+    fn to_rug(&self) -> rug::Rational {
+        assert!(self.is_canonical(), "non-canonical Rational: {self:?}");
+        rug::Rational::from((self.numer().to_rug(), self.denom().to_rug()))
+    }
+}
+
 impl Signed {
     /// The same value as an [`Integer`].
     pub(crate) fn to_integer(&self) -> crate::Integer {

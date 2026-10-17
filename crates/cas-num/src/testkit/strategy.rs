@@ -255,3 +255,58 @@ pub(crate) fn gcd_pair(max_limbs: usize) -> BoxedStrategy<(Mag, Mag)> {
         .prop_map(|((a, b), swap)| if swap { (b, a) } else { (a, b) })
         .boxed()
 }
+
+/// A canonical fraction `(numerator, denominator)`, reduced by GMP.
+fn canonical(num: &rug::Integer, den: &rug::Integer) -> (Signed, Signed) {
+    let q = rug::Rational::from((num, den));
+    (Signed::from_rug(q.numer()), Signed::from_rug(q.denom()))
+}
+
+fn nonzero_integer() -> BoxedStrategy<Signed> {
+    integer()
+        .prop_filter("non-zero", |d| !d.mag().is_zero())
+        .boxed()
+}
+
+/// A canonical rational `(numerator, denominator)`: arbitrary fractions,
+/// integers, small fractions, and denominators at the promotion edges of
+/// `Integer`'s inline representation.
+pub(crate) fn rational() -> BoxedStrategy<(Signed, Signed)> {
+    let one = || Just(Signed::from_i64(1));
+    prop_oneof![
+        4 => (integer(), nonzero_integer()),
+        1 => (integer(), one()),
+        2 => (-30i64..=30, 1i64..=30).prop_map(|(n, d)| (Signed::from_i64(n), Signed::from_i64(d))),
+        1 => (integer(), signed_near_i64_bounds().prop_filter("non-zero", |d| !d.mag().is_zero())),
+    ]
+    .prop_map(|(n, d)| canonical(&n.to_rug(), &d.to_rug()))
+    .boxed()
+}
+
+/// Pairs of canonical rationals: independent, with denominators sharing a
+/// factor (the cancellation in Henrici's sum), or with each numerator sharing
+/// a factor with the other's denominator (the cross-cancellation in
+/// products), and equal or opposite values.
+pub(crate) fn rational_pair() -> BoxedStrategy<((Signed, Signed), (Signed, Signed))> {
+    let part = || signed_up_to(DEFAULT_MAX_LIMBS / 3);
+    let nonzero = || natural_up_to(DEFAULT_MAX_LIMBS / 3).prop_filter("non-zero", |m| !m.is_zero());
+    prop_oneof![
+        3 => (rational(), rational()),
+        2 => (part(), nonzero(), part(), nonzero(), nonzero()).prop_map(|(a, b, c, d, g)| {
+            let g = g.to_rug();
+            (canonical(&a.to_rug(), &(b.to_rug() * &g)), canonical(&c.to_rug(), &(d.to_rug() * &g)))
+        }),
+        2 => (part(), nonzero(), part(), nonzero(), nonzero(), nonzero()).prop_map(|(a, b, c, d, g, h)| {
+            let (g, h) = (g.to_rug(), h.to_rug());
+            (
+                canonical(&(a.to_rug() * &g), &(b.to_rug() * &h)),
+                canonical(&(c.to_rug() * &h), &(d.to_rug() * &g)),
+            )
+        }),
+        1 => (rational(), any::<bool>()).prop_map(|((n, d), negate)| {
+            let m = if negate { Signed::new(!n.is_negative(), n.mag().clone()) } else { n.clone() };
+            ((n, d.clone()), (m, d))
+        }),
+    ]
+    .boxed()
+}

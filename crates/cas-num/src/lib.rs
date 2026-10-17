@@ -8,15 +8,19 @@
 //! - [`Natural`]: unsigned arbitrary-precision integers.
 //! - [`Integer`]: signed arbitrary-precision integers; values that fit an `i64`
 //!   never allocate.
+//! - [`Rational`]: rational numbers, always reduced with a positive
+//!   denominator.
 
 mod error;
 mod integer;
 pub mod kernel;
 mod natural;
+mod rational;
 
 pub use error::{OutOfRangeError, ParseErrorKind, ParseNumberError};
 pub use integer::{Integer, Rounding};
 pub use natural::Natural;
+pub use rational::Rational;
 
 /// A machine word of a multi-precision number. Numbers are little-endian
 /// sequences of limbs.

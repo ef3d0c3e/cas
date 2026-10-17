@@ -29,6 +29,8 @@ pub enum ParseErrorKind {
     /// A character is not a digit of the radix, or a sign has no digits
     /// after it.
     InvalidDigit,
+    /// A fraction has a zero denominator.
+    ZeroDenominator,
 }
 
 impl ParseNumberError {
@@ -48,6 +50,7 @@ impl fmt::Display for ParseNumberError {
         f.write_str(match self.kind {
             ParseErrorKind::Empty => "cannot parse number from empty string",
             ParseErrorKind::InvalidDigit => "invalid digit found in string",
+            ParseErrorKind::ZeroDenominator => "denominator is zero",
         })
     }
 }
