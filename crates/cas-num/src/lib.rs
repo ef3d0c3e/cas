@@ -10,6 +10,9 @@
 //!   never allocate.
 //! - [`Rational`]: rational numbers, always reduced with a positive
 //!   denominator.
+//! - [`Primality`], [`Factorization`]: primality tests and factorisation,
+//!   as methods of [`Natural`] ([`Natural::primality`],
+//!   [`Natural::factor`]).
 //! - [`modular`]: residues modulo word-size and multi-precision moduli,
 //!   Chinese remaindering and rational reconstruction.
 
@@ -18,11 +21,13 @@ mod integer;
 pub mod kernel;
 pub mod modular;
 mod natural;
+mod prime;
 mod rational;
 
 pub use error::{OutOfRangeError, ParseErrorKind, ParseNumberError};
 pub use integer::{Integer, Rounding};
 pub use natural::Natural;
+pub use prime::{Factor, Factorization, Primality};
 pub use rational::Rational;
 
 /// A machine word of a multi-precision number. Numbers are little-endian

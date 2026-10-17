@@ -5,7 +5,6 @@ use proptest::prelude::*;
 use rug::Integer;
 use rug::ops::Pow;
 
-use super::is_prime_u64;
 use crate::Natural;
 use crate::testkit::strategy::{self, DEFAULT_MAX_LIMBS};
 use crate::testkit::{Mag, ToRug, differential};
@@ -213,18 +212,4 @@ fn root_edge_cases() {
 #[should_panic(expected = "zeroth root")]
 fn zeroth_root_panics() {
     let _ = Natural::one().nth_root(0);
-}
-
-#[test]
-fn prime_test_matches_gmp() {
-    let check = |n: u64| {
-        let gmp = Integer::from(n).is_probably_prime(30) != rug::integer::IsPrime::No;
-        assert_eq!(is_prime_u64(n), gmp, "{n}");
-    };
-    (0..20_000).for_each(check);
-    (u64::MAX - 20_000..=u64::MAX).for_each(check);
-    // Strong pseudoprimes to several small bases.
-    [3_215_031_751, 3_825_123_056_546_413_051]
-        .into_iter()
-        .for_each(check);
 }

@@ -226,6 +226,23 @@ impl ModRing {
         Self::residue(r.into_boxed_slice())
     }
 
+    /// `x / 2`, for an odd modulus.
+    pub(crate) fn half(&self, x: &Residue) -> Residue {
+        self.check(x);
+        debug_assert!(self.n.bit(0), "halving needs an odd modulus");
+        let mut r = x.limbs.to_vec();
+        // x or x + n is even; halving is linear, so it commutes with the
+        // Montgomery representation.
+        let carry = if r[0] & 1 == 1 {
+            add_n_assign(&mut r, self.n.limbs())
+        } else {
+            0
+        };
+        kernel::shr_assign(&mut r, 1);
+        *r.last_mut().expect("non-empty") |= carry << (Limb::BITS - 1);
+        Self::residue(r.into_boxed_slice())
+    }
+
     /// `x y`.
     #[must_use]
     pub fn mul(&self, x: &Residue, y: &Residue) -> Residue {

@@ -14,6 +14,8 @@
 use super::Natural;
 use super::bits::split_bit_index;
 use crate::Limb;
+use crate::modular::ModWord;
+use crate::prime::is_prime_u64;
 
 #[cfg(test)]
 mod tests;
@@ -299,7 +301,7 @@ fn power_residues(x: &Natural, p: u64) -> bool {
             }
         }
         let a = x.rem_limb(q);
-        if a != 0 && pow_mod_u64(a, (q - 1) / p, q) != 1 {
+        if a != 0 && ModWord::new(q).pow(a, (q - 1) / p) != 1 {
             return false;
         }
     }
@@ -313,50 +315,4 @@ fn next_prime(p: u64) -> u64 {
         q += 1;
     }
     q
-}
-
-/// Deterministic Miller–Rabin: the first twelve prime bases decide every
-/// `u64`. A stopgap for the filters above until the primality ticket
-/// (CAS-15).
-fn is_prime_u64(n: u64) -> bool {
-    const BASES: [u64; 12] = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37];
-    if n < 2 {
-        return false;
-    }
-    if let Some(&b) = BASES.iter().find(|&&b| n % b == 0) {
-        return n == b;
-    }
-    let s = (n - 1).trailing_zeros();
-    let d = (n - 1) >> s;
-    BASES.iter().all(|&b| {
-        let mut y = pow_mod_u64(b, d, n);
-        if y == 1 || y == n - 1 {
-            return true;
-        }
-        for _ in 1..s {
-            y = mul_mod_u64(y, y, n);
-            if y == n - 1 {
-                return true;
-            }
-        }
-        false
-    })
-}
-
-fn mul_mod_u64(a: u64, b: u64, m: u64) -> u64 {
-    let r = u128::from(a) * u128::from(b) % u128::from(m);
-    u64::try_from(r).expect("below m")
-}
-
-fn pow_mod_u64(mut b: u64, mut e: u64, m: u64) -> u64 {
-    let mut r = 1 % m;
-    b %= m;
-    while e > 0 {
-        if e & 1 == 1 {
-            r = mul_mod_u64(r, b, m);
-        }
-        b = mul_mod_u64(b, b, m);
-        e >>= 1;
-    }
-    r
 }
