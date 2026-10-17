@@ -4,6 +4,7 @@ mod convert;
 mod div;
 mod gcd;
 mod ops;
+mod pow;
 mod radix;
 
 #[cfg(test)]

@@ -121,6 +121,17 @@ differential! {
         },
     }
 
+    fn pow(a in rational(), e in -12i32..=12) {
+        ours: {
+            let x = ours(&a);
+            if x.is_zero() && e < 0 { x } else { x.pow(i64::from(e)) }
+        },
+        gmp: {
+            let g = gmp(&a);
+            if g == 0 && e < 0 { g } else { rug::ops::Pow::pow(g, e) }
+        },
+    }
+
     fn to_string_radix(a in rational(), r in radix()) {
         ours: ours(&a).to_string_radix(r),
         gmp: gmp(&a).to_string_radix(i32::try_from(r).unwrap()),
@@ -206,6 +217,8 @@ fn edge_cases() {
     assert_eq!(q(-3, 2).to_string(), "-3/2");
     assert_eq!(q(4, 2).to_string(), "2");
     assert_eq!(Rational::default(), Rational::ZERO);
+    assert_eq!(q(-2, 3).pow(-3), q(-27, 8));
+    assert_eq!(Rational::ZERO.pow(0), Rational::ONE);
 
     let parse = |s: &str| s.parse::<Rational>().map_err(|e| e.kind());
     assert_eq!(parse(""), Err(ParseErrorKind::Empty));
@@ -226,4 +239,10 @@ fn edge_cases() {
 #[should_panic(expected = "attempt to divide by zero")]
 fn division_by_zero_panics() {
     let _ = Rational::ONE / Rational::ZERO;
+}
+
+#[test]
+#[should_panic(expected = "attempt to divide by zero")]
+fn zero_to_negative_power_panics() {
+    let _ = Rational::ZERO.pow(-1);
 }

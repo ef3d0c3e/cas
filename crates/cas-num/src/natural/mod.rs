@@ -7,7 +7,9 @@ mod gcd;
 mod limb_vec;
 mod mul;
 mod ops;
+mod pow;
 mod radix;
+mod root;
 
 #[cfg(test)]
 mod tests;

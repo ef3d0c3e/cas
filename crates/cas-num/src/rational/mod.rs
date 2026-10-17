@@ -154,6 +154,20 @@ impl Rational {
         self.checked_recip().expect("attempt to divide by zero")
     }
 
+    /// `self^e`, with `x^0 = 1`. Powers of coprime parts stay coprime, so
+    /// nothing is reduced.
+    ///
+    /// # Panics
+    ///
+    /// If `self` is zero and `e` negative, or if the bit length of the
+    /// result overflows `u64`.
+    #[must_use]
+    pub fn pow(&self, e: i64) -> Rational {
+        let base = if e < 0 { &self.recip() } else { self };
+        let k = e.unsigned_abs();
+        Rational::from_canonical(base.num.pow(k), base.den.pow(k))
+    }
+
     /// The largest integer `<= self`.
     #[must_use]
     pub fn floor(&self) -> Integer {

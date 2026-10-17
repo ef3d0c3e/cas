@@ -41,7 +41,7 @@ try_from_signed!(i8 => u8, i16 => u16, i32 => u32, i64 => u64, i128 => u128, isi
 
 impl Natural {
     /// The value as a `u128`, if it fits.
-    fn to_u128(&self) -> Option<u128> {
+    pub(super) fn to_u128(&self) -> Option<u128> {
         match *self.limbs() {
             [] => Some(0),
             [lo] => Some(u128::from(lo)),
