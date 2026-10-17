@@ -3,6 +3,7 @@
 mod bits;
 mod convert;
 mod limb_vec;
+mod mul;
 mod ops;
 
 #[cfg(test)]

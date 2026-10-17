@@ -280,6 +280,51 @@ differential! {
         ours: a.to_natural().is_power_of_two(),
         gmp: a.to_rug().is_power_of_two(),
     }
+
+    fn mul(a in strategy::natural(), b in strategy::natural()) {
+        ours: all_forms!(a.to_natural(), *, *=, b.to_natural()),
+        gmp: a.to_rug() * b.to_rug(),
+    }
+
+    fn mul_unbalanced((a, b) in strategy::unbalanced_pair(DEFAULT_MAX_LIMBS)) {
+        ours: all_forms!(a.to_natural(), *, *=, b.to_natural()),
+        gmp: a.to_rug() * b.to_rug(),
+    }
+
+    fn mul_around_inline(a in around_inline(), b in around_inline()) {
+        ours: all_forms!(a.to_natural(), *, *=, b.to_natural()),
+        gmp: a.to_rug() * b.to_rug(),
+    }
+
+    /// Sizes past every algorithm threshold (the kernel tests cover the
+    /// crossovers themselves).
+    fn mul_large(a in natural_beyond_thresholds(), b in natural_beyond_thresholds()) {
+        ours: a.to_natural() * b.to_natural(),
+        gmp: a.to_rug() * b.to_rug(),
+    }
+
+    fn mul_limb(a in strategy::natural(), b in strategy::limb()) {
+        ours: all_forms_prim!(a.to_natural(), *, *=, b),
+        gmp: a.to_rug() * b,
+    }
+
+    fn square(a in prop_oneof![strategy::natural(), natural_beyond_thresholds()]) {
+        ours: {
+            let x = a.to_natural();
+            let s = x.square();
+            // `&x * &x` takes the squaring path too.
+            prop_assert_eq!(&(&x * &x), &s);
+            s
+        },
+        gmp: a.to_rug().square(),
+    }
+}
+
+/// A natural of up to three times the largest multiplication threshold.
+fn natural_beyond_thresholds() -> BoxedStrategy<Mag> {
+    let max =
+        3 * crate::kernel::mul::MUL_TOOM3_THRESHOLD.max(crate::kernel::mul::SQR_TOOM3_THRESHOLD);
+    strategy::natural_with_len(1..=max).boxed()
 }
 
 proptest! {
@@ -311,6 +356,17 @@ proptest! {
     fn add_sub_round_trip(a in strategy::natural(), b in strategy::natural()) {
         let (x, y) = (a.to_natural(), b.to_natural());
         prop_assert_eq!(&(&x + &y) - &y, x);
+    }
+
+    #[test]
+    fn mul_is_associative_and_distributive(
+        a in strategy::natural(),
+        b in strategy::natural(),
+        c in strategy::natural(),
+    ) {
+        let (x, y, z) = (a.to_natural(), b.to_natural(), c.to_natural());
+        prop_assert_eq!(&(&x * &y) * &z, &x * &(&y * &z));
+        prop_assert_eq!(&x * &(&y + &z), &(&x * &y) + &(&x * &z));
     }
 
     #[test]

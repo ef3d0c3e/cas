@@ -8,7 +8,8 @@ Correctness is the primary goal. The design is in Lific page `CAS-DOC-2`.
 | Module | Contents |
 |---|---|
 | `kernel` | GMP `mpn`-style limb kernels on slices: add/sub (`_n`, `_1`, mixed length, in-place), compare, shifts, bitwise ops, bit counts. No allocation, no normalisation; carries and borrows are returned. |
-| `Natural` | Unsigned arbitrary precision integer, limbs stored inline up to 192 bits and on the heap beyond. `std` operators in all owned/borrowed forms, `checked_sub*`, shifts by `u64`, bit queries, primitive conversions. |
+| `kernel` (multiplication) | `mul_1`, `addmul_1`, schoolbook `mul_basecase`/`sqr_basecase`, and `mul`/`sqr`, which pick schoolbook, Karatsuba or Toom-3 by size and cut very unbalanced operands into balanced chunks. The recursive algorithms work in caller-provided scratch (`mul_scratch_len`, `sqr_scratch_len`). Thresholds are in `kernel/mul.rs`; retune with `cargo test --release -p cas-num tune_mul -- --ignored --nocapture`. |
+| `Natural` | Unsigned arbitrary precision integer, limbs stored inline up to 192 bits and on the heap beyond. `std` operators in all owned/borrowed forms (`+ - *`, bitwise), `checked_sub*`, `square`, shifts by `u64`, bit queries, primitive conversions. |
 
 ## Differential testing against GMP
 

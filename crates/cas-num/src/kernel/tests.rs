@@ -178,3 +178,5 @@ fn cmp_orders_by_length_first() {
     assert_eq!(cmp(&[Limb::MAX], &[0, 1]), Ordering::Less);
     assert_eq!(cmp(&[], &[]), Ordering::Equal);
 }
+
+mod mul;
