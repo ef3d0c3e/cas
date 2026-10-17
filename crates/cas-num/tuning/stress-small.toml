@@ -11,5 +11,7 @@ ntt_block = 2
 ntt_wrap_fraction = 1
 dc_div_threshold = 2
 redc_n_threshold = 1
+gcd_dc_threshold = 1
+hgcd_threshold = 3
 to_string_dc_threshold = 1
 from_string_dc_threshold = 65

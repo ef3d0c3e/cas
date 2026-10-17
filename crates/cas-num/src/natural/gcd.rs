@@ -38,19 +38,29 @@ struct Matrix {
 enum Step<'a> {
     /// `(x, y)` became `M (x, y)`.
     Matrix(&'a Matrix),
+    /// `(x, y)` became `M^-1 (x, y)`.
+    Hgcd(&'a HgcdMatrix),
     /// `(x, y)` became `(y, x - q y)`, with `q` the given limbs.
     Quotient(&'a [Limb]),
 }
 
+mod hgcd;
 #[cfg(test)]
 mod tests;
+
+use hgcd::HgcdMatrix;
 
 impl Natural {
     /// The greatest common divisor; `gcd(0, 0) = 0`.
     #[must_use]
     pub fn gcd(&self, other: &Natural) -> Natural {
+        self.gcd_from(other, hgcd::GCD_DC_THRESHOLD)
+    }
+
+    /// [`Natural::gcd`] with half-GCD steps from `dc` limbs.
+    fn gcd_from(&self, other: &Natural, dc: usize) -> Natural {
         let (mut a, mut b) = ordered(self, other);
-        reduce(&mut a, &mut b, |_| {});
+        reduce(&mut a, &mut b, dc, false, |_| {});
         match *b {
             [] => Natural::from_vec(a),
             [d] => Natural::from(kernel::gcd_1(kernel::rem_1(&a, d), d)),
@@ -71,6 +81,11 @@ impl Natural {
     /// some integer `t`. `s` is not reduced; [`Integer::gcd_ext`] normalises
     /// the cofactors.
     pub(crate) fn gcd_cofactor(&self, other: &Natural) -> (Natural, Integer) {
+        self.gcd_cofactor_from(other, hgcd::GCD_DC_THRESHOLD)
+    }
+
+    /// [`Natural::gcd_cofactor`] with half-GCD steps from `dc` limbs.
+    fn gcd_cofactor_from(&self, other: &Natural, dc: usize) -> (Natural, Integer) {
         let (mut a, mut b) = ordered(self, other);
         // sa and sb are the coefficients of `self` in a and b.
         let (mut sa, mut sb) = if self >= other {
@@ -78,7 +93,9 @@ impl Natural {
         } else {
             (Integer::ZERO, Integer::ONE)
         };
-        reduce(&mut a, &mut b, |step| track(&mut sa, &mut sb, &step));
+        reduce(&mut a, &mut b, dc, true, |step| {
+            track(&mut sa, &mut sb, &step)
+        });
         if b.is_empty() {
             return (Natural::from_vec(a), sa);
         }
@@ -124,6 +141,14 @@ fn track(sa: &mut Integer, sb: &mut Integer, step: &Step<'_>) {
             *sa = &a * &Integer::from(m.a) + &b * &Integer::from(m.b);
             *sb = &a * &Integer::from(m.c) + &b * &Integer::from(m.d);
         }
+        Step::Hgcd(m) => {
+            // M^-1 = ±[[u11, -u01], [-u10, u00]].
+            let [[u00, u01], [u10, u11]] =
+                m.m.each_ref().map(|row| row.each_ref().map(Integer::from));
+            let (a, b) = (std::mem::take(sa), std::mem::take(sb));
+            let (x, y) = (&u11 * &a - &u01 * &b, &u00 * &b - &u10 * &a);
+            (*sa, *sb) = if m.negative { (-x, -y) } else { (x, y) };
+        }
         Step::Quotient(q) => {
             let next = &*sa - &(Integer::from(Natural::from_limbs(q)) * &*sb);
             *sa = std::mem::replace(sb, next);
@@ -132,18 +157,49 @@ fn track(sa: &mut Integer, sb: &mut Integer, step: &Step<'_>) {
 }
 
 /// Reduces normalised `a >= b` until `b` has at most one limb, keeping
-/// `gcd(a, b)` and `a >= b`, and reports every step to `on_step`.
-fn reduce(a: &mut Vec<Limb>, b: &mut Vec<Limb>, mut on_step: impl FnMut(Step<'_>)) {
+/// `gcd(a, b)` and `a >= b`, by half-GCD steps while `b` has at least `dc`
+/// limbs and Lehmer steps below. With `track`, reports every step to
+/// `on_step`; without, half-GCD steps are not reported, which saves building
+/// their matrices.
+fn reduce(
+    a: &mut Vec<Limb>,
+    b: &mut Vec<Limb>,
+    dc: usize,
+    track: bool,
+    mut on_step: impl FnMut(Step<'_>),
+) {
+    let mut buf = [Vec::new(), Vec::new()];
     while b.len() >= 2 {
-        if let Some(m) = lehmer_matrix(a, b) {
-            apply(&m, a, b);
+        if b.len() >= dc {
+            let progress = if track {
+                hgcd::hgcd(a, b).map(|mut m| {
+                    if kernel::cmp(a, b) == Ordering::Less {
+                        std::mem::swap(a, b);
+                        m.swap_columns();
+                    }
+                    on_step(Step::Hgcd(&m));
+                })
+            } else {
+                hgcd::hgcd_values(a, b).then(|| {
+                    if kernel::cmp(a, b) == Ordering::Less {
+                        std::mem::swap(a, b);
+                    }
+                })
+            };
+            if progress.is_none() {
+                let q = div_step(a, b);
+                on_step(Step::Quotient(&q));
+            }
+        } else if let Some(m) = lehmer_matrix(a, b, None) {
+            apply(&m, a, b, &mut buf);
             on_step(Step::Matrix(&m));
         } else {
             let q = div_step(a, b);
             on_step(Step::Quotient(&q));
         }
         debug_assert!(kernel::is_normalized(a) && kernel::is_normalized(b));
-        debug_assert_eq!(kernel::cmp(a, b), Ordering::Greater);
+        // Equal only when a half-GCD stopped at a gcd of at least B^s.
+        debug_assert_ne!(kernel::cmp(a, b), Ordering::Less);
     }
 }
 
@@ -172,9 +228,20 @@ fn leading(x: &[Limb], k: u64) -> u64 {
 }
 
 /// Lehmer's inner loop on the leading bits of `a >= b`, where `a` has at
-/// least two limbs. `None` when not even the first quotient is decided.
-fn lehmer_matrix(a: &[Limb], b: &[Limb]) -> Option<Matrix> {
+/// least two limbs. With a `floor` of `t`, only steps whose remainder is
+/// provably at least `2^t` are taken. `None` when not even the first quotient
+/// is decided.
+fn lehmer_matrix(a: &[Limb], b: &[Limb], floor: Option<u64>) -> Option<Matrix> {
     let k = kernel::bit_length(a) - LEAD_BITS;
+    // With e as below, the new remainder is mc a + md b = 2^k v + mc e_a +
+    // md e_b, where mc and md have opposite signs: it is at least
+    // 2^k (v + min(mc, md)), and so at least 2^t once that sum is 2^(t - k).
+    let need = match floor {
+        None => None,
+        Some(t) if t <= k => Some(1i128),
+        Some(t) if t - k < LEAD_BITS => Some(1i128 << (t - k)),
+        Some(_) => return None,
+    };
     let (mut u, mut v) = (i128::from(leading(a, k)), i128::from(leading(b, k)));
     debug_assert!(u < 1 << LEAD_BITS && v <= u);
     let (mut ma, mut mb, mut mc, mut md) = (1i128, 0i128, 0i128, 1i128);
@@ -187,13 +254,17 @@ fn lehmer_matrix(a: &[Limb], b: &[Limb]) -> Option<Matrix> {
         if d0 == 0 || d1 == 0 {
             break;
         }
-        let q = n0 / d0;
-        if q != n1 / d1 {
+        let q = quotient(n0, d0);
+        if q != quotient(n1, d1) {
             break;
         }
-        (ma, mc) = (mc, ma - q * mc);
-        (mb, md) = (md, mb - q * md);
-        (u, v) = (v, u - q * v);
+        let (c, d, w) = (ma - q * mc, mb - q * md, u - q * v);
+        if need.is_some_and(|need| w + c.min(d) < need) {
+            break;
+        }
+        (ma, mc) = (mc, c);
+        (mb, md) = (md, d);
+        (u, v) = (v, w);
     }
     (mb != 0).then_some(Matrix {
         a: ma,
@@ -203,17 +274,32 @@ fn lehmer_matrix(a: &[Limb], b: &[Limb]) -> Option<Matrix> {
     })
 }
 
-/// `(a, b) = M (a, b)`.
-fn apply(m: &Matrix, a: &mut Vec<Limb>, b: &mut Vec<Limb>) {
+/// `n / d` for `0 <= n <= 2^63` and `0 < d`, by a 64-bit division, which is
+/// much cheaper than a 128-bit one.
+#[expect(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "both operands are in 0 ..= 2^63"
+)]
+fn quotient(n: i128, d: i128) -> i128 {
+    debug_assert!((0..=1 << 63).contains(&n) && (1..=1 << 63).contains(&d));
+    i128::from(n as u64 / d as u64)
+}
+
+/// `(a, b) = M (a, b)`, with `buf` as working space; the old buffers of `a`
+/// and `b` become `buf`, so repeated calls do not allocate.
+fn apply(m: &Matrix, a: &mut Vec<Limb>, b: &mut Vec<Limb>, buf: &mut [Vec<Limb>; 2]) {
     let n = a.len();
     b.resize(n, 0);
-    let mut x = vec![0; n];
-    let mut y = vec![0; n];
-    combine(&mut x, m.a, a, m.b, b);
-    combine(&mut y, m.c, a, m.d, b);
-    x.truncate(kernel::normalized_len(&x));
-    y.truncate(kernel::normalized_len(&y));
-    (*a, *b) = (x, y);
+    let [x, y] = buf;
+    x.resize(n, 0);
+    y.resize(n, 0);
+    combine(x, m.a, a, m.b, b);
+    combine(y, m.c, a, m.d, b);
+    x.truncate(kernel::normalized_len(x));
+    y.truncate(kernel::normalized_len(y));
+    std::mem::swap(a, x);
+    std::mem::swap(b, y);
 }
 
 /// `r = p a + q b` for `p` and `q` of opposite signs (or one zero), where the

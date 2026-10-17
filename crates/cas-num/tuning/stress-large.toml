@@ -11,5 +11,7 @@ ntt_block = 1_000_000_000
 ntt_wrap_fraction = 1_000_000_000
 dc_div_threshold = 1_000_000_000
 redc_n_threshold = 1_000_000_000
+gcd_dc_threshold = 1_000_000_000
+hgcd_threshold = 1_000_000_000
 to_string_dc_threshold = 1_000_000_000
 from_string_dc_threshold = 1_000_000_000

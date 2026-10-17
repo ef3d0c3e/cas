@@ -8,6 +8,7 @@
 use proptest::prelude::*;
 use rug::Integer;
 
+use super::hgcd::{hgcd, hgcd_values};
 use super::{Step, reduce};
 use crate::Natural;
 use crate::testkit::strategy::{self, DEFAULT_MAX_LIMBS};
@@ -21,13 +22,14 @@ fn pair() -> BoxedStrategy<(Mag, Mag)> {
     .boxed()
 }
 
-/// Matrix and division steps `reduce` takes on `(a, b)`.
+/// Matrix and division steps `reduce` takes on `(a, b)` without half-GCD.
 fn steps(a: &Natural, b: &Natural) -> (usize, usize) {
     let (mut x, mut y) = super::ordered(a, b);
     let (mut matrices, mut divisions) = (0, 0);
-    reduce(&mut x, &mut y, |step| match step {
+    reduce(&mut x, &mut y, usize::MAX, true, |step| match step {
         Step::Matrix(_) => matrices += 1,
         Step::Quotient(_) => divisions += 1,
+        Step::Hgcd(_) => unreachable!("half-GCD is off"),
     });
     (matrices, divisions)
 }
@@ -42,6 +44,21 @@ fn dense(len: usize) -> impl Strategy<Value = Natural> {
 
 fn fibonacci(n: u32) -> Natural {
     Mag::from_rug(&Integer::from(Integer::fibonacci(n))).to_natural()
+}
+
+/// Pairs for the half-GCD: dense, nearly equal, with a large common factor,
+/// or of different lengths.
+fn hgcd_pair() -> BoxedStrategy<(Natural, Natural)> {
+    let n = 3usize..240;
+    prop_oneof![
+        3 => n.clone().prop_flat_map(|n| (dense(n), dense(n))),
+        1 => n.clone().prop_flat_map(|n| (dense(n), dense(n / 2 + 1))),
+        1 => n.clone().prop_flat_map(|n| (dense(n), any::<u64>()))
+            .prop_map(|(a, d)| (&a + &Natural::from(d), a)),
+        1 => (dense(25), dense(20), dense(20)).prop_map(|(c, a, b)| (&a * &c, &b * &c)),
+        1 => (100u32..4000).prop_map(|k| (fibonacci(k + 1), fibonacci(k))),
+    ]
+    .boxed()
 }
 
 differential! {
@@ -73,6 +90,80 @@ differential! {
             g
         },
         gmp: a.to_rug().gcd(&b.to_rug()),
+    }
+}
+
+proptest! {
+    /// `hgcd` returns `M` and `(x, y)` with `(a, b) = M (x, y)`, `det M` as
+    /// recorded, both values at least `B^s` and no step left (`|x - y| <
+    /// B^s`), and `hgcd_values` the same values.
+    #[test]
+    fn hgcd_contract((a, b) in hgcd_pair()) {
+        let (a, b) = if a >= b { (a, b) } else { (b, a) };
+        let (mut x, mut y) = (a.limbs().to_vec(), b.limbs().to_vec());
+        let (mut vx, mut vy) = (x.clone(), y.clone());
+        let progress = hgcd_values(&mut vx, &mut vy);
+        let n = x.len().max(y.len());
+        let s = n / 2 + 1;
+        let floor = Integer::from(1) << (64 * s);
+        let (ra, rb) = (a.to_rug(), b.to_rug());
+        let m = hgcd(&mut x, &mut y);
+        prop_assert_eq!(progress, m.is_some());
+        prop_assert!(vx == x && vy == y, "hgcd_values reduced differently");
+        match m {
+            None => {
+                prop_assert!(x == a.limbs() && y == b.limbs());
+                prop_assert!(ra.clone().min(rb.clone()) < floor || (ra - rb).abs() < floor);
+            }
+            Some(m) => {
+                let [[u00, u01], [u10, u11]] = m.m.each_ref().map(|r| r.each_ref().map(ToRug::to_rug));
+                let (rx, ry) = (Natural::from_limbs(&x).to_rug(), Natural::from_limbs(&y).to_rug());
+                prop_assert_eq!(&ra, &(u00.clone() * &rx + u01.clone() * &ry));
+                prop_assert_eq!(&rb, &(u10.clone() * &rx + u11.clone() * &ry));
+                let det = u00 * &u11 - u01 * &u10;
+                prop_assert_eq!(det, if m.negative { -1 } else { 1 });
+                prop_assert!(rx >= floor && ry >= floor);
+                prop_assert!((rx - ry).abs() < floor);
+            }
+        }
+    }
+
+    /// On uniformly random operands the half-GCD does nearly half the work.
+    #[test]
+    fn hgcd_halves((a, b) in (3usize..240).prop_flat_map(|n| (dense(n), dense(n)))) {
+        let (a, b) = if a >= b { (a, b) } else { (b, a) };
+        let (mut x, mut y) = (a.limbs().to_vec(), b.limbs().to_vec());
+        let s = a.limb_len() / 2 + 1;
+        prop_assert!(hgcd(&mut x, &mut y).is_some());
+        prop_assert!(x.len().max(y.len()) <= s + 2, "{} limbs left, s = {}", x.len().max(y.len()), s);
+    }
+
+    /// GCD and cofactor with half-GCD steps from two limbs on.
+    #[test]
+    fn half_gcd_everywhere((a, b) in prop_oneof![pair().prop_map(|(a, b)| (a.to_natural(), b.to_natural())), hgcd_pair()]) {
+        let g = a.to_rug().gcd(&b.to_rug());
+        prop_assert!(a.gcd_from(&b, 2).to_rug() == g);
+        let (g2, s) = a.gcd_cofactor_from(&b, 2);
+        prop_assert!(g2.to_rug() == g);
+        let rest = s.to_rug() * a.to_rug() - g;
+        let b = b.to_rug();
+        prop_assert!(if b == 0 { rest == 0 } else { rest.is_divisible(&b) }, "s = {:?}", s);
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(6))]
+
+    /// Operands of thousands of limbs: the half-GCD recursion at the default
+    /// thresholds.
+    #[test]
+    fn huge_operands((a, b, c) in (dense(2500), dense(2000), dense(300))) {
+        let (x, y) = (&a * &c, &b * &c);
+        let g = x.gcd(&y);
+        prop_assert!(g.to_rug() == x.to_rug().gcd(&y.to_rug()));
+        let (g2, s) = x.gcd_cofactor(&y);
+        prop_assert!(g2 == g);
+        prop_assert!((s.to_rug() * x.to_rug() - g.to_rug()).is_divisible(&y.to_rug()));
     }
 }
 

@@ -85,6 +85,10 @@ fn with_never(mut grid: Vec<u64>) -> Vec<u64> {
     grid
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "a table: one entry per key, in tuning order"
+)]
 fn params() -> Vec<Param> {
     vec![
         Param {
@@ -160,6 +164,22 @@ fn params() -> Vec<Param> {
             key: "redc_n_threshold",
             op: "redc",
             grid: with_never(geometric(16, 640, 1.19)),
+            window: None,
+        },
+        Param {
+            key: "hgcd_threshold",
+            op: "gcd",
+            grid: geometric(16, 400, 1.19),
+            // Sizes that take half-GCD steps, where the recursion runs.
+            window: Some(|c| {
+                let from = c["gcd_dc_threshold"].clamp(64, 1000);
+                geometric(from, from.max(1600) * 5 / 2, 1.25)
+            }),
+        },
+        Param {
+            key: "gcd_dc_threshold",
+            op: "gcd",
+            grid: with_never(geometric(32, 1000, 1.19)),
             window: None,
         },
         Param {

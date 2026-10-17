@@ -30,6 +30,11 @@ dc_div_threshold = 17
 # multiplies by -n^-1 mod R instead of eliminating one limb at a time.
 redc_n_threshold = 70
 
+# GCD (natural/gcd.rs): smaller operand length from which half-GCD steps
+# replace Lehmer steps, and length from which the half-GCD recurses.
+gcd_dc_threshold = 182
+hgcd_threshold = 49
+
 # Radix conversion (natural/radix.rs): limbs from which to_string, and
 # digits from which parsing, split by divide and conquer.
 to_string_dc_threshold = 15

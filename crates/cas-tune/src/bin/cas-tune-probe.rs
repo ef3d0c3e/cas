@@ -95,6 +95,13 @@ fn measure(op: &str, n: usize, min: Duration) -> f64 {
                 drop(black_box(ring.mul(black_box(&x), black_box(&y))));
             })
         }
+        "gcd" => {
+            let (a, b) = (
+                Natural::from_limbs(&limbs(n, 11)),
+                Natural::from_limbs(&limbs(n, 12)),
+            );
+            time(min, || drop(black_box(black_box(&a).gcd(black_box(&b)))))
+        }
         "to_string" => {
             let x = Natural::from_limbs(&limbs(n, 9));
             time(min, || drop(black_box(black_box(&x).to_string())))
