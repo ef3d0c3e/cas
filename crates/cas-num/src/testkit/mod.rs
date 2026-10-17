@@ -99,6 +99,26 @@ impl ToRug for Natural {
     }
 }
 
+impl ToRug for crate::Integer {
+    type Rug = Integer;
+
+    /// Also checks the representation invariant, so every differential test
+    /// of an `Integer` result checks it.
+    fn to_rug(&self) -> Integer {
+        assert!(self.is_canonical(), "non-canonical Integer: {self:?}");
+        let (negative, mag) = self.clone().into_parts();
+        let m = mag.to_rug();
+        if negative { -m } else { m }
+    }
+}
+
+impl Signed {
+    /// The same value as an [`Integer`].
+    pub(crate) fn to_integer(&self) -> crate::Integer {
+        crate::Integer::from_parts(self.is_negative(), self.mag().to_natural())
+    }
+}
+
 impl Mag {
     /// The same value as a [`Natural`].
     pub(crate) fn to_natural(&self) -> Natural {
@@ -167,3 +187,38 @@ macro_rules! differential {
 }
 
 pub(crate) use differential;
+
+/// Evaluates `x op y` in every owned/borrowed form plus both in-place forms,
+/// fails unless they all agree, and yields the result.
+macro_rules! all_forms {
+    ($x:expr, $op:tt, $op_assign:tt, $y:expr) => {{
+        let (x, y) = ($x, $y);
+        let r = &x $op &y;
+        let forms = [
+            x.clone() $op &y,
+            &x $op y.clone(),
+            x.clone() $op y.clone(),
+            { let mut z = x.clone(); z $op_assign &y; z },
+            { let mut z = x.clone(); z $op_assign y.clone(); z },
+        ];
+        for (i, f) in forms.iter().enumerate() {
+            prop_assert_eq!(f, &r, "form {} differs from &x {} &y", i, stringify!($op));
+        }
+        r
+    }};
+}
+
+/// Same for an operation with a primitive right operand (`Limb`, shift amount).
+macro_rules! all_forms_prim {
+    ($x:expr, $op:tt, $op_assign:tt, $y:expr) => {{
+        let (x, y) = ($x, $y);
+        let r = &x $op y;
+        let forms = [x.clone() $op y, { let mut z = x.clone(); z $op_assign y; z }];
+        for (i, f) in forms.iter().enumerate() {
+            prop_assert_eq!(f, &r, "form {} differs from &x {} y", i, stringify!($op));
+        }
+        r
+    }};
+}
+
+pub(crate) use {all_forms, all_forms_prim};

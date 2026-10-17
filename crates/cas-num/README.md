@@ -11,6 +11,7 @@ Correctness is the primary goal. The design is in Lific page `CAS-DOC-2`.
 | `kernel` (multiplication) | `mul_1`, `addmul_1`, schoolbook `mul_basecase`/`sqr_basecase`, and `mul`/`sqr`, which pick schoolbook, Karatsuba or Toom-3 by size and cut very unbalanced operands into balanced chunks. The recursive algorithms work in caller-provided scratch (`mul_scratch_len`, `sqr_scratch_len`). Thresholds are in `kernel/mul.rs`; retune with `cargo test --release -p cas-num tune_mul -- --ignored --nocapture`. |
 | `kernel` (division) | `div_rem_1`/`rem_1` (Möller–Granlund reciprocal), `divexact_1` (Hensel), and `div_rem`: Knuth's algorithm D with a 3-by-2 quotient estimate, or Burnikel–Ziegler divide and conquer from `DC_DIV_THRESHOLD` limbs, in caller-provided scratch (`div_rem_scratch_len`). The word-level primitives are also compiled for 8- and 16-bit words in tests, where every boundary case is reachable. Retune with `cargo test --release -p cas-num tune_div -- --ignored --nocapture`. |
 | `Natural` | Unsigned arbitrary precision integer, limbs stored inline up to 192 bits and on the heap beyond. `std` operators in all owned/borrowed forms (`+ - * / %`, bitwise), `checked_sub*`, `square`, `div_rem`, `div_exact`, `is_divisible_by`, single-limb variants, shifts by `u64`, bit queries, primitive conversions. |
+| `Integer` | Signed integer, layout E: `Small(i64)` inline (never allocates) or a boxed sign and `Natural` magnitude, canonical (boxed iff outside `i64`), 16 bytes. Inline operands use `checked_*` with an `i128` fallback; results are demoted when they fit. `+ - * / %` in all forms (`/`, `%` truncate), `checked_div_rem` with a `Rounding` (`Trunc`, `Floor`, `Ceil`, `Euclid`) and named `div_rem_*` variants, `div_exact`, `is_divisible_by`, sign queries, conversions. |
 
 ## Differential testing against GMP
 
@@ -23,7 +24,8 @@ dev-dependencies, so they never end up in a runtime build.
 | Item | Purpose |
 |---|---|
 | `testkit::Mag`, `testkit::Signed` | Normalised little-endian `u64` limb vectors (sign + magnitude). This is the neutral exchange format between our types and GMP. `Debug` prints hex with `_` at limb boundaries. |
-| `ToRug` | Maps a value of ours to its GMP equivalent. It is implemented for primitives, `bool`, `Ordering`, `Option<T>`, pairs, `Mag` and `Signed`. Every cas-num type implements it as it lands. |
+| `ToRug` | Maps a value of ours to its GMP equivalent. It is implemented for primitives, `bool`, `Ordering`, `Option<T>`, pairs, `Mag`, `Signed`, `Natural` and `Integer` (whose impl also asserts the canonical representation). Every cas-num type implements it as it lands. |
+| `all_forms!`, `all_forms_prim!` | Evaluate an operator in every owned/borrowed and in-place form, fail unless all agree, and yield the result. |
 | `check_same(ours, gmp)` | Fails the proptest case unless the two values agree, and prints both. |
 | `differential!` | Declares one `#[test]` per entry, asserting that `ours` equals `gmp`. |
 | `testkit::strategy` | Adversarial generators (see below). |
@@ -66,3 +68,6 @@ generators weight such inputs heavily:
 - `unbalanced_pair(max_limbs)`: a long operand and a 1–3 limb operand, in either order.
 - `signed()` / `signed_up_to(max_limbs)`: a sign plus any of the above (zero is never
   negative).
+- `signed_near_i64_bounds()`: within ±3 of `0`, `±2^31`, `±2^32`, `±2^62`, `±2^63`, `±2^64`,
+  `±2^65`, `±2^127`, `±2^128`, the promotion edges of `Integer`'s inline fast path.
+- `integer()`: a mix of `signed()`, `signed_near_i64_bounds()` and any `i64`.

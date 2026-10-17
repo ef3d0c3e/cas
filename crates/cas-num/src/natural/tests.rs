@@ -11,40 +11,7 @@ use super::Natural;
 use super::limb_vec::INLINE;
 use crate::Limb;
 use crate::testkit::strategy::{self, DEFAULT_MAX_LIMBS};
-use crate::testkit::{Mag, ToRug, differential};
-
-/// Evaluates `x op y` in every owned/borrowed form plus both in-place forms,
-/// fails unless they all agree, and yields the result.
-macro_rules! all_forms {
-    ($x:expr, $op:tt, $op_assign:tt, $y:expr) => {{
-        let (x, y) = ($x, $y);
-        let r = &x $op &y;
-        let forms = [
-            x.clone() $op &y,
-            &x $op y.clone(),
-            x.clone() $op y.clone(),
-            { let mut z = x.clone(); z $op_assign &y; z },
-            { let mut z = x.clone(); z $op_assign y.clone(); z },
-        ];
-        for (i, f) in forms.iter().enumerate() {
-            prop_assert_eq!(f, &r, "form {} differs from &x {} &y", i, stringify!($op));
-        }
-        r
-    }};
-}
-
-/// Same for an operation with a primitive right operand (`Limb`, shift amount).
-macro_rules! all_forms_prim {
-    ($x:expr, $op:tt, $op_assign:tt, $y:expr) => {{
-        let (x, y) = ($x, $y);
-        let r = &x $op y;
-        let forms = [x.clone() $op y, { let mut z = x.clone(); z $op_assign y; z }];
-        for (i, f) in forms.iter().enumerate() {
-            prop_assert_eq!(f, &r, "form {} differs from &x {} y", i, stringify!($op));
-        }
-        r
-    }};
-}
+use crate::testkit::{Mag, ToRug, all_forms, all_forms_prim, differential};
 
 fn hash_of(x: &Natural) -> u64 {
     let mut h = DefaultHasher::new();

@@ -184,3 +184,36 @@ pub(crate) fn raw_pair_longer_first(max_limbs: usize) -> BoxedStrategy<(Vec<u64>
         .prop_flat_map(|(n, m)| (raw_limbs(n), raw_limbs(m)))
         .boxed()
 }
+
+/// Signed values within a few units of a promotion edge of the small-integer
+/// fast path: `0`, `±2^31`, `±2^32`, `±2^62`, `±2^63` (the `i64` limits),
+/// `±2^64`, `±2^65`, `±2^127` and `±2^128` (the `i128` limits).
+pub(crate) fn signed_near_i64_bounds() -> BoxedStrategy<Signed> {
+    const EXPONENTS: [u32; 9] = [0, 31, 32, 62, 63, 64, 65, 127, 128];
+    (
+        proptest::sample::select(&EXPONENTS[..]),
+        -3i32..=3,
+        any::<bool>(),
+    )
+        .prop_map(|(k, offset, negative)| {
+            let base = if k == 0 {
+                rug::Integer::new()
+            } else {
+                rug::Integer::from(1) << k
+            };
+            let x = base + offset;
+            Signed::from_rug(&if negative { -x } else { x })
+        })
+        .boxed()
+}
+
+/// A signed integer for `Integer` tests: arbitrary sizes, promotion edges, or
+/// any `i64`.
+pub(crate) fn integer() -> BoxedStrategy<Signed> {
+    prop_oneof![
+        3 => signed(),
+        3 => signed_near_i64_bounds(),
+        2 => any::<i64>().prop_map(Signed::from_i64),
+    ]
+    .boxed()
+}
