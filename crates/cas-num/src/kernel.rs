@@ -26,15 +26,6 @@ pub(crate) mod gcd;
 
 pub(crate) mod ntt;
 
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "under comparison with the NTT, not dispatched yet (CAS-31)"
-    )
-)]
-pub(crate) mod ssa;
-
 pub use div::{div_rem, div_rem_1, div_rem_scratch_len, divexact_1, rem_1};
 pub use gcd::gcd_1;
 pub use mul::{

@@ -234,4 +234,4 @@ fn cmp_orders_by_length_first() {
 }
 
 mod div;
-pub(in crate::kernel) mod mul;
+mod mul;
