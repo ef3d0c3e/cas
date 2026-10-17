@@ -6,7 +6,10 @@ use proptest::prelude::*;
 use rug::Integer;
 
 use super::*;
-use crate::testkit::strategy;
+use crate::testkit::{strategy, tested};
+
+/// [`NTT_BLOCK`] within test sizes.
+const BLOCK: usize = tested(NTT_BLOCK);
 
 /// Filler for output and scratch buffers, so results can't rely on zeroed memory.
 const GARBAGE: Limb = 0xdead_beef_dead_beef;
@@ -94,10 +97,10 @@ proptest! {
         prop_assert_eq!(run_sqr(&a), val(&a).square());
     }
 
-    /// Transforms past `NTT_BLOCK`, which split into halves.
+    /// Transforms past [`NTT_BLOCK`], which split into halves.
     #[test]
     fn mul_matches_recursive(
-        (a, b) in (NTT_BLOCK / 2..=2 * NTT_BLOCK, 1..=2 * NTT_BLOCK)
+        (a, b) in (BLOCK / 2..=2 * BLOCK, 1..=2 * BLOCK)
             .prop_flat_map(|(n, k)| (strategy::raw_limbs(n), strategy::raw_limbs(k))),
     ) {
         prop_assert_eq!(run_mul(&a, &b), val(&a) * val(&b));
@@ -117,11 +120,11 @@ fn all_ones() {
         (5, 4),
         (512, 512),
         (513, 512),
-        (NTT_BLOCK, 1),
-        (NTT_BLOCK / 2, NTT_BLOCK / 2 + 1),
-        (NTT_BLOCK, NTT_BLOCK),
-        (NTT_BLOCK + 1, NTT_BLOCK),
-        (3 * NTT_BLOCK, 2 * NTT_BLOCK + 7),
+        (BLOCK, 1),
+        (BLOCK / 2, BLOCK / 2 + 1),
+        (BLOCK, BLOCK),
+        (BLOCK + 1, BLOCK),
+        (3 * BLOCK, 2 * BLOCK + 7),
         (300, 300),
         (1174, 1175),
         (2048, 301),
@@ -137,23 +140,28 @@ fn all_ones() {
 
 /// Shapes whose top coefficients wrap around the transform, once or (the
 /// recomputed top product wrapping again) twice, and the limits of wrapping.
+/// The named shapes assume the default `ntt_wrap_fraction` of 1.
 #[test]
 fn wrap_shapes() {
     let wraps = |an: usize, bn: usize| transform_len(an, bn) < an + bn - 1;
-    assert!(wraps(300, 300));
-    assert!(wraps(2048, 2));
-    // Top product of 300 x 300 limbs, which wraps again.
-    assert!(wraps(1174, 1175) && wraps(2048, 301));
-    assert_eq!(1174 + 1175 - 1 - transform_len(1174, 1175), 300);
-    // An operand longer than the shorter transform, or too much to recompute.
+    if WRAP_FRACTION == 1 {
+        assert!(wraps(300, 300));
+        assert!(wraps(2048, 2));
+        // Top product of 300 x 300 limbs, which wraps again.
+        assert!(wraps(1174, 1175) && wraps(2048, 301));
+        assert_eq!(1174 + 1175 - 1 - transform_len(1174, 1175), 300);
+    }
+    // An operand longer than the shorter transform, or a power-of-two length.
     assert!(!wraps(2049, 2));
     assert!(!wraps(512, 512) && !wraps(1, 1));
+    // The largest wrapped part e = len - half for balanced operands.
     let half = 1024;
     let e_max = (half / WRAP_FRACTION).div_ceil(2);
-    // len = half + e for balanced operands of at most half limbs.
     let shape = |e: usize| (half + e + 1 - half.midpoint(e), half.midpoint(e));
-    let (an, bn) = shape(e_max);
-    assert!(an.max(bn) <= half && wraps(an, bn));
+    if e_max >= 1 {
+        let (an, bn) = shape(e_max);
+        assert!(an.max(bn) <= half && wraps(an, bn));
+    }
     let (an, bn) = shape(e_max + 1);
     assert!(an.max(bn) <= half && !wraps(an, bn));
 }

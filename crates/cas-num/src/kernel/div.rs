@@ -15,8 +15,8 @@ use super::{add_n_assign, cmp_n, mul, mul_scratch_len, shl, shr, sub_1_assign, s
 use crate::Limb;
 
 /// Smallest divisor length at which [`div_rem`] uses divide and conquer
-/// instead of schoolbook. Tuned with `tune_div` (see `kernel/tests/div.rs`).
-pub(crate) const DC_DIV_THRESHOLD: usize = 40;
+/// instead of schoolbook. Set by the tuning configuration (`build.rs`).
+pub(crate) const DC_DIV_THRESHOLD: usize = crate::tuning::DC_DIV_THRESHOLD;
 
 /// Counters for the rarely taken correction branches, so tests can check that
 /// their inputs reach them.

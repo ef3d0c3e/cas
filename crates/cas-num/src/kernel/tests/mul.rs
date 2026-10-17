@@ -19,7 +19,7 @@ use crate::kernel::{
     sqr_scratch_len,
 };
 use crate::testkit::strategy::{self, len_around};
-use crate::testkit::{Mag, ToRug, differential};
+use crate::testkit::{Mag, TESTED_SIZE_MAX, ToRug, differential, tested};
 
 /// Filler for output and scratch buffers, so results can't rely on zeroed memory.
 const GARBAGE: Limb = 0xdead_beef_dead_beef;
@@ -168,7 +168,7 @@ differential! {
         gmp: val(&a).square(),
     }
 
-    fn mul_unbalanced_matches((a, b) in strategy::unbalanced_pair(3 * MUL_TOOM3_THRESHOLD)) {
+    fn mul_unbalanced_matches((a, b) in strategy::unbalanced_pair(3 * tested(MUL_TOOM3_THRESHOLD))) {
         ours: run_mul(a.limbs(), b.limbs()),
         gmp: val(a.limbs()) * val(b.limbs()),
     }
@@ -220,7 +220,10 @@ proptest! {
 }
 
 /// Each algorithm, including nested Toom-3 and chunking, on all-ones operands
-/// (the worst case for carries), with the dispatcher's choice checked.
+/// (the worst case for carries). The dispatcher's choice is checked when the
+/// configured thresholds are ordered as these shapes assume (as in the
+/// default and `stress-small` configurations); shapes beyond test sizes are
+/// skipped.
 #[test]
 #[allow(clippy::many_single_char_names, reason = "one letter per threshold")]
 fn every_algorithm_on_all_ones() {
@@ -241,14 +244,23 @@ fn every_algorithm_on_all_ones() {
         (2 * f - 2, f, Algorithm::Ntt),
         (2 * f + 1, f, Algorithm::Chunked),
     ];
+    let max = 3 * TESTED_SIZE_MAX;
+    let ordered = 2 * k <= t && 3 * t < f && 2 * f < max;
     let mut seen = HashSet::new();
     for (an, bn, expected) in cases {
-        assert_eq!(algorithm(an, bn), expected, "({an}, {bn})");
-        seen.insert(expected);
+        if an > max {
+            continue;
+        }
+        if ordered {
+            assert_eq!(algorithm(an, bn), expected, "({an}, {bn})");
+        }
+        seen.insert(algorithm(an, bn));
         let (a, b) = (vec![Limb::MAX; an], vec![Limb::MAX; bn]);
         assert_eq!(run_mul(&a, &b).to_rug(), val(&a) * val(&b), "({an}, {bn})");
     }
-    assert_eq!(seen.len(), 5);
+    if ordered {
+        assert_eq!(seen.len(), 5);
+    }
 
     for n in [
         SQR_KARATSUBA_THRESHOLD - 1,
@@ -257,18 +269,27 @@ fn every_algorithm_on_all_ones() {
         3 * SQR_TOOM3_THRESHOLD + 1,
         SQR_NTT_THRESHOLD,
     ] {
+        if n > max {
+            continue;
+        }
         let a = vec![Limb::MAX; n];
         assert_eq!(run_sqr(&a).to_rug(), val(&a).square(), "{n}");
     }
-    assert_eq!(sqr_algorithm(SQR_TOOM3_THRESHOLD), Algorithm::Toom3);
-    assert_eq!(sqr_algorithm(SQR_NTT_THRESHOLD - 1), Algorithm::Toom3);
-    assert_eq!(sqr_algorithm(SQR_NTT_THRESHOLD), Algorithm::Ntt);
+    if SQR_KARATSUBA_THRESHOLD <= SQR_TOOM3_THRESHOLD && SQR_TOOM3_THRESHOLD < SQR_NTT_THRESHOLD {
+        assert_eq!(sqr_algorithm(SQR_TOOM3_THRESHOLD), Algorithm::Toom3);
+        assert_eq!(sqr_algorithm(SQR_NTT_THRESHOLD - 1), Algorithm::Toom3);
+        assert_eq!(sqr_algorithm(SQR_NTT_THRESHOLD), Algorithm::Ntt);
+    }
 }
 
 /// Products of about 10^5 limbs through the dispatcher (the NTT, chunked
 /// NTT, and squaring), on pseudo-random and all-ones operands, against GMP.
+/// Skipped when the configuration leaves these sizes to quadratic algorithms.
 #[test]
 fn mul_at_1e5_limbs() {
+    if MUL_NTT_THRESHOLD > 30_000 || SQR_NTT_THRESHOLD > 100_000 {
+        return;
+    }
     let mut state = 0x0123_4567_89ab_cdef_u64;
     let mut random = |n: usize| -> Vec<Limb> {
         (0..n)
@@ -310,12 +331,21 @@ fn empty_operands() {
 }
 
 #[test]
-#[should_panic(expected = "scratch too short")]
 fn short_scratch_panics() {
-    let n = MUL_TOOM3_THRESHOLD;
+    let n = tested(MUL_TOOM3_THRESHOLD.max(MUL_KARATSUBA_THRESHOLD));
+    let need = mul_scratch_len(n, n);
+    if need == 0 {
+        // Every testable size is schoolbook, which needs no scratch.
+        return;
+    }
     let (a, b) = (vec![1; n], vec![1; n]);
     let mut r = vec![0; 2 * n];
-    mul(&mut r, &a, &b, &mut vec![0; mul_scratch_len(n, n) - 1]);
+    let panic = std::panic::catch_unwind(move || {
+        mul(&mut r, &a, &b, &mut vec![0; need - 1]);
+    })
+    .expect_err("a short scratch must panic");
+    let message = panic.downcast_ref::<&str>().copied().unwrap_or_default();
+    assert!(message.contains("scratch too short"), "{message}");
 }
 
 /// Nanoseconds per call of `f`: best of 5 runs of at least 10 ms each.

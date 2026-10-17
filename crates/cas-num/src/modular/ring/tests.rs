@@ -19,7 +19,7 @@ fn small_modulus() -> BoxedStrategy<Mag> {
 fn large_modulus() -> BoxedStrategy<Mag> {
     modulus(
         strategy::natural_with_len(strategy::len_around(&[REDC_N_THRESHOLD])).boxed(),
-        u32::try_from(64 * REDC_N_THRESHOLD + 64).unwrap(),
+        u32::try_from(64 * crate::testkit::tested(REDC_N_THRESHOLD) + 64).unwrap(),
     )
 }
 
@@ -186,16 +186,20 @@ fn modulus_one() {
 
 #[test]
 fn forms() {
-    let odd = ModRing::new(Natural::power_of_two(64 * REDC_N_THRESHOLD as u64) - 1u64);
-    let Form::Montgomery { ninv_full, .. } = &odd.form else {
-        panic!("odd modulus not in Montgomery form");
+    let ninv_full_len = |limbs: usize| {
+        let ring = ModRing::new(Natural::power_of_two(64 * limbs as u64) - 1u64);
+        let Form::Montgomery { ninv_full, .. } = &ring.form else {
+            panic!("odd modulus not in Montgomery form");
+        };
+        ninv_full.len()
     };
-    assert_eq!(ninv_full.len(), REDC_N_THRESHOLD);
-    let short = ModRing::new(Natural::power_of_two(64 * (REDC_N_THRESHOLD as u64 - 1)) - 1u64);
-    let Form::Montgomery { ninv_full, .. } = &short.form else {
-        panic!("odd modulus not in Montgomery form");
-    };
-    assert!(ninv_full.is_empty());
+    if REDC_N_THRESHOLD <= crate::testkit::TESTED_SIZE_MAX {
+        assert_eq!(ninv_full_len(REDC_N_THRESHOLD), REDC_N_THRESHOLD);
+    }
+    if REDC_N_THRESHOLD > 1 {
+        let short = crate::testkit::tested(REDC_N_THRESHOLD - 1);
+        assert_eq!(ninv_full_len(short), 0);
+    }
     assert!(matches!(
         ModRing::new(Natural::from(7u64)).form,
         Form::Montgomery { .. }

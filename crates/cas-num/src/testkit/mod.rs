@@ -24,6 +24,20 @@ use rug::Integer;
 
 pub(crate) use model::{Mag, Signed};
 
+/// Largest operand length, in limbs, that tests build around a threshold.
+/// A tuning configuration may put a threshold far above it (see
+/// `tuning/stress-large.toml`), where only the basecase can be tested.
+pub(crate) const TESTED_SIZE_MAX: usize = 4096;
+
+/// `threshold`, clamped to a size the tests can afford.
+pub(crate) const fn tested(threshold: usize) -> usize {
+    if threshold < TESTED_SIZE_MAX {
+        threshold
+    } else {
+        TESTED_SIZE_MAX
+    }
+}
+
 use crate::Natural;
 
 /// Maps a value of ours to the equivalent GMP value, for comparison.

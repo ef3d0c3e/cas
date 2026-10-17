@@ -16,7 +16,7 @@ fn radix() -> impl Strategy<Value = u32> {
 /// Values on both sides of the divide-and-conquer threshold and several
 /// recursion levels above it.
 fn large() -> BoxedStrategy<Mag> {
-    let t = TO_STRING_DC_THRESHOLD;
+    let t = crate::testkit::tested(TO_STRING_DC_THRESHOLD);
     strategy::natural_with_len(prop_oneof![
         len_around(&[t, 2 * t, 4 * t]),
         (t..=5 * t).boxed()
@@ -60,7 +60,7 @@ differential! {
     fn from_str_radix(
         a in prop_oneof![strategy::natural(), large()],
         r in radix(),
-        zeros in prop_oneof![Just(0usize), 0..2 * FROM_STRING_DC_THRESHOLD],
+        zeros in prop_oneof![Just(0usize), 0..2 * crate::testkit::tested(FROM_STRING_DC_THRESHOLD)],
         plus in any::<bool>(),
         mask in any::<u64>(),
     ) {
@@ -165,7 +165,8 @@ fn edge_cases() {
 #[test]
 fn to_string_radix_powers() {
     for radix in [3u32, 7, 10, 36] {
-        let max_digits = TO_STRING_DC_THRESHOLD * 4 * 64;
+        // Every exponent up to a few levels; past 64 limbs only the basecase runs.
+        let max_digits = TO_STRING_DC_THRESHOLD.min(64) * 4 * 64;
         let mut e = 0u32;
         while (e as usize) < max_digits {
             let p = Integer::from(Integer::u_pow_u(radix, e));

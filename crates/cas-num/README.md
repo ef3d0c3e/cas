@@ -8,8 +8,8 @@ Correctness is the primary goal. The design is in Lific page `CAS-DOC-2`.
 | Module | Contents |
 |---|---|
 | `kernel` | GMP `mpn`-style limb kernels on slices: add/sub (`_n`, `_1`, mixed length, in-place), compare, shifts, bitwise ops, bit counts. No allocation, no normalisation; carries and borrows are returned. |
-| `kernel` (multiplication) | `mul_1`, `addmul_1`, schoolbook `mul_basecase`/`sqr_basecase`, and `mul`/`sqr`, which pick schoolbook, Karatsuba, Toom-3 or a three-prime NTT (`kernel/ntt.rs`) by size and cut very unbalanced operands into balanced chunks. The recursive algorithms work in caller-provided scratch (`mul_scratch_len`, `sqr_scratch_len`). Thresholds are in `kernel/mul.rs`; retune with `cargo test --release -p cas-num tune_mul -- --ignored --nocapture` (and `tune_ntt` for the NTT crossover). |
-| `kernel` (division) | `div_rem_1`/`rem_1` (Möller–Granlund reciprocal), `divexact_1` (Hensel), and `div_rem`: Knuth's algorithm D with a 3-by-2 quotient estimate, or Burnikel–Ziegler divide and conquer from `DC_DIV_THRESHOLD` limbs, in caller-provided scratch (`div_rem_scratch_len`). The word-level primitives are also compiled for 8- and 16-bit words in tests, where every boundary case is reachable. Retune with `cargo test --release -p cas-num tune_div -- --ignored --nocapture`. |
+| `kernel` (multiplication) | `mul_1`, `addmul_1`, schoolbook `mul_basecase`/`sqr_basecase`, and `mul`/`sqr`, which pick schoolbook, Karatsuba, Toom-3 or a three-prime NTT (`kernel/ntt.rs`) by size and cut very unbalanced operands into balanced chunks. The recursive algorithms work in caller-provided scratch (`mul_scratch_len`, `sqr_scratch_len`). Thresholds come from the tuning configuration (see below). |
+| `kernel` (division) | `div_rem_1`/`rem_1` (Möller–Granlund reciprocal), `divexact_1` (Hensel), and `div_rem`: Knuth's algorithm D with a 3-by-2 quotient estimate, or Burnikel–Ziegler divide and conquer from `DC_DIV_THRESHOLD` limbs, in caller-provided scratch (`div_rem_scratch_len`). The word-level primitives are also compiled for 8- and 16-bit words in tests, where every boundary case is reachable. |
 | `kernel` (gcd) | `gcd_1`: binary GCD of two limbs. |
 | `Natural` | Unsigned arbitrary precision integer, limbs stored inline up to 192 bits and on the heap beyond. `std` operators in all owned/borrowed forms (`+ - * / %`, bitwise), `checked_sub*`, `square`, `div_rem`, `div_exact`, `is_divisible_by`, single-limb variants, shifts by `u64`, bit queries, primitive conversions. `gcd` and `lcm` by Lehmer's algorithm (Knuth's Algorithm L on the leading 63 bits, with a full division step when the leading bits cannot decide a quotient), finished by the binary GCD once the smaller operand fits a limb. |
 | `Natural` (radix) | `to_string_radix`/`from_str_radix` for radix 2–36, `Display`/`Debug` (decimal), `Binary`, `Octal`, `FromStr`. Power-of-two radices pack bits in linear time. Other radices work in chunks of the largest power of the radix that fits a limb; from `TO_STRING_DC_THRESHOLD` limbs (or `FROM_STRING_DC_THRESHOLD` digits) the number splits by divide and conquer on `base^(2^i)`. Parsing follows the primitive integers' rules: an optional sign, no whitespace, separators or prefix, and `ParseNumberError` with `ParseErrorKind::{Empty, InvalidDigit}`. |
@@ -17,7 +17,7 @@ Correctness is the primary goal. The design is in Lific page `CAS-DOC-2`.
 | `Integer` | Signed integer, layout E: `Small(i64)` inline (never allocates) or a boxed sign and `Natural` magnitude, canonical (boxed iff outside `i64`), 16 bytes. Inline operands use `checked_*` with an `i128` fallback; results are demoted when they fit. `+ - * / %` in all forms (`/`, `%` truncate), `checked_div_rem` with a `Rounding` (`Trunc`, `Floor`, `Ceil`, `Euclid`) and named `div_rem_*` variants, `div_exact`, `is_divisible_by`, sign queries, conversions. `gcd`, `lcm`, `gcd_ext` (the same cofactors as GMP's `mpz_gcdext`) and `mod_inverse` (in `0..|m|`). `pow`, `pow_mod` (in `0..|m|`; a negative exponent raises the inverse), `isqrt`/`sqrt_rem` (panic on a negative), `nth_root`/`root_rem` truncated towards zero (odd degrees for negatives), `is_perfect_square`, `is_perfect_power` (GMP's convention: a negative value needs an odd exponent). Radix conversion as for `Natural`, with a leading `-`; `-0` parses as zero. |
 | `Rational` | Canonical fraction of two `Integer`s: positive denominator, coprime parts, zero is `0/1`, so derived `Eq`/`Hash` are by value. `new`/`checked_new` reduce; `+ - * /` in all forms, with Henrici's cancellation (Knuth §4.5.1) so results come out reduced without full-size GCDs; `checked_div`, `recip`, `abs`, `floor`, `ceil`, `trunc`, `round` (halves away from zero), `round_ties_even`, `pow` with an `i64` exponent. Comparison decides by sign, equal denominators or a bit-length estimate before cross-multiplying. Radix conversion as `num/den` (or `num` for integers); parsing reduces, accepts a sign on the numerator only, and reports `ParseErrorKind::ZeroDenominator`. |
 | `algebra` | Ring-object traits: `Ring` (`Elem`, `zero`, `one`, `add`, `sub`, `neg`, `mul`, `elem_integer`, `characteristic`; provided `square`, `pow`, `is_zero`, `is_one`), `EuclideanDomain` (`div_rem`, `normal_form`; provided Euclidean `gcd` and `gcd_ext` with normalised results) and `Field` (`inv`, provided `div`). Instances: `Integers` (Lehmer GCD), `Rationals`, `ModWord` and `ModRing` (rings), `PrimeField<M>` (`WordPrimeField`, `BigPrimeField`; construction checks primality). |
-| `modular` | Ring objects holding a modulus and its constants, with plain element values. `ModWord`: any modulus that fits a limb, elements `u64` in `0..n`, products reduced by one 2-by-1 division with a precomputed reciprocal (Möller–Granlund); `add`, `sub`, `neg`, `mul`, `pow`, `inv`, `reduce*`. `ModRing`/`Residue`: any modulus; odd moduli use Montgomery form, reduced one limb at a time (`redc_1`) or, from `REDC_N_THRESHOLD` limbs, by two full multiplications with `-n^(-1) mod R` (`redc_n`); even moduli store plain values and divide. `pow` uses a sliding window of up to 6 bits. `crt` solves two congruences with any moduli (`None` if incompatible); `CrtBasis` reconstructs from residues modulo pairwise coprime word moduli by Garner's algorithm, in `0..M` or symmetric. `rational_reconstruction` (Wang's algorithm, bounds `2 N D < m`, default `N = D`). Retune with `cargo test --release -p cas-num tune_redc -- --ignored --nocapture`. |
+| `modular` | Ring objects holding a modulus and its constants, with plain element values. `ModWord`: any modulus that fits a limb, elements `u64` in `0..n`, products reduced by one 2-by-1 division with a precomputed reciprocal (Möller–Granlund); `add`, `sub`, `neg`, `mul`, `pow`, `inv`, `reduce*`. `ModRing`/`Residue`: any modulus; odd moduli use Montgomery form, reduced one limb at a time (`redc_1`) or, from `REDC_N_THRESHOLD` limbs, by two full multiplications with `-n^(-1) mod R` (`redc_n`); even moduli store plain values and divide. `pow` uses a sliding window of up to 6 bits. `crt` solves two congruences with any moduli (`None` if incompatible); `CrtBasis` reconstructs from residues modulo pairwise coprime word moduli by Garner's algorithm, in `0..M` or symmetric. `rational_reconstruction` (Wang's algorithm, bounds `2 N D < m`, default `N = D`). |
 | `prime` | `Natural::primality() -> Primality` (`Prime` proven, `ProbablePrime`, `NotPrime`): table lookup below 2^16; trial division by the primes below 2^12 (one remainder per group of primes whose product fits a limb); below 2^64 Miller–Rabin with Sinclair's seven bases (deterministic); above, Baillie–PSW (base-2 Miller–Rabin plus a strong Lucas test with Selfridge's parameters). `is_strong_probable_prime(base)`, `next_prime`, `Integer::jacobi`. `factor()` / `factor_with_effort(rho_iterations) -> Factorization`: trial division by the primes below 2^16, perfect powers through their base, Brent's variant of Pollard's rho (`ModWord` or `ModRing`, GCD every 128 steps); factors are sorted, merged and labelled, and composites that resist the effort stay labelled `NotPrime`. |
 
 ## Benchmarks
@@ -34,9 +34,28 @@ CAS_BENCH_MAX_LIMBS=100000 cargo bench -p cas-num -- '^(mul|sqr)/'   # the full 
 Groups: `add`, `mul`, `sqr`, `div_rem` (2n by n limbs), `gcd`, `pow_mod` (odd modulus, full-size
 exponent, up to 64 limbs), `primality` (an n-limb prime, up to 64 limbs), `to_string`, `from_str`, and
 `small`: batches of 512 sums and products of values below 2^63, against GMP and plain `i128`.
-Measurements are short (20 samples, 1 s) so that the whole sweep stays in minutes. For tuning a
-threshold, run its group alone, or use the dedicated `tune_*` tests (`tune_mul`, `tune_div`,
-`tune_redc`). Criterion keeps the previous run in `target/criterion` and reports changes against it.
+Measurements are short (20 samples, 1 s) so that the whole sweep stays in minutes. Criterion keeps
+the previous run in `target/criterion` and reports changes against it.
+
+## Tuning configuration
+
+The thresholds that pick an algorithm by operand size (multiplication, squaring, NTT, division,
+Montgomery reduction, radix conversion) are compiled in from
+[`tuning/default.toml`](tuning/default.toml), measured on the development machine. To build with
+other values, point `CAS_NUM_TUNING` at another file, e.g. in `.cargo/config.toml`:
+
+```toml
+[env]
+CAS_NUM_TUNING = { value = "cas-num-tuning.toml", relative = true }
+```
+
+`build.rs` rejects unknown, missing or repeated keys and any value below an algorithm's minimum,
+and every accepted value gives correct results. Two stress configurations prove that:
+`tuning/stress-small.toml` (every algorithm at tiny sizes) and `tuning/stress-large.toml` (only the
+basecases); run the suite under each with
+`CAS_NUM_TUNING=tuning/stress-small.toml cargo test -p cas-num --target-dir target/tuning-small`.
+The ignored `tune_*` tests (`tune_mul`, `tune_ntt`, `tune_div`, `tune_redc`, `tune_to_string`)
+print the measurements behind the defaults.
 
 ## Fuzzing
 

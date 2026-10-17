@@ -365,8 +365,9 @@ fn divisor() -> BoxedStrategy<Mag> {
 
 /// A natural of up to three times the largest multiplication threshold.
 fn natural_beyond_thresholds() -> BoxedStrategy<Mag> {
-    let max =
-        3 * crate::kernel::mul::MUL_TOOM3_THRESHOLD.max(crate::kernel::mul::SQR_TOOM3_THRESHOLD);
+    let max = 3 * crate::testkit::tested(
+        crate::kernel::mul::MUL_TOOM3_THRESHOLD.max(crate::kernel::mul::SQR_TOOM3_THRESHOLD),
+    );
     strategy::natural_with_len(1..=max).boxed()
 }
 

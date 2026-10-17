@@ -45,7 +45,7 @@ const ROOT_ORDER_LOG2: u32 = 54;
 
 /// Transforms of at most this many coefficients run layer by layer; longer
 /// ones split into halves first.
-pub(crate) const NTT_BLOCK: usize = 1024;
+pub(crate) const NTT_BLOCK: usize = crate::tuning::NTT_BLOCK;
 
 /// Arithmetic modulo one of [`PRIMES`].
 #[derive(Clone, Copy, Debug)]
@@ -259,7 +259,7 @@ fn load(m: Modulus, f: &mut [Limb], x: &[Limb]) {
 /// A product of `an` and `bn` limbs wraps around a transform of half the
 /// covering power of two when its top coefficients, recomputed by a product of
 /// at most this fraction of the transform's length, are all that wrap.
-pub(crate) const WRAP_FRACTION: usize = 1;
+pub(crate) const WRAP_FRACTION: usize = crate::tuning::NTT_WRAP_FRACTION;
 
 /// The transform length for operands of `an, bn >= 1` limbs: the power of two
 /// `n >= len = an + bn - 1`, or half of it when the `e = len - n / 2`

@@ -24,9 +24,9 @@ use crate::{Integer, Limb, Natural};
 mod tests;
 
 /// Smallest modulus length, in limbs, at which REDC multiplies by
-/// `-n^(-1) mod R` instead of eliminating one limb at a time. Tuned with
-/// `tune_redc` (see `modular/ring/tests.rs`).
-pub(crate) const REDC_N_THRESHOLD: usize = 144;
+/// `-n^(-1) mod R` instead of eliminating one limb at a time. Set by
+/// the tuning configuration (`build.rs`).
+pub(crate) const REDC_N_THRESHOLD: usize = crate::tuning::REDC_N_THRESHOLD;
 
 /// The ring ℤ/nℤ for a non-zero modulus `n` of any size.
 ///

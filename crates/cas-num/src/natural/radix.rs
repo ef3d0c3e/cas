@@ -15,10 +15,10 @@ use crate::error::{ParseErrorKind, ParseNumberError};
 use crate::{Limb, kernel};
 
 /// Limbs from which [`Natural::to_string_radix`] splits by divide and conquer.
-pub(crate) const TO_STRING_DC_THRESHOLD: usize = 16;
+pub(crate) const TO_STRING_DC_THRESHOLD: usize = crate::tuning::TO_STRING_DC_THRESHOLD;
 
 /// Digits from which parsing splits by divide and conquer.
-pub(crate) const FROM_STRING_DC_THRESHOLD: usize = 600;
+pub(crate) const FROM_STRING_DC_THRESHOLD: usize = crate::tuning::FROM_STRING_DC_THRESHOLD;
 
 const DIGITS: &[u8; 36] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 

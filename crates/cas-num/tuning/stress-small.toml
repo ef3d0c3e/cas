@@ -1,0 +1,15 @@
+# Stress configuration: every threshold small and staggered, so each
+# algorithm, recursion and wrap-around runs on the small operands the tests
+# use. Not for speed. `CAS_NUM_TUNING=tuning/stress-small.toml cargo test`.
+mul_karatsuba_threshold = 2
+mul_toom3_threshold = 6
+mul_ntt_threshold = 24
+sqr_karatsuba_threshold = 2
+sqr_toom3_threshold = 5
+sqr_ntt_threshold = 20
+ntt_block = 2
+ntt_wrap_fraction = 1
+dc_div_threshold = 2
+redc_n_threshold = 1
+to_string_dc_threshold = 1
+from_string_dc_threshold = 65

@@ -57,11 +57,13 @@ pub(crate) fn len_up_to(max: usize) -> BoxedStrategy<usize> {
 }
 
 /// Lengths `t - 1`, `t` and `t + 1` for each algorithm threshold `t`
-/// (never below 1), so both sides of every crossover get exercised.
+/// (never below 1, and clamped by [`super::tested`]), so both sides of every
+/// crossover get exercised.
 pub(crate) fn len_around(thresholds: &[usize]) -> BoxedStrategy<usize> {
     let mut lens: Vec<usize> = thresholds
         .iter()
-        .flat_map(|&t| [t.saturating_sub(1), t, t + 1])
+        .map(|&t| super::tested(t))
+        .flat_map(|t| [t.saturating_sub(1), t, t + 1])
         .filter(|&n| n >= 1)
         .collect();
     lens.sort_unstable();

@@ -258,19 +258,34 @@ fn check_div(a: &[Limb], d: &[Limb]) {
     assert_eq!((q.to_rug(), r.to_rug()), gmp_div(a, d));
 }
 
+/// [`check_div`] through the schoolbook kernel directly, whatever the
+/// configured divide-and-conquer threshold; `d` normalised, `d.len() >= 2`.
+fn check_schoolbook(a: &[Limb], d: &[Limb]) -> Mag {
+    let dn = d.len();
+    let mut n = a.to_vec();
+    let mut q = vec![GARBAGE; a.len() - dn];
+    let v = reciprocal_3by2(d[dn - 1], d[dn - 2]);
+    let qh = sb_div_qr(&mut q, &mut n, d, v);
+    q.push(qh);
+    let (q, r) = (Mag::from_limbs(q), Mag::from_limbs(n[..dn].to_vec()));
+    assert_eq!((q.to_rug(), r.to_rug()), gmp_div(a, d));
+    q
+}
+
 /// Algorithm D's add-back step: the 3-by-2 estimate is one too large. This is
 /// the 64-bit version of the Hacker's Delight example for `divmnu`.
 #[test]
 fn add_back_is_reached() {
     let a = [0, 0, 1 << 63, (1 << 63) - 1];
     let d = [1, 0, 1 << 63];
-    assert_eq!(count(&hits::ADD_BACK, || check_div(&a, &d)), 1);
-    assert_eq!(run_div(&a, &d).0, Mag::from_u64(u64::MAX - 1));
+    let mut q = Mag::default();
+    assert_eq!(count(&hits::ADD_BACK, || q = check_schoolbook(&a, &d)), 1);
+    assert_eq!(q, Mag::from_u64(u64::MAX - 1));
 
     // In general a = q d - 1 with low divisor limbs makes the last estimate overshoot.
     let d = [5, 7, u64::MAX, 1 << 63];
     let a = limbs_of(&(Integer::from(0x1234_5678_9abc_u64) * val(&d) - 1u32));
-    assert!(count(&hits::ADD_BACK, || check_div(&a, &d)) >= 1);
+    assert!(count(&hits::ADD_BACK, || drop(check_schoolbook(&a, &d))) >= 1);
 }
 
 /// Top window limbs equal to the divisor's: the estimate is capped at B - 1.
@@ -279,15 +294,22 @@ fn capped_estimate_is_reached() {
     let d = [3, u64::MAX, 1 << 63];
     // a = B d - 1, so the quotient is B - 1.
     let a = limbs_of(&(val(&d) * base_pow(1) - 1u32));
-    assert_eq!(count(&hits::CAPPED, || check_div(&a, &d)), 1);
-    assert_eq!(run_div(&a, &d).0, Mag::from_u64(u64::MAX));
+    let mut q = Mag::default();
+    assert_eq!(count(&hits::CAPPED, || q = check_schoolbook(&a, &d)), 1);
+    assert_eq!(q, Mag::from_u64(u64::MAX));
 }
 
 /// The divide-and-conquer block estimates overshoot for `a = q d - 1`.
 #[test]
 fn dc_correction_is_reached() {
-    for dn in [DC_DIV_THRESHOLD, 2 * DC_DIV_THRESHOLD + 1] {
-        for qn in [dn / 2, dn, 2 * dn + 1] {
+    if DC_DIV_THRESHOLD > crate::testkit::TESTED_SIZE_MAX {
+        return;
+    }
+    // Divide and conquer needs two quotient limbs, and its blocks only
+    // correct when they have at least two limbs (dn >= 4).
+    let dn0 = DC_DIV_THRESHOLD.max(4);
+    for dn in [dn0, 2 * dn0 + 1] {
+        for qn in [(dn / 2).max(2), dn, 2 * dn + 1] {
             let d: Vec<Limb> = (0..dn as u64)
                 .map(|i| i.wrapping_mul(0x9e37_79b9_7f4a_7c15) | (1 << 63))
                 .collect();

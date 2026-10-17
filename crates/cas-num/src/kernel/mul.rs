@@ -20,20 +20,19 @@ use super::{add_1_assign, add_assign, cmp_n, ntt, shl_assign, shr_assign, sub_as
 use crate::Limb;
 
 /// Smallest shorter-operand length at which [`mul`] uses Karatsuba instead of
-/// schoolbook. Tuned with `tune_mul` (see `kernel/tests/mul.rs`).
-pub(crate) const MUL_KARATSUBA_THRESHOLD: usize = 16;
+/// schoolbook. These thresholds come from the tuning configuration (`build.rs`).
+pub(crate) const MUL_KARATSUBA_THRESHOLD: usize = crate::tuning::MUL_KARATSUBA_THRESHOLD;
 /// Smallest shorter-operand length at which [`mul`] uses Toom-3.
-pub(crate) const MUL_TOOM3_THRESHOLD: usize = 144;
-/// Smallest shorter-operand length at which [`mul`] uses the NTT. Tuned with
-/// `tune_ntt`; the NTT's cost is a staircase (see [`super::ntt`]), so above
+pub(crate) const MUL_TOOM3_THRESHOLD: usize = crate::tuning::MUL_TOOM3_THRESHOLD;
+/// Smallest shorter-operand length at which [`mul`] uses the NTT. The NTT's cost is a staircase (see [`super::ntt`]), so above
 /// this it is ahead on average rather than at every length.
-pub(crate) const MUL_NTT_THRESHOLD: usize = 3328;
+pub(crate) const MUL_NTT_THRESHOLD: usize = crate::tuning::MUL_NTT_THRESHOLD;
 /// Smallest length at which [`sqr`] uses Karatsuba squaring.
-pub(crate) const SQR_KARATSUBA_THRESHOLD: usize = 44;
+pub(crate) const SQR_KARATSUBA_THRESHOLD: usize = crate::tuning::SQR_KARATSUBA_THRESHOLD;
 /// Smallest length at which [`sqr`] uses Toom-3 squaring.
-pub(crate) const SQR_TOOM3_THRESHOLD: usize = 192;
+pub(crate) const SQR_TOOM3_THRESHOLD: usize = crate::tuning::SQR_TOOM3_THRESHOLD;
 /// Smallest length at which [`sqr`] uses the NTT.
-pub(crate) const SQR_NTT_THRESHOLD: usize = 1792;
+pub(crate) const SQR_NTT_THRESHOLD: usize = crate::tuning::SQR_NTT_THRESHOLD;
 
 /// `a * b + c` as a double limb, returned as `(low, high)`; cannot overflow.
 #[inline]
