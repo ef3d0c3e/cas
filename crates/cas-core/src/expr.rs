@@ -1,6 +1,5 @@
 //! The expression handle.
 
-use std::fmt;
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
@@ -235,27 +234,5 @@ impl Eq for Expr {}
 impl Hash for Expr {
     fn hash<H: Hasher>(&self, state: &mut H) {
         state.write_u64(self.structural_hash());
-    }
-}
-
-/// Full form: `f[x, 1, "s"]`. Recursive; the printing ticket (CAS-23) owns the
-/// real output.
-impl fmt::Debug for Expr {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.view() {
-            View::Symbol(s) => write!(f, "{s:?}"),
-            View::Int(x) => write!(f, "{x}"),
-            View::String(s) => write!(f, "{s:?}"),
-            View::Apply { head, args } => {
-                write!(f, "{head:?}[")?;
-                for (i, a) in args.iter().enumerate() {
-                    if i > 0 {
-                        f.write_str(", ")?;
-                    }
-                    write!(f, "{a:?}")?;
-                }
-                f.write_str("]")
-            }
-        }
     }
 }
