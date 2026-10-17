@@ -10,10 +10,13 @@
 //!   never allocate.
 //! - [`Rational`]: rational numbers, always reduced with a positive
 //!   denominator.
+//! - [`modular`]: residues modulo word-size and multi-precision moduli,
+//!   Chinese remaindering and rational reconstruction.
 
 mod error;
 mod integer;
 pub mod kernel;
+pub mod modular;
 mod natural;
 mod rational;
 

@@ -1,6 +1,7 @@
 //! Powers and modular powers.
 
 use super::Natural;
+use crate::modular::{ModRing, ModWord};
 
 #[cfg(test)]
 mod tests;
@@ -49,8 +50,9 @@ impl Natural {
 
     /// `self^e mod m`, in `0..m`.
     ///
-    /// Left-to-right binary exponentiation with a full division after every
-    /// product; the modular arithmetic ticket (CAS-14) replaces the reduction.
+    /// A single-limb modulus uses [`ModWord`]; a larger one, [`ModRing`]
+    /// (Montgomery multiplication for odd moduli, sliding-window
+    /// exponentiation).
     ///
     /// # Panics
     ///
@@ -58,17 +60,11 @@ impl Natural {
     #[must_use]
     pub fn pow_mod(&self, e: &Natural, m: &Natural) -> Natural {
         assert!(!m.is_zero(), "attempt to divide by zero");
-        if m.is_one() {
-            return Natural::ZERO;
+        if let [n] = *m.limbs() {
+            let w = ModWord::new(n);
+            return Natural::from(w.pow_natural(w.reduce_natural(self), e));
         }
-        let b = self % m;
-        let mut r = Natural::one();
-        for i in (0..e.bit_length()).rev() {
-            r = r.square() % m;
-            if e.bit(i) {
-                r = &r * &b % m;
-            }
-        }
-        r
+        let ring = ModRing::new(m.clone());
+        ring.to_natural(&ring.pow(&ring.elem(self), e))
     }
 }

@@ -192,7 +192,7 @@ where
 /// `ToRug::Rug`. A leading `#![proptest_config(..)]` is forwarded to proptest.
 macro_rules! differential {
     (
-        $(#![$config:meta])?
+        $(#![proptest_config($config:expr)])?
         $(
             $(#[$meta:meta])*
             fn $name:ident($($arg:pat in $strat:expr),+ $(,)?) {
@@ -202,7 +202,7 @@ macro_rules! differential {
         )*
     ) => {
         ::proptest::proptest! {
-            $(#![$config])?
+            $(#![proptest_config($config)])?
             $(
                 $(#[$meta])*
                 #[test]
