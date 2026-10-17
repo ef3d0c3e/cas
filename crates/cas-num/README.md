@@ -54,8 +54,24 @@ and every accepted value gives correct results. Two stress configurations prove 
 `tuning/stress-small.toml` (every algorithm at tiny sizes) and `tuning/stress-large.toml` (only the
 basecases); run the suite under each with
 `CAS_NUM_TUNING=tuning/stress-small.toml cargo test -p cas-num --target-dir target/tuning-small`.
+To measure the thresholds on your machine, run the auto-tuner on an idle machine:
+
+```sh
+cargo run --release -p cas-tune -- --out my-tuning.toml          # about 12 minutes
+cargo run --release -p cas-tune -- --quick --out my-tuning.toml  # a coarser pass
+cargo run --release -p cas-tune -- --only dc_div_threshold,redc_n_threshold --out my-tuning.toml
+```
+
+It rebuilds a small timing binary for every candidate value (inlining and code layout depend on
+the value, so each is measured as compiled), times the operation the threshold controls over a
+window of sizes, and keeps the candidate with the lowest mean time relative to the best at each
+size. It writes the configuration and a report (`my-tuning.report.txt`) of every candidate's cost.
+Timings need a quiet machine: the tuner warns when the load average shows other work and when
+identical runs disagree by more than 3%, and the report gives the measured noise. The optima are
+often flat (candidates within 1-2% of each other), so values that move between runs are expected.
+
 The ignored `tune_*` tests (`tune_mul`, `tune_ntt`, `tune_div`, `tune_redc`, `tune_to_string`)
-print the measurements behind the defaults.
+print direct algorithm-against-algorithm measurements.
 
 ## Fuzzing
 
