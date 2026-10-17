@@ -15,7 +15,7 @@ use proptest::prelude::*;
 use crate::expr::Repr;
 use crate::intern::{self, entries_with_hash};
 use crate::node::Key;
-use crate::{Attributes, Expr, Symbol, View};
+use crate::{Attributes, Expr, Integer, Rational, Symbol, View};
 
 fn sym(name: &str) -> Expr {
     Symbol::new(name).into()
@@ -506,8 +506,28 @@ enum Tree {
     /// An index into [`SYMS`].
     Sym(usize),
     Int(i64),
+    /// A number atom that is not an `i64`: a larger integer or a rational.
+    Num(Rational),
     Str(String),
     Apply(Box<Tree>, Vec<Tree>),
+}
+
+/// Integers just outside `i64` and non-integer rationals, small and large.
+fn big_number() -> impl Strategy<Value = Rational> {
+    let edge = (any::<bool>(), 0i128..3).prop_map(|(negative, k)| {
+        let x = if negative {
+            i128::from(i64::MIN) - 1 - k
+        } else {
+            i128::from(i64::MAX) + 1 + k
+        };
+        Rational::from(x)
+    });
+    let fraction = (-50i64..50, 2i64..9, 0u32..3).prop_filter_map("an integer", |(n, d, scale)| {
+        let n = Integer::from(n) * Integer::from(i128::from(i64::MAX).pow(scale));
+        let q = Rational::new(n, Integer::from(d));
+        (!q.is_integer()).then_some(q)
+    });
+    prop_oneof![edge, fraction]
 }
 
 fn tree() -> impl Strategy<Value = Tree> {
@@ -522,6 +542,7 @@ fn tree() -> impl Strategy<Value = Tree> {
             -3i64..3
         ]
         .prop_map(Tree::Int),
+        big_number().prop_map(Tree::Num),
         "[ab]{0,2}".prop_map(Tree::Str),
     ];
     leaf.prop_recursive(4, 32, 4, |inner| {
@@ -534,6 +555,7 @@ fn build(t: &Tree) -> Expr {
     match t {
         Tree::Sym(i) => sym(SYMS[*i]),
         Tree::Int(x) => Expr::from(*x),
+        Tree::Num(q) => Expr::from(q),
         Tree::Str(s) => Expr::string(s),
         Tree::Apply(h, a) => Expr::apply(&build(h), &a.iter().map(build).collect::<Vec<_>>()),
     }
@@ -543,6 +565,8 @@ fn unbuild(e: &Expr) -> Tree {
     match e.view() {
         View::Symbol(s) => Tree::Sym(SYMS.iter().position(|&n| n == s.name()).unwrap()),
         View::Int(x) => Tree::Int(x),
+        View::Integer(x) => Tree::Num(Rational::from(x)),
+        View::Rational(x) => Tree::Num(x.clone()),
         View::String(s) => Tree::Str(s.to_owned()),
         View::Apply { head, args } => {
             Tree::Apply(Box::new(unbuild(head)), args.iter().map(unbuild).collect())
@@ -567,7 +591,7 @@ fn model_depth_size(t: &Tree) -> (u16, u32) {
 
 fn model_numeric(t: &Tree) -> bool {
     match t {
-        Tree::Int(_) => true,
+        Tree::Int(_) | Tree::Num(_) => true,
         Tree::Sym(i) => SYMS[*i] == "Pi",
         Tree::Apply(h, a) => {
             matches!(**h, Tree::Sym(i) if ["Plus", "Sin"].contains(&SYMS[i]))
@@ -631,4 +655,58 @@ proptest! {
         prop_assert_eq!(e.is_numeric(), model_numeric(&t));
         prop_assert_eq!(e.has_pattern(), model_has_pattern(&t));
     }
+}
+
+/// Each number has one form: inline exactly when it is an integer that fits
+/// an `i64`, whichever constructor builds it.
+#[test]
+fn numbers_have_one_form() {
+    let inline = |e: &Expr| matches!(e.0, Repr::Int(_));
+    for x in [i64::MIN, i64::MIN + 1, -1, 0, 1, i64::MAX - 1, i64::MAX] {
+        let from_i64 = Expr::from(x);
+        let from_integer = Expr::from(Integer::from(x));
+        let from_rational = Expr::from(Rational::from(x));
+        assert!(inline(&from_i64) && inline(&from_integer) && inline(&from_rational));
+        assert!(from_i64 == from_integer && from_i64 == from_rational);
+        assert_eq!(from_i64.to_integer(), Some(Integer::from(x)));
+        assert_eq!(from_i64.view(), View::Int(x));
+    }
+    let edges = [
+        i128::from(i64::MIN) - 1,
+        i128::from(i64::MAX) + 1,
+        i128::from(u64::MAX),
+        i128::MIN,
+    ];
+    for x in edges {
+        let n = Integer::from(x);
+        let a = Expr::from(&n);
+        let b = Expr::from(Rational::new(
+            Integer::from(x) * Integer::from(3),
+            Integer::from(3),
+        ));
+        assert!(!inline(&a) && a == b);
+        assert!(Arc::ptr_eq(node(&a), node(&b)));
+        assert_eq!(a.view(), View::Integer(&n));
+        assert_eq!(a.to_integer(), Some(n.clone()));
+        assert_eq!(a.to_rational(), Some(Rational::from(n)));
+        assert!(a.is_number() && a.is_numeric() && a.is_atom());
+    }
+    let half = Rational::new(Integer::from(1), Integer::from(2));
+    let a = Expr::from(&half);
+    assert_eq!(
+        a,
+        Expr::from(Rational::new(Integer::from(-7), Integer::from(-14)))
+    );
+    assert_eq!(a.view(), View::Rational(&half));
+    assert_eq!(a.to_integer(), None);
+    assert_eq!(a.to_rational(), Some(half));
+    assert!(a.is_number() && a.is_numeric() && a.as_i64().is_none());
+    // Different kinds with related payloads stay apart.
+    let big = Expr::from(Integer::from(1i128 << 64));
+    assert_ne!(
+        big,
+        Expr::from(Rational::new(Integer::from(1i128 << 64), Integer::from(3)))
+    );
+    assert!(!sym("Pi").is_number() && sym("Pi").is_numeric());
+    assert!(!Expr::string("1").is_number());
 }

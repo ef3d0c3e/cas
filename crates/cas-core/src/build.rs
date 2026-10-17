@@ -26,8 +26,10 @@
 use std::iter::{Product, Sum};
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
+use cas_num::Integer;
+
 use crate::attributes::Attributes;
-use crate::expr::Expr;
+use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 
 impl Expr {
@@ -117,11 +119,16 @@ fn times(a: Expr, b: Expr) -> Expr {
     normalized(&Symbol::TIMES.into(), vec![a, b])
 }
 
-/// `Times[-1, e]`; a negative literal for an integer atom.
+/// `Times[-1, e]`; the negated literal for a number atom.
 fn negate(e: Expr) -> Expr {
-    match e.as_i64().and_then(i64::checked_neg) {
-        Some(n) => n.into(),
-        None => times((-1).into(), e),
+    match e.view() {
+        View::Int(n) => match n.checked_neg() {
+            Some(n) => n.into(),
+            None => Expr::from(-Integer::from(n)),
+        },
+        View::Integer(n) => Expr::from(-n),
+        View::Rational(q) => Expr::from(-q),
+        _ => times((-1).into(), e),
     }
 }
 

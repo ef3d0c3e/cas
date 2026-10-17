@@ -61,11 +61,14 @@ enum Piece<'a> {
     Expr(&'a Expr),
 }
 
-/// Symbols by name, integers in decimal, strings quoted and escaped.
+/// Symbols by name, numbers in decimal (`-3/2` for a rational), strings
+/// quoted and escaped.
 fn atom(e: &Expr, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match e.view() {
         View::Symbol(s) => f.write_str(s.name()),
         View::Int(x) => write!(f, "{x}"),
+        View::Integer(x) => write!(f, "{x}"),
+        View::Rational(x) => write!(f, "{x}"),
         View::String(s) => string(s, f),
         View::Apply { .. } => unreachable!("not an atom"),
     }
@@ -101,10 +104,14 @@ impl fmt::Debug for Expr {
 /// where precedence needs them; `List` prints as `{a, b}`; everything else
 /// in full form, `f[x, y]`.
 ///
+/// - Numbers print in decimal, a rational as `3/2`, which binds like a
+///   quotient: `x^(1/2)`, `2*(3/4)`, and `1/2*x` as a leading coefficient.
 /// - A term with a negative coefficient is subtracted: `x - 2*y`, and
 ///   `Times[-1, x]` is `-x`.
 /// - Factors with a negative integer exponent are a denominator:
-///   `x/(y*z^2)`.
+///   `x/(y*z^2)`, except that an integer over an integer would read as a
+///   rational, so `Times[3, Power[2, -1]]` is `3*2^(-1)`. Likewise
+///   `Times[-1, 3]` is `-1*3`, apart from the integer `-3`.
 /// - An operand never starts with a minus sign after an operator:
 ///   `2*(-3)`, `(-3)^2`, `x^(-1)`, `-(-x)`.
 /// - Nested applications of the same operator, which the builder flattens,
@@ -132,6 +139,12 @@ impl fmt::Display for Expr {
             match task {
                 Task::Text(s) => f.write_str(s)?,
                 Task::Abs(n) => write!(f, "{}", n.unsigned_abs())?,
+                Task::Magnitude(e) => match e.view() {
+                    View::Int(n) => write!(f, "{}", n.unsigned_abs())?,
+                    View::Integer(n) => write!(f, "{}", n.unsigned_abs())?,
+                    View::Rational(q) => write!(f, "{}", q.abs())?,
+                    _ => unreachable!("only numbers have a magnitude"),
+                },
                 Task::Expr { e, min, no_minus } => {
                     if prec(e) < min || (no_minus && leading_minus(e)) {
                         expansion.extend([
@@ -150,7 +163,7 @@ impl fmt::Display for Expr {
                     }
                 }
                 Task::Negated(e) => match form(e) {
-                    Form::Int(n) => expansion.push(Task::Abs(n)),
+                    Form::Number => expansion.push(Task::Magnitude(e)),
                     Form::Times(args) => times(args, true, &mut expansion),
                     _ => unreachable!("only integers and products are negated"),
                 },
@@ -178,6 +191,8 @@ enum Task<'a> {
     Text(&'static str),
     /// The absolute value of an integer.
     Abs(i64),
+    /// The absolute value of a number atom.
+    Magnitude(&'a Expr),
     /// `e`, parenthesised if it binds weaker than `min`, or if `no_minus`
     /// and it would start with a minus sign.
     Expr {
@@ -186,7 +201,7 @@ enum Task<'a> {
         no_minus: bool,
     },
     /// `e` without its leading minus sign, which the caller has written. Only
-    /// for an integer or a product with [`leading_minus`].
+    /// for a number or a product with [`leading_minus`].
     Negated(&'a Expr),
     /// The product of `factors`, see [`product`].
     Product {
@@ -197,7 +212,8 @@ enum Task<'a> {
 
 /// What the infix printer sees in an expression.
 enum Form<'a> {
-    Int(i64),
+    /// A number atom.
+    Number,
     Plus(&'a [Expr]),
     Times(&'a [Expr]),
     Power(&'a Expr, &'a Expr),
@@ -208,7 +224,7 @@ enum Form<'a> {
 
 fn form(e: &Expr) -> Form<'_> {
     match e.view() {
-        View::Int(n) => Form::Int(n),
+        View::Int(_) | View::Integer(_) | View::Rational(_) => Form::Number,
         View::Apply { head, args } => match (head.as_symbol(), args) {
             (Some(Symbol::PLUS), [_, _, ..]) => Form::Plus(args),
             (Some(Symbol::TIMES), [_, _, ..]) => Form::Times(args),
@@ -225,17 +241,19 @@ fn prec(e: &Expr) -> Prec {
         Form::Plus(_) => Prec::Sum,
         Form::Times(_) => Prec::Product,
         Form::Power(..) => Prec::Power,
-        Form::Int(_) | Form::List(_) | Form::Other => Prec::Atom,
+        // A rational reads as a quotient.
+        Form::Number if is_rational(e) => Prec::Product,
+        Form::Number | Form::List(_) | Form::Other => Prec::Atom,
     }
 }
 
 /// Whether `e`, printed without parentheses, starts with a minus sign. Only
-/// integers and products can: a sum with a negative first term is an operand
+/// numbers and products can: a sum with a negative first term is an operand
 /// only where its precedence already parenthesises it. Precedence ignores the
 /// sign; operands that must not start with one say so with `no_minus`.
 fn leading_minus(e: &Expr) -> bool {
     match form(e) {
-        Form::Int(n) => n < 0,
+        Form::Number => is_negative(e),
         Form::Times(args) => args
             .iter()
             .find(|f| inverse_power(f).is_none())
@@ -244,8 +262,22 @@ fn leading_minus(e: &Expr) -> bool {
     }
 }
 
+/// Whether `e` is a negative number.
 fn is_negative(e: &Expr) -> bool {
-    e.as_i64().is_some_and(|n| n < 0)
+    match e.view() {
+        View::Int(n) => n < 0,
+        View::Integer(n) => n.is_negative(),
+        View::Rational(q) => q.is_negative(),
+        _ => false,
+    }
+}
+
+fn is_rational(e: &Expr) -> bool {
+    matches!(e.view(), View::Rational(_))
+}
+
+fn is_integer(e: &Expr) -> bool {
+    matches!(e.view(), View::Int(_) | View::Integer(_))
 }
 
 /// The tasks that print the application `e`, in order.
@@ -272,7 +304,7 @@ fn expand<'a>(e: &'a Expr, out: &mut Vec<Task<'a>>) {
             comma_separated(items, out);
             out.push(Task::Text("}"));
         }
-        Form::Int(_) | Form::Other => {
+        Form::Number | Form::Other => {
             let (head, args) = (e.head().expect("an application"), e.args());
             out.extend([operand(head, Prec::Atom, true), Task::Text("[")]);
             comma_separated(args, out);
@@ -306,17 +338,27 @@ fn times<'a>(args: &'a [Expr], negated: bool, out: &mut Vec<Task<'a>>) {
 /// `negated`, the sign is left out.
 fn product<'a>(factors: &[Factor<'a>], negated: bool, out: &mut Vec<Task<'a>>) {
     let mut numerator = Vec::new();
+    // Each with the factor it came from.
     let mut denominator = Vec::new();
     for &f in factors {
         match f {
             Factor::Plain(e) => match inverse_power(e) {
-                Some((b, -1)) => denominator.push(Factor::Plain(b)),
-                Some((b, n)) => denominator.push(Factor::Power(b, n)),
+                Some((b, -1)) => denominator.push((Factor::Plain(b), f)),
+                Some((b, n)) => denominator.push((Factor::Power(b, n), f)),
                 None => numerator.push(f),
             },
             Factor::Power(..) => numerator.push(f),
         }
     }
+    // `n/d` for integers `n` and `d >= 0` is how a rational prints.
+    if let ([Factor::Plain(n)], [(Factor::Plain(d), original)]) = (&numerator[..], &denominator[..])
+    {
+        if is_integer(n) && is_integer(d) && !is_negative(d) {
+            numerator.push(*original);
+            denominator.clear();
+        }
+    }
+    let denominator: Vec<Factor<'a>> = denominator.into_iter().map(|(f, _)| f).collect();
     signed_product(&numerator, negated, out);
     match denominator[..] {
         [] => {}
@@ -348,11 +390,11 @@ enum Factor<'a> {
 }
 
 impl<'a> Factor<'a> {
-    /// The integer that the factor prints as, if it is a bare integer.
-    fn int(self) -> Option<(&'a Expr, i64)> {
+    /// The number that the factor prints as, if it is a bare number.
+    fn number(self) -> Option<&'a Expr> {
         match self {
-            Factor::Plain(e) => e.as_i64().map(|n| (e, n)),
-            Factor::Power(..) => None,
+            Factor::Plain(e) if e.is_number() => Some(e),
+            _ => None,
         }
     }
 
@@ -366,25 +408,25 @@ impl<'a> Factor<'a> {
     }
 }
 
-/// `factors` joined by `*`, a negative integer first as the sign, and `1`
+/// `factors` joined by `*`, a negative number first as the sign, and `1`
 /// for no factors. With `negated`, the sign is left out.
 fn signed_product<'a>(factors: &[Factor<'a>], negated: bool, out: &mut Vec<Task<'a>>) {
     let mut items = Vec::new();
     let mut rest = factors;
     if let Some((&first, tail)) = factors.split_first() {
-        if let Some((c, n)) = first.int().filter(|&(_, n)| n < 0) {
+        if let Some(c) = first.number().filter(|c| is_negative(c)) {
             rest = tail;
             // `Times[-1, 3]` is `-1*3`: `-3` is the integer.
             let literal_next = tail
                 .first()
-                .and_then(|f| f.int())
-                .is_some_and(|(_, m)| m >= 0);
-            if n == -1 && !literal_next {
+                .and_then(|f| f.number())
+                .is_some_and(|m| !is_negative(m));
+            if c.as_i64() == Some(-1) && !literal_next {
                 if !negated {
                     out.push(Task::Text("-"));
                 }
             } else if negated {
-                items.push(Task::Abs(n));
+                items.push(Task::Magnitude(c));
             } else {
                 items.push(operand(c, Prec::Lowest, false));
             }
@@ -396,11 +438,19 @@ fn signed_product<'a>(factors: &[Factor<'a>], negated: bool, out: &mut Vec<Task<
     }
     out.extend(items);
     for &f in rest {
-        if !first {
-            out.push(Task::Text("*"));
+        match f {
+            // A leading rational needs no parentheses: `1/2*x`.
+            Factor::Plain(e) if first && is_rational(e) => {
+                out.push(operand(e, Prec::Product, true));
+            }
+            _ => {
+                if !first {
+                    out.push(Task::Text("*"));
+                }
+                f.emit(out);
+            }
         }
         first = false;
-        f.emit(out);
     }
 }
 

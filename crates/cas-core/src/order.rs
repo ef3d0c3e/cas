@@ -2,6 +2,8 @@
 
 use std::cmp::Ordering;
 
+use cas_num::{Integer, Rational};
+
 use crate::expr::{Expr, Repr, View};
 use crate::symbol::Symbol;
 
@@ -16,7 +18,7 @@ static ONE: Expr = Expr(Repr::Int(1));
 /// and values: never on symbol ids, hashes, addresses or interning order, so
 /// it is the same in every run.
 ///
-/// 1. **Numbers** come first, by value.
+/// 1. **Numbers** (integers and rationals) come first, by value.
 /// 2. **Products and powers** — `Times[…]`, and `Power[b, n]` with two
 ///    arguments — compare as products of powers, as do all other expressions
 ///    against them (`x` is `x^1`, and `x^2` is the product of one factor).
@@ -78,13 +80,28 @@ fn canonical(a: &Expr, b: &Expr) -> Ordering {
     }
 }
 
-/// Number atoms. (Integers outside `i64` and rationals join with CAS-24.)
 fn is_number(e: &Expr) -> bool {
-    matches!(e.view(), View::Int(_))
+    e.is_number()
 }
 
+/// By value; only rationals need a `Rational` comparison.
 fn cmp_numbers(a: &Expr, b: &Expr) -> Ordering {
-    a.as_i64().cmp(&b.as_i64())
+    let integer = |v: View<'_>| match v {
+        View::Int(x) => Some(Integer::from(x)),
+        View::Integer(x) => Some(x.clone()),
+        _ => None,
+    };
+    match (a.view(), b.view()) {
+        (View::Int(l), View::Int(r)) => l.cmp(&r),
+        (l, r) => match (integer(l), integer(r)) {
+            (Some(l), Some(r)) => l.cmp(&r),
+            _ => rational(a).cmp(&rational(b)),
+        },
+    }
+}
+
+fn rational(e: &Expr) -> Rational {
+    e.to_rational().expect("a number")
 }
 
 /// `Times[…]`, or `Power[b, n]`.
@@ -139,10 +156,10 @@ fn coefficient(e: &Expr) -> impl Iterator<Item = &Expr> {
     numbers.chain(implicit)
 }
 
-/// Rule 3.
+/// Rule 3, for pairs that are not both numbers (rule 1 decides those).
 fn structural(a: &Expr, b: &Expr) -> Ordering {
+    debug_assert!(!(is_number(a) && is_number(b)));
     match (a.view(), b.view()) {
-        (View::Int(l), View::Int(r)) => l.cmp(&r),
         (View::String(l), View::String(r)) => cmp_names(l, r),
         (View::Symbol(l), View::Symbol(r)) => cmp_names(l.name(), r.name()),
         (
@@ -163,7 +180,7 @@ fn structural(a: &Expr, b: &Expr) -> Ordering {
 
 fn rank(v: View<'_>) -> u8 {
     match v {
-        View::Int(_) => 0,
+        View::Int(_) | View::Integer(_) | View::Rational(_) => 0,
         View::String(_) => 1,
         View::Symbol(_) => 2,
         View::Apply { .. } => 3,

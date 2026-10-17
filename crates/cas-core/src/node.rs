@@ -1,11 +1,12 @@
 //! Interned nodes: everything that is not stored inline in an [`Expr`].
 
 use std::cell::{Cell, RefCell};
-use std::hash::{BuildHasher, Hasher};
+use std::hash::{BuildHasher, Hash, Hasher};
 use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
+use cas_num::{Integer, Rational};
 use foldhash::fast::{FixedState, FoldHasher};
 
 use crate::attributes::Attributes;
@@ -27,14 +28,23 @@ pub(crate) struct Node {
 }
 
 pub(crate) enum Kind {
+    /// Only values outside `i64`, which are inline.
+    Integer(Integer),
+    /// Only non-integers: an integer value is an integer atom.
+    Rational(Rational),
     String(Box<str>),
-    Apply { head: Expr, args: Box<[Expr]> },
+    Apply {
+        head: Expr,
+        args: Box<[Expr]>,
+    },
 }
 
 /// A node's contents, borrowed: what the interner looks up, so that a hit
 /// allocates nothing.
 #[derive(Clone, Copy)]
 pub(crate) enum Key<'a> {
+    Integer(&'a Integer),
+    Rational(&'a Rational),
     String(&'a str),
     Apply { head: &'a Expr, args: &'a [Expr] },
 }
@@ -46,6 +56,8 @@ pub(crate) mod tag {
     pub(crate) const INT: u8 = 1;
     pub(crate) const STRING: u8 = 2;
     pub(crate) const APPLY: u8 = 3;
+    pub(crate) const INTEGER: u8 = 4;
+    pub(crate) const RATIONAL: u8 = 5;
 }
 
 /// The structural hasher: fixed seed, no per-process randomness.
@@ -119,6 +131,14 @@ impl Key<'_> {
     pub(crate) fn hash(self) -> u64 {
         let mut h = hasher();
         match self {
+            Key::Integer(n) => {
+                h.write_u8(tag::INTEGER);
+                n.hash(&mut h);
+            }
+            Key::Rational(q) => {
+                h.write_u8(tag::RATIONAL);
+                q.hash(&mut h);
+            }
             Key::String(s) => {
                 h.write_u8(tag::STRING);
                 h.write_usize(s.len());
@@ -138,6 +158,7 @@ impl Key<'_> {
 
     pub(crate) fn meta(self) -> Meta {
         match self {
+            Key::Integer(_) | Key::Rational(_) => Meta::atom(Flags::NUMERIC, 0),
             Key::String(_) => Meta::atom(Flags::NONE, 0),
             Key::Apply { head, args } => {
                 let mut m = head.meta();
@@ -169,6 +190,8 @@ impl Key<'_> {
     /// Whether `kind` has exactly these contents (children by identity).
     pub(crate) fn matches(self, kind: &Kind) -> bool {
         match (self, kind) {
+            (Key::Integer(a), Kind::Integer(b)) => a == b,
+            (Key::Rational(a), Kind::Rational(b)) => a == b,
             (Key::String(a), Kind::String(b)) => a == &**b,
             (Key::Apply { head, args }, Kind::Apply { head: h, args: a }) => {
                 head == h && args.len() == a.len() && args.iter().zip(a.iter()).all(|(x, y)| x == y)
@@ -179,6 +202,8 @@ impl Key<'_> {
 
     pub(crate) fn to_kind(self) -> Kind {
         match self {
+            Key::Integer(n) => Kind::Integer(n.clone()),
+            Key::Rational(q) => Kind::Rational(q.clone()),
             Key::String(s) => Kind::String(s.into()),
             Key::Apply { head, args } => Kind::Apply {
                 head: head.clone(),

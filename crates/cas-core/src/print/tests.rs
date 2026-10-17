@@ -3,7 +3,7 @@
 use proptest::prelude::*;
 
 use crate::build::symbols;
-use crate::{Expr, Symbol};
+use crate::{Expr, Integer, Rational, Symbol};
 
 fn apply(head: Symbol, args: &[Expr]) -> Expr {
     Expr::apply(&head.into(), args)
@@ -19,6 +19,10 @@ fn times(args: &[Expr]) -> Expr {
 
 fn pow(b: &Expr, n: impl Into<Expr>) -> Expr {
     apply(Symbol::POWER, &[b.clone(), n.into()])
+}
+
+fn q(n: i64, d: i64) -> Expr {
+    Expr::from(Rational::new(n.into(), d.into()))
 }
 
 fn int(n: i64) -> Expr {
@@ -89,11 +93,68 @@ fn powers() {
         (pow(&times(&[int(2), x.clone()]), 3), "(2*x)^3"),
         (pow(&plus(&[x.clone(), int(1)]), 2), "(x + 1)^2"),
         (pow(&Expr::call(Symbol::SIN, [&x]), 2), "Sin[x]^2"),
-        // Rational exponents, until rationals are atoms (CAS-24).
-        (pow(&x, times(&[int(1), pow(&int(2), -1)])), "x^(1/2)"),
-        (pow(&x, times(&[int(-1), pow(&int(2), -1)])), "x^(-1/2)"),
-        (pow(&x, times(&[int(-3), pow(&int(2), -1)])), "x^(-3/2)"),
+        (pow(&x, q(1, 2)), "x^(1/2)"),
+        (pow(&x, q(-3, 2)), "x^(-3/2)"),
+        (pow(&q(1, 2), &x), "(1/2)^x"),
+        (pow(&q(-1, 2), &x), "(-1/2)^x"),
+        // Not a rational: an integer over an integer stays a power.
+        (pow(&x, times(&[int(1), pow(&int(2), -1)])), "x^(1*2^(-1))"),
     ]);
+}
+
+#[test]
+fn numbers() {
+    let [x, y] = symbols(["x", "y"]);
+    let big = Expr::from(Integer::from(1i128 << 70));
+    let neg_big = Expr::from(-Integer::from(1i128 << 70));
+    check(&[
+        (big.clone(), "1180591620717411303424"),
+        (neg_big.clone(), "-1180591620717411303424"),
+        (
+            plus(&[x.clone(), neg_big.clone()]),
+            "x - 1180591620717411303424",
+        ),
+        (
+            times(&[int(2), neg_big.clone()]),
+            "2*(-1180591620717411303424)",
+        ),
+        (times(&[neg_big, x.clone()]), "-1180591620717411303424*x"),
+        (q(1, 2), "1/2"),
+        (q(-3, 2), "-3/2"),
+        (plus(&[x.clone(), q(1, 2)]), "x + 1/2"),
+        (plus(&[x.clone(), q(-1, 2)]), "x - 1/2"),
+        (plus(&[q(-1, 2), x.clone()]), "-1/2 + x"),
+        (times(&[q(1, 2), x.clone()]), "1/2*x"),
+        (times(&[q(-1, 2), x.clone()]), "-1/2*x"),
+        (
+            plus(&[y.clone(), times(&[q(-1, 2), x.clone()])]),
+            "y - 1/2*x",
+        ),
+        (times(&[x.clone(), q(-1, 2)]), "x*(-1/2)"),
+        (times(&[int(2), q(3, 4)]), "2*(3/4)"),
+        (times(&[int(-1), q(1, 2)]), "-1*(1/2)"),
+        (
+            plus(&[y.clone(), times(&[int(-1), q(1, 2)])]),
+            "y - 1*(1/2)",
+        ),
+        (times(&[q(1, 2), pow(&x, -1)]), "1/2/x"),
+        (
+            Expr::apply(&Expr::symbol("f"), &[q(1, 2), big]),
+            "f[1/2, 1180591620717411303424]",
+        ),
+        // An integer over an integer would read as a rational.
+        (times(&[int(3), pow(&int(2), -1)]), "3*2^(-1)"),
+        (times(&[int(-3), pow(&int(2), -1)]), "-3*2^(-1)"),
+        (times(&[int(-1), pow(&int(2), -1)]), "-2^(-1)"),
+        (
+            plus(&[x.clone(), times(&[int(-3), pow(&int(2), -1)])]),
+            "x - 3*2^(-1)",
+        ),
+        (times(&[x.clone(), pow(&int(2), -1)]), "x/2"),
+        (times(&[int(3), pow(&int(-2), -1)]), "3/(-2)"),
+        (times(&[int(3), pow(&int(2), -2)]), "3/2^2"),
+    ]);
+    assert_eq!(format!("{:?}", plus(&[x, q(-3, 2)])), "Plus[x, -3/2]");
 }
 
 #[test]
@@ -301,7 +362,19 @@ impl<'a> Parser<'a> {
     /// A product, after a minus sign if `negated`: the inverse of how the
     /// printer writes a negative coefficient.
     fn product(&mut self, negated: bool) -> Result<Expr, String> {
+        let literal = self.at_literal();
         let mut factors = vec![self.power()?];
+        // A literal over a literal is a rational.
+        if literal && self.peek() == Some("/") {
+            self.pos += 1;
+            if self.at_literal() {
+                let d = self.power()?.to_integer().unwrap();
+                let n = factors[0].to_integer().unwrap();
+                factors[0] = Expr::from(Rational::new(n, d));
+            } else {
+                factors.push(pow(&self.power()?, -1));
+            }
+        }
         loop {
             if self.eat("*") {
                 factors.push(self.power()?);
@@ -312,8 +385,8 @@ impl<'a> Parser<'a> {
             }
         }
         if negated {
-            match factors[0].as_i64() {
-                Some(n) if n > 0 => factors[0] = int(-n),
+            match factors[0].to_rational() {
+                Some(q) if q.is_positive() => factors[0] = Expr::from(-q),
                 _ => factors.insert(0, int(-1)),
             }
         }
@@ -322,6 +395,16 @@ impl<'a> Parser<'a> {
         } else {
             times(&factors)
         })
+    }
+
+    /// Whether the next tokens are a bare integer literal, not the base of a
+    /// power or the head of an application.
+    fn at_literal(&self) -> bool {
+        let digits = self
+            .peek()
+            .is_some_and(|t| t.starts_with(|c: char| c.is_ascii_digit()));
+        let next = self.tokens.get(self.pos + 1).copied();
+        digits && next != Some("^") && next != Some("[")
     }
 
     fn power(&mut self) -> Result<Expr, String> {
@@ -351,9 +434,10 @@ impl<'a> Parser<'a> {
                 Ok(e)
             }
             "{" => Ok(apply(Symbol::LIST, &self.items("}")?)),
-            _ if t.starts_with(|c: char| c.is_ascii_digit()) => {
-                t.parse::<i64>().map(Expr::from).map_err(|e| e.to_string())
-            }
+            _ if t.starts_with(|c: char| c.is_ascii_digit()) => t
+                .parse::<Integer>()
+                .map(Expr::from)
+                .map_err(|e| e.to_string()),
             _ if t.starts_with(|c: char| c.is_ascii_alphabetic()) => Ok(Expr::symbol(t)),
             _ => Err(format!("unexpected {t:?}")),
         }
@@ -384,8 +468,9 @@ fn value(e: &Expr) -> f64 {
         "c" => 2.75,
         name => name.len() as f64,
     };
-    if let Some(n) = e.as_i64() {
-        return n as f64;
+    if let Some(q) = e.to_rational() {
+        let f = |n: &Integer| n.to_string().parse::<f64>().unwrap();
+        return f(q.numer()) / f(q.denom());
     }
     if let Some(s) = e.as_symbol() {
         return sym(s);
@@ -417,6 +502,9 @@ fn tree() -> impl Strategy<Value = Expr> {
     let leaf = prop_oneof![
         prop::sample::select(vec!["a", "b", "c"]).prop_map(Expr::symbol),
         (-3i64..4).prop_map(Expr::from),
+        (-3i64..4, 1i64..4).prop_map(|(n, d)| q(n, d)),
+        prop::sample::select(vec![-(1i128 << 64), 1i128 << 63])
+            .prop_map(|n| Expr::from(Integer::from(n))),
     ];
     leaf.prop_recursive(5, 40, 4, |inner| {
         let head = prop_oneof![
@@ -465,12 +553,13 @@ proptest! {
     #[test]
     fn full_form_matches_a_recursive_model(e in tree()) {
         fn model(e: &Expr) -> String {
-            match (e.head(), e.as_i64(), e.as_symbol()) {
+            match (e.head(), e.to_rational(), e.as_symbol()) {
                 (Some(h), ..) => {
                     let args: Vec<String> = e.args().iter().map(model).collect();
                     format!("{}[{}]", model(h), args.join(", "))
                 }
-                (_, Some(n), _) => n.to_string(),
+                (_, Some(q), _) if q.is_integer() => q.numer().to_string(),
+                (_, Some(q), _) => format!("{}/{}", q.numer(), q.denom()),
                 (_, _, Some(s)) => s.name().to_owned(),
                 _ => unreachable!(),
             }

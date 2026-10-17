@@ -3,6 +3,8 @@
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
+use cas_num::{Integer, Rational};
+
 use crate::intern;
 use crate::node::{Flags, Key, Kind, Meta, Node, hasher, tag};
 use crate::symbol::Symbol;
@@ -10,8 +12,10 @@ use crate::symbol::Symbol;
 /// An immutable, hash-consed expression.
 ///
 /// Symbols and integers that fit an `i64` are stored inline; everything else
-/// is a node in the global interner, shared by every expression that contains
-/// it. Each value has exactly one representation, so equality is O(1):
+/// (larger integers, rationals, strings, applications) is a node in the
+/// global interner, shared by every expression that contains it. Each value
+/// has exactly one representation (an integer is never a rational, and an
+/// `i64` never a node), so equality is O(1):
 /// inline payloads compare by value and nodes by address. Cloning is a copy
 /// or a reference-count increment.
 ///
@@ -50,7 +54,12 @@ pub(crate) enum Repr {
 #[non_exhaustive]
 pub enum View<'a> {
     Symbol(Symbol),
+    /// An integer that fits an `i64`.
     Int(i64),
+    /// An integer outside the `i64` range.
+    Integer(&'a Integer),
+    /// A rational number that is not an integer.
+    Rational(&'a Rational),
     String(&'a str),
     /// `head[args…]`; the head is any expression.
     Apply {
@@ -78,6 +87,8 @@ impl Expr {
             Repr::Symbol(s) => View::Symbol(*s),
             Repr::Int(x) => View::Int(*x),
             Repr::Node(n) => match &n.kind {
+                Kind::Integer(x) => View::Integer(x),
+                Kind::Rational(x) => View::Rational(x),
                 Kind::String(s) => View::String(s),
                 Kind::Apply { head, args } => View::Apply { head, args },
             },
@@ -121,6 +132,48 @@ impl Expr {
             Repr::Int(x) => Some(x),
             _ => None,
         }
+    }
+
+    /// The value of an integer atom, inline or not.
+    #[must_use]
+    pub fn to_integer(&self) -> Option<Integer> {
+        match self.view() {
+            View::Int(x) => Some(Integer::from(x)),
+            View::Integer(x) => Some(x.clone()),
+            _ => None,
+        }
+    }
+
+    /// The value of a number atom: an integer or a rational.
+    ///
+    /// ```
+    /// use cas_core::{Expr, Integer, Rational};
+    ///
+    /// let half = Expr::from(Rational::new(1.into(), 2.into()));
+    /// assert_eq!(half.to_string(), "1/2");
+    /// assert_eq!(half.to_rational(), Some(Rational::new(2.into(), 4.into())));
+    /// // An integer value is an integer atom, inline when it fits an i64.
+    /// assert_eq!(Expr::from(Rational::new(4.into(), 2.into())), Expr::from(2));
+    /// assert_eq!(Expr::from(2).to_rational(), Some(Rational::from(2)));
+    /// ```
+    #[must_use]
+    pub fn to_rational(&self) -> Option<Rational> {
+        match self.view() {
+            View::Int(x) => Some(Rational::from(x)),
+            View::Integer(x) => Some(Rational::from(x)),
+            View::Rational(x) => Some(x.clone()),
+            _ => None,
+        }
+    }
+
+    /// Whether this is a number atom: an integer or a rational. Unlike
+    /// [`Expr::is_numeric`], `Pi` and `Sin[1]` are not.
+    #[must_use]
+    pub fn is_number(&self) -> bool {
+        matches!(
+            self.view(),
+            View::Int(_) | View::Integer(_) | View::Rational(_)
+        )
     }
 
     #[must_use]
@@ -214,6 +267,39 @@ impl From<Symbol> for Expr {
 impl From<i64> for Expr {
     fn from(x: i64) -> Expr {
         Expr(Repr::Int(x))
+    }
+}
+
+impl From<Integer> for Expr {
+    /// Inline if it fits an `i64`, an interned atom otherwise.
+    fn from(x: Integer) -> Expr {
+        Expr::from(&x)
+    }
+}
+
+impl From<&Integer> for Expr {
+    fn from(x: &Integer) -> Expr {
+        match x.to_i64() {
+            Some(x) => Expr(Repr::Int(x)),
+            None => Expr(Repr::Node(intern::intern(Key::Integer(x)))),
+        }
+    }
+}
+
+impl From<Rational> for Expr {
+    /// An integer atom if the value is an integer.
+    fn from(x: Rational) -> Expr {
+        Expr::from(&x)
+    }
+}
+
+impl From<&Rational> for Expr {
+    fn from(x: &Rational) -> Expr {
+        if x.is_integer() {
+            Expr::from(x.numer())
+        } else {
+            Expr(Repr::Node(intern::intern(Key::Rational(x))))
+        }
     }
 }
 

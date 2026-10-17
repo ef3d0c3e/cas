@@ -45,10 +45,13 @@ fn assignment_operators() {
 fn negation() {
     let [x] = symbols(["x"]);
     assert_eq!(-Expr::from(3), Expr::from(-3));
-    assert_eq!(
-        full(&-Expr::from(i64::MIN)),
-        format!("Times[{}, -1]", i64::MIN)
-    );
+    // The negation of i64::MIN is the boxed integer 2^63.
+    let big = -Expr::from(i64::MIN);
+    assert!(big.as_i64().is_none());
+    assert_eq!(full(&big), "9223372036854775808");
+    assert_eq!(-&big, Expr::from(i64::MIN));
+    let half = Expr::from(cas_num::Rational::new(1.into(), 2.into()));
+    assert_eq!(full(&-&half), "-1/2");
     assert_eq!(full(&-&x), "Times[-1, x]");
     assert_eq!(full(&-Symbol::new("x")), "Times[-1, x]");
     // Not arithmetic: the coefficient is not folded.

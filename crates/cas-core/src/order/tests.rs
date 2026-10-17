@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 
 use proptest::prelude::*;
 
-use crate::{Expr, Symbol};
+use crate::{Expr, Integer, Rational, Symbol};
 
 fn sym(name: &str) -> Expr {
     Symbol::new(name).into()
@@ -12,6 +12,14 @@ fn sym(name: &str) -> Expr {
 
 fn int(x: i64) -> Expr {
     x.into()
+}
+
+fn q(n: i64, d: i64) -> Expr {
+    Rational::new(n.into(), d.into()).into()
+}
+
+fn big(x: i128) -> Expr {
+    Integer::from(x).into()
 }
 
 fn apply(head: &Expr, args: &[Expr]) -> Expr {
@@ -49,6 +57,40 @@ fn numbers_by_value_and_first() {
         Expr::string(""),
         sym("a"),
         apply(&sym("a"), &[]),
+    ]);
+}
+
+/// Integers inside and outside `i64` and rationals interleave by value.
+#[test]
+fn all_numbers_by_value() {
+    let min = i128::from(i64::MIN);
+    let max = i128::from(i64::MAX);
+    assert_increasing(&[
+        big(min * 4),
+        big(min - 1),
+        int(i64::MIN),
+        q(-5, 2),
+        int(-2),
+        q(-1, 3),
+        int(0),
+        q(1, 1_000_000),
+        q(1, 2),
+        int(1),
+        q(4, 3),
+        int(i64::MAX),
+        Expr::from(Rational::new((max * 2 + 1).into(), 2.into())),
+        big(max + 1),
+        big(max * 4),
+        times(&[]),
+    ]);
+    // A rational coefficient orders like an integer one.
+    let x = sym("x");
+    assert_increasing(&[
+        times(&[int(-1), x.clone()]),
+        times(&[q(1, 2), x.clone()]),
+        x.clone(),
+        times(&[q(3, 2), x.clone()]),
+        times(&[int(2), x]),
     ]);
 }
 
@@ -153,6 +195,8 @@ fn tree() -> impl Strategy<Value = Expr> {
     let leaf = prop_oneof![
         prop::sample::select(vec!["a", "A", "b", "f", "Times", "Power"]).prop_map(sym),
         (-2i64..3).prop_map(int),
+        (-3i64..4, 1i64..4).prop_map(|(n, d)| q(n, d)),
+        prop::sample::select(vec![-(1i128 << 64), 1 << 63, 3 << 70]).prop_map(big),
         prop::sample::select(vec!["", "a", "B"]).prop_map(Expr::string),
     ];
     leaf.prop_recursive(4, 24, 3, |inner| {
@@ -199,9 +243,21 @@ proptest! {
 
     /// The coefficient decides only between terms with the same factors.
     #[test]
-    fn coefficients_order_like_terms(m in tree(), c in -3i64..4, d in -3i64..4) {
-        prop_assume!(m.as_i64().is_none());
-        let (tc, td) = (times(&[int(c), m.clone()]), times(&[int(d), m.clone()]));
-        prop_assert_eq!(tc.cmp(&td), c.cmp(&d));
+    fn coefficients_order_like_terms(m in tree(), c in (-3i64..4, 1i64..4), d in (-3i64..4, 1i64..4)) {
+        prop_assume!(!m.is_number());
+        let (tc, td) = (times(&[q(c.0, c.1), m.clone()]), times(&[q(d.0, d.1), m.clone()]));
+        let value = |(n, d): (i64, i64)| Rational::new(n.into(), d.into());
+        prop_assert_eq!(tc.cmp(&td), value(c).cmp(&value(d)));
+    }
+
+    /// Numbers compare by value, whatever their kind.
+    #[test]
+    fn numbers_compare_by_value(a in (-5i128..5, 1i128..5, 0u32..3), b in (-5i128..5, 1i128..5, 0u32..3)) {
+        let value = |(n, d, k): (i128, i128, u32)| {
+            let scale = (0..k).fold(Integer::ONE, |acc, _| acc * Integer::from(i64::MAX));
+            Rational::new(Integer::from(n) * scale, Integer::from(d))
+        };
+        let (x, y) = (value(a), value(b));
+        prop_assert_eq!(Expr::from(&x).cmp(&Expr::from(&y)), x.cmp(&y));
     }
 }

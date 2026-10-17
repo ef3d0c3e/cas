@@ -4,7 +4,8 @@
 //! "Expression design" page in Lific (`CAS-DOC-3`).
 //!
 //! - [`Expr`]: the expression handle, 16 bytes; symbols and `i64` integers are
-//!   inline, everything else is interned. `Ord` is the canonical order that
+//!   inline, everything else (larger [`Integer`]s, [`Rational`]s, strings,
+//!   applications) is interned. `Ord` is the canonical order that
 //!   evaluation sorts `Orderless` arguments into (see `order.rs`).
 //!   It prints in infix with `Display` (`x + 2*y^3`) and in full form with
 //!   `Debug` or [`Expr::full_form`] (`Plus[x, Times[2, Power[y, 3]]]`).
@@ -31,6 +32,7 @@ mod symbol;
 mod traverse;
 
 pub use attributes::Attributes;
+pub use cas_num::{Integer, Rational};
 pub use context::{Context, ContextError, EvalError, Limits, StateId};
 pub use expr::{Expr, View};
 pub use intern::{InternerStats, interner_stats};
