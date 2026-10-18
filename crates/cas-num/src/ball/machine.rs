@@ -477,6 +477,32 @@ impl MachineBall {
         MachineBall::new(mid, rad)
     }
 
+    /// `exp`, through [`Ball`] at 64 bits until CAS-88's kernels.
+    #[must_use]
+    pub fn exp(&self) -> Option<MachineBall> {
+        self.via_ball(Ball::exp)
+    }
+
+    /// `exp(x) - 1`, through [`Ball`] at 64 bits.
+    #[must_use]
+    pub fn expm1(&self) -> Option<MachineBall> {
+        self.via_ball(Ball::expm1)
+    }
+
+    /// `log`, through [`Ball`] at 64 bits; `None` unless the ball lies in
+    /// `x > 0`.
+    #[must_use]
+    pub fn log(&self) -> Option<MachineBall> {
+        self.via_ball(Ball::log)
+    }
+
+    /// `log(1 + x)`, through [`Ball`] at 64 bits; `None` unless the ball
+    /// lies in `x > -1`.
+    #[must_use]
+    pub fn log1p(&self) -> Option<MachineBall> {
+        self.via_ball(Ball::log1p)
+    }
+
     /// `f` evaluated on the ball through [`Ball`] at 64 bits, the fallback
     /// for functions without a machine kernel yet (CAS-88).
     #[must_use]

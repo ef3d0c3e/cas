@@ -369,3 +369,16 @@ fn via_ball_fallback() {
     assert!(pi.contains(std::f64::consts::PI));
     assert!(pi.rad <= 2f64.powi(-50));
 }
+
+#[test]
+fn functions_through_ball() {
+    let x = MachineBall::new(0.75, 1e-12).unwrap();
+    assert!(x.exp().unwrap().contains(0.75f64.exp()));
+    assert!(x.expm1().unwrap().contains(0.75f64.exp_m1()));
+    assert!(x.log().unwrap().contains(0.75f64.ln()));
+    assert!(x.log1p().unwrap().contains(0.75f64.ln_1p()));
+    let tiny = MachineBall::exact(1e-300).unwrap();
+    assert!(tiny.expm1().unwrap().contains(1e-300));
+    assert_eq!(MachineBall::exact(-1.0).unwrap().log(), None);
+    assert_eq!(MachineBall::exact(1000.0).unwrap().exp(), None);
+}

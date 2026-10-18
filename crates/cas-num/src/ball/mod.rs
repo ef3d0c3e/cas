@@ -11,6 +11,8 @@
 //!   [`RealBalls`] ring object (§5).
 //! - Constants: [`Ball::const_pi`], [`Ball::const_log2`] and [`Ball::const_e`]
 //!   by binary splitting, cached process-wide (§7.1).
+//! - Elementary functions: [`Ball::exp`], [`Ball::expm1`], [`Ball::log`],
+//!   [`Ball::log1p`] (§7.2).
 //! - Decimal printing with Arb's digit rule ([`Ball::to_decimal`], `Display`)
 //!   and decimal parsing ([`Ball::from_decimal`]); exact hexadecimal floats
 //!   for `FullForm` ([`Float::to_hex`], [`Mag::to_hex`]) (§6).
@@ -21,6 +23,7 @@ mod bsplit;
 mod consts;
 mod decimal;
 mod float;
+mod fns;
 mod hex;
 mod machine;
 mod mag;

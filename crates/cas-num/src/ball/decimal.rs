@@ -79,7 +79,7 @@ fn log10_estimate(x: &Float) -> Option<i64> {
 
 /// `x` rounded to an integer: to nearest (ties away from zero), or up
 /// (toward `+∞`).
-fn to_integer(x: &Float, up: bool) -> Integer {
+pub(super) fn to_integer(x: &Float, up: bool) -> Integer {
     let (m, e) = x.to_integer_exp();
     if !e.is_negative() {
         let (neg, mag) = m.into_parts();

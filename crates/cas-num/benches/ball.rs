@@ -322,16 +322,24 @@ fn decimal(c: &mut Criterion) {
 /// Elementary functions at an argument with all bits significant.
 fn functions(c: &mut Criterion) {
     type Fun = fn(&Float) -> Float;
-    let funs: [(&str, Fun); 4] = [
-        ("exp", |x| x.clone().exp()),
-        ("log", |x| x.clone().ln()),
-        ("sin", |x| x.clone().sin()),
-        ("atan", |x| x.clone().atan()),
+    type Ours = Option<fn(&ball::Ball, u64) -> ball::Ball>;
+    let funs: [(&str, Fun, Ours); 4] = [
+        ("exp", |x| x.clone().exp(), Some(ball::Ball::exp)),
+        ("log", |x| x.clone().ln(), Some(ball::Ball::log)),
+        ("sin", |x| x.clone().sin(), None),
+        ("atan", |x| x.clone().atan(), None),
     ];
-    for (name, f) in funs {
+    for (name, f, ours) in funs {
         let mut group = c.benchmark_group(name);
         for d in digit_counts() {
             let x = operand(bits(d), 2);
+            if let Some(g) = ours {
+                // Constants are cached on both sides after the first call.
+                let b = ball::Ball::exact(to_ours(&x));
+                group.bench_function(BenchmarkId::new("ours", d), |bench| {
+                    bench.iter(|| g(black_box(&b), u64::from(bits(d))));
+                });
+            }
             group.bench_function(BenchmarkId::new("mpfr", d), |bench| {
                 bench.iter(|| f(black_box(&x)));
             });
