@@ -8,7 +8,7 @@
 use proptest::prelude::*;
 use rug::Integer;
 
-use super::hgcd::{hgcd, hgcd_values};
+use super::hgcd::{classical, hgcd, hgcd_values, strassen};
 use super::{Step, reduce};
 use crate::Natural;
 use crate::testkit::strategy::{self, DEFAULT_MAX_LIMBS};
@@ -148,6 +148,35 @@ proptest! {
         let rest = s.to_rug() * a.to_rug() - g;
         let b = b.to_rug();
         prop_assert!(if b == 0 { rest == 0 } else { rest.is_divisible(&b) }, "s = {:?}", s);
+    }
+}
+
+/// A 2×2 matrix whose entries have independent lengths, some empty.
+fn matrix() -> impl Strategy<Value = [[Natural; 2]; 2]> {
+    let entry = || {
+        prop_oneof![
+            1 => Just(Natural::ZERO),
+            4 => proptest::collection::vec(any::<u64>(), 1..80)
+                .prop_map(|l| Natural::from_limbs(&l)),
+        ]
+    };
+    [[entry(), entry()], [entry(), entry()]]
+}
+
+proptest! {
+    /// Strassen's seven products give the eight-product result, which is
+    /// the product.
+    #[test]
+    fn matrix_products(a in matrix(), b in matrix()) {
+        let c = classical(&a, &b);
+        prop_assert_eq!(&strassen(&a, &b), &c);
+        let rug = |m: &[[Natural; 2]; 2]| m.each_ref().map(|r| r.each_ref().map(ToRug::to_rug));
+        let ([[a00, a01], [a10, a11]], [[b00, b01], [b10, b11]]) = (rug(&a), rug(&b));
+        let expect = [
+            [a00.clone() * &b00 + a01.clone() * &b10, a00 * &b01 + a01 * &b11],
+            [a10.clone() * &b00 + a11.clone() * &b10, a10 * &b01 + a11 * &b11],
+        ];
+        prop_assert_eq!(rug(&c), expect);
     }
 }
 

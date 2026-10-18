@@ -25,7 +25,7 @@
 use std::cmp::Ordering;
 
 use super::{Matrix, apply, lehmer_matrix};
-use crate::{Limb, Natural, kernel};
+use crate::{Integer, Limb, Natural, kernel};
 
 /// Smaller operand length (limbs) from which `Natural::gcd` reduces by
 /// half-GCD steps instead of Lehmer steps.
@@ -34,6 +34,10 @@ pub(super) const GCD_DC_THRESHOLD: usize = crate::tuning::GCD_DC_THRESHOLD;
 /// Length (limbs) from which [`hgcd`] recurses; at least 3, the smallest `n`
 /// for which the first recursive call keeps the values above `B^s`.
 const HGCD_THRESHOLD: usize = crate::tuning::HGCD_THRESHOLD;
+
+/// Entry length (limbs) from which [`HgcdMatrix::mul`] uses Strassen's
+/// seven products instead of eight.
+const MATRIX22_STRASSEN_THRESHOLD: usize = crate::tuning::MATRIX22_STRASSEN_THRESHOLD;
 
 /// The steps of a half-GCD: a non-negative matrix `M` of determinant ±1 with
 /// `(a, b) = M (x, y)`, where `(a, b)` is the pair before the steps and
@@ -90,15 +94,59 @@ impl HgcdMatrix {
         self.negative ^= l.a.wrapping_mul(l.d).wrapping_sub(l.b.wrapping_mul(l.c)) < 0;
     }
 
-    /// The product `self other`.
-    fn mul(&self, other: &HgcdMatrix) -> HgcdMatrix {
-        let (a, b) = (&self.m, &other.m);
-        let entry = |i: usize, j: usize| &(&a[i][0] * &b[0][j]) + &(&a[i][1] * &b[1][j]);
+    /// The product `self other`: by Strassen's method once both matrices
+    /// have an entry of at least [`MATRIX22_STRASSEN_THRESHOLD`] limbs, by
+    /// eight products below.
+    pub(super) fn mul(&self, other: &HgcdMatrix) -> HgcdMatrix {
+        let len = |m: &HgcdMatrix| m.m.iter().flatten().map(Natural::limb_len).max();
+        let m = if len(self).min(len(other)) >= Some(MATRIX22_STRASSEN_THRESHOLD) {
+            strassen(&self.m, &other.m)
+        } else {
+            classical(&self.m, &other.m)
+        };
         HgcdMatrix {
-            m: [[entry(0, 0), entry(0, 1)], [entry(1, 0), entry(1, 1)]],
+            m,
             negative: self.negative != other.negative,
         }
     }
+}
+
+/// `a b` by eight products.
+pub(super) fn classical(a: &[[Natural; 2]; 2], b: &[[Natural; 2]; 2]) -> [[Natural; 2]; 2] {
+    let entry = |i: usize, j: usize| &(&a[i][0] * &b[0][j]) + &(&a[i][1] * &b[1][j]);
+    [[entry(0, 0), entry(0, 1)], [entry(1, 0), entry(1, 1)]]
+}
+
+/// `a b` by Winograd's form of Strassen's method: seven products and
+/// fifteen additions. Some sums are negative, though the product of
+/// non-negative matrices is not.
+pub(super) fn strassen(a: &[[Natural; 2]; 2], b: &[[Natural; 2]; 2]) -> [[Natural; 2]; 2] {
+    let int = |m: &[[Natural; 2]; 2]| m.each_ref().map(|r| r.each_ref().map(Integer::from));
+    let ([[a11, a12], [a21, a22]], [[b11, b12], [b21, b22]]) = (int(a), int(b));
+    let s1 = &a21 + &a22;
+    let s2 = &s1 - &a11;
+    let s3 = &a11 - &a21;
+    let s4 = &a12 - &s2;
+    let t1 = &b12 - &b11;
+    let t2 = &b22 - &t1;
+    let t3 = &b22 - &b12;
+    let t4 = &t2 - &b21;
+    let p1 = &a11 * &b11;
+    let p5 = &s1 * &t1;
+    let u2 = &p1 + &(&s2 * &t2);
+    let u3 = &u2 + &(&s3 * &t3);
+    let natural = |x: Integer| {
+        let (negative, x) = x.into_parts();
+        debug_assert!(
+            !negative,
+            "negative entry in a product of non-negative matrices"
+        );
+        x
+    };
+    [
+        [natural(p1 + &a12 * &b21), natural(u2 + &p5 + &s4 * &b22)],
+        [natural(&u3 - &(&a22 * &t4)), natural(u3 + p5)],
+    ]
 }
 
 /// Reduces `(x, y)`, normalised with `x >= y` and of at most `n` limbs, by

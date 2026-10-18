@@ -13,5 +13,6 @@ dc_div_threshold = 1_000_000_000
 redc_n_threshold = 1_000_000_000
 gcd_dc_threshold = 1_000_000_000
 hgcd_threshold = 1_000_000_000
+matrix22_strassen_threshold = 1_000_000_000
 to_string_dc_threshold = 1_000_000_000
 from_string_dc_threshold = 1_000_000_000

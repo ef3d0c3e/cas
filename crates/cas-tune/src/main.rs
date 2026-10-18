@@ -167,6 +167,16 @@ fn params() -> Vec<Param> {
             window: None,
         },
         Param {
+            key: "matrix22_strassen_threshold",
+            op: "gcd",
+            grid: with_never(geometric(4, 600, 1.25)),
+            // Sizes whose half-GCD composes matrices of all entry lengths.
+            window: Some(|c| {
+                let from = c["gcd_dc_threshold"].clamp(64, 1000);
+                geometric(from, from.max(1600) * 5 / 2, 1.25)
+            }),
+        },
+        Param {
             key: "hgcd_threshold",
             op: "gcd",
             grid: geometric(16, 400, 1.19),

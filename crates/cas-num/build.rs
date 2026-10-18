@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 /// `(key, minimum)`. Every algorithm is correct for any value at or above
 /// its minimum; below it some algorithm would be called outside its domain.
-const KEYS: [(&str, u64); 14] = [
+const KEYS: [(&str, u64); 15] = [
     // A 1x1 product would be "chunked" into 1x1 products forever.
     ("mul_karatsuba_threshold", 2),
     // Toom-3 checks its own balance condition, so any size works.
@@ -37,6 +37,7 @@ const KEYS: [(&str, u64); 14] = [
     ("gcd_dc_threshold", 1),
     // Below 3 limbs the first recursive half-GCD could leave values under B^s.
     ("hgcd_threshold", 3),
+    ("matrix22_strassen_threshold", 1),
     ("to_string_dc_threshold", 1),
     // Parsing by divide and conquer needs more digits than one limb holds.
     ("from_string_dc_threshold", 65),

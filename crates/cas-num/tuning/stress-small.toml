@@ -13,5 +13,6 @@ dc_div_threshold = 2
 redc_n_threshold = 1
 gcd_dc_threshold = 1
 hgcd_threshold = 3
+matrix22_strassen_threshold = 1
 to_string_dc_threshold = 1
 from_string_dc_threshold = 65
