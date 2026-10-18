@@ -342,6 +342,19 @@ fn falls_back_outside_the_range() {
 }
 
 #[test]
+fn overflowing_check_product() {
+    // q = MAX / b rounds so that q b overflows: not exact.
+    let a = MachineBall::exact(f64::MAX).unwrap();
+    let b = MachineBall::exact(5.604_110_778_259_519_4e17).unwrap();
+    let q = a.div(&b).unwrap();
+    assert!(!q.is_exact());
+    assert!(holds(
+        &q,
+        &(&rat(f64::MAX) / &rat(5.604_110_778_259_519_4e17))
+    ));
+}
+
+#[test]
 fn half_ulp_values() {
     assert_eq!(half_ulp(1.0), 2f64.powi(-53));
     assert_eq!(half_ulp(1.5), 2f64.powi(-53));
@@ -393,4 +406,195 @@ fn trig_through_ball() {
     assert!(x.asin().unwrap().contains(0.75f64.asin()));
     assert!(x.acos().unwrap().contains(0.75f64.acos()));
     assert_eq!(MachineBall::exact(2.0).unwrap().asin(), None);
+}
+
+// ---- Double-double kernels (CAS-88).
+
+mod kernels_against_mpfr {
+    use proptest::prelude::*;
+    use rug::Float as MpFloat;
+
+    use super::super::MachineBall;
+    use super::super::dd::Dd;
+    use super::super::kernels::{self, KERNEL_ERR};
+    use crate::ball::Ball;
+    use crate::testkit::ToRug;
+
+    fn value(d: Dd) -> MpFloat {
+        MpFloat::with_val(400, d.hi) + d.lo
+    }
+
+    /// `|got - want| / |want|`, with `want` from MPFR at 400 bits.
+    fn rel(got: Dd, want: &MpFloat) -> f64 {
+        ((value(got) - want).abs() / want.clone().abs()).to_f64()
+    }
+
+    /// The kernels' budgets are below `2^-94`; check `2^-92` (the claim is
+    /// `2^-90`).
+    const CHECK: f64 = KERNEL_ERR / 4.0;
+
+    fn mp(x: f64) -> MpFloat {
+        MpFloat::with_val(400, x)
+    }
+
+    type F = (
+        &'static str,
+        fn(&MachineBall) -> Option<MachineBall>,
+        fn(MpFloat) -> MpFloat,
+    );
+
+    proptest! {
+        #[test]
+        fn exp_within_budget(x in prop_oneof![-665.0f64..708.0, -700.0f64..-640.0, -1e-20f64..1e-20]) {
+            if x < -665.0 { prop_assert!(kernels::exp(x).is_none()); return Ok(()); }
+            let v = kernels::exp(x).unwrap();
+            prop_assert!(rel(v, &mp(x).exp()) <= CHECK, "exp({}) off by {:e}", x, rel(v, &mp(x).exp()));
+        }
+
+        #[test]
+        fn log_within_budget(e in -1022i32..1023, f in 1.0f64..2.0) {
+            let x = f * 2f64.powi(e);
+            if !x.is_normal() { return Ok(()); }
+            let v = kernels::log(x).unwrap();
+            let want = mp(x).ln();
+            if want.is_zero() { prop_assert_eq!(v.to_f64(), 0.0); return Ok(()); }
+            prop_assert!(rel(v, &want) <= CHECK, "log({}) off by {:e}", x, rel(v, &want));
+        }
+
+        #[test]
+        fn sin_cos_within_budget(x in prop_oneof![-4.0f64..4.0, -1e6f64..1e6, -1e-30f64..1e-30, -1e-300f64..1e-300]) {
+            if let Some((s, c)) = kernels::sin_cos(x) {
+                let (ws, wc) = (mp(x).sin(), mp(x).cos());
+                if !ws.is_zero() { prop_assert!(rel(s, &ws) <= CHECK, "sin({}) off by {:e}", x, rel(s, &ws)); }
+                prop_assert!(rel(c, &wc) <= CHECK, "cos({}) off by {:e}", x, rel(c, &wc));
+            }
+        }
+
+        #[test]
+        fn atan_within_budget(x in prop_oneof![-2.0f64..2.0, -1e100f64..1e100, -1e-100f64..1e-100]) {
+            let v = kernels::atan(x).unwrap();
+            let want = mp(x).atan();
+            if want.is_zero() { return Ok(()); }
+            prop_assert!(rel(v, &want) <= CHECK, "atan({}) off by {:e}", x, rel(v, &want));
+        }
+
+        #[test]
+        fn machine_functions_contain(m in prop_oneof![-30.0f64..30.0, -1e-3f64..1e-3], k in 0i32..60, z in any::<bool>()) {
+            let r = if z { 0.0 } else { m.abs() * 2f64.powi(-k - 20) };
+            let Some(b) = MachineBall::new(m, r) else { return Ok(()) };
+            let fs: [F; 6] = [
+                ("exp", MachineBall::exp, MpFloat::exp),
+                ("log", MachineBall::log, MpFloat::ln),
+                ("sin", MachineBall::sin, MpFloat::sin),
+                ("cos", MachineBall::cos, MpFloat::cos),
+                ("tan", MachineBall::tan, MpFloat::tan),
+                ("atan", MachineBall::atan, MpFloat::atan),
+            ];
+            for (name, f, oracle) in fs {
+                let Some(out) = f(&b) else {
+                    prop_assert!(name == "log" && m - r <= 0.0 || name == "tan", "{} of {:?} fell through", name, b);
+                    continue;
+                };
+                for end in [MpFloat::with_val(400, m) - r, MpFloat::with_val(400, m) + r] {
+                    if name == "log" && end <= 0 { continue; }
+                    let want = oracle(end);
+                    let lo = MpFloat::with_val(400, out.mid()) - out.rad();
+                    let hi = MpFloat::with_val(400, out.mid()) + out.rad();
+                    prop_assert!(lo <= want && want <= hi, "{}({:?}) = {:?} misses {}", name, b, out, want);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn hard_inputs_and_fallbacks() {
+        let contains = |b: &MachineBall, want: &MpFloat| {
+            let lo = MpFloat::with_val(400, b.mid()) - b.rad();
+            let hi = MpFloat::with_val(400, b.mid()) + b.rad();
+            lo <= *want && *want <= hi
+        };
+        // Doubles next to multiples of π/2, up to the reduction's range and
+        // beyond it: the kernel declines the closest ones, the Ball fallback
+        // answers.
+        for k in [
+            1i64,
+            2,
+            3,
+            7,
+            1000,
+            355,
+            103_993,
+            1 << 19,
+            (1 << 20) + 1,
+            1 << 40,
+        ] {
+            #[allow(clippy::cast_precision_loss, reason = "test points")]
+            let x = (MpFloat::with_val(200, rug::float::Constant::Pi) * k / 2u32).to_f64();
+            let b = MachineBall::exact(x).unwrap();
+            let (s, c) = b.sin_cos().unwrap();
+            assert!(
+                contains(&s, &mp(x).sin()) && contains(&c, &mp(x).cos()),
+                "sin_cos({x}): {s:?} {c:?}"
+            );
+        }
+        // exp at the ends of its range and beyond (fallback, then None).
+        for x in [-665.0, -690.4, -707.0, 708.0, -745.0, 709.7] {
+            let b = MachineBall::exact(x).unwrap();
+            if let Some(e) = b.exp() {
+                assert!(contains(&e, &mp(x).exp()), "exp({x}) = {e:?}");
+            }
+        }
+        assert_eq!(MachineBall::exact(800.0).unwrap().exp(), None);
+        // log near 1, of the smallest normal and of the largest double.
+        for x in [
+            1.0 + f64::EPSILON,
+            1.0 - f64::EPSILON / 2.0,
+            f64::MIN_POSITIVE,
+            f64::MAX,
+            0.75,
+        ] {
+            let l = MachineBall::exact(x).unwrap().log().unwrap();
+            assert!(contains(&l, &mp(x).ln()), "log({x}) = {l:?}");
+        }
+        // atan of tiny and huge arguments (beyond the kernel: Ball).
+        for x in [
+            1e-200,
+            1e-310_f64.max(f64::MIN_POSITIVE),
+            1e300,
+            -1e150,
+            0.5,
+            1.0,
+            -1.0,
+        ] {
+            let a = MachineBall::exact(x).unwrap().atan().unwrap();
+            assert!(contains(&a, &mp(x).atan()), "atan({x}) = {a:?}");
+        }
+        // Wide balls take the Ball path.
+        let wide = MachineBall::new(1.0, 0.5).unwrap();
+        assert!(
+            wide.exp().unwrap().contains(1.5f64.exp())
+                && wide.exp().unwrap().contains(0.5f64.exp())
+        );
+        // Tight: one kernel evaluation costs about half an ulp.
+        let e = MachineBall::exact(1.0).unwrap().exp().unwrap();
+        assert!(e.rad() <= 1.0001 * f64::EPSILON * 1.36, "{e:?}");
+    }
+
+    #[test]
+    fn constants_match_cas78() {
+        let (ln2, half_pi) = kernels::constants_dd();
+        let check = |d: Dd, b: Ball| {
+            let want = b.mid().to_rational().to_rug();
+            let got = MpFloat::with_val(400, d.hi) + d.lo;
+            let err = (got - MpFloat::with_val(400, &want)).abs() / MpFloat::with_val(400, &want);
+            assert!(err.to_f64() < 2f64.powi(-104), "{d:?}");
+        };
+        check(ln2, Ball::const_log2(300));
+        check(half_pi, Ball::const_pi(300).mul_2exp(&-crate::Integer::ONE));
+        let (e1, e2) = kernels::reduction_errors();
+        assert!(
+            e1 < 2f64.powi(-130) && e2 < 2f64.powi(-170),
+            "{e1:e} {e2:e}"
+        );
+    }
 }

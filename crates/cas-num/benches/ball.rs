@@ -217,6 +217,9 @@ fn balls_op(name: &str) -> Option<fn(&ball::Ball, &ball::Ball, u64) -> ball::Bal
 /// Machine balls against 53-bit balls on the same values (radius about
 /// 2^-20 relative), the fast path's target being 2–5 ns per operation.
 fn machine(c: &mut Criterion) {
+    type Machine = fn(&ball::MachineBall) -> Option<ball::MachineBall>;
+    type Libm = fn(f64) -> f64;
+    type Fallback = fn(&ball::Ball, u64) -> ball::Ball;
     let a = ball::MachineBall::new(std::f64::consts::PI, 3e-6).expect("regular");
     let b = ball::MachineBall::new(std::f64::consts::E, 2.6e-6).expect("regular");
     let (ba, bb) = (a.to_ball(), b.to_ball());
@@ -233,6 +236,26 @@ fn machine(c: &mut Criterion) {
     group.bench_function(BenchmarkId::new("sqrt", "machine"), |bench| {
         bench.iter(|| black_box(&a).sqrt());
     });
+    // Elementary functions: the double-double kernels, libm (no proven
+    // bound, for scale) and the 64-bit Ball fallback they replace.
+    let x = ball::MachineBall::new(0.7, 1e-12).expect("regular");
+    let funs: [(&str, Machine, Libm, Fallback); 4] = [
+        ("exp", ball::MachineBall::exp, f64::exp, ball::Ball::exp),
+        ("log", ball::MachineBall::log, f64::ln, ball::Ball::log),
+        ("sin", ball::MachineBall::sin, f64::sin, ball::Ball::sin),
+        ("atan", ball::MachineBall::atan, f64::atan, ball::Ball::atan),
+    ];
+    for (name, ours, libm, fallback) in funs {
+        group.bench_function(BenchmarkId::new(name, "machine"), |bench| {
+            bench.iter(|| ours(black_box(&x)));
+        });
+        group.bench_function(BenchmarkId::new(name, "libm"), |bench| {
+            bench.iter(|| libm(black_box(0.7)));
+        });
+        group.bench_function(BenchmarkId::new(name, "via_ball"), |bench| {
+            bench.iter(|| black_box(&x).via_ball(fallback));
+        });
+    }
     for name in ["add", "mul", "div", "sqrt"] {
         let ball_op = balls_op(name).expect("ball op");
         group.bench_function(BenchmarkId::new(name, "ball"), |bench| {

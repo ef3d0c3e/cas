@@ -30,6 +30,8 @@ use std::cmp::Ordering;
 
 use super::{Ball, Float, Mag};
 
+mod dd;
+mod kernels;
 #[cfg(test)]
 mod tests;
 
@@ -53,11 +55,13 @@ const SPLIT_MAX: f64 = f64::from_bits((1023 + 995) << 52);
 /// `a b - p` for `p = fl(a b)`, exactly, by a fused multiply-add where the
 /// target has one and Dekker's two-product otherwise (Rust's `mul_add` is a
 /// software routine without the `fma` target feature); `None` where
-/// exactness is not guaranteed (`|p| < EFT_MIN`, or a factor from
-/// `SPLIT_MAX` up).
+/// exactness is not guaranteed (`p` infinite, `|p| < EFT_MIN`, or a factor
+/// from `SPLIT_MAX` up).
 #[inline]
 fn product_error(a: f64, b: f64, p: f64) -> Option<f64> {
-    if !(p.abs() >= EFT_MIN && a.abs() < SPLIT_MAX && b.abs() < SPLIT_MAX) {
+    // A product rounded to ±∞ has no residual: `a - p == e` would compare
+    // infinities (MAX / 5.6e17 passed as exact that way).
+    if !(p.is_finite() && p.abs() >= EFT_MIN && a.abs() < SPLIT_MAX && b.abs() < SPLIT_MAX) {
         return None;
     }
     if cfg!(target_feature = "fma") {
@@ -477,10 +481,108 @@ impl MachineBall {
         MachineBall::new(mid, rad)
     }
 
-    /// `exp`, through [`Ball`] at 64 bits until CAS-88's kernels.
+    /// `exp`: the double-double kernel within `2^-90` and half an ulp, the
+    /// spread `e^m (e^r - 1) <= |v| (r + r^2)` for `r <= 2^-20`; `Ball` at 64
+    /// bits beyond the kernel's range or for wider balls.
     #[must_use]
     pub fn exp(&self) -> Option<MachineBall> {
-        self.via_ball(Ball::exp)
+        let fast = || {
+            let v = kernels::exp(self.mid)?;
+            let spread = self.small_rad()?;
+            let spread = mul_up(spread, add_up(1.0, spread));
+            MachineBall::from_kernel(v, |size| mul_up(size, spread))
+        };
+        fast().or_else(|| self.via_ball(Ball::exp))
+    }
+
+    /// `log`: the kernel, spread `r / (m - r)`; `None` unless the ball lies
+    /// in `x > 0`.
+    #[must_use]
+    pub fn log(&self) -> Option<MachineBall> {
+        let gap = down(self.mid - self.rad, self.rad == 0.0);
+        if !(self.mid > 0.0 && gap > 0.0) {
+            return None;
+        }
+        let fast = || {
+            let v = kernels::log(self.mid)?;
+            let spread = div_up(self.rad, gap);
+            MachineBall::from_kernel(v, |_| spread)
+        };
+        fast().or_else(|| self.via_ball(Ball::log))
+    }
+
+    /// `(sin, cos)`: the kernel, spread `r` (both 1-Lipschitz) for `r <=
+    /// 2^-20`; `Ball` for `|m| > 2^20`, next to multiples of π/2, or wider
+    /// balls.
+    #[must_use]
+    pub fn sin_cos(&self) -> Option<(MachineBall, MachineBall)> {
+        let fast = || {
+            let (s, c) = kernels::sin_cos(self.mid)?;
+            let spread = self.small_rad()?;
+            Some((
+                MachineBall::from_kernel(s, |_| spread)?,
+                MachineBall::from_kernel(c, |_| spread)?,
+            ))
+        };
+        fast().or_else(|| {
+            let b = self.to_ball();
+            let (s, c) = b.sin_cos(64);
+            Some((MachineBall::from_ball(&s)?, MachineBall::from_ball(&c)?))
+        })
+    }
+
+    /// `sin`, as [`MachineBall::sin_cos`].
+    #[must_use]
+    pub fn sin(&self) -> Option<MachineBall> {
+        self.sin_cos().map(|(s, _)| s)
+    }
+
+    /// `cos`, as [`MachineBall::sin_cos`].
+    #[must_use]
+    pub fn cos(&self) -> Option<MachineBall> {
+        self.sin_cos().map(|(_, c)| c)
+    }
+
+    /// `tan = sin / cos`; `None` across a pole.
+    #[must_use]
+    pub fn tan(&self) -> Option<MachineBall> {
+        let (s, c) = self.sin_cos()?;
+        s.div(&c)
+    }
+
+    /// `atan`: the kernel, spread `r` (`|atan'| <= 1`).
+    #[must_use]
+    pub fn atan(&self) -> Option<MachineBall> {
+        let fast = || {
+            let v = kernels::atan(self.mid)?;
+            let spread = self.rad;
+            MachineBall::from_kernel(v, |_| spread)
+        };
+        fast().or_else(|| self.via_ball(Ball::atan))
+    }
+
+    /// The radius if it is at most `2^-20` (the kernels' spreads assume a
+    /// narrow ball).
+    fn small_rad(&self) -> Option<f64> {
+        (self.rad <= f64::from_bits((1023 - 20) << 52)).then_some(self.rad)
+    }
+
+    /// The ball of a kernel value `v` (relative error at most
+    /// `KERNEL_ERR`): the nearest double, its distance to `v`, `2 KERNEL_ERR
+    /// |v|` (`|f - v| <= KERNEL_ERR |f|` gives `|f - v| <= KERNEL_ERR |v| /
+    /// (1 - KERNEL_ERR)`), and the spread from `spread(|v| bound)`.
+    fn from_kernel(v: dd::Dd, spread: impl FnOnce(f64) -> f64) -> Option<MachineBall> {
+        let mid = v.to_f64();
+        if !mid.is_finite() {
+            return None;
+        }
+        // hi - mid is exact (Sterbenz); the sum with lo rounds once.
+        let d = (v.hi - mid) + v.lo;
+        let round = up(d.abs(), d == 0.0);
+        let size = add_up(mid.abs(), round);
+        let kernel = mul_up(size, 2.0 * kernels::KERNEL_ERR);
+        let rad = add_up(add_up(round, kernel), spread(size));
+        MachineBall::finish(mid, 0.0, rad)
     }
 
     /// `exp(x) - 1`, through [`Ball`] at 64 bits.
@@ -489,42 +591,11 @@ impl MachineBall {
         self.via_ball(Ball::expm1)
     }
 
-    /// `log`, through [`Ball`] at 64 bits; `None` unless the ball lies in
-    /// `x > 0`.
-    #[must_use]
-    pub fn log(&self) -> Option<MachineBall> {
-        self.via_ball(Ball::log)
-    }
-
     /// `log(1 + x)`, through [`Ball`] at 64 bits; `None` unless the ball
     /// lies in `x > -1`.
     #[must_use]
     pub fn log1p(&self) -> Option<MachineBall> {
         self.via_ball(Ball::log1p)
-    }
-
-    /// `sin`, through [`Ball`] at 64 bits until CAS-88's kernels.
-    #[must_use]
-    pub fn sin(&self) -> Option<MachineBall> {
-        self.via_ball(Ball::sin)
-    }
-
-    /// `cos`, through [`Ball`] at 64 bits until CAS-88's kernels.
-    #[must_use]
-    pub fn cos(&self) -> Option<MachineBall> {
-        self.via_ball(Ball::cos)
-    }
-
-    /// `tan`, through [`Ball`] at 64 bits until CAS-88's kernels; `None` across a pole.
-    #[must_use]
-    pub fn tan(&self) -> Option<MachineBall> {
-        self.via_ball(Ball::tan)
-    }
-
-    /// `atan`, through [`Ball`] at 64 bits until CAS-88's kernels.
-    #[must_use]
-    pub fn atan(&self) -> Option<MachineBall> {
-        self.via_ball(Ball::atan)
     }
 
     /// `asin`, through [`Ball`] at 64 bits until CAS-88's kernels; `None` outside `[-1, 1]`.
