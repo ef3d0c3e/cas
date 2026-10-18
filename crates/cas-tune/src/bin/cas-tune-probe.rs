@@ -59,6 +59,7 @@ fn time(min: Duration, mut f: impl FnMut()) -> f64 {
         .fold(f64::INFINITY, f64::min)
 }
 
+#[allow(clippy::too_many_lines, reason = "one arm per operation")]
 fn measure(op: &str, n: usize, min: Duration) -> f64 {
     match op {
         "mul" => {
@@ -138,6 +139,24 @@ fn measure(op: &str, n: usize, min: Duration) -> f64 {
             let e = Natural::from_limbs(&limbs(n, 9));
             time(min, || {
                 drop(black_box(ring.pow(black_box(&x), black_box(&e))));
+            })
+        }
+        "pow_mod" => {
+            // Natural::pow_mod modulo an odd n-limb modulus, n-limb exponent.
+            let mut m = limbs(n, 6);
+            m[0] |= 1;
+            let m = Natural::from_limbs(&m);
+            let x = Natural::from_limbs(&limbs(n, 7));
+            let e = Natural::from_limbs(&limbs(n, 9));
+            time(min, || {
+                drop(black_box(black_box(&x).pow_mod(black_box(&e), &m)));
+            })
+        }
+        "primality" => {
+            // Baillie-PSW of an n-limb prime.
+            let p = Natural::from_limbs(&limbs(n, 10)).next_prime();
+            time(min, || {
+                black_box(black_box(&p).primality());
             })
         }
         "gcd" => {

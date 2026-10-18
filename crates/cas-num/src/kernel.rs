@@ -40,7 +40,7 @@ pub use mul::{
 /// The carry is a `bool` so that LLVM lowers a chain of these to `adc`
 /// instructions; with a `Limb` carry it materialises every carry with `setb`.
 #[inline]
-const fn adc(a: Limb, b: Limb, carry: bool) -> (Limb, bool) {
+pub(crate) const fn adc(a: Limb, b: Limb, carry: bool) -> (Limb, bool) {
     let (s, c1) = a.overflowing_add(b);
     let (s, c2) = s.overflowing_add(carry as Limb);
     (s, c1 | c2)
@@ -48,7 +48,7 @@ const fn adc(a: Limb, b: Limb, carry: bool) -> (Limb, bool) {
 
 /// `a - b - borrow`, returning `(difference, borrow_out)`; see [`adc`].
 #[inline]
-const fn sbb(a: Limb, b: Limb, borrow: bool) -> (Limb, bool) {
+pub(crate) const fn sbb(a: Limb, b: Limb, borrow: bool) -> (Limb, bool) {
     let (d, b1) = a.overflowing_sub(b);
     let (d, b2) = d.overflowing_sub(borrow as Limb);
     (d, b1 | b2)

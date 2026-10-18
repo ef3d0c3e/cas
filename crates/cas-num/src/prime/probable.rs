@@ -6,7 +6,7 @@
 
 use super::Primality;
 use super::small::{SIEVE_LIMIT, TRIAL_LIMIT, groups, is_small_prime, primes};
-use crate::modular::{ModDouble, ModRing, ModWord, Residue};
+use crate::modular::{Fixed, ModDouble, ModFixed, ModRing, ModWord, Residue};
 use crate::{Integer, Natural};
 
 #[cfg(test)]
@@ -140,8 +140,9 @@ fn has_small_factor(n: &Natural) -> bool {
 }
 
 /// The ring operations the probable-prime tests use, so that a two-limb
-/// modulus can run them on `u128` ([`ModDouble`]) and any other on
-/// [`ModRing`].
+/// modulus can run them on `u128` ([`ModDouble`]), one of three to
+/// eight limbs on stack arrays
+/// ([`ModFixed`]) and any other on [`ModRing`].
 trait TestRing {
     type Elem: Clone + PartialEq;
     fn small(&self, a: i64) -> Self::Elem;
@@ -150,7 +151,6 @@ trait TestRing {
     fn add(&self, x: &Self::Elem, y: &Self::Elem) -> Self::Elem;
     fn sub(&self, x: &Self::Elem, y: &Self::Elem) -> Self::Elem;
     fn neg(&self, x: &Self::Elem) -> Self::Elem;
-    fn half(&self, x: &Self::Elem) -> Self::Elem;
     fn mul(&self, x: &Self::Elem, y: &Self::Elem) -> Self::Elem;
     fn square(&self, x: &Self::Elem) -> Self::Elem;
     fn pow(&self, x: &Self::Elem, e: &Natural) -> Self::Elem;
@@ -176,9 +176,7 @@ impl TestRing for ModRing {
     fn neg(&self, x: &Residue) -> Residue {
         ModRing::neg(self, x)
     }
-    fn half(&self, x: &Residue) -> Residue {
-        ModRing::half(self, x)
-    }
+
     fn mul(&self, x: &Residue, y: &Residue) -> Residue {
         ModRing::mul(self, x, y)
     }
@@ -212,9 +210,7 @@ impl TestRing for ModDouble {
     fn neg(&self, x: &u128) -> u128 {
         ModDouble::neg(*self, *x)
     }
-    fn half(&self, x: &u128) -> u128 {
-        ModDouble::half(*self, *x)
-    }
+
     fn mul(&self, x: &u128, y: &u128) -> u128 {
         ModDouble::mul(*self, *x, *y)
     }
@@ -226,14 +222,55 @@ impl TestRing for ModDouble {
     }
 }
 
+impl<const K: usize> TestRing for ModFixed<K> {
+    type Elem = Fixed<K>;
+    fn small(&self, a: i64) -> Fixed<K> {
+        let m = self.elem(&Natural::from(a.unsigned_abs()));
+        if a < 0 { ModFixed::neg(self, m) } else { m }
+    }
+    fn one(&self) -> Fixed<K> {
+        ModFixed::one(self)
+    }
+    fn is_zero(&self, x: &Fixed<K>) -> bool {
+        *x == Fixed::default()
+    }
+    fn add(&self, x: &Fixed<K>, y: &Fixed<K>) -> Fixed<K> {
+        ModFixed::add(self, *x, *y)
+    }
+    fn sub(&self, x: &Fixed<K>, y: &Fixed<K>) -> Fixed<K> {
+        ModFixed::sub(self, *x, *y)
+    }
+    fn neg(&self, x: &Fixed<K>) -> Fixed<K> {
+        ModFixed::neg(self, *x)
+    }
+
+    fn mul(&self, x: &Fixed<K>, y: &Fixed<K>) -> Fixed<K> {
+        ModFixed::mul(self, *x, *y)
+    }
+    fn square(&self, x: &Fixed<K>) -> Fixed<K> {
+        ModFixed::square(self, *x)
+    }
+    fn pow(&self, x: &Fixed<K>, e: &Natural) -> Fixed<K> {
+        ModFixed::pow(self, *x, e)
+    }
+}
+
 /// Baillie–PSW for odd `n` above 2^64 without small factors, on `u128` for
-/// two limbs.
+/// two limbs and stack arrays up to eight.
 fn baillie_psw(n: &Natural) -> bool {
     if let [lo, hi] = *n.limbs() {
         let ring = ModDouble::new(u128::from(lo) | u128::from(hi) << 64);
         return baillie_psw_in(&ring, n);
     }
-    baillie_psw_in(&ModRing::new(n.clone()), n)
+    match n.limb_len() {
+        3 => baillie_psw_in(&ModFixed::<3>::new(n), n),
+        4 => baillie_psw_in(&ModFixed::<4>::new(n), n),
+        5 => baillie_psw_in(&ModFixed::<5>::new(n), n),
+        6 => baillie_psw_in(&ModFixed::<6>::new(n), n),
+        7 => baillie_psw_in(&ModFixed::<7>::new(n), n),
+        8 => baillie_psw_in(&ModFixed::<8>::new(n), n),
+        _ => baillie_psw_in(&ModRing::new(n.clone()), n),
+    }
 }
 
 fn baillie_psw_in<R: TestRing>(ring: &R, n: &Natural) -> bool {
@@ -262,6 +299,23 @@ fn strong_probable_prime<R: TestRing>(ring: &R, n: &Natural, a: &R::Elem) -> boo
     false
 }
 
+/// `c x`, by doubling and adding for a small `|c|` (as Selfridge's `Q`
+/// almost always is), else by a product.
+fn times<R: TestRing>(ring: &R, x: &R::Elem, c: i64) -> R::Elem {
+    let m = c.unsigned_abs();
+    if m >= 1 << 8 {
+        return ring.mul(x, &ring.small(c));
+    }
+    let mut r = ring.small(0);
+    for i in (0..u64::BITS - m.leading_zeros()).rev() {
+        r = ring.add(&r, &r);
+        if m >> i & 1 == 1 {
+            r = ring.add(&r, x);
+        }
+    }
+    if c < 0 { ring.neg(&r) } else { r }
+}
+
 /// The strong Lucas probable-prime test with Selfridge's parameters
 /// (method A): `D` is the first of 5, -7, 9, -11, … with Jacobi symbol
 /// `(D/n) = -1`, `P = 1`, `Q = (1 - D)/4`. With `n + 1 = d 2^s`, `d` odd,
@@ -281,29 +335,32 @@ fn strong_lucas<R: TestRing>(ring: &R, n: &Natural) -> bool {
         }
     }
     let q = (1 - d) / 4;
-    let dd = ring.small(d);
     let qq = ring.small(q);
     let n1 = n + 1u64;
     let s = n1.trailing_zeros().expect("n + 1 > 0");
     let k = &n1 >> s;
-    // (U_j, V_j, Q^j) from j = 1, doubling and incrementing along the bits
-    // of k: U_2j = U_j V_j, V_2j = V_j^2 - 2 Q^j, and with P = 1,
-    // U_(j+1) = (U_j + V_j)/2, V_(j+1) = (D U_j + V_j)/2.
-    let mut u = ring.one();
+    // The Lucas chain (V_j, V_(j+1), Q^j) from j = 1, doubling along the
+    // bits of k: with P = 1, V_(2j) = V_j^2 - 2 Q^j, V_(2j+1) = V_j V_(j+1)
+    // - Q^j and V_(2j+2) = V_(j+1)^2 - 2 Q^(j+1). U is not tracked:
+    // D U_k = 2 V_(k+1) - V_k, and D is a unit modulo n.
     let mut v = ring.one();
+    let mut v1 = ring.sub(&ring.one(), &ring.add(&qq, &qq));
     let mut qk = qq.clone();
     for i in (0..k.bit_length() - 1).rev() {
-        u = ring.mul(&u, &v);
-        v = ring.sub(&ring.square(&v), &ring.add(&qk, &qk));
-        qk = ring.square(&qk);
+        let mid = ring.sub(&ring.mul(&v, &v1), &qk);
         if k.bit(i) {
-            let u1 = ring.half(&ring.add(&u, &v));
-            v = ring.half(&ring.add(&ring.mul(&dd, &u), &v));
-            u = u1;
-            qk = ring.mul(&qk, &qq);
+            let q1 = times(ring, &qk, q);
+            v1 = ring.sub(&ring.square(&v1), &ring.add(&q1, &q1));
+            v = mid;
+            qk = times(ring, &ring.square(&qk), q);
+        } else {
+            v = ring.sub(&ring.square(&v), &ring.add(&qk, &qk));
+            v1 = mid;
+            qk = ring.square(&qk);
         }
     }
-    if ring.is_zero(&u) || ring.is_zero(&v) {
+    let u_zero = ring.add(&v1, &v1) == v;
+    if u_zero || ring.is_zero(&v) {
         return true;
     }
     for _ in 1..s {

@@ -1,7 +1,7 @@
 //! Powers and modular powers.
 
 use super::Natural;
-use crate::modular::{ModDouble, ModRing, ModWord, pow_mod_even};
+use crate::modular::{ModDouble, ModFixed, ModRing, ModWord, pow_mod_even};
 
 #[cfg(test)]
 mod tests;
@@ -52,7 +52,8 @@ impl Natural {
     ///
     /// A single-limb modulus uses [`ModWord`]; a two-limb one `u128`
     /// arithmetic (Montgomery form when odd, else split by the Chinese
-    /// remainder theorem); a larger one [`ModRing`] (Montgomery
+    /// remainder theorem); an odd one of three to eight limbs Montgomery
+    /// arithmetic on stack arrays; any other [`ModRing`] (Montgomery
     /// multiplication for odd moduli, sliding-window exponentiation).
     ///
     /// # Panics
@@ -79,7 +80,24 @@ impl Natural {
                 pow_mod_even(a, e, n)
             });
         }
+        if m.bit(0) {
+            match m.limb_len() {
+                3 => return fixed_pow::<3>(self, e, m),
+                4 => return fixed_pow::<4>(self, e, m),
+                5 => return fixed_pow::<5>(self, e, m),
+                6 => return fixed_pow::<6>(self, e, m),
+                7 => return fixed_pow::<7>(self, e, m),
+                8 => return fixed_pow::<8>(self, e, m),
+                _ => {}
+            }
+        }
         let ring = ModRing::new(m.clone());
         ring.to_natural(&ring.pow(&ring.elem(self), e))
     }
+}
+
+/// `a^e mod m` for an odd `K`-limb `m`, on stack arrays.
+fn fixed_pow<const K: usize>(a: &Natural, e: &Natural, m: &Natural) -> Natural {
+    let ring = ModFixed::<K>::new(m);
+    ring.value(ring.pow(ring.elem(a), e))
 }

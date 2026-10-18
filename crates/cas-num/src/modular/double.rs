@@ -16,8 +16,8 @@ use super::word::sliding_window;
 use crate::Natural;
 
 /// Montgomery arithmetic modulo an odd `n` in `(2^64, 2^128)`. Elements in
-/// Montgomery form are `x R mod n`; addition, subtraction, negation and
-/// halving are the same in either form.
+/// Montgomery form are `x R mod n`; addition, subtraction and negation are
+/// the same in either form.
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ModDouble {
     n: u128,
@@ -99,16 +99,6 @@ impl ModDouble {
     /// `-x mod n`.
     pub(crate) fn neg(self, x: u128) -> u128 {
         if x == 0 { 0 } else { self.n - x }
-    }
-
-    /// `x / 2 mod n`: `(x + n) / 2` for odd `x`, taken as `x / 2 + n / 2 + 1`
-    /// (both odd) so that it cannot overflow.
-    pub(crate) fn half(self, x: u128) -> u128 {
-        if x & 1 == 0 {
-            x >> 1
-        } else {
-            (x >> 1) + (self.n >> 1) + 1
-        }
     }
 
     /// `x^e` in Montgomery form, with `x^0 = 1`.

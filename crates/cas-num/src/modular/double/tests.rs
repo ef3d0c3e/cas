@@ -73,8 +73,6 @@ proptest! {
         prop_assert_eq!(back(d.sub(mx, my)), g(Integer::from(x) - y));
         prop_assert_eq!(back(d.neg(mx)), g(-Integer::from(x)));
         prop_assert_eq!(back(d.mul(mx, my)), g(Integer::from(x) * y));
-        let h = Integer::from(d.mul(d.half(mx), 1));
-        prop_assert_eq!(g(h * 2u32), Integer::from(x));
         prop_assert_eq!(back(d.one()), Integer::from(1));
     }
 }

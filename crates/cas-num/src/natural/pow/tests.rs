@@ -20,12 +20,14 @@ fn base_exp() -> BoxedStrategy<(Mag, u32)> {
     .boxed()
 }
 
-/// A modulus: one, a power of two, a single limb, or any.
+/// A modulus: one, a power of two, a single limb, an odd one of three to
+/// eight limbs (stack arithmetic), or any.
 fn modulus() -> BoxedStrategy<Mag> {
     prop_oneof![
         1 => Just(Mag::from_u64(1)),
         1 => (0..300u32).prop_map(|k| Mag::from_rug(&(Integer::from(1) << k))),
         2 => strategy::natural_up_to(1),
+        2 => strategy::natural_with_len(3..=8usize).prop_map(|m| Mag::from_rug(&(m.to_rug() | 1))),
         4 => strategy::natural_up_to(12),
     ]
     .prop_filter("non-zero", |m| !m.is_zero())

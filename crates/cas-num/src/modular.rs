@@ -18,12 +18,16 @@
 
 mod crt;
 mod double;
+mod fixed;
 mod reconstruct;
 mod ring;
 mod word;
 
 pub use crt::{CrtBasis, crt};
 pub(crate) use double::{ModDouble, pow_mod_even};
+#[cfg(test)]
+pub(crate) use fixed::FIXED_MAX;
+pub(crate) use fixed::{Fixed, ModFixed};
 pub use reconstruct::{rational_reconstruction, rational_reconstruction_with_bounds};
 pub use ring::{ModRing, Residue};
 pub use word::ModWord;

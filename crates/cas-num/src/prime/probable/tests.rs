@@ -11,7 +11,7 @@ use rug::integer::IsPrime;
 
 use super::strong_probable_prime as spp;
 use super::{TestRing, U64_BASES, is_prime_u64, strong_lucas};
-use crate::modular::{ModDouble, ModRing};
+use crate::modular::{FIXED_MAX, ModDouble, ModFixed, ModRing};
 use crate::testkit::{Mag, ToRug, strategy};
 use crate::{Natural, Primality};
 
@@ -335,6 +335,68 @@ proptest! {
         );
         if !n.is_perfect_square() {
             prop_assert_eq!(strong_lucas(&double, &n), strong_lucas(&ring, &n));
+        }
+        prop_assert_eq!(n.primality(), expected(&n.to_rug()));
+    }
+}
+
+/// Odd values of 3 to `FIXED_MAX` limbs: primes, products of two primes,
+/// near squares and plain random ones.
+fn fixed_len_odd() -> BoxedStrategy<Natural> {
+    let value = strategy::natural_with_len(3..=FIXED_MAX)
+        .prop_map(|m| m.to_rug())
+        .boxed();
+    prop_oneof![
+        value.clone(),
+        value.clone().prop_map(Integer::next_prime),
+        // Split at a limb boundary into two primes.
+        (value.clone(), any::<u32>()).prop_map(|(n, h)| {
+            let limbs = u32::try_from(n.significant_digits::<u64>()).unwrap();
+            let low = 64 * (1 + h % (limbs - 1));
+            let p = (n.clone() >> low).next_prime();
+            let q = n.keep_bits(low).next_prime();
+            p * q
+        }),
+        value.prop_map(|n| {
+            let r = n.sqrt();
+            r.clone() * (r + 2)
+        }),
+    ]
+    .prop_map(|n| Mag::from_rug(&(n | 1)).to_natural())
+    .prop_filter("3 to FIXED_MAX limbs", |n| {
+        (3..=FIXED_MAX).contains(&n.limb_len())
+    })
+    .boxed()
+}
+
+/// Miller–Rabin to `base` and the strong Lucas test of `n` on
+/// `ModFixed::<K>`, against `ModRing`.
+fn fixed_matches<const K: usize>(n: &Natural, base: i64) -> Result<(), TestCaseError> {
+    let fixed = ModFixed::<K>::new(n);
+    let ring = ModRing::new(n.clone());
+    prop_assert_eq!(
+        spp(&fixed, n, &fixed.small(base)),
+        spp(&ring, n, &ring.small(base))
+    );
+    if !n.is_perfect_square() {
+        prop_assert_eq!(strong_lucas(&fixed, n), strong_lucas(&ring, n));
+    }
+    Ok(())
+}
+
+proptest! {
+    /// The fixed-size rings give the same Miller–Rabin and Lucas answers as
+    /// `ModRing`, base by base.
+    #[test]
+    fn fixed_ring_matches(n in fixed_len_odd(), base in 2..1000i64) {
+        match n.limb_len() {
+            3 => fixed_matches::<3>(&n, base)?,
+            4 => fixed_matches::<4>(&n, base)?,
+            5 => fixed_matches::<5>(&n, base)?,
+            6 => fixed_matches::<6>(&n, base)?,
+            7 => fixed_matches::<7>(&n, base)?,
+            8 => fixed_matches::<8>(&n, base)?,
+            k => unreachable!("{k} limbs"),
         }
         prop_assert_eq!(n.primality(), expected(&n.to_rug()));
     }
