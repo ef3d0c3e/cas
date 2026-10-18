@@ -10,7 +10,7 @@ needs a nightly toolchain and its own build profile; the library itself stays on
 | `integer` | `+ -`, `*`, `checked_div_rem` with every `Rounding`, `gcd_ext` (GMP's cofactors), `mod_inverse`, `pow`, `pow_mod` (negative exponents too), `root_rem`, perfect-power predicates |
 | `rational` | `+ - * /`, comparison, `floor`/`ceil`/`trunc`/`round`, `pow` with negative exponents |
 | `radix` | printing in every radix against GMP and round trips (integers and rationals); parsing of arbitrary strings against the grammar the primitive integers use, and against `i128`/`u128` where those parse; long digit strings against GMP |
-| `ball` | skeleton until the ball types land (CAS-76): dyadic inputs `m·2^e`, the exact `Rational` result of `+ - * /` checked against GMP; CAS-76 adds the check that ball results contain it |
+| `ball` | ball `+ - * /` and `sqrt` (of squares, exact answer) on dyadic midpoints with or without a radius, at fuzzer-chosen precisions: the result contains the exact `Rational` value at the midpoints (checked against GMP); division by a ball containing 0 gives the indeterminate ball |
 | `number_theory` | `sqrt_rem`, `pow_mod` through every reduction, `ModRing` and `ModWord` operations and inverses, `crt`, `jacobi`, `primality`, `factor` (product and labels), `perfect_power` |
 
 Inputs are decoded from the fuzzer's bytes (`src/lib.rs`): limbs mix boundary values (`0`,

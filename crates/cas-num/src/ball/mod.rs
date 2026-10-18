@@ -6,9 +6,14 @@
 //!   [`Round`] mode (§3).
 //! - [`Mag`]: a 30-bit upper (or lower) bound on a magnitude with an
 //!   `Integer` exponent, the radius type (§4).
+//! - [`Ball`]: midpoint ± radius, with arithmetic whose results contain every
+//!   exact result for points of the inputs, three-valued predicates, and the
+//!   [`RealBalls`] ring object (§5).
 
 mod float;
 mod mag;
+mod real;
 
 pub use float::{APPROX_ULPS, Float, Round};
 pub use mag::Mag;
+pub use real::{Ball, RealBalls};

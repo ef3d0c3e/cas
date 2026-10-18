@@ -3,7 +3,8 @@
 //!
 //! Every group times the MPFR baseline as `op/mpfr/bits` next to ours,
 //! `op/ours/bits` (correctly rounded, toward zero) and, for division and
-//! square root, `op/approx/bits` (the midpoint entries), on the same inputs.
+//! square root, `op/approx/bits` (the midpoint entries), and `op/ball/bits`
+//! (balls with a radius of about 2^-20 relative), on the same inputs.
 //! Precisions sweep 64, 128, 256 … bits up to `CAS_BENCH_MAX_BITS` (default
 //! 4096); constants and functions run at decimal digit counts up to
 //! `CAS_BENCH_MAX_DIGITS` (default 10^4; the tickets' sweeps go to 10^6).
@@ -174,6 +175,20 @@ fn arithmetic(c: &mut Criterion) {
             group.bench_function(BenchmarkId::new("ours", prec), |bench| {
                 bench.iter(|| ours(black_box(&x), black_box(&y), u64::from(prec)));
             });
+            if let Some(ball_op) = balls_op(name) {
+                // Balls with a radius of about 2^-20 relative, as after a few
+                // operations.
+                let ball = |x: &ball::Float| {
+                    ball::Ball::new(
+                        x.clone(),
+                        ball::Mag::from_float(x).mul_2exp(&cas_num::Integer::from(-20)),
+                    )
+                };
+                let (bx, by) = (ball(&x), ball(&y));
+                group.bench_function(BenchmarkId::new("ball", prec), |bench| {
+                    bench.iter(|| ball_op(black_box(&bx), black_box(&by), u64::from(prec)));
+                });
+            }
             if let Some(approx) = approx {
                 group.bench_function(BenchmarkId::new("approx", prec), |bench| {
                     bench.iter(|| approx(black_box(&x), black_box(&y), u64::from(prec)));
@@ -186,6 +201,17 @@ fn arithmetic(c: &mut Criterion) {
         }
         group.finish();
     }
+}
+
+/// The ball operation of a group (target: within 2× of MPFR's plain float).
+fn balls_op(name: &str) -> Option<fn(&ball::Ball, &ball::Ball, u64) -> ball::Ball> {
+    Some(match name {
+        "add" => |a, b, p| a.add(b, p),
+        "mul" => |a, b, p| a.mul(b, p),
+        "div" => |a, b, p| a.div(b, p),
+        "sqrt" => |a, _, p| a.sqrt(p),
+        _ => return None,
+    })
 }
 
 /// The same value as our float, through its integer mantissa and exponent.

@@ -247,6 +247,59 @@ impl Float {
         ))
     }
 
+    /// A ball midpoint for `self / rhs`: `(q, k)` with `|q| <= |self / rhs|`
+    /// and `|self / rhs| - |q| < k` units of `2^(exp(q) - prec)`, `k = 0`
+    /// exactly when `q` is the exact quotient (known where the quotient is
+    /// computed exactly, below the kernel's Newton threshold); `None` for a
+    /// zero divisor.
+    pub(crate) fn div_mid(&self, rhs: &Float, prec: u64) -> Option<(Float, u64)> {
+        let n = approx_len(prec, self.mant().len().max(rhs.mant().len()));
+        if kernel::div_approx_error(n) == 0 {
+            let (q, o) = self.checked_div_round(rhs, prec, Round::Down)?;
+            return Some((q, u64::from(o != Ordering::Equal)));
+        }
+        let q = self.div_approx(rhs, prec)?;
+        // An exact quotient that fits `prec` bits is q, q + u or q + 2u
+        // (the error is below 2 ulps); c rhs = self only for that one. The
+        // product of odd mantissas of b and c bits has b + c - 1 or b + c
+        // bits, which rules out most candidates without multiplying.
+        let (bits_a, bits_b) = (self.bit_length(), rhs.bit_length());
+        let exact = candidates(&q, prec).find(|c| {
+            let bits_c = c.bit_length();
+            bits_a + 1 >= bits_c + bits_b && bits_a <= bits_c + bits_b && c.mul(rhs) == *self
+        });
+        Some(match exact {
+            Some(c) => (c, 0),
+            None => (q, APPROX_ULPS),
+        })
+    }
+
+    /// A ball midpoint for `sqrt(self)`, as [`Float::div_mid`]; `None` for a
+    /// negative argument.
+    pub(crate) fn sqrt_mid(&self, prec: u64) -> Option<(Float, u64)> {
+        let (n, _) = if self.is_zero() || self.neg {
+            (1, Integer::ZERO)
+        } else {
+            self.sqrt_layout(prec)
+        };
+        if kernel::sqrt_approx_error(n) == 0 {
+            let (s, o) = self.checked_sqrt_round(prec, Round::Down)?;
+            return Some((s, u64::from(o != Ordering::Equal)));
+        }
+        let s = self.sqrt_approx(prec)?;
+        // As for the quotient: an exact root is s, s + u or s + 2u, and c^2
+        // has 2c - 1 or 2c bits.
+        let bits_a = self.bit_length();
+        let exact = candidates(&s, prec).find(|c| {
+            let bits_c = c.bit_length();
+            bits_a + 1 >= 2 * bits_c && bits_a <= 2 * bits_c && c.mul(c) == *self
+        });
+        Some(match exact {
+            Some(c) => (c, 0),
+            None => (s, APPROX_ULPS),
+        })
+    }
+
     /// `(n, half)` with `self = A / B^n 2^(2 half)` for the mantissa `A` of
     /// [`Float::sqrt_mantissa`] (`n` limbs, `A >= B^n / 4`).
     fn sqrt_layout(&self, prec: u64) -> (usize, Integer) {
@@ -270,6 +323,20 @@ impl Float {
             debug_assert_eq!(out, 0, "the extra low limb takes the bit");
         }
     }
+}
+
+/// `q`, `q + u`, `q + 2u` for `u` one ulp of `q` at `prec` bits (away from
+/// zero), those of at most `prec` bits: where an exactly representable
+/// result lies when `q` is a lower bound within 2 ulps.
+fn candidates(q: &Float, prec: u64) -> impl Iterator<Item = Float> + '_ {
+    let unit = (!q.is_zero()).then(|| {
+        let u = Float::from_integer_exp(&Integer::ONE, &(q.exponent() - &Integer::from(prec)));
+        if q.is_negative() { u.neg() } else { u }
+    });
+    let next = move |c: &Float| unit.as_ref().map(|u| c.add(u));
+    std::iter::successors(Some(q.clone()), next)
+        .take(3)
+        .filter(move |c| c.bit_length() <= prec)
 }
 
 /// Limbs for an approximate entry: one limb beyond the precision, and at

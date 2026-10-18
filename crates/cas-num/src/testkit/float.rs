@@ -6,7 +6,7 @@
 //! - [`bracket`]: encloses a true value between two MPFR results computed
 //!   `GUARD` bits above the precision under test, rounded toward −∞ and +∞.
 //! - [`check_encloses`]: a ball, given as an exact midpoint and radius,
-//!   against a bracket.
+//!   must meet a bracket (computed well above the ball's accuracy).
 //! - [`dyadic`] and friends: proptest strategies with adversarial shapes.
 //!
 //! Rounding names differ: rug's `Round::Down`/`Round::Up` are toward −∞/+∞
@@ -203,12 +203,13 @@ pub(crate) fn bracket(prec: u32, f: impl Fn(u32, Round) -> Float) -> Bracket {
     Bracket { lo, hi }
 }
 
-/// Fails unless the ball `mid ± rad` is consistent with the true value in `b`.
+/// Fails unless the ball `mid ± rad` meets `[lo, hi]`, which contains the true
+/// value.
 ///
-/// When `rad ≥ hi − lo`, the ball must contain all of `[lo, hi]`: the oracle is
-/// then sharper than the ball, so the true value could be anywhere in it.
-/// Otherwise the ball must at least meet `[lo, hi]` (the true value lies in
-/// both).
+/// That is all a bracket can refute: the true value is one point of it, and a
+/// correct ball may leave out the rest. The check is sharp only when the
+/// bracket is much narrower than the ball's radius (or the ball is exact), so
+/// callers compute the bracket at well above the ball's accuracy.
 pub(crate) fn check_encloses(
     mid: &Rational,
     rad: &Rational,
@@ -216,16 +217,11 @@ pub(crate) fn check_encloses(
 ) -> Result<(), TestCaseError> {
     assert!(*rad >= 0, "negative radius {rad}");
     let (ball_lo, ball_hi) = (Rational::from(mid - rad), Rational::from(mid + rad));
-    let ok = if *rad >= b.width() {
-        ball_lo <= b.lo && b.hi <= ball_hi
-    } else {
-        ball_lo <= b.hi && b.lo <= ball_hi
-    };
-    if ok {
+    if ball_lo <= b.hi && b.lo <= ball_hi {
         Ok(())
     } else {
         Err(TestCaseError::fail(format!(
-            "ball does not enclose the oracle bracket\n  ball:   {mid} ± {rad}\n  \
+            "ball misses the oracle bracket\n  ball:   {mid} ± {rad}\n  \
              as [lo, hi]: [{ball_lo}, {ball_hi}]\n  oracle: [{}, {}]",
             b.lo, b.hi
         )))
@@ -387,8 +383,10 @@ mod tests {
         let one = Rational::from(1);
         // Wide ball containing the bracket.
         assert!(check_encloses(&one, &Rational::from((1, 10)), &b).is_ok());
-        // Wide ball missing part of it.
-        assert!(check_encloses(&Rational::from((11, 10)), &Rational::from((1, 10)), &b).is_err());
+        // Wide ball meeting part of it: the true value may be in the part.
+        assert!(check_encloses(&Rational::from((11, 10)), &Rational::from((1, 10)), &b).is_ok());
+        // Wide ball beside it.
+        assert!(check_encloses(&Rational::from((12, 10)), &Rational::from((1, 10)), &b).is_err());
         // Narrow ball inside the bracket: consistent.
         assert!(check_encloses(&one, &Rational::from((1, 1000)), &b).is_ok());
         // Narrow ball outside the bracket.

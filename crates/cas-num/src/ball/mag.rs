@@ -427,6 +427,47 @@ impl Mag {
         r
     }
 
+    /// An upper bound of `sqrt(self)`.
+    #[must_use]
+    pub fn sqrt(&self) -> Mag {
+        self.sqrt_dir(true)
+    }
+
+    /// A lower bound of `sqrt(self)`.
+    #[must_use]
+    pub fn sqrt_lower(&self) -> Mag {
+        self.sqrt_dir(false)
+    }
+
+    /// With `self = man 2^E` (`E = exp - 30`), make `E` even by doubling `man`
+    /// if needed, then `s = isqrt(m 2^32)` (31 or 32 bits), so `sqrt(self) =
+    /// sqrt(m 2^32) 2^(E / 2 - 16)`: the integer root rounds once (`2^-31`
+    /// relative), the conversion to 30 bits once more.
+    fn sqrt_dir(&self, up: bool) -> Mag {
+        if self.is_zero() || self.is_inf() {
+            return self.clone();
+        }
+        let e = offset(&self.exp, -i64::from(BITS));
+        let odd = match e.to_i64() {
+            Some(v) => v & 1 == 1,
+            None => e.unsigned_abs().limbs()[0] & 1 == 1,
+        };
+        let (m, e) = if odd {
+            (u64::from(self.man) << 1, offset(&e, -1))
+        } else {
+            (u64::from(self.man), e)
+        };
+        let n = m << 32;
+        let r = n.isqrt();
+        let r = if up && r * r != n { r + 1 } else { r };
+        let half = match e.to_i64() {
+            Some(v) => Integer::from(v / 2),
+            None => e.div_exact(&Integer::from(2)),
+        };
+        // r 2^(E/2 - 16) as m 2^(X - 30): X = E/2 + 14.
+        Mag::from_u64(r, offset(&half, 14), up)
+    }
+
     /// The `i64` exponent of a finite non-zero value, if it fits.
     fn exp_i64(&self) -> Option<i64> {
         self.exp.to_i64()

@@ -145,6 +145,18 @@ proptest! {
         }
     }
 
+    /// `sqrt`: `s^2 >= x` and `s^2 <= x (1 + 2^-28)^2`; `sqrt_lower`
+    /// symmetric (checked on squares, which are exact rationals).
+    #[test]
+    fn sqrt_bounds(a in finite(-300..=300)) {
+        let p = value(&a).unwrap();
+        let (s, l) = (value(&a.sqrt()).unwrap(), value(&a.sqrt_lower()).unwrap());
+        let one_up = &Rational::ONE + &tight();
+        let one_down = &Rational::ONE - &tight();
+        prop_assert!(&s * &s >= p && &s * &s <= &(&p * &one_up) * &one_up, "sqrt {:?}", a.sqrt());
+        prop_assert!(&l * &l <= p && &l * &l >= &(&p * &one_down) * &one_down, "sqrt_lower {:?}", a.sqrt_lower());
+    }
+
     #[test]
     fn pow_bound(a in finite(-40..=40), n in 0u64..50) {
         let p = value(&a).unwrap();
@@ -212,6 +224,9 @@ proptest! {
         prop_assert_eq!(ak.div(&bk), a.div(&b));
         prop_assert_eq!(ak.mul(&b.mul_2exp(&-&k)), a.mul(&b));
         prop_assert_eq!(ak.cmp(&bk), a.cmp(&b));
+        let k2 = &k * &Integer::from(2);
+        prop_assert_eq!(a.mul_2exp(&k2).sqrt(), a.sqrt().mul_2exp(&k));
+        prop_assert_eq!(a.mul_2exp(&k2).sqrt_lower(), a.sqrt_lower().mul_2exp(&k));
         let f = a.to_float().unwrap().mul_2exp(&k);
         prop_assert_eq!(Mag::from_float(&f), Mag::from_float(&a.to_float().unwrap()).mul_2exp(&k));
     }
@@ -242,6 +257,12 @@ fn zero_and_infinity() {
     assert_eq!(one.pow(0), one);
     assert_eq!(z.pow(0), one);
     assert_eq!(inf.pow(3), inf);
+    assert_eq!(z.sqrt(), z);
+    assert_eq!(inf.sqrt(), inf);
+    assert_eq!(
+        Mag::from_integer(&Integer::from(4)).sqrt(),
+        Mag::from_integer(&Integer::from(2))
+    );
     assert_eq!(Mag::from_float(&crate::ball::Float::ZERO), z);
     assert_eq!(inf.to_float(), None);
     assert_eq!(
