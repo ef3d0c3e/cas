@@ -16,6 +16,8 @@
 //!   [`Ball::atan`], [`Ball::asin`], [`Ball::acos`], [`Ball::atan2`] (§7.2);
 //!   [`Ball::pow_ball`], [`Ball::root`], [`Ball::sinh`] and the other
 //!   hyperbolic functions (§7.3).
+//! - [`ComplexBall`]: rectangular complex balls with principal branches
+//!   (§8).
 //! - Decimal printing with Arb's digit rule ([`Ball::to_decimal`], `Display`)
 //!   and decimal parsing ([`Ball::from_decimal`]); exact hexadecimal floats
 //!   for `FullForm` ([`Float::to_hex`], [`Mag::to_hex`]) (§6).
@@ -23,6 +25,7 @@
 //!   path up to 53 bits; `None` sends the caller back to [`Ball`] (§5.4).
 
 mod bsplit;
+mod complex;
 mod consts;
 mod decimal;
 mod float;
@@ -32,6 +35,7 @@ mod machine;
 mod mag;
 mod real;
 
+pub use complex::ComplexBall;
 pub use consts::clear_constant_cache;
 pub use decimal::DecimalStyle;
 pub use float::{APPROX_ULPS, Float, Round};
