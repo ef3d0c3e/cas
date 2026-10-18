@@ -100,8 +100,41 @@ pub fn submul_1(r: &mut [Limb], a: &[Limb], b: Limb) -> Limb {
     carry
 }
 
+/// `r[..n] += a * (b0 + b1 B) + c0` for `n = a.len()` and `r.len() == n + 1`,
+/// with `r[n]` overwritten by the limb at that position; returns the limb
+/// above.
+///
+/// One pass for two rows: each limb of `r` is loaded and stored once per two
+/// multiplier limbs. Limb `i` takes `r[i] + a[i] b0 + c0` and passes its high
+/// half on with `a[i] b1 + c1` to limb `i + 1`; both sums fit a double limb.
+fn addmul_2(r: &mut [Limb], a: &[Limb], b0: Limb, b1: Limb, c0: Limb) -> Limb {
+    debug_assert_eq!(r.len(), a.len() + 1);
+    let (head, top) = r.split_at_mut(a.len());
+    let (mut c0, mut c1) = (c0, 0);
+    let step = |r: &mut Limb, a: Limb, c0: Limb, c1: Limb| {
+        let x = u128::from(a) * u128::from(b0) + u128::from(*r) + u128::from(c0);
+        let (lo, hi) = split(x);
+        *r = lo;
+        split(u128::from(a) * u128::from(b1) + u128::from(hi) + u128::from(c1))
+    };
+    let mut rs = head.chunks_exact_mut(2);
+    let mut as_ = a.chunks_exact(2);
+    for (r, a) in (&mut rs).zip(&mut as_) {
+        (c0, c1) = step(&mut r[0], a[0], c0, c1);
+        (c0, c1) = step(&mut r[1], a[1], c0, c1);
+    }
+    if let ([r], [a]) = (rs.into_remainder(), as_.remainder()) {
+        (c0, c1) = step(r, *a, c0, c1);
+    }
+    top[0] = c0;
+    c1
+}
+
 /// `r = a * b` by the schoolbook method, for any lengths with
 /// `r.len() == a.len() + b.len()`. Quadratic; prefer [`mul`].
+///
+/// The first row by [`mul_1`], then two rows at a time by [`addmul_2`]; an
+/// even count leaves the last row to [`addmul_1`].
 pub fn mul_basecase(r: &mut [Limb], a: &[Limb], b: &[Limb]) {
     assert_eq!(r.len(), a.len() + b.len(), "mul_basecase: length mismatch");
     let Some((&b0, b_rest)) = b.split_first() else {
@@ -109,10 +142,19 @@ pub fn mul_basecase(r: &mut [Limb], a: &[Limb], b: &[Limb]) {
         return;
     };
     let n = a.len();
+    if n == 0 {
+        r.fill(0);
+        return;
+    }
     r[n] = mul_1(&mut r[..n], a, b0);
-    for (j, &bj) in b_rest.iter().enumerate() {
-        let j = j + 1;
-        r[n + j] = addmul_1(&mut r[j..j + n], a, bj);
+    let mut pairs = b_rest.chunks_exact(2);
+    let mut j = 1;
+    for pair in &mut pairs {
+        r[n + j + 1] = addmul_2(&mut r[j..=j + n], a, pair[0], pair[1], 0);
+        j += 2;
+    }
+    if let [bj] = pairs.remainder() {
+        r[n + j] = addmul_1(&mut r[j..j + n], a, *bj);
     }
 }
 
@@ -123,8 +165,19 @@ pub fn sqr_basecase(r: &mut [Limb], a: &[Limb]) {
     assert_eq!(r.len(), 2 * n, "sqr_basecase: length mismatch");
     r.fill(0);
     // Row i adds a[i] * a[i+1..] at position 2i + 1; its carry lands on the
-    // still untouched limb i + n.
-    for i in 0..n.saturating_sub(1) {
+    // still untouched limb i + n. Rows i and i + 1 go together: a[i] a[i+1]
+    // at 2i + 1, then a[i] and a[i+1] times a[i+2..] from 2i + 2 by
+    // [`addmul_2`], which takes the high half of the first product as its
+    // carry in.
+    let rows = n.saturating_sub(1);
+    let mut i = 0;
+    while i + 1 < rows {
+        let (lo, hi) = mul_add(a[i], a[i + 1], r[2 * i + 1]);
+        r[2 * i + 1] = lo;
+        r[i + n + 1] = addmul_2(&mut r[2 * i + 2..=i + n], &a[i + 2..], a[i], a[i + 1], hi);
+        i += 2;
+    }
+    if i < rows {
         r[i + n] = addmul_1(&mut r[2 * i + 1..i + n], &a[i + 1..], a[i]);
     }
     let out = shl_assign(r, 1);

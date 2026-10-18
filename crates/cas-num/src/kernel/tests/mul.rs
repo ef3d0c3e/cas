@@ -610,3 +610,24 @@ fn tune_ntt() {
         );
     }
 }
+
+/// Schoolbook products and squares of all-ones operands, the largest carries
+/// through both double-limb sums of a two-row pass, at every small shape: odd
+/// and even row counts, the single last row, and squares whose triangle pairs
+/// rows down to an empty multiplicand.
+#[test]
+fn basecase_all_ones() {
+    for an in 1..=12 {
+        let a = vec![Limb::MAX; an];
+        for bn in 0..=12 {
+            let b = vec![Limb::MAX; bn];
+            assert_eq!(val(&basecase(&a, &b)), val(&a) * val(&b), "({an}, {bn})");
+        }
+    }
+    for n in 0..=24 {
+        let a = vec![Limb::MAX; n];
+        let mut r = vec![GARBAGE; 2 * n];
+        sqr_basecase(&mut r, &a);
+        assert_eq!(val(&r), val(&a).square(), "{n}");
+    }
+}
