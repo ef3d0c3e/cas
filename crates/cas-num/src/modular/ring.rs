@@ -3,9 +3,10 @@
 //! Odd moduli use Montgomery's representation: a residue `x` is stored as
 //! `x R mod n` with `R = B^k` for a `k`-limb modulus, and products are
 //! reduced by REDC, which divides by `R` instead of by `n`. Below
-//! [`REDC_N_THRESHOLD`] limbs REDC eliminates one limb at a time (GMP's
-//! `redc_1`); from it on, it multiplies by a precomputed `-n^(-1) mod R` and
-//! by `n` with the subquadratic multiplication (`redc_n`). Even moduli store
+//! [`REDC_N_THRESHOLD`] limbs REDC eliminates two limbs per pass over `n`
+//! (GMP's `redc_2`); from it on, it multiplies by a precomputed
+//! `-n^(-1) mod R` and by `n` with the subquadratic multiplication
+//! (`redc_n`). Even moduli store
 //! plain values and reduce products by division.
 #![allow(
     clippy::many_single_char_names,
@@ -14,6 +15,7 @@
 
 use std::cmp::Ordering;
 
+use crate::kernel::mul::addmul_2_carries;
 use crate::kernel::{
     self, add_1_assign, add_n, add_n_assign, cmp_n, div_rem, div_rem_scratch_len, mul_scratch_len,
     sqr_scratch_len, sub_n, sub_n_assign,
@@ -56,6 +58,8 @@ enum Form {
     Montgomery {
         /// `-n^(-1) mod B`.
         ninv: Limb,
+        /// `-n^(-1) mod B^2`, for `redc_2`.
+        ninv2: u128,
         /// `-n^(-1) mod R`, for `redc_n` (empty below `REDC_N_THRESHOLD`).
         ninv_full: Vec<Limb>,
         /// `R mod n`, the residue 1.
@@ -99,8 +103,16 @@ impl ModRing {
             } else {
                 Vec::new()
             };
+            let inv = limb_inverse(n.limbs()[0]);
+            // One more Newton step takes the inverse to 128 bits.
+            let low = u128::from(n.limbs()[0])
+                | u128::from(n.limbs().get(1).copied().unwrap_or(0)) << Limb::BITS;
+            let inv2 =
+                u128::from(inv).wrapping_mul(2u128.wrapping_sub(low.wrapping_mul(u128::from(inv))));
+            debug_assert_eq!(low.wrapping_mul(inv2), 1);
             Form::Montgomery {
-                ninv: limb_inverse(n.limbs()[0]).wrapping_neg(),
+                ninv: inv.wrapping_neg(),
+                ninv2: inv2.wrapping_neg(),
                 ninv_full,
                 one: padded(&(&r % &n), k),
                 r2: padded(&(r.square() % &n), k),
@@ -384,14 +396,17 @@ impl ModRing {
     /// `r = t R^(-1) mod n` for `t = s.t < n R`, in `0..n`.
     fn redc(&self, r: &mut [Limb], s: &mut Scratch) {
         let Form::Montgomery {
-            ninv, ninv_full, ..
+            ninv,
+            ninv2,
+            ninv_full,
+            ..
         } = &self.form
         else {
             unreachable!("REDC needs an odd modulus");
         };
         let n = self.n.limbs();
         let carry = if ninv_full.is_empty() {
-            redc_1(r, &mut s.t, n, *ninv)
+            redc_2(r, &mut s.t, n, *ninv, *ninv2)
         } else {
             redc_n(r, &s.t, n, ninv_full, &mut s.u, &mut s.work)
         };
@@ -401,15 +416,29 @@ impl ModRing {
     }
 }
 
-/// `r = (t + q n) / R` for the `q < R` that makes it exact, eliminating one
-/// limb of `t` per step. Returns the carry out of `r`; `r + carry B^k < 2n`.
-/// Clobbers `t`.
-fn redc_1(r: &mut [Limb], t: &mut [Limb], n: &[Limb], ninv: Limb) -> Limb {
+/// `r = (t + q n) / R` for the `q < R` that makes it exact, eliminating two
+/// limbs of `t` per pass with `q`'s next two limbs `t[i..i + 2] (-n^(-1))
+/// mod B^2`, and a last single limb for odd `k`. Returns the carry out of
+/// `r`; `r + carry B^k < 2n`. Clobbers `t`.
+///
+/// A pass clears `t[i]` and `t[i + 1]`; its two carry limbs belong at
+/// positions `i + k` and `i + k + 1` and are kept in the cleared limbs until
+/// the end, as no later `q` depends on them.
+fn redc_2(r: &mut [Limb], t: &mut [Limb], n: &[Limb], ninv: Limb, ninv2: u128) -> Limb {
     let k = n.len();
-    for i in 0..k {
+    let mut i = 0;
+    while i + 1 < k {
+        let low = u128::from(t[i]) | u128::from(t[i + 1]) << Limb::BITS;
+        let q = low.wrapping_mul(ninv2);
+        #[allow(clippy::cast_possible_truncation, reason = "splitting a double limb")]
+        let (q0, q1) = (q as Limb, (q >> Limb::BITS) as Limb);
+        let (c0, c1) = addmul_2_carries(&mut t[i..i + k], n, q0, q1, 0);
+        debug_assert!(t[i] == 0 && t[i + 1] == 0);
+        (t[i], t[i + 1]) = (c0, c1);
+        i += 2;
+    }
+    if i < k {
         let q = t[i].wrapping_mul(ninv);
-        // Clears t[i]; the carry belongs at position i + k and is kept in
-        // the cleared limb until the end.
         t[i] = kernel::addmul_1(&mut t[i..i + k], n, q);
     }
     let (lo, hi) = t.split_at(k);
@@ -437,17 +466,17 @@ fn redc_n(
     carry + add_1_assign(r, low_carry)
 }
 
-/// The window width for an exponent of `bits` bits, minimising squarings
-/// plus multiplications (the table costs `2^(w-1)` products).
+/// The window width for an exponent of `bits` bits, minimising the
+/// multiplications: about `bits / (w + 1)` windows plus a table of `2^(w-1)`
+/// odd powers, while the squarings are `bits` for every width. Width `w + 1`
+/// wins once `bits > 2^(w-1) (w + 1) (w + 2)`: from 7, 25, 81, 241, 673,
+/// 1793, 4609 bits on.
 fn window_bits(bits: u64) -> u64 {
-    match bits {
-        0..=7 => 1,
-        8..=24 => 2,
-        25..=80 => 3,
-        81..=240 => 4,
-        241..=672 => 5,
-        _ => 6,
+    let mut w = 1;
+    while w < 16 && bits > (1 << (w - 1)) * (w + 1) * (w + 2) {
+        w += 1;
     }
+    w
 }
 
 /// `a^(-1) mod B` for odd `a`, by Newton's iteration: each step doubles the

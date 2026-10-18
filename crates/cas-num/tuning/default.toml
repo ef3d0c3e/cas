@@ -1,6 +1,7 @@
-# Written by cas-tune on 2026-10-18 (full run, 1224 s, 421 builds, median
-# timing noise 0.4%; then the NTT dispatch keys, 179 s, noise 0.2%), after the
-# radix-3 NTT lengths and size-aware NTT dispatch.
+# Written by cas-tune on 2026-10-18: a full run (1224 s, 421 builds, median
+# timing noise 0.4%) after the radix-3 NTT lengths and size-aware NTT
+# dispatch, then the NTT dispatch keys (179 s, noise 0.2%), then
+# redc_n_threshold after REDC by two limbs (88 s, noise 0.5%).
 # Algorithm thresholds for cas-num, embedded at build time (see build.rs).
 # Sizes are in limbs unless noted. Measured on the development machine;
 # `cargo run --release -p cas-tune` writes a file for yours.
@@ -43,7 +44,7 @@ inv_newton_threshold = 8
 
 # Montgomery reduction (modular/ring.rs): modulus length from which REDC
 # multiplies by -n^-1 mod R instead of eliminating one limb at a time.
-redc_n_threshold = 54
+redc_n_threshold = 183
 
 # GCD (natural/gcd.rs): smaller operand length from which half-GCD steps
 # replace Lehmer steps, and length from which the half-GCD recurses; entry

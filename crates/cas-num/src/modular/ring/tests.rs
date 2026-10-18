@@ -4,7 +4,7 @@
 use proptest::prelude::*;
 use rug::Integer;
 
-use super::{Form, ModRing, REDC_N_THRESHOLD};
+use super::{Form, ModRing, REDC_N_THRESHOLD, window_bits};
 use crate::Natural;
 use crate::testkit::{Mag, ToRug, differential, strategy};
 
@@ -254,4 +254,23 @@ fn tune_redc() {
             time(&full)
         );
     }
+}
+
+/// Each width takes over exactly where it saves multiplications:
+/// `bits / (w + 1) + 2^(w - 1)` drops below the narrower width's count.
+#[test]
+#[allow(clippy::cast_precision_loss, reason = "counts below 2^20")]
+fn window_widths() {
+    let cost = |bits: u64, w: u64| bits as f64 / (w + 1) as f64 + (1u64 << (w - 1)) as f64;
+    for bits in 1..20_000u64 {
+        let w = window_bits(bits);
+        assert!(cost(bits, w) <= cost(bits, w + 1), "{bits} bits: {w}");
+        if w > 1 {
+            assert!(cost(bits, w) < cost(bits, w - 1), "{bits} bits: {w}");
+        }
+    }
+    assert_eq!(window_bits(6), 1);
+    assert_eq!(window_bits(7), 2);
+    assert_eq!(window_bits(4096), 7);
+    assert_eq!(window_bits(4609), 8);
 }

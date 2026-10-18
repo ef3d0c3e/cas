@@ -112,6 +112,22 @@ pub fn submul_1(r: &mut [Limb], a: &[Limb], b: Limb) -> Limb {
 fn addmul_2(r: &mut [Limb], a: &[Limb], b0: Limb, b1: Limb, c0: Limb) -> Limb {
     debug_assert_eq!(r.len(), a.len() + 1);
     let (head, top) = r.split_at_mut(a.len());
+    let (c0, c1) = addmul_2_carries(head, a, b0, b1, c0);
+    top[0] = c0;
+    c1
+}
+
+/// `r += a * (b0 + b1 B) + c0` over `n = r.len() == a.len()` limbs; returns
+/// the two limbs above, `(c0, c1)` (the sum is below `B^(n + 2)`).
+pub(crate) fn addmul_2_carries(
+    r: &mut [Limb],
+    a: &[Limb],
+    b0: Limb,
+    b1: Limb,
+    c0: Limb,
+) -> (Limb, Limb) {
+    debug_assert_eq!(r.len(), a.len());
+    let head = r;
     let (mut c0, mut c1) = (c0, 0);
     let step = |r: &mut Limb, a: Limb, c0: Limb, c1: Limb| {
         let x = u128::from(a) * u128::from(b0) + u128::from(*r) + u128::from(c0);
@@ -128,8 +144,7 @@ fn addmul_2(r: &mut [Limb], a: &[Limb], b0: Limb, b1: Limb, c0: Limb) -> Limb {
     if let ([r], [a]) = (rs.into_remainder(), as_.remainder()) {
         (c0, c1) = step(r, *a, c0, c1);
     }
-    top[0] = c0;
-    c1
+    (c0, c1)
 }
 
 /// `r = a * b` by the schoolbook method, for any lengths with
