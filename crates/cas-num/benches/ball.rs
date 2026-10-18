@@ -106,6 +106,32 @@ fn short_products(c: &mut Criterion) {
     group.finish();
 }
 
+/// Radius operations: `mag/{add,mul,div,sub_lower,exp,log1p}`, on values
+/// with `i64` exponents (target: a few ns, no allocation).
+fn mag_ops(c: &mut Criterion) {
+    use ball::Mag;
+    let mag = |x: f64| Mag::from_float(&ball::Float::from_f64(x).expect("finite"));
+    let (a, b) = (mag(1.234_567_8e-20), mag(9.876_543_2e-22));
+    let (small, mid) = (mag(3.0e-5), mag(2.75));
+    let mut group = c.benchmark_group("mag");
+    group.bench_function("add", |bench| {
+        bench.iter(|| black_box(&a).add(black_box(&b)));
+    });
+    group.bench_function("mul", |bench| {
+        bench.iter(|| black_box(&a).mul(black_box(&b)));
+    });
+    group.bench_function("div", |bench| {
+        bench.iter(|| black_box(&a).div(black_box(&b)));
+    });
+    group.bench_function("sub_lower", |bench| {
+        bench.iter(|| black_box(&a).sub_lower(black_box(&b)));
+    });
+    group.bench_function("exp/small", |bench| bench.iter(|| black_box(&small).exp()));
+    group.bench_function("exp/mid", |bench| bench.iter(|| black_box(&mid).exp()));
+    group.bench_function("log1p/mid", |bench| bench.iter(|| black_box(&mid).log1p()));
+    group.finish();
+}
+
 /// One group per binary operation at every precision. MPFR rounds toward
 /// zero, as ball midpoints do (§5.2).
 fn arithmetic(c: &mut Criterion) {
@@ -227,6 +253,6 @@ fn config() -> Criterion {
 criterion_group! {
     name = benches;
     config = config();
-    targets = short_products, arithmetic, constants, functions
+    targets = short_products, arithmetic, mag_ops, constants, functions
 }
 criterion_main!(benches);

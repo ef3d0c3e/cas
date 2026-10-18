@@ -4,7 +4,11 @@
 //! - [`Float`]: an exact binary float `±0.m × 2^exp` with an `Integer`
 //!   exponent, exact operations, and correctly rounded ones in every
 //!   [`Round`] mode (§3).
+//! - [`Mag`]: a 30-bit upper (or lower) bound on a magnitude with an
+//!   `Integer` exponent, the radius type (§4).
 
 mod float;
+mod mag;
 
 pub use float::{APPROX_ULPS, Float, Round};
+pub use mag::Mag;
