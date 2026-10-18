@@ -83,6 +83,32 @@ fn measure(op: &str, n: usize, min: Duration) -> f64 {
                 kernel::mullo(&mut r, black_box(&a), black_box(&b), &mut s);
             })
         }
+        "divexact" | "bdiv_q" => {
+            // A 2n-limb multiple of an odd n-limb divisor.
+            let mut d = limbs(n, 5);
+            d[0] |= 1;
+            let q = limbs(n, 4);
+            let mut a = vec![0; 2 * n];
+            let mut s = vec![0; kernel::mul_scratch_len(n, n)];
+            kernel::mul(&mut a, &q, &d, &mut s);
+            let mut quot = vec![0; n + 1];
+            if op == "bdiv_q" {
+                let mut s = vec![0; kernel::bdiv_q_scratch_len(n + 1, n)];
+                time(min, || {
+                    kernel::bdiv_q(&mut quot, black_box(&a), black_box(&d), &mut s);
+                })
+            } else {
+                let mut s = vec![0; kernel::divexact_scratch_len(2 * n, n)];
+                time(min, || {
+                    assert!(kernel::divexact(
+                        &mut quot,
+                        black_box(&a),
+                        black_box(&d),
+                        &mut s
+                    ));
+                })
+            }
+        }
         "div" => {
             // A 2n-limb dividend by a normalised n-limb divisor.
             let (a, d) = (limbs(2 * n, 4), limbs(n, 5));

@@ -319,6 +319,15 @@ differential! {
         gmp: q.to_rug(),
     }
 
+    /// Even divisors too: both sides lose the divisor's factors of two.
+    fn div_exact_unchecked(q in strategy::natural(), d in divisor(), twos in 0..130u64) {
+        ours: {
+            let d = d.to_natural() << twos;
+            (q.to_natural() * &d).div_exact_unchecked(&d)
+        },
+        gmp: q.to_rug(),
+    }
+
     fn div_exact_limb(q in strategy::natural(), d in strategy::top_limb()) {
         ours: (q.to_natural() * d).div_exact_limb(d),
         gmp: q.to_rug(),

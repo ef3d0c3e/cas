@@ -149,6 +149,21 @@ impl Integer {
         Integer::from_parts(a_negative != d_negative, a.div_exact(&dm))
     }
 
+    /// `self / d` for a non-zero `d` that divides `self` by construction:
+    /// [`Integer::div_exact`] without its check (see
+    /// [`Natural::div_exact_unchecked`]).
+    pub(crate) fn div_exact_unchecked(&self, d: &Integer) -> Integer {
+        if let (Repr::Small(a), Repr::Small(b)) = (&self.0, &d.0) {
+            if let Some(q) = a.checked_div(*b) {
+                debug_assert!(a.wrapping_rem(*b) == 0, "division is not exact");
+                return Integer::from(q);
+            }
+        }
+        let (a_negative, a) = self.sign_mag();
+        let (d_negative, dm) = d.sign_mag();
+        Integer::from_parts(a_negative != d_negative, a.div_exact_unchecked(&dm))
+    }
+
     /// Whether `d` divides `self`. Zero divides only zero.
     #[must_use]
     pub fn is_divisible_by(&self, d: &Integer) -> bool {

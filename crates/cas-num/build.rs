@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 /// `(key, minimum)`. Every algorithm is correct for any value at or above
 /// its minimum; below it some algorithm would be called outside its domain.
-const KEYS: [(&str, u64); 23] = [
+const KEYS: [(&str, u64); 26] = [
     // A 1x1 product would be "chunked" into 1x1 products forever.
     ("mul_karatsuba_threshold", 2),
     // Toom-3 checks its own balance condition, so any size works.
@@ -46,6 +46,10 @@ const KEYS: [(&str, u64); 23] = [
     ("mu_div_threshold", 2),
     // A Newton step on n limbs recurses on n / 2 + 1, below n only from 3.
     ("inv_newton_threshold", 3),
+    ("bdiv_mu_threshold", 1),
+    // A 2-adic Newton step on n limbs recurses on ceil(n / 2), below n from 2.
+    ("binv_newton_threshold", 2),
+    ("divexact_div_threshold", 1),
     ("redc_n_threshold", 1),
     ("gcd_dc_threshold", 1),
     // Below 3 limbs the first recursive half-GCD could leave values under B^s.

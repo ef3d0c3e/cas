@@ -603,7 +603,7 @@ fn half_assign(a: &mut [Limb]) {
 
 /// `d^-1 mod 2^64` for an odd `d`, by Newton's iteration: `d d = 1 mod 8`
 /// gives 3 correct bits and each step doubles them.
-const fn limb_inverse(d: Limb) -> Limb {
+pub(crate) const fn limb_inverse(d: Limb) -> Limb {
     let mut inv = d;
     let mut i = 0;
     while i < 5 {

@@ -62,7 +62,7 @@ impl Rational {
         let (num, den) = if g.is_one() {
             (num, den)
         } else {
-            (num.div_exact(&g), den.div_exact(&g))
+            (num.div_exact_unchecked(&g), den.div_exact_unchecked(&g))
         };
         Some(if den.is_negative() {
             Rational::from_canonical(-num, -den)

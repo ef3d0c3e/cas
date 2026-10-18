@@ -19,6 +19,7 @@ use crate::Limb;
 /// instead of schoolbook. Set by the tuning configuration (`build.rs`).
 pub(crate) const DC_DIV_THRESHOLD: usize = crate::tuning::DC_DIV_THRESHOLD;
 
+pub(crate) mod bdiv;
 pub(crate) mod mu;
 
 use mu::{MU_DIV_THRESHOLD, mu_div_qr, mu_div_qr_scratch_len};

@@ -53,7 +53,7 @@ impl Integer {
         let s = if a_negative { -s } else { s };
         // Every coefficient of `self` is congruent to s modulo |b| / g; pick
         // the one nearest zero.
-        let m = Integer::from(b.div_exact(&g));
+        let m = Integer::from(b.div_exact_unchecked(&g));
         let s = if m.to_i64() == Some(2) {
             // s is odd, and +1 and -1 are equally near: GMP takes sgn(a).
             signum(self)
@@ -62,7 +62,7 @@ impl Integer {
             if &r + &r > m { r - &m } else { r }
         };
         let g = Integer::from(g);
-        let t = (&g - &(&s * self)).div_exact(other);
+        let t = (&g - &(&s * self)).div_exact_unchecked(other);
         (g, s, t)
     }
 

@@ -29,8 +29,8 @@ pub fn crt(a: &Natural, m: &Natural, b: &Natural, n: &Natural) -> Option<(Natura
     if !diff.is_divisible_by(&g) {
         return None;
     }
-    let n_g = Integer::from(n).div_exact(&g);
-    let k = (diff.div_exact(&g) * s).div_rem_euclid(&n_g).1;
+    let n_g = Integer::from(n).div_exact_unchecked(&g);
+    let k = (diff.div_exact_unchecked(&g) * s).div_rem_euclid(&n_g).1;
     let k = k.unsigned_abs();
     let n_g = n_g.unsigned_abs();
     let x = a + &(m * &k);

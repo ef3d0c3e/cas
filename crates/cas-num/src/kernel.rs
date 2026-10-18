@@ -26,6 +26,7 @@ pub(crate) mod gcd;
 
 pub(crate) mod ntt;
 
+pub use div::bdiv::{bdiv_q, bdiv_q_scratch_len, divexact, divexact_scratch_len};
 pub use div::{div_rem, div_rem_1, div_rem_scratch_len, divexact_1, rem_1};
 pub use gcd::gcd_1;
 pub use mul::mullo::{mullo, mullo_scratch_len};

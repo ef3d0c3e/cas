@@ -77,7 +77,7 @@ impl Natural {
         if self.is_zero() || other.is_zero() {
             return Natural::ZERO;
         }
-        self.div_exact(&self.gcd(other)) * other
+        self.div_exact_unchecked(&self.gcd(other)) * other
     }
 
     /// `(g, s)` with `g = gcd(self, other)` and `g = s self + t other` for

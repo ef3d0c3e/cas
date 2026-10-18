@@ -19,6 +19,9 @@ use rug::ops::{DivRounding, RemRounding};
 
 use super::{base_pow, val};
 use crate::Limb;
+use crate::kernel::div::bdiv::{
+    BDIV_MU_THRESHOLD, BINV_NEWTON_THRESHOLD, DIVEXACT_DIV_THRESHOLD, binvert, binvert_scratch_len,
+};
 use crate::kernel::div::mu::{
     INV_NEWTON_THRESHOLD, MU_DIV_THRESHOLD, block_inverse, invert, invert_scratch_len, mu_div_qr,
     mu_div_qr_scratch_len,
@@ -27,7 +30,10 @@ use crate::kernel::div::{
     DC_DIV_THRESHOLD, bz_div_qr, bz_div_qr_scratch_len, div_2by1, div_3by2, hits, reciprocal_2by1,
     reciprocal_3by2, sb_div_qr,
 };
-use crate::kernel::{div_rem, div_rem_1, div_rem_scratch_len, divexact_1, rem_1, submul_1};
+use crate::kernel::{
+    bdiv_q, bdiv_q_scratch_len, div_rem, div_rem_1, div_rem_scratch_len, divexact, divexact_1,
+    divexact_scratch_len, rem_1, submul_1,
+};
 use crate::testkit::strategy::{self, len_around};
 use crate::testkit::{Mag, ToRug, differential, tested};
 
@@ -785,6 +791,158 @@ fn mu_exact_multiple_of_wrap_modulus() {
                     check_mu(&a, &d);
                 }
             }
+        }
+    }
+}
+
+/// `(quotient, divides)` from [`divexact`], with garbage-filled buffers.
+fn run_divexact(a: &[Limb], d: &[Limb]) -> (Integer, bool) {
+    let mut q = vec![GARBAGE; a.len() - d.len() + 1];
+    let mut scratch = vec![GARBAGE; divexact_scratch_len(a.len(), d.len())];
+    let exact = divexact(&mut q, a, d, &mut scratch);
+    (val(&q), exact)
+}
+
+/// Divisor lengths around the block threshold and where the inverse takes
+/// Newton steps, with every quotient shape.
+fn bdiv_divisor_lens() -> BoxedStrategy<usize> {
+    len_around(&[
+        1,
+        2,
+        3,
+        tested(DIVEXACT_DIV_THRESHOLD),
+        tested(BDIV_MU_THRESHOLD),
+        2 * tested(BINV_NEWTON_THRESHOLD),
+        tested(BINV_NEWTON_THRESHOLD),
+    ])
+}
+
+/// `(a, d)` with `d` odd and normalised: `a = q d + e` for `e` in `{0, 1,
+/// -1, d - 1, d}` (a multiple again), padded with zero limbs or not, or raw.
+fn bdiv_operands() -> impl Strategy<Value = (Vec<Limb>, Vec<Limb>)> {
+    bdiv_divisor_lens()
+        .prop_flat_map(|dn| (Just(dn), quotient_len(dn), 0..7u8, any::<bool>()))
+        .prop_flat_map(|(dn, qn, shape, pad)| {
+            let d = strategy::natural_with_len(Just(dn));
+            let q = strategy::natural_with_len(Just(qn.max(1)));
+            let raw = strategy::raw_limbs(dn + qn);
+            (d, q, raw, Just(shape), Just(pad))
+        })
+        .prop_map(|(d, q, raw, shape, pad)| {
+            let mut d = d.limbs().to_vec();
+            d[0] |= 1;
+            let dv = val(&d);
+            let a = match shape {
+                0 => return (raw.clone(), d),
+                1 => q.to_rug() * &dv + 1u32,
+                2 => q.to_rug() * &dv - 1u32,
+                3 => q.to_rug() * &dv + (dv.clone() - 1u32),
+                4 => (q.to_rug() + 1u32) * &dv,
+                _ => q.to_rug() * &dv,
+            };
+            let mut a = limbs_of(&a.max(Integer::new()));
+            a.resize(a.len().max(d.len()) + usize::from(pad), 0);
+            (a, d)
+        })
+}
+
+proptest! {
+    #[test]
+    fn divexact_matches((a, d) in bdiv_operands()) {
+        let (av, dv) = (val(&a), val(&d));
+        let (q, exact) = run_divexact(&a, &d);
+        prop_assert_eq!(exact, av.is_divisible(&dv));
+        if exact {
+            prop_assert_eq!(q, av / dv);
+        }
+    }
+
+    #[test]
+    fn binvert_matches(
+        d in len_around(&[1, 2, tested(BINV_NEWTON_THRESHOLD), 2 * tested(BINV_NEWTON_THRESHOLD) + 1])
+            .prop_flat_map(strategy::raw_limbs)
+            .prop_filter("non-empty", |d| !d.is_empty()),
+    ) {
+        let mut d = d;
+        d[0] |= 1;
+        let n = d.len();
+        let mut x = vec![GARBAGE; n];
+        let mut scratch = vec![GARBAGE; binvert_scratch_len(n)];
+        binvert(&mut x, &d, &mut scratch);
+        let modulus = base_pow(n);
+        prop_assert_eq!(val(&x) * val(&d) % modulus, 1);
+    }
+}
+
+/// All-ones divisors and quotients (the largest carries), one bit off a
+/// multiple, zero, the divisor itself and `d B^2`.
+#[test]
+fn divexact_extremes() {
+    for dn in [
+        1,
+        2,
+        3,
+        tested(BDIV_MU_THRESHOLD),
+        tested(BDIV_MU_THRESHOLD) + 1,
+    ] {
+        let d = vec![Limb::MAX; dn];
+        for qn in [1, 2, dn, dn + 1, 3 * dn + 1] {
+            let q = vec![Limb::MAX; qn];
+            let a = limbs_of(&(val(&q) * val(&d)));
+            assert_eq!(
+                run_divexact(&a, &d),
+                (val(&q), true),
+                "dn = {dn}, qn = {qn}"
+            );
+            let mut off = a.clone();
+            off[0] ^= 2;
+            assert!(!run_divexact(&off, &d).1, "dn = {dn}, qn = {qn}: off by 2");
+        }
+        assert_eq!(run_divexact(&vec![0; dn + 2], &d), (Integer::new(), true));
+        assert_eq!(run_divexact(&d, &d), (Integer::from(1), true));
+        let mut shifted = vec![0; 2];
+        shifted.extend_from_slice(&d);
+        assert_eq!(run_divexact(&shifted, &d), (base_pow(2), true));
+    }
+}
+
+/// The 2-adic quotient from [`bdiv_q`] to `qn` limbs, with garbage-filled
+/// buffers.
+fn run_bdiv_q(a: &[Limb], d: &[Limb], qn: usize) -> Vec<Limb> {
+    let mut q = vec![GARBAGE; qn];
+    let mut scratch = vec![GARBAGE; bdiv_q_scratch_len(qn, d.len())];
+    bdiv_q(&mut q, a, d, &mut scratch);
+    q
+}
+
+proptest! {
+    /// Any dividend: `q d = a mod B^qn` for quotients shorter than, as long
+    /// as and longer than the divisor; multiples: the exact quotient.
+    #[test]
+    fn bdiv_q_matches((a, d) in bdiv_operands(), cut in 0..3usize) {
+        let qn = a.len() - d.len() + 1;
+        let qn = match cut { 0 => qn, 1 => qn.div_ceil(2), _ => (qn + d.len()).min(a.len()) };
+        let q = run_bdiv_q(&a, &d, qn);
+        let modulus = base_pow(qn);
+        prop_assert_eq!(val(&q) * val(&d) % &modulus, val(&a) % &modulus);
+        let (av, dv) = (val(&a), val(&d));
+        if cut == 0 && av.is_divisible(&dv) {
+            prop_assert_eq!(val(&q), av / dv);
+        }
+    }
+}
+
+/// All-ones divisors and quotients through every block shape of [`bdiv_q`].
+#[test]
+fn bdiv_q_extremes() {
+    let t = tested(BDIV_MU_THRESHOLD);
+    for dn in [1, 2, t, t + 1, 2 * t + 1] {
+        let d = vec![Limb::MAX; dn];
+        for qn in [1, 2, dn / 2 + 1, dn, dn + 1, 3 * dn + 1] {
+            let q = vec![Limb::MAX; qn];
+            let a = limbs_of(&(val(&q) * val(&d)));
+            let got = run_bdiv_q(&a, &d, a.len() - dn + 1);
+            assert_eq!(val(&got), val(&q), "dn = {dn}, qn = {qn}");
         }
     }
 }

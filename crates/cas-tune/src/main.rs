@@ -211,6 +211,28 @@ fn params() -> Vec<Param> {
             window: None,
         },
         Param {
+            key: "binv_newton_threshold",
+            op: "bdiv_q",
+            grid: geometric(8, 640, 1.25),
+            // Exact divisions long enough to work in blocks with the inverse.
+            window: Some(|c| {
+                let from = c["bdiv_mu_threshold"].clamp(64, 4096);
+                geometric(from, from * 16, 1.4)
+            }),
+        },
+        Param {
+            key: "bdiv_mu_threshold",
+            op: "bdiv_q",
+            grid: with_never(geometric(16, 1600, 1.19)),
+            window: None,
+        },
+        Param {
+            key: "divexact_div_threshold",
+            op: "divexact",
+            grid: with_never(geometric(4, 400, 1.19)),
+            window: None,
+        },
+        Param {
             key: "mullo_dc_threshold",
             op: "mullo",
             grid: geometric(8, 320, 1.19),

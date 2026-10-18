@@ -76,9 +76,10 @@ impl Natural {
 
     /// `self / d` where `d` is known to divide `self`.
     ///
-    /// Single-limb divisors use Hensel division, which is faster than
-    /// [`Natural::div_rem_limb`]; longer divisors currently cost the same as
-    /// [`Natural::div_rem`].
+    /// Short divisors use Hensel (2-adic) division from the low end, which
+    /// needs no quotient estimates and whose remainder proves the division
+    /// exact; longer ones divide with remainder, which is cheaper than Hensel
+    /// division plus a check.
     ///
     /// # Panics
     ///
@@ -88,9 +89,87 @@ impl Natural {
         if let [d] = d.limbs() {
             return self.div_exact_limb(*d);
         }
-        let (q, r) = self.div_rem(d);
-        assert!(r.is_zero(), "{NOT_EXACT}");
+        assert!(!d.is_zero(), "{DIV_BY_ZERO}");
+        self.hensel_div(d).expect(NOT_EXACT)
+    }
+
+    /// `self / d` for a non-zero `d` that divides `self` by construction (a
+    /// gcd, a found factor): [`Natural::div_exact`] without its check, by the
+    /// 2-adic quotient alone. Checked in debug builds; otherwise an inexact
+    /// division gives an unspecified value.
+    pub(crate) fn div_exact_unchecked(&self, d: &Natural) -> Natural {
+        let q = match d.limbs() {
+            [] => panic!("{DIV_BY_ZERO}"),
+            [d] => return self.div_exact_limb(*d),
+            _ => self.bdiv_q(d),
+        };
+        debug_assert!(&q * d == *self, "{NOT_EXACT}");
         q
+    }
+
+    /// The 2-adic quotient of `self` and the multi-limb `d`, both without
+    /// `d`'s factors of two, to `an - dn + 1` limbs: `self / d` when it is
+    /// exact.
+    fn bdiv_q(&self, d: &Natural) -> Natural {
+        let twos = d.trailing_zeros().expect("non-zero divisor");
+        let shifted;
+        let (a, d) = if twos == 0 {
+            (self.limbs(), d.limbs())
+        } else {
+            shifted = (self >> twos, d >> twos);
+            (shifted.0.limbs(), shifted.1.limbs())
+        };
+        let (an, dn) = (a.len(), d.len());
+        if an < dn {
+            return Natural::ZERO;
+        }
+        let mut q = LimbVec::zeroed(an - dn + 1);
+        if let [d] = d {
+            kernel::divexact_1(q.as_mut_slice(), a, *d);
+        } else {
+            let mut scratch = vec![0; kernel::bdiv_q_scratch_len(an - dn + 1, dn)];
+            kernel::bdiv_q(q.as_mut_slice(), a, d, &mut scratch);
+        }
+        let mut q = Natural { limbs: q };
+        q.normalize();
+        q.debug_check();
+        q
+    }
+
+    /// `Some(self / d)` if the non-zero `d` divides `self`, by Hensel
+    /// division of both without their common factors of two.
+    fn hensel_div(&self, d: &Natural) -> Option<Natural> {
+        let Some(s) = self.trailing_zeros() else {
+            return Some(Natural::ZERO);
+        };
+        let twos = d.trailing_zeros().expect("non-zero divisor");
+        if s < twos {
+            return None;
+        }
+        let shifted;
+        let (a, d) = if twos == 0 {
+            (self.limbs(), d.limbs())
+        } else {
+            shifted = (self >> twos, d >> twos);
+            (shifted.0.limbs(), shifted.1.limbs())
+        };
+        let (an, dn) = (a.len(), d.len());
+        if an < dn {
+            return None;
+        }
+        let mut q = LimbVec::zeroed(an - dn + 1);
+        let exact = if let [d] = d {
+            kernel::divexact_1(q.as_mut_slice(), a, *d)
+        } else {
+            let mut scratch = vec![0; kernel::divexact_scratch_len(an, dn)];
+            kernel::divexact(q.as_mut_slice(), a, d, &mut scratch)
+        };
+        exact.then(|| {
+            let mut q = Natural { limbs: q };
+            q.normalize();
+            q.debug_check();
+            q
+        })
     }
 
     /// `self / d` for a single limb `d` known to divide `self`.
@@ -116,10 +195,7 @@ impl Natural {
         match d.limbs() {
             [] => self.is_zero(),
             [d] => self.is_divisible_by_limb(*d),
-            _ if self.is_zero() => true,
-            // A divisor with more factors of two cannot divide.
-            _ if self.trailing_zeros() < d.trailing_zeros() => false,
-            _ => self.div_rem(d).1.is_zero(),
+            _ => self.hensel_div(d).is_some(),
         }
     }
 

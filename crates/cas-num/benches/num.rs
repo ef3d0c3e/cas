@@ -135,6 +135,23 @@ fn arithmetic(c: &mut Criterion) {
             black_box(<(rug::Integer, rug::Integer)>::from(a.div_rem_ref(d)));
         },
     );
+    // A 2n-limb multiple of an n-limb divisor (GMP's divexact does not check
+    // that the division is exact; ours does).
+    sweep(
+        c,
+        "div_exact",
+        usize::MAX,
+        |n| {
+            let ((q, qg), (d, dg)) = (operand(n, 4), operand(n, 5));
+            ((&q * &d, rug::Integer::from(&qg * &dg)), (d, dg))
+        },
+        |((a, _), (d, _))| {
+            black_box(a.div_exact(d));
+        },
+        |((_, a), (_, d))| {
+            black_box(rug::Integer::from(a.div_exact_ref(d)));
+        },
+    );
 }
 
 /// Balanced products at sizes between the NTT's power-of-two steps, where

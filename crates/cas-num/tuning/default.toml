@@ -1,8 +1,10 @@
 # Written by cas-tune on 2026-10-18: a full run (1224 s, 421 builds, median
 # timing noise 0.4%) after the radix-3 NTT lengths and size-aware NTT
 # dispatch, then the NTT dispatch keys (179 s, noise 0.2%), redc_n_threshold
-# after REDC by two limbs (88 s, noise 0.5%), and the short-product keys with
-# redc_n_threshold after short products in REDC (246 s, noise 0.8%).
+# after REDC by two limbs (88 s, noise 0.5%), the short-product keys with
+# redc_n_threshold after short products in REDC (246 s, noise 0.8%), and the
+# Hensel division keys (292 s, then 178 s for the inverse and block keys;
+# noise 0.2-1.3%).
 # Algorithm thresholds for cas-num, embedded at build time (see build.rs).
 # Sizes are in limbs unless noted. Measured on the development machine;
 # `cargo run --release -p cas-tune` writes a file for yours.
@@ -46,6 +48,13 @@ dc_div_threshold = 14
 # reciprocal takes Newton steps instead of an exact division.
 mu_div_threshold = 6419
 inv_newton_threshold = 8
+# Hensel division (kernel/div/bdiv.rs): divisor length from which the 2-adic
+# quotient works in blocks with the 2-adic inverse, and length from which
+# that inverse takes Newton steps; divisor length from which exact division
+# with its check divides with remainder instead.
+bdiv_mu_threshold = 154
+binv_newton_threshold = 43
+divexact_div_threshold = 46
 
 # Montgomery reduction (modular/ring.rs): modulus length from which REDC
 # multiplies by -n^-1 mod R instead of eliminating one limb at a time.
