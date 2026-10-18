@@ -2,8 +2,9 @@
 
 use crate::Limb;
 
-/// Number of limbs stored without a heap allocation (192 bits).
-pub(crate) const INLINE: usize = 3;
+/// Number of limbs stored without a heap allocation (256 bits; 4 against 3
+/// measured in CAS-40).
+pub(crate) const INLINE: usize = 4;
 
 /// A growable limb buffer: inline up to [`INLINE`] limbs, `Vec` beyond.
 ///

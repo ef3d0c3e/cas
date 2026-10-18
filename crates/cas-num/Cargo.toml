@@ -14,9 +14,14 @@ workspace = true
 
 [dev-dependencies]
 criterion = { version = "0.7.0", default-features = false, features = ["cargo_bench_support"] }
+mimalloc = "0.1.52"
 proptest = "1.11.0"
 rug = { version = "1.30.0", default-features = false, features = ["integer", "rational", "std"] }
 
 [[bench]]
 name = "num"
+harness = false
+
+[[bench]]
+name = "num_mimalloc"
 harness = false

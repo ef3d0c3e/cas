@@ -79,16 +79,29 @@ impl Add<&Natural> for &Natural {
         } else {
             (rhs.limbs(), self.limbs())
         };
-        // Room for the carry limb up front: pushing it onto an exactly sized
-        // heap buffer would reallocate and copy the whole sum.
         let n = a.len();
-        let mut r = LimbVec::zeroed(if n <= INLINE { n } else { n + 1 });
-        let carry = kernel::add(&mut r.as_mut_slice()[..n], a, b);
-        if n <= INLINE {
+        if n < INLINE {
+            // A carry still fits inline.
+            let mut r = LimbVec::zeroed(n);
+            let carry = kernel::add(r.as_mut_slice(), a, b);
             if carry != 0 {
                 r.push(carry);
             }
-        } else if carry != 0 {
+            return Natural::from_limb_vec(r);
+        }
+        if n == INLINE {
+            // Through the stack, so that a sum carrying out of the inline
+            // capacity allocates once, at its length.
+            let mut buf = [0; INLINE + 1];
+            buf[n] = kernel::add(&mut buf[..n], a, b);
+            let len = n + usize::from(buf[n] != 0);
+            return Natural::from_limb_vec(LimbVec::from_slice(&buf[..len]));
+        }
+        // Room for the carry limb up front: pushing it onto an exactly sized
+        // heap buffer would reallocate and copy the whole sum.
+        let mut r = LimbVec::zeroed(n + 1);
+        let carry = kernel::add(&mut r.as_mut_slice()[..n], a, b);
+        if carry != 0 {
             r.as_mut_slice()[n] = carry;
         } else {
             r.truncate(n);

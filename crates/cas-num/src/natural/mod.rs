@@ -24,7 +24,7 @@ pub(crate) use radix::check_radix;
 
 /// An arbitrary-precision natural number (non-negative integer).
 ///
-/// Stored as little-endian 64-bit limbs, inline up to 192 bits and on the heap
+/// Stored as little-endian 64-bit limbs, inline up to 256 bits and on the heap
 /// beyond. The representation is normalised (no zero most-significant limb,
 /// zero has no limbs), so equality, ordering and hashing are by value.
 ///
@@ -105,7 +105,7 @@ impl Natural {
         self.limbs() == [1]
     }
 
-    /// Releases spare capacity; values of up to 192 bits move back inline.
+    /// Releases spare capacity; values of up to 256 bits move back inline.
     pub fn shrink_to_fit(&mut self) {
         self.limbs.shrink_to_fit();
     }

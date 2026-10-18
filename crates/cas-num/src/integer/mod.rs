@@ -21,7 +21,7 @@ pub use div::Rounding;
 /// An arbitrary-precision integer.
 ///
 /// Values that fit an `i64` are stored inline and never allocate; larger values
-/// are boxed sign and magnitude (one allocation up to 192 bits, layout E in the
+/// are boxed sign and magnitude (one allocation up to 256 bits, layout E in the
 /// numerics design). The representation is canonical (a value is boxed iff it
 /// does not fit an `i64`), so equality and hashing are by value.
 ///

@@ -490,9 +490,12 @@ fn hex_formatting() {
     assert_eq!(format!("{:>6x}", Natural::from(255u64)), "    ff");
 }
 
+/// Four inline limbs and a length (CAS-40: 4 limbs beat 3 on 2-4 limb values
+/// for 8 more bytes); a big `Integer` stays one pointer and a tag.
 #[test]
 fn natural_is_small() {
-    assert_eq!(size_of::<Natural>(), 32);
+    assert_eq!(size_of::<Natural>(), 40);
+    assert_eq!(size_of::<crate::Integer>(), 16);
 }
 
 #[test]
