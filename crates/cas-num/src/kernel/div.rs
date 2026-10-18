@@ -21,6 +21,7 @@ use crate::Limb;
 /// instead of schoolbook. Set by the tuning configuration (`build.rs`).
 pub(crate) const DC_DIV_THRESHOLD: usize = crate::tuning::DC_DIV_THRESHOLD;
 
+pub(crate) mod approx;
 pub(crate) mod bdiv;
 pub(crate) mod mu;
 

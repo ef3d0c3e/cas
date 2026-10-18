@@ -28,9 +28,15 @@ pub(crate) mod ntt;
 
 pub(crate) mod root;
 
+pub use div::approx::{
+    div_approx, div_approx_error, div_approx_scratch_len, recip_approx, recip_approx_error,
+    recip_approx_scratch_len, rsqrt_approx, rsqrt_approx_error, rsqrt_approx_scratch_len,
+    sqrt_approx, sqrt_approx_error, sqrt_approx_scratch_len,
+};
 pub use div::bdiv::{bdiv_q, bdiv_q_scratch_len, divexact, divexact_scratch_len};
 pub use div::{div_rem, div_rem_1, div_rem_scratch_len, divexact_1, rem_1};
 pub use gcd::gcd_1;
+pub use mul::mulhi::{mulhi, mulhi_error, mulhi_scratch_len};
 pub use mul::mullo::{mullo, mullo_scratch_len};
 pub use mul::{
     addmul_1, mul, mul_1, mul_1_assign, mul_basecase, mul_scratch_len, sqr, sqr_basecase,

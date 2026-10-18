@@ -6,6 +6,8 @@
 //! Precisions sweep 64, 128, 256 … bits up to `CAS_BENCH_MAX_BITS` (default
 //! 4096); constants and functions run at decimal digit counts up to
 //! `CAS_BENCH_MAX_DIGITS` (default 10^4; the tickets' sweeps go to 10^6).
+//! The `mulhi` group times the short products of the midpoint kernels
+//! against the full product, on limb counts.
 //! Pass a filter to run part of it: `cargo bench -p cas-num --bench ball -- '^mul/'`.
 //!
 //! Targets (CAS-DOC-5 §11): `Float` add/mul within 1.3× of MPFR at 1–4 limbs,
@@ -16,6 +18,7 @@
 use std::hint::black_box;
 use std::time::Duration;
 
+use cas_num::kernel;
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rug::Float;
 use rug::float::{Constant, Round};
@@ -58,6 +61,47 @@ fn bits(digits: u32) -> u32 {
 fn operand(prec: u32, seed: u32) -> Float {
     let x = Float::with_val(prec, Float::with_val(prec, seed).sqrt_ref());
     x / seed.isqrt()
+}
+
+/// Deterministic pseudo-random limbs (`SplitMix64`), so runs compare.
+fn limbs(len: usize, seed: u64) -> Vec<u64> {
+    let mut state = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ len as u64;
+    (0..len)
+        .map(|_| {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        })
+        .collect()
+}
+
+/// The short products the midpoints use against the full product, at
+/// 1 … `CAS_BENCH_MAX_LIMBS` (default 4096) limbs: `mulhi/{mulhi,mullo,mul}/n`.
+fn short_products(c: &mut Criterion) {
+    let max = env_max("CAS_BENCH_MAX_LIMBS", 4096) as usize;
+    let mut group = c.benchmark_group("mulhi");
+    for n in (0..usize::BITS)
+        .map(|k| 1usize << k)
+        .take_while(|&n| n <= max)
+    {
+        let (a, b) = (limbs(n, 1), limbs(n, 2));
+        let mut r = vec![0; 2 * n];
+        let mut scratch = vec![0; kernel::mulhi_scratch_len(n)];
+        group.bench_function(BenchmarkId::new("mulhi", n), |bench| {
+            bench.iter(|| kernel::mulhi(&mut r[..n], black_box(&a), black_box(&b), &mut scratch));
+        });
+        let mut scratch = vec![0; kernel::mullo_scratch_len(n)];
+        group.bench_function(BenchmarkId::new("mullo", n), |bench| {
+            bench.iter(|| kernel::mullo(&mut r[..n], black_box(&a), black_box(&b), &mut scratch));
+        });
+        let mut scratch = vec![0; kernel::mul_scratch_len(n, n)];
+        group.bench_function(BenchmarkId::new("mul", n), |bench| {
+            bench.iter(|| kernel::mul(&mut r, black_box(&a), black_box(&b), &mut scratch));
+        });
+    }
+    group.finish();
 }
 
 /// One group per binary operation at every precision. MPFR rounds toward
@@ -142,6 +186,6 @@ fn config() -> Criterion {
 criterion_group! {
     name = benches;
     config = config();
-    targets = arithmetic, constants, functions
+    targets = short_products, arithmetic, constants, functions
 }
 criterion_main!(benches);

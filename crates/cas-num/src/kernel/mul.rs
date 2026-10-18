@@ -16,6 +16,7 @@
     reason = "the algorithms use the textbook names (a, b, r, n, s, t)"
 )]
 
+pub(crate) mod mulhi;
 pub(crate) mod mullo;
 pub(crate) mod split;
 
