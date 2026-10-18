@@ -11,14 +11,18 @@
 //!   [`RealBalls`] ring object (§5).
 //! - Constants: [`Ball::const_pi`], [`Ball::const_log2`] and [`Ball::const_e`]
 //!   by binary splitting, cached process-wide (§7.1).
+//! - [`MachineBall`]: `f64` midpoint and radius with proven bounds, the fast
+//!   path up to 53 bits; `None` sends the caller back to [`Ball`] (§5.4).
 
 mod bsplit;
 mod consts;
 mod float;
+mod machine;
 mod mag;
 mod real;
 
 pub use consts::clear_constant_cache;
 pub use float::{APPROX_ULPS, Float, Round};
+pub use machine::MachineBall;
 pub use mag::Mag;
 pub use real::{Ball, RealBalls};

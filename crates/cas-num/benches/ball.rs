@@ -214,6 +214,34 @@ fn balls_op(name: &str) -> Option<fn(&ball::Ball, &ball::Ball, u64) -> ball::Bal
     })
 }
 
+/// Machine balls against 53-bit balls on the same values (radius about
+/// 2^-20 relative), the fast path's target being 2–5 ns per operation.
+fn machine(c: &mut Criterion) {
+    let a = ball::MachineBall::new(std::f64::consts::PI, 3e-6).expect("regular");
+    let b = ball::MachineBall::new(std::f64::consts::E, 2.6e-6).expect("regular");
+    let (ba, bb) = (a.to_ball(), b.to_ball());
+    let mut group = c.benchmark_group("machine");
+    group.bench_function(BenchmarkId::new("add", "machine"), |bench| {
+        bench.iter(|| black_box(&a).add(black_box(&b)));
+    });
+    group.bench_function(BenchmarkId::new("mul", "machine"), |bench| {
+        bench.iter(|| black_box(&a).mul(black_box(&b)));
+    });
+    group.bench_function(BenchmarkId::new("div", "machine"), |bench| {
+        bench.iter(|| black_box(&a).div(black_box(&b)));
+    });
+    group.bench_function(BenchmarkId::new("sqrt", "machine"), |bench| {
+        bench.iter(|| black_box(&a).sqrt());
+    });
+    for name in ["add", "mul", "div", "sqrt"] {
+        let ball_op = balls_op(name).expect("ball op");
+        group.bench_function(BenchmarkId::new(name, "ball"), |bench| {
+            bench.iter(|| ball_op(black_box(&ba), black_box(&bb), 53));
+        });
+    }
+    group.finish();
+}
+
 /// The same value as our float, through its integer mantissa and exponent.
 fn to_ours(x: &Float) -> ball::Float {
     let (m, e) = x.to_integer_exp().expect("finite");
@@ -296,6 +324,6 @@ fn config() -> Criterion {
 criterion_group! {
     name = benches;
     config = config();
-    targets = short_products, arithmetic, mag_ops, constants, functions
+    targets = short_products, arithmetic, mag_ops, machine, constants, functions
 }
 criterion_main!(benches);
