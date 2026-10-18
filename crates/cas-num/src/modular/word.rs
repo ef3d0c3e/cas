@@ -1,5 +1,10 @@
 //! Arithmetic modulo a single limb.
+#![allow(
+    clippy::many_single_char_names,
+    reason = "the algorithms use the textbook names (n, m, p, q, t, u, x)"
+)]
 
+use super::ring::{limb_inverse, window_bits};
 use crate::kernel::div::{div_2by1, reciprocal_2by1};
 use crate::{Integer, Limb, Natural};
 
@@ -11,7 +16,8 @@ mod tests;
 /// Elements are plain `u64` values in `0..n`, so they can be stored in
 /// vectors and compared directly. Products are reduced by one division of a
 /// double limb with a precomputed reciprocal (Möller–Granlund), which works
-/// for every modulus, odd or even.
+/// for every modulus, odd or even. Powers modulo an odd `n` run in Montgomery
+/// form inside [`ModWord::pow`], with sliding windows.
 ///
 /// The arithmetic methods require reduced operands (in `0..n`), which is
 /// checked in debug builds only; otherwise the result is unspecified. The
@@ -23,6 +29,8 @@ pub struct ModWord {
     shift: u32,
     /// `reciprocal_2by1(n << shift)`.
     v: Limb,
+    /// `-n^(-1) mod B` for an odd `n`, else 0.
+    ninv: Limb,
 }
 
 impl ModWord {
@@ -39,6 +47,11 @@ impl ModWord {
             n,
             shift,
             v: reciprocal_2by1(n << shift),
+            ninv: if n & 1 == 1 {
+                limb_inverse(n).wrapping_neg()
+            } else {
+                0
+            },
         }
     }
 
@@ -150,18 +163,44 @@ impl ModWord {
         self.pow_bits(a, e.bit_length(), |i| e.bit(i))
     }
 
-    /// Left-to-right binary exponentiation over the `bits` exponent bits
-    /// given by `bit`.
+    /// `a^e` over the `bits` exponent bits given by `bit`: in Montgomery
+    /// form with sliding windows for an odd modulus (from `a R` to `a^e R`,
+    /// `R = B`, then back), else by left-to-right binary exponentiation.
     fn pow_bits(&self, a: Limb, bits: u64, bit: impl Fn(u64) -> bool) -> Limb {
         debug_assert!(a < self.n);
-        let mut r = self.reduce(1);
-        for i in (0..bits).rev() {
-            r = self.mul(r, r);
-            if bit(i) {
-                r = self.mul(r, a);
+        if self.ninv == 0 || bits == 0 {
+            let mut r = self.reduce(1);
+            for i in (0..bits).rev() {
+                r = self.mul(r, r);
+                if bit(i) {
+                    r = self.mul(r, a);
+                }
             }
+            return r;
         }
-        r
+        let x = self.rem_2by1(a, 0);
+        let r = sliding_window(bits, &bit, x, |p, q| self.mont_mul(p, q));
+        self.mont_mul(r, 1)
+    }
+
+    /// `p q R^(-1) mod n` for an odd `n` and `p, q < n`: REDC of the double
+    /// limb `t = p q`, with `m = t ninv mod B` making `t + m n` divisible by
+    /// `B`. The low limbs cancel, carrying exactly when `t`'s is non-zero; the
+    /// high limbs add up to less than `2n`.
+    #[inline]
+    #[expect(clippy::cast_possible_truncation, reason = "splitting double limbs")]
+    fn mont_mul(&self, p: Limb, q: Limb) -> Limb {
+        let t = u128::from(p) * u128::from(q);
+        let m = (t as Limb).wrapping_mul(self.ninv);
+        let mn = u128::from(m) * u128::from(self.n);
+        let carry = Limb::from(t as Limb != 0);
+        let (u, over) =
+            ((t >> Limb::BITS) as Limb).overflowing_add((mn >> Limb::BITS) as Limb + carry);
+        if over || u >= self.n {
+            u.wrapping_sub(self.n)
+        } else {
+            u
+        }
     }
 
     /// The inverse of `a` modulo `n`, or `None` if they are not coprime.
@@ -185,4 +224,55 @@ impl ModWord {
         let t = t0.rem_euclid(i128::from(self.n)) as Limb;
         Some(t)
     }
+}
+
+/// `x^e` for the `bits`-bit exponent `e` given by `bit` (top bit set), by
+/// left-to-right sliding windows of up to [`window_bits`] bits ending in a
+/// one, with `mul` the product: the odd powers `x, x^3, …` are tabled, and
+/// each window costs one product after its squarings.
+pub(super) fn sliding_window<T: Copy + Default>(
+    bits: u64,
+    bit: &impl Fn(u64) -> bool,
+    x: T,
+    mul: impl Fn(T, T) -> T,
+) -> T {
+    // Width 8 already suits exponents of 4609 to 11520 bits.
+    let w = window_bits(bits).min(8);
+    // table[i] = x^(2i + 1).
+    let mut table = [T::default(); 1 << 7];
+    table[0] = x;
+    let count = 1usize << (w - 1);
+    if count > 1 {
+        let x2 = mul(x, x);
+        for i in 1..count {
+            table[i] = mul(table[i - 1], x2);
+        }
+    }
+    // The window of bits i - 1 down to l, at most w long and ending in a one.
+    let window = |i: u64| {
+        let mut l = i.saturating_sub(w);
+        while !bit(l) {
+            l += 1;
+        }
+        let v = (l..i)
+            .rev()
+            .fold(0usize, |v, j| (v << 1) | usize::from(bit(j)));
+        (l, v)
+    };
+    let (mut i, v) = window(bits);
+    let mut r = table[v >> 1];
+    while i > 0 {
+        if !bit(i - 1) {
+            r = mul(r, r);
+            i -= 1;
+            continue;
+        }
+        let (l, v) = window(i);
+        for _ in l..i {
+            r = mul(r, r);
+        }
+        r = mul(r, table[v >> 1]);
+        i = l;
+    }
+    r
 }

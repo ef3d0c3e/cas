@@ -9,8 +9,9 @@ use proptest::prelude::*;
 use rug::Integer;
 use rug::integer::IsPrime;
 
-use super::{U64_BASES, is_prime_u64, strong_lucas};
-use crate::modular::ModRing;
+use super::strong_probable_prime as spp;
+use super::{TestRing, U64_BASES, is_prime_u64, strong_lucas};
+use crate::modular::{ModDouble, ModRing};
 use crate::testkit::{Mag, ToRug, strategy};
 use crate::{Natural, Primality};
 
@@ -294,4 +295,47 @@ fn primes_dividing_a_base() {
         }
     }
     assert!(checked >= 1, "no base has a prime factor past the table");
+}
+
+/// Odd two-limb values: primes, products of two primes near `2^64`, near
+/// squares and plain random ones.
+fn two_limb_odd() -> BoxedStrategy<Natural> {
+    let two_limbs = (any::<u64>(), 1..u64::MAX)
+        .prop_map(|(lo, hi)| Integer::from(lo) | (Integer::from(hi) << 64));
+    prop_oneof![
+        two_limbs.clone(),
+        two_limbs.clone().prop_map(|n: Integer| n.next_prime()),
+        (any::<u32>(), any::<u32>()).prop_map(|(a, b)| {
+            let p = Integer::from((1u64 << 32) + u64::from(a)).next_prime();
+            let q = Integer::from((1u64 << 40) + u64::from(b)).next_prime();
+            p * q
+        }),
+        two_limbs.prop_map(|n: Integer| {
+            let r = n.sqrt();
+            r.clone() * (r + 2)
+        }),
+    ]
+    .prop_map(|n| Mag::from_rug(&(n | 1)).to_natural())
+    .prop_filter("two limbs", |n| n.limb_len() == 2)
+    .boxed()
+}
+
+proptest! {
+    /// The `u128` ring gives the same Miller–Rabin and Lucas answers as
+    /// `ModRing`, base by base.
+    #[test]
+    fn two_limb_ring_matches(n in two_limb_odd(), base in 2..1000u64) {
+        let [lo, hi] = *n.limbs() else { unreachable!() };
+        let double = ModDouble::new(u128::from(lo) | u128::from(hi) << 64);
+        let ring = ModRing::new(n.clone());
+        let b = i64::try_from(base).unwrap();
+        prop_assert_eq!(
+            spp(&double, &n, &double.small(b)),
+            spp(&ring, &n, &ring.small(b))
+        );
+        if !n.is_perfect_square() {
+            prop_assert_eq!(strong_lucas(&double, &n), strong_lucas(&ring, &n));
+        }
+        prop_assert_eq!(n.primality(), expected(&n.to_rug()));
+    }
 }

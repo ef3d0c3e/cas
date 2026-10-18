@@ -6,7 +6,7 @@
 
 use super::Primality;
 use super::small::{SIEVE_LIMIT, TRIAL_LIMIT, groups, is_small_prime, primes};
-use crate::modular::{ModRing, ModWord, Residue};
+use crate::modular::{ModDouble, ModRing, ModWord, Residue};
 use crate::{Integer, Natural};
 
 #[cfg(test)]
@@ -139,15 +139,110 @@ fn has_small_factor(n: &Natural) -> bool {
         })
 }
 
-/// Baillie–PSW for odd `n` above 2^64 without small factors.
-fn baillie_psw(n: &Natural) -> bool {
-    let ring = ModRing::new(n.clone());
-    let two = ring.elem(&Natural::from(2u64));
-    strong_probable_prime(&ring, n, &two) && !n.is_perfect_square() && strong_lucas(&ring, n)
+/// The ring operations the probable-prime tests use, so that a two-limb
+/// modulus can run them on `u128` ([`ModDouble`]) and any other on
+/// [`ModRing`].
+trait TestRing {
+    type Elem: Clone + PartialEq;
+    fn small(&self, a: i64) -> Self::Elem;
+    fn one(&self) -> Self::Elem;
+    fn is_zero(&self, x: &Self::Elem) -> bool;
+    fn add(&self, x: &Self::Elem, y: &Self::Elem) -> Self::Elem;
+    fn sub(&self, x: &Self::Elem, y: &Self::Elem) -> Self::Elem;
+    fn neg(&self, x: &Self::Elem) -> Self::Elem;
+    fn half(&self, x: &Self::Elem) -> Self::Elem;
+    fn mul(&self, x: &Self::Elem, y: &Self::Elem) -> Self::Elem;
+    fn square(&self, x: &Self::Elem) -> Self::Elem;
+    fn pow(&self, x: &Self::Elem, e: &Natural) -> Self::Elem;
 }
 
-/// Miller–Rabin to base `a` (a residue of `ring`, modulo odd `n > 1`).
-fn strong_probable_prime(ring: &ModRing, n: &Natural, a: &Residue) -> bool {
+impl TestRing for ModRing {
+    type Elem = Residue;
+    fn small(&self, a: i64) -> Residue {
+        self.elem_integer(&Integer::from(a))
+    }
+    fn one(&self) -> Residue {
+        ModRing::one(self)
+    }
+    fn is_zero(&self, x: &Residue) -> bool {
+        ModRing::is_zero(self, x)
+    }
+    fn add(&self, x: &Residue, y: &Residue) -> Residue {
+        ModRing::add(self, x, y)
+    }
+    fn sub(&self, x: &Residue, y: &Residue) -> Residue {
+        ModRing::sub(self, x, y)
+    }
+    fn neg(&self, x: &Residue) -> Residue {
+        ModRing::neg(self, x)
+    }
+    fn half(&self, x: &Residue) -> Residue {
+        ModRing::half(self, x)
+    }
+    fn mul(&self, x: &Residue, y: &Residue) -> Residue {
+        ModRing::mul(self, x, y)
+    }
+    fn square(&self, x: &Residue) -> Residue {
+        ModRing::square(self, x)
+    }
+    fn pow(&self, x: &Residue, e: &Natural) -> Residue {
+        ModRing::pow(self, x, e)
+    }
+}
+
+impl TestRing for ModDouble {
+    type Elem = u128;
+    fn small(&self, a: i64) -> u128 {
+        // |a| is far below n > 2^64.
+        let m = self.to_mont(u128::from(a.unsigned_abs()));
+        if a < 0 { ModDouble::neg(*self, m) } else { m }
+    }
+    fn one(&self) -> u128 {
+        ModDouble::one(*self)
+    }
+    fn is_zero(&self, x: &u128) -> bool {
+        *x == 0
+    }
+    fn add(&self, x: &u128, y: &u128) -> u128 {
+        ModDouble::add(*self, *x, *y)
+    }
+    fn sub(&self, x: &u128, y: &u128) -> u128 {
+        ModDouble::sub(*self, *x, *y)
+    }
+    fn neg(&self, x: &u128) -> u128 {
+        ModDouble::neg(*self, *x)
+    }
+    fn half(&self, x: &u128) -> u128 {
+        ModDouble::half(*self, *x)
+    }
+    fn mul(&self, x: &u128, y: &u128) -> u128 {
+        ModDouble::mul(*self, *x, *y)
+    }
+    fn square(&self, x: &u128) -> u128 {
+        ModDouble::mul(*self, *x, *x)
+    }
+    fn pow(&self, x: &u128, e: &Natural) -> u128 {
+        self.pow_mont(*x, e)
+    }
+}
+
+/// Baillie–PSW for odd `n` above 2^64 without small factors, on `u128` for
+/// two limbs.
+fn baillie_psw(n: &Natural) -> bool {
+    if let [lo, hi] = *n.limbs() {
+        let ring = ModDouble::new(u128::from(lo) | u128::from(hi) << 64);
+        return baillie_psw_in(&ring, n);
+    }
+    baillie_psw_in(&ModRing::new(n.clone()), n)
+}
+
+fn baillie_psw_in<R: TestRing>(ring: &R, n: &Natural) -> bool {
+    let two = ring.small(2);
+    strong_probable_prime(ring, n, &two) && !n.is_perfect_square() && strong_lucas(ring, n)
+}
+
+/// Miller–Rabin to base `a` (an element of `ring`, modulo odd `n > 1`).
+fn strong_probable_prime<R: TestRing>(ring: &R, n: &Natural, a: &R::Elem) -> bool {
     let n1 = n - 1u64;
     let s = n1.trailing_zeros().expect("n > 1");
     let minus_one = ring.neg(&ring.one());
@@ -174,7 +269,7 @@ fn strong_probable_prime(ring: &ModRing, n: &Natural, a: &Residue) -> bool {
 ///
 /// `n` is odd, above the trial-division bound and not a square (else no
 /// such `D` exists).
-fn strong_lucas(ring: &ModRing, n: &Natural) -> bool {
+fn strong_lucas<R: TestRing>(ring: &R, n: &Natural) -> bool {
     let n_int = Integer::from(n);
     let mut d = 5i64;
     loop {
@@ -186,8 +281,8 @@ fn strong_lucas(ring: &ModRing, n: &Natural) -> bool {
         }
     }
     let q = (1 - d) / 4;
-    let dd = ring.elem_integer(&Integer::from(d));
-    let qq = ring.elem_integer(&Integer::from(q));
+    let dd = ring.small(d);
+    let qq = ring.small(q);
     let n1 = n + 1u64;
     let s = n1.trailing_zeros().expect("n + 1 > 0");
     let k = &n1 >> s;

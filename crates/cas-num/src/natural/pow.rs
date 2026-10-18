@@ -1,7 +1,7 @@
 //! Powers and modular powers.
 
 use super::Natural;
-use crate::modular::{ModRing, ModWord};
+use crate::modular::{ModDouble, ModRing, ModWord, pow_mod_even};
 
 #[cfg(test)]
 mod tests;
@@ -50,9 +50,10 @@ impl Natural {
 
     /// `self^e mod m`, in `0..m`.
     ///
-    /// A single-limb modulus uses [`ModWord`]; a larger one, [`ModRing`]
-    /// (Montgomery multiplication for odd moduli, sliding-window
-    /// exponentiation).
+    /// A single-limb modulus uses [`ModWord`]; a two-limb one `u128`
+    /// arithmetic (Montgomery form when odd, else split by the Chinese
+    /// remainder theorem); a larger one [`ModRing`] (Montgomery
+    /// multiplication for odd moduli, sliding-window exponentiation).
     ///
     /// # Panics
     ///
@@ -63,6 +64,20 @@ impl Natural {
         if let [n] = *m.limbs() {
             let w = ModWord::new(n);
             return Natural::from(w.pow_natural(w.reduce_natural(self), e));
+        }
+        if let [lo, hi] = *m.limbs() {
+            let n = u128::from(lo) | u128::from(hi) << 64;
+            let a = self % m;
+            let a = a
+                .limbs()
+                .iter()
+                .rev()
+                .fold(0u128, |v, &l| v << 64 | u128::from(l));
+            return Natural::from(if lo & 1 == 1 {
+                ModDouble::new(n).pow(a, e)
+            } else {
+                pow_mod_even(a, e, n)
+            });
         }
         let ring = ModRing::new(m.clone());
         ring.to_natural(&ring.pow(&ring.elem(self), e))

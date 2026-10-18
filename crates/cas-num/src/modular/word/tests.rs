@@ -106,6 +106,12 @@ differential! {
         gmp: Integer::from(a).pow_mod(&e.to_rug(), &Integer::from(n)).unwrap(),
     }
 
+    /// Exponents long enough for every window width (8 from 4609 bits).
+    fn pow_natural_long((n, a, _b) in operands(), e in strategy::natural_up_to(130)) {
+        ours: ModWord::new(n).pow_natural(a, &e.to_natural()),
+        gmp: Integer::from(a).pow_mod(&e.to_rug(), &Integer::from(n)).unwrap(),
+    }
+
     fn inv((n, a, _b) in operands()) {
         ours: ModWord::new(n).inv(a),
         gmp: Integer::from(a).invert(&Integer::from(n)).ok(),

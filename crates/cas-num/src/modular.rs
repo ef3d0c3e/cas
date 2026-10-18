@@ -17,11 +17,13 @@
 //! - [`rational_reconstruction`] recovers a fraction `n/d` from `n d^(-1) mod m`.
 
 mod crt;
+mod double;
 mod reconstruct;
 mod ring;
 mod word;
 
 pub use crt::{CrtBasis, crt};
+pub(crate) use double::{ModDouble, pow_mod_even};
 pub use reconstruct::{rational_reconstruction, rational_reconstruction_with_bounds};
 pub use ring::{ModRing, Residue};
 pub use word::ModWord;

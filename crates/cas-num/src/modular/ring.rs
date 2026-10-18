@@ -471,7 +471,7 @@ fn redc_n(
 /// odd powers, while the squarings are `bits` for every width. Width `w + 1`
 /// wins once `bits > 2^(w-1) (w + 1) (w + 2)`: from 7, 25, 81, 241, 673,
 /// 1793, 4609 bits on.
-fn window_bits(bits: u64) -> u64 {
+pub(super) fn window_bits(bits: u64) -> u64 {
     let mut w = 1;
     while w < 16 && bits > (1 << (w - 1)) * (w + 1) * (w + 2) {
         w += 1;
@@ -481,7 +481,7 @@ fn window_bits(bits: u64) -> u64 {
 
 /// `a^(-1) mod B` for odd `a`, by Newton's iteration: each step doubles the
 /// number of correct low bits, and `a` is its own inverse modulo 8.
-fn limb_inverse(a: Limb) -> Limb {
+pub(super) fn limb_inverse(a: Limb) -> Limb {
     debug_assert_eq!(a & 1, 1);
     let mut x = a;
     for _ in 0..5 {
