@@ -10,6 +10,8 @@
 //!   never allocate.
 //! - [`Rational`]: rational numbers, always reduced with a positive
 //!   denominator.
+//! - [`Complex`]: complex rationals ℚ(i), with the Gaussian integers ℤ\[i\] as
+//!   the values with integer parts.
 //! - [`Primality`], [`Factorization`]: primality tests and factorisation,
 //!   as methods of [`Natural`] ([`Natural::primality`],
 //!   [`Natural::factor`]).
@@ -22,6 +24,7 @@
 
 pub mod algebra;
 pub mod ball;
+mod complex;
 mod error;
 mod integer;
 pub mod kernel;
@@ -34,6 +37,7 @@ mod tuning {
     include!(concat!(env!("OUT_DIR"), "/tuning.rs"));
 }
 
+pub use complex::Complex;
 pub use error::{OutOfRangeError, ParseErrorKind, ParseNumberError};
 pub use integer::{Integer, Rounding};
 pub use natural::Natural;

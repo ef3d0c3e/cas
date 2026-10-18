@@ -155,6 +155,15 @@ impl ToRug for crate::Rational {
     }
 }
 
+impl ToRug for crate::Complex {
+    type Rug = (rug::Rational, rug::Rational);
+
+    /// The two parts; also checks their canonical form.
+    fn to_rug(&self) -> Self::Rug {
+        (self.re().to_rug(), self.im().to_rug())
+    }
+}
+
 impl Signed {
     /// The same value as an [`Integer`].
     pub(crate) fn to_integer(&self) -> crate::Integer {

@@ -8,10 +8,13 @@
 
 use proptest::prelude::*;
 
-use super::{BigPrimeField, EuclideanDomain, Field, Integers, Rationals, Ring, WordPrimeField};
+use super::{
+    BigPrimeField, EuclideanDomain, Field, GaussianIntegers, GaussianRationals, Integers,
+    Rationals, Ring, WordPrimeField,
+};
 use crate::modular::{ModRing, ModWord};
 use crate::testkit::{ToRug, strategy};
-use crate::{Integer, Natural, Rational};
+use crate::{Complex, Integer, Natural, Rational};
 
 /// Fails unless `x == y`, printing both.
 fn same<T: PartialEq + std::fmt::Debug>(x: &T, y: &T, law: &str) -> Result<(), TestCaseError> {
@@ -271,6 +274,25 @@ fn rational() -> impl Strategy<Value = Rational> {
     strategy::rational().prop_map(|(n, d)| Rational::new(n.to_integer(), d.to_integer()))
 }
 
+/// Complex rationals (or Gaussian integers) with parts of at most two limbs,
+/// so that `pow(13)` in the ring laws stays small.
+fn small_complex(integral: bool) -> impl Strategy<Value = Complex> {
+    let part = move || {
+        (strategy::signed_up_to(2), strategy::signed_up_to(1)).prop_filter_map(
+            "zero denominator",
+            move |(n, d)| {
+                let d = if integral {
+                    Integer::ONE
+                } else {
+                    d.to_integer()
+                };
+                Rational::checked_new(n.to_integer(), d)
+            },
+        )
+    };
+    (part(), part()).prop_map(|(re, im)| Complex::new(re, im))
+}
+
 fn small_poly() -> impl Strategy<Value = Vec<i64>> {
     prop::collection::vec(-50i64..50, 0..6)
 }
@@ -289,6 +311,21 @@ proptest! {
         prop_assert_eq!(Integers.normal_form(&Integer::ZERO), (Integer::ZERO, Integer::ONE));
         // The provided Euclidean algorithm agrees with GMP.
         prop_assert_eq!(PlainIntegers.gcd(&a, &b).to_rug(), a.to_rug().gcd(&b.to_rug()));
+    }
+
+    #[test]
+    fn gaussian_rationals(a in small_complex(false), b in small_complex(false), c in small_complex(false), m in strategy::integer(), n in strategy::integer()) {
+        let (m, n) = (m.to_integer(), n.to_integer());
+        ring_laws(&GaussianRationals, &a, &b, &c, &m, &n)?;
+        field_laws(&GaussianRationals, &a, &b)?;
+        gcd_laws(&GaussianRationals, &a, &b)?;
+    }
+
+    #[test]
+    fn gaussian_integers(a in small_complex(true), b in small_complex(true), c in small_complex(true), m in strategy::integer(), n in strategy::integer()) {
+        let (m, n) = (m.to_integer(), n.to_integer());
+        ring_laws(&GaussianIntegers, &a, &b, &c, &m, &n)?;
+        gcd_laws(&GaussianIntegers, &a, &b)?;
     }
 
     #[test]

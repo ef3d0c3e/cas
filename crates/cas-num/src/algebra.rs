@@ -22,9 +22,11 @@
 //! assert_eq!(gcd_of_all(&f7, &[3, 5]), 1);
 //! ```
 //!
-//! Instances: [`Integers`] (ℤ), [`Rationals`] (ℚ), [`ModWord`] and
+//! Instances: [`Integers`] (ℤ), [`Rationals`] (ℚ), [`GaussianIntegers`]
+//! (ℤ\[i\]), [`GaussianRationals`] (ℚ(i)), [`ModWord`] and
 //! [`ModRing`] (ℤ/nℤ, rings only), and [`PrimeField`] over either (𝔽ₚ).
 
+pub use crate::complex::{GaussianIntegers, GaussianRationals};
 use crate::modular::{ModRing, ModWord, Residue};
 use crate::{Integer, Natural, Rational};
 
