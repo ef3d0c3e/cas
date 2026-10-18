@@ -11,7 +11,7 @@ use rug::integer::IsPrime;
 
 use super::strong_probable_prime as spp;
 use super::{TestRing, U64_BASES, is_prime_u64, strong_lucas};
-use crate::modular::{FIXED_MAX, ModDouble, ModFixed, ModRing};
+use crate::modular::{FIXED_MAX, ModDouble, ModFixed, ModRing, RingWork};
 use crate::testkit::{Mag, ToRug, strategy};
 use crate::{Natural, Primality};
 
@@ -226,7 +226,7 @@ fn strong_lucas_matches_definition() {
         if nat.is_perfect_square() {
             continue;
         }
-        let ours = strong_lucas(&ModRing::new(nat), &Natural::from(n));
+        let ours = strong_lucas(&RingWork::new(&ModRing::new(nat)), &Natural::from(n));
         assert_eq!(ours, naive_strong_lucas(i128::from(n)), "{n}");
     }
 }
@@ -239,7 +239,10 @@ fn strong_lucas_pseudoprimes() {
         5459u64, 5777, 10877, 16109, 18971, 22499, 24569, 25199, 40309, 58519,
     ] {
         let nat = Natural::from(n);
-        assert!(strong_lucas(&ModRing::new(nat.clone()), &nat), "{n}");
+        assert!(
+            strong_lucas(&RingWork::new(&ModRing::new(nat.clone())), &nat),
+            "{n}"
+        );
         assert!(!gmp_is_prime(&Integer::from(n)), "{n} is composite");
         assert_eq!(nat.primality(), Primality::NotPrime);
     }
@@ -327,7 +330,8 @@ proptest! {
     fn two_limb_ring_matches(n in two_limb_odd(), base in 2..1000u64) {
         let [lo, hi] = *n.limbs() else { unreachable!() };
         let double = ModDouble::new(u128::from(lo) | u128::from(hi) << 64);
-        let ring = ModRing::new(n.clone());
+        let modring = ModRing::new(n.clone());
+        let ring = RingWork::new(&modring);
         let b = i64::try_from(base).unwrap();
         prop_assert_eq!(
             spp(&double, &n, &double.small(b)),
@@ -373,7 +377,8 @@ fn fixed_len_odd() -> BoxedStrategy<Natural> {
 /// `ModFixed::<K>`, against `ModRing`.
 fn fixed_matches<const K: usize>(n: &Natural, base: i64) -> Result<(), TestCaseError> {
     let fixed = ModFixed::<K>::new(n);
-    let ring = ModRing::new(n.clone());
+    let modring = ModRing::new(n.clone());
+    let ring = RingWork::new(&modring);
     prop_assert_eq!(
         spp(&fixed, n, &fixed.small(base)),
         spp(&ring, n, &ring.small(base))
@@ -399,5 +404,29 @@ proptest! {
             k => unreachable!("{k} limbs"),
         }
         prop_assert_eq!(n.primality(), expected(&n.to_rug()));
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    /// Above eight limbs (the lazily reduced Lucas step): primes,
+    /// semiprimes and plain odd values against GMP.
+    #[test]
+    fn primality_beyond_fixed(
+        n in strategy::natural_with_len(9..=20usize),
+        kind in 0..3u8,
+    ) {
+        let n = n.to_rug() | 1u32;
+        let n = match kind {
+            0 => n.next_prime(),
+            1 => {
+                let p = (n.clone() >> 320u32).next_prime();
+                p * n.keep_bits(320).next_prime()
+            }
+            _ => n,
+        };
+        let nat = Mag::from_rug(&n).to_natural();
+        prop_assert_eq!(nat.primality(), expected(&n));
     }
 }

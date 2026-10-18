@@ -13,13 +13,15 @@
     reason = "the algorithms use the textbook names (n, k, r, t, q, u)"
 )]
 
+use std::cell::RefCell;
 use std::cmp::Ordering;
 
+use crate::kernel::div::{div_2by1, reciprocal_2by1};
 use crate::kernel::mul::mullo::{mullo, mullo_scratch_len};
 use crate::kernel::mul::{addmul_2_carries, mul_wrap, mul_wrap_scratch_len, wraps_cyclically};
 use crate::kernel::{
-    self, add_1_assign, add_n, add_n_assign, cmp_n, div_rem, div_rem_scratch_len, mul_scratch_len,
-    sqr_scratch_len, sub_1_assign, sub_assign, sub_n, sub_n_assign,
+    self, add_1_assign, add_n, add_n_assign, addmul_1, cmp_n, div_rem, div_rem_scratch_len,
+    mul_scratch_len, sqr_scratch_len, sub_1_assign, sub_assign, sub_n, sub_n_assign, submul_1,
 };
 use crate::{Integer, Limb, Natural};
 
@@ -47,10 +49,27 @@ pub struct ModRing {
 ///
 /// The representation is internal (Montgomery form for odd moduli) but
 /// unique, so equality and hashing are by value within one ring.
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(PartialEq, Eq, Hash, Debug)]
 pub struct Residue {
     /// Exactly as many limbs as the modulus, below it.
     limbs: Box<[Limb]>,
+}
+
+impl Clone for Residue {
+    fn clone(&self) -> Self {
+        Residue {
+            limbs: self.limbs.clone(),
+        }
+    }
+
+    /// Reuses the buffer for a residue of the same ring.
+    fn clone_from(&mut self, source: &Self) {
+        if self.limbs.len() == source.limbs.len() {
+            self.limbs.copy_from_slice(&source.limbs);
+        } else {
+            *self = source.clone();
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -206,37 +225,50 @@ impl ModRing {
     /// `x + y`.
     #[must_use]
     pub fn add(&self, x: &Residue, y: &Residue) -> Residue {
-        self.check(x);
-        self.check(y);
-        let mut r = vec![0; self.len()];
-        let carry = add_n(&mut r, &x.limbs, &y.limbs);
-        if carry != 0 || cmp_n(&r, self.n.limbs()) != Ordering::Less {
-            sub_n_assign(&mut r, self.n.limbs());
-        }
-        Self::residue(r.into_boxed_slice())
+        let mut r = self.zero();
+        self.add_into(&mut r.limbs, x, y);
+        r
     }
 
     /// `x - y`.
     #[must_use]
     pub fn sub(&self, x: &Residue, y: &Residue) -> Residue {
-        self.check(x);
-        self.check(y);
-        let mut r = vec![0; self.len()];
-        if sub_n(&mut r, &x.limbs, &y.limbs) != 0 {
-            add_n_assign(&mut r, self.n.limbs());
-        }
-        Self::residue(r.into_boxed_slice())
+        let mut r = self.zero();
+        self.sub_into(&mut r.limbs, x, y);
+        r
     }
 
     /// `-x`.
     #[must_use]
     pub fn neg(&self, x: &Residue) -> Residue {
-        if self.is_zero(x) {
-            return x.clone();
+        let mut r = self.zero();
+        self.neg_into(&mut r.limbs, x);
+        r
+    }
+
+    fn add_into(&self, r: &mut [Limb], x: &Residue, y: &Residue) {
+        self.check(x);
+        self.check(y);
+        let carry = add_n(r, &x.limbs, &y.limbs);
+        if carry != 0 || cmp_n(r, self.n.limbs()) != Ordering::Less {
+            sub_n_assign(r, self.n.limbs());
         }
-        let mut r = vec![0; self.len()];
-        sub_n(&mut r, self.n.limbs(), &x.limbs);
-        Self::residue(r.into_boxed_slice())
+    }
+
+    fn sub_into(&self, r: &mut [Limb], x: &Residue, y: &Residue) {
+        self.check(x);
+        self.check(y);
+        if sub_n(r, &x.limbs, &y.limbs) != 0 {
+            add_n_assign(r, self.n.limbs());
+        }
+    }
+
+    fn neg_into(&self, r: &mut [Limb], x: &Residue) {
+        if self.is_zero(x) {
+            r.fill(0);
+        } else {
+            sub_n(r, self.n.limbs(), &x.limbs);
+        }
     }
 
     /// `x y`.
@@ -383,6 +415,16 @@ impl ModRing {
 
     /// `r = t R^(-1) mod n` for `t = s.t < n R`, in `0..n`.
     fn redc(&self, r: &mut [Limb], s: &mut Scratch) {
+        let carry = self.redc_carry(r, s);
+        if carry != 0 || cmp_n(r, self.n.limbs()) != Ordering::Less {
+            sub_n_assign(r, self.n.limbs());
+        }
+    }
+
+    /// `r + carry B^k = (t + q n) / R` for `t = s.t` (any `2k` limbs) and
+    /// the `q < R` that makes it exact: congruent to `t R^(-1)`, and below
+    /// `B^k + n`. Clobbers `s.t`.
+    fn redc_carry(&self, r: &mut [Limb], s: &mut Scratch) -> Limb {
         let Form::Montgomery {
             ninv,
             ninv2,
@@ -393,13 +435,187 @@ impl ModRing {
             unreachable!("REDC needs an odd modulus");
         };
         let n = self.n.limbs();
-        let carry = if ninv_full.is_empty() {
+        if ninv_full.is_empty() {
             redc_2(r, &mut s.t, n, *ninv, *ninv2)
         } else {
             redc_n(r, &s.t, n, ninv_full, &mut s.u, &mut s.work)
+        }
+    }
+}
+
+/// A [`ModRing`] with its product buffers, for loops of steps that write
+/// into existing residues and so allocate nothing (the probable-prime
+/// tests). Each method's output is a residue of the ring, overwritten.
+pub(crate) struct RingWork<'a> {
+    ring: &'a ModRing,
+    s: RefCell<Scratch>,
+    /// Four products of `2k + 1` limbs and a `k`-limb difference, for
+    /// [`RingWork::lucas_double`].
+    wide: RefCell<Vec<Limb>>,
+    /// `n`'s top limb after shifting `n` left by `shift` to set its top bit,
+    /// and that limb's reciprocal, for [`RingWork::reduce_top`].
+    shift: u32,
+    top: Limb,
+    recip: Limb,
+}
+
+impl<'a> RingWork<'a> {
+    pub(crate) fn new(ring: &'a ModRing) -> Self {
+        let n = ring.n.limbs();
+        let k = n.len();
+        let shift = n[k - 1].leading_zeros();
+        let below = if k >= 2 { n[k - 2] } else { 0 };
+        let top = if shift == 0 {
+            n[k - 1]
+        } else {
+            n[k - 1] << shift | below >> (Limb::BITS - shift)
         };
-        if carry != 0 || cmp_n(r, n) != Ordering::Less {
-            sub_n_assign(r, n);
+        RingWork {
+            ring,
+            s: RefCell::new(ring.scratch()),
+            wide: RefCell::new(vec![0; 4 * (2 * k + 1) + k]),
+            shift,
+            top,
+            recip: reciprocal_2by1(top),
+        }
+    }
+
+    /// The ring.
+    pub(crate) fn ring(&self) -> &'a ModRing {
+        self.ring
+    }
+
+    /// `r = x + y`.
+    pub(crate) fn add(&self, r: &mut Residue, x: &Residue, y: &Residue) {
+        self.ring.add_into(&mut r.limbs, x, y);
+    }
+
+    /// `r = x - y`.
+    pub(crate) fn sub(&self, r: &mut Residue, x: &Residue, y: &Residue) {
+        self.ring.sub_into(&mut r.limbs, x, y);
+    }
+
+    /// `r = -x`.
+    pub(crate) fn neg(&self, r: &mut Residue, x: &Residue) {
+        self.ring.neg_into(&mut r.limbs, x);
+    }
+
+    /// `r = x y`.
+    pub(crate) fn mul(&self, r: &mut Residue, x: &Residue, y: &Residue) {
+        self.ring.check(x);
+        self.ring.check(y);
+        let s = &mut self.s.borrow_mut();
+        self.ring.mul_into(&mut r.limbs, &x.limbs, &y.limbs, s);
+    }
+
+    /// `r = x^2`.
+    pub(crate) fn square(&self, r: &mut Residue, x: &Residue) {
+        self.ring.check(x);
+        let s = &mut self.s.borrow_mut();
+        self.ring.sqr_into(&mut r.limbs, &x.limbs, s);
+    }
+
+    /// One doubling step of the Lucas sequence `U` for `P = 1` and `Q = q`,
+    /// `|q| < 2^8`, modulo the odd modulus: `(u, u1) = (U_j, U_(j+1))`
+    /// becomes `(U_(2j), U_(2j+1))`, or `(U_(2j+1), U_(2j+2))` if `up`.
+    ///
+    /// With `A = U_j^2`, `B = U_(j+1)^2` and `C = (U_j - U_(j+1))^2`,
+    /// `U_(2j) = B - C`, `U_(2j+1) = B - Q A` and `U_(2j+2) = U_(2j+1) -
+    /// Q U_(2j)`. The three squares stay unreduced, and only the two
+    /// combinations needed are reduced: two REDCs per step instead of
+    /// three. Each combination gets a multiple of `n R` that keeps it
+    /// non-negative, which REDC maps to a multiple of `n`.
+    pub(crate) fn lucas_double(&self, u: &mut Residue, u1: &mut Residue, q: i64, up: bool) {
+        self.ring.check(u);
+        self.ring.check(u1);
+        let n = self.ring.n.limbs();
+        let k = n.len();
+        let m = q.unsigned_abs();
+        debug_assert!(m < 1 << 8, "lucas_double: |Q| too large");
+        let s = &mut *self.s.borrow_mut();
+        let wide = &mut *self.wide.borrow_mut();
+        let (a, rest) = wide.split_at_mut(2 * k + 1);
+        let (b, rest) = rest.split_at_mut(2 * k + 1);
+        let (x, rest) = rest.split_at_mut(2 * k + 1);
+        let (c, d) = rest.split_at_mut(2 * k + 1);
+        kernel::sqr(&mut a[..2 * k], &u.limbs, &mut s.work);
+        kernel::sqr(&mut b[..2 * k], &u1.limbs, &mut s.work);
+        // |U_j - U_(j+1)|, whose square is C.
+        if cmp_n(&u.limbs, &u1.limbs) == Ordering::Less {
+            sub_n(d, &u1.limbs, &u.limbs);
+        } else {
+            sub_n(d, &u.limbs, &u1.limbs);
+        }
+        kernel::sqr(&mut c[..2 * k], d, &mut s.work);
+        // x = B - C + n R, in (0, 2 n R).
+        x[..2 * k].copy_from_slice(&b[..2 * k]);
+        let carry = add_n_assign(&mut x[k..2 * k], n);
+        let borrow = sub_n_assign(&mut x[..2 * k], &c[..2 * k]);
+        x[2 * k] = carry - borrow;
+        // b = B - Q A, plus Q n R for Q > 0: in [0, (1 + |Q|) n R).
+        b[2 * k] = if q < 0 {
+            addmul_1(&mut b[..2 * k], &a[..2 * k], m)
+        } else {
+            let carry = addmul_1(&mut b[k..2 * k], n, m);
+            carry - submul_1(&mut b[..2 * k], &a[..2 * k], m)
+        };
+        if up {
+            // c = b - Q x, plus 2 Q n R for Q > 0: in [0, (1 + 3|Q|) n R).
+            c.copy_from_slice(b);
+            if q < 0 {
+                let carry = addmul_1(c, x, m);
+                debug_assert_eq!(carry, 0);
+            } else {
+                c[2 * k] += addmul_1(&mut c[k..2 * k], n, 2 * m);
+                let borrow = submul_1(c, x, m);
+                debug_assert_eq!(borrow, 0);
+            }
+            self.redc_wide(&mut u.limbs, b, s);
+            self.redc_wide(&mut u1.limbs, c, s);
+        } else {
+            self.redc_wide(&mut u.limbs, x, s);
+            self.redc_wide(&mut u1.limbs, b, s);
+        }
+    }
+
+    /// `r = w R^(-1) mod n` for `w` of `2k + 1` limbs, below `2^61 n R`:
+    /// `(w + q n) / R` is below `2^62 n`.
+    fn redc_wide(&self, r: &mut [Limb], w: &[Limb], s: &mut Scratch) {
+        let k = r.len();
+        s.t.copy_from_slice(&w[..2 * k]);
+        let carry = self.ring.redc_carry(r, s);
+        self.reduce_top(r, carry + w[2 * k]);
+    }
+
+    /// `r = (r + top B^k) mod n` for a value `V` below `2^62 n`, by one
+    /// quotient estimate. With `n` shifted left to set its top bit, `N_top`
+    /// its top limb, and `v` the two limbs of `V` shifted alike at the same
+    /// positions, `q_est = floor(v / N_top)` is at least `q = floor(V / n)`
+    /// (`v >= q N_top`), and at most one more: `v < (q + 1) (N_top + 1)`
+    /// gives `q_est <= q + 1 + floor((q + 1) / N_top)`, and `q + 1 < 2^63
+    /// <= N_top`. So `V - q_est n` needs `n` added back at most once.
+    fn reduce_top(&self, r: &mut [Limb], mut top: Limb) {
+        let n = self.ring.n.limbs();
+        let k = n.len();
+        if top == 0 && cmp_n(r, n) == Ordering::Less {
+            return;
+        }
+        let r1 = r[k - 1];
+        let r2 = if k >= 2 { r[k - 2] } else { 0 };
+        let (v1, v0) = if self.shift == 0 {
+            (top, r1)
+        } else {
+            let back = Limb::BITS - self.shift;
+            (
+                top << self.shift | r1 >> back,
+                r1 << self.shift | r2 >> back,
+            )
+        };
+        let (q, _) = div_2by1(v1, v0, self.top, self.recip);
+        top = top.wrapping_sub(submul_1(r, n, q));
+        if top != 0 {
+            top = top.wrapping_add(add_n_assign(r, n));
+            debug_assert_eq!(top, 0, "reduce_top: quotient estimate off by more than one");
         }
     }
 }

@@ -4,7 +4,9 @@
 use proptest::prelude::*;
 use rug::Integer;
 
-use super::{Form, ModRing, REDC_N_THRESHOLD, redc_n, redc_n_scratch_len, redc_wraps, window_bits};
+use super::{
+    Form, ModRing, REDC_N_THRESHOLD, RingWork, redc_n, redc_n_scratch_len, redc_wraps, window_bits,
+};
 use crate::kernel::mul::MUL_WRAP_NTT_THRESHOLD;
 use crate::testkit::{Mag, ToRug, differential, strategy, tested};
 use crate::{Limb, Natural};
@@ -150,6 +152,111 @@ differential! {
     fn large_inv((m, a, _b) in operands(large_modulus())) {
         ours: { let r = ring(&m); r.inv(&r.elem(&a.to_natural())).map(|x| r.to_natural(&x)) },
         gmp: a.to_rug().invert(&m.to_rug()).ok(),
+    }
+}
+
+/// `RingWork`'s in-place operations, each writing over a residue that holds
+/// another value, against `ModRing`'s allocating ones.
+fn in_place_matches(m: &Mag, a: &Mag, b: &Mag) -> Result<(), TestCaseError> {
+    let r = ring(m);
+    let w = RingWork::new(&r);
+    let (x, y) = (r.elem(&a.to_natural()), r.elem(&b.to_natural()));
+    let mut out = r.sub(&y, &x);
+    w.add(&mut out, &x, &y);
+    prop_assert_eq!(&out, &r.add(&x, &y));
+    w.sub(&mut out, &x, &y);
+    prop_assert_eq!(&out, &r.sub(&x, &y));
+    w.neg(&mut out, &x);
+    prop_assert_eq!(&out, &r.neg(&x));
+    w.mul(&mut out, &x, &y);
+    prop_assert_eq!(&out, &r.mul(&x, &y));
+    w.square(&mut out, &x);
+    prop_assert_eq!(&out, &r.square(&x));
+    // The product buffers are reused: a second product is still right.
+    w.mul(&mut out, &y, &x);
+    prop_assert_eq!(&out, &r.mul(&x, &y));
+    out.clone_from(&y);
+    prop_assert_eq!(&out, &y);
+    Ok(())
+}
+
+/// `RingWork::lucas_double` from residues of `a` and `b` modulo `m` (made
+/// odd and at least 3), against the doubling formulas evaluated by GMP:
+/// `(B - C, B - q A)` for `A = a^2`, `B = b^2`, `C = (a - b)^2`, then
+/// `(B - q A, B - q A - q (B - C))` if `up`.
+fn lucas_matches(m: &Integer, a: &Integer, b: &Integer, q: i64, up: bool) {
+    let n = Integer::from(m | 1u32).max(Integer::from(3));
+    let (x, y) = (Integer::from(a % &n), Integer::from(b % &n));
+    let r = ModRing::new(Mag::from_rug(&n).to_natural());
+    let w = RingWork::new(&r);
+    let elem = |v: &Integer| r.elem(&Mag::from_rug(v).to_natural());
+    let (mut u, mut u1) = (elem(&x), elem(&y));
+    w.lucas_double(&mut u, &mut u1, q, up);
+    let md = |v: Integer| v.modulo(&n);
+    let sq = |v: &Integer| Integer::from(v * v);
+    let even = md(sq(&y) - sq(&Integer::from(&x - &y)));
+    let odd = md(sq(&y) - Integer::from(q) * sq(&x));
+    let want = if up {
+        let next = md(&odd - Integer::from(q) * &even);
+        (odd, next)
+    } else {
+        (even, odd)
+    };
+    let got = (r.to_natural(&u).to_rug(), r.to_natural(&u1).to_rug());
+    assert_eq!(got, want, "n = {n}, q = {q}, up = {up}");
+    // Canonical: the same residue as built from the value.
+    assert_eq!(u, elem(&want.0));
+    assert_eq!(u1, elem(&want.1));
+}
+
+/// The Lucas step's extremes: `|Q| = 255`, residues `n - 1`, and moduli
+/// `B^k - 1` (top limb all ones) and `B^(k-1) + 1` (top limb 1, the
+/// largest normalising shift).
+#[test]
+fn lucas_double_extremes() {
+    for k in 1..=12u32 {
+        let full = (Integer::from(1) << (64 * k)) - 1;
+        let low = (Integer::from(1) << (64 * (k - 1))) + 1;
+        for n in [full, low] {
+            let top = Integer::from(&n - 1);
+            for q in [-255, -1, 1, 2, 255] {
+                for up in [false, true] {
+                    lucas_matches(&n, &top, &top, q, up);
+                    lucas_matches(&n, &top, &Integer::new(), q, up);
+                    lucas_matches(&n, &Integer::new(), &top, q, up);
+                }
+            }
+        }
+    }
+}
+
+proptest! {
+    #[test]
+    fn lucas_double_matches(
+        (m, a, b) in operands(small_modulus()),
+        q in -255..=255i64,
+        up in any::<bool>(),
+    ) {
+        lucas_matches(&m.to_rug(), &a.to_rug(), &b.to_rug(), q, up);
+    }
+
+    #[test]
+    fn large_lucas_double_matches(
+        (m, a, b) in operands(large_modulus()),
+        q in -255..=255i64,
+        up in any::<bool>(),
+    ) {
+        lucas_matches(&m.to_rug(), &a.to_rug(), &b.to_rug(), q, up);
+    }
+
+    #[test]
+    fn ring_work_matches((m, a, b) in operands(small_modulus())) {
+        in_place_matches(&m, &a, &b)?;
+    }
+
+    #[test]
+    fn large_ring_work_matches((m, a, b) in operands(large_modulus())) {
+        in_place_matches(&m, &a, &b)?;
     }
 }
 

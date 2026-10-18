@@ -29,5 +29,6 @@ pub(crate) use double::{ModDouble, pow_mod_even};
 pub(crate) use fixed::FIXED_MAX;
 pub(crate) use fixed::{Fixed, ModFixed};
 pub use reconstruct::{rational_reconstruction, rational_reconstruction_with_bounds};
+pub(crate) use ring::RingWork;
 pub use ring::{ModRing, Residue};
 pub use word::ModWord;
