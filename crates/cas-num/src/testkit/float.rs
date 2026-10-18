@@ -28,6 +28,7 @@ use rug::{Float, Integer, Rational};
 
 use super::model::{Mag, Signed};
 use super::{ToRug, strategy};
+use crate::ball::{Float as Ours, Round as OurRound};
 
 /// Extra bits the oracle computes above the precision under test.
 pub(crate) const GUARD: u32 = 64;
@@ -134,6 +135,36 @@ impl Dyadic {
 impl fmt::Debug for Dyadic {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:?} * 2^{}", self.mant, self.exp.to_rug())
+    }
+}
+
+impl Dyadic {
+    /// The same value as our [`Float`](crate::ball::Float).
+    pub(crate) fn to_ours(&self) -> Ours {
+        Ours::from_integer_exp(&self.mant.to_integer(), &self.exp.to_integer())
+    }
+}
+
+impl ToRug for Ours {
+    type Rug = Dyadic;
+
+    /// Also checks the representation invariant, so every differential test
+    /// of a `Float` result checks it.
+    fn to_rug(&self) -> Dyadic {
+        assert!(self.is_canonical(), "non-canonical Float: {self:?}");
+        let (m, e) = self.to_integer_exp();
+        Dyadic::new(&m.to_rug(), &e.to_rug())
+    }
+}
+
+/// MPFR's name for one of our rounding modes.
+pub(crate) fn rug_round(r: OurRound) -> Round {
+    match r {
+        OurRound::Down => Round::Zero,
+        OurRound::Up => Round::AwayZero,
+        OurRound::Floor => Round::Down,
+        OurRound::Ceil => Round::Up,
+        OurRound::Nearest => Round::Nearest,
     }
 }
 

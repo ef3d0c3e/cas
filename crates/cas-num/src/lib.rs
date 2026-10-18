@@ -17,8 +17,11 @@
 //!   with instances for ℤ, ℚ, ℤ/nℤ and 𝔽ₚ.
 //! - [`modular`]: residues modulo word-size and multi-precision moduli,
 //!   Chinese remaindering and rational reconstruction.
+//! - [`ball`]: binary floats with an `Integer` exponent and correct
+//!   rounding, the midpoints of ball arithmetic.
 
 pub mod algebra;
+pub mod ball;
 mod error;
 mod integer;
 pub mod kernel;

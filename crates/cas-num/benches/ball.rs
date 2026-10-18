@@ -14,11 +14,12 @@
 //! ball arithmetic within 2× of MPFR's plain floats, constants and elementary
 //! functions within 2× after the fast-path tickets.
 #![allow(missing_docs, reason = "benchmark binary")]
+#![allow(clippy::many_single_char_names, reason = "operands a, b, x, y, r")]
 
 use std::hint::black_box;
 use std::time::Duration;
 
-use cas_num::kernel;
+use cas_num::{ball, kernel};
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use rug::Float;
 use rug::float::{Constant, Round};
@@ -108,18 +109,41 @@ fn short_products(c: &mut Criterion) {
 /// zero, as ball midpoints do (§5.2).
 fn arithmetic(c: &mut Criterion) {
     type Op = fn(&mut Float, &Float, &Float);
-    let ops: [(&str, Op); 4] = [
-        ("add", |r, a, b| _ = r.assign_round(a + b, Round::Zero)),
-        ("mul", |r, a, b| _ = r.assign_round(a * b, Round::Zero)),
-        ("div", |r, a, b| _ = r.assign_round(a / b, Round::Zero)),
-        ("sqrt", |r, a, _| {
-            _ = r.assign_round(a.sqrt_ref(), Round::Zero);
-        }),
+    type OurOp = fn(&ball::Float, &ball::Float, u64) -> ball::Float;
+    let ops: [(&str, Op, Option<OurOp>); 4] = [
+        (
+            "add",
+            |r, a, b| _ = r.assign_round(a + b, Round::Zero),
+            Some(|a, b, p| a.add_round(b, p, ball::Round::Down).0),
+        ),
+        (
+            "mul",
+            |r, a, b| _ = r.assign_round(a * b, Round::Zero),
+            Some(|a, b, p| a.mul_round(b, p, ball::Round::Down).0),
+        ),
+        (
+            "div",
+            |r, a, b| _ = r.assign_round(a / b, Round::Zero),
+            None,
+        ),
+        (
+            "sqrt",
+            |r, a, _| {
+                _ = r.assign_round(a.sqrt_ref(), Round::Zero);
+            },
+            None,
+        ),
     ];
-    for (name, op) in ops {
+    for (name, op, ours) in ops {
         let mut group = c.benchmark_group(name);
         for prec in precisions() {
             let (a, b) = (operand(prec, 2), operand(prec, 3));
+            if let Some(ours) = ours {
+                let (x, y) = (to_ours(&a), to_ours(&b));
+                group.bench_function(BenchmarkId::new("ours", prec), |bench| {
+                    bench.iter(|| ours(black_box(&x), black_box(&y), u64::from(prec)));
+                });
+            }
             let mut r = Float::new(prec);
             group.bench_function(BenchmarkId::new("mpfr", prec), |bench| {
                 bench.iter(|| op(&mut r, black_box(&a), black_box(&b)));
@@ -127,6 +151,14 @@ fn arithmetic(c: &mut Criterion) {
         }
         group.finish();
     }
+}
+
+/// The same value as our float, through its integer mantissa and exponent.
+fn to_ours(x: &Float) -> ball::Float {
+    let (m, e) = x.to_integer_exp().expect("finite");
+    let mag = cas_num::Natural::from_limbs(&m.as_abs().to_digits::<u64>(rug::integer::Order::Lsf));
+    let m = cas_num::Integer::from_parts(m < 0, mag);
+    ball::Float::from_integer_exp(&m, &cas_num::Integer::from(i64::from(e)))
 }
 
 /// π, log 2 and e from scratch. MPFR caches constants, so each iteration

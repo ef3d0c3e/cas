@@ -4,7 +4,7 @@ mod bits;
 mod convert;
 mod div;
 mod gcd;
-mod limb_vec;
+pub(crate) mod limb_vec;
 mod mul;
 mod ops;
 mod pow;
