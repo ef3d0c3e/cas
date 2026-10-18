@@ -31,6 +31,8 @@ pub enum ParseErrorKind {
     InvalidDigit,
     /// A fraction has a zero denominator.
     ZeroDenominator,
+    /// A decimal exponent is beyond `i64`.
+    ExponentRange,
 }
 
 impl ParseNumberError {
@@ -51,6 +53,7 @@ impl fmt::Display for ParseNumberError {
             ParseErrorKind::Empty => "cannot parse number from empty string",
             ParseErrorKind::InvalidDigit => "invalid digit found in string",
             ParseErrorKind::ZeroDenominator => "denominator is zero",
+            ParseErrorKind::ExponentRange => "exponent out of range",
         })
     }
 }

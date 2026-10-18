@@ -106,6 +106,12 @@ impl Ball {
     #[must_use]
     pub fn from_rational(q: &Rational, prec: u64) -> Ball {
         let (m, o) = Float::from_rational(q, prec, Round::Nearest);
+        Ball::from_nearest(m, o, prec)
+    }
+
+    /// The ball of a value rounded to nearest at `prec` bits as `m`, with
+    /// ternary value `o`: radius half an ulp, 0 when `o` is `Equal`.
+    pub(crate) fn from_nearest(m: Float, o: Ordering, prec: u64) -> Ball {
         let rad = if o == Ordering::Equal {
             Mag::ZERO
         } else {

@@ -293,6 +293,32 @@ fn constants(c: &mut Criterion) {
     group.finish();
 }
 
+/// π printed to `d` digits and a `d`-digit decimal parsed, against MPFR's
+/// `to_string_radix` and `Float::parse` at the same precision.
+fn decimal(c: &mut Criterion) {
+    let mut group = c.benchmark_group("decimal");
+    for d in digit_counts() {
+        let p = bits(d);
+        let ours = ball::Ball::const_pi(u64::from(p) + 16);
+        let theirs = Float::with_val(p + 16, Constant::Pi);
+        let n = usize::try_from(d).expect("small");
+        group.bench_function(BenchmarkId::new("print/ours", d), |bench| {
+            bench.iter(|| black_box(&ours).to_decimal(u64::from(d), ball::DecimalStyle::Digits));
+        });
+        group.bench_function(BenchmarkId::new("print/mpfr", d), |bench| {
+            bench.iter(|| black_box(&theirs).to_string_radix(10, Some(n)));
+        });
+        let text = theirs.to_string_radix(10, Some(n));
+        group.bench_function(BenchmarkId::new("parse/ours", d), |bench| {
+            bench.iter(|| ball::Ball::from_decimal(black_box(&text), u64::from(p)));
+        });
+        group.bench_function(BenchmarkId::new("parse/mpfr", d), |bench| {
+            bench.iter(|| Float::with_val(p, Float::parse(black_box(&text)).expect("decimal")));
+        });
+    }
+    group.finish();
+}
+
 /// Elementary functions at an argument with all bits significant.
 fn functions(c: &mut Criterion) {
     type Fun = fn(&Float) -> Float;
@@ -324,6 +350,6 @@ fn config() -> Criterion {
 criterion_group! {
     name = benches;
     config = config();
-    targets = short_products, arithmetic, mag_ops, machine, constants, functions
+    targets = short_products, arithmetic, mag_ops, machine, constants, decimal, functions
 }
 criterion_main!(benches);

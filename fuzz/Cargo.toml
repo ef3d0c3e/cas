@@ -63,3 +63,10 @@ path = "fuzz_targets/ball.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "ball_text"
+path = "fuzz_targets/ball_text.rs"
+test = false
+doc = false
+bench = false

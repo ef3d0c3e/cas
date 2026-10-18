@@ -11,6 +11,7 @@ needs a nightly toolchain and its own build profile; the library itself stays on
 | `rational` | `+ - * /`, comparison, `floor`/`ceil`/`trunc`/`round`, `pow` with negative exponents |
 | `radix` | printing in every radix against GMP and round trips (integers and rationals); parsing of arbitrary strings against the grammar the primitive integers use, and against `i128`/`u128` where those parse; long digit strings against GMP |
 | `ball` | ball `+ - * /` and `sqrt` (of squares, exact answer) on dyadic midpoints with or without a radius, at fuzzer-chosen precisions: the result contains the exact `Rational` value at the midpoints (checked against GMP); division by a ball containing 0 gives the indeterminate ball |
+| `ball_text` | arbitrary strings into `Ball::from_decimal` (at fuzzer-chosen precisions), `Float::from_hex` and `Mag::from_hex`: no panic; an accepted decimal with a small exponent gives a ball containing its exact value, and prints in both styles; accepted hex floats print and parse back exactly |
 | `number_theory` | `sqrt_rem`, `pow_mod` through every reduction, `ModRing` and `ModWord` operations and inverses, `crt`, `jacobi`, `primality`, `factor` (product and labels), `perfect_power` |
 
 Inputs are decoded from the fuzzer's bytes (`src/lib.rs`): limbs mix boundary values (`0`,

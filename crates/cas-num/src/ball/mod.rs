@@ -11,17 +11,23 @@
 //!   [`RealBalls`] ring object (§5).
 //! - Constants: [`Ball::const_pi`], [`Ball::const_log2`] and [`Ball::const_e`]
 //!   by binary splitting, cached process-wide (§7.1).
+//! - Decimal printing with Arb's digit rule ([`Ball::to_decimal`], `Display`)
+//!   and decimal parsing ([`Ball::from_decimal`]); exact hexadecimal floats
+//!   for `FullForm` ([`Float::to_hex`], [`Mag::to_hex`]) (§6).
 //! - [`MachineBall`]: `f64` midpoint and radius with proven bounds, the fast
 //!   path up to 53 bits; `None` sends the caller back to [`Ball`] (§5.4).
 
 mod bsplit;
 mod consts;
+mod decimal;
 mod float;
+mod hex;
 mod machine;
 mod mag;
 mod real;
 
 pub use consts::clear_constant_cache;
+pub use decimal::DecimalStyle;
 pub use float::{APPROX_ULPS, Float, Round};
 pub use machine::MachineBall;
 pub use mag::Mag;
