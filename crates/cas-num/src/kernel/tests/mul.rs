@@ -11,9 +11,10 @@ use super::{split_at_limbs, val};
 use crate::Limb;
 use crate::kernel::mul::{
     Algorithm, MUL_KARATSUBA_THRESHOLD, MUL_NTT_THRESHOLD, MUL_TOOM3_THRESHOLD,
-    MUL_WRAP_NTT_THRESHOLD, SQR_KARATSUBA_THRESHOLD, SQR_NTT_THRESHOLD, SQR_TOOM3_THRESHOLD,
-    algorithm, karatsuba, karatsuba_scratch_len, mul_wrap, mul_wrap_scratch_len, sqr_algorithm,
-    toom3, toom3_scratch_len,
+    MUL_TOOM4_THRESHOLD, MUL_WRAP_NTT_THRESHOLD, SQR_KARATSUBA_THRESHOLD, SQR_NTT_THRESHOLD,
+    SQR_TOOM3_THRESHOLD, SQR_TOOM4_THRESHOLD, algorithm, karatsuba, karatsuba_scratch_len,
+    mul_wrap, mul_wrap_scratch_len, sqr_algorithm, toom3, toom3_scratch_len, toom4,
+    toom4_scratch_len,
 };
 use crate::kernel::{
     addmul_1, mul, mul_1, mul_1_assign, mul_basecase, mul_scratch_len, sqr, sqr_basecase,
@@ -45,10 +46,11 @@ fn basecase(a: &[Limb], b: &[Limb]) -> Vec<Limb> {
     r
 }
 
-/// Signature of [`karatsuba`] and [`toom3`].
+/// Signature of [`karatsuba`], [`toom3`] and [`toom4`].
 type Recursive = fn(&mut [Limb], &[Limb], &[Limb], &mut [Limb], bool);
 
-/// Calls `karatsuba` or `toom3` directly with an exactly sized scratch.
+/// Calls `karatsuba`, `toom3` or `toom4` directly with an exactly sized
+/// scratch.
 fn run_direct(
     f: Recursive,
     scratch_len: fn(usize, usize, bool) -> usize,
@@ -73,6 +75,8 @@ fn mul_thresholds() -> Vec<usize> {
         MUL_TOOM3_THRESHOLD,
         3 * MUL_KARATSUBA_THRESHOLD,
         3 * MUL_TOOM3_THRESHOLD,
+        MUL_TOOM4_THRESHOLD,
+        4 * MUL_TOOM4_THRESHOLD,
         MUL_NTT_THRESHOLD,
     ]
 }
@@ -102,6 +106,13 @@ fn mul_operands() -> impl Strategy<Value = (Vec<Limb>, Vec<Limb>)> {
 /// Lengths `(an, bn)` valid for Karatsuba: `an >= bn > ceil(an / 2)`.
 fn karatsuba_lens(max: usize) -> impl Strategy<Value = (usize, usize)> {
     (2..=max).prop_flat_map(|an| (Just(an), an.div_ceil(2) + 1..=an))
+}
+
+/// Lengths `(an, bn)` valid for Toom-4: `an >= bn > 3 ceil(an / 4)`.
+fn toom4_lens(max: usize) -> impl Strategy<Value = (usize, usize)> {
+    (7..=max)
+        .prop_filter("an has a valid b", |&an| an > 3 * an.div_ceil(4))
+        .prop_flat_map(|an| (Just(an), 3 * an.div_ceil(4) + 1..=an))
 }
 
 /// Lengths `(an, bn)` valid for Toom-3: `an >= bn > 2 ceil(an / 3)`.
@@ -202,6 +213,40 @@ proptest! {
         prop_assert_eq!(ours, basecase(&a, &a));
     }
 
+    #[test]
+    fn toom4_matches_basecase((a, b) in toom4_lens(160).prop_flat_map(raw_pair)) {
+        let ours = run_direct(toom4, toom4_scratch_len, &a, &b, false);
+        prop_assert_eq!(ours, basecase(&a, &b));
+    }
+
+    #[test]
+    fn toom4_square_matches_basecase(
+        a in toom4_lens(160).prop_flat_map(|(an, _)| strategy::raw_limbs(an)),
+    ) {
+        let ours = run_direct(toom4, toom4_scratch_len, &a, &a, true);
+        prop_assert_eq!(ours, basecase(&a, &a));
+    }
+
+    /// Toom-4's evaluations at -1 and -2 go negative and the interpolation's
+    /// intermediates are largest with all-ones pieces; mixing all-ones and
+    /// zero pieces reaches every sign pattern.
+    #[test]
+    fn toom4_extreme_parts(
+        (an, bn) in toom4_lens(80),
+        pa in [any::<bool>(); 4],
+        pb in [any::<bool>(); 4],
+        square in any::<bool>(),
+    ) {
+        let fill = |len: usize, parts: [bool; 4]| -> Vec<Limb> {
+            let n = len.div_ceil(4);
+            (0..len).map(|i| if parts[(i / n).min(3)] { Limb::MAX } else { 0 }).collect()
+        };
+        let a = fill(an, pa);
+        let b = if square { a.clone() } else { fill(bn, pb) };
+        let ours = run_direct(toom4, toom4_scratch_len, &a, &b, square);
+        prop_assert_eq!(ours, basecase(&a, &b));
+    }
+
     /// Toom-3's evaluations go negative; all-ones and all-zero halves push
     /// them to their extremes.
     #[test]
@@ -291,6 +336,7 @@ fn mul_wrap_multiple_of_modulus() {
 fn every_algorithm_on_all_ones() {
     let k = MUL_KARATSUBA_THRESHOLD;
     let t = MUL_TOOM3_THRESHOLD;
+    let q = MUL_TOOM4_THRESHOLD;
     let f = MUL_NTT_THRESHOLD;
     let cases = [
         (k - 1, k - 1, Algorithm::Basecase),
@@ -299,15 +345,17 @@ fn every_algorithm_on_all_ones() {
         (2 * k + 1, k, Algorithm::Chunked),
         (t, t, Algorithm::Toom3),
         (t + t / 2, t, Algorithm::Karatsuba),
-        (3 * t + 1, 3 * t, Algorithm::Toom3),
+        (q - 1, q - 1, Algorithm::Toom3),
+        (q, q, Algorithm::Toom4),
+        (4 * q, 3 * q, Algorithm::Toom3),
         (5 * t + 3, 2 * t, Algorithm::Chunked),
-        (f - 1, f - 1, Algorithm::Toom3),
+        (f - 1, f - 1, Algorithm::Toom4),
         (f, f, Algorithm::Ntt),
         (2 * f - 2, f, Algorithm::Ntt),
         (2 * f + 1, f, Algorithm::Chunked),
     ];
     let max = 3 * TESTED_SIZE_MAX;
-    let ordered = 2 * k <= t && 3 * t < f && 2 * f < max;
+    let ordered = 2 * k <= t && t < q && 3 * q < f && 2 * f < max;
     let mut seen = HashSet::new();
     for (an, bn, expected) in cases {
         if an > max {
@@ -321,7 +369,7 @@ fn every_algorithm_on_all_ones() {
         assert_eq!(run_mul(&a, &b).to_rug(), val(&a) * val(&b), "({an}, {bn})");
     }
     if ordered {
-        assert_eq!(seen.len(), 5);
+        assert_eq!(seen.len(), 6);
     }
 
     for n in [
@@ -329,6 +377,8 @@ fn every_algorithm_on_all_ones() {
         SQR_KARATSUBA_THRESHOLD,
         SQR_TOOM3_THRESHOLD,
         3 * SQR_TOOM3_THRESHOLD + 1,
+        SQR_TOOM4_THRESHOLD.max(7),
+        4 * SQR_TOOM4_THRESHOLD + 1,
         SQR_NTT_THRESHOLD,
     ] {
         if n > max {
@@ -337,10 +387,25 @@ fn every_algorithm_on_all_ones() {
         let a = vec![Limb::MAX; n];
         assert_eq!(run_sqr(&a).to_rug(), val(&a).square(), "{n}");
     }
-    if SQR_KARATSUBA_THRESHOLD <= SQR_TOOM3_THRESHOLD && SQR_TOOM3_THRESHOLD < SQR_NTT_THRESHOLD {
-        assert_eq!(sqr_algorithm(SQR_TOOM3_THRESHOLD), Algorithm::Toom3);
-        assert_eq!(sqr_algorithm(SQR_NTT_THRESHOLD - 1), Algorithm::Toom3);
-        assert_eq!(sqr_algorithm(SQR_NTT_THRESHOLD), Algorithm::Ntt);
+    // Toom-4 squaring takes the lengths with n > 3 ceil(n / 4) (all from 13)
+    // from its threshold on; the others stay with Toom-3.
+    let (s3, s4, sf) = (SQR_TOOM3_THRESHOLD, SQR_TOOM4_THRESHOLD, SQR_NTT_THRESHOLD);
+    let first4 = (s4..s4 + 16)
+        .find(|&n| n > 3 * n.div_ceil(4))
+        .expect("13 qualifies, and every length from it");
+    if SQR_KARATSUBA_THRESHOLD <= s3 && s3 < s4 && first4 < sf {
+        assert_eq!(sqr_algorithm(s3), Algorithm::Toom3);
+        assert_eq!(sqr_algorithm(s4 - 1), Algorithm::Toom3);
+        assert_eq!(sqr_algorithm(first4), Algorithm::Toom4);
+        let below = sf - 1;
+        let fits = below > 3 * below.div_ceil(4);
+        let expected = if fits {
+            Algorithm::Toom4
+        } else {
+            Algorithm::Toom3
+        };
+        assert_eq!(sqr_algorithm(below), expected);
+        assert_eq!(sqr_algorithm(sf), Algorithm::Ntt);
     }
 }
 

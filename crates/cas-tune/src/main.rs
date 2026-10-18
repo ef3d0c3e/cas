@@ -104,6 +104,12 @@ fn params() -> Vec<Param> {
             window: None,
         },
         Param {
+            key: "mul_toom4_threshold",
+            op: "mul",
+            grid: with_never(geometric(96, 1600, 1.19)),
+            window: None,
+        },
+        Param {
             key: "mul_ntt_threshold",
             op: "mul",
             grid: with_never(geometric(512, 16384, 1.19)),
@@ -119,6 +125,12 @@ fn params() -> Vec<Param> {
             key: "sqr_toom3_threshold",
             op: "sqr",
             grid: with_never(geometric(64, 768, 1.19)),
+            window: None,
+        },
+        Param {
+            key: "sqr_toom4_threshold",
+            op: "sqr",
+            grid: with_never(geometric(96, 1600, 1.19)),
             window: None,
         },
         Param {

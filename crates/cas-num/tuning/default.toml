@@ -1,5 +1,5 @@
-# Written by cas-tune on 2026-10-18 on an idle machine (623 s, 242 builds,
-# median timing noise 0.6%).
+# Written by cas-tune on 2026-10-18 (1075 s, 424 builds, median timing noise
+# 0.6%), after Toom-4 was added.
 # Algorithm thresholds for cas-num, embedded at build time (see build.rs).
 # Sizes are in limbs unless noted. Measured on the development machine;
 # `cargo run --release -p cas-tune` writes a file for yours.
@@ -7,13 +7,15 @@
 # Multiplication: the shorter operand's length from which each algorithm is
 # used (kernel/mul.rs).
 mul_karatsuba_threshold = 17
-mul_toom3_threshold = 105
+mul_toom3_threshold = 115
+mul_toom4_threshold = 503
 mul_ntt_threshold = 3470
 
 # Squaring (kernel/mul.rs).
-sqr_karatsuba_threshold = 35
+sqr_karatsuba_threshold = 42
 sqr_toom3_threshold = 118
-sqr_ntt_threshold = 1730
+sqr_toom4_threshold = 503
+sqr_ntt_threshold = 1894
 
 # NTT (kernel/ntt.rs): transforms of at most this many coefficients run
 # layer by layer; longer ones split in halves first.
@@ -23,29 +25,29 @@ ntt_block = 4096
 ntt_wrap_fraction = 1
 # Products modulo B^m - 1 (Newton division) take a cyclic transform of m
 # coefficients from this power-of-two m; below it, the full product reduced.
-mul_wrap_ntt_threshold = 1536
+mul_wrap_ntt_threshold = 3072
 
 # Division (kernel/div.rs): divisor length from which divide and conquer is
 # used.
-dc_div_threshold = 17
+dc_div_threshold = 21
 # Divisor and quotient length from which division uses Barrett's estimates
 # from Newton's reciprocal (kernel/div/mu.rs), and length from which that
 # reciprocal takes Newton steps instead of an exact division.
-mu_div_threshold = 5394
-inv_newton_threshold = 26
+mu_div_threshold = 4926
+inv_newton_threshold = 362
 
 # Montgomery reduction (modular/ring.rs): modulus length from which REDC
 # multiplies by -n^-1 mod R instead of eliminating one limb at a time.
-redc_n_threshold = 70
+redc_n_threshold = 59
 
 # GCD (natural/gcd.rs): smaller operand length from which half-GCD steps
 # replace Lehmer steps, and length from which the half-GCD recurses; entry
 # length from which its 2x2 matrix products take seven products, not eight.
-gcd_dc_threshold = 733
+gcd_dc_threshold = 802
 hgcd_threshold = 168
-matrix22_strassen_threshold = 114
+matrix22_strassen_threshold = 17
 
 # Radix conversion (natural/radix.rs): limbs from which to_string, and
 # digits from which parsing, split by divide and conquer.
-to_string_dc_threshold = 15
-from_string_dc_threshold = 6939
+to_string_dc_threshold = 13
+from_string_dc_threshold = 3997

@@ -3,9 +3,11 @@
 # use. Not for speed. `CAS_NUM_TUNING=tuning/stress-small.toml cargo test`.
 mul_karatsuba_threshold = 2
 mul_toom3_threshold = 6
+mul_toom4_threshold = 7
 mul_ntt_threshold = 24
 sqr_karatsuba_threshold = 2
 sqr_toom3_threshold = 5
+sqr_toom4_threshold = 7
 sqr_ntt_threshold = 20
 ntt_block = 2
 ntt_wrap_fraction = 1

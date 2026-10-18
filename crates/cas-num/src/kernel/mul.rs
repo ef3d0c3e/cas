@@ -1,6 +1,6 @@
 //! Multiplication kernels: single-limb products, schoolbook, Karatsuba,
-//! Toom-3 and number-theoretic transforms ([`super::ntt`]), plus dedicated
-//! squaring.
+//! Toom-3, Toom-4 and number-theoretic transforms ([`super::ntt`]), plus
+//! dedicated squaring.
 //!
 //! [`mul`] and [`sqr`] pick the algorithm by operand size. The recursive
 //! algorithms work in a caller-provided scratch slice of at least
@@ -24,6 +24,8 @@ use crate::Limb;
 pub(crate) const MUL_KARATSUBA_THRESHOLD: usize = crate::tuning::MUL_KARATSUBA_THRESHOLD;
 /// Smallest shorter-operand length at which [`mul`] uses Toom-3.
 pub(crate) const MUL_TOOM3_THRESHOLD: usize = crate::tuning::MUL_TOOM3_THRESHOLD;
+/// Smallest shorter-operand length at which [`mul`] uses Toom-4.
+pub(crate) const MUL_TOOM4_THRESHOLD: usize = crate::tuning::MUL_TOOM4_THRESHOLD;
 /// Smallest shorter-operand length at which [`mul`] uses the NTT. The NTT's cost is a staircase (see [`super::ntt`]), so above
 /// this it is ahead on average rather than at every length.
 pub(crate) const MUL_NTT_THRESHOLD: usize = crate::tuning::MUL_NTT_THRESHOLD;
@@ -31,6 +33,8 @@ pub(crate) const MUL_NTT_THRESHOLD: usize = crate::tuning::MUL_NTT_THRESHOLD;
 pub(crate) const SQR_KARATSUBA_THRESHOLD: usize = crate::tuning::SQR_KARATSUBA_THRESHOLD;
 /// Smallest length at which [`sqr`] uses Toom-3 squaring.
 pub(crate) const SQR_TOOM3_THRESHOLD: usize = crate::tuning::SQR_TOOM3_THRESHOLD;
+/// Smallest length at which [`sqr`] uses Toom-4 squaring.
+pub(crate) const SQR_TOOM4_THRESHOLD: usize = crate::tuning::SQR_TOOM4_THRESHOLD;
 /// Smallest length at which [`sqr`] uses the NTT.
 pub(crate) const SQR_NTT_THRESHOLD: usize = crate::tuning::SQR_NTT_THRESHOLD;
 /// Smallest power-of-two modulus length at which [`mul_wrap`] uses a cyclic
@@ -152,6 +156,7 @@ pub fn mul_scratch_len(an: usize, bn: usize) -> usize {
         }
         Algorithm::Karatsuba => karatsuba_scratch_len(an, bn, false),
         Algorithm::Toom3 => toom3_scratch_len(an, bn, false),
+        Algorithm::Toom4 => toom4_scratch_len(an, bn, false),
         Algorithm::Ntt => ntt::mul_scratch_len(an, bn),
     }
 }
@@ -163,6 +168,7 @@ pub fn sqr_scratch_len(n: usize) -> usize {
         Algorithm::Basecase | Algorithm::Chunked => 0,
         Algorithm::Karatsuba => karatsuba_scratch_len(n, n, true),
         Algorithm::Toom3 => toom3_scratch_len(n, n, true),
+        Algorithm::Toom4 => toom4_scratch_len(n, n, true),
         Algorithm::Ntt => ntt::sqr_scratch_len(n),
     }
 }
@@ -280,6 +286,7 @@ pub(crate) enum Algorithm {
     Chunked,
     Karatsuba,
     Toom3,
+    Toom4,
     Ntt,
 }
 
@@ -293,6 +300,8 @@ pub(crate) fn algorithm(an: usize, bn: usize) -> Algorithm {
         Algorithm::Chunked
     } else if bn >= MUL_NTT_THRESHOLD {
         Algorithm::Ntt
+    } else if bn >= MUL_TOOM4_THRESHOLD && bn > 3 * an.div_ceil(4) {
+        Algorithm::Toom4
     } else if bn >= MUL_TOOM3_THRESHOLD && bn > 2 * an.div_ceil(3) {
         Algorithm::Toom3
     } else {
@@ -306,10 +315,12 @@ pub(crate) fn sqr_algorithm(n: usize) -> Algorithm {
         Algorithm::Basecase
     } else if n < SQR_TOOM3_THRESHOLD {
         Algorithm::Karatsuba
-    } else if n < SQR_NTT_THRESHOLD {
-        Algorithm::Toom3
-    } else {
+    } else if n >= SQR_NTT_THRESHOLD {
         Algorithm::Ntt
+    } else if n >= SQR_TOOM4_THRESHOLD && n > 3 * n.div_ceil(4) {
+        Algorithm::Toom4
+    } else {
+        Algorithm::Toom3
     }
 }
 
@@ -320,6 +331,7 @@ fn mul_unchecked(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]) {
         Algorithm::Chunked => mul_chunked(r, a, b, scratch),
         Algorithm::Karatsuba => karatsuba(r, a, b, scratch, false),
         Algorithm::Toom3 => toom3(r, a, b, scratch, false),
+        Algorithm::Toom4 => toom4(r, a, b, scratch, false),
         Algorithm::Ntt => ntt::mul(r, a, b, scratch),
     }
 }
@@ -329,6 +341,7 @@ fn sqr_unchecked(r: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) {
         Algorithm::Basecase | Algorithm::Chunked => sqr_basecase(r, a),
         Algorithm::Karatsuba => karatsuba(r, a, a, scratch, true),
         Algorithm::Toom3 => toom3(r, a, a, scratch, true),
+        Algorithm::Toom4 => toom4(r, a, a, scratch, true),
         Algorithm::Ntt => ntt::sqr(r, a, scratch),
     }
 }
@@ -504,19 +517,36 @@ fn half_assign(a: &mut [Limb]) {
     }
 }
 
-/// `a /= 3` for a multiple of 3, modulo `B^len` (so two's complement values
-/// work too): multiplies by the inverse of 3, propagating a borrow.
-fn divexact_by3_assign(a: &mut [Limb]) {
-    const INV3: Limb = 0xAAAA_AAAA_AAAA_AAAB; // 3 * INV3 = 1 mod 2^64
+/// `d^-1 mod 2^64` for an odd `d`, by Newton's iteration: `d d = 1 mod 8`
+/// gives 3 correct bits and each step doubles them.
+const fn limb_inverse(d: Limb) -> Limb {
+    let mut inv = d;
+    let mut i = 0;
+    while i < 5 {
+        inv = inv.wrapping_mul(2u64.wrapping_sub(d.wrapping_mul(inv)));
+        i += 1;
+    }
+    inv
+}
+
+/// `a /= d` for a multiple of the small odd `d` (`inv = limb_inverse(d)`),
+/// modulo `B^len` (so two's complement values work too): multiplies by the
+/// inverse of `d`, propagating a borrow.
+fn divexact_odd_assign(a: &mut [Limb], d: Limb, inv: Limb) {
+    debug_assert_eq!(d.wrapping_mul(inv), 1);
     let mut borrow = 0;
     for x in a {
         let (s, b) = x.overflowing_sub(borrow);
-        let q = s.wrapping_mul(INV3);
+        let q = s.wrapping_mul(inv);
         *x = q;
-        // 3 q = s + hi B, so the next limb owes hi, plus 1 if s wrapped.
-        let (_, hi) = mul_add(q, 3, 0);
+        // d q = s + hi B, so the next limb owes hi, plus 1 if s wrapped.
+        let (_, hi) = mul_add(q, d, 0);
         borrow = hi + Limb::from(b);
     }
+}
+
+fn divexact_by3_assign(a: &mut [Limb]) {
+    divexact_odd_assign(a, 3, const { limb_inverse(3) });
 }
 
 /// `p = x0 + x2` and `sum = x0 + x1 + x2`, as `n + 1`-limb values; `p` is the
@@ -628,4 +658,191 @@ pub(crate) fn toom3(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]
     add_at(r, n, v1);
     add_at(r, 2 * n, vm1);
     add_at(r, 3 * n, vm2);
+}
+
+fn toom4_split(an: usize, bn: usize) -> (usize, usize, usize) {
+    let n = an.div_ceil(4);
+    (n, an - 3 * n, bn - 3 * n)
+}
+
+pub(crate) fn toom4_scratch_len(an: usize, bn: usize, square: bool) -> usize {
+    let (n, s, t) = toom4_split(an, bn);
+    let e = n + 1;
+    product_scratch_len(n, n, square)
+        .max(product_scratch_len(s, t, square))
+        .max(7 * 2 * e + 12 * e + product_scratch_len(e, e, square))
+}
+
+/// `buf = x` zero-extended (`x.len() <= buf.len()`).
+fn load(buf: &mut [Limb], x: &[Limb]) {
+    buf[..x.len()].copy_from_slice(x);
+    buf[x.len()..].fill(0);
+}
+
+/// `buf = x << k`, zero-extended; the value fits.
+fn load_shifted(buf: &mut [Limb], x: &[Limb], k: u32) {
+    load(buf, x);
+    let out = shl_assign(buf, k);
+    debug_assert_eq!(out, 0);
+}
+
+/// The values of `x0 + x1 X + x2 X^2 + x3 X^3` at `1, -1, 2, -2` and `8 x(1/2)`
+/// (`8 x0 + 4 x1 + 2 x2 + x3`), as `n + 1`-limb two's complement values, into
+/// the five chunks of `v`; `t` is one chunk of work.
+fn toom4_eval(v: &mut [Limb], t: &mut [Limb], x: [&[Limb]; 4]) {
+    let e = t.len();
+    let [x0, x1, x2, x3] = x;
+    let (p1, v) = v.split_at_mut(e);
+    let (m1, v) = v.split_at_mut(e);
+    let (p2, v) = v.split_at_mut(e);
+    let (m2, h) = v.split_at_mut(e);
+    // x(+-1) = (x0 + x2) +- (x1 + x3).
+    load(p1, x0);
+    add_assign(p1, x2);
+    load(t, x1);
+    add_assign(t, x3);
+    m1.copy_from_slice(p1);
+    add_assign(p1, t);
+    sub_assign(m1, t);
+    // x(+-2) = (x0 + 4 x2) +- 2 (x1 + 4 x3).
+    load_shifted(p2, x2, 2);
+    add_assign(p2, x0);
+    load_shifted(t, x3, 2);
+    add_assign(t, x1);
+    shl_assign(t, 1);
+    m2.copy_from_slice(p2);
+    add_assign(p2, t);
+    sub_assign(m2, t);
+    // 8 x(1/2) = ((2 x0 + x1) 2 + x2) 2 + x3.
+    load_shifted(h, x0, 1);
+    add_assign(h, x1);
+    shl_assign(h, 1);
+    add_assign(h, x2);
+    shl_assign(h, 1);
+    add_assign(h, x3);
+}
+
+/// `x`'s pieces of `n`, `n`, `n` and the rest limbs.
+fn quarters(x: &[Limb], n: usize) -> [&[Limb]; 4] {
+    [&x[..n], &x[n..2 * n], &x[2 * n..3 * n], &x[3 * n..]]
+}
+
+/// Two's complement division by 4 of a multiple of 4.
+fn quarter_assign(a: &mut [Limb]) {
+    half_assign(a);
+    half_assign(a);
+}
+
+/// Toom-4 (Toom-Cook with points `0, 1, -1, 2, -2, 1/2, ∞`): with `X = B^n`,
+/// `a = a0 + a1 X + a2 X^2 + a3 X^3` and `b` likewise, seven quarter-size
+/// products. Needs `b.len() > 3 ceil(a.len() / 4)`.
+///
+/// The product's coefficients `c0..c6` come back from the seven values by
+/// splitting even and odd parts: `E(k) = (v(k) + v(-k)) / 2` and `O(1) =
+/// (v(1) - v(-1)) / 2`, `O(2) = (v(2) - v(-2)) / 4` give `c2 + c4` and
+/// `c2 + 4 c4` (from `c0 = v(0)` and `c6 = v(∞)`), and with `H = (v(1/2) - 64
+/// c0 - 16 c2 - 4 c4 - c6) / 2 = 16 c1 + 4 c3 + c5` the odd coefficients
+/// solve `c5 - c1 = (O(2) - H) / 15` and `c1 + c5 = (O(2) + H - 8 O(1)) / 9`.
+/// Every division is exact. As in [`toom3`], the evaluations and the
+/// interpolation run in two's complement on fixed-width buffers.
+pub(crate) fn toom4(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb], square: bool) {
+    let (an, bn) = (a.len(), b.len());
+    let (n, s, t) = toom4_split(an, bn);
+    debug_assert!(s >= t && t >= 1 && r.len() == an + bn);
+    debug_assert!(scratch.len() >= toom4_scratch_len(an, bn, square));
+    let (pa, pb) = (quarters(a, n), quarters(b, n));
+
+    // v0 = c0 and vinf = c6 go straight to their final place.
+    product(&mut r[..2 * n], pa[0], pb[0], scratch, square);
+    product(&mut r[6 * n..], pa[3], pb[3], scratch, square);
+    r[2 * n..6 * n].fill(0);
+
+    let e = n + 1;
+    let w = 2 * e;
+    let (v, rest) = scratch.split_at_mut(5 * w);
+    let (tmp, rest) = rest.split_at_mut(w);
+    let (dif, rest) = rest.split_at_mut(w);
+    let (ea, rest) = rest.split_at_mut(5 * e);
+    let (eb, rest) = rest.split_at_mut(5 * e);
+    let (ta, rest) = rest.split_at_mut(e);
+    let (tb, rest) = rest.split_at_mut(e);
+    toom4_eval(ea, ta, pa);
+    if !square {
+        toom4_eval(eb, tb, pb);
+    }
+    for (k, out) in v.chunks_exact_mut(w).enumerate() {
+        let xa = &ea[k * e..(k + 1) * e];
+        let neg_a = abs_twos(ta, xa);
+        if square {
+            product(out, ta, ta, rest, true);
+        } else {
+            let neg_b = abs_twos(tb, &eb[k * e..(k + 1) * e]);
+            product(out, ta, tb, rest, false);
+            if neg_a != neg_b {
+                neg_assign(out);
+            }
+        }
+    }
+
+    // Interpolation (all mod B^w).
+    let (v1, v) = v.split_at_mut(w);
+    let (vm1, v) = v.split_at_mut(w);
+    let (v2, v) = v.split_at_mut(w);
+    let (vm2, vh) = v.split_at_mut(w);
+    let (c0, rest_r) = r.split_at(2 * n);
+    let c6 = &rest_r[4 * n..];
+    // v1 = O(1), vm1 = E(1) - c0 - c6 = c2 + c4.
+    sub_assign(v1, vm1);
+    shl_assign(vm1, 1);
+    add_assign(vm1, v1);
+    half_assign(v1);
+    half_assign(vm1);
+    sub_assign(vm1, c0);
+    sub_assign(vm1, c6);
+    // v2 = O(2), vm2 = (E(2) - c0 - 64 c6) / 4 = c2 + 4 c4.
+    sub_assign(v2, vm2);
+    shl_assign(vm2, 1);
+    add_assign(vm2, v2);
+    quarter_assign(v2);
+    half_assign(vm2);
+    sub_assign(vm2, c0);
+    load_shifted(tmp, c6, 6);
+    sub_assign(vm2, tmp);
+    quarter_assign(vm2);
+    // vm2 = c4, vm1 = c2.
+    sub_assign(vm2, vm1);
+    divexact_by3_assign(vm2);
+    sub_assign(vm1, vm2);
+    // vh = H = (v(1/2) - 64 c0 - c6 - 4 (4 c2 + c4)) / 2.
+    sub_assign(vh, c6);
+    load_shifted(tmp, c0, 6);
+    sub_assign(vh, tmp);
+    tmp.copy_from_slice(vm1);
+    shl_assign(tmp, 2);
+    add_assign(tmp, vm2);
+    shl_assign(tmp, 2);
+    sub_assign(vh, tmp);
+    half_assign(vh);
+    // dif = c5 - c1, v2 = c1 + c5.
+    dif.copy_from_slice(v2);
+    sub_assign(dif, vh);
+    divexact_odd_assign(dif, 15, const { limb_inverse(15) });
+    add_assign(v2, vh);
+    tmp.copy_from_slice(v1);
+    shl_assign(tmp, 3);
+    sub_assign(v2, tmp);
+    divexact_odd_assign(v2, 9, const { limb_inverse(9) });
+    // v1 = c3, vh = c5, v2 = c1.
+    sub_assign(v1, v2);
+    vh.copy_from_slice(v2);
+    add_assign(vh, dif);
+    half_assign(vh);
+    sub_assign(v2, dif);
+    half_assign(v2);
+
+    add_at(r, n, v2);
+    add_at(r, 2 * n, vm1);
+    add_at(r, 3 * n, v1);
+    add_at(r, 4 * n, vm2);
+    add_at(r, 5 * n, vh);
 }

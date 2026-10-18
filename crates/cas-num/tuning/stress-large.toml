@@ -3,9 +3,11 @@
 # `CAS_NUM_TUNING=tuning/stress-large.toml cargo test`.
 mul_karatsuba_threshold = 1_000_000_000
 mul_toom3_threshold = 1_000_000_000
+mul_toom4_threshold = 1_000_000_000
 mul_ntt_threshold = 1_000_000_000
 sqr_karatsuba_threshold = 1_000_000_000
 sqr_toom3_threshold = 1_000_000_000
+sqr_toom4_threshold = 1_000_000_000
 sqr_ntt_threshold = 1_000_000_000
 ntt_block = 1_000_000_000
 ntt_wrap_fraction = 1_000_000_000
