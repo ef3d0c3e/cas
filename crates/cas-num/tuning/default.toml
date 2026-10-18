@@ -1,7 +1,8 @@
 # Written by cas-tune on 2026-10-18: a full run (1224 s, 421 builds, median
 # timing noise 0.4%) after the radix-3 NTT lengths and size-aware NTT
-# dispatch, then the NTT dispatch keys (179 s, noise 0.2%), then
-# redc_n_threshold after REDC by two limbs (88 s, noise 0.5%).
+# dispatch, then the NTT dispatch keys (179 s, noise 0.2%), redc_n_threshold
+# after REDC by two limbs (88 s, noise 0.5%), and the short-product keys with
+# redc_n_threshold after short products in REDC (246 s, noise 0.8%).
 # Algorithm thresholds for cas-num, embedded at build time (see build.rs).
 # Sizes are in limbs unless noted. Measured on the development machine;
 # `cargo run --release -p cas-tune` writes a file for yours.
@@ -32,6 +33,10 @@ ntt_wrap_fraction = 1
 # Products modulo B^m - 1 (Newton division) take a cyclic transform of m
 # coefficients from this power-of-two m; below it, the full product reduced.
 mul_wrap_ntt_threshold = 2048
+# Short products a b mod B^n (Montgomery's quotient): length from which they
+# split by divide and conquer, and from which they take the full product.
+mullo_dc_threshold = 50
+mullo_mul_threshold = 6402
 
 # Division (kernel/div.rs): divisor length from which divide and conquer is
 # used.
@@ -44,7 +49,7 @@ inv_newton_threshold = 8
 
 # Montgomery reduction (modular/ring.rs): modulus length from which REDC
 # multiplies by -n^-1 mod R instead of eliminating one limb at a time.
-redc_n_threshold = 183
+redc_n_threshold = 108
 
 # GCD (natural/gcd.rs): smaller operand length from which half-GCD steps
 # replace Lehmer steps, and length from which the half-GCD recurses; entry

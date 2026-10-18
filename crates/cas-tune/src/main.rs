@@ -211,6 +211,18 @@ fn params() -> Vec<Param> {
             window: None,
         },
         Param {
+            key: "mullo_dc_threshold",
+            op: "mullo",
+            grid: geometric(8, 320, 1.19),
+            window: None,
+        },
+        Param {
+            key: "mullo_mul_threshold",
+            op: "mullo",
+            grid: with_never(geometric(512, 16384, 1.19)),
+            window: None,
+        },
+        Param {
             key: "redc_n_threshold",
             op: "redc",
             grid: with_never(geometric(16, 640, 1.19)),

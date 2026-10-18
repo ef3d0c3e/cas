@@ -4,9 +4,10 @@
 use proptest::prelude::*;
 use rug::Integer;
 
-use super::{Form, ModRing, REDC_N_THRESHOLD, window_bits};
-use crate::Natural;
-use crate::testkit::{Mag, ToRug, differential, strategy};
+use super::{Form, ModRing, REDC_N_THRESHOLD, redc_n, redc_n_scratch_len, redc_wraps, window_bits};
+use crate::kernel::mul::MUL_WRAP_NTT_THRESHOLD;
+use crate::testkit::{Mag, ToRug, differential, strategy, tested};
+use crate::{Limb, Natural};
 
 /// A modulus of up to 8 limbs (one limb is `ModWord`'s job, but works here
 /// too), mostly odd (Montgomery form), or `2^k ± 1`.
@@ -182,6 +183,96 @@ fn modulus_one() {
     assert!(r.is_zero(&x));
     assert_eq!(r.inv(&x), Some(r.zero()));
     assert_eq!(r.to_natural(&r.pow(&x, &Natural::ZERO)), Natural::ZERO);
+}
+
+/// `(t R^-1 mod n, the result of redc_n)` for an odd `n` and `t < n R`; the
+/// result is `r + carry R`, which must be `< 2n`.
+fn run_redc_n(n: &[Limb], t: &[Limb]) -> (Integer, Integer) {
+    let k = n.len();
+    let (nv, tv) = (
+        Mag::from_limbs(n.to_vec()).to_rug(),
+        Mag::from_limbs(t.to_vec()).to_rug(),
+    );
+    let r_big = Integer::from(1) << (64 * u32::try_from(k).unwrap());
+    let ninv = &r_big - nv.clone().invert(&r_big).unwrap();
+    let mut ninv_full = Mag::from_rug(&ninv).limbs().to_vec();
+    ninv_full.resize(k, 0);
+    let mut r = vec![0xdead_beef; k];
+    let mut u = vec![0xdead_beef; 4 * k];
+    let mut work = vec![0xdead_beef; redc_n_scratch_len(k)];
+    let carry = redc_n(&mut r, t, n, &ninv_full, &mut u, &mut work);
+    let got =
+        Mag::from_limbs(r).to_rug() + (Integer::from(carry) << (64 * u32::try_from(k).unwrap()));
+    assert!(got < Integer::from(2 * &nv), "redc_n: result >= 2n");
+    let want = tv * r_big.invert(&nv).unwrap() % &nv;
+    (want, got % nv)
+}
+
+/// Modulus lengths for `redc_n`: small ones, and lengths around the powers of
+/// two from which `q n` is taken modulo `B^m - 1`.
+fn redc_lens() -> BoxedStrategy<usize> {
+    let m = tested(MUL_WRAP_NTT_THRESHOLD).next_power_of_two().max(4);
+    prop_oneof![
+        1..=12usize,
+        Just(m / 2),
+        Just(m / 2 + 1),
+        Just(m * 3 / 4),
+        Just(m - 1),
+        Just(m),
+        Just(m + 1)
+    ]
+    .boxed()
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    /// `t` random below `n R`, with a zero low half (`q = 0`'s neighbour: the
+    /// low halves sum to 0, not `R`), or `n R - 1`.
+    #[test]
+    fn redc_n_matches(
+        (n, t) in redc_lens().prop_flat_map(|k| (strategy::raw_limbs(k), strategy::raw_limbs(2 * k), 0..4u8))
+            .prop_map(|(mut n, t, shape)| {
+                let k = n.len();
+                n[0] |= 1;
+                n[k - 1] = n[k - 1].max(1);
+                let nv = Mag::from_limbs(n.clone()).to_rug();
+                let nr = nv << (64 * u32::try_from(k).unwrap());
+                let tv = match shape {
+                    0 => Integer::from(&nr - 1),
+                    1 => (Mag::from_limbs(t[k..].to_vec()).to_rug() << (64 * u32::try_from(k).unwrap())) % &nr,
+                    _ => Mag::from_limbs(t).to_rug() % &nr,
+                };
+                let mut t = Mag::from_rug(&tv).limbs().to_vec();
+                t.resize(2 * k, 0);
+                (n, t)
+            }),
+    ) {
+        let (want, got) = run_redc_n(&n, &t);
+        prop_assert_eq!(got, want);
+    }
+}
+
+/// All-ones moduli (`B^k - 1`) and `t = n R - 1` at every wrap shape, and the
+/// wrap rule itself.
+#[test]
+fn redc_n_extremes() {
+    let m = tested(MUL_WRAP_NTT_THRESHOLD).next_power_of_two().max(4);
+    for k in [1, 2, 3, m / 2 + 1, m * 3 / 4, m] {
+        let n = vec![Limb::MAX; k];
+        let nr = Mag::from_limbs(n.clone()).to_rug() << (64 * u32::try_from(k).unwrap());
+        for tv in [Integer::from(&nr - 1), Integer::from(1), Integer::from(0)] {
+            let mut t = Mag::from_rug(&tv).limbs().to_vec();
+            t.resize(2 * k, 0);
+            let (want, got) = run_redc_n(&n, &t);
+            assert_eq!(got, want, "k = {k}");
+        }
+    }
+    if MUL_WRAP_NTT_THRESHOLD <= crate::testkit::TESTED_SIZE_MAX {
+        assert!(redc_wraps(m * 3 / 4) && redc_wraps(m));
+        assert_eq!(redc_wraps(m / 2), m / 2 >= MUL_WRAP_NTT_THRESHOLD);
+        assert!(redc_wraps(m + 1));
+    }
 }
 
 #[test]

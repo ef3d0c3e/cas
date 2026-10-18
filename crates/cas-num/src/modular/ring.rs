@@ -5,8 +5,8 @@
 //! reduced by REDC, which divides by `R` instead of by `n`. Below
 //! [`REDC_N_THRESHOLD`] limbs REDC eliminates two limbs per pass over `n`
 //! (GMP's `redc_2`); from it on, it multiplies by a precomputed
-//! `-n^(-1) mod R` and by `n` with the subquadratic multiplication
-//! (`redc_n`). Even moduli store
+//! `-n^(-1) mod R` (a short product) and by `n` with the subquadratic
+//! multiplication (`redc_n`). Even moduli store
 //! plain values and reduce products by division.
 #![allow(
     clippy::many_single_char_names,
@@ -15,10 +15,11 @@
 
 use std::cmp::Ordering;
 
-use crate::kernel::mul::addmul_2_carries;
+use crate::kernel::mul::mullo::{mullo, mullo_scratch_len};
+use crate::kernel::mul::{addmul_2_carries, mul_wrap, mul_wrap_scratch_len, wraps_cyclically};
 use crate::kernel::{
     self, add_1_assign, add_n, add_n_assign, cmp_n, div_rem, div_rem_scratch_len, mul_scratch_len,
-    sqr_scratch_len, sub_n, sub_n_assign,
+    sqr_scratch_len, sub_1_assign, sub_assign, sub_n, sub_n_assign,
 };
 use crate::{Integer, Limb, Natural};
 
@@ -356,8 +357,12 @@ impl ModRing {
         let k = self.len();
         let (u, work) = match &self.form {
             Form::Montgomery { ninv_full, .. } => {
-                let u = if ninv_full.is_empty() { 0 } else { 4 * k };
-                (u, mul_scratch_len(k, k).max(sqr_scratch_len(k)))
+                let product = mul_scratch_len(k, k).max(sqr_scratch_len(k));
+                if ninv_full.is_empty() {
+                    (0, product)
+                } else {
+                    (4 * k, product.max(redc_n_scratch_len(k)))
+                }
             }
             Form::Plain => (
                 k + 1,
@@ -445,8 +450,11 @@ fn redc_2(r: &mut [Limb], t: &mut [Limb], n: &[Limb], ninv: Limb, ninv2: u128) -
     add_n(r, hi, lo)
 }
 
-/// As [`redc_1`], with `q = t ninv_full mod R` and `q n` computed by two full
-/// multiplications. `u` holds `4k` limbs.
+/// `r = (t + q n) / R` as [`redc_2`], with `q = t ninv_full mod R` a short
+/// product ([`mullo`]) and `q n` from a full product, or, when a cyclic
+/// transform of `m = next_pow2(k)` coefficients applies, modulo `B^m -
+/// 1` ([`wrapped_high`]). `u` holds `4k` limbs, `work` at least
+/// [`redc_n_scratch_len`]`(k)`.
 fn redc_n(
     r: &mut [Limb],
     t: &[Limb],
@@ -456,14 +464,76 @@ fn redc_n(
     work: &mut [Limb],
 ) -> Limb {
     let k = n.len();
-    let (q, qn) = u.split_at_mut(2 * k);
-    kernel::mul(q, &t[..k], ninv_full, work);
-    kernel::mul(qn, &q[..k], n, work);
+    let (q, rest) = u.split_at_mut(k);
+    mullo(q, &t[..k], ninv_full, work);
     // The low halves of t and q n add up to 0 mod R: to R exactly, with a
     // carry, unless both are zero.
     let low_carry = Limb::from(t[..k].iter().any(|&l| l != 0));
-    let carry = add_n(r, &t[k..], &qn[k..]);
+    let carry = if redc_wraps(k) {
+        let (w, h) = rest.split_at_mut(k.next_power_of_two());
+        wrapped_high(&mut h[..k], w, q, n, &t[..k], work);
+        add_n(r, &t[k..], &h[..k])
+    } else {
+        let qn = &mut rest[..2 * k];
+        kernel::mul(qn, q, n, work);
+        add_n(r, &t[k..], &qn[k..])
+    };
     carry + add_1_assign(r, low_carry)
+}
+
+/// Whether [`redc_n`] takes `q n` modulo `B^m - 1`, `m = next_pow2(k)`
+/// (always below `2k`).
+fn redc_wraps(k: usize) -> bool {
+    wraps_cyclically(k.next_power_of_two())
+}
+
+/// Scratch limbs `work` that [`redc_n`] needs for a `k`-limb modulus.
+fn redc_n_scratch_len(k: usize) -> usize {
+    let product = if redc_wraps(k) {
+        mul_wrap_scratch_len(k.next_power_of_two(), k, k)
+    } else {
+        mul_scratch_len(k, k)
+    };
+    product.max(mullo_scratch_len(k))
+}
+
+/// `h = floor(q n / B^k)` for `k = n.len() = q.len()`, from the product
+/// modulo `B^m - 1` (`m = w.len()`, `k <= m < 2k`) and the low half `L = q n
+/// mod B^k`, which REDC knows: `B^k - t_lo`, or 0.
+///
+/// Write `H = h`: `q n = L + H B^k`, and `H B^k = H_lo B^k + H_hi B^m` for
+/// the low `m - k` limbs `H_lo` and the top `2k - m` limbs `H_hi` of `H`, so
+/// `q n - L = H_lo B^k + H_hi` modulo `B^m - 1`. The two parts sit side by
+/// side below `B^m`, and the sum is not `B^m - 1`: that needs `H_hi = B^k -
+/// 1`, but `H_hi` has fewer than `k` limbs when `m > k`, and `H < n < B^k`
+/// when `m = k`. So the canonical residue holds `H` exactly. Clobbers `w`; `h`
+/// is the scratch for `L`.
+fn wrapped_high(
+    h: &mut [Limb],
+    w: &mut [Limb],
+    q: &[Limb],
+    n: &[Limb],
+    t_lo: &[Limb],
+    work: &mut [Limb],
+) {
+    let (k, m) = (n.len(), w.len());
+    debug_assert!(k <= m && m < 2 * k);
+    mul_wrap(w, q, n, work);
+    // L = B^k - t_lo, or 0.
+    for (l, &x) in h.iter_mut().zip(t_lo) {
+        *l = !x;
+    }
+    add_1_assign(h, 1);
+    if sub_assign(w, h) != 0 {
+        // The borrow added B^m; the residue needs B^m - 1.
+        sub_1_assign(w, 1);
+    }
+    debug_assert!(
+        w[2 * k - m..k].iter().all(|&x| x == 0),
+        "redc_n: H_lo and H_hi overlap"
+    );
+    h[..m - k].copy_from_slice(&w[k..]);
+    h[m - k..].copy_from_slice(&w[..2 * k - m]);
 }
 
 /// The window width for an exponent of `bits` bits, minimising the

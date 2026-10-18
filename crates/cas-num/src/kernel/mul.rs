@@ -16,6 +16,8 @@
     reason = "the algorithms use the textbook names (a, b, r, n, s, t)"
 )]
 
+pub(crate) mod mullo;
+
 use super::{add_1_assign, add_assign, cmp_n, ntt, shl_assign, shr_assign, sub_assign, sub_n};
 use crate::Limb;
 
@@ -270,7 +272,7 @@ pub fn sqr(r: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) {
 }
 
 /// Whether [`mul_wrap`] modulo `B^m - 1` uses the cyclic transform.
-fn wraps_cyclically(m: usize) -> bool {
+pub(crate) fn wraps_cyclically(m: usize) -> bool {
     m.is_power_of_two() && m >= MUL_WRAP_NTT_THRESHOLD
 }
 

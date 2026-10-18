@@ -75,6 +75,14 @@ fn measure(op: &str, n: usize, min: Duration) -> f64 {
             let mut s = vec![0; kernel::sqr_scratch_len(n)];
             time(min, || kernel::sqr(&mut r, black_box(&a), &mut s))
         }
+        "mullo" => {
+            let (a, b) = (limbs(n, 1), limbs(n, 2));
+            let mut r = vec![0; n];
+            let mut s = vec![0; kernel::mullo_scratch_len(n)];
+            time(min, || {
+                kernel::mullo(&mut r, black_box(&a), black_box(&b), &mut s);
+            })
+        }
         "div" => {
             // A 2n-limb dividend by a normalised n-limb divisor.
             let (a, d) = (limbs(2 * n, 4), limbs(n, 5));

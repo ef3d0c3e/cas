@@ -9,6 +9,10 @@ use rug::Integer;
 
 use super::{split_at_limbs, val};
 use crate::Limb;
+use crate::kernel::mul::mullo::{
+    MULLO_DC_THRESHOLD, MULLO_MUL_THRESHOLD, Mullo, mullo, mullo_algorithm, mullo_basecase,
+    mullo_scratch_len,
+};
 use crate::kernel::mul::{
     Algorithm, MUL_KARATSUBA_THRESHOLD, MUL_NTT_THRESHOLD, MUL_TOOM3_THRESHOLD,
     MUL_TOOM4_THRESHOLD, MUL_WRAP_NTT_THRESHOLD, NTT_EFFICIENCY_EXPONENT, SQR_KARATSUBA_THRESHOLD,
@@ -667,5 +671,76 @@ fn ntt_dispatch_follows_efficiency() {
     }
     if NTT_EFFICIENCY_EXPONENT > 0 && f >= 16 {
         assert!(ntt > 0 && toom > 0, "ntt {ntt}, toom {toom}");
+    }
+}
+
+/// `a b mod B^n` from [`mullo`] with an exactly sized, garbage-filled scratch.
+fn run_mullo(a: &[Limb], b: &[Limb]) -> Vec<Limb> {
+    let mut r = vec![GARBAGE; a.len()];
+    let mut scratch = vec![GARBAGE; mullo_scratch_len(a.len())];
+    mullo(&mut r, a, b, &mut scratch);
+    r
+}
+
+/// The low `n` limbs of `a b`, by schoolbook.
+fn low_half(a: &[Limb], b: &[Limb]) -> Vec<Limb> {
+    let mut full = basecase(a, b);
+    full.truncate(a.len());
+    full
+}
+
+/// Lengths around both short-product thresholds, and where the divide and
+/// conquer split recurses into its own range.
+fn mullo_lens() -> BoxedStrategy<usize> {
+    len_around(&[
+        1,
+        2,
+        MULLO_DC_THRESHOLD,
+        2 * MULLO_DC_THRESHOLD,
+        4 * MULLO_DC_THRESHOLD,
+        MULLO_MUL_THRESHOLD,
+    ])
+    .boxed()
+}
+
+proptest! {
+    #[test]
+    fn mullo_matches(
+        (a, b) in mullo_lens().prop_flat_map(|n| (strategy::raw_limbs(n), strategy::raw_limbs(n))),
+    ) {
+        prop_assert_eq!(run_mullo(&a, &b), low_half(&a, &b));
+    }
+
+    #[test]
+    fn mullo_basecase_matches(
+        (a, b) in (0..=40usize).prop_flat_map(|n| (strategy::raw_limbs(n), strategy::raw_limbs(n))),
+    ) {
+        let mut r = vec![GARBAGE; a.len()];
+        mullo_basecase(&mut r, &a, &b);
+        prop_assert_eq!(r, low_half(&a, &b));
+    }
+}
+
+/// All-ones operands (every carry out of `B^n` set) at each algorithm, and the
+/// dispatcher's choice.
+#[test]
+fn mullo_all_ones() {
+    for n in [
+        1,
+        2,
+        3,
+        MULLO_DC_THRESHOLD,
+        MULLO_DC_THRESHOLD + 1,
+        3 * MULLO_DC_THRESHOLD + 1,
+        MULLO_MUL_THRESHOLD,
+    ] {
+        let n = tested(n);
+        let ones = vec![Limb::MAX; n];
+        assert_eq!(run_mullo(&ones, &ones), low_half(&ones, &ones), "n = {n}");
+    }
+    if MULLO_DC_THRESHOLD < MULLO_MUL_THRESHOLD && MULLO_MUL_THRESHOLD <= TESTED_SIZE_MAX {
+        assert_eq!(mullo_algorithm(MULLO_DC_THRESHOLD - 1), Mullo::Basecase);
+        assert_eq!(mullo_algorithm(MULLO_DC_THRESHOLD), Mullo::Dc);
+        assert_eq!(mullo_algorithm(MULLO_MUL_THRESHOLD), Mullo::Full);
     }
 }
