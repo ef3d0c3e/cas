@@ -503,6 +503,42 @@ impl MachineBall {
         self.via_ball(Ball::log1p)
     }
 
+    /// `sin`, through [`Ball`] at 64 bits until CAS-88's kernels.
+    #[must_use]
+    pub fn sin(&self) -> Option<MachineBall> {
+        self.via_ball(Ball::sin)
+    }
+
+    /// `cos`, through [`Ball`] at 64 bits until CAS-88's kernels.
+    #[must_use]
+    pub fn cos(&self) -> Option<MachineBall> {
+        self.via_ball(Ball::cos)
+    }
+
+    /// `tan`, through [`Ball`] at 64 bits until CAS-88's kernels; `None` across a pole.
+    #[must_use]
+    pub fn tan(&self) -> Option<MachineBall> {
+        self.via_ball(Ball::tan)
+    }
+
+    /// `atan`, through [`Ball`] at 64 bits until CAS-88's kernels.
+    #[must_use]
+    pub fn atan(&self) -> Option<MachineBall> {
+        self.via_ball(Ball::atan)
+    }
+
+    /// `asin`, through [`Ball`] at 64 bits until CAS-88's kernels; `None` outside `[-1, 1]`.
+    #[must_use]
+    pub fn asin(&self) -> Option<MachineBall> {
+        self.via_ball(Ball::asin)
+    }
+
+    /// `acos`, through [`Ball`] at 64 bits until CAS-88's kernels; `None` outside `[-1, 1]`.
+    #[must_use]
+    pub fn acos(&self) -> Option<MachineBall> {
+        self.via_ball(Ball::acos)
+    }
+
     /// `f` evaluated on the ball through [`Ball`] at 64 bits, the fallback
     /// for functions without a machine kernel yet (CAS-88).
     #[must_use]

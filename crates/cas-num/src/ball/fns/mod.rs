@@ -10,9 +10,11 @@
     reason = "x, t, m, k, h, n, w, e as in the error analyses of the comments"
 )]
 
+mod atan;
 mod exp;
 mod fixed;
 mod log;
+mod trig;
 
 #[cfg(test)]
 mod tests;

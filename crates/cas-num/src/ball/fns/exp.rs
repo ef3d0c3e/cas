@@ -20,7 +20,7 @@ use crate::{Integer, Natural};
 const HUGE_EXP: i64 = 1 << 16;
 
 /// `x` truncated to a fixed-point integer `trunc(x 2^w)`.
-fn to_fixed(x: &Float, w: u64) -> Integer {
+pub(super) fn to_fixed(x: &Float, w: u64) -> Integer {
     let (m, e) = x.to_integer_exp();
     let shift = e + Integer::from(w);
     match shift.to_i64() {

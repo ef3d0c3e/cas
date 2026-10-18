@@ -326,8 +326,8 @@ fn functions(c: &mut Criterion) {
     let funs: [(&str, Fun, Ours); 4] = [
         ("exp", |x| x.clone().exp(), Some(ball::Ball::exp)),
         ("log", |x| x.clone().ln(), Some(ball::Ball::log)),
-        ("sin", |x| x.clone().sin(), None),
-        ("atan", |x| x.clone().atan(), None),
+        ("sin", |x| x.clone().sin(), Some(ball::Ball::sin)),
+        ("atan", |x| x.clone().atan(), Some(ball::Ball::atan)),
     ];
     for (name, f, ours) in funs {
         let mut group = c.benchmark_group(name);

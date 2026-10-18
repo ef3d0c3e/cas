@@ -382,3 +382,15 @@ fn functions_through_ball() {
     assert_eq!(MachineBall::exact(-1.0).unwrap().log(), None);
     assert_eq!(MachineBall::exact(1000.0).unwrap().exp(), None);
 }
+
+#[test]
+fn trig_through_ball() {
+    let x = MachineBall::new(0.75, 1e-12).unwrap();
+    assert!(x.sin().unwrap().contains(0.75f64.sin()));
+    assert!(x.cos().unwrap().contains(0.75f64.cos()));
+    assert!(x.tan().unwrap().contains(0.75f64.tan()));
+    assert!(x.atan().unwrap().contains(0.75f64.atan()));
+    assert!(x.asin().unwrap().contains(0.75f64.asin()));
+    assert!(x.acos().unwrap().contains(0.75f64.acos()));
+    assert_eq!(MachineBall::exact(2.0).unwrap().asin(), None);
+}
