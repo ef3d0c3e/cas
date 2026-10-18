@@ -11,8 +11,9 @@ use super::{split_at_limbs, val};
 use crate::Limb;
 use crate::kernel::mul::{
     Algorithm, MUL_KARATSUBA_THRESHOLD, MUL_NTT_THRESHOLD, MUL_TOOM3_THRESHOLD,
-    SQR_KARATSUBA_THRESHOLD, SQR_NTT_THRESHOLD, SQR_TOOM3_THRESHOLD, algorithm, karatsuba,
-    karatsuba_scratch_len, sqr_algorithm, toom3, toom3_scratch_len,
+    MUL_WRAP_NTT_THRESHOLD, SQR_KARATSUBA_THRESHOLD, SQR_NTT_THRESHOLD, SQR_TOOM3_THRESHOLD,
+    algorithm, karatsuba, karatsuba_scratch_len, mul_wrap, mul_wrap_scratch_len, sqr_algorithm,
+    toom3, toom3_scratch_len,
 };
 use crate::kernel::{
     addmul_1, mul, mul_1, mul_1_assign, mul_basecase, mul_scratch_len, sqr, sqr_basecase,
@@ -216,6 +217,67 @@ proptest! {
         let (a, b) = (fill(an, pa), fill(bn, pb));
         let ours = run_direct(toom3, toom3_scratch_len, &a, &b, false);
         prop_assert_eq!(ours, basecase(&a, &b));
+    }
+}
+
+/// `a * b mod (B^m - 1)` from [`mul_wrap`], checked to be canonical.
+fn run_wrap(m: usize, a: &[Limb], b: &[Limb]) -> Integer {
+    let mut r = vec![GARBAGE; m];
+    let mut scratch = vec![GARBAGE; mul_wrap_scratch_len(m, a.len(), b.len())];
+    mul_wrap(&mut r, a, b, &mut scratch);
+    let r = val(&r);
+    assert!(r < wrap_modulus(m), "not canonical");
+    r
+}
+
+fn wrap_modulus(m: usize) -> Integer {
+    (Integer::from(1) << (64 * u32::try_from(m).unwrap())) - 1u32
+}
+
+/// Moduli `B^m - 1`: small ones of every length, and powers of two around the
+/// cyclic transform's threshold.
+fn wrap_lens() -> BoxedStrategy<usize> {
+    let t = tested(MUL_WRAP_NTT_THRESHOLD).next_power_of_two();
+    prop_oneof![1..=40usize, Just(t / 2), Just(t), Just(2 * t), Just(t + 1)].boxed()
+}
+
+proptest! {
+    /// Operands shorter than the modulus, around it (one piece wraps) and up
+    /// to three times longer (folded before a cyclic product), and all-ones
+    /// ones, whose residue can come out as `B^m - 1`.
+    #[test]
+    fn mul_wrap_matches(
+        (m, a, b) in wrap_lens()
+            .prop_flat_map(|m| (Just(m), 1..=3 * m, prop_oneof![1..=m, m..=3 * m], any::<bool>()))
+            .prop_flat_map(|(m, an, bn, ones)| {
+                let limbs = move |n: usize| if ones {
+                    Just(vec![Limb::MAX; n]).boxed()
+                } else {
+                    strategy::raw_limbs(n)
+                };
+                (Just(m), limbs(an), limbs(bn))
+            }),
+    ) {
+        prop_assert_eq!(run_wrap(m, &a, &b), val(&a) * val(&b) % wrap_modulus(m));
+    }
+}
+
+/// Products that are a multiple of `B^m - 1` come out as zero.
+#[test]
+fn mul_wrap_multiple_of_modulus() {
+    for m in [
+        1,
+        2,
+        3,
+        8,
+        tested(MUL_WRAP_NTT_THRESHOLD).next_power_of_two(),
+    ] {
+        // B^m - 1 = (B^(m/2) - 1)(B^(m/2) + 1) for even m; 3 divides it.
+        let third = Mag::from_rug(&(wrap_modulus(m) / 3u32)).limbs().to_vec();
+        assert_eq!(run_wrap(m, &third, &[3]), 0, "m = {m}");
+        assert_eq!(run_wrap(m, &[6], &third), 0, "m = {m}");
+        let ones = vec![Limb::MAX; m];
+        assert_eq!(run_wrap(m, &ones, &ones), 0, "m = {m}");
     }
 }
 

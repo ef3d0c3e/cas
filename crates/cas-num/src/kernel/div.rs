@@ -1,7 +1,8 @@
 //! Division kernels: by a single limb with a precomputed reciprocal
 //! (Möller–Granlund), schoolbook long division (Knuth's algorithm D with a
 //! 3-by-2 quotient estimate), divide and conquer (Burnikel–Ziegler) for large
-//! divisors, and exact division by a single limb (Hensel).
+//! divisors, Newton's reciprocal with Barrett's estimates ([`mu`]) for large
+//! divisors and quotients, and exact division by a single limb (Hensel).
 //!
 //! The multi-limb algorithms work on a normalised divisor (top bit set);
 //! [`div_rem`] shifts both operands into caller-provided scratch first.
@@ -18,6 +19,10 @@ use crate::Limb;
 /// instead of schoolbook. Set by the tuning configuration (`build.rs`).
 pub(crate) const DC_DIV_THRESHOLD: usize = crate::tuning::DC_DIV_THRESHOLD;
 
+pub(crate) mod mu;
+
+use mu::{MU_DIV_THRESHOLD, mu_div_qr, mu_div_qr_scratch_len};
+
 /// Counters for the rarely taken correction branches, so tests can check that
 /// their inputs reach them.
 #[cfg(test)]
@@ -32,6 +37,13 @@ pub(crate) mod hits {
         pub(crate) static CAPPED: Cell<u64> = const { Cell::new(0) };
         /// Divide and conquer: a block quotient estimate was too large.
         pub(crate) static DC_CORRECTION: Cell<u64> = const { Cell::new(0) };
+        /// Newton's reciprocal: the recursive reciprocal was decreased.
+        pub(crate) static INV_DECREMENT: Cell<u64> = const { Cell::new(0) };
+        /// Barrett division: a block quotient estimate was too small.
+        pub(crate) static MU_CORRECTION: Cell<u64> = const { Cell::new(0) };
+        /// Barrett division: a block remainder reached `B^m - 1`, so its
+        /// residue alone was ambiguous.
+        pub(crate) static MU_WRAPPED: Cell<u64> = const { Cell::new(0) };
     }
 }
 
@@ -357,16 +369,41 @@ pub(crate) fn dc_div_qr_n_scratch_len(k: usize) -> usize {
     div_block_scratch_len(k - k / 2, k).max(div_block_scratch_len(k / 2, k))
 }
 
+/// Whether [`div_qr_normalized`] divides by Newton's reciprocal.
+fn uses_mu(nn: usize, m: usize) -> bool {
+    m >= MU_DIV_THRESHOLD && nn - m >= MU_DIV_THRESHOLD
+}
+
 /// Division of `n` by the normalised `d` (`d.len() >= 2`) with
-/// `q.len() == n.len() - d.len()`: schoolbook for short divisors, otherwise
-/// quotient blocks of `d.len()` limbs from the top, each by divide and conquer.
-/// Leaves the remainder in `n[..d.len()]`; returns the top quotient limb.
+/// `q.len() == n.len() - d.len()`: Barrett's estimates from Newton's
+/// reciprocal ([`mu::mu_div_qr`]) when both the divisor and the quotient are
+/// long, else [`bz_div_qr`]. Leaves the remainder in `n[..d.len()]`; returns
+/// the top quotient limb.
 pub(crate) fn div_qr_normalized(
     q: &mut [Limb],
     n: &mut [Limb],
     d: &[Limb],
     scratch: &mut [Limb],
 ) -> Limb {
+    if uses_mu(n.len(), d.len()) {
+        mu_div_qr(q, n, d, scratch)
+    } else {
+        bz_div_qr(q, n, d, scratch)
+    }
+}
+
+pub(crate) fn div_qr_normalized_scratch_len(nn: usize, m: usize) -> usize {
+    if uses_mu(nn, m) {
+        mu_div_qr_scratch_len(nn, m)
+    } else {
+        bz_div_qr_scratch_len(nn, m)
+    }
+}
+
+/// [`div_qr_normalized`] without Newton's reciprocal: schoolbook for short
+/// divisors, otherwise quotient blocks of `d.len()` limbs from the top, each
+/// by divide and conquer.
+pub(crate) fn bz_div_qr(q: &mut [Limb], n: &mut [Limb], d: &[Limb], scratch: &mut [Limb]) -> Limb {
     let m = d.len();
     let qn = n.len() - m;
     debug_assert!(m >= 2 && q.len() == qn);
@@ -393,7 +430,7 @@ pub(crate) fn div_qr_normalized(
     Limb::from(qh)
 }
 
-pub(crate) fn div_qr_normalized_scratch_len(nn: usize, m: usize) -> usize {
+pub(crate) fn bz_div_qr_scratch_len(nn: usize, m: usize) -> usize {
     let qn = nn - m;
     if m < DC_DIV_THRESHOLD || qn < 2 {
         return 0;

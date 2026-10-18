@@ -161,6 +161,26 @@ fn params() -> Vec<Param> {
             window: None,
         },
         Param {
+            key: "mul_wrap_ntt_threshold",
+            op: "div",
+            grid: with_never((6..=14).map(|k| 1 << k).collect()),
+            // Divisions long enough to take Barrett's estimates, whose
+            // products modulo B^m - 1 have every power-of-two m up to n.
+            window: Some(|_| geometric(2048, 32768, 1.5)),
+        },
+        Param {
+            key: "inv_newton_threshold",
+            op: "div",
+            grid: geometric(8, 2400, 1.3),
+            window: Some(|_| geometric(2048, 32768, 1.5)),
+        },
+        Param {
+            key: "mu_div_threshold",
+            op: "div",
+            grid: with_never(geometric(256, 16384, 1.19)),
+            window: None,
+        },
+        Param {
             key: "redc_n_threshold",
             op: "redc",
             grid: with_never(geometric(16, 640, 1.19)),

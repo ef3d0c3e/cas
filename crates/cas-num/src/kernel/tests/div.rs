@@ -19,12 +19,17 @@ use rug::ops::{DivRounding, RemRounding};
 
 use super::{base_pow, val};
 use crate::Limb;
+use crate::kernel::div::mu::{
+    INV_NEWTON_THRESHOLD, MU_DIV_THRESHOLD, block_inverse, invert, invert_scratch_len, mu_div_qr,
+    mu_div_qr_scratch_len,
+};
 use crate::kernel::div::{
-    DC_DIV_THRESHOLD, div_2by1, div_3by2, hits, reciprocal_2by1, reciprocal_3by2, sb_div_qr,
+    DC_DIV_THRESHOLD, bz_div_qr, bz_div_qr_scratch_len, div_2by1, div_3by2, hits, reciprocal_2by1,
+    reciprocal_3by2, sb_div_qr,
 };
 use crate::kernel::{div_rem, div_rem_1, div_rem_scratch_len, divexact_1, rem_1, submul_1};
 use crate::testkit::strategy::{self, len_around};
-use crate::testkit::{Mag, ToRug, differential};
+use crate::testkit::{Mag, ToRug, differential, tested};
 
 const GARBAGE: Limb = 0xdead_beef_dead_beef;
 
@@ -60,6 +65,7 @@ fn divisor_lens() -> BoxedStrategy<usize> {
         DC_DIV_THRESHOLD,
         2 * DC_DIV_THRESHOLD,
         4 * DC_DIV_THRESHOLD,
+        tested(MU_DIV_THRESHOLD),
     ])
 }
 
@@ -253,12 +259,7 @@ fn count(counter: &'static LocalKey<Cell<u64>>, f: impl FnOnce()) -> u64 {
     counter.with(Cell::get)
 }
 
-fn check_div(a: &[Limb], d: &[Limb]) {
-    let (q, r) = run_div(a, d);
-    assert_eq!((q.to_rug(), r.to_rug()), gmp_div(a, d));
-}
-
-/// [`check_div`] through the schoolbook kernel directly, whatever the
+/// Checks `a / d` against GMP through the schoolbook kernel directly, whatever the
 /// configured divide-and-conquer threshold; `d` normalised, `d.len() >= 2`.
 fn check_schoolbook(a: &[Limb], d: &[Limb]) -> Mag {
     let dn = d.len();
@@ -299,6 +300,19 @@ fn capped_estimate_is_reached() {
     assert_eq!(q, Mag::from_u64(u64::MAX));
 }
 
+/// Checks `a / d` against GMP through divide and conquer directly, whatever the
+/// configured Barrett threshold; `d` normalised, `d.len() >= 2`.
+fn check_bz(a: &[Limb], d: &[Limb]) {
+    let dn = d.len();
+    let mut n = a.to_vec();
+    let mut q = vec![GARBAGE; a.len() - dn];
+    let mut scratch = vec![GARBAGE; bz_div_qr_scratch_len(a.len(), dn)];
+    let qh = bz_div_qr(&mut q, &mut n, d, &mut scratch);
+    q.push(qh);
+    let (q, r) = (Mag::from_limbs(q), Mag::from_limbs(n[..dn].to_vec()));
+    assert_eq!((q.to_rug(), r.to_rug()), gmp_div(a, d));
+}
+
 /// The divide-and-conquer block estimates overshoot for `a = q d - 1`.
 #[test]
 fn dc_correction_is_reached() {
@@ -316,7 +330,7 @@ fn dc_correction_is_reached() {
             let q: Vec<Limb> = (0..qn as u64).map(|i| !i).collect();
             let a = limbs_of(&(val(&q) * val(&d) - 1u32));
             assert!(
-                count(&hits::DC_CORRECTION, || check_div(&a, &d)) >= 1,
+                count(&hits::DC_CORRECTION, || check_bz(&a, &d)) >= 1,
                 "dn = {dn}, qn = {qn}"
             );
         }
@@ -489,5 +503,287 @@ fn tune_div() {
             ));
         });
         println!("{dn} {qn} {ours:.0} {gmp:.0} {:.2}", ours / gmp);
+    }
+}
+
+/// `X = B^n + I` from [`invert`] on the normalised `a`, checked against
+/// `A X < B^(2n) < A (X + 2)`.
+fn check_invert(a: &[Limb]) -> Integer {
+    let n = a.len();
+    let mut x = vec![GARBAGE; n];
+    let mut scratch = vec![GARBAGE; invert_scratch_len(n)];
+    invert(&mut x, a, &mut scratch);
+    let x = val(&x) + base_pow(n);
+    let (a, b2n) = (val(a), base_pow(2 * n));
+    assert!(Integer::from(&a * &x) < b2n, "A X >= B^2n for n = {n}");
+    assert!(
+        (x.clone() + 2u32) * a > b2n,
+        "A (X + 2) <= B^2n for n = {n}"
+    );
+    x
+}
+
+/// Reciprocal lengths: every small one, and around the Newton threshold and
+/// its first recursion, `2 (t - 1)`.
+fn invert_lens() -> BoxedStrategy<usize> {
+    let t = tested(INV_NEWTON_THRESHOLD);
+    prop_oneof![len_around(&[1, 2, 3, t, 2 * t - 2, 4 * t]), 1..=40usize].boxed()
+}
+
+/// Normalised values with the shapes that stress a reciprocal: random, the
+/// smallest (`B^n / 2`, reciprocal `2 B^n - 1`), the largest, and runs of
+/// ones or zeros below a random top.
+fn invert_operand(n: usize) -> BoxedStrategy<Vec<Limb>> {
+    let top = 1 << 63;
+    prop_oneof![
+        strategy::raw_limbs(n).prop_map(move |mut a| {
+            a[n - 1] |= top;
+            a
+        }),
+        Just({
+            let mut a = vec![0; n];
+            a[n - 1] = top;
+            a
+        }),
+        Just(vec![Limb::MAX; n]),
+        (normalised_limb(), any::<bool>(), 0..n).prop_map(move |(t, ones, k)| {
+            let mut a = vec![if ones { Limb::MAX } else { 0 }; n];
+            a[n - 1] = t;
+            a[k.min(n - 1)] ^= 1;
+            a
+        }),
+    ]
+    .boxed()
+}
+
+proptest! {
+    #[test]
+    fn invert_bound(a in invert_lens().prop_flat_map(invert_operand)) {
+        check_invert(&a);
+    }
+}
+
+/// Checks `a / d` against GMP through Barrett division directly, whatever the configured
+/// thresholds; `d` normalised, `d.len() >= 2`, `a.len() > d.len()`.
+fn check_mu(a: &[Limb], d: &[Limb]) {
+    let dn = d.len();
+    let mut n = a.to_vec();
+    let mut q = vec![GARBAGE; a.len() - dn];
+    let mut scratch = vec![GARBAGE; mu_div_qr_scratch_len(a.len(), dn)];
+    let qh = mu_div_qr(&mut q, &mut n, d, &mut scratch);
+    q.push(qh);
+    let (q, r) = (Mag::from_limbs(q), Mag::from_limbs(n[..dn].to_vec()));
+    assert_eq!(
+        (q.to_rug(), r.to_rug()),
+        gmp_div(a, d),
+        "dn = {dn}, an = {}",
+        a.len()
+    );
+}
+
+/// `(a, d)` for Barrett division: `d` normalised, of a length around the
+/// thresholds of the reciprocal it inverts, with `a` as in [`div_operands`].
+fn mu_operands() -> impl Strategy<Value = (Vec<Limb>, Vec<Limb>)> {
+    let t = tested(INV_NEWTON_THRESHOLD);
+    (len_around(&[2, 3, 4, 8, t, 2 * t, 3 * t]), any::<bool>())
+        .prop_flat_map(|(dn, small)| {
+            let dn = dn.max(2);
+            let qn = prop_oneof![
+                Just(1),
+                Just(dn / 3),
+                Just(dn / 3 + 1),
+                Just(dn),
+                Just(dn + 1),
+                Just(2 * dn + 3),
+                1..=2 * dn
+            ];
+            (
+                invert_operand(dn),
+                qn.prop_map(|q: usize| q.max(1)),
+                Just(small),
+            )
+        })
+        .prop_flat_map(|(d, qn, small)| {
+            let dn = d.len();
+            let raw = strategy::raw_limbs(dn + qn).prop_map(|a| (a, None)).boxed();
+            let shaped = (
+                strategy::natural_with_len(Just(qn)),
+                prop_oneof![Just(0i64), Just(1), Just(i64::MAX)],
+            )
+                .prop_map(|(q, e)| (Vec::new(), Some((q, e))))
+                .boxed();
+            (Just(d), if small { raw } else { shaped })
+        })
+        .prop_map(|(d, (raw, shaped))| {
+            let a = match shaped {
+                None => raw,
+                Some((q, e)) => {
+                    let e = if e == i64::MAX {
+                        val(&d) - 1u32
+                    } else {
+                        Integer::from(e)
+                    };
+                    let mut a = limbs_of(&(q.to_rug() * val(&d) + e));
+                    a.resize(a.len().max(d.len() + 1), 0);
+                    a
+                }
+            };
+            (a, d)
+        })
+}
+
+proptest! {
+    #[test]
+    fn mu_div_qr_matches((a, d) in mu_operands()) {
+        check_mu(&a, &d);
+    }
+}
+
+/// The reciprocal's decrease step: with `A`'s low limbs all ones, `A Xh`
+/// reaches `B^(n + h)` for most tops.
+#[test]
+fn invert_decrement_is_reached() {
+    if INV_NEWTON_THRESHOLD > crate::testkit::TESTED_SIZE_MAX {
+        return;
+    }
+    let n = tested(INV_NEWTON_THRESHOLD).max(3);
+    let mut hits = 0;
+    for t in 0..20u64 {
+        let mut a = vec![Limb::MAX; n];
+        a[n - 1] = (1 << 63) | t.wrapping_mul(0x9e37_79b9_7f4a_7c15) >> 1;
+        hits += count(&hits::INV_DECREMENT, || drop(check_invert(&a)));
+    }
+    assert!(hits >= 1);
+}
+
+/// The largest remainders `a = q d + d - 1` make Barrett's estimates fall
+/// short, so the correction runs.
+#[test]
+fn mu_correction_is_reached() {
+    if INV_NEWTON_THRESHOLD > crate::testkit::TESTED_SIZE_MAX {
+        return;
+    }
+    let t = tested(INV_NEWTON_THRESHOLD);
+    for dn in [2, 3, 8, t, 2 * t + 1] {
+        for qn in [1, dn / 3 + 1, dn, 2 * dn + 3] {
+            let d: Vec<Limb> = (0..dn as u64)
+                .map(|i| i.wrapping_mul(0x9e37_79b9_7f4a_7c15) >> 1)
+                .chain([1 << 63])
+                .skip(1)
+                .collect();
+            let q: Vec<Limb> = (0..qn as u64).map(|i| !i).collect();
+            let a = limbs_of(&(val(&q) * val(&d) + val(&d) - 1u32));
+            let c = count(&hits::MU_CORRECTION, || check_mu(&a, &d));
+            // A one-limb quotient of B - 1 comes out exact.
+            assert!(qn == 1 || c >= 1, "dn = {dn}, qn = {qn}");
+        }
+    }
+}
+
+/// A divisor just above `B^dn / 2`, of a power-of-two length, leaves
+/// remainders of about `2D = B^dn` before the correction: the residue modulo
+/// `B^dn - 1` alone is then ambiguous, and the low limb decides.
+#[test]
+fn mu_wrapped_is_reached() {
+    let t = tested(INV_NEWTON_THRESHOLD).next_power_of_two();
+    for dn in [2, 4, 8, t, 2 * t] {
+        let mut d = vec![0; dn];
+        d[dn - 1] = 1 << 63;
+        d[0] = 0x9e37_79b9;
+        let q: Vec<Limb> = (0..dn as u64)
+            .map(|i| i.wrapping_mul(0xbf58_476d_1ce4_e5b9))
+            .collect();
+        let a = limbs_of(&(val(&q) * val(&d) + val(&d) - 1u32));
+        assert!(
+            count(&hits::MU_WRAPPED, || check_mu(&a, &d)) >= 1,
+            "dn = {dn}"
+        );
+    }
+}
+
+/// Divisions through [`div_rem`] on both sides of the configured Barrett
+/// threshold, beyond the property tests' sizes: random and largest-remainder
+/// dividends, quotients of one block, two halves and several blocks.
+/// Skipped when the configuration leaves these sizes to divide and conquer.
+#[test]
+fn div_rem_around_mu_threshold() {
+    let t = MU_DIV_THRESHOLD;
+    if t > 20_000 {
+        return;
+    }
+    let lens = |dn: usize| [t - 1, t, dn, 2 * dn + 3];
+    for dn in [t, t + 1, (2 * t).next_power_of_two()] {
+        for qn in lens(dn) {
+            let d: Vec<Limb> = (0..dn as u64)
+                .map(|i| i.wrapping_mul(0x9e37_79b9_7f4a_7c15) ^ i << 7)
+                .collect();
+            let q: Vec<Limb> = (0..qn as u64)
+                .map(|i| !i.wrapping_mul(0xbf58_476d_1ce4_e5b9))
+                .collect();
+            for a in [
+                limbs_of(&(val(&q) * val(&d) + val(&d) - 1u32)),
+                limbs_of(&(val(&q) * val(&d))),
+            ] {
+                let (q, r) = run_div(&a, &d);
+                assert_eq!(
+                    (q.to_rug(), r.to_rug()),
+                    gmp_div(&a, &d),
+                    "dn = {dn}, qn = {qn}"
+                );
+            }
+        }
+    }
+}
+
+/// The block reciprocal never exceeds `B^(dn + k) / D`, on divisors where the
+/// truncated top limbs alone would give one above it: top limbs
+/// `Dt = floor(B^(2k + 1) / X0)`, whose reciprocal is `X0 B` to within a few
+/// units, and a tail of ones.
+#[test]
+fn block_inverse_is_below_reciprocal() {
+    let t = tested(INV_NEWTON_THRESHOLD);
+    for k in [1, 2, 3, 8, t, 2 * t + 1] {
+        for s in [1, 3] {
+            for seed in 1..=4u64 {
+                let x0: Vec<Limb> = (0..k as u64)
+                    .map(|i| (i + seed).wrapping_mul(0x9e37_79b9_7f4a_7c15))
+                    .chain([1])
+                    .collect();
+                let dt = base_pow(2 * k) * (Integer::from(1) << 64) / val(&x0);
+                let d = dt * base_pow(s) + base_pow(s) - 1u32;
+                let d = limbs_of(&d);
+                let dn = d.len();
+                assert_eq!(dn, k + 1 + s);
+                let mut inv = vec![GARBAGE; k];
+                let mut scratch = vec![GARBAGE; 2 * k + 2 + invert_scratch_len(k + 1)];
+                block_inverse(&mut inv, &d, &mut scratch);
+                let x = val(&inv) + base_pow(k);
+                let (d, top) = (val(&d), base_pow(dn + k));
+                assert!(Integer::from(&x * &d) <= top, "k = {k}, s = {s}: X above");
+                assert!((x + 2u32) * d > top, "k = {k}, s = {s}: X too small");
+            }
+        }
+    }
+}
+
+/// Exact multiples of divisors of `B^m - 1` times a power-of-two length `m`
+/// (all ones, and `2 (B^m - 1) / 3`, by multiples of 3): the window and the
+/// product are both multiples of `B^m - 1`, so the residue modulo `B^m - 1`
+/// is zero, which the block may hold as `B^m - 1`.
+#[test]
+fn mu_exact_multiple_of_wrap_modulus() {
+    let t = tested(INV_NEWTON_THRESHOLD).next_power_of_two();
+    for dn in [2, 4, 8, t] {
+        let ones = vec![Limb::MAX; dn];
+        let two_thirds = limbs_of(&(val(&ones) / 3u32 * 2u32));
+        for d in [ones, two_thirds] {
+            for qn in [1, 2, dn / 2 + 1, dn, 2 * dn + 1] {
+                for q in [vec![Limb::MAX; qn], (1..=qn as u64).collect()] {
+                    let mut a = limbs_of(&(val(&q) * 3u32 * val(&d)));
+                    a.resize(a.len().max(dn + 1), 0);
+                    check_mu(&a, &d);
+                }
+            }
+        }
     }
 }

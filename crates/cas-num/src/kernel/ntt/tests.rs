@@ -107,6 +107,48 @@ proptest! {
     }
 }
 
+/// `a * b mod (B^n - 1)` from [`mul_cyclic`], as a residue in `[0, B^n - 1)`.
+fn run_cyclic(n: usize, a: &[Limb], b: &[Limb]) -> Integer {
+    let mut r = vec![GARBAGE; n];
+    let mut scratch = vec![GARBAGE; cyclic_scratch_len(n)];
+    mul_cyclic(&mut r, a, b, &mut scratch);
+    val(&r) % ((Integer::from(1) << (64 * n)) - 1u32)
+}
+
+fn modulo_bnm1(x: Integer, n: usize) -> Integer {
+    x % ((Integer::from(1) << (64 * n)) - 1u32)
+}
+
+proptest! {
+    /// Cyclic products of every operand length up to the transform length,
+    /// through the transform's recursion.
+    #[test]
+    fn mul_cyclic_matches(
+        (n, a, b) in (0..=12u32)
+            .prop_map(|k| 1usize << k)
+            .prop_flat_map(|n| (Just(n), 1..=n, 1..=n))
+            .prop_flat_map(|(n, an, bn)| (Just(n), strategy::raw_limbs(an), strategy::raw_limbs(bn))),
+    ) {
+        prop_assert_eq!(run_cyclic(n, &a, &b), modulo_bnm1(val(&a) * val(&b), n));
+    }
+}
+
+/// All-ones operands of the full transform length: every coefficient is the
+/// largest, `n (B - 1)^2`, and the carry out of the top limb is two limbs.
+#[test]
+fn mul_cyclic_all_ones() {
+    for n in [1, 2, 4, 64, BLOCK, 2 * BLOCK] {
+        for (an, bn) in [(n, n), (n, 1), (n / 2 + 1, n)] {
+            let (a, b) = (vec![Limb::MAX; an], vec![Limb::MAX; bn]);
+            assert_eq!(
+                run_cyclic(n, &a, &b),
+                modulo_bnm1(val(&a) * val(&b), n),
+                "n = {n}, ({an}, {bn})"
+            );
+        }
+    }
+}
+
 /// All-ones operands give the largest coefficients, `min(an, bn) (B - 1)^2`,
 /// which the recombination must carry exactly; the lengths straddle the
 /// powers of two and the recursion threshold.

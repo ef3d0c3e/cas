@@ -339,7 +339,53 @@ fn convolve(r: &mut [Limb], a: &[Limb], b: Option<&[Limb]>, scratch: &mut [Limb]
     let len = an + bn - 1;
     let (f0, f12) = residues.split_at(stride);
     let (f1, f2) = f12.split_at(stride);
-    recombine(r, &f0[..len], &f1[..len], &f2[..len]);
+    let carry = recombine(&mut r[..len], &f0[..len], &f1[..len], &f2[..len]);
+    r[len] = carry as Limb;
+    debug_assert_eq!(carry >> Limb::BITS, 0, "ntt: product overflows");
+}
+
+/// Scratch limbs [`mul_cyclic`] needs for a transform of `n` limbs.
+pub(crate) fn cyclic_scratch_len(n: usize) -> usize {
+    6 * n
+}
+
+/// `r = a * b mod (B^n - 1)` for `n = r.len()` a power of two and operands of
+/// `1..=n` limbs, with `scratch.len() >= cyclic_scratch_len(n)`. The result
+/// is a residue in `[0, B^n)`: `B^n - 1` may stand for zero.
+///
+/// `B^n = 1` modulo `B^n - 1`, so this is the cyclic convolution of the limbs,
+/// with no top coefficients to recompute. Each coefficient still sums at
+/// most `min(an, bn)` limb products, within the bound the primes cover.
+pub(crate) fn mul_cyclic(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]) {
+    let n = r.len();
+    assert!(
+        n.is_power_of_two() && (1..=n).contains(&a.len()) && (1..=n).contains(&b.len()),
+        "ntt: cyclic length mismatch"
+    );
+    let log_n = n.trailing_zeros();
+    assert!(log_n <= ROOT_ORDER_LOG2, "ntt: operands too long");
+    let (residues, rest) = scratch.split_at_mut(3 * n);
+    let (tw, g) = rest.split_at_mut(2 * n);
+    for (&(p, root), f) in PRIMES.iter().zip(residues.chunks_exact_mut(n)) {
+        let m = Modulus::new(p);
+        twiddles(m, tw, m.pow(root, 1 << (ROOT_ORDER_LOG2 - log_n)));
+        cyclic_mod(m, f, a, Some(b), tw, &mut g[..n]);
+    }
+    let (f0, f12) = residues.split_at(n);
+    let (f1, f2) = f12.split_at(n);
+    let carry = recombine(r, f0, f1, f2);
+    // The carry is worth carry B^n = carry.
+    add_wrapping(r, 0, carry as Limb);
+    add_wrapping(r, 1 % n, (carry >> Limb::BITS) as Limb);
+}
+
+/// `r += x B^at` modulo `B^n - 1` (`n = r.len()`, `at < n`): a carry out of
+/// the top is worth `B^n = 1`, so it comes back in at the bottom.
+fn add_wrapping(r: &mut [Limb], at: usize, x: Limb) {
+    let mut carry = super::add_1_assign(&mut r[at..], x);
+    while carry != 0 {
+        carry = super::add_1_assign(r, carry);
+    }
 }
 
 /// `f[..len] = a * b mod p` (or `a^2`), the linear convolution of
@@ -362,30 +408,8 @@ fn convolve_mod(
     let (an, bn) = (a.len(), b.map_or(a.len(), <[Limb]>::len));
     let len = an + bn - 1;
     let n = transform_len(an, bn);
-    let log_n = n.trailing_zeros();
     let (f, top) = f.split_at_mut(n);
-    load(m, f, a);
-    forward(m, f, tw);
-    // Montgomery reduction leaves 2^-64 and the inverse transform n, so each
-    // pointwise product is scaled by 2^64 / n = 2^(64 - log n).
-    let k = m.pow(2, u64::from(Limb::BITS - log_n));
-    let ks = m.shoup(k);
-    if let Some(b) = b {
-        let g = &mut work[..n];
-        load(m, g, b);
-        forward(m, g, tw);
-        for (x, &y) in f.iter_mut().zip(&*g) {
-            *x = m.mul_shoup(m.redc(u128::from(*x) * u128::from(y)), k, ks);
-        }
-    } else {
-        for x in f.iter_mut() {
-            *x = m.mul_shoup(m.redc(u128::from(*x) * u128::from(*x)), k, ks);
-        }
-    }
-    inverse(m, f, tw);
-    for x in f.iter_mut() {
-        *x = m.reduce_p(*x);
-    }
+    cyclic_mod(m, f, a, b, tw, &mut work[..if b.is_some() { n } else { 0 }]);
 
     let e = len.saturating_sub(n);
     if e == 0 {
@@ -400,10 +424,45 @@ fn convolve_mod(
     }
 }
 
-/// `r = sum_k x_k B^k`, where `x_k` is the coefficient with residues
-/// `(f0[k], f1[k], f2[k])` modulo the three primes (Garner's algorithm); the
-/// last limb of `r` only takes the carry.
-fn recombine(r: &mut [Limb], f0: &[Limb], f1: &[Limb], f2: &[Limb]) {
+/// `f = a * b mod (x^n - 1, p)` (or `a^2`) for `n = f.len()`, the cyclic
+/// convolution of operands of at most `n` limbs, as residues in `[0, p)`;
+/// `g` holds `b`'s transform (`n` limbs, empty when squaring).
+fn cyclic_mod(
+    m: Modulus,
+    f: &mut [Limb],
+    a: &[Limb],
+    b: Option<&[Limb]>,
+    tw: &[Limb],
+    g: &mut [Limb],
+) {
+    let log_n = f.len().trailing_zeros();
+    load(m, f, a);
+    forward(m, f, tw);
+    // Montgomery reduction leaves 2^-64 and the inverse transform n, so each
+    // pointwise product is scaled by 2^64 / n = 2^(64 - log n).
+    let k = m.pow(2, u64::from(Limb::BITS - log_n));
+    let ks = m.shoup(k);
+    if let Some(b) = b {
+        load(m, g, b);
+        forward(m, g, tw);
+        for (x, &y) in f.iter_mut().zip(&*g) {
+            *x = m.mul_shoup(m.redc(u128::from(*x) * u128::from(y)), k, ks);
+        }
+    } else {
+        for x in f.iter_mut() {
+            *x = m.mul_shoup(m.redc(u128::from(*x) * u128::from(*x)), k, ks);
+        }
+    }
+    inverse(m, f, tw);
+    for x in f.iter_mut() {
+        *x = m.reduce_p(*x);
+    }
+}
+
+/// `r + carry B^r.len() = sum_k x_k B^k`, where `x_k` is the coefficient with
+/// residues `(f0[k], f1[k], f2[k])` modulo the three primes (Garner's
+/// algorithm), one per limb of `r`; returns the carry.
+fn recombine(r: &mut [Limb], f0: &[Limb], f1: &[Limb], f2: &[Limb]) -> u128 {
     let [m0, m1, m2] = PRIMES.map(|(p, _)| Modulus::new(p));
     // The primes are within a factor 2 of each other, so reduce_p reduces a
     // residue modulo one prime to a residue modulo another.
@@ -414,8 +473,6 @@ fn recombine(r: &mut [Limb], f0: &[Limb], f1: &[Limb], f2: &[Limb]) {
     let p01 = u128::from(m0.p) * u128::from(m1.p);
     let (p01_lo, p01_hi) = (u128::from(p01 as Limb), p01 >> Limb::BITS);
 
-    let coefficients = r.len() - 1;
-    let (r, top) = r.split_at_mut(coefficients);
     let mut carry: u128 = 0;
     for (((out, &x0), &x1), &x2) in r.iter_mut().zip(f0).zip(f1).zip(f2) {
         // x = x0 + p0 y1 + p0 p1 y2 with y1 < p1 and y2 < p2.
@@ -433,8 +490,7 @@ fn recombine(r: &mut [Limb], f0: &[Limb], f1: &[Limb], f2: &[Limb]) {
             + (carry >> Limb::BITS)
             + hi;
     }
-    top[0] = carry as Limb;
-    debug_assert_eq!(carry >> Limb::BITS, 0, "ntt: product overflows");
+    carry
 }
 
 #[cfg(test)]

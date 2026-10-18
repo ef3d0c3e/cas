@@ -33,6 +33,9 @@ pub(crate) const SQR_KARATSUBA_THRESHOLD: usize = crate::tuning::SQR_KARATSUBA_T
 pub(crate) const SQR_TOOM3_THRESHOLD: usize = crate::tuning::SQR_TOOM3_THRESHOLD;
 /// Smallest length at which [`sqr`] uses the NTT.
 pub(crate) const SQR_NTT_THRESHOLD: usize = crate::tuning::SQR_NTT_THRESHOLD;
+/// Smallest power-of-two modulus length at which [`mul_wrap`] uses a cyclic
+/// transform instead of reducing the full product.
+pub(crate) const MUL_WRAP_NTT_THRESHOLD: usize = crate::tuning::MUL_WRAP_NTT_THRESHOLD;
 
 /// `a * b + c` as a double limb, returned as `(low, high)`; cannot overflow.
 #[inline]
@@ -188,6 +191,87 @@ pub fn sqr(r: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) {
         "sqr: scratch too short"
     );
     sqr_unchecked(r, a, scratch);
+}
+
+/// Whether [`mul_wrap`] modulo `B^m - 1` uses the cyclic transform.
+fn wraps_cyclically(m: usize) -> bool {
+    m.is_power_of_two() && m >= MUL_WRAP_NTT_THRESHOLD
+}
+
+/// Scratch limbs [`mul_wrap`] needs modulo `B^m - 1` for operands of `an`
+/// and `bn` limbs, both at least 1.
+pub(crate) fn mul_wrap_scratch_len(m: usize, an: usize, bn: usize) -> usize {
+    if an + bn <= m {
+        mul_scratch_len(an, bn)
+    } else if wraps_cyclically(m) {
+        let folded = |len: usize| if len > m { m } else { 0 };
+        folded(an) + folded(bn) + ntt::cyclic_scratch_len(m)
+    } else {
+        an + bn + mul_scratch_len(an, bn)
+    }
+}
+
+/// `r = a * b mod (B^m - 1)` for `m = r.len() >= 1` and non-empty operands of
+/// any length, as the residue in `[0, B^m - 1)`, with `scratch.len() >=
+/// mul_wrap_scratch_len(m, a.len(), b.len())`.
+///
+/// A power-of-two `m` from [`MUL_WRAP_NTT_THRESHOLD`] takes a cyclic transform
+/// of `m` coefficients where the full product would need about `a.len() +
+/// b.len()`; any other `m` reduces the full product.
+pub(crate) fn mul_wrap(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]) {
+    let (m, an, bn) = (r.len(), a.len(), b.len());
+    assert!(m >= 1 && an >= 1 && bn >= 1, "mul_wrap: empty operand");
+    assert!(
+        scratch.len() >= mul_wrap_scratch_len(m, an, bn),
+        "mul_wrap: scratch too short"
+    );
+    if an + bn <= m {
+        mul(&mut r[..an + bn], a, b, scratch);
+        r[an + bn..].fill(0);
+    } else if wraps_cyclically(m) {
+        let (a, scratch) = folded(a, m, scratch);
+        let (b, scratch) = folded(b, m, scratch);
+        ntt::mul_cyclic(r, a, b, scratch);
+    } else {
+        let (t, scratch) = scratch.split_at_mut(an + bn);
+        mul(t, a, b, scratch);
+        fold(r, t);
+    }
+    canonical_wrapped(r);
+}
+
+/// `x` itself if it has at most `m` limbs, else `x mod (B^m - 1)` in the head
+/// of `scratch`; returns it and the rest of `scratch`.
+fn folded<'a>(x: &'a [Limb], m: usize, scratch: &'a mut [Limb]) -> (&'a [Limb], &'a mut [Limb]) {
+    if x.len() <= m {
+        return (x, scratch);
+    }
+    let (t, rest) = scratch.split_at_mut(m);
+    fold(t, x);
+    (t, rest)
+}
+
+/// `r = x mod (B^m - 1)` for `m = r.len() >= 1`, as a residue in `[0, B^m)`:
+/// the sum of `x`'s `m`-limb pieces, each carry out of the top added back in at
+/// the bottom (`B^m = 1`).
+pub(crate) fn fold(r: &mut [Limb], x: &[Limb]) {
+    let m = r.len();
+    let head = x.len().min(m);
+    r[..head].copy_from_slice(&x[..head]);
+    r[head..].fill(0);
+    for piece in x[head..].chunks(m) {
+        let mut carry = add_assign(r, piece);
+        while carry != 0 {
+            carry = add_1_assign(r, carry);
+        }
+    }
+}
+
+/// Maps the residue `B^m - 1` (all ones), which stands for zero, to zero.
+fn canonical_wrapped(r: &mut [Limb]) {
+    if r.iter().all(|&x| x == Limb::MAX) {
+        r.fill(0);
+    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]

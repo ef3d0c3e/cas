@@ -21,10 +21,18 @@ ntt_block = 4096
 # A product wraps around a halved transform when the recomputed top product
 # is at most 1/ntt_wrap_fraction of the transform.
 ntt_wrap_fraction = 1
+# Products modulo B^m - 1 (Newton division) take a cyclic transform of m
+# coefficients from this power-of-two m; below it, the full product reduced.
+mul_wrap_ntt_threshold = 1536
 
 # Division (kernel/div.rs): divisor length from which divide and conquer is
 # used.
 dc_div_threshold = 17
+# Divisor and quotient length from which division uses Barrett's estimates
+# from Newton's reciprocal (kernel/div/mu.rs), and length from which that
+# reciprocal takes Newton steps instead of an exact division.
+mu_div_threshold = 5394
+inv_newton_threshold = 26
 
 # Montgomery reduction (modular/ring.rs): modulus length from which REDC
 # multiplies by -n^-1 mod R instead of eliminating one limb at a time.
