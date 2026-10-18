@@ -182,6 +182,39 @@ fn to_string_radix_powers() {
     }
 }
 
+/// The divide-and-conquer powers themselves, `big_base^(2^i) = radix^(k 2^i)`,
+/// and their neighbours, both ways: a value equal to a power must still get
+/// one more level, and the powers' low zero limbs (split off for an even
+/// radix) must come back in both the remainders and the products. Lengths
+/// reach several levels above both thresholds.
+#[test]
+fn big_base_powers_round_trip() {
+    let to_limbs = crate::testkit::tested(TO_STRING_DC_THRESHOLD) * 8;
+    let to_digits = crate::testkit::tested(FROM_STRING_DC_THRESHOLD) * 8;
+    for radix in [3u32, 10, 12, 36] {
+        let k = (1..64)
+            .find(|&k| u64::from(radix).checked_pow(k + 1).is_none())
+            .expect("a limb holds at most 63 digits");
+        for i in 0..20 {
+            let e = k << i;
+            let p = Integer::from(Integer::u_pow_u(radix, e));
+            let limbs = p.significant_bits() as usize / 64;
+            let digits = e as usize;
+            if limbs > to_limbs && digits > to_digits {
+                break;
+            }
+            for v in [p.clone() - 1u32, p.clone(), p.clone() + 1u32] {
+                let r = i32::try_from(radix).unwrap();
+                let text = v.to_string_radix(r);
+                let ours = Mag::from_rug(&v).to_natural();
+                assert_eq!(ours.to_string_radix(radix), text, "radix {radix}, e = {e}");
+                let parsed = Natural::from_str_radix(&text, radix).unwrap();
+                assert_eq!(parsed, ours, "radix {radix}, e = {e}");
+            }
+        }
+    }
+}
+
 #[test]
 #[should_panic(expected = "radix must be in 2..=36")]
 fn radix_37_panics() {

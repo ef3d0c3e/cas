@@ -5,7 +5,10 @@
 //! that fits a limb (the "big base"): the basecase divides by, or multiplies
 //! by, the big base one limb pass at a time, in quadratic time. Large numbers
 //! are split by divide and conquer on the powers `big_base^(2^i)`, so their
-//! cost is that of a few multiplications or divisions of the full size.
+//! cost is that of a few multiplications or divisions of the full size. The
+//! powers are kept without their low zero limbs ([`Power`]): for an even radix
+//! they are a large part of the power (`10^m = 2^m 5^m`: 30% of its limbs),
+//! and the divisions and products then only work on the rest.
 
 use std::fmt;
 use std::str::FromStr;
@@ -41,6 +44,67 @@ fn big_base(radix: u32) -> (Limb, usize) {
         k += 1;
     }
     (base, k)
+}
+
+/// `odd B^zeros`, a power `big_base^(2^i)` with its low zero limbs split off
+/// (`odd` has a non-zero low limb).
+struct Power {
+    odd: Natural,
+    zeros: usize,
+}
+
+impl Power {
+    fn new(base: Limb) -> Self {
+        Power {
+            odd: Natural::from(base),
+            zeros: 0,
+        }
+    }
+
+    /// The square, with the zero limbs it gains split off.
+    fn square(&self) -> Self {
+        let sq = self.odd.square();
+        let tz = sq.limbs().iter().take_while(|&&l| l == 0).count();
+        Power {
+            odd: Natural::from_limbs(&sq.limbs()[tz..]),
+            zeros: 2 * self.zeros + tz,
+        }
+    }
+
+    /// Whether the power is at most `x`.
+    fn le(&self, x: &Natural) -> bool {
+        let (len, xs) = (self.odd.limb_len() + self.zeros, x.limbs());
+        if len != xs.len() {
+            return len < xs.len();
+        }
+        // Equal high parts leave the comparison to x's low limbs, which are
+        // at least the power's zeros.
+        kernel::cmp(self.odd.limbs(), &xs[self.zeros..]).is_le()
+    }
+
+    /// `(x / power, x mod power)`: with `x = h B^zeros + l`, the quotient is
+    /// `h / odd`, and the remainder `(h mod odd) B^zeros + l`.
+    fn div_rem(&self, x: &Natural) -> (Natural, Natural) {
+        let xs = x.limbs();
+        if xs.len() <= self.zeros {
+            return (Natural::ZERO, x.clone());
+        }
+        let (low, high) = xs.split_at(self.zeros);
+        let (q, r) = Natural::from_limbs(high).div_rem(&self.odd);
+        let mut rem = low.to_vec();
+        rem.extend_from_slice(r.limbs());
+        (q, Natural::from_vec(rem))
+    }
+
+    /// `high * power + low`, the product taken by `odd` alone.
+    fn mul_add(&self, high: &Natural, low: &Natural) -> Natural {
+        let product = high * &self.odd;
+        let mut v = low.limbs().to_vec();
+        v.resize(v.len().max(self.zeros + product.limb_len()) + 1, 0);
+        let carry = kernel::add_assign(&mut v[self.zeros..], product.limbs());
+        debug_assert_eq!(carry, 0);
+        Natural::from_vec(v)
+    }
 }
 
 #[cfg(test)]
@@ -116,8 +180,8 @@ impl Natural {
         if self.limb_len() < TO_STRING_DC_THRESHOLD {
             digits.basecase(self.limbs(), None, &mut out);
         } else {
-            let mut powers = vec![Natural::from(base)];
-            while powers.last().expect("non-empty") <= self {
+            let mut powers = vec![Power::new(base)];
+            while powers.last().expect("non-empty").le(self) {
                 let next = powers.last().expect("non-empty").square();
                 powers.push(next);
             }
@@ -206,7 +270,7 @@ impl Digits {
     fn dc(
         &self,
         x: &Natural,
-        powers: &[Natural],
+        powers: &[Power],
         level: usize,
         pad: Option<usize>,
         out: &mut Vec<u8>,
@@ -215,7 +279,7 @@ impl Digits {
             return self.basecase(x.limbs(), pad, out);
         }
         // q, r < powers[level - 1], and r has exactly `low` digits.
-        let (q, r) = x.div_rem(&powers[level - 1]);
+        let (q, r) = powers[level - 1].div_rem(x);
         let low = self.k << (level - 1);
         if pad.is_none() && q.is_zero() {
             return self.dc(&r, powers, level - 1, None, out);
@@ -274,7 +338,7 @@ fn from_digits(d: &[u8], radix: u32) -> Natural {
     if d.len() < FROM_STRING_DC_THRESHOLD {
         return parse_basecase(d, radix, k);
     }
-    let mut powers = vec![Natural::from(base)];
+    let mut powers = vec![Power::new(base)];
     while k << powers.len() < d.len() {
         let next = powers.last().expect("non-empty").square();
         powers.push(next);
@@ -284,7 +348,7 @@ fn from_digits(d: &[u8], radix: u32) -> Natural {
 
 /// Digits split at `k 2^i` from the right, for the largest `i` leaving a
 /// non-empty high part; `powers[i] = base^(2^i)`.
-fn parse_dc(d: &[u8], radix: u32, k: usize, powers: &[Natural]) -> Natural {
+fn parse_dc(d: &[u8], radix: u32, k: usize, powers: &[Power]) -> Natural {
     if d.len() < FROM_STRING_DC_THRESHOLD {
         return parse_basecase(d, radix, k);
     }
@@ -293,7 +357,10 @@ fn parse_dc(d: &[u8], radix: u32, k: usize, powers: &[Natural]) -> Natural {
         .find(|&i| k << i < d.len())
         .expect("a single chunk is below the threshold");
     let (high, low) = d.split_at(d.len() - (k << level));
-    &parse_dc(high, radix, k, powers) * &powers[level] + parse_dc(low, radix, k, powers)
+    powers[level].mul_add(
+        &parse_dc(high, radix, k, powers),
+        &parse_dc(low, radix, k, powers),
+    )
 }
 
 /// Quadratic parsing, `k` digits (one limb multiplication) at a time.
