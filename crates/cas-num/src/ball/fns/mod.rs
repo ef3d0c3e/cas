@@ -13,7 +13,9 @@
 mod atan;
 mod exp;
 mod fixed;
+mod hyp;
 mod log;
+mod pow;
 mod trig;
 
 #[cfg(test)]

@@ -13,7 +13,9 @@
 //!   by binary splitting, cached process-wide (§7.1).
 //! - Elementary functions: [`Ball::exp`], [`Ball::expm1`], [`Ball::log`],
 //!   [`Ball::log1p`], [`Ball::sin_cos`], [`Ball::tan`], [`Ball::sin_pi`],
-//!   [`Ball::atan`], [`Ball::asin`], [`Ball::acos`], [`Ball::atan2`] (§7.2).
+//!   [`Ball::atan`], [`Ball::asin`], [`Ball::acos`], [`Ball::atan2`] (§7.2);
+//!   [`Ball::pow_ball`], [`Ball::root`], [`Ball::sinh`] and the other
+//!   hyperbolic functions (§7.3).
 //! - Decimal printing with Arb's digit rule ([`Ball::to_decimal`], `Display`)
 //!   and decimal parsing ([`Ball::from_decimal`]); exact hexadecimal floats
 //!   for `FullForm` ([`Float::to_hex`], [`Mag::to_hex`]) (§6).

@@ -5,3 +5,6 @@
 # It is recommended to check this file in to source control so that
 # everyone who runs the test benefits from these saved cases.
 cc eb2d6199cb84b44486fe6cf2dba6f3bd7aba0771d6d455ceae466939fceb783e # shrinks to x = 0x8000000000000001 (1 limbs) * 2^0, j = 3, prec = 2
+cc f1490b3a2c3d07e15b2dbc4add16e48fbe4181638e61231e77843becd5fb9149 # shrinks to x = 0xffffffffffffffff (1 limbs) * 2^-64, prec = 1
+cc 61c104f338e2eb4f1d3955edc720b6f86766638dd2c6dac6d1ef1cc83e36a133 # shrinks to x = -0x1 (1 limbs) * 2^0, y = 0x0 * 2^0, n = 1, prec = 1
+cc 5ccb1e616ad9877a956be8265666b87808cbdb5680d2cfb8d123421c4a386487 # shrinks to x = 0x1 (1 limbs) * 2^-11, y = 0x1 (1 limbs) * 2^-1, n = 3, prec = 1

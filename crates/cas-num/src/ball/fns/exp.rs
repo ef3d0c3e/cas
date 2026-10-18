@@ -17,7 +17,7 @@ use crate::ball::{Ball, Float, Mag, Round};
 use crate::{Integer, Natural};
 
 /// Exponents of arguments that `exp` reduces; see the module comment.
-const HUGE_EXP: i64 = 1 << 16;
+pub(super) const HUGE_EXP: i64 = 1 << 16;
 
 /// `x` truncated to a fixed-point integer `trunc(x 2^w)`.
 pub(super) fn to_fixed(x: &Float, w: u64) -> Integer {

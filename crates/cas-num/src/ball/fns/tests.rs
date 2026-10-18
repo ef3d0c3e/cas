@@ -513,3 +513,221 @@ fn atan_huge_consistent() -> bool {
     let hp = Ball::const_pi(200).mul_2exp(&-Integer::ONE);
     a.overlaps(&hp) && a.rel_accuracy_bits() >= 125
 }
+
+// ---- Derived functions (CAS-81).
+
+const HYP: [Unary; 6] = [
+    ("sinh", Ball::sinh, |x, p, r| {
+        MpFloat::with_val_round(p, x.sinh_ref(), r).0
+    }),
+    ("cosh", Ball::cosh, |x, p, r| {
+        MpFloat::with_val_round(p, x.cosh_ref(), r).0
+    }),
+    ("tanh", Ball::tanh, |x, p, r| {
+        MpFloat::with_val_round(p, x.tanh_ref(), r).0
+    }),
+    ("asinh", Ball::asinh, |x, p, r| {
+        MpFloat::with_val_round(p, x.asinh_ref(), r).0
+    }),
+    ("acosh", Ball::acosh, |x, p, r| {
+        MpFloat::with_val_round(p, x.acosh_ref(), r).0
+    }),
+    ("atanh", Ball::atanh, |x, p, r| {
+        MpFloat::with_val_round(p, x.atanh_ref(), r).0
+    }),
+];
+
+/// Containment and tightness of `b` against a bracket.
+fn check_bracket(
+    what: &str,
+    b: &Ball,
+    br: &crate::testkit::float::Bracket,
+    prec: u64,
+) -> Result<(), TestCaseError> {
+    prop_assert!(b.is_finite(), "{}: indeterminate", what);
+    let mid = b.mid().to_rational().to_rug();
+    let rad = b.rad().to_float().unwrap().to_rational().to_rug();
+    check_encloses(&mid, &rad, br).map_err(|e| TestCaseError::fail(format!("{what}: {e}")))?;
+    if !b.mid().is_zero() {
+        #[allow(clippy::cast_possible_wrap, reason = "small precisions")]
+        let want = prec as i64 - 3;
+        prop_assert!(
+            b.rel_accuracy_bits() >= want,
+            "{}: only {} bits: {:?}",
+            what,
+            b.rel_accuracy_bits(),
+            b
+        );
+    }
+    Ok(())
+}
+
+fn hyp_domain(name: &str, x: &MpFloat) -> bool {
+    match name {
+        "acosh" => *x >= 1,
+        "atanh" => x.clone().abs() < 1,
+        _ => true,
+    }
+}
+
+proptest! {
+    #[test]
+    fn hyp_against_mpfr(x in argument(), prec in prec()) {
+        let xr = x.to_rug().unwrap();
+        for (name, f, oracle) in HYP {
+            let b = f(&Ball::exact(x.to_ours()), prec);
+            if !hyp_domain(name, &xr) {
+                prop_assert_eq!(&b, &Ball::INDETERMINATE, "{}({})", name, xr);
+                continue;
+            }
+            if matches!(name, "sinh" | "cosh") && xr.clone().abs() >= 1e8 { continue; }
+            let br = bracket(u32::try_from(prec).unwrap(), |p, r| oracle(&xr, p, r));
+            check_bracket(&format!("{name}({xr}) at {prec}"), &b, &br, prec)?;
+        }
+    }
+
+    #[test]
+    fn pow_against_mpfr(x in dyadic_with(2, -30..=2), y in dyadic_with(1, -20..=0), n in -12i64..12, prec in prec()) {
+        let (xr, yr) = (x.to_rug().unwrap(), y.to_rug().unwrap());
+        // Values, not dyadic exponents, bounded: |y| < 64 keeps x^y in range.
+        if yr.clone().abs() >= 64 { return Ok(()); }
+        let (bx, by) = (Ball::exact(x.to_ours()), Ball::exact(y.to_ours()));
+        // A general exponent: defined for x > 0.
+        let b = bx.pow_ball(&by, prec);
+        if xr > 0 && xr.clone().abs() < 1e6 {
+            let br = bracket(u32::try_from(prec).unwrap(), |p, r| MpFloat::with_val_round(p, rug::ops::Pow::pow(&xr, &yr), r).0);
+            check_bracket(&format!("{xr}^{yr} at {prec}"), &b, &br, prec)?;
+        } else if xr < 0 && !(yr.clone() * 2u32).is_integer() {
+            prop_assert_eq!(&b, &Ball::INDETERMINATE);
+        }
+        // Integer and half-integer exponents, any sign of x where defined.
+        if !xr.is_zero() && xr.clone().abs() < 1e6 {
+            let ni = Ball::from_integer(&Integer::from(n));
+            let br = bracket(u32::try_from(prec).unwrap(), |p, r| MpFloat::with_val_round(p, rug::ops::Pow::pow(&xr, n), r).0);
+            check_bracket(&format!("{xr}^{n} at {prec}"), &bx.pow_ball(&ni, prec), &br, prec)?;
+            if xr > 0 {
+                let half = Ball::exact(Float::from(n).add(&Float::from(1i64).mul_2exp(&-Integer::ONE)));
+                let yh = MpFloat::with_val(64, n) + 0.5;
+                let br = bracket(u32::try_from(prec).unwrap(), |p, r| MpFloat::with_val_round(p, rug::ops::Pow::pow(&xr, &yh), r).0);
+                check_bracket(&format!("{xr}^{yh} at {prec}"), &bx.pow_ball(&half, prec), &br, prec)?;
+            }
+        }
+    }
+
+    #[test]
+    fn roots_against_mpfr(x in argument(), n in 3u32..12, prec in prec()) {
+        let xr = x.to_rug().unwrap();
+        let b = Ball::exact(x.to_ours()).root(u64::from(n), prec);
+        if xr < 0 && n % 2 == 0 {
+            prop_assert_eq!(&b, &Ball::INDETERMINATE);
+            return Ok(());
+        }
+        if xr.is_zero() {
+            prop_assert_eq!(&b, &Ball::ZERO);
+            return Ok(());
+        }
+        let br = bracket(u32::try_from(prec).unwrap(), |p, r| MpFloat::with_val_round(p, xr.root_ref(n), r).0);
+        check_bracket(&format!("root({xr}, {n}) at {prec}"), &b, &br, prec)?;
+    }
+
+    #[test]
+    fn hyp_identities(x in dyadic_with(2, -40..=1), prec in 2u64..300) {
+        let b = Ball::exact(x.to_ours());
+        let (s, c) = (b.sinh(prec), b.cosh(prec));
+        let d = c.mul(&c, prec).sub(&s.mul(&s, prec), prec);
+        prop_assert!(d.contains(&Float::from(1i64)), "cosh² - sinh² of {:?}: {:?}", b, d);
+        prop_assert!(s.asinh(prec).contains(b.mid()), "asinh(sinh {:?})", b);
+        if !b.mid().is_negative() {
+            prop_assert!(c.acosh(prec).contains(b.mid()), "acosh(cosh {:?})", b);
+        }
+        prop_assert!(b.tanh(prec).atanh(prec).contains(b.mid()) || b.tanh(prec).atanh(prec) == Ball::INDETERMINATE);
+        let r3 = b.root(3, prec);
+        prop_assert!(r3.pow(3, prec + 8).contains(b.mid()), "root(x, 3)^3 of {:?}", b);
+        for (name, f, _) in HYP {
+            let (lo, hi) = (f(&b, prec), f(&b, prec + 500));
+            prop_assert!(lo.overlaps(&hi), "{} at {} and {}: {:?} {:?}", name, prec, prec + 500, lo, hi);
+        }
+    }
+
+    #[test]
+    fn hyp_radii(x in dyadic_with(2, -20..=4), j in 1i64..80, prec in 2u64..200) {
+        let m = x.to_ours();
+        if m.is_zero() || *m.exponent() > Integer::from(8i64) { return Ok(()); }
+        let r = Mag::power_of_two(&(m.exponent() - &Integer::from(j)));
+        let b = Ball::new(m.clone(), r.clone());
+        let rf = r.to_float().unwrap();
+        for (name, f, oracle) in HYP {
+            let out = f(&b, prec);
+            if !out.is_finite() { continue; }
+            for end in [m.sub(&rf), m.add(&rf)] {
+                let xr = Dyadic::from_rug(&MpFloat::with_val(10_000, &end.to_rational().to_rug())).unwrap().to_rug().unwrap();
+                if !hyp_domain(name, &xr) { continue; }
+                let br = bracket(u32::try_from(prec).unwrap(), |p, rd| oracle(&xr, p, rd));
+                let mid = out.mid().to_rational().to_rug();
+                let rad = out.rad().to_float().unwrap().to_rational().to_rug();
+                check_encloses(&mid, &rad, &br).map_err(|e| TestCaseError::fail(format!("{name} of {b:?} at {prec}, end {end:?}: {e}")))?;
+            }
+        }
+    }
+}
+
+#[test]
+fn real_roots_and_exact_powers() {
+    let int = |n: i64| Ball::from_integer(&Integer::from(n));
+    // The real cube root of negatives, exact for perfect powers.
+    assert_eq!(int(-8).root(3, 64), int(-2));
+    assert_eq!(int(-27).root(3, 64), int(-3));
+    assert_eq!(int(1024).root(10, 64), int(2));
+    assert_eq!(int(-32).root(5, 64), int(-2));
+    let big = Ball::from_integer(&Integer::from(3u64).pow(300));
+    // 3^60 has 96 bits: exact once the precision holds it.
+    assert_eq!(
+        big.root(5, 128),
+        Ball::from_integer(&Integer::from(3u64).pow(60))
+    );
+    assert!(!big.root(5, 64).is_exact());
+    assert_eq!(int(-8).root(4, 64), Ball::INDETERMINATE);
+    // An odd root across 0 holds both sides.
+    let across = Ball::new(Float::ZERO, Mag::from_integer(&Integer::from(8)));
+    let r = across.root(3, 64);
+    assert!(r.contains(&Float::from(2i64)) && r.contains(&Float::from(-2i64)));
+    assert_eq!(across.root(4, 64), Ball::INDETERMINATE);
+    // pow fast paths and edges.
+    assert_eq!(int(-2).pow_ball(&int(3), 64), int(-8));
+    assert_eq!(
+        int(4).pow_ball(&Ball::exact(Float::from_f64(1.5).unwrap()), 64),
+        int(8)
+    );
+    assert_eq!(
+        int(0).pow_ball(&Ball::exact(Float::from_f64(0.3).unwrap()), 64),
+        Ball::ZERO
+    );
+    assert_eq!(
+        int(0).pow_ball(&Ball::exact(Float::from_f64(-0.3).unwrap()), 64),
+        Ball::INDETERMINATE
+    );
+    assert_eq!(
+        int(-2).pow_ball(&Ball::exact(Float::from_f64(0.3).unwrap()), 64),
+        Ball::INDETERMINATE
+    );
+    // 2^(10^6 + 0.25): y log x far above the point, extra bits for exp.
+    let y = Ball::exact(Float::from(1_000_000i64).add(&Float::from_f64(0.25).unwrap()));
+    let v = int(2).pow_ball(&y, 128);
+    assert!(v.rel_accuracy_bits() >= 125, "{v:?}");
+    let scaled = v.mul_2exp(&-Integer::from(1_000_000i64));
+    assert!(scaled.overlaps(&int(2).pow_ball(&Ball::exact(Float::from_f64(0.25).unwrap()), 128)));
+    // Hyperbolic edges.
+    assert_eq!(int(1).acosh(64), Ball::ZERO);
+    assert_eq!(
+        Ball::exact(Float::from_f64(0.5).unwrap()).acosh(64),
+        Ball::INDETERMINATE
+    );
+    assert_eq!(int(1).atanh(64), Ball::INDETERMINATE);
+    let huge = Ball::exact(Float::from(1i64).mul_2exp(&Integer::from(100_000i64)));
+    assert_eq!(huge.sinh(64), Ball::INDETERMINATE);
+    assert!(huge.tanh(64).contains(&Float::from(1i64)) && huge.tanh(64).rel_accuracy_bits() >= 63);
+    let t = Ball::exact(Float::from(3i64).mul_2exp(&Integer::from(-5000i64)));
+    for f in [Ball::sinh, Ball::tanh, Ball::asinh, Ball::atanh] {
+        assert!(f(&t, 100).rel_accuracy_bits() >= 97, "{:?}", f(&t, 100));
+    }
+}
