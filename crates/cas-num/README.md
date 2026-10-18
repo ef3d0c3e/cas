@@ -38,6 +38,25 @@ exponent, up to 64 limbs), `primality` (an n-limb prime, up to 64 limbs), `to_st
 Measurements are short (20 samples, 1 s) so that the whole sweep stays in minutes. Criterion keeps
 the previous run in `target/criterion` and reports changes against it.
 
+`benches/ball.rs` does the same for binary floats and balls against MPFR (`rug::Float`), as
+`op/ours/bits` and `op/mpfr/bits`: groups `add`, `mul`, `div`, `sqrt` at 64 … `CAS_BENCH_MAX_BITS`
+(default 4096) bits, and `pi`, `log2`, `e`, `exp`, `log`, `sin`, `atan` at 100 …
+`CAS_BENCH_MAX_DIGITS` (default 10^4) digits. Until the ball types land, only the MPFR rows exist:
+`cargo bench -p cas-num --bench ball -- '^mul/'`.
+
+## Long runs
+
+Stress tests, long proptest runs, fuzzing and full benchmark sweeps go through
+[`scripts/capped.sh`](../../scripts/capped.sh), which runs the command in a systemd scope with a
+memory limit (`CAP_MEM`, default 8G, swap disabled), a timeout (`CAP_TIME`, default 3600 s) and
+`CARGO_BUILD_JOBS` capped (`CAP_JOBS`, default 6). A runaway (a binary-splitting tree or a
+precision loop gone wrong) is then killed instead of exhausting a shared machine:
+
+```sh
+scripts/capped.sh cargo test -p cas-num
+PROPTEST_CASES=20000 CAP_MEM=4G scripts/capped.sh cargo test -p cas-num --release float
+```
+
 ## Tuning configuration
 
 The thresholds that pick an algorithm by operand size (multiplication, squaring, NTT, division,
@@ -96,6 +115,7 @@ dev-dependencies, so they never end up in a runtime build.
 | `check_same(ours, gmp)` | Fails the proptest case unless the two values agree, and prints both. |
 | `differential!` | Declares one `#[test]` per entry, asserting that `ours` equals `gmp`. |
 | `testkit::strategy` | Adversarial generators (see below). |
+| `testkit::float` | The MPFR oracle for floats and balls (CAS-DOC-5 §11): `Dyadic` (`±m·2^e`, odd mantissa, exponent as a `Signed`, so beyond MPFR's `i32` range too) with exact conversions from and to `rug::Float` and `rug::Rational`; `bracket(prec, f)`, the true value of `f` enclosed by MPFR at `prec + GUARD` (64) bits rounded toward −∞ and +∞; `check_encloses(mid, rad, bracket)`, which requires a ball to contain the whole bracket when its radius is at least the bracket's width and to meet it otherwise; `check_rounded`, exact equality with MPFR including the ternary value; strategies `dyadic`, `dyadic_with`, `far_apart_pair` and `huge_shift` (exponents near and beyond `±2^63`, tested by scaling: `x·2^E op y·2^E` against `(x op y)·2^E`). Note that rug's `Round::Down`/`Up` are toward −∞/+∞; rug's `Zero`/`AwayZero` are our `Down`/`Up`. |
 
 Conversions go through limb slices (`Integer::from_digits` / `to_digits`), never through
 strings, so the conversion is not one of the things under test. The harness tests itself

@@ -11,6 +11,7 @@
 //! Conversions go through limb slices, never through strings, so the
 //! conversion itself is not one of the things under test.
 
+pub(crate) mod float;
 pub(crate) mod model;
 pub(crate) mod strategy;
 

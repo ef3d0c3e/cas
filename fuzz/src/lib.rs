@@ -99,3 +99,27 @@ pub fn gmp_rat(x: &Rational) -> rug::Rational {
 pub fn check<T: PartialEq + std::fmt::Debug>(op: &str, ours: T, gmp: T) {
     assert!(ours == gmp, "{op}: ours {ours:?}, gmp {gmp:?}");
 }
+
+/// Largest exponent magnitude of [`dyadic`], so exact results stay small.
+pub const DYADIC_MAX_EXP: i64 = 512;
+
+/// A dyadic rational `m·2^e`: a mantissa of at most `max` limbs and
+/// `|e| <= DYADIC_MAX_EXP`, the exact values ball midpoints and radii take.
+pub fn dyadic(u: &mut Unstructured<'_>, max: usize) -> Result<(Rational, rug::Rational)> {
+    let (m, mg) = integer(u, max)?;
+    let e = u.int_in_range(-DYADIC_MAX_EXP..=DYADIC_MAX_EXP)?;
+    let pow = Integer::from_parts(false, Natural::from(1u64) << e.unsigned_abs());
+    let one = Integer::from(1);
+    let ours = if e >= 0 {
+        Rational::new(m * pow, one)
+    } else {
+        Rational::new(m, pow)
+    };
+    let mut gmp = rug::Rational::from(mg);
+    if e >= 0 {
+        gmp <<= u32::try_from(e).unwrap();
+    } else {
+        gmp >>= u32::try_from(-e).unwrap();
+    }
+    Ok((ours, gmp))
+}
