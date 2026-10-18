@@ -168,13 +168,14 @@ proptest! {
 }
 
 proptest! {
-    /// On dense operands nearly every step is a Lehmer matrix; the full
-    /// division is the exception.
+    /// On dense operands nearly every step is a Lehmer matrix, each about 64
+    /// bits of the leading 128; the full division is the exception.
     #[test]
-    fn lehmer_does_the_work(a in dense(12), b in dense(12)) {
+    fn lehmer_does_the_work(a in dense(24), b in dense(24)) {
         let (matrices, divisions) = steps(&a, &b);
         prop_assert!(matrices >= 8 * divisions, "{} matrices, {} divisions", matrices, divisions);
-        prop_assert!(matrices >= 12, "{} matrices", matrices);
+        // 24 limbs at 60 bits a matrix or more.
+        prop_assert!((20..=26).contains(&matrices), "{} matrices", matrices);
     }
 }
 
@@ -199,8 +200,10 @@ fn fibonacci_worst_case_uses_matrices() {
     let (a, b) = (fibonacci(5001), fibonacci(5000));
     assert!(a.gcd(&b).is_one());
     let (matrices, divisions) = steps(&a, &b);
+    // 3471 bits: at most 60 matrices means at least 57 bits a matrix even on
+    // all-ones quotients.
     assert!(
-        matrices >= 100 && divisions <= matrices / 8,
+        (40..=60).contains(&matrices) && divisions <= matrices / 8,
         "{matrices} matrices, {divisions} divisions"
     );
 }

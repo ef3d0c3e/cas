@@ -86,8 +86,8 @@ impl HgcdMatrix {
             assign(u0, &buf[0]);
             assign(u1, &buf[1]);
         }
-        // det L^-1 = det L, and each Lehmer step has determinant -1.
-        self.negative ^= l.a * l.d - l.b * l.c < 0;
+        // det L^-1 = det L = ±1; the products may wrap, the difference not.
+        self.negative ^= l.a.wrapping_mul(l.d).wrapping_sub(l.b.wrapping_mul(l.c)) < 0;
     }
 
     /// The product `self other`.
@@ -191,17 +191,18 @@ fn order(x: &mut Vec<Limb>, y: &mut Vec<Limb>, m: &mut Option<HgcdMatrix>) {
     }
 }
 
-/// `r = a p + b q`, normalised, for `p, q < 2^63`.
+/// `r = a p + b q`, normalised.
 fn add_products(r: &mut Vec<Limb>, a: &[Limb], p: Limb, b: &[Limb], q: Limb) {
     let (a, p, b, q) = if a.len() >= b.len() {
         (a, p, b, q)
     } else {
         (b, q, a, p)
     };
-    r.resize(a.len() + 1, 0);
+    r.resize(a.len() + 2, 0);
     r[a.len()] = kernel::mul_1(&mut r[..a.len()], a, p);
+    r[a.len() + 1] = 0;
     let carry = kernel::addmul_1(&mut r[..b.len()], b, q);
-    // a p + b q < 2 B^len(a) 2^63, so the top limb absorbs the carry.
+    // a p + b q < 2 B^(len(a) + 1), so the top two limbs absorb the carry.
     let overflow = kernel::add_1_assign(&mut r[b.len()..], carry);
     debug_assert_eq!(overflow, 0);
     r.truncate(kernel::normalized_len(r));

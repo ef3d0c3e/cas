@@ -1,12 +1,14 @@
 //! Greatest common divisor and least common multiple, by Lehmer's algorithm.
 //!
 //! Lehmer's algorithm (Knuth, TAOCP vol. 2, §4.5.2, Algorithm L) runs Euclid's
-//! algorithm on the leading 63 bits of the operands for as long as the
-//! quotients provably agree with those of the full values, collecting them in a
-//! 2×2 matrix, then applies the matrix to the full values with one pass of
+//! algorithm on the leading 128 bits of the operands for as long as the
+//! steps provably leave the full values non-negative (a condition in the
+//! manner of Jebelean's and of GMP's `mpn_hgcd2`), collecting them in a 2×2
+//! matrix, then applies the matrix to the full values with one pass of
 //! single-limb multiplications. When the leading bits cannot decide a single
-//! quotient, a full division step is taken instead. Once both values fit a
-//! limb the binary algorithm (or a word-level extended Euclid) finishes.
+//! step, a full division step is taken instead. Once both values fit a limb
+//! the binary algorithm (or a word-level extended Euclid) finishes. Large
+//! operands are reduced by half-GCD steps first (`hgcd`).
 #![allow(
     clippy::many_single_char_names,
     reason = "the algorithm uses Knuth's names (a, b, u, v, q) and matrix entries"
@@ -17,15 +19,16 @@ use std::cmp::Ordering;
 use super::Natural;
 use crate::{Integer, Limb, kernel};
 
-/// Bits of the leading parts the inner loop works on. With 63 bits every
-/// cofactor and every sum in the loop fits comfortably in an `i128`, and every
-/// matrix entry has a magnitude below `2^63`.
-const LEAD_BITS: u64 = 63;
+/// Bits of the leading parts the inner loop works on: two limbs, so that
+/// each matrix advances about 64 bits with entries that fit a limb.
+const LEAD_BITS: u64 = 128;
 
 /// The matrix `((a, b), (c, d))` from Lehmer's inner loop: the pair `(x, y)`
-/// becomes `(a x + b y, c x + d y)`. It is the product of the Euclidean steps
-/// of the full values, so it is unimodular, the entries of each row have
-/// opposite signs (or one is zero), and both results are non-negative.
+/// becomes `(a x + b y, c x + d y)`. It is a product of Euclidean steps, so
+/// it is unimodular and the entries of each row have opposite signs (or one
+/// is zero); the loop takes only steps that leave both results non-negative,
+/// though not necessarily in order. Every entry has a magnitude below
+/// `2^64`.
 #[derive(Clone, Copy, Debug)]
 struct Matrix {
     a: i128,
@@ -94,7 +97,7 @@ impl Natural {
             (Integer::ZERO, Integer::ONE)
         };
         reduce(&mut a, &mut b, dc, true, |step| {
-            track(&mut sa, &mut sb, &step)
+            track(&mut sa, &mut sb, &step);
         });
         if b.is_empty() {
             return (Natural::from_vec(a), sa);
@@ -190,8 +193,17 @@ fn reduce(
                 let q = div_step(a, b);
                 on_step(Step::Quotient(&q));
             }
-        } else if let Some(m) = lehmer_matrix(a, b, None) {
+        } else if let Some(mut m) = lehmer_matrix(a, b, None) {
             apply(&m, a, b, &mut buf);
+            if kernel::cmp(a, b) == Ordering::Less {
+                std::mem::swap(a, b);
+                m = Matrix {
+                    a: m.c,
+                    b: m.d,
+                    c: m.a,
+                    d: m.b,
+                };
+            }
             on_step(Step::Matrix(&m));
         } else {
             let q = div_step(a, b);
@@ -215,75 +227,152 @@ fn div_step(a: &mut Vec<Limb>, b: &mut Vec<Limb>) -> Vec<Limb> {
     q
 }
 
-/// Bits `k .. k + 63` of `x`.
-fn leading(x: &[Limb], k: u64) -> u64 {
+/// Bits `k .. k + 128` of `x`.
+fn leading(x: &[Limb], k: u64) -> u128 {
     let i = usize::try_from(k / 64).expect("bit index fits usize");
     let s = k % 64;
-    let lo = x.get(i).map_or(0, |&l| l >> s);
-    let hi = match x.get(i + 1) {
-        Some(&l) if s != 0 => l << (64 - s),
-        _ => 0,
-    };
-    lo | hi
+    let limb = |j: usize| u128::from(x.get(j).copied().unwrap_or(0));
+    let v = limb(i) | limb(i + 1) << 64;
+    if s == 0 {
+        v
+    } else {
+        v >> s | limb(i + 2) << (128 - s)
+    }
 }
 
-/// Lehmer's inner loop on the leading bits of `a >= b`, where `a` has at
-/// least two limbs. With a `floor` of `t`, only steps whose remainder is
-/// provably at least `2^t` are taken. `None` when not even the first quotient
-/// is decided.
+/// Lehmer's inner loop on the leading 128 bits of `a >= b`, where `a` has at
+/// least two limbs: a double-limb step in the manner of GMP's `mpn_hgcd2`.
+/// With a `floor` of `t`, only steps whose remainder is provably at least
+/// `2^t` are taken. `None` when not even the first step is.
 fn lehmer_matrix(a: &[Limb], b: &[Limb], floor: Option<u64>) -> Option<Matrix> {
-    let k = kernel::bit_length(a) - LEAD_BITS;
-    // With e as below, the new remainder is mc a + md b = 2^k v + mc e_a +
-    // md e_b, where mc and md have opposite signs: it is at least
-    // 2^k (v + min(mc, md)), and so at least 2^t once that sum is 2^(t - k).
-    let need = match floor {
-        None => None,
-        Some(t) if t <= k => Some(1i128),
-        Some(t) if t - k < LEAD_BITS => Some(1i128 << (t - k)),
+    let k = kernel::bit_length(a).saturating_sub(LEAD_BITS);
+    // With a = 2^k u + e_a, 0 <= e_a < 2^k (and alike for b), a remainder of
+    // the leading parts r = s u + t v, with s and t of opposite signs, belongs
+    // to the remainder s a + t b = 2^k r + s e_a + t e_b of the full values,
+    // which is at least 2^k (r - |s|) or 2^k (r - |t|), whichever is
+    // negative, and is exact when k = 0. A step is taken only while that
+    // bound is at least 2^t (or non-negative): then the matrix takes (a, b)
+    // to a non-negative pair, with no need for the quotients to be those of
+    // the full values. Every entry is also checked to fit a limb, which with
+    // the bound stops the loop near the middle of the 128 bits.
+    let need: u128 = match floor {
+        None => 0,
+        Some(t) if t.saturating_sub(k) < LEAD_BITS => 1 << t.saturating_sub(k),
         Some(_) => return None,
     };
-    let (mut u, mut v) = (i128::from(leading(a, k)), i128::from(leading(b, k)));
-    debug_assert!(u < 1 << LEAD_BITS && v <= u);
-    let (mut ma, mut mb, mut mc, mut md) = (1i128, 0i128, 0i128, 1i128);
-    // a = u 2^k + e with 0 <= e < 2^k (and alike for b), so the true quotient
-    // of the current pair lies between (u + ma) / (v + mc) and
-    // (u + mb) / (v + md); when both agree, it is decided. The four sums stay
-    // in 0 ..= 2^63 (Knuth), so only a zero denominator needs checking.
-    loop {
-        let (n0, d0, n1, d1) = (u + ma, v + mc, u + mb, v + md);
-        if d0 == 0 || d1 == 0 {
-            break;
+    let mut l = Lehmer {
+        u: leading(a, k),
+        v: leading(b, k),
+        m: [1, 0, 0, 1],
+        need,
+        exact: k == 0,
+    };
+    debug_assert!(l.v <= l.u);
+    // Two steps a round, so that each knows where its negative entry is.
+    let odd = loop {
+        if !l.step::<false>() {
+            break false;
         }
-        let q = quotient(n0, d0);
-        if q != quotient(n1, d1) {
-            break;
+        if !l.step::<true>() {
+            break true;
         }
-        let (c, d, w) = (ma - q * mc, mb - q * md, u - q * v);
-        if need.is_some_and(|need| w + c.min(d) < need) {
-            break;
-        }
-        (ma, mc) = (mc, c);
-        (mb, md) = (md, d);
-        (u, v) = (v, w);
-    }
-    (mb != 0).then_some(Matrix {
-        a: ma,
-        b: mb,
-        c: mc,
-        d: md,
+    };
+    let [ma, mb, mc, md] = l.m.map(i128::from);
+    let signed = |x: i128, negative: bool| if negative { -x } else { x };
+    (mb != 0).then(|| Matrix {
+        a: signed(ma, odd),
+        b: signed(mb, !odd),
+        c: signed(mc, !odd),
+        d: signed(md, odd),
     })
 }
 
-/// `n / d` for `0 <= n <= 2^63` and `0 < d`, by a 64-bit division, which is
-/// much cheaper than a 128-bit one.
+/// The state of Lehmer's inner loop: the leading parts `u >= v` and the
+/// magnitudes `[ma, mb, mc, md]` of their rows `(s, t)`, with `r = s u0 + t
+/// v0` for the starting parts `u0, v0`. The signs alternate: after an even
+/// number of steps the negative entry of `u`'s row is `t` and that of `v`'s
+/// is `s`, and the other way round after an odd number.
+struct Lehmer {
+    u: u128,
+    v: u128,
+    m: [Limb; 4],
+    /// The least admissible `r - |negative entry|`.
+    need: u128,
+    /// Whether the leading parts are the whole values.
+    exact: bool,
+}
+
+impl Lehmer {
+    /// One Euclidean step, after an odd number of them if `ODD`; whether it
+    /// was admissible and taken.
+    #[inline]
+    fn step<const ODD: bool>(&mut self) -> bool {
+        if self.v == 0 {
+            return false;
+        }
+        let (q, w) = div(self.u, self.v);
+        let [ma, mb, mc, md] = self.m;
+        let (Some(c), Some(d)) = (cofactor(q, ma, mc), cofactor(q, mb, md)) else {
+            return false;
+        };
+        // w's row comes two after u's, so its negative entry is in the same
+        // place as u's.
+        let negative = if self.exact {
+            0
+        } else if ODD {
+            c
+        } else {
+            d
+        };
+        if w < self.need + u128::from(negative) {
+            return false;
+        }
+        self.m = [mc, md, c, d];
+        (self.u, self.v) = (self.v, w);
+        true
+    }
+}
+
+/// `p + q c` if it fits a limb.
+#[inline]
+fn cofactor(q: u128, p: Limb, c: Limb) -> Option<Limb> {
+    let q = Limb::try_from(q).ok()?;
+    let x = u128::from(q) * u128::from(c) + u128::from(p);
+    Limb::try_from(x).ok()
+}
+
+/// `(u / v, u % v)` for `u >= v > 0`. Most quotients are small, and a
+/// 128-bit division is far slower than a few subtractions.
 #[expect(
     clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    reason = "both operands are in 0 ..= 2^63"
+    reason = "both values are shifted to below 2^64"
 )]
-fn quotient(n: i128, d: i128) -> i128 {
-    debug_assert!((0..=1 << 63).contains(&n) && (1..=1 << 63).contains(&d));
-    i128::from(n as u64 / d as u64)
+fn div(u: u128, v: u128) -> (u128, u128) {
+    let mut r = u - v;
+    for q in 1..=4 {
+        if r < v {
+            return (q, r);
+        }
+        r -= v;
+    }
+    if let (Ok(u), Ok(v)) = (u64::try_from(u), u64::try_from(v)) {
+        return (u128::from(u / v), u128::from(u % v));
+    }
+    // A 64-bit division of the leading bits of both, which never
+    // overestimates; when v keeps at least 32 of those bits, q is at most
+    // 2^32 and the estimate falls short of it by at most a couple.
+    let shift = 64 - u.leading_zeros();
+    let (u1, v1) = ((u >> shift) as u64, (v >> shift) as u64);
+    if v1 >> 32 == 0 {
+        return (u / v, u % v);
+    }
+    let mut q = u128::from(u1 / (v1 + 1));
+    let mut r = u - q * v;
+    while r >= v {
+        r -= v;
+        q += 1;
+    }
+    (q, r)
 }
 
 /// `(a, b) = M (a, b)`, with `buf` as working space; the old buffers of `a`
@@ -294,21 +383,72 @@ fn apply(m: &Matrix, a: &mut Vec<Limb>, b: &mut Vec<Limb>, buf: &mut [Vec<Limb>;
     let [x, y] = buf;
     x.resize(n, 0);
     y.resize(n, 0);
-    combine(x, m.a, a, m.b, b);
-    combine(y, m.c, a, m.d, b);
+    combine(x, y, m, a, b);
     x.truncate(kernel::normalized_len(x));
     y.truncate(kernel::normalized_len(y));
     std::mem::swap(a, x);
     std::mem::swap(b, y);
 }
 
-/// `r = p a + q b` for `p` and `q` of opposite signs (or one zero), where the
-/// result is known to be non-negative and to fit `r`.
-fn combine(r: &mut [Limb], p: i128, a: &[Limb], q: i128, b: &[Limb]) {
-    let (plus, pm, minus, mm) = if q <= 0 { (a, p, b, -q) } else { (b, q, a, -p) };
-    let carry = kernel::mul_1(r, plus, magnitude(pm));
-    let borrow = kernel::submul_1(r, minus, magnitude(mm));
-    assert_eq!(carry, borrow, "Lehmer step produced an out-of-range value");
+/// `x = m.a a + m.b b` and `y = m.c a + m.d b` in one pass over `a` and `b`,
+/// where each row has entries of opposite signs (or a zero) and the results
+/// are known to be non-negative and to fit `x` and `y`.
+fn combine(x: &mut [Limb], y: &mut [Limb], m: &Matrix, a: &[Limb], b: &[Limb]) {
+    let (x_rows, y_rows) = (Row::new(m.a, m.b), Row::new(m.c, m.d));
+    let (mut cx, mut cy) = (Row::CLEAR, Row::CLEAR);
+    for (((x, y), &a), &b) in x.iter_mut().zip(y.iter_mut()).zip(a).zip(b) {
+        *x = x_rows.limb(a, b, &mut cx);
+        *y = y_rows.limb(a, b, &mut cy);
+    }
+    assert!(
+        cx.0 == cx.1 && cy.0 == cy.1,
+        "Lehmer step produced an out-of-range value"
+    );
+}
+
+/// A row of a Lehmer matrix as the magnitudes of the entry for the
+/// positive operand and of the one for the negative.
+#[derive(Clone, Copy)]
+struct Row {
+    plus: Limb,
+    minus: Limb,
+    /// Whether `a` is the positive operand.
+    a_plus: bool,
+}
+
+impl Row {
+    /// No carry and no borrow.
+    const CLEAR: (Limb, Limb) = (0, 0);
+
+    fn new(p: i128, q: i128) -> Row {
+        if q <= 0 {
+            Row {
+                plus: magnitude(p),
+                minus: magnitude(-q),
+                a_plus: true,
+            }
+        } else {
+            Row {
+                plus: magnitude(q),
+                minus: magnitude(-p),
+                a_plus: false,
+            }
+        }
+    }
+
+    /// The next limb of the row applied to `(a, b)`, with the running carry
+    /// of the positive product and borrow of the negative one.
+    #[inline]
+    #[expect(clippy::cast_possible_truncation, reason = "taking the low limb")]
+    fn limb(self, a: Limb, b: Limb, (carry, borrow): &mut (Limb, Limb)) -> Limb {
+        let (p, n) = if self.a_plus { (a, b) } else { (b, a) };
+        let t = u128::from(self.plus) * u128::from(p) + u128::from(*carry);
+        let s = u128::from(self.minus) * u128::from(n) + u128::from(*borrow);
+        let (lo, under) = (t as Limb).overflowing_sub(s as Limb);
+        *carry = (t >> 64) as Limb;
+        *borrow = (s >> 64) as Limb + Limb::from(under);
+        lo
+    }
 }
 
 /// A non-negative matrix entry as a limb.

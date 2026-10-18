@@ -32,8 +32,8 @@ redc_n_threshold = 70
 
 # GCD (natural/gcd.rs): smaller operand length from which half-GCD steps
 # replace Lehmer steps, and length from which the half-GCD recurses.
-gcd_dc_threshold = 182
-hgcd_threshold = 49
+gcd_dc_threshold = 802
+hgcd_threshold = 366
 
 # Radix conversion (natural/radix.rs): limbs from which to_string, and
 # digits from which parsing, split by divide and conquer.
