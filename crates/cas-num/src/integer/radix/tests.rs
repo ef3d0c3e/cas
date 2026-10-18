@@ -44,7 +44,8 @@ differential! {
 
 proptest! {
     /// Accepted strings, values and error kinds agree with `i128`, except
-    /// where `i128` overflows; then the value agrees with GMP.
+    /// where `i128` overflows; then the value, or the rejection of a later
+    /// invalid digit, agrees with GMP.
     #[test]
     fn parse_rules_match_std(
         s in proptest::string::string_regex("[0-9a-zA-Z+\\- _]{0,6}|[+-]?[0-9a-f]{0,40}").unwrap(),
@@ -54,9 +55,14 @@ proptest! {
         match i128::from_str_radix(&s, r) {
             Ok(v) => prop_assert_eq!(ours.unwrap(), Integer::from(v)),
             Err(e) => match e.kind() {
+                // i128 stops at the overflow, so a later digit may still be
+                // invalid; GMP reads the whole string.
                 std::num::IntErrorKind::PosOverflow | std::num::IntErrorKind::NegOverflow => {
-                    let g = Gmp::from_str_radix(&s, i32::try_from(r).unwrap()).unwrap();
-                    prop_assert!(ours.unwrap().to_rug() == g);
+                    if let Ok(g) = Gmp::from_str_radix(&s, i32::try_from(r).unwrap()) {
+                        prop_assert!(ours.unwrap().to_rug() == g);
+                    } else {
+                        prop_assert_eq!(ours.unwrap_err().kind(), ParseErrorKind::InvalidDigit);
+                    }
                 }
                 std::num::IntErrorKind::Empty => {
                     prop_assert_eq!(ours.unwrap_err().kind(), ParseErrorKind::Empty);
