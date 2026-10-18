@@ -37,19 +37,21 @@ fn primes_and_roots() {
     let mut product = Integer::from(1);
     for (p, g) in PRIMES {
         assert!(p >> 61 == 1, "{p:#x} not in (2^61, 2^62)");
-        assert_eq!((p - 1) % (1 << ROOT_ORDER_LOG2), 0, "{p:#x}");
+        assert_eq!((p - 1) % (3 << ROOT_ORDER_LOG2), 0, "{p:#x}");
         assert_ne!(
             Integer::from(p).is_probably_prime(40),
             rug::integer::IsPrime::No
         );
         assert!(crate::prime::is_prime_u64(p));
         let m = Modulus::new(p);
-        // Order exactly 2^54: g^(2^53) = -1.
-        assert_eq!(m.pow(g, 1 << (ROOT_ORDER_LOG2 - 1)), p - 1, "{p:#x}");
+        // Order exactly 3 2^53: g^(3 2^52) = -1 and g^(2^53) != 1.
+        assert_eq!(m.pow(g, 3 << (ROOT_ORDER_LOG2 - 1)), p - 1, "{p:#x}");
+        assert_ne!(m.pow(g, 1 << ROOT_ORDER_LOG2), 1, "{p:#x}");
         product *= p;
     }
-    // Coefficients are below min(an, bn) 2^128 <= 2^(53 + 128).
-    assert!(product > Integer::from(1) << (ROOT_ORDER_LOG2 - 1 + 128));
+    // Coefficients are below min(an, bn) 2^128, and min(an, bn) is at most
+    // half the longest transform, 3 2^52 < 2^54.
+    assert!(product > Integer::from(1) << (54 + 128));
 }
 
 fn residue(x: u128, p: Limb) -> Limb {
@@ -149,6 +151,34 @@ fn mul_cyclic_all_ones() {
     }
 }
 
+/// The planner's choices at the shapes these tests use: radix-3 lengths
+/// covering the product, radix-3 lengths with wrapped coefficients, and
+/// powers of two on either side.
+#[test]
+fn transform_lengths() {
+    // len = an + bn - 1; the cheapest by plan's cost model, which these
+    // named lengths assume with the default `ntt_wrap_fraction` of 1.
+    if WRAP_FRACTION == 1 {
+        assert_eq!(transform_len(2, 2, true), 2);
+        assert_eq!(transform_len(5, 4, true), 8);
+        assert_eq!(transform_len(300, 300, true), 512);
+        assert_eq!(transform_len(384, 384, true), 768);
+        assert_eq!(transform_len(1536, 1537, true), 3072);
+        assert_eq!(transform_len(1536, 1537, false), 2048);
+        assert_eq!(transform_len(1600, 1700, true), 3072);
+        assert_eq!(transform_len(1600, 1700, false), 4096);
+        assert_eq!(transform_len(2048, 2048, true), 4096);
+        assert_eq!(transform_len(3072, 3072, true), 6144);
+        assert_eq!(transform_len(3072, 3072, false), 4096);
+    }
+    for (an, bn) in [(1, 1), (3, 2), (7, 9), (40, 40), (300, 301), (1000, 3)] {
+        let n = transform_len(an, bn, true);
+        let (half, three) = radix_parts(n);
+        assert!(half.is_power_of_two() && n == half * if three { 3 } else { 1 });
+        assert!(n >= an.max(bn));
+    }
+}
+
 /// All-ones operands give the largest coefficients, `min(an, bn) (B - 1)^2`,
 /// which the recombination must carry exactly; the lengths straddle the
 /// powers of two and the recursion threshold.
@@ -171,6 +201,13 @@ fn all_ones() {
         (1174, 1175),
         (2048, 301),
         (2048, 2),
+        // Radix-3 transforms: covering (3, 6, 768, 3072) and wrapped.
+        (2, 2),
+        (3, 3),
+        (384, 384),
+        (1536, 1537),
+        (1600, 1700),
+        (3 * BLOCK / 2, 3 * BLOCK / 2 + 2),
     ];
     for (an, bn) in shapes {
         let (a, b) = (vec![Limb::MAX; an], vec![Limb::MAX; bn]);
@@ -185,13 +222,13 @@ fn all_ones() {
 /// The named shapes assume the default `ntt_wrap_fraction` of 1.
 #[test]
 fn wrap_shapes() {
-    let wraps = |an: usize, bn: usize| transform_len(an, bn) < an + bn - 1;
+    let wraps = |an: usize, bn: usize| transform_len(an, bn, false) < an + bn - 1;
     if WRAP_FRACTION == 1 {
         assert!(wraps(300, 300));
         assert!(wraps(2048, 2));
         // Top product of 300 x 300 limbs, which wraps again.
         assert!(wraps(1174, 1175) && wraps(2048, 301));
-        assert_eq!(1174 + 1175 - 1 - transform_len(1174, 1175), 300);
+        assert_eq!(1174 + 1175 - 1 - transform_len(1174, 1175, false), 300);
     }
     // An operand longer than the shorter transform, or a power-of-two length.
     assert!(!wraps(2049, 2));

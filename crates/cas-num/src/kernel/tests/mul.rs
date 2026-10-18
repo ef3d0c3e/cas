@@ -11,10 +11,10 @@ use super::{split_at_limbs, val};
 use crate::Limb;
 use crate::kernel::mul::{
     Algorithm, MUL_KARATSUBA_THRESHOLD, MUL_NTT_THRESHOLD, MUL_TOOM3_THRESHOLD,
-    MUL_TOOM4_THRESHOLD, MUL_WRAP_NTT_THRESHOLD, SQR_KARATSUBA_THRESHOLD, SQR_NTT_THRESHOLD,
-    SQR_TOOM3_THRESHOLD, SQR_TOOM4_THRESHOLD, algorithm, karatsuba, karatsuba_scratch_len,
-    mul_wrap, mul_wrap_scratch_len, sqr_algorithm, toom3, toom3_scratch_len, toom4,
-    toom4_scratch_len,
+    MUL_TOOM4_THRESHOLD, MUL_WRAP_NTT_THRESHOLD, NTT_EFFICIENCY_EXPONENT, SQR_KARATSUBA_THRESHOLD,
+    SQR_NTT_THRESHOLD, SQR_TOOM3_THRESHOLD, SQR_TOOM4_THRESHOLD, algorithm, karatsuba,
+    karatsuba_scratch_len, mul_wrap, mul_wrap_scratch_len, sqr_algorithm, toom3, toom3_scratch_len,
+    toom4, toom4_scratch_len,
 };
 use crate::kernel::{
     addmul_1, mul, mul_1, mul_1_assign, mul_basecase, mul_scratch_len, sqr, sqr_basecase,
@@ -338,6 +338,10 @@ fn every_algorithm_on_all_ones() {
     let t = MUL_TOOM3_THRESHOLD;
     let q = MUL_TOOM4_THRESHOLD;
     let f = MUL_NTT_THRESHOLD;
+    // A length past the NTT threshold whose transform is tight (a power of
+    // two just covering the product), so the NTT takes it whatever the
+    // efficiency rule.
+    let g = (f + 1).next_power_of_two();
     let cases = [
         (k - 1, k - 1, Algorithm::Basecase),
         (k, k, Algorithm::Karatsuba),
@@ -350,12 +354,11 @@ fn every_algorithm_on_all_ones() {
         (4 * q, 3 * q, Algorithm::Toom3),
         (5 * t + 3, 2 * t, Algorithm::Chunked),
         (f - 1, f - 1, Algorithm::Toom4),
-        (f, f, Algorithm::Ntt),
-        (2 * f - 2, f, Algorithm::Ntt),
+        (g, g, Algorithm::Ntt),
         (2 * f + 1, f, Algorithm::Chunked),
     ];
     let max = 3 * TESTED_SIZE_MAX;
-    let ordered = 2 * k <= t && t < q && 3 * q < f && 2 * f < max;
+    let ordered = 2 * k <= t && t < q && 3 * q < f && 2 * g < max;
     let mut seen = HashSet::new();
     for (an, bn, expected) in cases {
         if an > max {
@@ -370,6 +373,13 @@ fn every_algorithm_on_all_ones() {
     }
     if ordered {
         assert_eq!(seen.len(), 6);
+    }
+    // Around the threshold, where the efficiency rule picks either.
+    for (an, bn) in [(f, f), (2 * f - 2, f), (3 * f / 2, f + 7)] {
+        if an <= max {
+            let (a, b) = (vec![Limb::MAX; an], vec![Limb::MAX; bn]);
+            assert_eq!(run_mul(&a, &b).to_rug(), val(&a) * val(&b), "({an}, {bn})");
+        }
     }
 
     for n in [
@@ -390,6 +400,7 @@ fn every_algorithm_on_all_ones() {
     // Toom-4 squaring takes the lengths with n > 3 ceil(n / 4) (all from 13)
     // from its threshold on; the others stay with Toom-3.
     let (s3, s4, sf) = (SQR_TOOM3_THRESHOLD, SQR_TOOM4_THRESHOLD, SQR_NTT_THRESHOLD);
+    let tight = (sf + 1).next_power_of_two();
     let first4 = (s4..s4 + 16)
         .find(|&n| n > 3 * n.div_ceil(4))
         .expect("13 qualifies, and every length from it");
@@ -405,7 +416,7 @@ fn every_algorithm_on_all_ones() {
             Algorithm::Toom3
         };
         assert_eq!(sqr_algorithm(below), expected);
-        assert_eq!(sqr_algorithm(sf), Algorithm::Ntt);
+        assert_eq!(sqr_algorithm(tight), Algorithm::Ntt);
     }
 }
 
@@ -629,5 +640,32 @@ fn basecase_all_ones() {
         let mut r = vec![GARBAGE; 2 * n];
         sqr_basecase(&mut r, &a);
         assert_eq!(val(&r), val(&a).square(), "{n}");
+    }
+}
+
+/// From the NTT threshold on, balanced products take the NTT exactly where
+/// the efficiency rule says it has caught up with Toom: both outcomes occur
+/// between the threshold and twice it, the tight sizes on the NTT side.
+#[test]
+#[allow(clippy::cast_precision_loss, reason = "the rule's estimate")]
+fn ntt_dispatch_follows_efficiency() {
+    let f = MUL_NTT_THRESHOLD;
+    if f > 1 << 20 {
+        return;
+    }
+    let x = NTT_EFFICIENCY_EXPONENT as f64 / 10.0;
+    let (mut ntt, mut toom) = (0, 0);
+    for n in f..2 * f {
+        let predicted = n as f64 * crate::kernel::ntt::efficiency(n, n).powf(x) >= f as f64;
+        let chosen = algorithm(n, n) == Algorithm::Ntt;
+        assert_eq!(chosen, predicted, "n = {n}");
+        if chosen {
+            ntt += 1;
+        } else {
+            toom += 1;
+        }
+    }
+    if NTT_EFFICIENCY_EXPONENT > 0 && f >= 16 {
+        assert!(ntt > 0 && toom > 0, "ntt {ntt}, toom {toom}");
     }
 }

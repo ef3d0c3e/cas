@@ -26,8 +26,8 @@ pub(crate) const MUL_KARATSUBA_THRESHOLD: usize = crate::tuning::MUL_KARATSUBA_T
 pub(crate) const MUL_TOOM3_THRESHOLD: usize = crate::tuning::MUL_TOOM3_THRESHOLD;
 /// Smallest shorter-operand length at which [`mul`] uses Toom-4.
 pub(crate) const MUL_TOOM4_THRESHOLD: usize = crate::tuning::MUL_TOOM4_THRESHOLD;
-/// Smallest shorter-operand length at which [`mul`] uses the NTT. The NTT's cost is a staircase (see [`super::ntt`]), so above
-/// this it is ahead on average rather than at every length.
+/// Shorter-operand length from which [`mul`] uses the NTT for products whose
+/// transform is as cheap as the size allows; see [`ntt_pays`].
 pub(crate) const MUL_NTT_THRESHOLD: usize = crate::tuning::MUL_NTT_THRESHOLD;
 /// Smallest length at which [`sqr`] uses Karatsuba squaring.
 pub(crate) const SQR_KARATSUBA_THRESHOLD: usize = crate::tuning::SQR_KARATSUBA_THRESHOLD;
@@ -35,8 +35,10 @@ pub(crate) const SQR_KARATSUBA_THRESHOLD: usize = crate::tuning::SQR_KARATSUBA_T
 pub(crate) const SQR_TOOM3_THRESHOLD: usize = crate::tuning::SQR_TOOM3_THRESHOLD;
 /// Smallest length at which [`sqr`] uses Toom-4 squaring.
 pub(crate) const SQR_TOOM4_THRESHOLD: usize = crate::tuning::SQR_TOOM4_THRESHOLD;
-/// Smallest length at which [`sqr`] uses the NTT.
+/// Length from which [`sqr`] uses the NTT, as [`MUL_NTT_THRESHOLD`].
 pub(crate) const SQR_NTT_THRESHOLD: usize = crate::tuning::SQR_NTT_THRESHOLD;
+/// Ten times the exponent of [`ntt_pays`]'s efficiency rule.
+pub(crate) const NTT_EFFICIENCY_EXPONENT: usize = crate::tuning::NTT_EFFICIENCY_EXPONENT;
 /// Smallest power-of-two modulus length at which [`mul_wrap`] uses a cyclic
 /// transform instead of reducing the full product.
 pub(crate) const MUL_WRAP_NTT_THRESHOLD: usize = crate::tuning::MUL_WRAP_NTT_THRESHOLD;
@@ -343,6 +345,18 @@ pub(crate) enum Algorithm {
     Ntt,
 }
 
+/// Whether the NTT beats Toom for `an x bn` limbs (`an >= bn`) given the
+/// configured `threshold`, by size: the NTT's cost is a staircase, so a
+/// product whose transform is `1 / e` times the ideal one ([`ntt::efficiency`])
+/// needs its length scaled up by `e^-x` before the NTT catches up with Toom,
+/// for `x = NTT_EFFICIENCY_EXPONENT / 10`. Toom-4's cost grows like `n^1.4`,
+/// which alone would give `x = 1 / (1.4 - 1) = 2.5`; `cas-tune` fits it.
+#[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
+fn ntt_pays(an: usize, bn: usize, threshold: usize) -> bool {
+    let x = NTT_EFFICIENCY_EXPONENT as f64 / 10.0;
+    bn >= threshold && bn as f64 * ntt::efficiency(an, bn).powf(x) >= threshold as f64
+}
+
 /// The algorithm [`mul`] uses for `an >= bn`.
 pub(crate) fn algorithm(an: usize, bn: usize) -> Algorithm {
     debug_assert!(an >= bn);
@@ -351,7 +365,7 @@ pub(crate) fn algorithm(an: usize, bn: usize) -> Algorithm {
     } else if bn <= an.div_ceil(2) {
         // Karatsuba needs b's high half to be non-empty.
         Algorithm::Chunked
-    } else if bn >= MUL_NTT_THRESHOLD {
+    } else if ntt_pays(an, bn, MUL_NTT_THRESHOLD) {
         Algorithm::Ntt
     } else if bn >= MUL_TOOM4_THRESHOLD && bn > 3 * an.div_ceil(4) {
         Algorithm::Toom4
@@ -368,7 +382,7 @@ pub(crate) fn sqr_algorithm(n: usize) -> Algorithm {
         Algorithm::Basecase
     } else if n < SQR_TOOM3_THRESHOLD {
         Algorithm::Karatsuba
-    } else if n >= SQR_NTT_THRESHOLD {
+    } else if ntt_pays(n, n, SQR_NTT_THRESHOLD) {
         Algorithm::Ntt
     } else if n >= SQR_TOOM4_THRESHOLD && n > 3 * n.div_ceil(4) {
         Algorithm::Toom4

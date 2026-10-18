@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 /// `(key, minimum)`. Every algorithm is correct for any value at or above
 /// its minimum; below it some algorithm would be called outside its domain.
-const KEYS: [(&str, u64); 20] = [
+const KEYS: [(&str, u64); 21] = [
     // A 1x1 product would be "chunked" into 1x1 products forever.
     ("mul_karatsuba_threshold", 2),
     // Toom-3 checks its own balance condition, so any size works.
@@ -32,6 +32,8 @@ const KEYS: [(&str, u64); 20] = [
     // Toom-4 squaring checks n > 3 ceil(n / 4) and leaves the rest to Toom-3.
     ("sqr_toom4_threshold", 1),
     ("sqr_ntt_threshold", 1),
+    // Any exponent only moves products between correct algorithms.
+    ("ntt_efficiency_exponent", 0),
     ("ntt_block", 1),
     // A divisor: wrap when 2e - 1 <= n / ntt_wrap_fraction.
     ("ntt_wrap_fraction", 1),

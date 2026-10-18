@@ -55,14 +55,22 @@ struct Param {
 }
 
 impl Param {
+    /// The window, plus the powers of two inside it: transform costs step
+    /// there, and they are common sizes, which a geometric sweep rarely hits.
     fn sizes(&self, config: &Config) -> Vec<u64> {
-        self.window.map_or_else(
+        let mut sizes = self.window.map_or_else(
             || {
                 let top = self.grid.iter().filter(|&&v| v != NEVER).max();
                 geometric(self.grid[0], top.expect("a finite candidate") * 5 / 2, 1.25)
             },
             |window| window(config),
-        )
+        );
+        if let (Some(&lo), Some(&hi)) = (sizes.first(), sizes.last()) {
+            sizes.extend((0..64).map(|k| 1u64 << k).filter(|&p| lo < p && p < hi));
+            sizes.sort_unstable();
+            sizes.dedup();
+        }
+        sizes
     }
 }
 
@@ -108,6 +116,16 @@ fn params() -> Vec<Param> {
             op: "mul",
             grid: with_never(geometric(96, 1600, 1.19)),
             window: None,
+        },
+        Param {
+            key: "ntt_efficiency_exponent",
+            op: "mul",
+            grid: vec![0, 10, 15, 20, 25, 30, 40, 50, 60, 80],
+            // Products from the threshold up, where the rule decides.
+            window: Some(|c| {
+                let from = c["mul_ntt_threshold"].clamp(512, 16384);
+                geometric(from, from * 6, 1.1)
+            }),
         },
         Param {
             key: "mul_ntt_threshold",

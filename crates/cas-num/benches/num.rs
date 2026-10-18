@@ -137,6 +137,30 @@ fn arithmetic(c: &mut Criterion) {
     );
 }
 
+/// Balanced products at sizes between the NTT's power-of-two steps, where
+/// its cost used to jump (just above `1.5 2^k` coefficients), up to
+/// `CAS_BENCH_MAX_LIMBS`.
+fn staircase(c: &mut Criterion) {
+    let max = std::env::var("CAS_BENCH_MAX_LIMBS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4096usize);
+    let mut group = c.benchmark_group("mul_staircase");
+    for n in [3000, 6000, 12000, 24000, 50000, 100_000] {
+        if n > max {
+            break;
+        }
+        let ((a, ga), (b, gb)) = pair(n);
+        group.bench_function(BenchmarkId::new("ours", n), |bench| {
+            bench.iter(|| black_box(&a * &b));
+        });
+        group.bench_function(BenchmarkId::new("gmp", n), |bench| {
+            bench.iter(|| black_box(rug::Integer::from(&ga * &gb)));
+        });
+    }
+    group.finish();
+}
+
 fn number_theory(c: &mut Criterion) {
     sweep(
         c,
@@ -278,6 +302,6 @@ fn config() -> Criterion {
 criterion_group! {
     name = benches;
     config = config();
-    targets = arithmetic, number_theory, radix, small_integers
+    targets = arithmetic, staircase, number_theory, radix, small_integers
 }
 criterion_main!(benches);

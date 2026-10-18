@@ -1,16 +1,19 @@
 //! Multiplication by number-theoretic transforms modulo three primes below
-//! 2^62, recombined by the Chinese remainder theorem.
+//! 2^62, recombined by the Chinese remainder theorem. Transform lengths are
+//! `2^k` or `3 2^k`: the primes have roots of order `3 2^53`.
 //!
 //! Each limb is one coefficient, so the product's coefficients are below
 //! `min(an, bn) 2^128`, far under the primes' product (above 2^183): their
 //! residues modulo each prime, from a cyclic convolution, determine them
 //! exactly. Just above a power of two, the transform is half the covering
 //! length instead, and the coefficients that wrap around are recomputed
-//! from the operands' top limbs (see [`convolve_mod`]); this flattens most of
-//! the power-of-two staircase in cost. The transforms are radix 2. The forward
-//! one decimates in frequency (natural order in, bit-reversed order out) and
-//! the inverse one is its exact mirror, decimating in time from bit-reversed
-//! order back to natural order, so no permutation pass is needed. Residues stay
+//! from the operands' top limbs (see [`convolve_mod`]); with the lengths
+//! `3 2^k` in between, this flattens most of the power-of-two staircase in
+//! cost. The transforms are radix 2, after one radix-3 layer for the lengths
+//! `3 2^k`. The forward one decimates in frequency (natural order in,
+//! bit-reversed order out within each third) and the inverse one is its exact
+//! mirror, decimating in time back to natural order, so no permutation pass is
+//! needed. Residues stay
 //! lazily in `[0, 2p)` (Harvey's butterflies), twiddle products use Shoup's
 //! precomputed quotients, and the pointwise products use Montgomery reduction,
 //! whose `2^-64` factor is folded into the `1 / N` scaling. Transforms longer
@@ -32,16 +35,37 @@
 use super::div::{div_2by1, reciprocal_2by1};
 use crate::Limb;
 
-/// `(p, g)`: primes `p = c 2^54 + 1` in `(2^61, 2^62)`, and an element `g` of
-/// order exactly `2^54` modulo `p` (a quadratic non-residue raised to `c`).
+/// `(p, g)`: primes `p = c 2^53 + 1` in `(2^61, 2^62)` with `3 | c`, and an
+/// element `g` of order exactly `3 2^53` modulo `p` (`x^(c / 3)` for the
+/// smallest `x` that gives that order).
 const PRIMES: [(Limb, Limb); 3] = [
-    (0x3a00_0000_0000_0001, 0x0fc2_62fd_2103_9b12),
-    (0x2c40_0000_0000_0001, 0x2a67_1570_b78e_304e),
-    (0x28c0_0000_0000_0001, 0x0127_0e41_54da_e99b),
+    (0x3ea0_0000_0000_0001, 0x26bc_11b4_7562_4031),
+    (0x3ae0_0000_0000_0001, 0x0238_519f_4524_a89f),
+    (0x3960_0000_0000_0001, 0x368c_a63f_7d75_28a0),
 ];
 
-/// `log2` of the order of the roots in [`PRIMES`]: the longest transform.
-const ROOT_ORDER_LOG2: u32 = 54;
+/// `log2` of the power-of-two part of the order of the roots in [`PRIMES`]:
+/// the longest transforms are `2^53` and `3 2^52`.
+const ROOT_ORDER_LOG2: u32 = 53;
+
+/// `(m, three)` for a transform length `n = m` or `n = 3 m`, `m` a power of
+/// two.
+fn radix_parts(n: usize) -> (usize, bool) {
+    if n % 3 == 0 {
+        (n / 3, true)
+    } else {
+        debug_assert!(n.is_power_of_two());
+        (n, false)
+    }
+}
+
+/// An element of order exactly `n` (`2^k` or `3 2^k`) modulo `m`, from the
+/// prime's root `root` of order `3 2^53`.
+fn root_of_order(m: Modulus, root: Limb, n: usize) -> Limb {
+    let order = 3u64 << ROOT_ORDER_LOG2;
+    debug_assert_eq!(order % n as u64, 0);
+    m.pow(root, order / n as u64)
+}
 
 /// Transforms of at most this many coefficients run layer by layer; longer
 /// ones split into halves first.
@@ -247,6 +271,115 @@ fn inverse(m: Modulus, a: &mut [Limb], tw: &[Limb]) {
     dit_layer(m, a, &tw[n..2 * n]);
 }
 
+/// Limbs of the twiddle tables for transforms up to length `n`: the radix-2
+/// pairs for its power-of-two part `m`, and for `n = 3 m` the radix-3 table
+/// (see [`radix3_twiddles`]).
+fn tables_len(n: usize) -> usize {
+    let (m, three) = radix_parts(n);
+    2 * m + if three { 2 + 8 * m } else { 0 }
+}
+
+/// The twiddle tables of a transform of length `n` in `tw`
+/// (`tables_len(n)` limbs); returns the radix-2 part and the radix-3 part,
+/// empty for a power of two. The radix-2 table serves every power of two up to
+/// `m` as a prefix.
+fn tables(m: Modulus, root: Limb, n: usize, tw: &mut [Limb]) -> (&[Limb], &[Limb]) {
+    let (half, three) = radix_parts(n);
+    let (tw2, tw3) = tw.split_at_mut(2 * half);
+    twiddles(m, tw2, root_of_order(m, root, half));
+    if three {
+        radix3_twiddles(m, tw3, root_of_order(m, root, n));
+    }
+    (tw2, if three { tw3 } else { &mut [] })
+}
+
+/// The radix-3 table for `n = 3 m` from `w` of order `n` (`2 + 8 m` limbs):
+/// `(ω, shoup(ω))` for the cube root of unity `ω = w^m`, then for each `j < m`
+/// the pairs of `w^j` and `w^2j`, then of `w^-j` and `w^-2j`.
+fn radix3_twiddles(m: Modulus, tw: &mut [Limb], w: Limb) {
+    let half = (tw.len() - 2) / 8;
+    let omega = m.pow(w, half as u64);
+    tw[0] = omega;
+    tw[1] = m.shoup(omega);
+    let (fwd, inv) = tw[2..].split_at_mut(4 * half);
+    for (w, quad) in [(w, fwd), (m.inv(w), inv)] {
+        let ws = m.shoup(w);
+        let mut x = 1;
+        for q in quad.chunks_exact_mut(4) {
+            let x2 = m.mul(x, x);
+            q.copy_from_slice(&[x, m.shoup(x), x2, m.shoup(x2)]);
+            x = m.reduce_p(m.mul_shoup(x, w, ws));
+        }
+    }
+}
+
+/// The radix-3 decimation-in-frequency layer on `a` (`3 m` residues in
+/// `[0, 2p)`): `(x0, x1, x2) -> (x0 + x1 + x2, (x0 + ω x1 + ω^2 x2) w^j,
+/// (x0 + ω^2 x1 + ω x2) w^2j)` on the thirds, with `ω^2 = -1 - ω` so that
+/// one product by `ω` serves both: `x0 - x2 + ω (x1 - x2)` and
+/// `x0 - x1 - ω (x1 - x2)`.
+fn radix3_forward(m: Modulus, a: &mut [Limb], tw3: &[Limb]) {
+    let third = a.len() / 3;
+    let (omega, omega_s) = (tw3[0], tw3[1]);
+    let (x0, rest) = a.split_at_mut(third);
+    let (x1, x2) = rest.split_at_mut(third);
+    let fwd = tw3[2..].chunks_exact(4);
+    for (((x0, x1), x2), q) in x0.iter_mut().zip(x1).zip(x2).zip(fwd) {
+        let (u, v, t) = (*x0, *x1, *x2);
+        *x0 = m.reduce_2p(m.reduce_2p(u + v) + t);
+        let d = m.mul_shoup(v + m.two_p - t, omega, omega_s);
+        let s = m.reduce_2p(u + m.two_p - t);
+        let r = m.reduce_2p(u + m.two_p - v);
+        *x1 = m.mul_shoup(s + d, q[0], q[1]);
+        *x2 = m.mul_shoup(r + m.two_p - d, q[2], q[3]);
+    }
+}
+
+/// The inverse of [`radix3_forward`] up to a factor 3: with `z1 = y1 w^-j` and
+/// `z2 = y2 w^-2j`, `(y0, y1, y2) -> (y0 + z1 + z2, y0 - z1 + ω (z2 - z1),
+/// y0 - z2 - ω (z2 - z1))`.
+fn radix3_inverse(m: Modulus, a: &mut [Limb], tw3: &[Limb]) {
+    let third = a.len() / 3;
+    let (omega, omega_s) = (tw3[0], tw3[1]);
+    let (y0, rest) = a.split_at_mut(third);
+    let (y1, y2) = rest.split_at_mut(third);
+    let inv = tw3[2 + 4 * third..].chunks_exact(4);
+    for (((y0, y1), y2), q) in y0.iter_mut().zip(y1).zip(y2).zip(inv) {
+        let u = *y0;
+        let z1 = m.mul_shoup(*y1, q[0], q[1]);
+        let z2 = m.mul_shoup(*y2, q[2], q[3]);
+        let d = m.mul_shoup(z2 + m.two_p - z1, omega, omega_s);
+        *y0 = m.reduce_2p(m.reduce_2p(u + z1) + z2);
+        *y1 = m.reduce_2p(m.reduce_2p(u + m.two_p - z1) + d);
+        *y2 = m.reduce_2p(m.reduce_2p(u + m.two_p - z2) + m.two_p - d);
+    }
+}
+
+/// [`forward`] for a length `m` or `3 m`, with the tables of [`tables`].
+fn forward_any(m: Modulus, a: &mut [Limb], tw2: &[Limb], tw3: &[Limb]) {
+    if a.len().is_power_of_two() {
+        forward(m, a, tw2);
+    } else {
+        radix3_forward(m, a, tw3);
+        for third in a.chunks_exact_mut(a.len() / 3) {
+            forward(m, third, tw2);
+        }
+    }
+}
+
+/// [`inverse`] for a length `m` or `3 m`: the inverse of [`forward_any`] times
+/// `a.len()`.
+fn inverse_any(m: Modulus, a: &mut [Limb], tw2: &[Limb], tw3: &[Limb]) {
+    if a.len().is_power_of_two() {
+        inverse(m, a, tw2);
+    } else {
+        for third in a.chunks_exact_mut(a.len() / 3) {
+            inverse(m, third, tw2);
+        }
+        radix3_inverse(m, a, tw3);
+    }
+}
+
 /// `f = x mod p`, zero-padded, residues in `[0, 2p)`.
 fn load(m: Modulus, f: &mut [Limb], x: &[Limb]) {
     let (head, tail) = f.split_at_mut(x.len());
@@ -256,45 +389,91 @@ fn load(m: Modulus, f: &mut [Limb], x: &[Limb]) {
     tail.fill(0);
 }
 
-/// A product of `an` and `bn` limbs wraps around a transform of half the
-/// covering power of two when its top coefficients, recomputed by a product of
-/// at most this fraction of the transform's length, are all that wrap.
+/// A product of `an` and `bn` limbs wraps around a transform shorter than it
+/// when its top coefficients, recomputed by a product of at most this fraction
+/// of the transform's power-of-two part, are all that wrap.
 pub(crate) const WRAP_FRACTION: usize = crate::tuning::NTT_WRAP_FRACTION;
 
-/// The transform length for operands of `an, bn >= 1` limbs: the power of two
-/// `n >= len = an + bn - 1`, or half of it when the `e = len - n / 2`
-/// coefficients that wrap are cheap to recompute (see [`convolve_mod`]).
-fn transform_len(an: usize, bn: usize) -> usize {
+/// The transform length for operands of `an, bn >= 1` limbs, by
+/// [`plan`].
+fn transform_len(an: usize, bn: usize, radix3: bool) -> usize {
+    plan(an, bn, radix3).0
+}
+
+/// `(n, cost)`: the transform length for operands of `an, bn >= 1` limbs, a
+/// power of two or (with `radix3`) three times one, and its estimated cost.
+///
+/// The candidates are the shortest such lengths covering `len = an + bn - 1`
+/// and the next shorter ones, which hold both operands and leave `e = len - n`
+/// coefficients that wrap and are recomputed (see [`convolve_mod`]); `2e - 1`
+/// at most the power-of-two part of `n` over [`WRAP_FRACTION`], so their
+/// transform is a power of two using a prefix of the same twiddles. A length
+/// costs `n` times its radix-2 layers, plus 2 for a radix-3 layer and 3 for
+/// loading, pointwise products and recombination, plus the cost of the
+/// wrapped coefficients; the cheapest wins.
+fn plan(an: usize, bn: usize, radix3: bool) -> (usize, u64) {
     let len = an + bn - 1;
-    let n = len.next_power_of_two();
-    let half = n / 2;
-    if half > 0 && an.max(bn) <= half && 2 * (len - half) - 1 <= half / WRAP_FRACTION {
-        half
-    } else {
-        n
+    let pow2 = len.next_power_of_two();
+    let mut three = 3;
+    while three < len {
+        three *= 2;
     }
+    let candidates = [pow2, pow2 / 2, three, three / 2];
+    let mut best = (pow2, u64::MAX);
+    for (i, &n) in candidates.iter().enumerate() {
+        let (half, is_three) = radix_parts(n.max(1));
+        if n == 0 || (i >= 2 && (!radix3 || n % 3 != 0)) || n < an.max(bn) {
+            continue;
+        }
+        let e = len.saturating_sub(n);
+        if e > 0 && 2 * e - 1 > half / WRAP_FRACTION {
+            continue;
+        }
+        let layers = u64::from(half.trailing_zeros()) + if is_three { 2 } else { 0 } + 3;
+        let mut cost = n as u64 * layers;
+        if e > 0 {
+            cost += plan(e, e, false).1;
+        }
+        if cost < best.1 {
+            best = (n, cost);
+        }
+    }
+    best
+}
+
+/// How close the transform for operands of `an, bn >= 1` limbs comes to the
+/// ideal cost `len (log2 len + 3)` of [`plan`]'s model, in `(0, 1]`: low just
+/// above the steps of the staircase, where the transform is much longer than
+/// the product or the wrapped part is large.
+#[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
+pub(crate) fn efficiency(an: usize, bn: usize) -> f64 {
+    let len = (an + bn - 1) as f64;
+    let ideal = len * (len.log2() + 3.0);
+    (ideal / plan(an, bn, true).1 as f64).min(1.0)
 }
 
 /// Limbs of the residue buffer for operands of `an` and `bn` limbs: the
 /// product's coefficients, and room for the transform.
-fn buffer_len(an: usize, bn: usize) -> usize {
-    transform_len(an, bn).max(an + bn - 1)
+fn buffer_len(an: usize, bn: usize, radix3: bool) -> usize {
+    transform_len(an, bn, radix3).max(an + bn - 1)
 }
 
-/// Work limbs [`convolve_mod`] needs beyond its buffer and the twiddles.
-fn work_len(an: usize, bn: usize, square: bool) -> usize {
-    let n = transform_len(an, bn);
+/// Work limbs [`convolve_mod`] needs beyond its buffer and the twiddles; the
+/// wrapped coefficients take power-of-two transforms.
+fn work_len(an: usize, bn: usize, square: bool, radix3: bool) -> usize {
+    let n = transform_len(an, bn, radix3);
     let second = if square { 0 } else { n };
     let e = (an + bn - 1).saturating_sub(n);
     if e == 0 {
         second
     } else {
-        second.max(buffer_len(e, e) + work_len(e, e, square))
+        second.max(buffer_len(e, e, false) + work_len(e, e, square, false))
     }
 }
 
 fn scratch_len(an: usize, bn: usize, square: bool) -> usize {
-    3 * buffer_len(an, bn) + 2 * transform_len(an, bn) + work_len(an, bn, square)
+    let n = transform_len(an, bn, true);
+    3 * buffer_len(an, bn, true) + tables_len(n) + work_len(an, bn, square, true)
 }
 
 /// Scratch limbs [`mul`] needs for operands of `an, bn >= 1` limbs.
@@ -324,17 +503,19 @@ fn convolve(r: &mut [Limb], a: &[Limb], b: Option<&[Limb]>, scratch: &mut [Limb]
     let (an, bn) = (a.len(), b.map_or(a.len(), <[Limb]>::len));
     assert!(an != 0 && bn != 0, "ntt: empty operand");
     debug_assert_eq!(r.len(), an + bn);
-    let n = transform_len(an, bn);
-    let log_n = n.trailing_zeros();
-    assert!(log_n <= ROOT_ORDER_LOG2, "ntt: operands too long");
-    let stride = buffer_len(an, bn);
+    let n = transform_len(an, bn, true);
+    assert!(
+        radix_parts(n).0.trailing_zeros() <= ROOT_ORDER_LOG2,
+        "ntt: operands too long"
+    );
+    let stride = buffer_len(an, bn, true);
     let (residues, rest) = scratch.split_at_mut(3 * stride);
-    let (tw, work) = rest.split_at_mut(2 * n);
+    let (tw, work) = rest.split_at_mut(tables_len(n));
     for (&(p, root), f) in PRIMES.iter().zip(residues.chunks_exact_mut(stride)) {
         let m = Modulus::new(p);
         // The smaller transforms of the wrapped coefficients use a prefix.
-        twiddles(m, tw, m.pow(root, 1 << (ROOT_ORDER_LOG2 - log_n)));
-        convolve_mod(m, f, a, b, tw, work);
+        let (tw2, tw3) = tables(m, root, n, tw);
+        convolve_mod(m, f, a, b, (tw2, tw3), work, true);
     }
     let len = an + bn - 1;
     let (f0, f12) = residues.split_at(stride);
@@ -362,13 +543,15 @@ pub(crate) fn mul_cyclic(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [
         n.is_power_of_two() && (1..=n).contains(&a.len()) && (1..=n).contains(&b.len()),
         "ntt: cyclic length mismatch"
     );
-    let log_n = n.trailing_zeros();
-    assert!(log_n <= ROOT_ORDER_LOG2, "ntt: operands too long");
+    assert!(
+        n.trailing_zeros() <= ROOT_ORDER_LOG2,
+        "ntt: operands too long"
+    );
     let (residues, rest) = scratch.split_at_mut(3 * n);
     let (tw, g) = rest.split_at_mut(2 * n);
     for (&(p, root), f) in PRIMES.iter().zip(residues.chunks_exact_mut(n)) {
         let m = Modulus::new(p);
-        twiddles(m, tw, m.pow(root, 1 << (ROOT_ORDER_LOG2 - log_n)));
+        let tw = tables(m, root, n, tw);
         cyclic_mod(m, f, a, Some(b), tw, &mut g[..n]);
     }
     let (f0, f12) = residues.split_at(n);
@@ -390,7 +573,8 @@ fn add_wrapping(r: &mut [Limb], at: usize, x: Limb) {
 
 /// `f[..len] = a * b mod p` (or `a^2`), the linear convolution of
 /// `len = an + bn - 1` coefficients, as residues in `[0, p)`; `f` has
-/// `buffer_len(an, bn)` limbs and `tw` covers the transform length.
+/// `buffer_len(an, bn, radix3)` limbs and `tw` covers the transform length
+/// (the radix-3 part only with `radix3`).
 ///
 /// When the transform length `n` is below `len`, the cyclic convolution adds
 /// each coefficient `c_(n + k)`, `k < e = len - n`, onto `c_k`. Those `c_(n + k)`
@@ -402,12 +586,13 @@ fn convolve_mod(
     f: &mut [Limb],
     a: &[Limb],
     b: Option<&[Limb]>,
-    tw: &[Limb],
+    tw: (&[Limb], &[Limb]),
     work: &mut [Limb],
+    radix3: bool,
 ) {
     let (an, bn) = (a.len(), b.map_or(a.len(), <[Limb]>::len));
     let len = an + bn - 1;
-    let n = transform_len(an, bn);
+    let n = transform_len(an, bn, radix3);
     let (f, top) = f.split_at_mut(n);
     cyclic_mod(m, f, a, b, tw, &mut work[..if b.is_some() { n } else { 0 }]);
 
@@ -415,8 +600,9 @@ fn convolve_mod(
     if e == 0 {
         return;
     }
-    let (t, work) = work.split_at_mut(buffer_len(e, e));
-    convolve_mod(m, t, &a[an - e..], b.map(|b| &b[bn - e..]), tw, work);
+    let (t, work) = work.split_at_mut(buffer_len(e, e, false));
+    let (a_top, b_top) = (&a[an - e..], b.map(|b| &b[bn - e..]));
+    convolve_mod(m, t, a_top, b_top, (tw.0, &[]), work, false);
     let wrapped = &t[e - 1..2 * e - 1];
     for ((x, top), &w) in f.iter_mut().zip(&mut top[..e]).zip(wrapped) {
         *x = m.reduce_p(*x + m.p - w);
@@ -432,19 +618,23 @@ fn cyclic_mod(
     f: &mut [Limb],
     a: &[Limb],
     b: Option<&[Limb]>,
-    tw: &[Limb],
+    (tw2, tw3): (&[Limb], &[Limb]),
     g: &mut [Limb],
 ) {
-    let log_n = f.len().trailing_zeros();
+    let (half, three) = radix_parts(f.len());
     load(m, f, a);
-    forward(m, f, tw);
+    forward_any(m, f, tw2, tw3);
     // Montgomery reduction leaves 2^-64 and the inverse transform n, so each
-    // pointwise product is scaled by 2^64 / n = 2^(64 - log n).
-    let k = m.pow(2, u64::from(Limb::BITS - log_n));
+    // pointwise product is scaled by 2^64 / n: 2^(64 - log m), over 3 for
+    // n = 3 m.
+    let mut k = m.pow(2, u64::from(Limb::BITS - half.trailing_zeros()));
+    if three {
+        k = m.mul(k, m.inv(3));
+    }
     let ks = m.shoup(k);
     if let Some(b) = b {
         load(m, g, b);
-        forward(m, g, tw);
+        forward_any(m, g, tw2, tw3);
         for (x, &y) in f.iter_mut().zip(&*g) {
             *x = m.mul_shoup(m.redc(u128::from(*x) * u128::from(y)), k, ks);
         }
@@ -453,7 +643,7 @@ fn cyclic_mod(
             *x = m.mul_shoup(m.redc(u128::from(*x) * u128::from(*x)), k, ks);
         }
     }
-    inverse(m, f, tw);
+    inverse_any(m, f, tw2, tw3);
     for x in f.iter_mut() {
         *x = m.reduce_p(*x);
     }
