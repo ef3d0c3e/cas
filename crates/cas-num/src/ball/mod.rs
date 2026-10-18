@@ -7,4 +7,4 @@
 
 mod float;
 
-pub use float::{Float, Round};
+pub use float::{APPROX_ULPS, Float, Round};

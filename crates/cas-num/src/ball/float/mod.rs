@@ -20,11 +20,13 @@ use crate::{Integer, Limb, Natural, Rational};
 
 mod arith;
 mod convert;
+mod divsqrt;
 mod round;
 
 #[cfg(test)]
 mod tests;
 
+pub use divsqrt::APPROX_ULPS;
 pub use round::Round;
 
 /// Bits per limb, as the `u64` that bit counts use.

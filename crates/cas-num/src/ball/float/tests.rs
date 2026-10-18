@@ -31,6 +31,19 @@ fn round_mode() -> impl Strategy<Value = Round> {
     proptest::sample::select(&Round::ALL[..])
 }
 
+/// [`dyadic_with`] without zero (mapped to one), for divisors.
+fn nonzero(max_limbs: usize, exps: std::ops::RangeInclusive<i64>) -> BoxedStrategy<Dyadic> {
+    dyadic_with(max_limbs, exps)
+        .prop_map(|d| {
+            if d.is_zero() {
+                Dyadic::new(&rug::Integer::from(1), &rug::Integer::new())
+            } else {
+                d
+            }
+        })
+        .boxed()
+}
+
 /// The exact MPFR value of `d`.
 fn mp(d: &Dyadic) -> MpFloat {
     d.to_rug().expect("strategy stays in MPFR's range")
@@ -342,4 +355,199 @@ fn small_cases() {
         Dyadic::new(&rug::Integer::from(7), &rug::Integer::new()),
     )
     .unwrap();
+}
+
+/// `|true - approx|` checked exactly: `approx` is a lower bound of the
+/// magnitude within `APPROX_ULPS` units of `2^(exp(approx) - prec)`.
+fn check_approx_quotient(q: &Float, exact: &Rational, prec: u64) -> Result<(), TestCaseError> {
+    prop_assert!(q.bit_length() <= prec, "more than prec bits");
+    let qv = q.to_rational();
+    prop_assert!(qv.abs() <= exact.abs(), "not a lower bound: {:?}", q);
+    prop_assert!(q.is_zero() || q.sign() == exact.sign());
+    if !q.is_zero() {
+        let ulp = Float::from_integer_exp(&Integer::ONE, &(q.exponent() - &Integer::from(prec)))
+            .to_rational();
+        let bound = &ulp * &Rational::from(Integer::from(super::APPROX_ULPS));
+        prop_assert!(
+            &(exact.abs()) - &qv.abs() < bound,
+            "beyond the bound: {:?}",
+            q
+        );
+    }
+    Ok(())
+}
+
+/// For a square root `s` of `a`: `s^2 <= a < (s + u)^2` with
+/// `u = APPROX_ULPS × 2^(exp(s) - prec)`, and similarly `y` for `1 / sqrt(a)`
+/// (`y^2 a <= 1 < (y + u)^2 a`).
+fn check_approx_root(
+    r: &Float,
+    a: &Rational,
+    prec: u64,
+    inverse: bool,
+) -> Result<(), TestCaseError> {
+    prop_assert!(r.bit_length() <= prec && !r.is_negative());
+    let rv = r.to_rational();
+    let ulp = Float::from_integer_exp(&Integer::ONE, &(r.exponent() - &Integer::from(prec)))
+        .to_rational();
+    let hi = &rv + &(&ulp * &Rational::from(Integer::from(super::APPROX_ULPS)));
+    let sq = |x: &Rational| x * x;
+    if inverse {
+        prop_assert!(&sq(&rv) * a <= Rational::ONE, "not a lower bound");
+        prop_assert!(&sq(&hi) * a > Rational::ONE, "beyond the bound");
+    } else {
+        prop_assert!(sq(&rv) <= *a, "not a lower bound");
+        prop_assert!(sq(&hi) > *a, "beyond the bound");
+    }
+    Ok(())
+}
+
+proptest! {
+    #[test]
+    fn div_matches_mpfr(
+        a in dyadic_with(8, -(1 << 27)..=(1 << 27)),
+        b in dyadic_with(8, -(1 << 27)..=(1 << 27)),
+        p in prec(),
+        r in round_mode(),
+    ) {
+        let (x, y) = (a.to_ours(), b.to_ours());
+        match x.checked_div_round(&y, p, r) {
+            None => prop_assert!(y.is_zero()),
+            Some(ours) => {
+                let pp = u32::try_from(p).unwrap();
+                check_round(ours, MpFloat::with_val_round(pp, &mp(&a) / &mp(&b), rug_round(r)))?;
+            }
+        }
+    }
+
+    /// Exact quotients and quotients exactly halfway between two `p`-bit
+    /// values: `a = b h` for an odd `h` of `p + 1` bits (or of at most `p`).
+    #[test]
+    fn div_exact_and_halfway(
+        b in nonzero(4, -300..=300),
+        h in strategy::top_limb(),
+        p in 1u64..=63,
+        exact: bool,
+        r in round_mode(),
+    ) {
+        let y = b.to_ours();
+        let bits = if exact { p } else { p + 1 };
+        let h = (h >> (64 - bits)) | 1 | (1 << (bits - 1));
+        let hf = Float::from_integer_exp(&Integer::from(h), &Integer::from(-7));
+        let x = y.mul(&hf);
+        let pp = u32::try_from(p).unwrap();
+        let (f, g) = (mp(&x.to_rug()), mp(&b));
+        let ours = x.div_round(&y, p, r);
+        if exact {
+            prop_assert_eq!(ours.1, Ordering::Equal);
+        }
+        check_round(ours, MpFloat::with_val_round(pp, &f / &g, rug_round(r)))?;
+    }
+
+    #[test]
+    fn sqrt_matches_mpfr(a in dyadic_with(8, -(1 << 27)..=(1 << 27)), p in prec(), r in round_mode()) {
+        let x = a.to_ours();
+        match x.checked_sqrt_round(p, r) {
+            None => prop_assert!(x.is_negative()),
+            Some(ours) => {
+                let pp = u32::try_from(p).unwrap();
+                check_round(ours, MpFloat::with_val_round(pp, mp(&a).sqrt_ref(), rug_round(r)))?;
+            }
+        }
+    }
+
+    /// Perfect squares, including roots of `p + 1` bits (halfway at `p`).
+    #[test]
+    fn sqrt_exact_and_halfway(
+        s in strategy::top_limb(),
+        p in 1u64..=63,
+        exact: bool,
+        e in -200i64..200,
+        r in round_mode(),
+    ) {
+        let bits = if exact { p } else { p + 1 };
+        let s = (s >> (64 - bits)) | 1 | (1 << (bits - 1));
+        let root = Float::from_integer_exp(&Integer::from(s), &Integer::from(e));
+        let x = root.mul(&root);
+        let pp = u32::try_from(p).unwrap();
+        let ours = x.sqrt_round(p, r);
+        if exact {
+            prop_assert_eq!(&ours, &(root.clone(), Ordering::Equal));
+        }
+        check_round(ours, MpFloat::with_val_round(pp, mp(&x.to_rug()).sqrt_ref(), rug_round(r)))?;
+    }
+
+    #[test]
+    fn div_approx_within_bound(a in dyadic_with(8, -500..=500), b in dyadic_with(8, -500..=500), p in prec()) {
+        let (x, y) = (a.to_ours(), b.to_ours());
+        match x.div_approx(&y, p) {
+            None => prop_assert!(y.is_zero()),
+            Some(q) => check_approx_quotient(&q, &(&x.to_rational() / &y.to_rational()), p)?,
+        }
+    }
+
+    #[test]
+    fn sqrt_approx_within_bound(a in dyadic_with(8, -500..=500), p in prec()) {
+        let x = a.to_ours();
+        match (x.sqrt_approx(p), x.rsqrt_approx(p)) {
+            (None, None) => prop_assert!(x.is_negative()),
+            (Some(s), None) => {
+                prop_assert!(x.is_zero() && s.is_zero());
+            }
+            (Some(s), Some(y)) => {
+                let av = x.to_rational();
+                check_approx_root(&s, &av, p, false)?;
+                check_approx_root(&y, &av, p, true)?;
+            }
+            (None, Some(_)) => prop_assert!(false, "rsqrt of a negative"),
+        }
+    }
+
+    /// Exponents near and beyond ±2^63: scaling commutes with division and
+    /// (by even powers) with the square root.
+    #[test]
+    fn div_sqrt_huge_exponents(a in dyadic_with(4, -300..=300), b in nonzero(4, -300..=300), k in huge_shift(), p in prec(), r in round_mode()) {
+        let k = Signed::from_rug(&k).to_integer();
+        let (x, y) = (a.to_ours().abs(), b.to_ours());
+        let (q, o) = x.div_round(&y, p, r);
+        prop_assert_eq!(x.mul_2exp(&k).div_round(&y, p, r), (q.mul_2exp(&k), o));
+        let k2 = &k * &Integer::from(2);
+        let (s, o) = x.sqrt_round(p, r);
+        prop_assert_eq!(x.mul_2exp(&k2).sqrt_round(p, r), (s.mul_2exp(&k), o));
+        let k1 = &k2 + &Integer::ONE;
+        let lhs = x.mul_2exp(&k1).sqrt_round(p, r);
+        let rhs = x.mul_2exp(&Integer::ONE).sqrt_round(p, r);
+        prop_assert_eq!(lhs, (rhs.0.mul_2exp(&k), rhs.1));
+        if let Some(q) = x.div_approx(&y, p) {
+            prop_assert_eq!(x.mul_2exp(&k).div_approx(&y, p), Some(q.mul_2exp(&k)));
+        }
+    }
+}
+
+#[test]
+fn div_sqrt_edge_cases() {
+    assert_eq!(
+        Float::from(1).checked_div_round(&Float::ZERO, 10, Round::Nearest),
+        None
+    );
+    assert_eq!(Float::from(1).div_approx(&Float::ZERO, 10), None);
+    assert_eq!(Float::from(-4).checked_sqrt_round(10, Round::Nearest), None);
+    assert_eq!(Float::from(-4).sqrt_approx(10), None);
+    assert_eq!(Float::ZERO.rsqrt_approx(10), None);
+    assert_eq!(
+        Float::ZERO.sqrt_round(5, Round::Up),
+        (Float::ZERO, Ordering::Equal)
+    );
+    assert_eq!(
+        Float::from(9).sqrt_round(2, Round::Down),
+        (Float::from(3), Ordering::Equal)
+    );
+    assert_eq!(
+        Float::from(6).div_round(&Float::from(3), 1, Round::Down),
+        (Float::from(2), Ordering::Equal)
+    );
+    assert!(
+        std::panic::catch_unwind(|| Float::from(1).div_round(&Float::ZERO, 10, Round::Down))
+            .is_err()
+    );
 }

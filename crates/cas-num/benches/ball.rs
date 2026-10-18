@@ -1,8 +1,9 @@
 //! Benchmarks of binary floats and ball arithmetic against MPFR (through
 //! `rug::Float`), CAS-DOC-5 §11.
 //!
-//! Every group times the MPFR baseline as `op/mpfr/bits`; the `Float`, `Mag`
-//! and `Ball` tickets add `op/ours/bits` next to it on the same inputs.
+//! Every group times the MPFR baseline as `op/mpfr/bits` next to ours,
+//! `op/ours/bits` (correctly rounded, toward zero) and, for division and
+//! square root, `op/approx/bits` (the midpoint entries), on the same inputs.
 //! Precisions sweep 64, 128, 256 … bits up to `CAS_BENCH_MAX_BITS` (default
 //! 4096); constants and functions run at decimal digit counts up to
 //! `CAS_BENCH_MAX_DIGITS` (default 10^4; the tickets' sweeps go to 10^6).
@@ -110,38 +111,46 @@ fn short_products(c: &mut Criterion) {
 fn arithmetic(c: &mut Criterion) {
     type Op = fn(&mut Float, &Float, &Float);
     type OurOp = fn(&ball::Float, &ball::Float, u64) -> ball::Float;
-    let ops: [(&str, Op, Option<OurOp>); 4] = [
+    // (group, MPFR, ours correctly rounded, ours approximate)
+    let ops: [(&str, Op, OurOp, Option<OurOp>); 4] = [
         (
             "add",
             |r, a, b| _ = r.assign_round(a + b, Round::Zero),
-            Some(|a, b, p| a.add_round(b, p, ball::Round::Down).0),
+            |a, b, p| a.add_round(b, p, ball::Round::Down).0,
+            None,
         ),
         (
             "mul",
             |r, a, b| _ = r.assign_round(a * b, Round::Zero),
-            Some(|a, b, p| a.mul_round(b, p, ball::Round::Down).0),
+            |a, b, p| a.mul_round(b, p, ball::Round::Down).0,
+            None,
         ),
         (
             "div",
             |r, a, b| _ = r.assign_round(a / b, Round::Zero),
-            None,
+            |a, b, p| a.div_round(b, p, ball::Round::Down).0,
+            Some(|a, b, p| a.div_approx(b, p).expect("non-zero")),
         ),
         (
             "sqrt",
             |r, a, _| {
                 _ = r.assign_round(a.sqrt_ref(), Round::Zero);
             },
-            None,
+            |a, _, p| a.sqrt_round(p, ball::Round::Down).0,
+            Some(|a, _, p| a.sqrt_approx(p).expect("positive")),
         ),
     ];
-    for (name, op, ours) in ops {
+    for (name, op, ours, approx) in ops {
         let mut group = c.benchmark_group(name);
         for prec in precisions() {
             let (a, b) = (operand(prec, 2), operand(prec, 3));
-            if let Some(ours) = ours {
-                let (x, y) = (to_ours(&a), to_ours(&b));
-                group.bench_function(BenchmarkId::new("ours", prec), |bench| {
-                    bench.iter(|| ours(black_box(&x), black_box(&y), u64::from(prec)));
+            let (x, y) = (to_ours(&a), to_ours(&b));
+            group.bench_function(BenchmarkId::new("ours", prec), |bench| {
+                bench.iter(|| ours(black_box(&x), black_box(&y), u64::from(prec)));
+            });
+            if let Some(approx) = approx {
+                group.bench_function(BenchmarkId::new("approx", prec), |bench| {
+                    bench.iter(|| approx(black_box(&x), black_box(&y), u64::from(prec)));
                 });
             }
             let mut r = Float::new(prec);
