@@ -9,11 +9,16 @@
 //! - [`Ball`]: midpoint ± radius, with arithmetic whose results contain every
 //!   exact result for points of the inputs, three-valued predicates, and the
 //!   [`RealBalls`] ring object (§5).
+//! - Constants: [`Ball::const_pi`], [`Ball::const_log2`] and [`Ball::const_e`]
+//!   by binary splitting, cached process-wide (§7.1).
 
+mod bsplit;
+mod consts;
 mod float;
 mod mag;
 mod real;
 
+pub use consts::clear_constant_cache;
 pub use float::{APPROX_ULPS, Float, Round};
 pub use mag::Mag;
 pub use real::{Ball, RealBalls};

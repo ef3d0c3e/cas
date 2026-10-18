@@ -222,14 +222,25 @@ fn to_ours(x: &Float) -> ball::Float {
     ball::Float::from_integer_exp(&m, &cas_num::Integer::from(i64::from(e)))
 }
 
-/// π, log 2 and e from scratch. MPFR caches constants, so each iteration
-/// clears the cache first; the cost of clearing is negligible next to the
-/// computation from 100 digits up.
+/// π, log 2 and e from scratch. Both sides cache constants, so each
+/// iteration clears the caches first; the cost of clearing is negligible
+/// next to the computation from 100 digits up. MPFR has no `e` constant:
+/// its row is `exp(1)`.
 fn constants(c: &mut Criterion) {
-    let consts = [("pi", Constant::Pi), ("log2", Constant::Log2)];
-    for (name, k) in consts {
+    type Ours = fn(u64) -> ball::Ball;
+    let consts: [(&str, Constant, Ours); 2] = [
+        ("pi", Constant::Pi, ball::Ball::const_pi),
+        ("log2", Constant::Log2, ball::Ball::const_log2),
+    ];
+    for (name, k, ours) in consts {
         let mut group = c.benchmark_group(name);
         for d in digit_counts() {
+            group.bench_function(BenchmarkId::new("ours", d), |bench| {
+                bench.iter(|| {
+                    ball::clear_constant_cache();
+                    black_box(ours(u64::from(bits(d))))
+                });
+            });
             group.bench_function(BenchmarkId::new("mpfr", d), |bench| {
                 bench.iter(|| {
                     rug::float::free_cache(rug::float::FreeCache::All);
@@ -241,6 +252,12 @@ fn constants(c: &mut Criterion) {
     }
     let mut group = c.benchmark_group("e");
     for d in digit_counts() {
+        group.bench_function(BenchmarkId::new("ours", d), |bench| {
+            bench.iter(|| {
+                ball::clear_constant_cache();
+                black_box(ball::Ball::const_e(u64::from(bits(d))))
+            });
+        });
         group.bench_function(BenchmarkId::new("mpfr", d), |bench| {
             bench.iter(|| black_box(Float::with_val(bits(d), 1).exp()));
         });

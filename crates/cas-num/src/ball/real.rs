@@ -142,6 +142,13 @@ impl Ball {
         self.rad.is_finite()
     }
 
+    /// The ball with `err` added to its radius: it then also contains every
+    /// point within `err` of a point of `self`.
+    #[must_use]
+    pub fn add_error(&self, err: &Mag) -> Ball {
+        Ball::new(self.mid.clone(), self.rad.add(err))
+    }
+
     /// `[m ± r]` from a rounded midpoint whose error is `k` ulps (`rad` the
     /// propagated radius).
     #[allow(
