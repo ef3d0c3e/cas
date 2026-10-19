@@ -405,17 +405,25 @@ impl Ball {
 
     /// `self^n` at `prec` bits (`self^0 = 1`), by squaring and multiplying
     /// balls; a negative `n` inverts the power.
+    ///
+    /// Each squaring doubles the relative error, so the products run at
+    /// `bits(n) + 8` more bits (Arb's `arb_pow_fmpz_binexp` adds `bits(n)`,
+    /// \[Arb\]), and the result is rounded to `prec`. At `prec` itself,
+    /// CAS-113 found `x^-423547` indeterminate at 5 bits for an exact `x`.
     #[must_use]
     pub fn pow(&self, n: i64, prec: u64) -> Ball {
         let k = n.unsigned_abs();
+        let bits = u64::BITS - k.leading_zeros();
+        let wp = prec + u64::from(bits) + 8;
         let mut r = Ball::from_integer(&Integer::ONE);
-        for i in (0..u64::BITS - k.leading_zeros()).rev() {
-            r = r.mul(&r, prec);
+        for i in (0..bits).rev() {
+            r = r.mul(&r, wp);
             if (k >> i) & 1 == 1 {
-                r = r.mul(self, prec);
+                r = r.mul(self, wp);
             }
         }
-        if n < 0 { r.inv(prec) } else { r }
+        let r = if n < 0 { r.inv(wp) } else { r };
+        r.round_to_accuracy(prec)
     }
 
     /// `[|m| ± r]`, which contains `|x|` for every `x` in the ball.

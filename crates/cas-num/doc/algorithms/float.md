@@ -108,6 +108,10 @@ remainder as the sticky bit, the usual route to correct rounding
     while `r^2 > X`. If that needs more than four steps, the general path
     takes over.
 
+Both take `i64` exponents, and every exponent computation in them is
+checked: one that would leave `i64` hands the operation to the general path
+(CAS-113 found one in the square root that was not).
+
 **Proof.** The doc comments of `div_round`, `sqrt_round` and, for the
 fixed-size forms, `small.rs`'s `quotient_n` and `root_n`. **Tests.** Bit
 for bit against MPFR in all five modes, at random and edge-case operands.

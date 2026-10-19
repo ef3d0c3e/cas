@@ -764,6 +764,29 @@ fn real_roots_and_exact_powers() {
     assert!(v.rel_accuracy_bits() >= 125, "{v:?}");
     let scaled = v.mul_2exp(&-Integer::from(1_000_000i64));
     assert!(scaled.overlaps(&int(2).pow_ball(&Ball::exact(Float::from_f64(0.25).unwrap()), 128)));
+    // y log x past exp's HUGE_EXP, where exp reads only its sign and
+    // exponent: log x is not recomputed at that many bits (CAS-113: an
+    // integer y = 3·2^(2^40), too large for the fast path, asked for 2^40).
+    for k in [1i64 << 20, 1 << 40] {
+        let y = Ball::exact(Float::from(3i64).mul_2exp(&Integer::from(k)));
+        assert_eq!(int(3).pow_ball(&y, 64), Ball::INDETERMINATE);
+        let v = Ball::exact(Float::from_f64(0.5).unwrap()).pow_ball(&y, 64);
+        assert!(v.is_finite() && v.contains(&Float::ZERO), "{v:?}");
+    }
+    // A negative base and an exact integer exponent beyond i64: (-1)^y |x|^y
+    // (CAS-113: indeterminate before). 2^70 + 1 is odd, 2^70 even.
+    let p70 = Integer::from(1u128 << 70);
+    for (k, sign) in [(&p70 + &Integer::ONE, -1i64), (p70.clone(), 1)] {
+        let y = Ball::from_integer(&k);
+        let v = int(-2).pow_ball(&y, 64);
+        assert!(v.rel_accuracy_bits() >= 61, "{v:?}");
+        assert!(v.mul_2exp(&-k).contains(&Float::from(sign)), "{v:?}");
+        assert_eq!(int(-1).pow_ball(&y, 64), int(sign));
+    }
+    // And x^y underflowing: (-11)^(-3·2^(10^6)), even, is [0 ± tiny].
+    let y = Ball::exact(Float::from(-3i64).mul_2exp(&Integer::from(1_000_000)));
+    let v = int(-11).pow_ball(&y, 64);
+    assert!(v.is_finite() && v.contains(&Float::ZERO), "{v:?}");
     // Hyperbolic edges.
     assert_eq!(int(1).acosh(64), Ball::ZERO);
     assert_eq!(

@@ -8,6 +8,8 @@
 use arbitrary::{Result, Unstructured};
 use cas_num::{Integer, Natural, Rational};
 
+pub mod ball;
+
 /// Lengths near which cas-num switches algorithms (Karatsuba 16, divide and
 /// conquer division 40, Karatsuba squaring 44, Toom-3 144, REDC 144).
 const THRESHOLDS: [usize; 5] = [16, 40, 44, 144, 192];

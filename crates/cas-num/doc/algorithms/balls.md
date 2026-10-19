@@ -72,8 +72,14 @@ a ± b      r + s + ε
 a × b      |a| s + |b| r + r s + ε
 a / b      (|a| s + |b| r) / (|b| (|b| - s)) + ε     (lower bounds below)
 sqrt(a)    r / (sqrt(a - r) + sqrt(a)) + ε           (lower bounds below)
-a^n        by squaring and multiplying balls
+a^n        by squaring and multiplying balls, at bits(n) + 8 more bits
 ```
+
+**Powers.** `Ball::pow` squares and multiplies at `bits(n) + 8` bits above
+`prec`, then rounds to `prec` (CAS-113). Each squaring doubles the relative
+error, so at `prec` itself `x^n` keeps only about `prec - log2 n` bits.
+Arb's `arb_pow_fmpz_binexp` adds `bits(n)` the same way
+[[Arb]](references.md#arb).
 
 **Indeterminate ball.** `[0 ± ∞]` is the only "no information" state. It
 results from a division by a ball containing 0, the square root of a ball

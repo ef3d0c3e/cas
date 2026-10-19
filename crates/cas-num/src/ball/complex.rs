@@ -318,7 +318,9 @@ impl ComplexBall {
     pub fn sqrt(&self, prec: u64) -> ComplexBall {
         let wp = prec + 8;
         let (a, b) = (&self.re, &self.im);
-        if self.is_real() && a.sign() != Some(Ordering::Less) {
+        // Every point at or above 0 (CAS-113: a real ball across 0 once
+        // took this path, and its negative points lost their imaginary part).
+        if self.is_real() && matches!(a.sign(), Some(Ordering::Greater | Ordering::Equal)) {
             return ComplexBall::from_real(a.sqrt(prec));
         }
         if b.is_exact() && b.mid().is_zero() && a.sign() == Some(Ordering::Less) {
@@ -411,8 +413,26 @@ impl ComplexBall {
                 _ => ComplexBall::INDETERMINATE,
             };
         }
-        let wp = prec + 16;
-        w.mul(&self.log(wp), wp).exp(prec)
+        // t = w log z has bits above its point, which exp turns into relative
+        // error (from Re t) and an error in the angle (from Im t): log z at
+        // that many more bits, as `exp_log` for real balls (CAS-113: at a
+        // fixed prec + 16, |t| ≈ 2^20 cost 6 bits). Past 2^16 of them, exp
+        // reads only the sign and exponent of each part.
+        let mut extra = 0;
+        loop {
+            let wp = prec + 16 + extra;
+            let t = w.mul(&self.log(wp), wp);
+            let above = [t.re.mid(), t.im.mid()]
+                .into_iter()
+                .filter_map(|m| m.exponent().to_i64())
+                .map(|e| u64::try_from(e).unwrap_or(0))
+                .max()
+                .unwrap_or(0);
+            if above <= extra || above > 1 << 16 {
+                return t.exp(prec);
+            }
+            extra = above + 8;
+        }
     }
 
     /// `sin(self)`.

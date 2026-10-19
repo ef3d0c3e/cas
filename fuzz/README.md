@@ -12,6 +12,10 @@ needs a nightly toolchain and its own build profile; the library itself stays on
 | `radix` | printing in every radix against GMP and round trips (integers and rationals); parsing of arbitrary strings against the grammar the primitive integers use, and against `i128`/`u128` where those parse; long digit strings against GMP |
 | `ball` | ball `+ - * /` and `sqrt` (of squares, exact answer) on dyadic midpoints with or without a radius, at fuzzer-chosen precisions: the result contains the exact `Rational` value at the midpoints (checked against GMP); division by a ball containing 0 gives the indeterminate ball |
 | `ball_text` | arbitrary strings into `Ball::from_decimal` (at fuzzer-chosen precisions), `Float::from_hex` and `Mag::from_hex`: no panic; an accepted decimal with a small exponent gives a ball containing its exact value, and prints in both styles; accepted hex floats print and parse back exactly |
+| `ball_fns` | The real ball functions (`exp`, `expm1`, `log`, `log1p`, `sin`, `cos`, `tan`, `sin_pi`, `cos_pi`, `atan`, `asin`, `acos`, the hyperbolic functions and inverses, `sqrt`, `root`, `pow`, `pow_ball`, `atan2`) at the midpoint, both ends and an interior point of fuzzer-chosen balls (every pair of them for two arguments): the result meets MPFR's bracket at `prec + 64` bits; a point outside the domain or at a pole gives the indeterminate ball; an exact input gives a finite result with at least `prec - 3` bits |
+| `complex_fns` | The complex ball functions, `inv`, `mul`, `div`, `pow`, `pow_int`, `root`, `abs` and `arg` at the centre, the corners and an interior point: both parts meet MPC's brackets at `prec + 192` bits; a pole gives a non-finite result; an exact input gives radii within `2^(6 - prec)` of the larger part |
+| `machine_fns` | The machine-ball functions and arithmetic against MPFR at 192 bits: `None` is always allowed; a `Some` meets the bracket at the midpoint, both ends and an interior point, and is `None` wherever MPFR has no finite value |
+| `ball_consts` | π, log 2, e, γ and G at sequences of fuzzer-chosen precisions from a cleared cache: each meets MPFR's bracket at `prec + 64` bits, knows `prec - 1` bits and has a midpoint of at most `prec` bits |
 | `number_theory` | `sqrt_rem`, `pow_mod` through every reduction, `ModRing` and `ModWord` operations and inverses, `crt`, `jacobi`, `primality`, `factor` (product and labels), `perfect_power` |
 
 Inputs are decoded from the fuzzer's bytes (`src/lib.rs`): limbs mix boundary values (`0`,
@@ -35,6 +39,22 @@ limits below the cap:
 CAP_MEM=3G CAP_TIME=700 ../scripts/capped.sh cargo fuzz run -O ball -- \
     -max_total_time=600 -rss_limit_mb=2048 -malloc_limit_mb=1024
 ```
+
+The ball function targets (`ball_fns`, `complex_fns`, `machine_fns`, `ball_consts`, CAS-113) run
+best with debug assertions and without AddressSanitizer: cas-num has no `unsafe` code, ASan's
+quarantine more than doubles the resident memory, and the debug assertions check the `Float`
+invariants of every value:
+
+```sh
+CAP_MEM=3G CAP_TIME=3700 ../scripts/capped.sh cargo fuzz run -O -a -s none ball_fns -- \
+    -max_total_time=3600 -rss_limit_mb=2048 -timeout=60
+```
+
+They fill the constant cache and the function tables once (`warm_up` in `src/ball.rs`), beyond
+every precision an input asks for, so that a result never depends on earlier inputs;
+`ball_consts` clears the cache before each input instead. A sample point longer than
+`2 prec + 256` bits (an end across a huge exponent gap) is rounded toward the midpoint, which keeps
+it in the ball and MPFR's work bounded.
 
 A finding is saved under `artifacts/<target>/`; replay it with
 `cargo fuzz run -O <target> artifacts/<target>/crash-…` and minimise with `cargo fuzz tmin`.

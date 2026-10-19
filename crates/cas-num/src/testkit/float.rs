@@ -100,7 +100,9 @@ impl Dyadic {
         let prec = self.mant_bits().max(1);
         let mut f = Float::with_val(prec, self.mant.to_rug());
         let e = self.exp.to_rug().to_i32()?;
-        let (lo, hi) = rug::float::allowed_exp_range();
+        // The range in force, not the largest one MPFR allows: past it, the
+        // shift below would overflow to an infinity.
+        let (lo, hi) = (rug::float::exp_min(), rug::float::exp_max());
         // `f` has exponent `prec`; the result has exponent `prec + e`.
         let top = i32::try_from(prec).ok()?.checked_add(e)?;
         if !self.is_zero() && !(lo..=hi).contains(&top) {

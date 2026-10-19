@@ -13,7 +13,7 @@ cargo-fuzz = true
 arbitrary = "1.4.1"
 cas-num = { path = "../crates/cas-num" }
 libfuzzer-sys = "0.4.13"
-rug = { version = "1.30.0", default-features = false, features = ["float", "integer", "rational", "std"] }
+rug = { version = "1.30.0", default-features = false, features = ["complex", "float", "integer", "rational", "std"] }
 
 # Not part of the main workspace: fuzzing needs nightly and its own profile.
 [workspace]
@@ -67,6 +67,34 @@ bench = false
 [[bin]]
 name = "ball_text"
 path = "fuzz_targets/ball_text.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ball_fns"
+path = "fuzz_targets/ball_fns.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "complex_fns"
+path = "fuzz_targets/complex_fns.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "machine_fns"
+path = "fuzz_targets/machine_fns.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "ball_consts"
+path = "fuzz_targets/ball_consts.rs"
 test = false
 doc = false
 bench = false

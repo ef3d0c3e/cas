@@ -647,6 +647,32 @@ proptest! {
     }
 }
 
+/// The fixed-size square root just above `i64::MIN`, where the exponent
+/// still takes it but `e - 128 N` does not fit: the general path answers
+/// (CAS-113: the subtraction overflowed), and scaling by an even power of
+/// two still commutes with the root.
+#[test]
+fn sqrt_next_to_the_smallest_i64_exponent() {
+    for x in [Float::from(3), Float::from(6), Float::from(7)] {
+        for d in [0i64, 1, 2, 3, 255, 256, 257, 511, 512, 513, 641, 700] {
+            // An even shift taking x's exponent to about i64::MIN + d.
+            let e = i128::try_from(x.exponent()).expect("small");
+            let s = (i128::from(i64::MIN) + i128::from(d) - e) & !1;
+            let (s, half) = (Integer::from(s), Integer::from(s / 2));
+            for p in [10, 64, 100, 150, 200, 250, 300] {
+                for r in [Round::Down, Round::Up, Round::Nearest] {
+                    let (q, o) = x.sqrt_round(p, r);
+                    assert_eq!(
+                        x.mul_2exp(&s).sqrt_round(p, r),
+                        (q.mul_2exp(&half), o),
+                        "{x:?} 2^{s} at {p}"
+                    );
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn div_sqrt_edge_cases() {
     assert_eq!(

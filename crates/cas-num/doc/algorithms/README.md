@@ -61,6 +61,13 @@ Every bound is also tested:
   threshold to an extreme.
 - **Sabotage runs.** Deliberate faults in the code are each checked to fail
   some test.
+- **Fuzzing.** libFuzzer targets in `fuzz/` (CAS-113) check the functions of
+  real, complex and machine balls against MPFR or MPC at the midpoint, the
+  ends and an interior point of fuzzer-chosen balls, and the constants from
+  a cleared cache. Their inputs sit next to the points where the functions
+  change behaviour (0, ±1, small integers and half-integers, multiples of
+  π/2), with tiny to huge exponents and precisions across the table and
+  bit-burst thresholds.
 
 ## Notation
 

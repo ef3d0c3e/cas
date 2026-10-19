@@ -585,7 +585,9 @@ fn root_n<const N: usize, const NX: usize, const NR: usize, const NX1: usize, co
     if odd {
         shl_window(&mut x, 1);
     }
-    let h = (e - 128 * i64::try_from(N).ok()? - i64::from(odd)) / 2;
+    // Checked like `exp` below: an exponent next to `i64::MIN` takes the
+    // general path (CAS-113: this subtraction once overflowed).
+    let h = e.checked_sub(128 * i64::try_from(N).ok()? + i64::from(odd))? / 2;
     // The overestimate from the top 128 bits.
     let bits = 64 * NX as u64 - u64::from(leading_zeros(&x));
     let t = (bits - 128).next_multiple_of(2);

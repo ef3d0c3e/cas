@@ -40,11 +40,15 @@ z^w          = exp(w log z)
   where it is `log1p(n - 1) / 2` with `n - 1` computed as
   `(a - 1)(a + 1) + b^2`, which does not cancel.
 - **`sqrt`.** Kahan's form [[Kah87]](references.md#kah87), which never
-  subtracts. Across the negative real axis the imaginary part covers both
-  signs, `[0 ± t]`.
+  subtracts. A real ball takes the real square root only when all of it is
+  at or above 0. Across the negative real axis the imaginary part covers
+  both signs, `[0 ± t]`.
 - **`atan`.** Near 0 the two logarithms are `±iz + O(z^2)` and their sum
   cancels to about `|z|` relative, so they are computed with `|log2 |z||`
   more bits.
+- **`pow`.** `log z` at as many more bits as `w log z` has above its point,
+  up to `2^16`, as for real balls ([functions.md](functions.md#pow-and-root)):
+  `exp` turns them into relative error and an error in the angle (CAS-113).
 
 ### More functions (CAS-102)
 
@@ -65,7 +69,9 @@ sin(π(a + bi)) = sin(πa) cosh(πb) + i cos(πa) sinh(πb)
 - **Beyond `exp`'s range.** `tan z` is `±i` within `2^(4 - 2|b|)` in each
   part.
 - **`sin_pi`, `cos_pi`.** They use the real functions' exact values at
-  integers and half-integers.
+  integers and half-integers. `π b` takes as many more bits as it has
+  above its point, since `cosh` and `sinh` turn its absolute error into
+  relative error (CAS-113: at a fixed `p + 8`, `|π b| ≈ 551` cost 9 bits).
 
 **Inverse functions** (`complex/inverse.rs`). `asin`, `acos`, `asinh` and
 `acosh` follow Hull, Fairgrieve and Tang [[HFT97]](references.md#hft97).

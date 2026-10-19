@@ -137,8 +137,21 @@ impl ComplexBall {
     }
 
     /// `(cosh(π b), sinh(π b))` for the imaginary part `b`.
+    ///
+    /// `π b` takes as many more bits as it has above its point: its absolute
+    /// error is what cosh and sinh turn into relative error (CAS-113: at
+    /// `wp` alone, `sin_pi(-175.5 i)` at 1 bit came out 20 times wider than
+    /// its value). Past `2^16` of them cosh and sinh are indeterminate.
     fn cosh_sinh_pi_im(&self, wp: u64) -> (Ball, Ball) {
-        let pb = self.im.mul(&Ball::const_pi(wp), wp);
+        let above = self
+            .im
+            .mid()
+            .exponent()
+            .to_i64()
+            .map_or(0, |e| u64::try_from(e.saturating_add(2)).unwrap_or(0))
+            .min(1 << 16);
+        let p = wp + above;
+        let pb = self.im.mul(&Ball::const_pi(p), p);
         (pb.cosh(wp), pb.sinh(wp))
     }
 }

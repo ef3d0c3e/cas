@@ -214,13 +214,20 @@ below. The exact values `±1` are special cases.
 `fns/pow.rs` (CAS-81).
 
 **`x^y`.** Exact fast paths first:
-- an exact integer `y` is `Ball::pow`, by squaring, for any sign of `x`;
-- an exact half-integer `n + 1/2` is `sqrt(x)^(2n+1)`;
+- an exact integer `y` is `Ball::pow`, by squaring, for any sign of `x`
+  ([balls.md](balls.md#ball-arithmetic)); one beyond `i64` with `x < 0` is
+  `(-1)^y exp(y log|x|)`, the parity read from `y`'s lowest one bit
+  (CAS-113);
+- an exact half-integer `n + 1/2` is `sqrt(x)^(2n+1)`, the root at
+  `bits(2n + 1)` more bits;
 - an exact base 0 gives 0 or 1.
 
 Otherwise `exp(y log x)` for `x > 0`, with `log x` at as many more bits as
 `y log x` has above its binary point, so `exp` sees an absolute error below
-its own ulp.
+its own ulp. Past `exp`'s `HUGE_EXP` (`2^16` bits above the point), `exp`
+reads only the sign and the exponent, and no more bits are taken (CAS-113:
+an integer `y = 3·2^(2^40)`, too large for the fast path, asked for `log x`
+at `2^40` bits).
 
 **`root(x, n)`.** The real `n`-th root: `exp(log(x) / n)` for `x > 0`, and
 `-root(-x, n)` for odd `n` and `x < 0`.

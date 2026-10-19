@@ -143,6 +143,49 @@ proptest! {
     }
 }
 
+/// `z^w` with `|w log z|` far above 1 keeps `prec` bits: log z at more
+/// bits (CAS-113 found `(-63.5)^(-195212.25 i)` 6.2 bits short at a fixed
+/// `prec + 16`).
+#[test]
+fn pow_with_large_exponents() {
+    let z = ComplexBall::from_real(Ball::exact(Float::from_f64(-63.5).unwrap()));
+    for y in [-195_212.25, 2f64.powi(30)] {
+        let w = ComplexBall::new(Ball::ZERO, Ball::exact(Float::from_f64(y).unwrap()));
+        for prec in [64, 200] {
+            let v = z.pow(&w, prec);
+            let size = Mag::from_float(v.re().mid()).max(Mag::from_float(v.im().mid()));
+            let tol = size.mul_2exp(&(Integer::from(6i64) - Integer::from(prec)));
+            assert!(
+                *v.re().rad() <= tol && *v.im().rad() <= tol,
+                "{y} i at {prec}: {v:?}"
+            );
+        }
+    }
+}
+
+/// `sin_pi` and `cos_pi` with a large imaginary part keep `prec` bits: `π b`
+/// at as many more bits as it has above its point (CAS-113 found
+/// `sin_pi(-175.5… i)` at 1 bit 20 times wider than its value).
+#[test]
+fn sin_cos_pi_of_large_imaginary_parts() {
+    for b in [-175.500_002_443_790_4, 3.0 * 2f64.powi(17) + 0.25] {
+        for a in [0.0, 0.25] {
+            let f = |x: f64| Ball::exact(Float::from_f64(x).unwrap());
+            let z = ComplexBall::new(f(a), f(b));
+            for prec in [1, 2, 64, 200] {
+                for v in [z.sin_pi(prec), z.cos_pi(prec)] {
+                    let size = Mag::from_float(v.re().mid()).max(Mag::from_float(v.im().mid()));
+                    let tol = size.mul_2exp(&(Integer::from(6i64) - Integer::from(prec)));
+                    assert!(
+                        *v.re().rad() <= tol && *v.im().rad() <= tol,
+                        "{a} + {b} i at {prec}: {v:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
 #[test]
 fn branch_cuts() {
     let pi = Ball::const_pi(128);
@@ -181,6 +224,15 @@ fn branch_cuts() {
     );
     let s = z.sqrt(100);
     assert!(s.im().contains(&Float::from(2i64)) && s.im().contains(&Float::from(-2i64)));
+    // A real ball across 0: its negative points have imaginary roots
+    // (CAS-113: sqrt([0 ± 4] + 0i) once claimed an exact imaginary part 0).
+    let across0 =
+        ComplexBall::from_real(Ball::new(Float::ZERO, Mag::from_integer(&Integer::from(4))));
+    let s = across0.sqrt(64);
+    assert!(
+        s.contains_complex(&Complex::new(Rational::ZERO, Rational::from(2i64))),
+        "{s:?}"
+    );
     // log of 0, or of a ball around it: indeterminate.
     assert_eq!(ComplexBall::ZERO.log(64), ComplexBall::INDETERMINATE);
     let around0 = ComplexBall::new(Ball::new(Float::ZERO, Mag::ONE), Ball::ZERO);

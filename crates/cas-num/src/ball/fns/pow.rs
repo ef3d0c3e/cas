@@ -16,6 +16,7 @@
 
 use std::cmp::Ordering;
 
+use super::exp::HUGE_EXP;
 use super::working;
 use crate::Integer;
 use crate::ball::decimal::to_integer;
@@ -38,6 +39,23 @@ fn as_i64(x: &Ball) -> Option<i64> {
     (Float::from(&v) == *m).then(|| v.to_i64()).flatten()
 }
 
+/// Whether `x` is an odd integer, at any size, or `None` if it is not an
+/// exact integer: from the weight of its mantissa's lowest one bit.
+fn integer_parity(x: &Ball) -> Option<bool> {
+    if !x.is_exact() {
+        return None;
+    }
+    let (m, e) = x.mid().to_integer_exp();
+    let Some(tz) = m.unsigned_abs().trailing_zeros() else {
+        return Some(false);
+    };
+    match (&e + &Integer::from(tz)).cmp(&Integer::ZERO) {
+        Ordering::Less => None,
+        Ordering::Equal => Some(true),
+        Ordering::Greater => Some(false),
+    }
+}
+
 /// `x^y` for a ball `x > 0` and any `y`, as `exp(y log x)`.
 fn exp_log(x: &Ball, y: &Ball, prec: u64) -> Ball {
     let wp = working(prec);
@@ -49,13 +67,15 @@ fn exp_log(x: &Ball, y: &Ball, prec: u64) -> Ball {
             return Ball::INDETERMINATE;
         }
         // Bits of y log x above its point, which exp turns into relative
-        // error of the result.
+        // error of the result. Past exp's HUGE_EXP it only reads the sign and
+        // the exponent (CAS-113: a huge y once asked for log x at that many
+        // bits).
         let above = t
             .mid()
             .exponent()
             .to_i64()
             .map_or(0, |e| u64::try_from(e).unwrap_or(0));
-        if t.mid().is_zero() || above <= extra {
+        if t.mid().is_zero() || above <= extra || above > HUGE_EXP.unsigned_abs() {
             return t.exp(prec);
         }
         extra = above + 8;
@@ -76,17 +96,16 @@ impl Ball {
         if !self.is_finite() || !y.is_finite() {
             return Ball::INDETERMINATE;
         }
-        // Squaring and multiplying rounds about 2 log2(n) times: that many
-        // more bits, then one rounding.
-        let wp =
-            |n: i64| working(prec) + 2 * u64::from(u64::BITS - n.unsigned_abs().leading_zeros());
+        // Ball::pow keeps `prec` bits by itself.
         if let Some(n) = as_i64(y) {
-            return self.pow(n, wp(n)).round_to_accuracy(prec);
+            return self.pow(n, prec);
         }
-        // Half-integers n + 1/2: sqrt(x)^(2n + 1), for x >= 0.
+        // Half-integers n + 1/2: sqrt(x)^(2n + 1), for x >= 0, the root at
+        // bits(2n + 1) more, since the power multiplies its relative error by
+        // up to 2n + 1.
         if let Some(k) = as_i64(&y.mul_2exp(&Integer::ONE)) {
-            let p = wp(k);
-            return self.sqrt(p).pow(k, p).round_to_accuracy(prec);
+            let bits = u64::BITS - k.unsigned_abs().leading_zeros();
+            return self.sqrt(working(prec) + u64::from(bits)).pow(k, prec);
         }
         if self.is_exact() && self.mid().is_zero() {
             // 0^y: 0 for y > 0, undefined otherwise.
@@ -94,6 +113,14 @@ impl Ball {
                 Some(Ordering::Greater) => Ball::ZERO,
                 _ => Ball::INDETERMINATE,
             };
+        }
+        // A negative x and an exact integer y too large for the fast path:
+        // (-1)^y |x|^y (CAS-113: indeterminate before).
+        if self.sign() == Some(Ordering::Less) {
+            if let Some(odd) = integer_parity(y) {
+                let v = exp_log(&self.neg(), y, prec);
+                return if odd { v.neg() } else { v };
+            }
         }
         if self.sign() != Some(Ordering::Greater) {
             return Ball::INDETERMINATE;
