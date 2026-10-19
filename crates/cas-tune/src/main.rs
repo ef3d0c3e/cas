@@ -233,10 +233,31 @@ fn params() -> Vec<Param> {
             grid: with_never(geometric(256, 16384, 1.19)),
             window: None,
         },
+        // Hensel division with remainder, timed where exact division with
+        // its check uses it (all sizes when the base disables
+        // divexact_div_threshold).
+        Param {
+            key: "bdiv_qr_dc_threshold",
+            op: "divexact",
+            grid: geometric(8, 640, 1.25),
+            window: None,
+        },
+        Param {
+            key: "bdiv_q_dc_threshold",
+            op: "bdiv_q",
+            grid: with_never(geometric(16, 1600, 1.19)),
+            window: None,
+        },
+        Param {
+            key: "bdiv_mu_threshold",
+            op: "bdiv_q",
+            grid: with_never(geometric(64, 8192, 1.19)),
+            window: None,
+        },
         Param {
             key: "binv_newton_threshold",
             op: "bdiv_q",
-            grid: geometric(8, 640, 1.25),
+            grid: geometric(8, 2000, 1.25),
             // Exact divisions long enough to work in blocks with the inverse.
             window: Some(|c| {
                 let from = c["bdiv_mu_threshold"].clamp(64, 4096);
@@ -244,15 +265,9 @@ fn params() -> Vec<Param> {
             }),
         },
         Param {
-            key: "bdiv_mu_threshold",
-            op: "bdiv_q",
-            grid: with_never(geometric(16, 1600, 1.19)),
-            window: None,
-        },
-        Param {
             key: "divexact_div_threshold",
             op: "divexact",
-            grid: with_never(geometric(4, 400, 1.19)),
+            grid: with_never(geometric(16, 6400, 1.19)),
             window: None,
         },
         Param {

@@ -20,7 +20,8 @@ use rug::ops::{DivRounding, RemRounding};
 use super::{base_pow, val};
 use crate::Limb;
 use crate::kernel::div::bdiv::{
-    BDIV_MU_THRESHOLD, BINV_NEWTON_THRESHOLD, DIVEXACT_DIV_THRESHOLD, binvert, binvert_scratch_len,
+    BDIV_MU_THRESHOLD, BDIV_Q_DC_THRESHOLD, BDIV_QR_DC_THRESHOLD, BINV_NEWTON_THRESHOLD,
+    DIVEXACT_DIV_THRESHOLD, binvert, binvert_scratch_len,
 };
 use crate::kernel::div::mu::{
     INV_NEWTON_THRESHOLD, MU_DIV_THRESHOLD, block_inverse, invert, invert_scratch_len, mu_div_qr,
@@ -803,13 +804,18 @@ fn run_divexact(a: &[Limb], d: &[Limb]) -> (Integer, bool) {
     (val(&q), exact)
 }
 
-/// Divisor lengths around the block threshold and where the inverse takes
-/// Newton steps, with every quotient shape.
+/// Divisor lengths around the divide-and-conquer and block thresholds (and
+/// one recursion level deeper) and where the inverse takes Newton steps, with
+/// every quotient shape.
 fn bdiv_divisor_lens() -> BoxedStrategy<usize> {
     len_around(&[
         1,
         2,
         3,
+        tested(BDIV_Q_DC_THRESHOLD),
+        2 * tested(BDIV_Q_DC_THRESHOLD) + 1,
+        tested(BDIV_QR_DC_THRESHOLD),
+        2 * tested(BDIV_QR_DC_THRESHOLD) + 1,
         tested(DIVEXACT_DIV_THRESHOLD),
         tested(BDIV_MU_THRESHOLD),
         2 * tested(BINV_NEWTON_THRESHOLD),
@@ -874,19 +880,38 @@ proptest! {
     }
 }
 
+/// Quotient lengths for the all-ones tests: the 2-adic quotient has one limb
+/// more, so these give it fewer limbs than, as many as and more than the
+/// divisor, and two and three times as many (a first block of every kind).
+fn extreme_quotient_lens(dn: usize) -> Vec<usize> {
+    let mut v = vec![
+        1,
+        2,
+        dn / 2 + 1,
+        dn.max(2) - 1,
+        dn,
+        dn + 1,
+        2 * dn - 1,
+        2 * dn,
+        3 * dn - 1,
+        3 * dn + 1,
+    ];
+    v.sort_unstable();
+    v.dedup();
+    v
+}
+
 /// All-ones divisors and quotients (the largest carries), one bit off a
 /// multiple, zero, the divisor itself and `d B^2`.
 #[test]
 fn divexact_extremes() {
-    for dn in [
-        1,
-        2,
-        3,
-        tested(BDIV_MU_THRESHOLD),
-        tested(BDIV_MU_THRESHOLD) + 1,
-    ] {
+    let (qr, t) = (tested(BDIV_QR_DC_THRESHOLD), tested(BDIV_MU_THRESHOLD));
+    let mut dns = vec![1, 2, 3, qr, qr + 1, 2 * qr + 1, t, t + 1];
+    dns.sort_unstable();
+    dns.dedup();
+    for dn in dns {
         let d = vec![Limb::MAX; dn];
-        for qn in [1, 2, dn, dn + 1, 3 * dn + 1] {
+        for qn in extreme_quotient_lens(dn) {
             let q = vec![Limb::MAX; qn];
             let a = limbs_of(&(val(&q) * val(&d)));
             assert_eq!(
@@ -903,6 +928,29 @@ fn divexact_extremes() {
         let mut shifted = vec![0; 2];
         shifted.extend_from_slice(&d);
         assert_eq!(run_divexact(&shifted, &d), (base_pow(2), true));
+    }
+}
+
+/// Dividends whose Hensel remainder is zero with a carry out of the top, so
+/// that only the carry tells them from multiples: `A = B^(qn + dn) - Q' D`
+/// for an all-ones `D` and `Q' = B^qn - B^(qn - 2) - 1`. It has one limb
+/// fewer than `qn + dn`, and modulo `D = B^dn - 1` it is `B^qn`, not zero.
+/// Through schoolbook and divide and conquer, with the carry left by every
+/// kind of last block.
+#[test]
+fn divexact_remainder_carry() {
+    let qr = tested(BDIV_QR_DC_THRESHOLD);
+    let mut dns = vec![2, 3, qr, qr + 1, 2 * qr + 1];
+    dns.sort_unstable();
+    dns.dedup();
+    for dn in dns {
+        let d = vec![Limb::MAX; dn];
+        for qn in extreme_quotient_lens(dn).into_iter().filter(|&qn| qn >= 2) {
+            let q_neg = base_pow(qn) - base_pow(qn - 2) - 1u32;
+            let a = limbs_of(&(base_pow(qn + dn) - q_neg * val(&d)));
+            assert_eq!(a.len(), qn + dn - 1, "dn = {dn}, qn = {qn}");
+            assert!(!run_divexact(&a, &d).1, "dn = {dn}, qn = {qn}");
+        }
     }
 }
 
@@ -932,17 +980,78 @@ proptest! {
     }
 }
 
-/// All-ones divisors and quotients through every block shape of [`bdiv_q`].
+/// All-ones divisors and quotients through every block shape of [`bdiv_q`],
+/// by divide and conquer (odd and even halves, first blocks of every kind)
+/// and by blocks.
 #[test]
 fn bdiv_q_extremes() {
-    let t = tested(BDIV_MU_THRESHOLD);
-    for dn in [1, 2, t, t + 1, 2 * t + 1] {
+    let (dc, qr, t) = (
+        tested(BDIV_Q_DC_THRESHOLD),
+        tested(BDIV_QR_DC_THRESHOLD),
+        tested(BDIV_MU_THRESHOLD),
+    );
+    let mut dns = vec![
+        1,
+        2,
+        dc,
+        dc + 1,
+        2 * dc + 1,
+        qr + 1,
+        2 * qr,
+        t,
+        t + 1,
+        2 * t + 1,
+    ];
+    dns.sort_unstable();
+    dns.dedup();
+    for dn in dns {
         let d = vec![Limb::MAX; dn];
-        for qn in [1, 2, dn / 2 + 1, dn, dn + 1, 3 * dn + 1] {
+        for qn in extreme_quotient_lens(dn) {
             let q = vec![Limb::MAX; qn];
             let a = limbs_of(&(val(&q) * val(&d)));
             let got = run_bdiv_q(&a, &d, a.len() - dn + 1);
             assert_eq!(val(&got), val(&q), "dn = {dn}, qn = {qn}");
+        }
+    }
+}
+
+/// The 2-adic quotient where the block updates and the inverse's Newton
+/// steps take products modulo `B^m - 1` (transform lengths from the wrap
+/// threshold): random operands, and all-ones ones, whose products are zero
+/// modulo `B^m - 1` (the residue that needs the borrow into the wrapped
+/// limbs), against GMP. Skipped when the configuration leaves these sizes to
+/// other algorithms.
+#[test]
+fn bdiv_q_wrapped_at_large_sizes() {
+    use crate::kernel::mul::{MUL_WRAP_NTT_THRESHOLD, wrap_len};
+    let big = (2 * MUL_WRAP_NTT_THRESHOLD + 1).max(BDIV_MU_THRESHOLD);
+    if big > 12_000 {
+        return;
+    }
+    let mut state = 0x0fed_cba9_8765_4321_u64;
+    let mut random = |n: usize| -> Vec<Limb> {
+        (0..n)
+            .map(|_| {
+                state ^= state >> 12;
+                state ^= state << 25;
+                state ^= state >> 27;
+                state.wrapping_mul(0x2545_f491_4f6c_dd1d)
+            })
+            .collect()
+    };
+    // An odd length (the inverse of about half of it wraps too), a power of
+    // two and a radix-3 length.
+    for dn in [big, big.next_power_of_two(), 3 * wrap_len(big.div_ceil(3))] {
+        for qn in [dn, 3 * dn] {
+            let mut d = random(dn);
+            d[0] |= 1;
+            d[dn - 1] |= 1 << 63;
+            let q = random(qn);
+            for (d, q) in [(d, q), (vec![Limb::MAX; dn], vec![Limb::MAX; qn])] {
+                let a = limbs_of(&(val(&q) * val(&d)));
+                let got = run_bdiv_q(&a, &d, a.len() - dn + 1);
+                assert_eq!(val(&got), val(&q), "dn = {dn}, qn = {qn}");
+            }
         }
     }
 }

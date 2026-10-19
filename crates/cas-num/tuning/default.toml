@@ -9,7 +9,11 @@
 # machine over a flat optimum; the other two 0.3-0.5%), and the Barrett
 # division keys after radix-3 wrap lengths, cached twiddles and reused
 # transforms (218 s, noise 0.1-0.3%), then mullo_mul_threshold and
-# redc_n_threshold after the faster NTT products (180 s, noise 0.4-1.3%).
+# redc_n_threshold after the faster NTT products (180 s, noise 0.4-1.3%);
+# the Hensel division keys after its divide and conquer and wrapped products
+# (822 s, noise 0.2-0.3%; bdiv_mu_threshold and binv_newton_threshold were
+# re-run, 331 s, noise 0.3-0.4%, after load on a busy machine had skewed
+# them; binv_newton_threshold is a flat optimum).
 # Algorithm thresholds for cas-num, embedded at build time (see build.rs).
 # Sizes are in limbs unless noted. Measured on the development machine;
 # `cargo run --release -p cas-tune` writes a file for yours.
@@ -62,12 +66,16 @@ dc_div_threshold = 14
 mu_div_threshold = 2690
 inv_newton_threshold = 8
 # Hensel division (kernel/div/bdiv.rs): divisor length from which the 2-adic
-# quotient works in blocks with the 2-adic inverse, and length from which
-# that inverse takes Newton steps; divisor length from which exact division
-# with its check divides with remainder instead.
-bdiv_mu_threshold = 154
-binv_newton_threshold = 43
-divexact_div_threshold = 46
+# quotient divides by divide and conquer, length from which Hensel division
+# with remainder does, divisor length from which the 2-adic quotient works in
+# blocks with the 2-adic inverse, and length from which that inverse takes
+# Newton steps; divisor length from which exact division with its check
+# divides with remainder instead.
+bdiv_q_dc_threshold = 118
+bdiv_qr_dc_threshold = 48
+bdiv_mu_threshold = 3830
+binv_newton_threshold = 1219
+divexact_div_threshold = 2719
 
 # Montgomery reduction (modular/ring.rs): modulus length from which REDC
 # multiplies by -n^-1 mod R instead of eliminating one limb at a time.

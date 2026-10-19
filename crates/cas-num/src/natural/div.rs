@@ -9,6 +9,39 @@ use crate::{Limb, kernel};
 const DIV_BY_ZERO: &str = "attempt to divide by zero";
 const NOT_EXACT: &str = "division is not exact";
 
+/// Scratch limbs that Hensel division takes from the stack instead of the
+/// heap, so that short exact divisions do not allocate for it.
+const STACK_SCRATCH: usize = 32;
+
+/// Runs `f` on `len` zeroed limbs, on the stack up to [`STACK_SCRATCH`].
+fn with_scratch<R>(len: usize, f: impl FnOnce(&mut [Limb]) -> R) -> R {
+    if len <= STACK_SCRATCH {
+        f(&mut [0; STACK_SCRATCH][..len])
+    } else {
+        f(&mut vec![0; len])
+    }
+}
+
+/// Runs `f` on `a` and `d` shifted right by `twos` bits, at most `d`'s
+/// trailing zeros (so `d` stays non-zero), both normalised; when `twos > 0`,
+/// into one buffer from [`with_scratch`].
+fn without_twos<R>(a: &[Limb], d: &[Limb], twos: u64, f: impl FnOnce(&[Limb], &[Limb]) -> R) -> R {
+    if twos == 0 {
+        return f(a, d);
+    }
+    let skip = usize::try_from(twos / u64::from(Limb::BITS)).expect("a limb count");
+    #[expect(clippy::cast_possible_truncation, reason = "below Limb::BITS")]
+    let bits = (twos % u64::from(Limb::BITS)) as u32;
+    let (a, d) = (&a[skip.min(a.len())..], &d[skip..]);
+    with_scratch(a.len() + d.len(), |buf| {
+        let (sa, sd) = buf.split_at_mut(a.len());
+        kernel::shr(sa, a, bits);
+        kernel::shr(sd, d, bits);
+        let (an, dn) = (kernel::normalized_len(sa), kernel::normalized_len(sd));
+        f(&sa[..an], &sd[..dn])
+    })
+}
+
 impl Natural {
     /// `(self / d, self % d)`, or `None` if `d` is zero.
     #[must_use]
@@ -112,28 +145,24 @@ impl Natural {
     /// exact.
     fn bdiv_q(&self, d: &Natural) -> Natural {
         let twos = d.trailing_zeros().expect("non-zero divisor");
-        let shifted;
-        let (a, d) = if twos == 0 {
-            (self.limbs(), d.limbs())
-        } else {
-            shifted = (self >> twos, d >> twos);
-            (shifted.0.limbs(), shifted.1.limbs())
-        };
-        let (an, dn) = (a.len(), d.len());
-        if an < dn {
-            return Natural::ZERO;
-        }
-        let mut q = LimbVec::zeroed(an - dn + 1);
-        if let [d] = d {
-            kernel::divexact_1(q.as_mut_slice(), a, *d);
-        } else {
-            let mut scratch = vec![0; kernel::bdiv_q_scratch_len(an - dn + 1, dn)];
-            kernel::bdiv_q(q.as_mut_slice(), a, d, &mut scratch);
-        }
-        let mut q = Natural { limbs: q };
-        q.normalize();
-        q.debug_check();
-        q
+        without_twos(self.limbs(), d.limbs(), twos, |a, d| {
+            let (an, dn) = (a.len(), d.len());
+            if an < dn {
+                return Natural::ZERO;
+            }
+            let mut q = LimbVec::zeroed(an - dn + 1);
+            if let [d] = d {
+                kernel::divexact_1(q.as_mut_slice(), a, *d);
+            } else {
+                with_scratch(kernel::bdiv_q_scratch_len(an - dn + 1, dn), |s| {
+                    kernel::bdiv_q(q.as_mut_slice(), a, d, s);
+                });
+            }
+            let mut q = Natural { limbs: q };
+            q.normalize();
+            q.debug_check();
+            q
+        })
     }
 
     /// `Some(self / d)` if the non-zero `d` divides `self`, by Hensel
@@ -146,29 +175,25 @@ impl Natural {
         if s < twos {
             return None;
         }
-        let shifted;
-        let (a, d) = if twos == 0 {
-            (self.limbs(), d.limbs())
-        } else {
-            shifted = (self >> twos, d >> twos);
-            (shifted.0.limbs(), shifted.1.limbs())
-        };
-        let (an, dn) = (a.len(), d.len());
-        if an < dn {
-            return None;
-        }
-        let mut q = LimbVec::zeroed(an - dn + 1);
-        let exact = if let [d] = d {
-            kernel::divexact_1(q.as_mut_slice(), a, *d)
-        } else {
-            let mut scratch = vec![0; kernel::divexact_scratch_len(an, dn)];
-            kernel::divexact(q.as_mut_slice(), a, d, &mut scratch)
-        };
-        exact.then(|| {
-            let mut q = Natural { limbs: q };
-            q.normalize();
-            q.debug_check();
-            q
+        without_twos(self.limbs(), d.limbs(), twos, |a, d| {
+            let (an, dn) = (a.len(), d.len());
+            if an < dn {
+                return None;
+            }
+            let mut q = LimbVec::zeroed(an - dn + 1);
+            let exact = if let [d] = d {
+                kernel::divexact_1(q.as_mut_slice(), a, *d)
+            } else {
+                with_scratch(kernel::divexact_scratch_len(an, dn), |s| {
+                    kernel::divexact(q.as_mut_slice(), a, d, s)
+                })
+            };
+            exact.then(|| {
+                let mut q = Natural { limbs: q };
+                q.normalize();
+                q.debug_check();
+                q
+            })
         })
     }
 
