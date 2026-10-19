@@ -9,11 +9,13 @@
 //! length instead, and the coefficients that wrap around are recomputed
 //! from the operands' top limbs (see [`convolve_mod`]); with the lengths
 //! `3 2^k` in between, this flattens most of the power-of-two staircase in
-//! cost. The transforms are radix 2, after one radix-3 layer for the lengths
-//! `3 2^k`. The forward one decimates in frequency (natural order in,
-//! bit-reversed order out within each third) and the inverse one is its exact
-//! mirror, decimating in time back to natural order, so no permutation pass is
-//! needed. Residues stay
+//! cost. A much longer operand goes in chunks instead, each multiplied by
+//! the shorter one's transform, computed once, at a length the chunks'
+//! products fill (see [`chunked`]). The transforms are radix 2, after one
+//! radix-3 layer for the lengths `3 2^k`. The forward one decimates in
+//! frequency (natural order in, bit-reversed order out within each third)
+//! and the inverse one is its exact mirror, decimating in time back to
+//! natural order, so no permutation pass is needed. Residues stay
 //! lazily in `[0, 2p)` (Harvey's butterflies), twiddle products use Shoup's
 //! precomputed quotients, and the pointwise products use Montgomery reduction,
 //! whose `2^-64` factor is folded into the `1 / N` scaling. Transforms longer
@@ -515,9 +517,38 @@ fn plan(an: usize, bn: usize, radix3: bool) -> (usize, u64) {
 }
 
 /// The cost of [`mul`] for operands of `an, bn >= 1` limbs in [`plan`]'s
-/// model.
+/// model: one transform of the whole product, or [`chunked`]'s.
 pub(crate) fn cost(an: usize, bn: usize) -> u64 {
-    plan(an, bn, true).1
+    let (an, bn) = (an.max(bn), an.min(bn));
+    chunked(an, bn).map_or_else(|| plan(an, bn, true).1, |(_, cost)| cost)
+}
+
+/// The transform length `n` and cost of [`mul`] by chunks of `a`, for
+/// operands of `an >= bn` limbs, when that costs at least 4% less than one
+/// transform of the whole product ([`plan`]): `b` is transformed once at
+/// `n`, then each chunk of `n - bn` limbs of `a` takes a cyclic product by
+/// it, two transforms, which does not wrap. A long `a` gains, in chunks
+/// whose products fill a transform length. The margin covers the model's
+/// error, a few percent either way in measurements, where the two are close.
+pub(crate) fn chunked(an: usize, bn: usize) -> Option<(usize, u64)> {
+    let single = plan(an, bn, true).1;
+    let mut best = (0, single * 24 / 25);
+    for k in 1..ROOT_ORDER_LOG2 {
+        for n in [1 << k, 3 << (k - 1)] {
+            if n <= bn || n + 1 >= an + bn {
+                continue;
+            }
+            let chunks = an.div_ceil(n - bn) as u64;
+            let cost = cyclic_cost(n) * (1 + 2 * chunks) / 3;
+            if cost < best.1 {
+                best = (n, cost);
+            }
+        }
+        if 1 << k >= an + bn {
+            break;
+        }
+    }
+    (best.0 != 0).then_some(best)
 }
 
 /// The cost of a cyclic product of transform length `n` in [`plan`]'s model.
@@ -563,6 +594,10 @@ fn scratch_len(an: usize, bn: usize, square: bool) -> usize {
 
 /// Scratch limbs [`mul`] needs for operands of `an, bn >= 1` limbs.
 pub(crate) fn mul_scratch_len(an: usize, bn: usize) -> usize {
+    let (an, bn) = (an.max(bn), an.min(bn));
+    if let Some((n, _)) = chunked(an, bn) {
+        return prepared_len(n) + n + cyclic_prepared_scratch_len(n);
+    }
     scratch_len(an, bn, false)
 }
 
@@ -574,7 +609,36 @@ pub(crate) fn sqr_scratch_len(n: usize) -> usize {
 /// `r = a * b` with `r.len() == a.len() + b.len()`, both operands non-empty
 /// and `scratch.len() >= mul_scratch_len(a.len(), b.len())`.
 pub(crate) fn mul(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]) {
-    convolve(r, a, Some(b), scratch);
+    let (a, b) = if a.len() >= b.len() { (a, b) } else { (b, a) };
+    match chunked(a.len(), b.len()) {
+        Some((n, _)) => mul_chunked(r, a, b, n, scratch),
+        None => convolve(r, a, Some(b), scratch),
+    }
+}
+
+/// [`mul`] by chunks of `a` (`a.len() >= b.len()`) with `b` prepared at the
+/// transform length `n` ([`chunked`]): each chunk of `c = n - bn` limbs times
+/// `b` has at most `n` limbs, so its cyclic product is the product, which
+/// overlaps the previous chunk's top `bn` limbs.
+fn mul_chunked(r: &mut [Limb], a: &[Limb], b: &[Limb], n: usize, scratch: &mut [Limb]) {
+    let bn = b.len();
+    let c = n - bn;
+    let (prep, rest) = scratch.split_at_mut(prepared_len(n));
+    let (t, rest) = rest.split_at_mut(n);
+    prepare_cyclic(prep, n, b, rest);
+    for (i, chunk) in a.chunks(c).enumerate() {
+        let (at, len) = (i * c, chunk.len() + bn);
+        mul_cyclic_prepared(t, chunk, prep, rest);
+        debug_assert!(t[len..].iter().all(|&x| x == 0));
+        if i == 0 {
+            r[..len].copy_from_slice(&t[..len]);
+        } else {
+            r[at + bn..at + len].copy_from_slice(&t[bn..len]);
+            let carry = super::add_n_assign(&mut r[at..at + bn], &t[..bn]);
+            let out = super::add_1_assign(&mut r[at + bn..at + len], carry);
+            debug_assert_eq!(out, 0, "ntt: chunk product overflows");
+        }
+    }
 }
 
 /// `r = a^2` with `r.len() == 2 * a.len()`, `a` non-empty and

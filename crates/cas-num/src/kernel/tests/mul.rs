@@ -546,6 +546,50 @@ fn every_algorithm_on_all_ones() {
     }
 }
 
+/// The NTT's products by chunks of the longer operand, each by the shorter
+/// one's prepared transform ([`ntt::chunked`]), against GMP: chunks that
+/// divide the longer operand, a last chunk of one limb, and one shorter than
+/// the shorter operand, with random and all-ones operands in either order.
+/// Called directly, so every configuration runs them.
+///
+/// [`ntt::chunked`]: crate::kernel::ntt::chunked
+#[test]
+fn ntt_chunked_matches() {
+    use crate::kernel::ntt;
+    let mut state = 0x5555_aaaa_1234_5678_u64;
+    let mut random = |n: usize| -> Vec<Limb> {
+        (0..n)
+            .map(|_| {
+                state ^= state >> 12;
+                state ^= state << 25;
+                state ^= state >> 27;
+                state.wrapping_mul(0x2545_f491_4f6c_dd1d)
+            })
+            .collect()
+    };
+    let shapes = [
+        (640, 64),
+        (641, 64),
+        (700, 64),
+        (8 * 2048, 2048),
+        (8 * 2048 + 5, 2048),
+    ];
+    let mut chunked = 0;
+    for (an, bn) in shapes {
+        chunked += usize::from(ntt::chunked(an, bn).is_some());
+        let (a, b) = (random(an), random(bn));
+        for (a, b) in [(a, b), (vec![Limb::MAX; an], vec![Limb::MAX; bn])] {
+            for (x, y) in [(&a, &b), (&b, &a)] {
+                let mut r = vec![GARBAGE; an + bn];
+                let mut scratch = vec![GARBAGE; ntt::mul_scratch_len(x.len(), y.len())];
+                ntt::mul(&mut r, x, y, &mut scratch);
+                assert_eq!(val(&r), val(&a) * val(&b), "({an}, {bn})");
+            }
+        }
+    }
+    assert_eq!(chunked, shapes.len());
+}
+
 /// Products of about 10^5 limbs through the dispatcher (the NTT, balanced
 /// and unbalanced, and squaring), on pseudo-random and all-ones operands,
 /// against GMP.

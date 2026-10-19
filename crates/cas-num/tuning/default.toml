@@ -13,7 +13,9 @@
 # the Hensel division keys after its divide and conquer and wrapped products
 # (822 s, noise 0.2-0.3%; bdiv_mu_threshold and binv_newton_threshold were
 # re-run, 331 s, noise 0.3-0.4%, after load on a busy machine had skewed
-# them; binv_newton_threshold is a flat optimum).
+# them; binv_newton_threshold is a flat optimum); ntt_unbalanced_exponent
+# after chunked NTT products (three runs of 38 s, noise 0.1-0.5%, gave 14,
+# 13 and 15 over a flat optimum, all within 0.6%; the last is kept).
 # Algorithm thresholds for cas-num, embedded at build time (see build.rs).
 # Sizes are in limbs unless noted. Measured on the development machine;
 # `cargo run --release -p cas-tune` writes a file for yours.
@@ -40,7 +42,7 @@ ntt_efficiency_exponent = 27
 # An unbalanced product (the longer operand at least 4/3 the shorter) takes
 # one NTT when the transform's modelled cost is below Toom's, scaled from the
 # balanced crossover as (an / bn) (bn / T)^(x / 10), x = ntt_unbalanced_exponent.
-ntt_unbalanced_exponent = 16
+ntt_unbalanced_exponent = 15
 
 # NTT (kernel/ntt.rs): transforms of at most this many coefficients run
 # layer by layer; longer ones split in halves first.

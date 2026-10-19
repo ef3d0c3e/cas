@@ -399,8 +399,9 @@ fn ntt_pays(an: usize, bn: usize, threshold: usize) -> bool {
 /// The algorithm [`mul`] uses for `an >= bn`.
 ///
 /// Up to `an < 4/3 bn` the balanced algorithms take the product. Longer `a`
-/// goes to the NTT if one transform of the whole product costs less than
-/// Toom ([`ntt_pays_unbalanced`]); else, from their thresholds, to Toom-32
+/// goes to the NTT if its product (one transform of the whole product, or
+/// chunks of `a` by `b`'s prepared transform) costs less than Toom
+/// ([`ntt_pays_unbalanced`]); else, from their thresholds, to Toom-32
 /// below `an = 7/4 bn`, Toom-42 below `11/4 bn`, and beyond to pieces of
 /// `2 bn` limbs, each a Toom-42 product. The boundaries are where the costs
 /// of the neighbours cross, counting a product of `n` limbs as `n^1.4`.
@@ -449,8 +450,9 @@ fn toom_cost(an: usize, bn: usize) -> f64 {
     at_t * (an as f64 / bn as f64) * (bn as f64 / t as f64).powf(x)
 }
 
-/// Whether one NTT of an unbalanced product `an x bn` (`an >= 4/3 bn`)
-/// costs less than Toom on it ([`toom_cost`]).
+/// Whether the NTT's product of an unbalanced `an x bn` (`an >= 4/3 bn`),
+/// in one transform or in chunks ([`ntt::cost`]), costs less than Toom on it
+/// ([`toom_cost`]).
 #[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
 fn ntt_pays_unbalanced(an: usize, bn: usize) -> bool {
     if an + bn < MUL_NTT_THRESHOLD {
