@@ -25,16 +25,17 @@ use crate::kernel::div::bdiv::{
     binvert_scratch_len, binvert_shared,
 };
 use crate::kernel::div::mu::{
-    INV_NEWTON_THRESHOLD, MU_DIV_THRESHOLD, block_inverse, block_len, invert, invert_scratch_len,
-    mu_div_qr, mu_div_qr_scratch_len, prepares,
+    INV_NEWTON_THRESHOLD, MU_DIV_THRESHOLD, block_inverse, block_len, folds_blocks, invert,
+    invert_scratch_len, mu_div_qr, mu_div_qr_scratch_len, mu_divappr_q, mu_divappr_q_scratch_len,
+    prepares, rem_wrap_len,
 };
 use crate::kernel::div::{
-    DC_DIV_THRESHOLD, bz_div_qr, bz_div_qr_scratch_len, div_2by1, div_3by2, hits, reciprocal_2by1,
-    reciprocal_3by2, sb_div_qr,
+    DC_DIV_THRESHOLD, bz_div_qr, bz_div_qr_scratch_len, bz_divappr_q, div_2by1, div_3by2,
+    divappr_q, divappr_q_scratch_len, hits, reciprocal_2by1, reciprocal_3by2, sb_div_qr,
 };
 use crate::kernel::{
     bdiv_q, bdiv_q_scratch_len, div_rem, div_rem_1, div_rem_scratch_len, divexact, divexact_1,
-    divexact_scratch_len, rem_1, submul_1,
+    divexact_scratch_len, rem_1, shl, submul_1,
 };
 use crate::testkit::strategy::{self, len_around};
 use crate::testkit::{Mag, ToRug, differential, tested};
@@ -1244,4 +1245,214 @@ fn mu_div_prepared_at_large_sizes() {
         (block_len(dn / 4, dn), prepares(dn / 4, dn)),
         (dn / 4, (false, false))
     );
+}
+
+/// `divappr_q` on `(a, d)`, with garbage in its output and scratch: checks
+/// that the quotient is the true one or one more.
+fn check_divappr(a: &[Limb], d: &[Limb]) {
+    let (an, dn) = (a.len(), d.len());
+    let mut q = vec![GARBAGE; an - dn + 1];
+    let mut scratch = vec![GARBAGE; divappr_q_scratch_len(an, dn)];
+    divappr_q(&mut q, a, d, &mut scratch);
+    let exact = gmp_div(a, d).0;
+    let got = val(&q);
+    assert!(
+        got == exact || got == Integer::from(&exact + 1u32),
+        "an = {an}, dn = {dn}: {} above",
+        got - exact
+    );
+}
+
+proptest! {
+    #[test]
+    fn divappr_q_within_one((a, d) in div_operands()) {
+        prop_assume!(d.last() != Some(&0));
+        check_divappr(&a, &d);
+    }
+
+    /// Barrett's estimate without the last remainder: at most 5 below.
+    #[test]
+    fn mu_divappr_q_bound((a, d) in mu_operands()) {
+        let dn = d.len();
+        let mut n = a.clone();
+        let mut q = vec![GARBAGE; a.len() - dn];
+        let mut scratch = vec![GARBAGE; mu_divappr_q_scratch_len(a.len(), dn)];
+        let qh = mu_divappr_q(&mut q, &mut n, &d, &mut scratch);
+        q.push(qh);
+        let below = (gmp_div(&a, &d).0 - val(&q)).to_i64().unwrap_or(i64::MIN);
+        prop_assert!((0..=5).contains(&below), "{} below", below);
+    }
+
+    /// Divide and conquer without the last block's correction: never below,
+    /// and at most 2 per level of the recursion above.
+    #[test]
+    fn bz_divappr_q_bound((a, d) in div_operands()) {
+        let dn = d.len();
+        prop_assume!(dn >= 2 && a.len() > dn);
+        let shift = d[dn - 1].leading_zeros();
+        let mut ds = vec![0; dn];
+        shl(&mut ds, &d, shift);
+        let mut n = vec![0; a.len() + 1];
+        n[a.len()] = shl(&mut n[..a.len()], &a, shift);
+        let mut q = vec![GARBAGE; n.len() - dn];
+        let mut scratch = vec![GARBAGE; bz_div_qr_scratch_len(n.len(), dn)];
+        let v = reciprocal_3by2(ds[dn - 1], ds[dn - 2]);
+        let qh = bz_divappr_q(&mut q, &mut n.clone(), &ds, v, &mut scratch);
+        q.push(qh);
+        let above = val(&q) - gmp_div(&a, &d).0;
+        let bound = 2 * (usize::BITS - dn.leading_zeros()) + 2;
+        prop_assert!(above >= 0 && above <= bound, "{} above, bound {}", above, bound);
+    }
+}
+
+/// The largest quotient a length allows: `B^(qn + 1) - 1`, from an all-ones
+/// dividend over `B^(dn - 1)`. The estimate may reach `B^(qn + 1)`, which
+/// the quotient's limbs cannot hold; it is clamped to the exact quotient.
+#[test]
+fn divappr_q_largest_quotient() {
+    let t = tested(DC_DIV_THRESHOLD).max(2);
+    for (an, dn) in [
+        (4, 2),
+        (9, 3),
+        (3 * t, t + 1),
+        (4 * t + 5, 2 * t),
+        (2 * t, t - 1),
+    ] {
+        let a = vec![Limb::MAX; an];
+        let mut d = vec![0; dn];
+        d[dn - 1] = 1;
+        check_divappr(&a, &d);
+        d[0] = 1;
+        check_divappr(&a, &d);
+    }
+}
+
+/// The guarded, approximate path at Barrett's sizes, with all-ones and
+/// random operands and exact multiples.
+#[test]
+fn divappr_q_at_barrett_sizes() {
+    let t = tested(MU_DIV_THRESHOLD);
+    let mut next = rng(114);
+    for (qn, dn) in [(t, t), (t + 1, t + 2), (2 * t, t), (t - 2, 3 * t)] {
+        let d: Vec<Limb> = (0..dn).map(|_| next()).collect();
+        let a: Vec<Limb> = (0..qn + dn).map(|_| next()).collect();
+        check_divappr(&a, &d);
+        check_divappr(&vec![Limb::MAX; qn + dn], &vec![Limb::MAX; dn]);
+        let q: Vec<Limb> = (0..qn).map(|_| next()).collect();
+        let mut exact = limbs_of(&(val(&q) * val(&d)));
+        exact.resize(qn + dn, 0);
+        check_divappr(&exact, &d);
+    }
+}
+
+/// Plans with the divisor's transform prepared at a modulus shorter than
+/// their blocks, which are folded first: the first such divisor and
+/// quotient lengths past a transform length, for exact and approximate
+/// quotients.
+#[test]
+fn mu_folds_blocks() {
+    use crate::kernel::mul::MUL_WRAP_NTT_THRESHOLD;
+    let low = MUL_WRAP_NTT_THRESHOLD.max(MU_DIV_THRESHOLD).max(4);
+    // Divisors just past the transform lengths, quotients a few times longer.
+    let lens: Vec<usize> = (2..12)
+        .flat_map(|j| [1 << j, 3 << (j - 1)])
+        .filter(|&len| len >= low && 2 * len <= crate::testkit::TESTED_SIZE_MAX)
+        .flat_map(|len| [len + 1, len + 2, len + len / 16, len + len / 8])
+        .collect();
+    let mut next = rng(1142);
+    for exact in [true, false] {
+        // Plans as the cost model draws them; a configuration may have none.
+        let Some((qn, dn)) = lens
+            .iter()
+            .flat_map(|&dn| [2, 3, 4, 6].map(|b| (b * dn, dn)))
+            .find(|&(qn, dn)| folds_blocks(qn, dn, exact))
+        else {
+            continue;
+        };
+        let mut d: Vec<Limb> = (0..dn).map(|_| next()).collect();
+        d[dn - 1] |= 1 << 63;
+        let a: Vec<Limb> = (0..qn + dn).map(|_| next()).collect();
+        if exact {
+            check_mu(&a, &d);
+        } else {
+            let mut n = a.clone();
+            let mut q = vec![GARBAGE; qn];
+            let mut scratch = vec![GARBAGE; mu_divappr_q_scratch_len(a.len(), dn)];
+            let qh = mu_divappr_q(&mut q, &mut n, &d, &mut scratch);
+            q.push(qh);
+            let below = (gmp_div(&a, &d).0 - val(&q)).to_i64().unwrap_or(i64::MIN);
+            assert!((0..=5).contains(&below), "{below} below");
+        }
+    }
+}
+
+/// Divisors just past a transform length take their remainder modulo the
+/// length below, with the low limbs from a short product: one limb past it
+/// (two low limbs) and an eighth past it, with all-ones operands, random
+/// ones and exact multiples, through the exact and approximate quotients.
+#[test]
+fn mu_wrap_below_divisor() {
+    use crate::kernel::mul::MUL_WRAP_NTT_THRESHOLD;
+    let fit = MUL_WRAP_NTT_THRESHOLD
+        .max(MU_DIV_THRESHOLD)
+        .max(16)
+        .next_power_of_two();
+    if fit > crate::testkit::TESTED_SIZE_MAX {
+        return;
+    }
+    let mut next = rng(1141);
+    for dn in [fit + 1, fit + fit / 8] {
+        assert!(rem_wrap_len(dn) < dn, "dn = {dn}");
+
+        for qn in [dn, dn / 2, 3 * dn] {
+            let mut d: Vec<Limb> = (0..dn).map(|_| next()).collect();
+            d[dn - 1] |= 1 << 63;
+            let a: Vec<Limb> = (0..qn + dn).map(|_| next()).collect();
+            check_mu(&a, &d);
+            check_divappr(&a, &d);
+            check_mu(&vec![Limb::MAX; qn + dn], &vec![Limb::MAX; dn]);
+            let q: Vec<Limb> = (0..qn).map(|_| next()).collect();
+            let mut exact = limbs_of(&(val(&q) * val(&d)));
+            exact.resize(qn + dn, 0);
+            check_mu(&exact, &d);
+            check_divappr(&exact, &d);
+        }
+    }
+}
+
+/// An all-ones quotient with the largest remainder, `d - 1`, has an all-ones
+/// guard quotient, so the approximate last block, which may be above, carries
+/// into the limbs above it: through `divappr_q` at divide and conquer's
+/// sizes, and through `bz_divappr_q` with blocks of all of `d`.
+#[test]
+fn divappr_carry_is_reached() {
+    if DC_DIV_THRESHOLD > crate::testkit::TESTED_SIZE_MAX {
+        return;
+    }
+    let t = DC_DIV_THRESHOLD.max(2);
+    let mut next = rng(1143);
+    let mut carries = 0;
+    for dn in [t, t + 1, 2 * t + 1, 4 * t] {
+        for qn in [dn - 2, dn, 3 * dn] {
+            for _ in 0..8 {
+                let mut d: Vec<Limb> = (0..dn).map(|_| next()).collect();
+                d[dn - 1] |= 1 << 63;
+                let q = vec![Limb::MAX; qn];
+                let mut a = limbs_of(&(val(&q) * val(&d) + val(&d) - 1u32));
+                a.resize(qn + dn, 0);
+                carries += count(&hits::APPR_CARRY, || {
+                    check_divappr(&a, &d);
+                    let mut n = a.clone();
+                    let mut q = vec![GARBAGE; qn];
+                    let mut scratch = vec![GARBAGE; bz_div_qr_scratch_len(n.len(), dn)];
+                    let v = reciprocal_3by2(d[dn - 1], d[dn - 2]);
+                    let qh = bz_divappr_q(&mut q, &mut n, &d, v, &mut scratch);
+                    q.push(qh);
+                    let above = (val(&q) - gmp_div(&a, &d).0).to_i64().unwrap_or(-1);
+                    assert!((0..=64).contains(&above), "{above} above");
+                });
+            }
+        }
+    }
+    assert!(carries > 0);
 }

@@ -18,6 +18,7 @@ use std::cell::Cell;
 
 use super::super::bits::split_bit_index;
 use super::Natural;
+use crate::kernel::div::{divappr_q, divappr_q_scratch_len};
 use crate::kernel::mul::{
     MUL_KARATSUBA_THRESHOLD, MUL_WRAP_NTT_THRESHOLD, SQR_KARATSUBA_THRESHOLD,
 };
@@ -124,7 +125,7 @@ pub(super) fn root_rem(x: &Natural, k: u32) -> (Natural, Natural) {
 /// `(1 + 1/s')^(k-1) < e^(1/64)`, and the rest, mostly the second term
 /// `(k - 1) q² / (2 s' 2^b)`, by less than `1/64 + 1/s'`. So the estimate is
 /// too large only when the remainder is that close to its largest, about
-/// one step in 200. [`RootWork::step`]'s truncated division adds at most
+/// one step in 200. [`RootWork::step`]'s approximate division adds at most
 /// one more, rarely. The powers `s^(k-1)` and `s^k` then check the
 /// estimate, and are computed again when it needs decrementing.
 fn newton_root(a: &[Limb], k: u32, exact: bool) -> (Natural, Option<Natural>) {
@@ -201,14 +202,15 @@ fn newton_root(a: &[Limb], k: u32, exact: bool) -> (Natural, Option<Natural>) {
 
 /// The bits `b` that the step to a root of `n` bits appends: at most `n - m`
 /// for the root of `m` bits it starts from, less `c` (see [`newton_root`]),
-/// so about half. Where the step's division, whose divisor has
-/// `⌈(b + 1) / 64⌉ + 1` limbs, would just pass a transform length of the
-/// NTT, which costs a third or a half more than the length below, the step
+/// so about half. The step's division ([`divappr_q`]) works with a divisor
+/// and a quotient of up to `⌈(b + 1) / 64⌉ + 2` limbs (its guard limb
+/// included). Where that would just pass a transform length of the NTT,
+/// which costs a third or a half more than the length below, the step
 /// takes a few limbs fewer and leaves them to the one before.
 fn step_bits(n: u64, c: u64) -> u64 {
     let b = n - (n + c).div_ceil(2);
     let bits = u64::from(Limb::BITS);
-    let dn = (b + 1).div_ceil(bits) + 1;
+    let dn = (b + 1).div_ceil(bits) + 2;
     let pow2 = 1 << (u64::BITS - 1 - dn.leading_zeros());
     // The longest transform length (2^j or 3 2^j) up to dn.
     let fit = if 3 * pow2 / 2 <= dn {
@@ -219,7 +221,7 @@ fn step_bits(n: u64, c: u64) -> u64 {
     let threshold = u64::try_from(MUL_WRAP_NTT_THRESHOLD).unwrap_or(u64::MAX);
     if dn > fit && fit >= threshold && dn - fit <= fit / 32 {
         hit!(STEP_FIT);
-        bits * (fit - 1) - 1
+        bits * (fit - 2) - 1
     } else {
         b
     }
@@ -325,11 +327,9 @@ impl RootWork<'_> {
     }
 
     /// Appends `b` bits to the root: `s = s 2^b + q` for the estimate `q`
-    /// of [`newton_root`]'s doc, through `d`. That estimate is at most
-    /// `2^b + 1`, so it has `qn = ⌈(b + 1) / 64⌉` limbs. It comes from
-    /// dividing `d` and `w` without their low limbs past `qn + 1` of `w`. A
-    /// truncated divisor `w'` can only raise the quotient, and by less than
-    /// `(Q' + 1) / (w' + 1)`, at most one since `w' >= B^qn > Q'`.
+    /// of [`newton_root`]'s doc, through `d`, from an approximate quotient
+    /// ([`divappr_q`]): the true one or one more. Only the top limbs of `w`
+    /// matter, and no remainder is computed.
     fn step(&mut self, b: u64) {
         let k = u64::from(self.k);
         // D: the remainder followed by bits (k - 1) b .. k b of u. They
@@ -341,13 +341,9 @@ impl RootWork<'_> {
         let wl = self.wl;
         let mut ql = 0;
         if dl >= wl {
-            let qn = usize::try_from((b + 1).div_ceil(u64::from(Limb::BITS))).expect("limbs");
-            let cut = wl.saturating_sub(qn + 1);
-            let (d, w) = (&self.d[cut..dl], &self.w[cut..wl]);
             ql = dl - wl + 1;
-            let need = kernel::div_rem_scratch_len(d.len(), w.len());
-            let scratch = take(self.fixed, &mut self.extra, need);
-            kernel::div_rem(&mut self.q[..ql], &mut self.tmp[..w.len()], d, w, scratch);
+            let scratch = take(self.fixed, &mut self.extra, divappr_q_scratch_len(dl, wl));
+            divappr_q(&mut self.q[..ql], &self.d[..dl], &self.w[..wl], scratch);
             ql = kernel::normalized_len(&self.q[..ql]);
         }
         // q < 2^b, as the root has b more bits.

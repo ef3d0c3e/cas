@@ -8,18 +8,23 @@
 //! divisor is the top half of the root, whose top bit is set, so the
 //! division needs no shift. [`sqrtrem`] shifts its operand once, by an
 //! even number of bits and a zero limb if needed, and shifts the root and
-//! the remainder back.
+//! the remainder back. [`sqrt`] computes the root alone, as GMP's
+//! `mpn_dc_sqrt`: one step with a quotient-only division and no square,
+//! with guard bits below the root to decide it.
 #![allow(
     clippy::many_single_char_names,
     reason = "the algorithms use the textbook names (s, r, a, q, l, h, c, k)"
 )]
 
+use std::cmp::Ordering;
+
 use super::div::{
-    div_2by1, div_qr_normalized, div_qr_normalized_scratch_len, reciprocal_2by1, reciprocal_3by2,
+    div_2by1, div_qr_normalized, div_qr_normalized_scratch_len, divappr_q, divappr_q_scratch_len,
+    reciprocal_2by1, reciprocal_3by2,
 };
 use super::{
-    add_1_assign, add_n_assign, addmul_1, normalized_len, shl, shr, shr_assign, sqr,
-    sqr_scratch_len, sub_1_assign, sub_n_assign, submul_1,
+    add_1_assign, add_assign, add_n_assign, addmul_1, cmp_n, mul, mul_scratch_len, normalized_len,
+    shl, shr, shr_assign, sqr, sqr_scratch_len, sub_1_assign, sub_assign, sub_n_assign, submul_1,
 };
 use crate::Limb;
 
@@ -31,6 +36,12 @@ thread_local! {
     pub(crate) static SQRT_CORRECTION: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     /// The low half's estimate was `B^l`, past its limbs.
     pub(crate) static SQRT_CARRY: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// [`sqrt`]'s estimate reached past the root's top half.
+    pub(crate) static SQRT_PAST_TOP: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// [`sqrt`]'s guard bits did not decide the root, so a square did.
+    pub(crate) static SQRT_CHECK: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// ... with guard bits 1 or 2, from an estimate above the root.
+    pub(crate) static SQRT_CHECK_GUARD: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
 }
 
 macro_rules! hit {
@@ -213,4 +224,141 @@ pub fn sqrtrem(s: &mut [Limb], r: &mut [Limb], a: &[Limb], scratch: &mut [Limb])
         debug_assert_eq!(out, 0);
     }
     normalized_len(r)
+}
+
+/// Root lengths, in limbs, from which [`sqrt`] divides approximately, for
+/// operands of odd and of even length; below, it takes [`sqrtrem`]'s root.
+/// An even length needs a root a limb longer for the guard bits, which
+/// pays only from about 20 limbs.
+const SQRT_APPROX_MIN: [usize; 2] = [20, 4];
+
+/// Whether [`sqrt`] divides approximately for an operand of `an` limbs.
+fn sqrt_approx(an: usize) -> bool {
+    an.div_ceil(2) >= SQRT_APPROX_MIN[an & 1]
+}
+
+/// Scratch limbs [`sqrt`] needs for an operand of `an` limbs.
+#[must_use]
+pub fn sqrt_scratch_len(an: usize) -> usize {
+    let n = an.div_ceil(2);
+    if !sqrt_approx(an) {
+        return an / 2 + 1 + sqrtrem_scratch_len(an);
+    }
+    let big = n + 1 - (an & 1);
+    let (l, h) = (big / 2, big - big / 2);
+    let check = 2 * big + 1 + mul_scratch_len(h, l).max(2 * l + sqr_scratch_len(l));
+    let inner = dc_sqrtrem_scratch_len(h)
+        .max(divappr_q_scratch_len(l + h, h))
+        .max(check);
+    2 * big + big + (l + 1) + inner
+}
+
+/// `s = ⌊√a⌋` for `a` with a non-zero top limb, with
+/// `s.len() == a.len().div_ceil(2)` and
+/// `scratch.len() >= sqrt_scratch_len(a.len())`; returns whether `a` is a
+/// square. The root's top limb is never zero.
+///
+/// As GMP's `mpn_sqrtrem` without a remainder (`mpn_dc_sqrt`): one step of
+/// the divide and conquer square root (`dc_sqrtrem`) that skips the low
+/// half's square and divides approximately (`divappr_q`). `a` is shifted as in [`sqrtrem`], and
+/// padded with zero limbs so that the root `S` of the result has `k >= 32`
+/// guard bits below `s`. The step's estimate is `S`, or one more from the
+/// division, or one more from the skipped correction. So `s` is the
+/// estimate shifted down by `k`, unless its guard bits are 0, 1 or 2; then
+/// `s` is that or one less, and the sign of the remainder decides, and
+/// tells whether `a` is a square (`S` then has zero guard bits).
+pub fn sqrt(s: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) -> bool {
+    let an = a.len();
+    assert!(an >= 1 && a[an - 1] != 0, "sqrt: operand not normalised");
+    let n = an.div_ceil(2);
+    assert_eq!(s.len(), n, "sqrt: length mismatch");
+    assert!(
+        scratch.len() >= sqrt_scratch_len(an),
+        "sqrt: scratch too short"
+    );
+    if !sqrt_approx(an) {
+        let (r, t) = scratch.split_at_mut(an / 2 + 1);
+        return sqrtrem(s, r, a, t) == 0;
+    }
+    let odd = an & 1;
+    let pad = 2 - odd;
+    let big = n + pad - 1;
+    let (l, h) = (big / 2, big - big / 2);
+    let c = a[an - 1].leading_zeros() / 2;
+    let k = c + if odd == 1 { 32 } else { 64 };
+    let (t, rest) = scratch.split_at_mut(2 * big);
+    let (root, rest) = rest.split_at_mut(big);
+    let (quot, rest) = rest.split_at_mut(l + 1);
+    t[..pad].fill(0);
+    let out = shl(&mut t[pad..], a, 2 * c);
+    debug_assert_eq!(out, 0);
+    let carry = dc_sqrtrem(&mut root[l..], &mut t[2 * l..], rest);
+    if carry {
+        let borrow = sub_n_assign(&mut t[2 * l..2 * l + h], &root[l..]);
+        debug_assert_eq!(borrow, 1);
+    }
+    divappr_q(quot, &t[l..2 * l + h], &root[l..], rest);
+    let mut top = Limb::from(carry) + quot[l];
+    shr(&mut root[..l], &quot[..l], 1);
+    root[l - 1] |= top << (Limb::BITS - 1);
+    top >>= 1;
+    let (from, bits) = ((k / Limb::BITS) as usize, k % Limb::BITS);
+    if top != 0 {
+        // The estimate reached (s' + 1) B^l, past the root's top half s'.
+        // The root is then (s' + 1) B^l - 1 or - 2, whose guard bits are
+        // neither zero: s is the root with all-ones low limbs.
+        hit!(SQRT_PAST_TOP);
+        root[..l].fill(Limb::MAX);
+        shr(s, &root[from..from + n], bits);
+        return false;
+    }
+    let guard_small = if k <= Limb::BITS {
+        root[0] & (Limb::MAX >> (Limb::BITS - k)) <= 2
+    } else {
+        root[0] <= 2 && root[1] & ((1 << (k - Limb::BITS)) - 1) == 0
+    };
+    shr(s, &root[from..from + n], bits);
+    if !guard_small {
+        return false;
+    }
+    hit!(SQRT_CHECK);
+    if root[0] & (Limb::MAX >> Limb::BITS.saturating_sub(k)) != 0 {
+        hit!(SQRT_CHECK_GUARD);
+    }
+    // The root is c' = s' B^l + q', the estimate without its guard bits, or
+    // c' - 1, and t - c'^2 = (X - 2 s' q') B^l + t₀ - q'² for the division's
+    // dividend X = r' B^l + t₁ and t₀ = t[..l]: as GMP's mpn_dc_sqrt, the
+    // square of q' only when X - 2 s' q' is below B^l.
+    if k < Limb::BITS {
+        root[0] &= !(Limb::MAX >> (Limb::BITS - k));
+    } else {
+        root[0] = 0;
+        root[1] &= !((1 << (k - Limb::BITS)) - 1);
+    }
+    let (p, rest) = rest.split_at_mut(big);
+    let (z, rest) = rest.split_at_mut(big + 1);
+    mul(p, &root[l..], &root[..l], rest);
+    z[..big].copy_from_slice(&t[l..2 * l + h]);
+    z[big] = 0;
+    if carry {
+        add_assign(&mut z[l..], &root[l..]);
+    }
+    let borrow = sub_assign(z, p) + sub_assign(z, p);
+    let order = if borrow != 0 {
+        Ordering::Less
+    } else if z[l..].iter().any(|&x| x != 0) {
+        Ordering::Greater
+    } else {
+        let (q2, rest) = rest.split_at_mut(2 * l);
+        sqr(q2, &root[..l], rest);
+        cmp_n(&z[..l], &q2[l..]).then_with(|| cmp_n(&t[..l], &q2[..l]))
+    };
+    match order {
+        Ordering::Less => {
+            sub_1_assign(s, 1);
+            false
+        }
+        Ordering::Equal => true,
+        Ordering::Greater => false,
+    }
 }

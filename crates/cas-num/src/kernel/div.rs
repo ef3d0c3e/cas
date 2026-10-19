@@ -12,7 +12,9 @@
 )]
 
 use super::mul::{mul_add, submul_1};
-use super::{add_n_assign, cmp_n, mul, mul_scratch_len, shl, shr, sub_1_assign, sub_n_assign};
+use super::{
+    add_1_assign, add_n_assign, cmp_n, mul, mul_scratch_len, shl, shr, sub_1_assign, sub_n_assign,
+};
 use crate::Limb;
 
 /// Smallest divisor length at which [`div_rem`] uses divide and conquer
@@ -22,7 +24,9 @@ pub(crate) const DC_DIV_THRESHOLD: usize = crate::tuning::DC_DIV_THRESHOLD;
 pub(crate) mod bdiv;
 pub(crate) mod mu;
 
-use mu::{MU_DIV_THRESHOLD, mu_div_qr, mu_div_qr_scratch_len};
+use mu::{
+    MU_DIV_THRESHOLD, mu_div_qr, mu_div_qr_scratch_len, mu_divappr_q, mu_divappr_q_scratch_len,
+};
 
 /// Counters for the rarely taken correction branches, so tests can check that
 /// their inputs reach them.
@@ -45,6 +49,9 @@ pub(crate) mod hits {
         /// Barrett division: a block remainder reached `B^m - 1`, so its
         /// residue alone was ambiguous.
         pub(crate) static MU_WRAPPED: Cell<u64> = const { Cell::new(0) };
+        /// An approximate quotient's last block reached past its limbs and
+        /// carried into the ones above.
+        pub(crate) static APPR_CARRY: Cell<u64> = const { Cell::new(0) };
     }
 }
 
@@ -348,6 +355,50 @@ pub(crate) fn dc_div_qr_n(
     qh
 }
 
+/// [`div_block`]'s quotient alone: the estimate from the top `2k` limbs of
+/// `w` and the top `k` limbs of `d`, without the correction by the rest of
+/// `d`. That estimate is never below the block's quotient and at most 2
+/// above when exact (as [`div_block`] relies on); for `k` from divide and
+/// conquer's threshold it comes from [`dc_divappr_n`], which adds its own
+/// excess. Returns the top quotient limb; `w` is left unspecified.
+fn div_block_appr(
+    q: &mut [Limb],
+    w: &mut [Limb],
+    d: &[Limb],
+    v: Limb,
+    scratch: &mut [Limb],
+) -> Limb {
+    let (k, dn) = (q.len(), d.len());
+    debug_assert!(1 <= k && k <= dn && w.len() == dn + k);
+    if k == 1 {
+        return sb_div_qr(q, w, d, v);
+    }
+    let lo = dn - k;
+    if k < DC_DIV_THRESHOLD {
+        sb_div_qr(q, &mut w[lo..], &d[lo..], v)
+    } else {
+        dc_divappr_n(q, &mut w[lo..], &d[lo..], v, scratch)
+    }
+}
+
+/// [`dc_div_qr_n`]'s quotient alone: the high half exactly, the low half by
+/// [`div_block_appr`]. The quotient is never below the true one, and above
+/// it by at most 2 per level of the recursion below this one that reaches
+/// divide and conquer's threshold, under 2 log₂ k in all. Returns the top
+/// quotient limb; `w` is left unspecified.
+fn dc_divappr_n(q: &mut [Limb], w: &mut [Limb], d: &[Limb], v: Limb, scratch: &mut [Limb]) -> Limb {
+    let k = d.len();
+    debug_assert!(w.len() == 2 * k && q.len() == k);
+    let lo = k / 2;
+    let (q_lo, q_hi) = q.split_at_mut(lo);
+    let qh = div_block(q_hi, &mut w[lo..], d, v, scratch);
+    let ql = div_block_appr(q_lo, &mut w[..k + lo], d, v, scratch);
+    if ql != 0 {
+        hit!(APPR_CARRY);
+    }
+    qh + add_1_assign(q_hi, ql)
+}
+
 fn div_block_scratch_len(k: usize, dn: usize) -> usize {
     if k == 1 {
         return 0;
@@ -461,6 +512,49 @@ pub(crate) fn bz_div_qr(
     Limb::from(qh)
 }
 
+/// [`bz_div_qr`]'s quotient alone: the blocks as there, the last (lowest)
+/// one by [`div_block_appr`]. The quotient is never below the true one and
+/// at most `2 log₂ m` above it. Returns the top quotient limb; `n` is left
+/// unspecified.
+pub(crate) fn bz_divappr_q(
+    q: &mut [Limb],
+    n: &mut [Limb],
+    d: &[Limb],
+    v: Limb,
+    scratch: &mut [Limb],
+) -> Limb {
+    let m = d.len();
+    let qn = n.len() - m;
+    debug_assert!(m >= 2 && q.len() == qn);
+    if m < DC_DIV_THRESHOLD || qn < 2 {
+        return sb_div_qr(q, n, d, v);
+    }
+    let mut qh = Limb::from(cmp_n(&n[qn..], d).is_ge());
+    if qh != 0 {
+        sub_n_assign(&mut n[qn..], d);
+    }
+    let mut top = qn;
+    let first = qn % m;
+    let mut k = if first == 0 { m } else { first };
+    while top > 0 {
+        let start = top - k;
+        let (q_block, w) = (&mut q[start..top], &mut n[start..top + m]);
+        if start > 0 {
+            let ql = div_block(q_block, w, d, v, scratch);
+            debug_assert_eq!(ql, 0);
+        } else {
+            let ql = div_block_appr(q_block, w, d, v, scratch);
+            if ql != 0 {
+                hit!(APPR_CARRY);
+            }
+            qh += add_1_assign(&mut q[top..], ql);
+        }
+        top = start;
+        k = m;
+    }
+    qh
+}
+
 pub(crate) fn bz_div_qr_scratch_len(nn: usize, m: usize) -> usize {
     let qn = nn - m;
     if m < DC_DIV_THRESHOLD || qn < 2 {
@@ -478,6 +572,107 @@ pub(crate) fn bz_div_qr_scratch_len(nn: usize, m: usize) -> usize {
         0
     };
     partial.max(full)
+}
+
+/// The lengths [`divappr_q`] works with for `nn` dividend and `dn` divisor
+/// limbs: the divisor's limbs it keeps, `dt`, and how many it drops, `cut`.
+fn divappr_lens(nn: usize, dn: usize) -> (usize, usize) {
+    let dt = dn.min(nn - dn + 2);
+    (dt, dn - dt)
+}
+
+/// Whether [`divappr_q`] computes a guard limb and divides approximately,
+/// rather than dividing its truncated operands exactly.
+fn divappr_guards(dt: usize) -> bool {
+    dt >= DC_DIV_THRESHOLD
+}
+
+/// Scratch limbs [`divappr_q`] needs for `nn` dividend and `dn` divisor limbs.
+pub(crate) fn divappr_q_scratch_len(nn: usize, dn: usize) -> usize {
+    if dn <= 1 {
+        return 0;
+    }
+    let (dt, cut) = divappr_lens(nn, dn);
+    // The guarded dividend: one limb below the truncated one, which has
+    // the shift's extra limb on top.
+    let gn = nn - cut + 2;
+    let inner = if !divappr_guards(dt) {
+        div_qr_normalized_scratch_len(gn - 1, dt)
+    } else if uses_mu(gn, dt) {
+        mu_divappr_q_scratch_len(gn, dt)
+    } else {
+        bz_div_qr_scratch_len(gn, dt)
+    };
+    (dt + 1) + gn + (gn - dt) + inner
+}
+
+/// An approximate quotient: `q` with `Q <= q <= Q + 1` for `Q = ⌊n / d⌋`,
+/// for `d` with a non-zero top limb, `n.len() >= d.len()`,
+/// `q.len() == n.len() - d.len() + 1` and
+/// `scratch.len() >= divappr_q_scratch_len(n.len(), d.len())`. As GMP's
+/// `mpn_divappr_q`, it costs less than the exact quotient by skipping the
+/// last part of the remainder.
+///
+/// Only the top `qn + 2` limbs of `d` matter (`qn = q.len() - 1`): with `j`
+/// limbs dropped from `n` and from `d` (normalised), the quotient changes
+/// by less than `B^j / d < 2 B^(-qn - 2)` relative, below `4 / B` since
+/// `Q < B^(qn + 1)`. Below divide and conquer's threshold, the truncated
+/// operands are divided exactly: their quotient is `Q` or `Q + 1`. From it,
+/// the quotient `G` of the truncated `n` times `B` is estimated, one guard
+/// limb more, without the last block's remainder ([`mu_divappr_q`], at most
+/// 5 below, or [`bz_divappr_q`], at most `2 log₂ dn` above). `G` is at least
+/// `Q B - 1` and below `Q B + B + 4`, so adding 6 to the estimate and
+/// dropping the guard limb gives `Q` or `Q + 1`.
+pub(crate) fn divappr_q(q: &mut [Limb], n: &[Limb], d: &[Limb], scratch: &mut [Limb]) {
+    let (nn, dn) = (n.len(), d.len());
+    assert!(
+        dn >= 1 && nn >= dn && q.len() == nn - dn + 1,
+        "divappr_q: length mismatch"
+    );
+    assert!(d[dn - 1] != 0, "divappr_q: divisor has a zero top limb");
+    assert!(
+        scratch.len() >= divappr_q_scratch_len(nn, dn),
+        "divappr_q: scratch too short"
+    );
+    if dn == 1 {
+        div_rem_1(q, n, d[0]);
+        return;
+    }
+    let shift = d[dn - 1].leading_zeros();
+    let (dt, cut) = divappr_lens(nn, dn);
+    // The truncated divisor, normalised: its top dt limbs shifted, with the
+    // bits from the limb below.
+    let (ds, rest) = scratch.split_at_mut(dt + 1);
+    let from = cut.saturating_sub(1);
+    let out = shl(&mut ds[..dn - from], &d[from..], shift);
+    debug_assert_eq!(out, 0);
+    let ds = &ds[dn - from - dt..dn - from];
+    // The truncated dividend, shifted the same way, above one limb that is
+    // its guard limb, or a limb below it when truncating.
+    let gn = nn - cut + 2;
+    let (g, rest) = rest.split_at_mut(gn);
+    let start = usize::from(cut == 0);
+    g[gn - 1] = shl(&mut g[start..gn - 1], &n[from..], shift);
+    g[0] = 0;
+    let v = reciprocal_3by2(ds[dt - 1], ds[dt - 2]);
+    let (gq, rest) = rest.split_at_mut(gn - dt);
+    let top = if divappr_guards(dt) {
+        let gq = &mut gq[..gn - dt];
+        let mut top = if uses_mu(gn, dt) {
+            mu_divappr_q(gq, g, ds, rest)
+        } else {
+            bz_divappr_q(gq, g, ds, v, rest)
+        };
+        top += add_1_assign(gq, 6);
+        q.copy_from_slice(&gq[1..]);
+        top
+    } else {
+        div_qr_normalized(q, &mut g[1..], ds, v, rest)
+    };
+    if top != 0 {
+        // At most Q + 1 <= B^(qn + 1), so Q = B^(qn + 1) - 1.
+        q.fill(Limb::MAX);
+    }
 }
 
 /// Scratch limbs [`div_rem`] needs for a dividend of `an` and a divisor of

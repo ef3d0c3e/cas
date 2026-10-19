@@ -63,10 +63,20 @@ const SQUARE_MASKS: [u64; RESIDUE_PRIMES.len()] = {
 const FILTER_PRIMES: usize = 3;
 
 impl Natural {
-    /// `⌊√self⌋`.
+    /// `⌊√self⌋`, from [`kernel::sqrt`], which skips the remainder.
     #[must_use]
     pub fn isqrt(&self) -> Natural {
-        self.sqrt_rem().0
+        if let Some(x) = self.to_u128() {
+            return Natural::from(x.isqrt());
+        }
+        let a = self.limbs();
+        let mut s = LimbVec::zeroed(a.len().div_ceil(2));
+        with_scratch(kernel::sqrt_scratch_len(a.len()), |t| {
+            kernel::sqrt(s.as_mut_slice(), a, t)
+        });
+        let s = Natural { limbs: s };
+        s.debug_check();
+        s
     }
 
     /// `(s, r)` with `s = ⌊√self⌋` and `r = self - s²`, so `0 <= r <= 2s`.
@@ -126,7 +136,10 @@ impl Natural {
     /// Whether `self` is the square of an integer (0 and 1 are).
     ///
     /// Residues modulo 64 and modulo the odd primes up to 47 reject all but
-    /// about one in 6000 non-squares before the root is computed.
+    /// about one in 6000 non-squares before the root is computed. What
+    /// passes is then almost always a square, whose root the root-only
+    /// [`kernel::sqrt`] leaves undecided until a check that costs more than
+    /// [`Natural::sqrt_rem`]'s remainder.
     #[must_use]
     pub fn is_perfect_square(&self) -> bool {
         let low = self.limbs().first().copied().unwrap_or(0);

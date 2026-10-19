@@ -332,9 +332,9 @@ fn kth_root_fits_transforms() {
         return;
     }
     // With c = 8 for cube roots, the last step to a root of 128 f - 56
-    // bits appends 64 f - 32, so its divisor has f + 1 limbs, one past the
-    // transform length f (at least 32, for a limb of slack).
-    let fit = u32::try_from(wrap_len(MUL_WRAP_NTT_THRESHOLD.max(32))).unwrap();
+    // bits appends 64 f - 32, so its division works on f + 2 limbs, two
+    // past the transform length f (at least 64, for two limbs of slack).
+    let fit = u32::try_from(wrap_len(MUL_WRAP_NTT_THRESHOLD.max(64))).unwrap();
     let bits = 128 * fit - 56;
     let s = (Integer::from(1) << (bits - 1)) + Integer::from(3).pow(bits / 4);
     let fits = count(&STEP_FIT, || {

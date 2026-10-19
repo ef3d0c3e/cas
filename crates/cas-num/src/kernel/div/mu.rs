@@ -11,14 +11,15 @@
 
 use super::{bz_div_qr, bz_div_qr_scratch_len, reciprocal_2by1, reciprocal_3by2};
 use crate::Limb;
+use crate::kernel::mul::mullo::cost as mullo_cost;
 use crate::kernel::mul::{
     Algorithm, algorithm, cost as mul_cost, fold, mul_wrap, mul_wrap_scratch_len, wrap_len,
     wraps_cyclically,
 };
 use crate::kernel::ntt;
 use crate::kernel::{
-    add_1_assign, add_assign, add_n, cmp_n, mul, mul_scratch_len, sub_1_assign, sub_assign,
-    sub_n_assign,
+    add_1_assign, add_assign, add_n, cmp_n, mul, mul_scratch_len, mullo, mullo_scratch_len,
+    sub_1_assign, sub_assign, sub_n, sub_n_assign,
 };
 
 #[cfg(test)]
@@ -174,18 +175,48 @@ fn invert_exact(x: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) {
     debug_assert_eq!(top, 1);
 }
 
+/// [`mu_div_qr`]'s quotient block length for `qn` quotient and `dn` divisor
+/// limbs.
+#[cfg(test)]
+pub(crate) fn block_len(qn: usize, dn: usize) -> usize {
+    block_len_for(qn, dn, true)
+}
+
 /// The quotient block length for `qn` quotient limbs and a `dn`-limb divisor:
 /// of the fewest blocks of at most `dn` limbs and up to three more, the
-/// count whose [`Plan::cost`] is lowest. GMP takes the fewest (or two halves
-/// of a quotient up to `dn` limbs); here more, smaller blocks often pay, as
-/// the divisor's transform is prepared once and each block then costs only
-/// part of a wrapped product, while the reciprocal and the estimates shrink.
-pub(crate) fn block_len(qn: usize, dn: usize) -> usize {
+/// count whose [`Plan::cost`] is lowest, for [`mu_div_qr`], or for
+/// [`mu_divappr_q`] when `exact` is false. GMP takes the fewest (or two
+/// halves of a quotient up to `dn` limbs); here more, smaller blocks often
+/// pay, as the divisor's transform is prepared once and each block then
+/// costs only part of a wrapped product, while the reciprocal and the
+/// estimates shrink.
+fn block_len_for(qn: usize, dn: usize, exact: bool) -> usize {
     let fewest = qn.div_ceil(dn);
     (fewest..fewest + 4)
-        .map(|b| Plan::with_block(qn, dn, qn.div_ceil(b)))
+        .map(|b| Plan::with_block(qn, dn, qn.div_ceil(b), exact))
         .min_by(|x, y| x.cost(qn, dn).total_cmp(&y.cost(qn, dn)))
         .map_or(qn, |plan| plan.k)
+}
+
+/// The modulus length `m` of a block's product `Q^ D` modulo `B^m - 1` for a
+/// `dn`-limb divisor: the shortest transform length from `dn` on, or the
+/// longest below `dn` when it is within an eighth of `dn` and takes the
+/// cyclic transform, as just past a transform length the next one is a
+/// third or a half longer. Below `dn`, the remainder's low `dn - m + 1`
+/// limbs, from a short product, recover it (see [`mu_block`]).
+pub(crate) fn rem_wrap_len(dn: usize) -> usize {
+    let up = wrap_len(dn);
+    let pow2 = 1 << (usize::BITS - 1 - dn.leading_zeros());
+    let down = if 3 * pow2 / 2 <= dn {
+        3 * pow2 / 2
+    } else {
+        pow2
+    };
+    if down < dn && wraps_cyclically(down) && dn - down <= dn / 8 {
+        down
+    } else {
+        up
+    }
 }
 
 /// The modelled cost of [`mul_wrap`] modulo `B^m - 1` for `an x bn` limbs, in
@@ -212,7 +243,7 @@ fn invert_cost(n: usize) -> f64 {
 
 /// Division of `n` by the normalised `d` (`d.len() >= 2`, `n.len() > d.len()`)
 /// with `q.len() == n.len() - d.len()`, by quotient blocks of `k` limbs (see
-/// [`block_len`]) from the top. Leaves the remainder in `n[..d.len()]` and
+/// [`block_len_for`]) from the top. Leaves the remainder in `n[..d.len()]` and
 /// returns the top quotient limb, as [`super::div_qr_normalized`].
 ///
 /// One reciprocal serves every block: `X = B^k + I`, from [`invert`] on
@@ -230,6 +261,25 @@ fn invert_cost(n: usize) -> f64 {
 /// `D` and `I` are the same in every block, so their transforms are
 /// computed once ([`Plan`]) where the products take the NTT.
 pub(crate) fn mu_div_qr(q: &mut [Limb], n: &mut [Limb], d: &[Limb], scratch: &mut [Limb]) -> Limb {
+    mu_div(q, n, d, scratch, true)
+}
+
+/// [`mu_div_qr`]'s quotient without the remainder: the last (lowest) block
+/// keeps its estimate `Q^` and skips the product and corrections that give
+/// its remainder. The quotient is then at most 5 below the true one, never
+/// above (see [`mu_div_qr`]), and `n` is left unspecified. Returns the top
+/// quotient limb.
+pub(crate) fn mu_divappr_q(
+    q: &mut [Limb],
+    n: &mut [Limb],
+    d: &[Limb],
+    scratch: &mut [Limb],
+) -> Limb {
+    mu_div(q, n, d, scratch, false)
+}
+
+/// [`mu_div_qr`], or [`mu_divappr_q`] when `exact` is false.
+fn mu_div(q: &mut [Limb], n: &mut [Limb], d: &[Limb], scratch: &mut [Limb], exact: bool) -> Limb {
     let dn = d.len();
     let qn = n.len() - dn;
     debug_assert!(dn >= 2 && qn >= 1 && q.len() == qn);
@@ -237,14 +287,20 @@ pub(crate) fn mu_div_qr(q: &mut [Limb], n: &mut [Limb], d: &[Limb], scratch: &mu
     if qh {
         sub_n_assign(&mut n[qn..], d);
     }
-    let plan = Plan::new(qn, dn);
+    let plan = Plan::new(qn, dn, exact);
     let k = plan.k;
     let (inv, scratch) = scratch.split_at_mut(k);
     block_inverse(inv, d, scratch);
     let (prep_d, scratch) = scratch.split_at_mut(plan.prep_d.map_or(0, ntt::prepared_len));
     let (prep_i, scratch) = scratch.split_at_mut(plan.prep_i.map_or(0, ntt::prepared_len));
     if let Some(m) = plan.prep_d {
-        ntt::prepare_cyclic(prep_d, m, d, scratch);
+        if dn > m {
+            let (folded, rest) = scratch.split_at_mut(m);
+            fold(folded, d);
+            ntt::prepare_cyclic(prep_d, m, folded, rest);
+        } else {
+            ntt::prepare_cyclic(prep_d, m, d, scratch);
+        }
     }
     if let Some(len) = plan.prep_i {
         ntt::prepare_cyclic(prep_i, len, inv, scratch);
@@ -258,15 +314,12 @@ pub(crate) fn mu_div_qr(q: &mut [Limb], n: &mut [Limb], d: &[Limb], scratch: &mu
             // Only full blocks use the whole reciprocal.
             i: plan.prep_i.filter(|_| kb == k).map(|len| (len, &*prep_i)),
         };
-        mu_block(
-            &mut q[lo..top],
-            &mut n[lo..top + dn],
-            d,
-            &inv[k - kb..],
-            plan.m,
-            prep,
-            scratch,
-        );
+        let (q, w) = (&mut q[lo..top], &mut n[lo..top + dn]);
+        if exact || lo > 0 {
+            mu_block(q, w, d, &inv[k - kb..], plan.m, prep, scratch);
+        } else {
+            mu_estimate(q, &w[dn..], &inv[k - kb..], prep.i, scratch);
+        }
         top = lo;
     }
     Limb::from(qh)
@@ -283,19 +336,24 @@ struct Plan {
     m: usize,
     prep_d: Option<usize>,
     prep_i: Option<usize>,
+    /// Whether every block takes its remainder; [`mu_divappr_q`]'s last
+    /// does not.
+    exact: bool,
 }
 
 impl Plan {
-    fn new(qn: usize, dn: usize) -> Self {
-        Plan::with_block(qn, dn, block_len(qn, dn))
+    fn new(qn: usize, dn: usize, exact: bool) -> Self {
+        Plan::with_block(qn, dn, block_len_for(qn, dn, exact), exact)
     }
 
     #[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
-    fn with_block(qn: usize, dn: usize, k: usize) -> Self {
-        let m = wrap_len(dn);
+    fn with_block(qn: usize, dn: usize, k: usize, exact: bool) -> Self {
+        let m = rem_wrap_len(dn);
         let blocks = qn.div_ceil(k);
         let full = qn / k;
-        let prep_d = (blocks >= 2 && wraps_cyclically(m)).then_some(m);
+        // The divisor's transform pays from two remainders on.
+        let remainders = blocks - usize::from(!exact);
+        let prep_d = (remainders >= 2 && wraps_cyclically(m)).then_some(m);
         let len = wrap_len(2 * k);
         // Prepared: one forward transform, then two per product; fresh: a
         // whole product, three, at the planner's own length.
@@ -308,6 +366,7 @@ impl Plan {
             m,
             prep_d,
             prep_i,
+            exact,
         }
     }
 
@@ -315,6 +374,8 @@ impl Plan {
     /// plan, in the units of [`mul_cost`]: the reciprocal of `k + 1` limbs,
     /// then per block the estimate and the product modulo `B^m - 1`, where a
     /// prepared operand saves one of a cyclic product's three transforms.
+    /// Without `exact`, the last block, the partial one if any, has no
+    /// product modulo `B^m - 1`.
     #[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
     fn cost(&self, qn: usize, dn: usize) -> f64 {
         let k = self.k;
@@ -327,13 +388,19 @@ impl Plan {
             Some(len) => prepared(len, full),
             None => full as f64 * mul_cost(k, k),
         };
-        cost += match self.prep_d {
-            Some(m) => prepared(m, blocks),
-            None => full as f64 * wrap_cost(self.m, k, dn),
+        let skip = usize::from(!self.exact);
+        cost += if let Some(m) = self.prep_d {
+            prepared(m, blocks - skip)
+        } else {
+            let full_products = if last > 0 { full } else { full - skip };
+            full_products as f64 * wrap_cost(self.m, k, dn)
         };
+        if self.m < dn {
+            cost += (blocks - skip) as f64 * mullo_cost(dn - self.m + 1);
+        }
         if last > 0 {
             cost += mul_cost(last, last);
-            if self.prep_d.is_none() {
+            if self.prep_d.is_none() && self.exact {
                 cost += wrap_cost(self.m, last, dn);
             }
         }
@@ -345,18 +412,28 @@ impl Plan {
         self.prep_d.map_or(0, ntt::prepared_len) + self.prep_i.map_or(0, ntt::prepared_len)
     }
 
-    /// Scratch limbs preparing them needs.
-    fn prepare_scratch_len(&self) -> usize {
+    /// Scratch limbs preparing them needs, for a `dn`-limb divisor (folded
+    /// first when longer than `m`).
+    fn prepare_scratch_len(&self, dn: usize) -> usize {
         let len = |m: Option<usize>| m.map_or(0, ntt::cyclic_prepared_scratch_len);
-        len(self.prep_d).max(len(self.prep_i))
+        let fold = self.prep_d.map_or(0, |m| if dn > m { m } else { 0 });
+        (fold + len(self.prep_d)).max(len(self.prep_i))
     }
+}
+
+/// Whether [`mu_div_qr`] (or [`mu_divappr_q`] without `exact`) prepares `D`
+/// at a modulus shorter than its full blocks, which it then folds.
+#[cfg(test)]
+pub(crate) fn folds_blocks(qn: usize, dn: usize, exact: bool) -> bool {
+    let plan = Plan::new(qn, dn, exact);
+    plan.prep_d.is_some() && plan.k > plan.m
 }
 
 /// Whether [`mu_div_qr`] prepares `D` and `I` for `qn` quotient and `dn`
 /// divisor limbs.
 #[cfg(test)]
 pub(crate) fn prepares(qn: usize, dn: usize) -> (bool, bool) {
-    let plan = Plan::new(qn, dn);
+    let plan = Plan::new(qn, dn, true);
     (plan.prep_d.is_some(), plan.prep_i.is_some())
 }
 
@@ -370,8 +447,18 @@ struct Prepared<'a> {
 
 /// Scratch limbs [`mu_div_qr`] needs for `nn` dividend and `dn` divisor limbs.
 pub(crate) fn mu_div_qr_scratch_len(nn: usize, dn: usize) -> usize {
+    mu_scratch_len(nn, dn, true)
+}
+
+/// Scratch limbs [`mu_divappr_q`] needs for `nn` dividend and `dn` divisor
+/// limbs.
+pub(crate) fn mu_divappr_q_scratch_len(nn: usize, dn: usize) -> usize {
+    mu_scratch_len(nn, dn, false)
+}
+
+fn mu_scratch_len(nn: usize, dn: usize, exact: bool) -> usize {
     let qn = nn - dn;
-    let plan = Plan::new(qn, dn);
+    let plan = Plan::new(qn, dn, exact);
     let k = plan.k;
     let last = qn % k;
     let blocks = mu_block_scratch_len(k, dn, &plan).max(if last == 0 {
@@ -380,7 +467,7 @@ pub(crate) fn mu_div_qr_scratch_len(nn: usize, dn: usize) -> usize {
         mu_block_scratch_len(last, dn, &plan)
     });
     k + (2 * k + 2 + invert_scratch_len(k + 1))
-        .max(plan.prepared_len() + plan.prepare_scratch_len().max(blocks))
+        .max(plan.prepared_len() + plan.prepare_scratch_len(dn).max(blocks))
 }
 
 /// `inv = I`, the `k = inv.len()` limbs of the reciprocal [`mu_div_qr`] uses.
@@ -404,15 +491,17 @@ pub(crate) fn block_inverse(inv: &mut [Limb], d: &[Limb], scratch: &mut [Limb]) 
 
 /// One block of [`mu_div_qr`]: the `kb = q.len()` quotient limbs of the window
 /// `w` (`d.len() + kb` limbs, below `d B^kb`), with `inv` the reciprocal's top
-/// `kb` limbs and `m = wrap_len(d.len())`. Leaves the remainder
+/// `kb` limbs and `m = rem_wrap_len(d.len())`. Leaves the remainder
 /// in `w[..d.len()]`; the limbs above it are unspecified.
 ///
 /// `R = W - Q^ D` is in `(0, 6D)`: positive since `X D < B^(dn + k)` strictly
 /// (equality would take `D = B^dn / 2` and `X = 2 B^k`, which `k` limbs of `I`
 /// cannot hold), so `Q^ D < Wt B^dn <= W`. It comes from `Q^ D` modulo
-/// `B^m - 1` and the low limb `R mod B`: `R = r + j (B^m - 1)` for the residue
-/// `r` and `0 <= j < 6`, and `j = r - R (mod B)`. As `R > 0`, either form of
-/// a zero residue, `0` or `B^m - 1`, gives `R` this way.
+/// `B^m - 1`. Above `dn`, the residue is `R` itself. Otherwise
+/// `R = r + j (B^m - 1)` for the residue `r` and `0 <= j < 6 B^(dn - m)`, so
+/// `j < B^t` for `t = dn - m + 1`, and `j = r - R (mod B^t)` from `R`'s low
+/// `t` limbs, by a short product. As `R > 0`, either form of a zero residue,
+/// `0` or `B^m - 1`, gives `R` this way.
 fn mu_block(
     q: &mut [Limb],
     w: &mut [Limb],
@@ -422,25 +511,20 @@ fn mu_block(
     prep: Prepared<'_>,
     scratch: &mut [Limb],
 ) {
-    let (kb, dn) = (q.len(), d.len());
-    if let Some((len, prep_i)) = prep.i {
-        // len >= 2 kb, so the cyclic product is the whole product.
-        let (t, rest) = scratch.split_at_mut(len);
-        ntt::mul_cyclic_prepared(t, &w[dn..], prep_i, rest);
-        debug_assert!(t[2 * kb..].iter().all(|&x| x == 0));
-        let carry = add_n(q, &t[kb..2 * kb], &w[dn..]);
-        debug_assert_eq!(carry, 0, "mu_div_qr: estimate above B^kb");
-    } else {
-        let (t, rest) = scratch.split_at_mut(2 * kb);
-        mul(t, &w[dn..], inv, rest);
-        let carry = add_n(q, &t[kb..], &w[dn..]);
-        debug_assert_eq!(carry, 0, "mu_div_qr: estimate above B^kb");
-    }
+    let dn = d.len();
+    mu_estimate(q, &w[dn..], inv, prep.i, scratch);
 
     let (p, rest) = scratch.split_at_mut(m);
     let (r, rest) = rest.split_at_mut(m);
     if let Some(prep_d) = prep.d {
-        ntt::mul_cyclic_prepared(p, q, prep_d, rest);
+        // A block longer than m (below dn) is folded first.
+        if q.len() > m {
+            let (folded, rest) = rest.split_at_mut(m);
+            fold(folded, q);
+            ntt::mul_cyclic_prepared(p, folded, prep_d, rest);
+        } else {
+            ntt::mul_cyclic_prepared(p, q, prep_d, rest);
+        }
     } else {
         mul_wrap(p, q, d, rest);
     }
@@ -449,19 +533,36 @@ fn mu_block(
         // As in `invert`: B^m - 1, not B^m.
         sub_1_assign(r, 1);
     }
-    let j = r[0].wrapping_sub(w[0].wrapping_sub(q[0].wrapping_mul(d[0])));
-    debug_assert!(j < 6, "mu_div_qr: j = {j}");
-    #[cfg(test)]
-    if j != 0 {
-        hits::MU_WRAPPED.with(|c| c.set(c.get() + 1));
-    }
-    let mut top = if m == dn {
-        j - sub_1_assign(r, j)
-    } else {
-        debug_assert!(j == 0 && r[dn + 1..].iter().all(|&x| x == 0));
+    let mut top = if m > dn {
+        debug_assert!(r[dn + 1..].iter().all(|&x| x == 0));
+        w[..dn].copy_from_slice(&r[..dn]);
         r[dn]
+    } else {
+        // R = r + j (B^m - 1) with j < 6 B^(dn - m) <= B^t, and
+        // j = r - R mod B^t from R's low t limbs, those of W - Q^ D.
+        let t = dn - m + 1;
+        let (j, rest) = rest.split_at_mut(t);
+        let (low, rest) = rest.split_at_mut(t);
+        if t == 1 {
+            low[0] = q[0].wrapping_mul(d[0]);
+        } else {
+            let (qt, rest) = rest.split_at_mut(t);
+            let kt = q.len().min(t);
+            qt[..kt].copy_from_slice(&q[..kt]);
+            qt[kt..].fill(0);
+            mullo(low, qt, &d[..t], rest);
+        }
+        sub_n(j, &w[..t], low);
+        low.copy_from_slice(j);
+        sub_n(j, &r[..t], low);
+        #[cfg(test)]
+        if j.iter().any(|&x| x != 0) {
+            hits::MU_WRAPPED.with(|c| c.set(c.get() + 1));
+        }
+        w[..m].copy_from_slice(&r[..m]);
+        w[m..dn].copy_from_slice(&j[..t - 1]);
+        j[t - 1] - sub_assign(&mut w[..dn], j)
     };
-    w[..dn].copy_from_slice(&r[..dn]);
 
     let mut corrections = 0;
     while top != 0 || cmp_n(&w[..dn], d).is_ge() {
@@ -475,6 +576,33 @@ fn mu_block(
     debug_assert!(corrections <= 5, "mu_div_qr: {corrections} corrections");
 }
 
+/// The estimate `Q^ = Wt + floor(Wt I / B^kb)` of a block of
+/// [`mu_div_qr`] from the window's top `kb = q.len()` limbs `wt` and the
+/// reciprocal's top limbs `inv`, prepared at its transform length when
+/// `prep_i` is given.
+fn mu_estimate(
+    q: &mut [Limb],
+    wt: &[Limb],
+    inv: &[Limb],
+    prep_i: Option<(usize, &[Limb])>,
+    scratch: &mut [Limb],
+) {
+    let kb = q.len();
+    if let Some((len, prep_i)) = prep_i {
+        // len >= 2 kb, so the cyclic product is the whole product.
+        let (t, rest) = scratch.split_at_mut(len);
+        ntt::mul_cyclic_prepared(t, wt, prep_i, rest);
+        debug_assert!(t[2 * kb..].iter().all(|&x| x == 0));
+        let carry = add_n(q, &t[kb..2 * kb], wt);
+        debug_assert_eq!(carry, 0, "mu_div_qr: estimate above B^kb");
+    } else {
+        let (t, rest) = scratch.split_at_mut(2 * kb);
+        mul(t, wt, inv, rest);
+        let carry = add_n(q, &t[kb..], wt);
+        debug_assert_eq!(carry, 0, "mu_div_qr: estimate above B^kb");
+    }
+}
+
 fn mu_block_scratch_len(kb: usize, dn: usize, plan: &Plan) -> usize {
     let m = plan.m;
     let estimate = match plan.prep_i {
@@ -483,8 +611,17 @@ fn mu_block_scratch_len(kb: usize, dn: usize, plan: &Plan) -> usize {
     }
     .max(2 * kb + mul_scratch_len(kb, kb));
     let wrapped = match plan.prep_d {
-        Some(m) => ntt::cyclic_prepared_scratch_len(m),
+        Some(m) => {
+            let folded = if kb > m { m } else { 0 };
+            folded + ntt::cyclic_prepared_scratch_len(m)
+        }
         None => mul_wrap_scratch_len(m, kb, dn),
     };
-    estimate.max(2 * m + wrapped)
+    let low = if m <= dn {
+        let t = dn - m + 1;
+        3 * t + mullo_scratch_len(t)
+    } else {
+        0
+    };
+    estimate.max(2 * m + wrapped.max(low))
 }

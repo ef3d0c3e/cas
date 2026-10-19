@@ -36,7 +36,7 @@ pub use mul::{
     addmul_1, mul, mul_1, mul_1_assign, mul_basecase, mul_scratch_len, sqr, sqr_basecase,
     sqr_scratch_len, submul_1,
 };
-pub use root::{sqrtrem, sqrtrem_scratch_len};
+pub use root::{sqrt, sqrt_scratch_len, sqrtrem, sqrtrem_scratch_len};
 
 /// `a + b + carry`, returning `(sum, carry_out)`.
 ///
