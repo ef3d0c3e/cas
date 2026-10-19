@@ -106,3 +106,10 @@ path = "fuzz_targets/lang_lex.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "lang_parse"
+path = "fuzz_targets/lang_parse.rs"
+test = false
+doc = false
+bench = false
