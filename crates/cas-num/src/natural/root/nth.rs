@@ -5,9 +5,11 @@
 //! From the root `s'` of the input's top bits and its remainder, a division
 //! by `k s'^(k-1)` gives the next bits of the root, at most two too large.
 //! The powers `s^(k-1)` and `s^k` then check them and give the next step's
-//! divisor and remainder. Without a remainder, the last step skips the
-//! powers: it computes guard bits below the root, which absorb the
-//! estimate's error.
+//! divisor and remainder. The remainder is about `(k - 1)/k` of `s^k`'s
+//! length, so at large sizes `s^k = s^(k-1) s` goes modulo `B^m - 1` for an
+//! `m` just above it. Without a remainder, the last step skips the powers:
+//! it computes guard bits below the root, which absorb the estimate's
+//! error.
 #![allow(
     clippy::many_single_char_names,
     reason = "the algorithm uses the textbook names (k, s, r, p, w, u, d, q, b, m, n)"
@@ -18,10 +20,13 @@ use std::cell::Cell;
 
 use super::super::bits::split_bit_index;
 use super::Natural;
+use crate::kernel::div::mu::rem_wrap_len;
 use crate::kernel::div::{divappr_q, divappr_q_scratch_len};
 use crate::kernel::mul::{
-    MUL_KARATSUBA_THRESHOLD, MUL_WRAP_NTT_THRESHOLD, SQR_KARATSUBA_THRESHOLD,
+    MUL_KARATSUBA_THRESHOLD, MUL_WRAP_NTT_THRESHOLD, SQR_KARATSUBA_THRESHOLD, cost as mul_cost,
+    fold, mul_wrap, mul_wrap_scratch_len, wraps_cyclically,
 };
+use crate::kernel::{mullo_scratch_len, ntt};
 use crate::{Limb, kernel};
 
 // Counters for the rarely taken branches, so tests can check that their
@@ -39,6 +44,10 @@ thread_local! {
     pub(super) static STEP_FIT: Cell<u64> = const { Cell::new(0) };
     /// The guard bits did not decide the root, so a power did.
     pub(super) static GUARD_CHECK: Cell<u64> = const { Cell::new(0) };
+    /// A step's last product went modulo `B^m - 1`, recovered from `m` on
+    /// by a short product of the low limbs, or directly.
+    pub(super) static WRAP_LOW: Cell<u64> = const { Cell::new(0) };
+    pub(super) static WRAP_DIRECT: Cell<u64> = const { Cell::new(0) };
 }
 
 macro_rules! hit {
@@ -366,37 +375,125 @@ impl RootWork<'_> {
         std::mem::swap(&mut self.s, &mut self.t);
     }
 
+    /// `r = u - p s` from `p s` modulo `B^m - 1` (see [`last_wrap_len`]), if
+    /// it is not negative; returns whether it is.
+    ///
+    /// `V = u - p s + B^(pl + 1)` is positive and below `B^(pl + 2)`, and its
+    /// residue `v` comes from `u`'s and `p s`'s. When `m >= pl + 2` that is
+    /// `V`; otherwise `V = v + j (B^m - 1)` with `j < B^t`, `t = pl + 3 - m`,
+    /// and `j = v - V (mod B^t)` from `V`'s low `t` limbs, those of
+    /// `u - p s` by a short product. `u - p s` is negative when `V < B^(pl + 1)`.
+    fn wrapped_remainder(&mut self, m: usize) -> bool {
+        let (pl, sl, ul) = (self.pl, self.sl, self.ul);
+        let need = mul_wrap_scratch_len(m, pl, sl);
+        let scratch = take(self.fixed, &mut self.extra, need);
+        mul_wrap(&mut self.t[..m], &self.p[..pl], &self.s[..sl], scratch);
+        let v = &mut self.tmp[..m];
+        fold(v, &self.u[..ul]);
+        if kernel::sub_n_assign(v, &self.t[..m]) != 0 {
+            // B^m - 1, not B^m.
+            kernel::sub_1_assign(v, 1);
+        }
+        if kernel::add_1_assign(&mut v[(pl + 1) % m..], 1) != 0 {
+            kernel::add_1_assign(v, 1);
+        }
+        let vn = pl + 2;
+        let r = &mut self.r[..=vn];
+        if m >= vn {
+            hit!(WRAP_DIRECT);
+            r[..vn].copy_from_slice(&v[..vn]);
+            debug_assert!(v[vn..].iter().all(|&x| x == 0));
+            r[vn] = 0;
+        } else {
+            hit!(WRAP_LOW);
+            let t = vn + 1 - m;
+            let scratch = take(self.fixed, &mut self.extra, 4 * t + mullo_scratch_len(t));
+            let (low, scratch) = scratch.split_at_mut(t);
+            let (j, scratch) = scratch.split_at_mut(t);
+            let (st, scratch) = scratch.split_at_mut(t);
+            let (ut, scratch) = scratch.split_at_mut(t);
+            let fill = |dst: &mut [Limb], src: &[Limb]| {
+                let n = src.len().min(dst.len());
+                dst[..n].copy_from_slice(&src[..n]);
+                dst[n..].fill(0);
+            };
+            fill(st, &self.s[..sl]);
+            fill(ut, &self.u[..ul]);
+            kernel::mullo(low, &self.p[..t], st, scratch);
+            kernel::sub_n(j, ut, low);
+            low.copy_from_slice(j);
+            kernel::sub_n(j, &v[..t], low);
+            r[..m].copy_from_slice(v);
+            r[m..=vn].copy_from_slice(j);
+            let borrow = kernel::sub_assign(r, j);
+            debug_assert!(borrow == 0 && r[vn] == 0);
+        }
+        // u - p s = V - B^(pl + 1).
+        if kernel::sub_1_assign(&mut r[pl + 1..vn], 1) != 0 {
+            return false;
+        }
+        self.rl = kernel::normalized_len(&r[..=pl]);
+        true
+    }
+
     /// Decrements the root `s` while `s^k > u`, and returns whether it did.
     /// Leaves `p = s^(k-1)`, `w = k p` and `r = u - s^k`.
     fn settle(&mut self) -> bool {
-        let mut decremented = false;
+        let mut decrements = 0;
         loop {
             let e = u64::from(self.k) - 1;
             let s = &self.s[..self.sl];
             self.pl = pow(self.p, self.tmp, s, e, self.fixed, &mut self.extra);
             let tl = self.pl + self.sl;
-            mul(
-                &mut self.t[..tl],
-                &self.p[..self.pl],
-                s,
-                self.fixed,
-                &mut self.extra,
-            );
-            let tl = kernel::normalized_len(&self.t[..tl]);
-            if kernel::cmp(&self.t[..tl], &self.u[..self.ul]).is_le() {
-                let ul = self.ul;
-                kernel::sub(&mut self.r[..ul], &self.u[..ul], &self.t[..tl]);
-                self.rl = kernel::normalized_len(&self.r[..ul]);
+            let fits = if let Some(m) = last_wrap_len(self.pl, self.sl) {
+                self.wrapped_remainder(m)
+            } else {
+                mul(
+                    &mut self.t[..tl],
+                    &self.p[..self.pl],
+                    s,
+                    self.fixed,
+                    &mut self.extra,
+                );
+                let tl = kernel::normalized_len(&self.t[..tl]);
+                let fits = kernel::cmp(&self.t[..tl], &self.u[..self.ul]).is_le();
+                if fits {
+                    let ul = self.ul;
+                    kernel::sub(&mut self.r[..ul], &self.u[..ul], &self.t[..tl]);
+                    self.rl = kernel::normalized_len(&self.r[..ul]);
+                }
+                fits
+            };
+            if fits {
                 self.w[self.pl] =
                     kernel::mul_1(&mut self.w[..self.pl], &self.p[..self.pl], self.k.into());
                 self.wl = kernel::normalized_len(&self.w[..=self.pl]);
-                return decremented;
+                return decrements > 0;
             }
             kernel::sub_1_assign(&mut self.s[..self.sl], 1);
             self.sl = kernel::normalized_len(&self.s[..self.sl]);
-            decremented = true;
+            // Estimates are at most 2 above the root (see `newton_root`).
+            decrements += 1;
+            debug_assert!(
+                decrements <= 3,
+                "kth root: estimate {decrements} above the root"
+            );
         }
     }
+}
+
+/// The modulus length `m` at which a step takes its last product `p s`
+/// modulo `B^m - 1` (`p` and `s` of `pl` and `sl` limbs), if it does: the
+/// remainder `u - p s` lies within `3k p` of zero, so `u - p s + B^(pl + 1)`
+/// has `pl + 2` limbs, about `(k - 1) / k` of the product's. As for
+/// Barrett's remainder, `m` is the transform length from there or just below
+/// it ([`rem_wrap_len`]), taken when its cyclic product costs less than the
+/// whole product.
+#[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
+fn last_wrap_len(pl: usize, sl: usize) -> Option<usize> {
+    let m = rem_wrap_len(pl + 2);
+    (m < pl + sl && wraps_cyclically(m) && (ntt::cyclic_cost(m) as f64) < mul_cost(pl, sl))
+        .then_some(m)
 }
 
 /// `need` limbs of scratch: `fixed` when it is long enough, else `extra`,

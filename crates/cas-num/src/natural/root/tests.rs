@@ -367,3 +367,37 @@ fn kth_root_low_digits() {
         }
     }
 }
+
+/// Cube roots of `L/2` to `L` limbs, `L` the shortest transform length from
+/// which products modulo `B^m - 1` take the cyclic transform: their steps'
+/// last products go modulo `B^m - 1`, at lengths just above a transform
+/// length (the limbs above `m` from a short product) and below one
+/// (directly). `(s + 1)^3 - 1` makes the last step's estimate too large, so
+/// that the wrapped remainder comes out negative.
+#[test]
+fn kth_root_wraps_last_product() {
+    use super::nth::{STEP_DECREMENT, WRAP_DIRECT, WRAP_LOW};
+    use crate::kernel::mul::{MUL_WRAP_NTT_THRESHOLD, wrap_len};
+    use crate::testkit::TESTED_SIZE_MAX;
+    if 2 * MUL_WRAP_NTT_THRESHOLD > TESTED_SIZE_MAX {
+        return;
+    }
+    let l = wrap_len(MUL_WRAP_NTT_THRESHOLD.max(8));
+    let mut hits = [0; 3];
+    for limbs in [l / 2, l / 2 + 1, 5 * l / 8, 3 * l / 4, l] {
+        let bits = 64 * u32::try_from(limbs).unwrap();
+        let s = (Integer::from(1) << (bits - 1)) + Integer::from(3).pow(bits / 3);
+        for x in [
+            Integer::from(&s + 1u32).pow(3) - 1u32,
+            Integer::from((&s).pow(3)),
+            (Integer::from(1) << (3 * bits)) - 1u32,
+        ] {
+            hits[0] += count(&WRAP_LOW, || {
+                hits[1] += count(&WRAP_DIRECT, || {
+                    hits[2] += count(&STEP_DECREMENT, || check_root(&x, 3));
+                });
+            });
+        }
+    }
+    assert!(hits.iter().all(|&h| h > 0), "{hits:?}");
+}
