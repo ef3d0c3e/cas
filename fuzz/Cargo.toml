@@ -113,3 +113,10 @@ path = "fuzz_targets/lang_parse.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "lang_lower"
+path = "fuzz_targets/lang_lower.rs"
+test = false
+doc = false
+bench = false

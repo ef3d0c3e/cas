@@ -15,11 +15,16 @@
 //!   ([`Target`]), with the spellings printers use; English plus at most one
 //!   locale, both data. User names that start with an ASCII capital are
 //!   escaped ([`escape_name`]) so they never meet a builtin's.
+//! - [`lower`]: the statements of a tree as expressions ([`Lowered`]):
+//!   values to evaluate, or statement heads for the session (`Set`,
+//!   `SetDelayed`, …), with [`Spans`] back into the text and
+//!   [`Diagnostic`]s, some with a [`Fix`].
 //!
-//! Lowering to expressions and the session come with CAS-120 and CAS-121.
+//! The session comes with CAS-121.
 
 mod lexer;
 mod literal;
+mod lower;
 mod names;
 mod parser;
 mod syntax;
@@ -28,6 +33,7 @@ pub use lexer::{LexError, LexErrorKind, Lexed, lex};
 pub use literal::{
     MAX_DECIMAL_EXPONENT, NumberError, name, number_value, string_value, superscript_value,
 };
+pub use lower::{Diagnostic, Fix, LowerErrorKind, Lowered, Severity, Spans, Statement, lower};
 pub use names::{
     Names, NamesError, NamesErrorKind, SyntaxForm, Target, TypeName, escape_name, unescape_name,
 };

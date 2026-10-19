@@ -34,12 +34,14 @@ fn english_names() {
         ("int", planned("Integrate")),
         ("integrate", planned("Integrate")),
         ("evalf", planned("N")),
-        ("subst", planned("ReplaceAll")),
-        ("replace", planned("ReplaceAll")),
-        ("undef", planned("Indeterminate")),
-        ("infinity", planned("ComplexInfinity")),
-        ("inf", planned("Infinity")),
-        ("true", planned("True")),
+        ("subst", Target::Builtin(Symbol::REPLACE_ALL)),
+        ("replace", Target::Builtin(Symbol::REPLACE_ALL)),
+        ("undef", Target::Builtin(Symbol::INDETERMINATE)),
+        ("infinity", Target::Builtin(Symbol::COMPLEX_INFINITY)),
+        ("inf", Target::Builtin(Symbol::INFINITY)),
+        ("true", Target::Builtin(Symbol::TRUE)),
+        ("sqrt", Target::Builtin(Symbol::SQRT)),
+        ("abs", planned("Abs")),
     ];
     for (name, target) in cases {
         assert_eq!(names.target(name), Some(&target), "{name}");

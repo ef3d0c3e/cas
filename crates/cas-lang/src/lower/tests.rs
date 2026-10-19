@@ -1,0 +1,390 @@
+use proptest::prelude::*;
+
+use super::{LowerErrorKind as E, Lowered, Severity, lower};
+use crate::names::Names;
+use crate::parser::parse;
+
+fn lowered(text: &str) -> Lowered {
+    lower(&parse(text), Names::english())
+}
+
+/// The full form of each statement of `text`, which must lower without
+/// errors.
+fn forms(text: &str) -> Vec<String> {
+    let lowered = lowered(text);
+    assert!(!lowered.has_errors(), "{text:?}: {:?}", lowered.diagnostics);
+    lowered
+        .statements
+        .iter()
+        .map(|s| format!("{:?}", s.expr))
+        .collect()
+}
+
+/// `(text, full form)`, one statement each.
+fn check(cases: &[(&str, &str)]) {
+    let mut wrong = Vec::new();
+    for (text, expected) in cases {
+        let found = forms(text);
+        if found != [*expected] {
+            wrong.push(format!("{text:?}: found {found:?}, expected {expected:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The errors of `text`, as `(covered text, kind)`.
+fn errors(text: &str) -> Vec<(&str, E)> {
+    lowered(text)
+        .diagnostics
+        .into_iter()
+        .filter(|d| d.severity == Severity::Error)
+        .map(|d| (&text[d.range], d.kind))
+        .collect()
+}
+
+#[test]
+fn literals_and_names() {
+    check(&[
+        ("42", "42"),
+        ("0.1", "1/10"),
+        ("1.5e-3", "3/2000"),
+        (r#""s\n""#, r#""s\n""#),
+        ("x", "x"),
+        ("θ", "θ"),
+        // A capitalised name of the user's is escaped (§5).
+        ("E", "$E"),
+        ("Delta", "$Delta"),
+        ("pi", "Pi"),
+        ("π", "Pi"),
+        ("e", "E"),
+        ("i", "Complex[0, 1]"),
+        ("true", "True"),
+        ("undef", "Indeterminate"),
+        ("infinity", "ComplexInfinity"),
+        ("inf", "Infinity"),
+        ("∞", "Infinity"),
+        ("+infinity", "Infinity"),
+        ("-infinity", "DirectedInfinity[-1]"),
+        ("sin", "Sin"),
+    ]);
+}
+
+#[test]
+fn arithmetic() {
+    check(&[
+        ("x + 2y", "Plus[x, Times[2, y]]"),
+        ("a + b - c + d", "Plus[a, b, Times[-1, c], d]"),
+        ("x - 2", "Plus[x, -2]"),
+        ("-x", "Times[-1, x]"),
+        ("-2", "-2"),
+        ("-(x + y)", "Times[-1, Plus[x, y]]"),
+        ("a * b / c", "Times[a, b, Power[c, -1]]"),
+        ("1/2x", "Times[1, Power[Times[2, x], -1]]"),
+        ("2x y", "Times[2, x, y]"),
+        ("x^2", "Power[x, 2]"),
+        ("x²", "Power[x, 2]"),
+        ("x⁻¹", "Power[x, -1]"),
+        ("2^3^2", "Power[2, Power[3, 2]]"),
+        ("√x", "Power[x, 1/2]"),
+        ("∛8", "Power[8, 1/3]"),
+        ("a .* b .* c", "ElementwiseTimes[a, b, c]"),
+        ("a ./ b", "ElementwiseDivide[a, b]"),
+        ("a .^ 2", "ElementwisePower[a, 2]"),
+        ("n!", "Factorial[n]"),
+        ("3x^2(x - 1)", "Times[3, Power[x, 2], Plus[x, -1]]"),
+    ]);
+}
+
+#[test]
+fn comparisons_and_logic() {
+    check(&[
+        ("a = b", "Equation[a, b]"),
+        ("a == b", "Equal[a, b]"),
+        ("a != b", "Unequal[a, b]"),
+        ("0 < x <= 1", "And[Less[0, x], LessEqual[x, 1]]"),
+        ("x >= 2", "GreaterEqual[x, 2]"),
+        ("x in S", "Element[x, $S]"),
+        ("a and b and c", "And[a, b, c]"),
+        ("a or b", "Or[a, b]"),
+        ("not p", "Not[p]"),
+        ("1..n", "Range[1, n]"),
+    ]);
+}
+
+#[test]
+fn structure() {
+    check(&[
+        ("[1, 2]", "List[1, 2]"),
+        ("{a, b}", "FiniteSet[a, b]"),
+        ("v[0]", "At[v, 0]"),
+        ("m[0, k]", "At[m, 0, k]"),
+        ("v[1..2]", "At[v, Range[1, 2]]"),
+        ("x -> x^2", "Function[List[x], Power[x, 2]]"),
+        ("(x, y) -> x y", "Function[List[x, y], Times[x, y]]"),
+        ("if c then a else b end", "If[c, a, b]"),
+        ("if c then a end", "If[c, a]"),
+        ("if c then end", "If[c, Null]"),
+        (
+            "if c then a elif d then b else f end",
+            "If[c, a, If[d, b, f]]",
+        ),
+    ]);
+}
+
+/// Calls and products: giac's rule (CAS-DOC-7 §3.1).
+#[test]
+fn calls_and_products() {
+    check(&[
+        ("f(x)", "f[x]"),
+        ("f(a, b)", "f[a, b]"),
+        ("f()", "f[]"),
+        ("sin(x)", "Sin[x]"),
+        ("y(x + 1)", "y[Plus[x, 1]]"),
+        ("x(x + 1)", "Times[x, Plus[x, 1]]"),
+        ("n(n + 1)/2", "Times[n, Plus[n, 1], Power[2, -1]]"),
+        ("x(y(x))", "Times[x, y[x]]"),
+        ("pi(x + 1)", "Times[Pi, Plus[x, 1]]"),
+        ("i(x + 1)", "Times[Complex[0, 1], Plus[x, 1]]"),
+        ("2(x + 1)", "Times[2, Plus[x, 1]]"),
+        ("(a + b)(a - b)", "Times[Plus[a, b], Plus[a, Times[-1, b]]]"),
+        ("2x(x + 1)", "Times[2, x, Plus[x, 1]]"),
+        ("f(a)(b)", "f[a][b]"),
+        ("x(x)(y)", "Times[Times[x, x], y]"),
+        ("g(g(u))", "g[g[u]]"),
+        ("call(x, x + 1)", "x[Plus[x, 1]]"),
+        ("(x -> x^2)(3)", "Function[List[x], Power[x, 2]][3]"),
+        ("v[0](x)", "At[v, 0][x]"),
+    ]);
+    // The product reading of a name in its argument comes with a note.
+    let lowered = lowered("x(x + 1)");
+    assert_eq!(lowered.diagnostics.len(), 1);
+    let note = &lowered.diagnostics[0];
+    assert_eq!(note.severity, Severity::Note);
+    assert_eq!(note.to_string(), "read as x*(x + 1)");
+    assert!(self::lowered("pi(x + 1)").diagnostics.is_empty());
+}
+
+#[test]
+fn assignments_and_definitions() {
+    check(&[
+        ("x := 1", "Set[x, 1]"),
+        ("[a, b] := [1, 2]", "Set[List[a, b], List[1, 2]]"),
+        ("v[0] := 1", "Set[v, ReplaceAt[v, 0, 1]]"),
+        (
+            "f(x) := x^2",
+            "SetDelayed[f[Pattern[x, Blank[]]], Power[x, 2]]",
+        ),
+        ("f(0) := 1", "SetDelayed[f[0], 1]"),
+        (
+            "f(x, x) := x",
+            "SetDelayed[f[Pattern[x, Blank[]], Pattern[x, Blank[]]], x]",
+        ),
+        ("f(pi) := 0", "SetDelayed[f[Pi], 0]"),
+        (
+            "f(n) := n*f(n - 1) when n > 0",
+            "SetDelayed[f[Pattern[n, Blank[]]], Condition[Times[n, f[Plus[n, -1]]], Greater[n, 0]]]",
+        ),
+        (
+            "f(n :: integer) := n",
+            "SetDelayed[f[PatternTest[Pattern[n, Blank[]], IntegerQ]], n]",
+        ),
+        ("f(x :: any) := x", "SetDelayed[f[Pattern[x, Blank[]]], x]"),
+        (
+            "f(x, xs...) := g(xs...) + h(xs)",
+            "SetDelayed[f[Pattern[x, Blank[]], Pattern[xs, BlankNullSequence[]]], \
+             Plus[g[xs], h[List[xs]]]]",
+        ),
+        (
+            "f(x, n = 1) := x^n",
+            "SetDelayed[f[Pattern[x, Blank[]], Optional[Pattern[n, Blank[]], 1]], Power[x, n]]",
+        ),
+        ("f(g(x)) := x", "SetDelayed[f[g[Pattern[x, Blank[]]]], x]"),
+        (
+            "f(a)(b) := a b",
+            "SetDelayed[f[Pattern[a, Blank[]]][Pattern[b, Blank[]]], Times[a, b]]",
+        ),
+        (
+            "twice(g, x) := g(g(x))",
+            "SetDelayed[twice[Pattern[g, Blank[]], Pattern[x, Blank[]]], g[g[x]]]",
+        ),
+        // A builtin head makes an up-rule; names are literal there.
+        (
+            "phi^2 := phi + 1",
+            "UpSetDelayed[Power[phi, 2], Plus[phi, 1]]",
+        ),
+        (
+            "sin(myangle) := 1/2",
+            "UpSetDelayed[Sin[myangle], Times[1, Power[2, -1]]]",
+        ),
+        (
+            "f(a) + f(b) := f(a + b)",
+            "UpSetDelayed[Plus[f[a], f[b]], f[Plus[a, b]]]",
+        ),
+        ("assume(x > 0)", "Assume[Greater[x, 0]]"),
+        ("purge(f, g)", "Clear[f, g]"),
+    ]);
+}
+
+/// Standalone rules are equations; `::` marks their variables (§6).
+#[test]
+fn rules() {
+    check(&[
+        (
+            "replace(p, sin(a :: any)^2 = 1 - cos(a)^2)",
+            "ReplaceAll[p, RuleDelayed[Power[Sin[Pattern[a, Blank[]]], 2], \
+             Plus[1, Times[-1, Power[Cos[a], 2]]]]]",
+        ),
+        ("subst(p, x = 2)", "ReplaceAll[p, RuleDelayed[x, 2]]"),
+        (
+            "subst(p, [x = 1, y = 2])",
+            "ReplaceAll[p, List[RuleDelayed[x, 1], RuleDelayed[y, 2]]]",
+        ),
+        ("subst(p, r)", "ReplaceAll[p, r]"),
+    ]);
+}
+
+#[test]
+fn statements() {
+    let lowered = lowered("a; b\nc;\n// done");
+    let quiet: Vec<_> = lowered.statements.iter().map(|s| s.quiet).collect();
+    assert_eq!(quiet, [true, false, true]);
+    // A statement with a parse error is left out; the parser reported it.
+    let lowered = self::lowered("x := 1\nf(x\ny := 2");
+    assert_eq!(lowered.statements.len(), 1);
+    assert!(lowered.diagnostics.is_empty());
+}
+
+#[test]
+fn errors_with_fixes() {
+    let text = "2 sin x";
+    let result = lowered(text);
+    let error = &result.diagnostics[0];
+    assert_eq!(error.kind, E::FunctionWithoutParentheses("sin".into()));
+    let fix = error.fix.as_ref().unwrap();
+    assert_eq!(
+        (&text[fix.range.clone()], fix.replacement.as_str()),
+        ("sin x", "sin(x)")
+    );
+    for (text, covered, replacement) in [
+        ("sin^2(x)", "sin^2(x)", "sin(x)^2"),
+        ("sin²x", "sin²x", "sin(x)^2"),
+        ("2 cos^3 (y + 1)", "cos^3 (y + 1)", "cos(y + 1)^3"),
+    ] {
+        let lowered = self::lowered(text);
+        let error = &lowered.diagnostics[0];
+        assert!(matches!(error.kind, E::PowerOfFunction(_)), "{text}");
+        let fix = error.fix.as_ref().unwrap();
+        assert_eq!(&text[fix.range.clone()], covered, "{text}");
+        assert_eq!(fix.replacement, replacement, "{text}");
+    }
+    assert!(self::lowered("sin^2").diagnostics[0].fix.is_none());
+    assert!(self::lowered("x sin").diagnostics[0].fix.is_none());
+}
+
+#[test]
+fn errors_leave_statements_out() {
+    let cases: &[(&str, &[(&str, E)])] = &[
+        ("pi := 3", &[("pi", E::ReservedName("pi".into()))]),
+        ("sin := 3", &[("sin", E::ReservedName("sin".into()))]),
+        ("i -> i^2", &[("i", E::ReservedName("i".into()))]),
+        ("[x, e] := l", &[("e", E::ReservedName("e".into()))]),
+        ("purge(pi)", &[("pi", E::ReservedName("pi".into()))]),
+        (
+            "diff(x^2, x)",
+            &[("diff(x^2, x)", E::NotAvailable("diff".into()))],
+        ),
+        ("y := diff", &[("diff", E::NotAvailable("diff".into()))]),
+        ("x :: integer", &[("x :: integer", E::TypeOutsidePattern)]),
+        (
+            "f(n :: natural) := 1",
+            &[("natural", E::UnknownType("natural".into()))],
+        ),
+        ("g(xs...)", &[("xs...", E::MisplacedSpread)]),
+        ("x := 1 when x > 0", &[("x > 0", E::GuardOnAssignment)]),
+        ("2 := 3", &[("2", E::InvalidTarget)]),
+        ("pi(x) := 1", &[("pi(x)", E::InvalidTarget)]),
+        (
+            "sin(x :: any) := 0",
+            &[("sin(x :: any)", E::NoUserName("sin".into()))],
+        ),
+        ("call", &[("call", E::MisplacedForm("call".into()))]),
+        (
+            "f(assume(x))",
+            &[("assume(x)", E::MisplacedForm("assume".into()))],
+        ),
+        (
+            "begin x end",
+            &[("begin x end", E::NotYetSupported("blocks"))],
+        ),
+        (
+            "local x",
+            &[(
+                "local x",
+                E::NotYetSupported("local variables, loops and `return`"),
+            )],
+        ),
+        (
+            "if a then b; c end",
+            &[("b; c", E::NotYetSupported("branches of several statements"))],
+        ),
+        (
+            "1e2000000",
+            &[("1e2000000", E::Number(crate::NumberError::ExponentTooLarge))],
+        ),
+    ];
+    let mut wrong = Vec::new();
+    for (text, expected) in cases {
+        let found = errors(text);
+        if found != *expected {
+            wrong.push(format!("{text:?}: found {found:?}"));
+        }
+        assert!(lowered(text).statements.is_empty(), "{text:?} is left out");
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+#[test]
+fn spans_lead_back_to_the_text() {
+    let text = "f(x) + 2 y - z";
+    let lowered = lowered(text);
+    let spans = &lowered.statements[0].spans;
+    let part = |path: &[usize]| &text[spans.find(path)];
+    assert_eq!(part(&[]), text);
+    assert_eq!(part(&[1]), "f(x)");
+    assert_eq!(part(&[1, 0]), "f");
+    assert_eq!(part(&[1, 1]), "x");
+    assert_eq!(part(&[2]), "2 y");
+    assert_eq!(part(&[2, 2]), "y");
+    // `-z` is `Times[-1, z]`, made for `z`.
+    assert_eq!(part(&[3]), "z");
+    assert_eq!(part(&[3, 2]), "z");
+    // A path past the parts stops at the nearest one.
+    assert_eq!(part(&[2, 2, 5]), "y");
+}
+
+/// Pieces of the language, for random programs.
+fn fragment() -> impl Strategy<Value = &'static str> {
+    prop::sample::select(vec![
+        "x", "f", "2", "sin", "pi", "i", "E", "(", ")", "[", "]", ",", "+", "-", "*", "/", "^",
+        "²", "!", "...", "::", ":=", "->", "=", "==", "<", "..", " ", "\n", ";", "and", "not",
+        "if", "then", "else", "end", "when", "integer", "call", "assume", "subst", "√",
+    ])
+}
+
+proptest! {
+    /// Lowering never panics, and every range it reports lies in the text.
+    #[test]
+    fn lowering_is_total(fragments in prop::collection::vec(fragment(), 0..30)) {
+        let text = fragments.concat();
+        let lowered = lowered(&text);
+        for d in &lowered.diagnostics {
+            prop_assert!(d.range.end <= text.len(), "{:?} in {:?}", d, text);
+            if let Some(fix) = &d.fix {
+                prop_assert!(fix.range.end <= text.len());
+            }
+        }
+        for s in &lowered.statements {
+            prop_assert!(s.spans.range().end <= text.len());
+        }
+    }
+}

@@ -1,7 +1,7 @@
 # cas-num fuzz targets
 
 libFuzzer targets (via [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz)) that cross-check
-cas-num against GMP (through `rug`), plus two for the cas-lang lexer and parser. This crate is outside the
+cas-num against GMP (through `rug`), plus three for the cas-lang lexer, parser and lowering. This crate is outside the
 main workspace because cargo-fuzz needs a nightly toolchain and its own build profile; the
 libraries themselves stay on stable.
 
@@ -20,6 +20,7 @@ libraries themselves stay on stable.
 | `number_theory` | `sqrt_rem`, `pow_mod` through every reduction, `ModRing` and `ModWord` operations and inverses, `crt`, `jacobi`, `primality`, `factor` (product and labels), `perfect_power` |
 | `lang_lex` | The cas-lang lexer on arbitrary text (bytes read as lossy UTF-8): the tokens cover the text exactly, each lexes alone as one token of the same kind, every error token has its error, errors are ordered and on character boundaries; the values of number, string and superscript tokens and the names of identifiers never panic (number exponents are bounded) |
 | `lang_parse` | The cas-lang parser on arbitrary text: the tree's text is the input, every node's children cover it exactly and in order, errors are ordered, within the text and on character boundaries, and nesting beyond `MAX_DEPTH` stops cleanly instead of overflowing the stack |
+| `lang_lower` | Parsing and lowering of arbitrary text (seeded with the `lang_parse` corpus): lowering never panics, every diagnostic, fix and statement span lies within the text, and every lowered statement prints in full form |
 
 Inputs are decoded from the fuzzer's bytes (`src/lib.rs`): limbs mix boundary values (`0`,
 `u64::MAX`, `2^63`, low masks) with raw bytes, and lengths are weighted towards the algorithm

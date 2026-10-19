@@ -53,6 +53,12 @@ builtins! {
     SIN = "Sin" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     COS = "Cos" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     TAN = "Tan" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    SQRT = "Sqrt" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    FACTORIAL = "Factorial" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
+    ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
+    ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];
+    ELEMENTWISE_POWER = "ElementwisePower" [LISTABLE, PROTECTED];
     // Constants.
     PI = "Pi" [CONSTANT, PROTECTED];
     E = "E" [CONSTANT, PROTECTED];
@@ -62,12 +68,48 @@ builtins! {
     I = "I" [CONSTANT, PROTECTED];
     // Numbers: the head of a complex number in full form, `Complex[re, im]`.
     COMPLEX = "Complex" [PROTECTED];
+    // Logical values, infinities and nothing (CAS-DOC-4 §6.1, R14).
+    TRUE = "True" [PROTECTED];
+    FALSE = "False" [PROTECTED];
+    NULL = "Null" [PROTECTED];
+    INDETERMINATE = "Indeterminate" [PROTECTED];
+    INFINITY = "Infinity" [PROTECTED];
+    COMPLEX_INFINITY = "ComplexInfinity" [PROTECTED];
+    DIRECTED_INFINITY = "DirectedInfinity" [PROTECTED];
+    // Equations, comparisons and logic (CAS-DOC-7 §9). `Equation` is the
+    // language's `=`, which never becomes a boolean; `Equal` is `==`.
+    EQUATION = "Equation" [PROTECTED];
+    EQUAL = "Equal" [PROTECTED];
+    UNEQUAL = "Unequal" [PROTECTED];
+    LESS = "Less" [PROTECTED];
+    LESS_EQUAL = "LessEqual" [PROTECTED];
+    GREATER = "Greater" [PROTECTED];
+    GREATER_EQUAL = "GreaterEqual" [PROTECTED];
+    ELEMENT = "Element" [PROTECTED];
+    AND = "And" [FLAT, ONE_IDENTITY, HOLD_ALL, PROTECTED];
+    OR = "Or" [FLAT, ONE_IDENTITY, HOLD_ALL, PROTECTED];
+    NOT = "Not" [PROTECTED];
+    IF = "If" [HOLD_REST, PROTECTED];
     // Structure.
     LIST = "List" [PROTECTED];
     SEQUENCE = "Sequence" [PROTECTED];
     HOLD = "Hold" [HOLD_ALL, PROTECTED];
     RULE = "Rule" [PROTECTED];
     RULE_DELAYED = "RuleDelayed" [HOLD_REST, PROTECTED];
+    FUNCTION = "Function" [HOLD_ALL, PROTECTED];
+    RANGE = "Range" [PROTECTED];
+    FINITE_SET = "FiniteSet" [ORDERLESS, PROTECTED];
+    // Indexing from 0, and a copy with an element replaced (CAS-DOC-7 §7).
+    AT = "At" [PROTECTED];
+    REPLACE_AT = "ReplaceAt" [PROTECTED];
+    REPLACE_ALL = "ReplaceAll" [PROTECTED];
+    // Statements: the session runs them, evaluation leaves them alone
+    // (CAS-DOC-4 R1, CAS-DOC-7 §4).
+    SET = "Set" [HOLD_FIRST, PROTECTED];
+    SET_DELAYED = "SetDelayed" [HOLD_ALL, PROTECTED];
+    UP_SET_DELAYED = "UpSetDelayed" [HOLD_ALL, PROTECTED];
+    ASSUME = "Assume" [HOLD_ALL, PROTECTED];
+    CLEAR = "Clear" [HOLD_ALL, PROTECTED];
     // Patterns.
     BLANK = "Blank" [PROTECTED];
     BLANK_SEQUENCE = "BlankSequence" [PROTECTED];
@@ -78,6 +120,16 @@ builtins! {
     CONDITION = "Condition" [HOLD_ALL, PROTECTED];
     PATTERN_TEST = "PatternTest" [HOLD_REST, PROTECTED];
     HOLD_PATTERN = "HoldPattern" [HOLD_ALL, PROTECTED];
+    // Type tests of pattern variables, `n :: integer` (CAS-DOC-7 §6).
+    INTEGER_Q = "IntegerQ" [PROTECTED];
+    RATIONAL_Q = "RationalQ" [PROTECTED];
+    NUMBER_Q = "NumberQ" [PROTECTED];
+    REAL_Q = "RealQ" [PROTECTED];
+    COMPLEX_Q = "ComplexQ" [PROTECTED];
+    LIST_Q = "ListQ" [PROTECTED];
+    MATRIX_Q = "MatrixQ" [PROTECTED];
+    STRING_Q = "StringQ" [PROTECTED];
+    SYMBOL_Q = "SymbolQ" [PROTECTED];
 }
 
 pub(crate) fn get(s: Symbol) -> Option<&'static Builtin> {
