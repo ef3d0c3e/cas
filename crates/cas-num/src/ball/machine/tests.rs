@@ -506,6 +506,369 @@ mod kernels_against_mpfr {
         }
     }
 
+    fn dd_value(d: Dd) -> MpFloat {
+        value(d)
+    }
+
+    /// `|got - want| <= bound |want|` (or both 0).
+    fn within(got: Dd, want: &MpFloat, bound: f64) -> bool {
+        if want.is_zero() {
+            return got.hi == 0.0 && got.lo == 0.0;
+        }
+        rel(got, want) <= bound
+    }
+
+    /// `1 + side f 2^-k` for `f` in `[1, 2)`, `k` in `1..=52`: just above
+    /// (`side = 1`) or below (`-1`) 1, either sign for below.
+    fn near_one(side: f64) -> impl Strategy<Value = f64> {
+        (1i32..=52, 1.0f64..2.0, any::<bool>()).prop_map(move |(k, f, neg)| {
+            let x = 1.0 + side * f * 2f64.powi(-k - 1);
+            if neg && side < 0.0 { -x } else { x }
+        })
+    }
+
+    /// A double with an exponent in `lo..=hi` and either sign.
+    fn spread_double(lo: i32, hi: i32) -> impl Strategy<Value = f64> {
+        (1.0f64..2.0, lo..=hi, any::<bool>()).prop_map(|(f, e, neg)| {
+            let x = f * 2f64.powi(e);
+            if neg { -x } else { x }
+        })
+    }
+
+    proptest! {
+        #[test]
+        fn hyperbolic_within_budget(x in prop_oneof![spread_double(-320, 9), -1.0f64..1.0, -45.0f64..45.0]) {
+            if x.abs() <= 708.0 {
+                let (s, c) = kernels::sinh_cosh(x).unwrap();
+                prop_assert!(within(s, &mp(x).sinh(), CHECK), "sinh({}) off by {:e}", x, rel(s, &mp(x).sinh()));
+                prop_assert!(within(c, &mp(x).cosh(), CHECK), "cosh({}) off by {:e}", x, rel(c, &mp(x).cosh()));
+            } else {
+                prop_assert!(kernels::sinh_cosh(x).is_none());
+            }
+            let t = kernels::tanh(x).unwrap();
+            prop_assert!(within(t, &mp(x).tanh(), CHECK), "tanh({}) off by {:e}", x, rel(t, &mp(x).tanh()));
+            let a = kernels::asinh(x).unwrap();
+            prop_assert!(within(a, &mp(x).asinh(), CHECK), "asinh({}) off by {:e}", x, rel(a, &mp(x).asinh()));
+        }
+
+        #[test]
+        fn inverse_hyperbolic_within_budget(
+            x in prop_oneof![spread_double(-320, 1020), 1.0f64..1.1, 1.0f64..3.0, near_one(1.0)],
+            t in prop_oneof![spread_double(-320, -1), -1.0f64..1.0, 0.9f64..1.0, near_one(-1.0)],
+        ) {
+            let x = x.abs().max(1.0);
+            let a = kernels::acosh(x).unwrap();
+            prop_assert!(within(a, &mp(x).acosh(), CHECK), "acosh({}) off by {:e}", x, rel(a, &mp(x).acosh()));
+            if t.abs() < 1.0 {
+                let a = kernels::atanh(t).unwrap();
+                prop_assert!(within(a, &mp(t).atanh(), CHECK), "atanh({}) off by {:e}", t, rel(a, &mp(t).atanh()));
+            }
+        }
+
+        #[test]
+        fn sin_cos_pi_within_budget(x in prop_oneof![-4.0f64..4.0, -1e15f64..1e15, spread_double(-890, 60)]) {
+            let Some((s, c, exact)) = kernels::sin_cos_pi(x) else {
+                prop_assert!(x.abs() < 1e-200);
+                return Ok(());
+            };
+            // sin(π x) from x mod 2, exactly reduced (rug's own reduction of
+            // π x would need π to the exponent of x).
+            let r = MpFloat::with_val(400, x) % 2u32;
+            let px = r * MpFloat::with_val(400, rug::float::Constant::Pi);
+            let (ws, wc) = (px.clone().sin(), px.cos());
+            if exact {
+                prop_assert!(s.lo == 0.0 && c.lo == 0.0 && (s.hi == 0.0 || c.hi == 0.0));
+                prop_assert!((dd_value(s) - &ws).abs() < 1e-100 && (dd_value(c) - &wc).abs() < 1e-100);
+            } else {
+                prop_assert!(within(s, &ws, CHECK), "sin_pi({}) off by {:e}", x, rel(s, &ws));
+                prop_assert!(within(c, &wc, CHECK), "cos_pi({}) off by {:e}", x, rel(c, &wc));
+            }
+        }
+
+        #[test]
+        fn pow_and_root_within_budget(x in spread_double(-1000, 1000), y in prop_oneof![-3.0f64..3.0, -300.0f64..300.0, spread_double(-60, 3)], n in 3u64..40) {
+            let x = x.abs();
+            if let Some((v, err, l)) = kernels::pow(x, y) {
+                let want = rug::ops::Pow::pow(MpFloat::with_val(400, x), MpFloat::with_val(400, y));
+                prop_assert!(rel(v, &want) <= err / 4.0, "pow({}, {}) off by {:e}, claim {:e}", x, y, rel(v, &want), err);
+                prop_assert!(within(l, &mp(x).ln(), CHECK));
+            }
+            let (v, err) = kernels::root(x, n).unwrap();
+            let want = MpFloat::with_val(400, x).root(u32::try_from(n).unwrap());
+            prop_assert!(rel(v, &want) <= err / 4.0, "root({}, {}) off by {:e}", x, n, rel(v, &want));
+        }
+
+        #[test]
+        fn dd_arguments_within_budget(x in -600.0f64..700.0, lo in -1.0f64..1.0, v in spread_double(-1000, 1000), u in -0.29f64..0.41, ul in -1.0f64..1.0) {
+            // exp of a double-double, log of one, log1p of one.
+            let m = Dd::sum(x, lo * x.abs() * 2f64.powi(-54));
+            let e = kernels::exp_dd(m).unwrap();
+            let want = dd_value(m).exp();
+            prop_assert!(within(e, &want, CHECK), "exp_dd({:?}) off by {:e}", m, rel(e, &want));
+            let w = Dd::sum(v.abs(), lo * v.abs() * 2f64.powi(-54));
+            let want = dd_value(w).ln();
+            if want.clone().abs() >= 0.34 {
+                let l = kernels::log_dd(w).unwrap();
+                prop_assert!(within(l, &want, CHECK), "log_dd({:?}) off by {:e}", w, rel(l, &want));
+            }
+            let ud = Dd::sum(u, ul * u.abs() * 2f64.powi(-54));
+            let want = dd_value(ud).ln_1p();
+            prop_assert!(within(kernels::log1p_dd(ud), &want, CHECK), "log1p_dd({:?})", ud);
+        }
+
+        #[test]
+        fn new_functions_contain(m in prop_oneof![-30.0f64..30.0, -1e-3f64..1e-3, 0.9f64..1.1], k in 0i32..60, z in any::<bool>(), y in -3.0f64..3.0) {
+            let r = if z { 0.0 } else { m.abs() * 2f64.powi(-k - 20) };
+            let Some(b) = MachineBall::new(m, r) else { return Ok(()) };
+            let fs: [F; 8] = [
+                ("sinh", MachineBall::sinh, MpFloat::sinh),
+                ("cosh", MachineBall::cosh, MpFloat::cosh),
+                ("tanh", MachineBall::tanh, MpFloat::tanh),
+                ("asinh", MachineBall::asinh, MpFloat::asinh),
+                ("acosh", MachineBall::acosh, MpFloat::acosh),
+                ("atanh", MachineBall::atanh, MpFloat::atanh),
+                ("sin_pi", MachineBall::sin_pi, |x| (x % 2u32 * MpFloat::with_val(400, rug::float::Constant::Pi)).sin()),
+                ("cos_pi", MachineBall::cos_pi, |x| (x % 2u32 * MpFloat::with_val(400, rug::float::Constant::Pi)).cos()),
+            ];
+            let ends = [MpFloat::with_val(400, m) - r, MpFloat::with_val(400, m) + r];
+            let inside = |out: &MachineBall, want: &MpFloat| {
+                let lo = MpFloat::with_val(400, out.mid()) - out.rad();
+                let hi = MpFloat::with_val(400, out.mid()) + out.rad();
+                lo <= *want && *want <= hi
+            };
+            for (name, f, oracle) in fs {
+                let defined = |x: &MpFloat| match name {
+                    "acosh" => *x >= 1,
+                    "atanh" => x.clone().abs() < 1,
+                    _ => true,
+                };
+                let Some(out) = f(&b) else {
+                    prop_assert!(!ends.iter().all(defined), "{} of {:?} fell through", name, b);
+                    continue;
+                };
+                for end in &ends {
+                    prop_assert!(defined(end), "{}({:?}) = {:?} outside the domain", name, b, out);
+                    let want = oracle(end.clone());
+                    prop_assert!(inside(&out, &want), "{}({:?}) = {:?} misses {}", name, b, out, want);
+                }
+                // The 64-bit Ball result overlaps.
+                let fb = MachineBall::via_ball(&b, |x, p| match name {
+                    "sinh" => x.sinh(p), "cosh" => x.cosh(p), "tanh" => x.tanh(p),
+                    "asinh" => x.asinh(p), "acosh" => x.acosh(p), "atanh" => x.atanh(p),
+                    "sin_pi" => x.sin_pi(p), _ => x.cos_pi(p),
+                });
+                if let Some(fb) = fb {
+                    prop_assert!(out.overlaps(&fb), "{}({:?}) = {:?}, Ball {:?}", name, b, out, fb);
+                }
+                // Exact inputs: within a few ulps.
+                if r == 0.0 && out.mid() != 0.0 {
+                    prop_assert!(out.rad() <= 4.0 * f64::EPSILON * out.mid().abs(), "{} loose: {:?}", name, out);
+                }
+            }
+            // Two-argument functions: pow and atan2, the second ball from y.
+            let w = MachineBall::new(y, if z { 0.0 } else { y.abs() * 2f64.powi(-k - 20) }).unwrap();
+            let two_ends = [MpFloat::with_val(400, y) - w.rad(), MpFloat::with_val(400, y) + w.rad()];
+            if let Some(p) = b.pow_ball(&w) {
+                for x in &ends {
+                    for e in &two_ends {
+                        prop_assert!(*x >= 0 || e.is_integer(), "pow({:?}, {:?}) of a negative base", b, w);
+                        let want = MpFloat::with_val(400, rug::ops::Pow::pow(x, e));
+                        prop_assert!(inside(&p, &want), "pow({:?}, {:?}) = {:?} misses {}", b, w, p, want);
+                    }
+                }
+                let pb = b.via_ball(|x, q| x.pow_ball(&w.to_ball(), q));
+                if let Some(pb) = pb { prop_assert!(p.overlaps(&pb)); }
+            }
+            if let Some(a) = w.atan2(&b) {
+                for x in &ends {
+                    for e in &two_ends {
+                        if x.is_zero() && e.is_zero() { continue; }
+                        let want = MpFloat::with_val(400, e.atan2_ref(x));
+                        prop_assert!(inside(&a, &want), "atan2({:?}, {:?}) = {:?} misses {}", w, b, a, want);
+                    }
+                }
+            }
+            if let Some(c) = b.root(3) {
+                for x in &ends {
+                    let want = MpFloat::with_val(400, x.cbrt_ref());
+                    prop_assert!(inside(&c, &want), "root({:?}, 3) = {:?} misses {}", b, c, want);
+                }
+            }
+        }
+    }
+
+    fn x(v: f64) -> MachineBall {
+        MachineBall::exact(v).unwrap()
+    }
+
+    /// Whether the ball contains the MPFR value.
+    fn contains(b: &MachineBall, want: &MpFloat) -> bool {
+        let lo = MpFloat::with_val(400, b.mid()) - b.rad();
+        let hi = MpFloat::with_val(400, b.mid()) + b.rad();
+        lo <= *want && *want <= hi
+    }
+
+    #[test]
+    fn sin_cos_pi_edges() {
+        // sin_pi, cos_pi: exact at integers and half-integers of any size.
+        for k in [
+            0.0,
+            1.0,
+            -3.0,
+            4.0,
+            1e15,
+            -2f64.powi(60),
+            2f64.powi(53) + 2.0,
+        ] {
+            let sign = if (k % 2.0) == 0.0 { 1.0 } else { -1.0 };
+            assert_eq!(x(k).sin_pi(), Some(MachineBall::ZERO));
+            assert_eq!(x(k).cos_pi(), Some(x(sign)));
+            if k.abs() < 1e15 {
+                let h = k + 0.5;
+                assert_eq!(x(h).cos_pi(), Some(MachineBall::ZERO));
+                assert_eq!(x(h).sin_pi().map(|b| b.mid().abs()), Some(1.0));
+            }
+        }
+        // Next to integers: relative accuracy (sin_pi(3 + 2^-50) ≈ -π 2^-50).
+        let near = x(3.0 + 2f64.powi(-50)).sin_pi().unwrap();
+        assert!(
+            near.mid() < 0.0 && near.rad() <= 4.0 * f64::EPSILON * near.mid().abs(),
+            "{near:?}"
+        );
+    }
+
+    #[test]
+    fn hyperbolic_edges() {
+        // Hyperbolic ends: |m| = 708 by the kernel, 709.7 through Ball, 711 nowhere.
+        for m in [708.0, -708.0, 709.7, -709.7] {
+            let (s, c) = (x(m).sinh().unwrap(), x(m).cosh().unwrap());
+            assert!(
+                contains(&s, &mp(m).sinh()) && contains(&c, &mp(m).cosh()),
+                "{m}: {s:?} {c:?}"
+            );
+        }
+        assert_eq!(x(711.0).cosh(), None);
+        // The kernel itself up to 708: halving e^|m| by a two-product had
+        // overflowed in Veltkamp's split from about 690 (NaN, so the
+        // machine balls fell back to Ball there).
+        for m in [690.5, 701.250_882_609_474, 707.9, 708.0, -708.0] {
+            let (s, c) = kernels::sinh_cosh(m).unwrap();
+            assert!(
+                rel(s, &mp(m).sinh()) <= CHECK && rel(c, &mp(m).cosh()) <= CHECK,
+                "{m}"
+            );
+        }
+        for m in [40.0, -40.0, 1e300, -19.5, 2f64.powi(-1000)] {
+            let t = x(m).tanh().unwrap();
+            assert!(contains(&t, &mp(m).tanh()), "tanh({m}) = {t:?}");
+        }
+        // tanh far out: ±1 with a radius of an ulp, not of the input's.
+        let far = MachineBall::new(30.0, 2f64.powi(-40))
+            .unwrap()
+            .tanh()
+            .unwrap();
+        assert!(far.mid() == 1.0 && far.rad() <= 2f64.powi(-52), "{far:?}");
+    }
+
+    #[test]
+    fn inverse_hyperbolic_edges() {
+        for m in [
+            2f64.powi(-1000),
+            0.35,
+            2f64.powi(500),
+            2f64.powi(501),
+            f64::MAX,
+            -1e-5,
+        ] {
+            let a = x(m).asinh().unwrap();
+            assert!(contains(&a, &mp(m).asinh()), "asinh({m}) = {a:?}");
+        }
+        for m in [
+            1.0,
+            1.0 + f64::EPSILON,
+            1.06,
+            f64::from_bits(1.06f64.to_bits() + 1),
+            2f64.powi(501),
+            f64::MAX,
+        ] {
+            let a = x(m).acosh().unwrap();
+            assert!(contains(&a, &mp(m).acosh()), "acosh({m}) = {a:?}");
+        }
+        assert_eq!(x(1.0).acosh(), Some(MachineBall::ZERO));
+        assert_eq!(x(0.5).acosh(), None);
+        assert_eq!(MachineBall::new(1.0, 1e-10).unwrap().acosh(), None);
+        for m in [
+            1.0 - f64::EPSILON / 2.0,
+            -0.1716,
+            0.17161,
+            2f64.powi(-1000),
+            -0.99,
+        ] {
+            let a = x(m).atanh().unwrap();
+            assert!(contains(&a, &mp(m).atanh()), "atanh({m}) = {a:?}");
+        }
+        assert_eq!(x(1.0).atanh(), None);
+        assert_eq!(MachineBall::new(0.5, 0.5).unwrap().atanh(), None);
+    }
+
+    #[test]
+    fn pow_root_atan2_edges() {
+        // pow: exact powers, 0^y, a negative base, overflow through Ball.
+        assert_eq!(x(2.0).pow_ball(&x(10.0)), Some(x(1024.0)));
+        assert_eq!(x(4.0).pow_ball(&x(1.5)), Some(x(8.0)));
+        assert_eq!(x(-2.0).pow_ball(&x(3.0)), Some(x(-8.0)));
+        assert_eq!(x(0.0).pow_ball(&x(0.5)), Some(MachineBall::ZERO));
+        assert_eq!(x(0.0).pow_ball(&x(-0.5)), None);
+        assert_eq!(x(-2.0).pow_ball(&x(0.5)), None);
+        assert_eq!(x(10.0).pow_ball(&x(400.0)), None);
+        let p = x(0.7).pow_ball(&x(2.3)).unwrap();
+        assert!(contains(
+            &p,
+            &MpFloat::with_val(400, rug::ops::Pow::pow(mp(0.7), mp(2.3)))
+        ));
+        // root: perfect powers exact, odd roots of negatives, even ones None.
+        assert_eq!(x(8.0).root(3), Some(x(2.0)));
+        assert_eq!(x(-243.0).root(5), Some(x(-3.0)));
+        assert_eq!(x(1024.0).root(10), Some(x(2.0)));
+        assert_eq!(x(-16.0).root(4), None);
+        let across = MachineBall::new(0.0, 8.0).unwrap().root(3).unwrap();
+        assert!(across.contains(2.0) && across.contains(-2.0));
+        // atan2: the four quadrants, the axes, on and across the cut.
+        let pi = rug::Float::with_val(400, rug::float::Constant::Pi);
+        for (yy, xx) in [
+            (1.0, 2.0),
+            (2.0, -1.0),
+            (-1.0, -2.0),
+            (-2.0, 1.0),
+            (0.0, -1.0),
+            (1.0, 0.0),
+            (-1.0, 0.0),
+            (0.0, 3.0),
+            (1e-300, -1.0),
+        ] {
+            let a = x(yy).atan2(&x(xx)).unwrap();
+            assert!(
+                contains(&a, &MpFloat::with_val(400, mp(yy).atan2_ref(&mp(xx)))),
+                "atan2({yy}, {xx}) = {a:?}"
+            );
+            assert!(
+                a.rad() <= 4.0 * f64::EPSILON * a.mid().abs().max(1e-300),
+                "atan2({yy}, {xx}) loose: {a:?}"
+            );
+        }
+        let cut = MachineBall::new(0.0, 1e-3)
+            .unwrap()
+            .atan2(&x(-1.0))
+            .unwrap();
+        assert!(contains(&cut, &pi) && contains(&cut, &MpFloat::with_val(400, -&pi)));
+        assert!(
+            MachineBall::ZERO
+                .atan2(&MachineBall::ZERO)
+                .unwrap()
+                .contains(3.0)
+        );
+    }
+
     #[test]
     fn hard_inputs_and_fallbacks() {
         let contains = |b: &MachineBall, want: &MpFloat| {

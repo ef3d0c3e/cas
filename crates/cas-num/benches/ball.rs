@@ -260,23 +260,57 @@ fn machine(c: &mut Criterion) {
     // Elementary functions: the double-double kernels, libm (no proven
     // bound, for scale) and the 64-bit Ball fallback they replace.
     let x = ball::MachineBall::new(0.7, 1e-12).expect("regular");
-    let funs: [(&str, Machine, Libm, Fallback); 4] = [
+    let funs: [(&str, Machine, Libm, Fallback); 11] = [
         ("exp", ball::MachineBall::exp, f64::exp, ball::Ball::exp),
         ("log", ball::MachineBall::log, f64::ln, ball::Ball::log),
         ("sin", ball::MachineBall::sin, f64::sin, ball::Ball::sin),
         ("atan", ball::MachineBall::atan, f64::atan, ball::Ball::atan),
+        // CAS-103; sin_pi's libm row is sin(π x), acosh's argument 1.7.
+        ("sinh", ball::MachineBall::sinh, f64::sinh, ball::Ball::sinh),
+        ("cosh", ball::MachineBall::cosh, f64::cosh, ball::Ball::cosh),
+        ("tanh", ball::MachineBall::tanh, f64::tanh, ball::Ball::tanh),
+        (
+            "asinh",
+            ball::MachineBall::asinh,
+            f64::asinh,
+            ball::Ball::asinh,
+        ),
+        (
+            "acosh",
+            ball::MachineBall::acosh,
+            f64::acosh,
+            ball::Ball::acosh,
+        ),
+        (
+            "atanh",
+            ball::MachineBall::atanh,
+            f64::atanh,
+            ball::Ball::atanh,
+        ),
+        (
+            "sin_pi",
+            ball::MachineBall::sin_pi,
+            |v| (v * std::f64::consts::PI).sin(),
+            ball::Ball::sin_pi,
+        ),
     ];
     for (name, ours, libm, fallback) in funs {
+        let (x, v) = if name == "acosh" {
+            (ball::MachineBall::new(1.7, 1e-12).expect("regular"), 1.7)
+        } else {
+            (x, 0.7)
+        };
         group.bench_function(BenchmarkId::new(name, "machine"), |bench| {
             bench.iter(|| ours(black_box(&x)));
         });
         group.bench_function(BenchmarkId::new(name, "libm"), |bench| {
-            bench.iter(|| libm(black_box(0.7)));
+            bench.iter(|| libm(black_box(v)));
         });
         group.bench_function(BenchmarkId::new(name, "via_ball"), |bench| {
             bench.iter(|| black_box(&x).via_ball(fallback));
         });
     }
+    machine_pairs(&mut group, &x);
     for name in ["add", "mul", "div", "sqrt"] {
         let ball_op = balls_op(name).expect("ball op");
         group.bench_function(BenchmarkId::new(name, "ball"), |bench| {
@@ -284,6 +318,46 @@ fn machine(c: &mut Criterion) {
         });
     }
     group.finish();
+}
+
+/// The machine group's two-argument functions and roots (CAS-103):
+/// `0.7^2.3`, `atan2(0.7, -1.3)`, `0.7^(1/3)`.
+fn machine_pairs(
+    group: &mut criterion::BenchmarkGroup<'_, criterion::measurement::WallTime>,
+    x: &ball::MachineBall,
+) {
+    let (e, w) = (
+        ball::MachineBall::new(2.3, 1e-12).expect("regular"),
+        ball::MachineBall::new(-1.3, 1e-12).expect("regular"),
+    );
+    let (be, bw) = (e.to_ball(), w.to_ball());
+    group.bench_function(BenchmarkId::new("pow", "machine"), |bench| {
+        bench.iter(|| black_box(&x).pow_ball(black_box(&e)));
+    });
+    group.bench_function(BenchmarkId::new("pow", "libm"), |bench| {
+        bench.iter(|| black_box(0.7f64).powf(black_box(2.3)));
+    });
+    group.bench_function(BenchmarkId::new("pow", "via_ball"), |bench| {
+        bench.iter(|| black_box(&x).via_ball(|b, p| b.pow_ball(&be, p)));
+    });
+    group.bench_function(BenchmarkId::new("atan2", "machine"), |bench| {
+        bench.iter(|| black_box(&x).atan2(black_box(&w)));
+    });
+    group.bench_function(BenchmarkId::new("atan2", "libm"), |bench| {
+        bench.iter(|| black_box(0.7f64).atan2(black_box(-1.3)));
+    });
+    group.bench_function(BenchmarkId::new("atan2", "via_ball"), |bench| {
+        bench.iter(|| black_box(&x).via_ball(|b, p| b.atan2(&bw, p)));
+    });
+    group.bench_function(BenchmarkId::new("root3", "machine"), |bench| {
+        bench.iter(|| black_box(&x).root(3));
+    });
+    group.bench_function(BenchmarkId::new("root3", "libm"), |bench| {
+        bench.iter(|| black_box(0.7f64).cbrt());
+    });
+    group.bench_function(BenchmarkId::new("root3", "via_ball"), |bench| {
+        bench.iter(|| black_box(&x).via_ball(|b, p| b.root(3, p)));
+    });
 }
 
 /// The same value as our float, through its integer mantissa and exponent.

@@ -6,3 +6,4 @@
 # everyone who runs the test benefits from these saved cases.
 cc 331af29b60e950619595bfb9d188fa7c8e8f2ca53affd13aba618f0aa3a47e8a # shrinks to x = -690.443213953563
 cc 50965bf9c9e27eff7df54cf8783352553a89dd96614c27f289cbc0859845ac98 # shrinks to (a, b) = (MachineBall { mid: 1.7976931348623157e308, rad: 0.0 }, MachineBall { mid: 5.6041107782595194e17, rad: 0.0 })
+cc 486409c9ebb157fb4576419315c0f2a1cd02d44ea6b09d9ee4d1f596270cebff # shrinks to x = 701.250882609474

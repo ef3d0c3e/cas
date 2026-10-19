@@ -8,7 +8,8 @@
 //! two-product. With `u = 2^-53`, their proved relative error bounds are
 //! `3u²/(1 - 4u)` for [`Dd::add`] (Alg. 6), `1.5u² + 4u³` for [`Dd::mul_f64`]
 //! (Alg. 7), `7u²` for [`Dd::mul`] (Alg. 10) and `15u² + 56u³` for
-//! [`Dd::div`] (Alg. 17): all below [`OP_ERR`] `= 2^-102 = 16u²`, the one
+//! [`Dd::div`] (Alg. 17); [`Dd::sqrt`], one Newton step, is within `6u²`
+//! (proved next to it). All are below [`OP_ERR`] `= 2^-102 = 16u²`, the one
 //! bound the kernels use.
 //!
 //! The two-product is exact while nothing overflows or underflows: inputs
@@ -145,6 +146,27 @@ impl Dd {
         Dd { hi, lo }
     }
 
+    /// `√self` for `self > 0` (not in JMP), one Newton step from the
+    /// correctly rounded `s = √hi`: `√self = s + r / (2s) - r^2 / (8 s^3) +
+    /// …`, `r = self - s^2`.
+    ///
+    /// With `s = √hi (1 + ε)`, `|ε| <= u`: `|hi - s^2| <= 2.0001 u hi` and
+    /// `|r| <= 3.0002 u hi`. `p = fl(s^2)` is within a factor 2 of `hi`, so
+    /// `hi - p` is exact (Sterbenz); the two sums after it round by at most
+    /// `2.0001 u^2 hi` and `3.0002 u^2 hi`, which the division by `2s` turns
+    /// into `2.6 u^2 √hi`; `r / (2s)` itself rounds by `u |r| / (2s) <= 1.6
+    /// u^2 √hi`; the dropped terms are at most `s x^2 (1 + |x|) / 8 <= 1.2
+    /// u^2 √hi` for `x = r / s^2`, `|x| <= 3.0003 u`. In all below `5.4 u^2
+    /// √hi <= 6 u^2 √self`, under [`OP_ERR`].
+    #[inline]
+    pub(super) fn sqrt(self) -> Dd {
+        let s = self.hi.sqrt();
+        let (p, e) = two_prod(s, s);
+        let r = ((self.hi - p) - e) + self.lo;
+        let (hi, lo) = fast_two_sum(s, r / (2.0 * s));
+        Dd { hi, lo }
+    }
+
     /// `self × 2^k`, exactly while the result stays normal.
     #[inline]
     pub(super) fn mul_pow2(self, k: i32) -> Dd {
@@ -212,6 +234,9 @@ mod tests {
             prop_assert!(rel_err(x.mul(y), &prod) <= OP_ERR, "mul");
             let quo = MpFloat::with_val(400, &xe / &ye);
             prop_assert!(rel_err(x.div(y), &quo) <= OP_ERR, "div");
+            let ax = Dd { hi: x.hi.abs(), lo: x.lo * x.hi.signum() };
+            let root = MpFloat::with_val(400, exact(ax).sqrt_ref());
+            prop_assert!(rel_err(ax.sqrt(), &root) <= OP_ERR / 2.0, "sqrt");
             let g = if f == 0.0 { 1.0 } else { f.abs().max(1e-300) * f.signum() * 1e-200 };
             let pf = MpFloat::with_val(400, &xe * g);
             if !pf.is_zero() {

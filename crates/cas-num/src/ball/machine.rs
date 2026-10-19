@@ -572,15 +572,22 @@ impl MachineBall {
     /// |v|` (`|f - v| <= KERNEL_ERR |f|` gives `|f - v| <= KERNEL_ERR |v| /
     /// (1 - KERNEL_ERR)`), and the spread from `spread(|v| bound)`.
     fn from_kernel(v: dd::Dd, spread: impl FnOnce(f64) -> f64) -> Option<MachineBall> {
+        MachineBall::from_kernel_err(v, kernels::KERNEL_ERR, spread)
+    }
+
+    /// [`MachineBall::from_kernel`] for a kernel within `err <= 1/2`
+    /// relative.
+    fn from_kernel_err(
+        v: dd::Dd,
+        err: f64,
+        spread: impl FnOnce(f64) -> f64,
+    ) -> Option<MachineBall> {
         let mid = v.to_f64();
         if !mid.is_finite() {
             return None;
         }
-        // hi - mid is exact (Sterbenz); the sum with lo rounds once.
-        let d = (v.hi - mid) + v.lo;
-        let round = up(d.abs(), d == 0.0);
-        let size = add_up(mid.abs(), round);
-        let kernel = mul_up(size, 2.0 * kernels::KERNEL_ERR);
+        let (round, size) = kernel_size(v, mid);
+        let kernel = mul_up(size, 2.0 * err);
         let rad = add_up(add_up(round, kernel), spread(size));
         MachineBall::finish(mid, 0.0, rad)
     }
@@ -610,6 +617,276 @@ impl MachineBall {
         self.via_ball(Ball::acos)
     }
 
+    /// `sinh`: the kernel, spread `r cosh(|m| + r) <= r C (1 + 2r)` for `r
+    /// <= 2^-20` (`C` the kernel's `cosh m` from above, `cosh(a + r) <=
+    /// cosh(a) e^r`); `Ball` beyond `|m| = 708` or for wider balls.
+    #[must_use]
+    pub fn sinh(&self) -> Option<MachineBall> {
+        let fast = || {
+            let (s, c) = kernels::sinh_cosh(self.mid)?;
+            let r = self.small_rad()?;
+            let slope = mul_up(kernel_bounds(c).1, add_up(1.0, 2.0 * r));
+            MachineBall::from_kernel(s, |_| mul_up(r, slope))
+        };
+        fast().or_else(|| self.via_ball(Ball::sinh))
+    }
+
+    /// `cosh`: the kernel, spread `r (S + r C (1 + 2r))` for `r <= 2^-20`:
+    /// on the ball `|sinh| <= sinh |m| + r cosh(|m| + r)`, with the kernel's
+    /// `S`, `C` from above.
+    #[must_use]
+    pub fn cosh(&self) -> Option<MachineBall> {
+        let fast = || {
+            let (s, c) = kernels::sinh_cosh(self.mid)?;
+            let r = self.small_rad()?;
+            let far = mul_up(r, mul_up(kernel_bounds(c).1, add_up(1.0, 2.0 * r)));
+            let slope = add_up(kernel_bounds(s).1, far);
+            MachineBall::from_kernel(c, |_| mul_up(r, slope))
+        };
+        fast().or_else(|| self.via_ball(Ball::cosh))
+    }
+
+    /// `tanh`: the kernel, spread `r (1 - t^2)` for `t = T - r` (or 0), `T`
+    /// the kernel's `|tanh m|` from below: `tanh' = 1 - tanh^2` falls with
+    /// `|x|`, and `|tanh| >= T - r` on the ball.
+    #[must_use]
+    pub fn tanh(&self) -> Option<MachineBall> {
+        let fast = || {
+            let v = kernels::tanh(self.mid)?;
+            let r = self.rad;
+            let t = down(kernel_bounds(v).0 - r, false);
+            let slope = up(1.0 - mul_down(t, t), false).min(1.0);
+            MachineBall::from_kernel(v, |_| mul_up(r, slope))
+        };
+        fast().or_else(|| self.via_ball(Ball::tanh))
+    }
+
+    /// `asinh`: the kernel, spread `r / max(1, |m| - r)`, as `asinh' = 1 /
+    /// √(1 + x^2)`.
+    #[must_use]
+    pub fn asinh(&self) -> Option<MachineBall> {
+        let fast = || {
+            let v = kernels::asinh(self.mid)?;
+            let r = self.rad;
+            let den = down(self.mid.abs() - r, r == 0.0).max(1.0);
+            MachineBall::from_kernel(v, |_| div_up(r, den))
+        };
+        fast().or_else(|| self.via_ball(Ball::asinh))
+    }
+
+    /// `acosh`: the kernel, spread `r / (√(m - r - 1) √(m - r + 1))` from
+    /// lower bounds; `Ball` when the ball reaches 1 (where `acosh'` is
+    /// unbounded), `None` unless it lies in `x >= 1`.
+    #[must_use]
+    pub fn acosh(&self) -> Option<MachineBall> {
+        let fast = || {
+            let v = kernels::acosh(self.mid)?;
+            let r = self.rad;
+            if r == 0.0 {
+                return MachineBall::from_kernel(v, |_| 0.0);
+            }
+            let lo = down(self.mid - r, false);
+            let gap = down(lo - 1.0, false);
+            let den = mul_down(
+                down(gap.sqrt(), false),
+                down(add_down(lo, 1.0).sqrt(), false),
+            );
+            if den == 0.0 {
+                return None;
+            }
+            MachineBall::from_kernel(v, |_| div_up(r, den))
+        };
+        fast().or_else(|| self.via_ball(Ball::acosh))
+    }
+
+    /// `atanh`: the kernel, spread `r / (1 - h)` for `h = |m| + r` from
+    /// above (`atanh' = 1 / ((1 - x)(1 + x))`); `Ball` when `h` is not
+    /// below 1, `None` unless the ball lies in `(-1, 1)`.
+    #[must_use]
+    pub fn atanh(&self) -> Option<MachineBall> {
+        let fast = || {
+            let v = kernels::atanh(self.mid)?;
+            let r = self.rad;
+            let gap = down(1.0 - add_up(self.mid.abs(), r), false);
+            if gap == 0.0 {
+                return None;
+            }
+            MachineBall::from_kernel(v, |_| div_up(r, gap))
+        };
+        fast().or_else(|| self.via_ball(Ball::atanh))
+    }
+
+    /// `(sin(π x), cos(π x))`: the kernel, exact at integers and
+    /// half-integers; spreads `π r min(1, C + π r)` for the sine and `π r
+    /// min(1, S + π r)` for the cosine (`|sin(π (m + δ)) - sin(π m)| <= π |δ|
+    /// max |cos(π x)|`, and `|cos(π x)| <= |cos(π m)| + π r` on the ball),
+    /// with the kernel's `C`, `S` from above.
+    #[must_use]
+    pub fn sin_cos_pi(&self) -> Option<(MachineBall, MachineBall)> {
+        let fast = || {
+            let (s, c, exact) = kernels::sin_cos_pi(self.mid)?;
+            let pr = mul_up(PI_UP, self.rad);
+            let spread = |other: dd::Dd| mul_up(pr, add_up(kernel_bounds(other).1, pr).min(1.0));
+            let (ss, sc) = (spread(c), spread(s));
+            if exact {
+                // 0 and ±1, exactly.
+                return Some((
+                    MachineBall::finish(s.hi, 0.0, ss)?,
+                    MachineBall::finish(c.hi, 0.0, sc)?,
+                ));
+            }
+            Some((
+                MachineBall::from_kernel(s, |_| ss)?,
+                MachineBall::from_kernel(c, |_| sc)?,
+            ))
+        };
+        fast().or_else(|| {
+            let b = self.to_ball();
+            Some((
+                MachineBall::from_ball(&b.sin_pi(64))?,
+                MachineBall::from_ball(&b.cos_pi(64))?,
+            ))
+        })
+    }
+
+    /// `sin(π x)`, as [`MachineBall::sin_cos_pi`].
+    #[must_use]
+    pub fn sin_pi(&self) -> Option<MachineBall> {
+        self.sin_cos_pi().map(|(s, _)| s)
+    }
+
+    /// `cos(π x)`, as [`MachineBall::sin_cos_pi`].
+    #[must_use]
+    pub fn cos_pi(&self) -> Option<MachineBall> {
+        self.sin_cos_pi().map(|(_, c)| c)
+    }
+
+    /// `atan2(self, x)`, the angle of the point `(x, self)` for every pair
+    /// of points of the balls, as [`Ball::atan2`]: `atan(y / x)` (`± π` on
+    /// the left) for `|y| < |x|`, `±π/2 - atan(x / y)` otherwise, `[0 ± π]`
+    /// across the cut on the negative `x` axis or when both balls contain 0.
+    #[must_use]
+    pub fn atan2(&self, x: &MachineBall) -> Option<MachineBall> {
+        let y = self;
+        let fast = || {
+            // π and π/2 within half an ulp.
+            let pi = MachineBall {
+                mid: std::f64::consts::PI,
+                rad: half_ulp(std::f64::consts::PI),
+            };
+            let hp = MachineBall {
+                mid: std::f64::consts::FRAC_PI_2,
+                rad: half_ulp(std::f64::consts::FRAC_PI_2),
+            };
+            let from_y = |up: bool| {
+                let h = if up { hp } else { hp.neg() };
+                h.sub(&x.div(y)?.atan()?)
+            };
+            match (x.sign(), y.sign()) {
+                (_, Some(side @ (Ordering::Greater | Ordering::Less)))
+                    if y.mid.abs() >= x.mid.abs() =>
+                {
+                    from_y(side == Ordering::Greater)
+                }
+                (Some(Ordering::Greater), _) => y.div(x)?.atan(),
+                (Some(Ordering::Less), Some(Ordering::Greater | Ordering::Equal)) => {
+                    y.div(x)?.atan()?.add(&pi)
+                }
+                (Some(Ordering::Less), Some(Ordering::Less)) => y.div(x)?.atan()?.sub(&pi),
+                (_, Some(Ordering::Greater)) => from_y(true),
+                (_, Some(Ordering::Less)) => from_y(false),
+                _ => MachineBall::new(0.0, PI_UP),
+            }
+        };
+        fast().or_else(|| MachineBall::from_ball(&y.to_ball().atan2(&x.to_ball(), 64)))
+    }
+
+    /// `x^y` for every `x` in `self` and `y` in `y`, as [`Ball::pow_ball`]:
+    /// an exact integer `y` is [`MachineBall::pow`], an exact half-integer
+    /// `n + 1/2` is `sqrt(x)^(2n + 1)`, an exact 0 base gives 0 for `y > 0`;
+    /// otherwise, for `x > 0`, the kernel `exp(y log x)` (within `(1 + |y log
+    /// x|) 2^-93`) and the spread `|v| δ (1 + 2δ)` for `δ = |n| λ + ρ_y (|log
+    /// m| + λ) <= 2^-20`, `λ = ρ_x / (m - ρ_x)` (on the balls `|log x - log
+    /// m| <= λ`, so `|y log x - n log m| <= δ`). `Ball` at 64 bits for the
+    /// rest; `None` where that is indeterminate.
+    #[must_use]
+    pub fn pow_ball(&self, y: &MachineBall) -> Option<MachineBall> {
+        let fast = || {
+            if let Some(n) = exact_i32(y.mid).filter(|_| y.is_exact()) {
+                return self.pow(n);
+            }
+            if let Some(k) = exact_i32(2.0 * y.mid).filter(|_| y.is_exact()) {
+                return self.sqrt()?.pow(k);
+            }
+            if self.mid == 0.0 && self.rad == 0.0 {
+                return (y.sign() == Some(Ordering::Greater)).then_some(MachineBall::ZERO);
+            }
+            let gap = down(self.mid - self.rad, self.rad == 0.0);
+            if gap == 0.0 {
+                return None;
+            }
+            let (v, err, l) = kernels::pow(self.mid, y.mid)?;
+            let lambda = div_up(self.rad, gap);
+            let log_m = kernel_bounds(l).1;
+            let delta = add_up(
+                mul_up(y.mid.abs(), lambda),
+                mul_up(y.rad, add_up(log_m, lambda)),
+            );
+            if delta > f64::from_bits((1023 - 20) << 52) {
+                return None;
+            }
+            let grow = mul_up(delta, add_up(1.0, 2.0 * delta));
+            MachineBall::from_kernel_err(v, err, |size| mul_up(size, grow))
+        };
+        fast().or_else(|| MachineBall::from_ball(&self.to_ball().pow_ball(&y.to_ball(), 64)))
+    }
+
+    /// The real `n`-th root of every point of the ball, as [`Ball::root`]:
+    /// for `x > 0` the kernel `exp(log(x) / n)` (exact for an exact perfect
+    /// power), spread `|v| r / (n (m - r))` (`(x^(1/n))'` falls with `x`);
+    /// odd roots of negative balls by symmetry; `Ball` across 0, `None` for
+    /// an even root of a ball reaching below 0.
+    ///
+    /// # Panics
+    ///
+    /// If `n` is 0.
+    #[must_use]
+    pub fn root(&self, n: u64) -> Option<MachineBall> {
+        assert!(n >= 1, "MachineBall::root: 0th root");
+        match (n, self.sign()) {
+            (1, _) => Some(*self),
+            (2, _) => self.sqrt(),
+            (_, Some(Ordering::Equal)) => Some(MachineBall::ZERO),
+            (_, Some(Ordering::Greater)) => self.root_positive(n),
+            (_, Some(Ordering::Less)) if n % 2 == 1 => self.neg().root_positive(n).map(|b| b.neg()),
+            _ => self.via_ball(|b, p| b.root(n, p)),
+        }
+    }
+
+    /// [`MachineBall::root`] of a ball in `x > 0`, `n >= 3`.
+    fn root_positive(&self, n: u64) -> Option<MachineBall> {
+        let fast = || {
+            let (v, err) = kernels::root(self.mid, n)?;
+            let r = self.rad;
+            if r == 0.0 {
+                // A perfect power: c^n = m exactly for the nearest double c.
+                let c = MachineBall::exact(v.to_f64())?;
+                let k = i32::try_from(n).ok();
+                if k.and_then(|k| c.pow(k)) == Some(*self) {
+                    return Some(c);
+                }
+                return MachineBall::from_kernel_err(v, err, |_| 0.0);
+            }
+            #[allow(clippy::cast_precision_loss, reason = "n < 2^53 (the kernel's range)")]
+            let den = mul_down(n as f64, down(self.mid - r, false));
+            if den == 0.0 {
+                return None;
+            }
+            MachineBall::from_kernel_err(v, err, |size| div_up(mul_up(size, r), den))
+        };
+        fast().or_else(|| self.via_ball(|b, p| b.root(n, p)))
+    }
+
     /// `f` evaluated on the ball through [`Ball`] at 64 bits, the fallback
     /// for functions without a machine kernel yet (CAS-88).
     #[must_use]
@@ -632,6 +909,43 @@ fn normal_up(x: f64) -> f64 {
 #[inline]
 fn add_down(a: f64, b: f64) -> f64 {
     down(a + b, a == 0.0 || b == 0.0)
+}
+
+/// `a × b` from below, for `a, b >= 0`.
+#[inline]
+fn mul_down(a: f64, b: f64) -> f64 {
+    down(a * b, a == 0.0 || b == 0.0)
+}
+
+/// For a kernel value `v` and its nearest double `mid`: `|v - mid|` and
+/// `|v|` from above (`hi - mid` is exact by Sterbenz, the sum with `lo`
+/// rounds once).
+fn kernel_size(v: dd::Dd, mid: f64) -> (f64, f64) {
+    let d = (v.hi - mid) + v.lo;
+    let round = up(d.abs(), d == 0.0);
+    (round, add_up(mid.abs(), round))
+}
+
+/// Bounds `lo <= |f| <= hi` on the true value `f` of a kernel value `v`
+/// (relative error at most `KERNEL_ERR`, so `|f - v| <= 2 KERNEL_ERR |v|`).
+fn kernel_bounds(v: dd::Dd) -> (f64, f64) {
+    let mid = v.to_f64();
+    let (round, size) = kernel_size(v, mid);
+    let err = mul_up(size, 2.0 * kernels::KERNEL_ERR);
+    let lo = down(down(mid.abs() - round, false) - err, false);
+    (lo, add_up(size, err))
+}
+
+/// π from above.
+const PI_UP: f64 = 3.141_592_653_589_793_6;
+
+/// `x` as an `i32` if it is an integer in range.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "checked to be an integer in range"
+)]
+fn exact_i32(x: f64) -> Option<i32> {
+    (x.trunc() == x && x.abs() <= f64::from(i32::MAX)).then_some(x as i32)
 }
 
 /// Knuth's two-sum: `(s, e)` with `s = fl(a + b)` and `s + e = a + b`
