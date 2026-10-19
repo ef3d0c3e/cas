@@ -43,6 +43,12 @@ impl Float {
             return Some((Float::ZERO, Ordering::Equal));
         }
         let (a, b) = (self.mant(), rhs.mant());
+        if let ([x], [y]) = (a, b)
+            && prec <= LIMB_BITS
+            && let Some(r) = div_1(self.neg != rhs.neg, *x, *y, &self.exp, &rhs.exp, prec, rnd)
+        {
+            return Some(r);
+        }
         let (ka, kb) = (a.len(), b.len());
         // q >= 2^(64 (ka + t - kb) - 1) has 64 (ka + t - kb) bits or more.
         let need = usize::try_from(prec.div_ceil(LIMB_BITS)).expect("precision fits") + 1;
@@ -93,6 +99,12 @@ impl Float {
         }
         if self.is_zero() {
             return Some((Float::ZERO, Ordering::Equal));
+        }
+        if let [m] = self.mant()
+            && prec <= LIMB_BITS
+            && let Some(r) = sqrt_1(*m, &self.exp, prec, rnd)
+        {
+            return Some(r);
         }
         // self = M 2^E with E = exp - 64 k; shift M left by s, with E - s even.
         let (m, e) = self.to_integer_exp();
@@ -344,6 +356,79 @@ fn candidates(q: &Float, prec: u64) -> impl Iterator<Item = Float> + '_ {
 fn approx_len(prec: u64, operand: usize) -> usize {
     let need = usize::try_from(prec.div_ceil(LIMB_BITS)).expect("precision fits") + 1;
     need.max(operand)
+}
+
+/// [`Float::checked_div_round`] of one-limb mantissas at `prec <= 64` bits,
+/// by two 2-by-1 divisions with a precomputed reciprocal (CAS-91); `None`
+/// when an exponent leaves `i64`.
+///
+/// Both top bits are set, so `a / b` lies in `(1/2, 2)`: `q2 = [a >= b]`,
+/// then `Q = q2 B^2 + floor((a - q2 b) B^2 / b)` with the remainder as the
+/// sticky bit. For `q2 = 0`, `Q >= B^2 / 2` is top-aligned in 128 bits; for
+/// `q2 = 1` it has 129, and its lowest bit, far below the rounding bit of
+/// `prec <= 64` bits, joins the sticky bit (it is only set with a non-zero
+/// remainder anyway: `Q b = a B^2` with `b < B` makes `Q` even).
+#[allow(clippy::too_many_arguments, reason = "two unpacked operands")]
+fn div_1(
+    neg: bool,
+    a: Limb,
+    b: Limb,
+    ea: &Integer,
+    eb: &Integer,
+    prec: u64,
+    rnd: Round,
+) -> Option<(Float, Ordering)> {
+    let e = ea.to_i64()?.checked_sub(eb.to_i64()?)?;
+    let v = kernel::div::reciprocal_2by1(b);
+    let (q2, r) = if a >= b { (true, a - b) } else { (false, a) };
+    let (q1, r) = kernel::div::div_2by1(r, 0, b, v);
+    let (q0, r) = kernel::div::div_2by1(r, 0, b, v);
+    let q = (u128::from(q1) << Limb::BITS) | u128::from(q0);
+    // a / b = Q / B^2 plus the remainder, times 2^(ea - eb).
+    if q2 {
+        let p = (1 << 127) | (q >> 1);
+        super::arith::finish_2(neg, p, r != 0 || q & 1 == 1, e.checked_add(1)?, prec, rnd)
+    } else {
+        super::arith::finish_2(neg, q, r != 0, e, prec, rnd)
+    }
+}
+
+/// [`Float::checked_sqrt_round`] of a positive one-limb mantissa `m` at
+/// `prec <= 64` bits, through `u128` (CAS-91); `None` when the exponent
+/// leaves `i64`.
+///
+/// `x = m 2^E` with `E = exp - 64`. `N = m 2^s` for the least `s` with `E - s`
+/// even and `N` of at least `2 prec + 1` bits, so that `R = floor(sqrt(N))`
+/// has a rounding bit; `N` has at most 130 bits. With `N = 4 N1 + n0` (`N1 <
+/// 2^128`) and `r1 = isqrt(N1)`, `4 r1^2 <= N < 4 (r1 + 1)^2` puts `R` at
+/// `2 r1` or `2 r1 + 1`, the latter iff `(2 r1 + 1)^2 <= N`, that is `t = 4
+/// (N1 - r1^2) + n0 >= 4 r1 + 1`. The remainder `N - R^2` is `t`, less `4 r1 +
+/// 1` in that case, and is the sticky bit.
+fn sqrt_1(m: Limb, exp: &Integer, prec: u64, rnd: Round) -> Option<(Float, Ordering)> {
+    let e = exp.to_i64()?.checked_sub(64)?;
+    let mut s = i64::try_from((2 * prec + 1).saturating_sub(LIMB_BITS)).ok()?;
+    if e.checked_sub(s)?.rem_euclid(2) == 1 {
+        s += 1;
+    }
+    let s = u32::try_from(s).ok()?;
+    debug_assert!(s <= 66);
+    let wide = u128::from(m);
+    let (n1, n0) = if s >= 2 {
+        (wide << (s - 2), 0)
+    } else {
+        (wide >> (2 - s), (wide << s) & 3)
+    };
+    let r1 = n1.isqrt();
+    let t = 4 * (n1 - r1 * r1) + n0;
+    let (r, rem) = if t > 4 * r1 {
+        (2 * r1 + 1, t - (4 * r1 + 1))
+    } else {
+        (2 * r1, t)
+    };
+    // sqrt(x) = sqrt(N) 2^h; R has 128 - lz bits.
+    let h = (e - i64::from(s)) / 2;
+    let lz = r.leading_zeros();
+    super::arith::finish_2(false, r << lz, rem != 0, h + 128 - i64::from(lz), prec, rnd)
 }
 
 fn is_odd(x: &Integer) -> bool {

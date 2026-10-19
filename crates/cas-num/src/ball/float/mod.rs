@@ -23,6 +23,7 @@ mod convert;
 mod divsqrt;
 mod round;
 mod sign;
+mod small;
 
 #[cfg(test)]
 mod tests;

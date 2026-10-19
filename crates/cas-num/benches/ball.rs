@@ -2,7 +2,8 @@
 //! `rug::Float`), CAS-DOC-5 §11.
 //!
 //! Every group times the MPFR baseline as `op/mpfr/bits` next to ours,
-//! `op/ours/bits` (correctly rounded, toward zero) and, for division and
+//! `op/ours/bits` (correctly rounded, toward zero), for addition and
+//! multiplication `op/into/bits` (the same into a reused destination), and, for division and
 //! square root, `op/approx/bits` (the midpoint entries), and `op/ball/bits`
 //! (balls with a radius of about 2^-20 relative), on the same inputs.
 //! Precisions sweep 64, 128, 256 … bits up to `CAS_BENCH_MAX_BITS` (default
@@ -190,6 +191,13 @@ fn arithmetic(c: &mut Criterion) {
                     bench.iter(|| ball_op(black_box(&bx), black_box(&by), u64::from(prec)));
                 });
             }
+            if let Some(into) = into_op(name) {
+                // Into a destination reused across iterations, as MPFR's row.
+                let mut r = ball::Float::ZERO;
+                group.bench_function(BenchmarkId::new("into", prec), |bench| {
+                    bench.iter(|| into(&mut r, black_box(&x), black_box(&y), u64::from(prec)));
+                });
+            }
             if let Some(approx) = approx {
                 group.bench_function(BenchmarkId::new("approx", prec), |bench| {
                     bench.iter(|| approx(black_box(&x), black_box(&y), u64::from(prec)));
@@ -202,6 +210,18 @@ fn arithmetic(c: &mut Criterion) {
         }
         group.finish();
     }
+}
+
+/// A rounded operation into a destination, returning the ternary value.
+type IntoOp = fn(&mut ball::Float, &ball::Float, &ball::Float, u64) -> std::cmp::Ordering;
+
+/// The destination form of a group's rounded operation (CAS-91).
+fn into_op(name: &str) -> Option<IntoOp> {
+    Some(match name {
+        "add" => |r, a, b, p| r.add_round_from(a, b, p, ball::Round::Down),
+        "mul" => |r, a, b, p| r.mul_round_from(a, b, p, ball::Round::Down),
+        _ => return None,
+    })
 }
 
 /// The ball operation of a group (target: within 2× of MPFR's plain float).

@@ -42,7 +42,13 @@ impl Round {
         clippy::fn_params_excessive_bools,
         reason = "the four bits rounding decides on"
     )]
-    fn increments(self, neg: bool, round_bit: bool, sticky: bool, last_bit: bool) -> bool {
+    pub(super) fn increments(
+        self,
+        neg: bool,
+        round_bit: bool,
+        sticky: bool,
+        last_bit: bool,
+    ) -> bool {
         let inexact = round_bit || sticky;
         match self {
             Round::Down => false,

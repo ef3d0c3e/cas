@@ -63,6 +63,32 @@ fn check_round(
     Ok(())
 }
 
+/// A `k`-limb mantissa (top bit set) of exponent `e`: all ones (shape 0),
+/// the top and lowest bits (1), the top bit (2), a top limb of ones over
+/// limbs holding only their top bit (3), or the random `limbs` (4).
+fn shaped(k: usize, shape: u8, limbs: [Limb; 4], neg: bool, e: i64) -> Float {
+    let top = 1 << (Limb::BITS - 1);
+    let mut m: Vec<Limb> = match shape {
+        0 => vec![Limb::MAX; k],
+        1 => {
+            let mut v = vec![0; k];
+            v[0] |= 1;
+            v
+        }
+        2 => vec![0; k],
+        3 => {
+            let mut v = vec![top; k];
+            v[k - 1] = Limb::MAX;
+            v
+        }
+        _ => limbs[..k].to_vec(),
+    };
+    m[k - 1] |= top;
+    let bits = i64::try_from(64 * k).unwrap();
+    let mag = Integer::from_parts(neg, crate::Natural::from_limbs(&m));
+    Float::from_integer_exp(&mag, &Integer::from(e - bits))
+}
+
 /// `x` scaled by `2^k`, which commutes with every operation tested here.
 fn scaled(x: &Float, k: &Integer) -> Float {
     x.mul_2exp(k)
@@ -138,6 +164,45 @@ proptest! {
         check_round(x.sub_round(&y, p, r), MpFloat::with_val_round(pp, &f - &g, rug_round(r)))?;
     }
 
+    /// The destination and assign forms (CAS-91) agree with the value
+    /// forms, whatever the destination held before (zero, short, long
+    /// enough to live on the heap, a boxed exponent).
+    #[test]
+    fn in_place_forms_agree(
+        a in dyadic(),
+        b in dyadic(),
+        old in prop_oneof![dyadic(), dyadic_with(12, -5..=5)],
+        huge_old: bool,
+        p in prec(),
+        r in round_mode(),
+    ) {
+        type Value = fn(&Float, &Float, u64, Round) -> (Float, Ordering);
+        type From = fn(&mut Float, &Float, &Float, u64, Round) -> Ordering;
+        type Assign = fn(&mut Float, &Float, u64, Round) -> Ordering;
+        let (x, y) = (a.to_ours(), b.to_ours());
+        let fresh = || {
+            let o = old.to_ours();
+            if huge_old { o.mul_2exp(&(Integer::from(i64::MAX) * Integer::from(4))) } else { o }
+        };
+        let forms: [(&str, Value, From, Assign); 3] = [
+            ("add", Float::add_round, Float::add_round_from, Float::add_round_assign),
+            ("sub", Float::sub_round, Float::sub_round_from, Float::sub_round_assign),
+            ("mul", Float::mul_round, Float::mul_round_from, Float::mul_round_assign),
+        ];
+        for (name, value, from, assign) in forms {
+            let want = value(&x, &y, p, r);
+            let mut d = fresh();
+            let ord = from(&mut d, &x, &y, p, r);
+            prop_assert_eq!(&d, &want.0, "{}_round_from", name);
+            prop_assert_eq!(ord, want.1, "{}_round_from ternary", name);
+            prop_assert!(d.is_canonical());
+            let mut z = x.clone();
+            let ord = assign(&mut z, &y, p, r);
+            prop_assert_eq!(&z, &want.0, "{}_round_assign", name);
+            prop_assert_eq!(ord, want.1, "{}_round_assign ternary", name);
+        }
+    }
+
     #[test]
     fn mul_matches_mpfr(
         a in dyadic_with(8, -(1 << 27)..=(1 << 27)),
@@ -179,6 +244,30 @@ proptest! {
             Float::from_integer_exp(&if neg { -m } else { m }, &Integer::from(e))
         };
         let (a, b) = (mk(x, nx, 0), mk(y, ny, -gap));
+        let (f, g) = (mp(&a.to_rug()), mp(&b.to_rug()));
+        let pp = u32::try_from(p).unwrap();
+        check_round(a.add_round(&b, p, r), MpFloat::with_val_round(pp, &f + &g, rug_round(r)))?;
+        check_round(a.sub_round(&b, p, r), MpFloat::with_val_round(pp, &f - &g, rug_round(r)))?;
+        check_round(b.sub_round(&a, p, r), MpFloat::with_val_round(pp, &g - &f, rug_round(r)))?;
+        check_round(a.mul_round(&b, p, r), MpFloat::with_val_round(pp, &f * &g, rug_round(r)))?;
+    }
+
+    /// Mantissas of one to four limbs in adversarial shapes at gaps around
+    /// every limb boundary, against MPFR: the fixed windows of `small`
+    /// (CAS-91), where bits start to fall off, a carry shifts the lowest bit
+    /// out, or a difference cancels.
+    #[test]
+    fn small_window_edges(
+        (kx, ky) in (1usize..=4, 1usize..=4),
+        (sx, sy) in (0u8..5, 0u8..5),
+        (rx, ry) in (any::<[Limb; 4]>(), any::<[Limb; 4]>()),
+        limb_gap in 0i64..=5,
+        bit_gap in prop_oneof![-2i64..=2, Just(63), Just(-63)],
+        (nx, ny) in (any::<bool>(), any::<bool>()),
+        p in prop_oneof![1u64..=256, Just(64), Just(127), Just(128), Just(129), Just(192), Just(256)],
+        r in round_mode(),
+    ) {
+        let (a, b) = (shaped(kx, sx, rx, nx, 0), shaped(ky, sy, ry, ny, -(64 * limb_gap + bit_gap)));
         let (f, g) = (mp(&a.to_rug()), mp(&b.to_rug()));
         let pp = u32::try_from(p).unwrap();
         check_round(a.add_round(&b, p, r), MpFloat::with_val_round(pp, &f + &g, rug_round(r)))?;
@@ -332,6 +421,22 @@ fn exponent_at_i64_edge() {
     assert!(*p.exponent() < &(-&edge * &Integer::from(2)) + &Integer::from(10));
     assert_eq!(z.to_f64(), 0.0);
     assert_eq!(y.to_f64(), f64::INFINITY);
+}
+
+/// The carry case of the fixed window whose only sticky information is the
+/// bit the carry shifts out: `x = 0.1…1 1000…0`, `y = 0.1000…0 0…01` 64
+/// bits lower, at 128 bits the sum is inexact by `y`'s lowest bit alone.
+#[test]
+fn small_window_carry_out() {
+    let x = shaped(2, 3, [0; 4], false, 0);
+    let y = shaped(2, 1, [0; 4], false, -64);
+    let (f, g) = (mp(&x.to_rug()), mp(&y.to_rug()));
+    for r in Round::ALL {
+        // `&f + &g` stays exact until rounded once, at 128 bits.
+        let want = MpFloat::with_val_round(128, &f + &g, rug_round(r));
+        check_round(x.add_round(&y, 128, r), want).unwrap();
+    }
+    assert_ne!(x.add_round(&y, 128, Round::Down).1, Ordering::Equal);
 }
 
 #[test]

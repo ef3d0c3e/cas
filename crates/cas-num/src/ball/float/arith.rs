@@ -3,7 +3,8 @@
 //! The general path aligns both operands in a buffer (on the stack up to 16
 //! limbs), adds or subtracts, and normalises and rounds in place. One-limb
 //! operands with `i64` exponents and precisions up to 64 bits take a `u128`
-//! path, rounded by a straight-line copy of the shared routine.
+//! path, rounded by a straight-line copy of the shared routine; up to four
+//! limbs, a fixed-size window ([`super::small`], CAS-91).
 #![allow(
     clippy::many_single_char_names,
     reason = "x, y, e, m, n, p, r: the operands and the textbook names"
@@ -12,7 +13,7 @@
 use std::cmp::Ordering;
 
 use super::round::round_1;
-use super::{EXACT_BITS_MAX, Float, LIMB_BITS, Round, with_limbs};
+use super::{EXACT_BITS_MAX, Float, LIMB_BITS, Round, small, with_limbs};
 use crate::kernel;
 use crate::{Integer, Limb};
 
@@ -70,7 +71,39 @@ impl Float {
         if let Some(r) = sum_fast(self, rhs, rhs.neg, prec, rnd) {
             return r;
         }
+        if let Some(r) = small::sum(self, rhs, rhs.neg, prec, rnd) {
+            return r.build();
+        }
         sum(self, rhs, rhs.neg, Some((prec, rnd)))
+    }
+
+    /// `self = a + b` correctly rounded to `prec` bits, and `rounded.cmp(exact)`:
+    /// [`Float::add_round`] into an existing value, which up to four limbs is
+    /// written in place (MPFR's `mpfr_add` into a destination).
+    ///
+    /// # Panics
+    ///
+    /// If `prec` is 0.
+    #[inline]
+    pub fn add_round_from(&mut self, a: &Float, b: &Float, prec: u64, rnd: Round) -> Ordering {
+        assert!(prec >= 1, "Float::add_round_from: precision 0");
+        if let Some(r) = small::sum(a, b, b.neg, prec, rnd) {
+            return r.write(self);
+        }
+        let (r, ord) = a.add_round(b, prec, rnd);
+        *self = r;
+        ord
+    }
+
+    /// `self += rhs` correctly rounded to `prec` bits, and `rounded.cmp(exact)`.
+    ///
+    /// # Panics
+    ///
+    /// If `prec` is 0.
+    #[inline]
+    pub fn add_round_assign(&mut self, rhs: &Float, prec: u64, rnd: Round) -> Ordering {
+        let a = std::mem::take(self);
+        self.add_round_from(&a, rhs, prec, rnd)
     }
 
     /// `self - rhs` correctly rounded to `prec` bits, and `rounded.cmp(exact)`.
@@ -85,7 +118,37 @@ impl Float {
         if let Some(r) = sum_fast(self, rhs, !rhs.neg, prec, rnd) {
             return r;
         }
+        if let Some(r) = small::sum(self, rhs, !rhs.neg, prec, rnd) {
+            return r.build();
+        }
         sum(self, rhs, !rhs.neg && !rhs.is_zero(), Some((prec, rnd)))
+    }
+
+    /// `self = a - b` correctly rounded, as [`Float::add_round_from`].
+    ///
+    /// # Panics
+    ///
+    /// If `prec` is 0.
+    #[inline]
+    pub fn sub_round_from(&mut self, a: &Float, b: &Float, prec: u64, rnd: Round) -> Ordering {
+        assert!(prec >= 1, "Float::sub_round_from: precision 0");
+        if let Some(r) = small::sum(a, b, !b.neg, prec, rnd) {
+            return r.write(self);
+        }
+        let (r, ord) = a.sub_round(b, prec, rnd);
+        *self = r;
+        ord
+    }
+
+    /// `self -= rhs` correctly rounded, as [`Float::add_round_assign`].
+    ///
+    /// # Panics
+    ///
+    /// If `prec` is 0.
+    #[inline]
+    pub fn sub_round_assign(&mut self, rhs: &Float, prec: u64, rnd: Round) -> Ordering {
+        let a = std::mem::take(self);
+        self.sub_round_from(&a, rhs, prec, rnd)
     }
 
     /// `self × rhs`, exactly.
@@ -109,7 +172,37 @@ impl Float {
         {
             return r;
         }
+        if let Some(r) = small::product(self, rhs, prec, rnd) {
+            return r.build();
+        }
         product(self, rhs, Some((prec, rnd)))
+    }
+
+    /// `self = a × b` correctly rounded, as [`Float::add_round_from`].
+    ///
+    /// # Panics
+    ///
+    /// If `prec` is 0.
+    #[inline]
+    pub fn mul_round_from(&mut self, a: &Float, b: &Float, prec: u64, rnd: Round) -> Ordering {
+        assert!(prec >= 1, "Float::mul_round_from: precision 0");
+        if let Some(r) = small::product(a, b, prec, rnd) {
+            return r.write(self);
+        }
+        let (r, ord) = a.mul_round(b, prec, rnd);
+        *self = r;
+        ord
+    }
+
+    /// `self *= rhs` correctly rounded, as [`Float::add_round_assign`].
+    ///
+    /// # Panics
+    ///
+    /// If `prec` is 0.
+    #[inline]
+    pub fn mul_round_assign(&mut self, rhs: &Float, prec: u64, rnd: Round) -> Ordering {
+        let a = std::mem::take(self);
+        self.mul_round_from(&a, rhs, prec, rnd)
     }
 }
 
@@ -159,7 +252,7 @@ fn product_1(
 /// Rounds the top-aligned `±0.p × 2^e` (with set bits below `p` if `sticky`)
 /// to `prec <= 64` bits.
 #[inline]
-fn finish_2(
+pub(super) fn finish_2(
     neg: bool,
     p: u128,
     sticky: bool,
