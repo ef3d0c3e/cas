@@ -32,7 +32,8 @@ mod tests;
 /// the sum cost a few ulps each, well inside this.
 const GUARD: u64 = 32;
 
-/// Chudnovsky's `1/π = 12 Σ (-1)^k (6k)! (A + B k) / ((3k)! (k!)^3 C^(3k+3/2))`:
+/// Chudnovsky's series \[CC88\],
+/// `1/π = 12 Σ (-1)^k (6k)! (A + B k) / ((3k)! (k!)^3 C^(3k+3/2))`:
 /// `p(k) = -(6k-5)(2k-1)(6k-1)`, `q(k) = k^3 C^3 / 24`, `a(k) = A + B k`
 /// (`p(0) = q(0) = 1`), so that `S = Σ a(k) Π p/q` and `π = 426880 √10005 / S`
 /// (`426880 √10005 = C^(3/2) / 12`).
@@ -150,7 +151,9 @@ fn atanh_tail(m: u64, n: u64) -> Mag {
     inv_m.pow(2 * n + 1).mul_2exp(&Integer::ONE)
 }
 
-/// `log 2 = 18 atanh(1/26) - 2 atanh(1/4801) + 8 atanh(1/8749)`.
+/// `log 2 = 18 atanh(1/26) - 2 atanh(1/4801) + 8 atanh(1/8749)`, a Machin-like
+/// formula: as `2 atanh(1/m) = log((m + 1) / (m - 1))`, it is the identity
+/// `2 = (27/25)^9 (2401/2400)^-1 (4375/4374)^4`.
 fn log2_uncached(prec: u64) -> Ball {
     let w = prec + GUARD;
     let term = |c: i64, m: u64| atanh_inv(m, w).mul(&Ball::from_integer(&Integer::from(c)), w);
@@ -207,9 +210,10 @@ fn e_tail(n: u64, q: &Integer) -> Mag {
 
 /// `2G = Σ (-8)^k (3k + 2) / ((2k+1)^3 C(2k, k)^3)` (Lima, "A rapidly
 /// converging Ramanujan-type series for Catalan's constant", 2012, arXiv
-/// 1207.3139, Theorem 1; Guillera's series shifted by one index). The ratio
-/// of consecutive `h_k = (-8)^k / ((2k+1)^3 C(2k, k)^3)` is `-k^3 / (2k+1)^3`:
-/// `p(k) = -k^3`, `q(k) = (2k+1)^3`, `a(k) = 3k + 2` (`p(0) = q(0) = 1`).
+/// 1207.3139, Theorem 1 \[Lim12\]; Guillera's series shifted by one
+/// index). The ratio of consecutive `h_k = (-8)^k / ((2k+1)^3 C(2k, k)^3)`
+/// is `-k^3 / (2k+1)^3`: `p(k) = -k^3`, `q(k) = (2k+1)^3`, `a(k) = 3k + 2`
+/// (`p(0) = q(0) = 1`).
 /// Three bits per term, and no π or logarithm, unlike Ramanujan's
 /// `G = π/8 log(2 + √3) + 3/8 Σ 1 / ((2k+1)^2 C(2k, k))` (two bits).
 struct Catalan;

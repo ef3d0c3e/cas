@@ -1,10 +1,11 @@
 //! `MachineBall`: an `f64` midpoint and radius, the fast path for
-//! precisions up to 53 bits (CAS-DOC-5 §5.4).
+//! precisions up to 53 bits (CAS-DOC-5 §5.4): midpoint-radius arithmetic in
+//! floating point, as in \[Rum99\].
 //!
-//! IEEE `+ − × ÷ √` round to nearest, so each midpoint is within half an ulp
-//! of the exact result; that error, exactly when an error-free
-//! transformation gives it (two-sum for sums, two-product residuals for the
-//! others), goes into the radius. The radius itself is computed in
+//! IEEE `+ − × ÷ √` round to nearest, so each midpoint is within half an ulp of
+//! the exact result; that error, exactly when an error-free transformation
+//! gives it (two-sum \[Knu97\] for sums, two-product residuals \[Dek71\] for
+//! the others), goes into the radius. The radius itself is computed in
 //! round-to-nearest with every step pushed up by one ulp ([`up`]): for a
 //! correctly rounded `fl(x)`, `x <= next_up(fl(x))`, whatever the exponent.
 //! Lower bounds (denominators) step down the same way.
@@ -12,10 +13,11 @@
 //! The exponent range is never trusted: an operation whose midpoint comes
 //! out infinite or subnormal (or underflowed to zero), or whose radius
 //! overflows, returns `None`, and the caller redoes it with [`Ball`] at 53
-//! bits or more. A radius below the normal range is rounded up to
-//! `f64::MIN_POSITIVE` instead, which is still an upper bound. So does an operation that a `Ball` would answer with the
+//! bits or more. So does an operation that a `Ball` would answer with the
 //! indeterminate ball (division by a ball containing 0, the square root of
-//! a ball reaching below 0), which a finite `f64` radius cannot hold.
+//! a ball reaching below 0), which a finite `f64` radius cannot hold. A
+//! radius below the normal range is rounded up to `f64::MIN_POSITIVE`
+//! instead, which is still an upper bound.
 //!
 //! Every `f64` is dyadic, so [`MachineBall::to_ball`] is exact in the
 //! midpoint (the radius becomes a [`Mag`], rounded up).

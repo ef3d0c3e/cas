@@ -1,5 +1,5 @@
 //! `Mag`: a fixed-size bound on a magnitude, the radius type of balls
-//! (CAS-DOC-5 §4, Arb's `mag_t`).
+//! (CAS-DOC-5 §4, Arb's `mag_t` \[Joh17\]).
 //!
 //! A value is `man × 2^(exp - 30)` with a 30-bit mantissa `man` in
 //! `[2^29, 2^30)` and an [`Integer`] exponent, or zero, or `+∞`. Every

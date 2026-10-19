@@ -1,15 +1,15 @@
 //! `sin`, `cos`, `tan`, `sin_pi`, `cos_pi` (CAS-DOC-5 §7.2).
 //!
-//! At the exact midpoint `m`: `m = k π/2 + t` with `|t| <= π/4` (a ball,
-//! from π at `p + exp(m)` bits, more when `t` cancels: `sin(10^100)` needs
-//! about 333 more), `t = x 2^h` with `|x| <= 2^-r`, `sin x` and `cos x` from
-//! their Taylor series in `y = x^2` summed in fixed point ([`hyp_sum`]),
-//! then `h` doublings `sin 2a = 2 sin a cos a`, `cos 2a = 1 - 2 sin^2 a` as
-//! balls, and the quadrant `k mod 4`; tables or bit-burst replace the
-//! halvings and the series at the precisions they serve (see the [module
-//! comment](super)). Both are 1-Lipschitz, so the input radius `ρ` adds
-//! `min(ρ, 2)`. Arguments of exponent above `HUGE_EXP`, an indeterminate
-//! input, or a radius from 2 give `[0 ± 1]`.
+//! At the exact midpoint `m`: `m = k π/2 + t` with `|t| <= π/4` (a ball, from π
+//! at `p + exp(m)` bits, more when `t` cancels: `sin(10^100)` needs about 333
+//! more, retrying as in Ziv's strategy \[Ziv91\]), `t = x 2^h` with `|x| <=
+//! 2^-r`, `sin x` and `cos x` from their Taylor series in `y = x^2` summed in
+//! fixed point ([`hyp_sum`]), then `h` doublings `sin 2a = 2 sin a cos a`, `cos
+//! 2a = 1 - 2 sin^2 a` as balls, and the quadrant `k mod 4`; tables or
+//! bit-burst replace the halvings and the series at the precisions they serve
+//! (see the [module comment](super)). Both are 1-Lipschitz, so the input radius
+//! `ρ` adds `min(ρ, 2)`. Arguments of exponent above `HUGE_EXP`, an
+//! indeterminate input, or a radius from 2 give `[0 ± 1]`.
 //!
 //! `sin_pi(x) = sin(π x)` and `cos_pi(x)` reduce `x` modulo 2 exactly (it
 //! is dyadic) and fold it onto `[0, 1/2]` by exact differences, so integers
@@ -152,7 +152,7 @@ fn sin_cos_exact(m: &Float, wp: u64) -> (Ball, Ball) {
     let wpi = i64::try_from(wp).unwrap_or(i64::MAX);
     // t = m - k π/2, with more bits of π while it cancels below wp bits.
     // A dyadic m stays away from multiples of π/2 by π's irrationality
-    // measure, so the extra stays within a few times m's length.
+    // measure [Mah53], so the extra stays within a few times m's length.
     let cap = 8 * (wp + m.bit_length() + kbits) + 256;
     let mut extra = 16;
     let t = loop {

@@ -1,4 +1,5 @@
-//! Binary splitting for hypergeometric-type series (CAS-DOC-5 §7.1).
+//! Binary splitting for hypergeometric-type series (Haible and Papanikolaou
+//! \[HP98\]; \[BZ10\] §4.9; CAS-DOC-5 §7.1).
 //!
 //! A [`Series`] is
 //!
@@ -20,10 +21,10 @@
 //! cost is our multiplication's. The tail beyond `n` terms is each series'
 //! business: callers bound it and add it to the ball's radius.
 //!
-//! A power of two in `q`, as in the bit-burst series of `x = p / 2^b`
-//! (CAS-95), is kept apart: `q(k) 2^s(k)` with `s` from [`Series::shift`],
-//! and a range carries `E = Σ s` instead of multiplying it into `Q`. Then
-//! `S = T / (B Q 2^E)` and the merge becomes
+//! A power of two in `q`, as in the bit-burst series of `x = p / 2^b` (CAS-95,
+//! a trick of ours), is kept apart: `q(k) 2^s(k)` with `s` from
+//! [`Series::shift`], and a range carries `E = Σ s` instead of multiplying it
+//! into `Q`. Then `S = T / (B Q 2^E)` and the merge becomes
 //!
 //! ```text
 //! T = 2^Er Br Qr Tl + Bl Pl Tr,   E = El + Er,

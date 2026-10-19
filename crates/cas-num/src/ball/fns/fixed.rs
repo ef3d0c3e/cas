@@ -29,10 +29,11 @@ pub(super) fn exp_sum(x: &Integer, w: u64, n: u64) -> (Integer, Natural) {
 }
 
 /// `Σ_{j < n} x^j / (q(1) q(2) … q(j))` for `x = X / 2^w` with `|x| <= 1/2`,
-/// integers `|q(t)| >= 1`, `n >= 1`, by rectangular splitting
-/// (Paterson–Stockmeyer): `(S, e)` with `|Σ - S / 2^w| <= e / 2^w`. The
-/// tail beyond `n` terms is the caller's. `q(t) = t` is `exp`; `-(2t-1)(2t)`
-/// and `-(2t)(2t+1)` are `cos` and `sin(x)/x` in `x^2`.
+/// integers `|q(t)| >= 1`, `n >= 1`, by rectangular splitting (Paterson and
+/// Stockmeyer \[PS73\], as Smith applies it to Taylor series \[Smi89\]): `(S,
+/// e)` with `|Σ - S / 2^w| <= e / 2^w`. The tail beyond `n` terms is the
+/// caller's. `q(t) = t` is `exp`; `-(2t-1)(2t)` and `-(2t)(2t+1)` are `cos` and
+/// `sin(x)/x` in `x^2`.
 ///
 /// Write `Q(j) = q(1) … q(j)`. With blocks of `m ≈ √n` terms, `acc_i =
 /// Σ_{j >= m i} x^(j - m i) Q(m i) / Q(j)` (over `j < n`) satisfies, for a

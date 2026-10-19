@@ -3,15 +3,19 @@
 //! near the true one, not the exact top limbs.
 //!
 //! Schoolbook computes only the columns from `B^(n - 1)` up, about half the
-//! partial products; up to 2 limbs the full product is taken instead, as it
-//! is faster there. Divide and conquer (Mulders' split, mirrored from
-//! [`mullo`](super::mullo)) takes the full product of the high `n2` limbs and
-//! two short products of `n1 = n - n2` limbs for the cross terms. In the NTT
-//! range the full product is taken, which is exact. The thresholds are
+//! partial products; up to 2 limbs the full product is taken instead, as it is
+//! faster there. Divide and conquer (Mulders' short product \[Mul00\], with
+//! [`mullo`](super::mullo)'s split; Hanrot and Zimmermann analyse the cut
+//! \[HZ04\]) takes the full product of the high `n2` limbs and two short
+//! products of `n1 = n - n2` limbs for the cross terms. In the NTT range the
+//! full product is taken, which is exact. The thresholds are
 //! [`mullo`](super::mullo)'s: both products drop the same half.
 //!
 //! Every algorithm returns `r` with `r <= floor(a b / B^n) <= r + e`, where
 //! `e = mulhi_error(n)` follows the same recursion as the computation.
+//!
+//! Documented in `doc/algorithms/kernels.md`; bracketed keys refer to
+//! `doc/algorithms/references.md`.
 
 use super::mullo::{MULLO_DC_THRESHOLD, MULLO_MUL_THRESHOLD};
 use super::{Algorithm, addmul_1, addmul_2_carries, algorithm, mul, mul_1, mul_scratch_len};

@@ -1,4 +1,5 @@
-//! `ComplexBall`: rectangular complex balls `re + im i` (CAS-DOC-5 §8).
+//! `ComplexBall`: rectangular complex balls `re + im i` (CAS-DOC-5 §8), Arb's
+//! `acb_t` representation \[Joh17\].
 //!
 //! Every operation is built from real ball operations on the parts, so it
 //! inherits their enclosure property; the formulas are chosen so that
@@ -19,20 +20,22 @@
 //! z^w = exp(w log z), integer w by squaring
 //! ```
 //!
+//! `sqrt` is Kahan's \[Kah87\], which never subtracts.
+//!
 //! The other elementary functions (CAS-102) are in [`trig`] (`tan`, the
 //! hyperbolic functions, `sin_pi`, `cos_pi`), [`inverse`] (`asin`, `acos`
 //! and the inverse hyperbolic functions) and [`near`] (`expm1`, `log1p`,
 //! `root`).
 //!
-//! Branch cuts are the principal ones (`log`, `sqrt`, `pow`, `root`,
-//! `log1p` on the negative real axis, from `-1` for `log1p`; `atan`,
-//! `asinh` on the imaginary axis beyond `±i`; `asin`, `acos`, `atanh` on
-//! the real axis beyond `±1`, `acosh` below 1). A ball straddling a cut
-//! gets an enclosure of both sides: `arg` is then `[0 ± π]`, and `sqrt`'s
-//! imaginary part `[0 ± t]`. A point exactly on a cut takes the side a `+0`
-//! in the zero part selects in C99 and MPC: `arg` in `(-π, π]` for `log`
-//! and `sqrt`, the side of `Re z > 0` for `atan` and `asinh`, of `Im z > 0`
-//! for the others.
+//! Branch cuts are the principal ones (`log`, `sqrt`, `pow`, `root`, `log1p` on
+//! the negative real axis, from `-1` for `log1p`; `atan`, `asinh` on the
+//! imaginary axis beyond `±i`; `asin`, `acos`, `atanh` on the real axis beyond
+//! `±1`, `acosh` below 1). A ball straddling a cut gets an enclosure of both
+//! sides: `arg` is then `[0 ± π]`, and `sqrt`'s imaginary part `[0 ± t]`. A
+//! point exactly on a cut takes the side a `+0` in the zero part selects in C99
+//! (Annex G) and MPC \[C99\] \[MPC\], after Kahan \[Kah87\]: `arg` in `(-π, π]`
+//! for `log` and `sqrt`, the side of `Re z > 0` for `atan` and `asinh`, of `Im
+//! z > 0` for the others.
 
 use std::cmp::Ordering;
 use std::fmt;

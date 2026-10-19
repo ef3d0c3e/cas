@@ -1,4 +1,5 @@
-//! `Float`: the midpoint type of balls (CAS-DOC-5 §3).
+//! `Float`: the midpoint type of balls (CAS-DOC-5 §3), MPFR's floating-point
+//! model \[Fou07\] with the unbounded exponent of Arb's `arf_t` \[Joh17\].
 //!
 //! A value is `±0.m × 2^exp`: the mantissa `m` is a fraction in `[1/2, 1)`,
 //! stored top-aligned in limbs (the top limb's top bit set, the lowest limb

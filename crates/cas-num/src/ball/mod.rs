@@ -24,6 +24,11 @@
 //!   for `FullForm` ([`Float::to_hex`], [`Mag::to_hex`]) (§6).
 //! - [`MachineBall`]: `f64` midpoint and radius with proven bounds, the fast
 //!   path up to 53 bits; `None` sends the caller back to [`Ball`] (§5.4).
+//!
+//! The algorithms, the tricks on top of them and their sources are
+//! documented in this crate's `doc/algorithms/`, after GMP's "Algorithms"
+//! chapter and MPFR's *Algorithms and Proofs*. Keys in brackets in these doc
+//! comments, such as \[BZ10\] or \[Joh17\], refer to its `references.md`.
 
 mod bsplit;
 mod complex;

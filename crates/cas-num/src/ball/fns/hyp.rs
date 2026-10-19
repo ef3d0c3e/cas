@@ -1,5 +1,5 @@
 //! Hyperbolic functions and their inverses (CAS-DOC-5 §7.3), written so that
-//! nothing cancels near 0:
+//! nothing cancels near 0, in fdlibm's forms \[fdlibm\]:
 //!
 //! ```text
 //! sinh x  = e (e + 2) / (2 (e + 1)),      e = expm1(|x|), odd

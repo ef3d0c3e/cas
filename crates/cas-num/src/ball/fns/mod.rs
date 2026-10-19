@@ -1,10 +1,11 @@
 //! Elementary functions on balls (CAS-DOC-5 §7.2).
 //!
-//! Each function computes its value at the exact midpoint as a ball, at a
-//! few guard bits above the requested precision, then widens it by a
-//! derivative bound for the input radius. Only the series sums are proved
-//! by hand ([`fixed`], [`bsplit`](super::bsplit)); argument reductions and
-//! reconstructions run on ball arithmetic, which tracks their errors itself.
+//! Each function computes its value at the exact midpoint as a ball, at a few
+//! guard bits above the requested precision, then widens it by a derivative
+//! bound for the input radius, as Arb does \[Joh17\]. Only the series sums are
+//! proved by hand ([`fixed`], [`bsplit`](super::bsplit)); argument reductions
+//! and reconstructions run on ball arithmetic, which tracks their errors
+//! itself.
 //!
 //! After each function's own reduction (`exp` by `log 2`, `sin`/`cos` by
 //! `π/2`, `atan` to `[0, 1]`), the working precision picks the core: lazy

@@ -3,11 +3,13 @@
 //! a-priori relative error bound per kernel, so the `f64` midpoint costs
 //! half an ulp plus a radius term `KERNEL_ERR |v|`. No platform libm.
 //!
-//! The reduction constants (π/2 and log 2 split Cody–Waite style, the table
-//! `atan(k/8)`) and the Taylor coefficients are built once, at first use,
-//! from the `Ball` constants and exact rationals: correct by construction,
-//! no hand-typed digits. Each kernel's error budget is written next to it;
-//! every one stays below `2^-94` and is claimed as [`KERNEL_ERR`] `= 2^-90`.
+//! The reduction constants (π/2 and log 2 split Cody–Waite style
+//! \[CW80\], the table `atan(k/8)`) and the Taylor coefficients are built
+//! once, at first use, from the `Ball` constants and exact rationals:
+//! correct by construction, no hand-typed digits. Each kernel's error budget
+//! is written next to it; every one stays below `2^-94` and is claimed as
+//! [`KERNEL_ERR`] `= 2^-90`. Horner's rule's errors are the `γ_n` bounds of
+//! \[Hig02\].
 //!
 //! The CAS-103 kernels build on these pieces ([`exp_dd`] and [`log_dd`] of
 //! double-double arguments, [`log1p_dd`] on `[1/√2 - 1, √2 - 1]`, the

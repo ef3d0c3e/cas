@@ -1,5 +1,6 @@
-//! The bit-burst algorithm for high precision (CAS-DOC-5 §7.2; Brent 1976,
-//! as in Arb's `arb_exp_arf_bb` and `arb_atan_arf_bb`).
+//! The bit-burst algorithm for high precision (CAS-DOC-5 §7.2; Brent
+//! \[Bre76\], \[BZ10\] §4.9; as in Arb's `arb_exp_arf_bb` and
+//! `arb_atan_arf_bb` \[Arb\]).
 //!
 //! An exact `|t| < 1` splits into chunks of doubling width,
 //!
@@ -25,9 +26,9 @@
 //!   `|c|^(2n+1)`. Arguments above 1/2 first take `atan x = π/4 - atan((1 -
 //!   x) / (1 + x))`.
 //!
-//! The powers of two of `x = p_j / 2^b` are [`Series::shift`]s, not factors
-//! of `q` (CAS-95): `Q` holds only the odd part (`k!`, `(2k+1)!`, 1), so the
-//! merges multiply integers about half as long.
+//! The powers of two of `x = p_j / 2^b` are [`Series::shift`]s, not factors of
+//! `q` (CAS-95, a trick of ours): `Q` holds only the odd part (`k!`, `(2k+1)!`,
+//! 1), so the merges multiply integers about half as long.
 //!
 //! `log` needs no series of its own: its Newton iteration and certificate
 //! run on `exp` ([`super::log`]), which is bit-burst at these precisions.

@@ -9,6 +9,14 @@
 //! units of the result's last limb. Where an exact algorithm is cheaper
 //! (below the Newton thresholds), the dispatching functions use it and the
 //! error is 0.
+//!
+//! The reciprocal and the inverse square root are Newton's iterations
+//! (\[BZ10\], chapter 3). The inverse square root's residual is wrapped
+//! modulo `B^m - 1` where the cyclic transform applies: the wrap-around
+//! trick, as in GMP's `mpn_invertappr`. The exact square root is
+//! Zimmermann's Karatsuba square root \[Zim99\]. Algorithms and proofs are
+//! documented in `doc/algorithms/kernels.md`; bracketed keys refer to
+//! `doc/algorithms/references.md`.
 
 use super::mu::{INV_NEWTON_THRESHOLD, MU_DIV_THRESHOLD, invert, invert_scratch_len};
 use super::{div_rem, div_rem_scratch_len};
@@ -167,7 +175,7 @@ pub(crate) fn div_approx_newton_error(n: usize) -> usize {
 ///
 /// - `R = B^(n + 2h) - A Yh^2` exactly, so `1 - a y^2 = R / B^(n + 2h)`, and
 ///   the step is `Y = Yh B^l + Yh R / (2 B^(3h))`. `R` comes from the full
-///   product, or from a wrapped one ([`rsqrt_residual_wrapped`]) where the
+///   product, or from a wrapped one (`rsqrt_residual_wrapped`) where the
 ///   cyclic transform applies.
 /// - `R` is truncated to `floor(R / B^k)` with `k = 2h - 1`, and the
 ///   correction to `floor(Yh floor(R / B^k) / (2 B^(h + 1)))`: floors also when

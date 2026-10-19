@@ -3,6 +3,10 @@
 Arbitrary-precision integers, rationals, modular and ball arithmetic for the CAS engine.
 Correctness is the primary goal. The design is in Lific page `CAS-DOC-2`.
 
+The ball arithmetic's algorithms, the tricks on top of them, where each error bound is proved,
+and the papers they come from are documented in [doc/algorithms](doc/algorithms/README.md),
+after GMP's "Algorithms" chapter and MPFR's *Algorithms and Proofs*.
+
 ## Layout
 
 | Module | Contents |

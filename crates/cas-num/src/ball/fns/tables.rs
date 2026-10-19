@@ -1,6 +1,6 @@
 //! Table-based argument reduction for medium precision (CAS-DOC-5 §7.2,
 //! after Johansson, "Efficient implementation of elementary functions in
-//! the medium-precision range", ARITH 2015).
+//! the medium-precision range", ARITH 2015, \[Joh15\]).
 //!
 //! Two lookups shrink an argument from below 1 to below `2^-16`, so the
 //! baseline series that follows needs no halvings (at the precisions the

@@ -12,7 +12,8 @@ pub struct GaussianRationals;
 /// elements whose parts are integers.
 ///
 /// Division with remainder rounds each part of the exact quotient to the
-/// nearest integer, so `norm(r) <= norm(b) / 2`. Normal forms are the
+/// nearest integer, so `norm(r) <= norm(b) / 2`: ℤ\[i\] is Euclidean
+/// (\[HW08\], chapter XII). Normal forms are the
 /// associates in the first quadrant: real part positive, imaginary part
 /// non-negative.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]

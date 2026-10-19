@@ -1,4 +1,6 @@
-//! `Ball`: a real number enclosed as midpoint ± radius (CAS-DOC-5 §5).
+//! `Ball`: a real number enclosed as midpoint ± radius (CAS-DOC-5 §5), the
+//! midpoint-radius arithmetic of \[Moo66\] and \[Rum99\] in van der Hoeven's
+//! ball form \[Hoe09\], as in Arb \[Joh17\].
 //!
 //! A ball `[m ± r]` stands for every real `x` with `|x - m| <= r`; the one
 //! promise of every operation is that the result contains the exact result

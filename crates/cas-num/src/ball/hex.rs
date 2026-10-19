@@ -1,5 +1,6 @@
 //! Exact hexadecimal float literals for [`Float`] and [`Mag`] (CAS-DOC-5
-//! §6.2), C99's `%a` form: `0x1.921fb54442d18p+1`, `-0x1.8p-3`, `0x0p+0`.
+//! §6.2), C99's `%a` form \[C99\]: `0x1.921fb54442d18p+1`, `-0x1.8p-3`,
+//! `0x0p+0`.
 //!
 //! The printed form is canonical: a leading `1`, the fraction without
 //! trailing zeros, and a decimal exponent of any size. The parser also takes

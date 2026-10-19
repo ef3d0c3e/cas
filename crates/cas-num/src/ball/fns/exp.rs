@@ -1,12 +1,13 @@
 //! `exp` and `expm1` (CAS-DOC-5 §7.2).
 //!
-//! `exp(m)` for the exact midpoint: `m = k log 2 + t` with `|t| <= log 2 / 2`
-//! (a ball, from `log 2` at enough bits for `k`), `t = x 2^h` with `|x| <=
-//! 2^-r`, `r ≈ p^(1/3)`, the Taylor series of `exp(x)` summed in fixed point
-//! by rectangular splitting ([`exp_sum`]), then squared back `h` times and
-//! scaled by `2^k`, as balls. Tables or bit-burst replace the halvings and
-//! the series at the precisions they serve (see the [module
-//! comment](super)). The input radius `ρ` adds `exp(m) (e^ρ - 1)`.
+//! `exp(m)` for the exact midpoint, by the classical reduction and halving
+//! (\[BZ10\], chapter 4): `m = k log 2 + t` with `|t| <= log 2 / 2` (a ball,
+//! from `log 2` at enough bits for `k`), `t = x 2^h` with `|x| <= 2^-r`, `r ≈
+//! p^(1/3)`, the Taylor series of `exp(x)` summed in fixed point by rectangular
+//! splitting ([`exp_sum`]), then squared back `h` times and scaled by `2^k`, as
+//! balls. Tables or bit-burst replace the halvings and the series at the
+//! precisions they serve (see the [module comment](super)). The input radius
+//! `ρ` adds `exp(m) (e^ρ - 1)`.
 //!
 //! Arguments of exponent above `HUGE_EXP` (`|m| >= 2^65536`) would need `log
 //! 2` to that many bits: a positive one gives the indeterminate ball, a

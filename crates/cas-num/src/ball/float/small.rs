@@ -460,11 +460,13 @@ fn product_n<const N: usize, const W: usize>(
 
 /// `quotient` of `N`-limb mantissas (shorter ones padded with low zero
 /// limbs), at `2^e`: `A B^(N+1) / D` by schoolbook division
-/// (`kernel::div::sb_div_qr`) on `NN = 2N + 1` limbs, the remainder as the
-/// sticky bit. As `A / D` lies in `(1/2, 2)`, the quotient `Q` lies in `(B^(N
-/// +1) / 2, 2 B^(N+1))`: at least `64 (N + 1) > prec` bits. Placed in a
-/// window of `W = N + 2` limbs (its top bit in limb `N + 1` or at the top of
-/// limb `N`) and normalised by `lz` bits, `Q / B^(N+1) = 0.w × 2^(64 - lz)`.
+/// (`kernel::div::sb_div_qr`, Knuth's Algorithm D \[Knu97\] with the 3-by-2
+/// reciprocal of \[MG11\]) on `NN = 2N + 1` limbs, the remainder as the
+/// sticky bit. As `A / D` lies in `(1/2, 2)`, the quotient `Q` lies in
+/// `(B^(N+1) / 2, 2 B^(N+1))`: at least `64 (N + 1) > prec` bits. Placed in
+/// a window of `W = N + 2` limbs (its top bit in limb `N + 1` or at the top
+/// of limb `N`) and normalised by `lz` bits,
+/// `Q / B^(N+1) = 0.w × 2^(64 - lz)`.
 #[inline(always)]
 fn quotient_n<const N: usize, const W: usize, const NN: usize>(
     x: &[Limb],
@@ -559,14 +561,14 @@ fn square<const R: usize, const SQ: usize>(x: &[Limb; R]) -> [Limb; SQ] {
 /// `B^N / sqrt(2)` and `sqrt(2) B^N`, has at least `64 N > prec` bits and
 /// `NR = N + 1` limbs.
 ///
-/// Newton's iteration from above: `r0 = (isqrt(T) + 1) 2^(t/2)` for the top
-/// 128 bits `T = floor(X / 2^t)` (`t` even) exceeds `sqrt(X)` by a factor
-/// below `1 + 2^-62`, and `r <- floor((r + floor(X / r)) / 2)` never goes
-/// below `R` (it is `floor` of the arithmetic mean of `r` and `X / r`, whose
-/// geometric mean is `sqrt(X)`) while it roughly squares the relative error:
-/// `k` steps with `62 2^k` above `R`'s bits leave `r` within one or two of
-/// `R`. Then `r` steps down while `r^2 > X` (at most four times, else the
-/// general path takes over), and `X - R^2 != 0` is the sticky bit.
+/// Newton's iteration from above (\[BZ10\], chapter 1): `r0 = (isqrt(T) + 1)
+/// 2^(t/2)` for the top 128 bits `T = floor(X / 2^t)` (`t` even) exceeds
+/// `sqrt(X)` by a factor below `1 + 2^-62`, and `r <- floor((r + floor(X / r))
+/// / 2)` never goes below `R` (it is `floor` of the arithmetic mean of `r` and
+/// `X / r`, whose geometric mean is `sqrt(X)`) while it roughly squares the
+/// relative error: `k` steps with `62 2^k` above `R`'s bits leave `r` within
+/// one or two of `R`. Then `r` steps down while `r^2 > X` (at most four times,
+/// else the general path takes over), and `X - R^2 != 0` is the sticky bit.
 #[inline(always)]
 fn root_n<const N: usize, const NX: usize, const NR: usize, const NX1: usize, const SQ: usize>(
     m: &[Limb],

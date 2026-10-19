@@ -1,6 +1,6 @@
 //! Decimal printing and parsing of balls (CAS-DOC-5 §6.1, §6.3).
 //!
-//! Printing follows Arb's `arb_printn`: the digits shown are correct to
+//! Printing follows Arb's `arb_printn` \[Arb\]: the digits shown are correct to
 //! within one unit in the last place, for every point of the ball. So
 //! `1 ± 10^-30` prints as `1.000…` rather than nothing, which is what a
 //! "only certain digits" rule would give at a digit boundary. When not even

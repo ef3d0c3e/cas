@@ -1,5 +1,5 @@
-//! Euler's constant γ by the Brent-McMillan algorithm B3 with binary
-//! splitting, as MPFR's `mpfr_const_euler` (CAS-104).
+//! Euler's constant γ by the Brent-McMillan algorithm B3 \[BM80\] with
+//! binary splitting, as MPFR's `mpfr_const_euler` (CAS-104).
 //!
 //! With `u_k = (n^k / k!)^2`, `I_0(2n) = Σ u_k` and `S_0(2n) = Σ H_k u_k`
 //! (`H_k = 1 + 1/2 + … + 1/k`), the Bessel functions give
@@ -13,15 +13,16 @@
 //! `T = (1/4n) Σ_{k < 2n} ((2k)!)^3 / ((k!)^4 (16n)^(2k))`, within
 //! `7 e^-4n / (4n)` for every integer `n >= 1` (Brent and Johansson, "A
 //! bound for the error term in the Brent-McMillan algorithm", Math. Comp. 84
-//! (2015), Lemma 4). As `I_0(2n) > e^2n / √(4πn)`, that costs `7π e^-8n` in
-//! γ, so `n ≈ w log(2) / 8` gives `w` bits. `S_0` and `I_0` are summed to
-//! `N ≈ 4.97 n` terms, where their terms have fallen `e^-8n` below `I_0`
-//! (ibid., Corollary 2 and Remark 2), and their tails are bounded here. All
-//! three bounds go into the balls, so the result holds whatever `n` and `N`
-//! are: they only set its accuracy.
+//! (2015), Lemma 4, \[BJ15\]). As `I_0(2n) > e^2n / √(4πn)`, that costs
+//! `7π e^-8n` in γ, so `n ≈ w log(2) / 8` gives `w` bits. `S_0` and `I_0`
+//! are summed to `N ≈ 4.97 n` terms, where their terms have fallen `e^-8n`
+//! below `I_0` (ibid., Corollary 2 and Remark 2), and their tails are
+//! bounded here. All three bounds go into the balls, so the result holds
+//! whatever `n` and `N` are: they only set its accuracy.
 //!
 //! `S` and `I` share one splitting that carries the harmonic numbers
-//! ([`split`]); `T` is a plain [`Series`]. `n` is free, so it is the first
+//! ([`split`], Haible and Papanikolaou's sums weighted by partial sums
+//! \[HP98\]); `T` is a plain [`Series`]. `n` is free, so it is the first
 //! integer of the form `2^a 3^b 5^c 7^d` above the bound: then `log n` is a
 //! combination of four fast `atanh(1/m)` series ([`log_smooth`]), five times
 //! cheaper than a general logarithm at `10^5` digits, where it would be a

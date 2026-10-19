@@ -1,5 +1,9 @@
 //! Division and square root: correctly rounded, and approximate entries with
 //! an error bound for ball midpoints (CAS-DOC-5 §3.4, §5.2).
+//!
+//! Correct rounding goes through the exact integer quotient or square root
+//! (`Natural::sqrt_rem`, Zimmermann's Karatsuba square root \[Zim99\]), with
+//! the remainder as the sticky bit (\[BZ10\], chapter 3).
 #![allow(
     clippy::many_single_char_names,
     reason = "a, b, q, r, d, e, n, s: the operands and textbook names"

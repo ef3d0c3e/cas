@@ -1,8 +1,8 @@
 //! `log` and `log1p` by "approximate, then certify" (CAS-DOC-5 §7.2).
 //!
-//! `y ≈ log(m)` comes from Newton's iteration on `exp` at the float level,
-//! `y ← y + m e^-y - 1`, doubling the precision each step: no balls, no
-//! error analysis. One ball evaluation then proves it:
+//! `y ≈ log(m)` comes from Newton's iteration on `exp` (\[BZ10\], chapter 4) at
+//! the float level, `y ← y + m e^-y - 1`, doubling the precision each step: no
+//! balls, no error analysis. One ball evaluation then proves it:
 //!
 //! ```text
 //! log(m) = y + log1p(u),   u = m e^-y - 1   (a ball),

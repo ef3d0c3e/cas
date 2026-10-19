@@ -2,7 +2,7 @@
 //!
 //! The first four follow Hull, Fairgrieve and Tang ("Implementing the
 //! complex arcsine and arccosine functions using exception handling", ACM
-//! TOMS 23, 1997): with `X = |x|`, `Y = |y|` for `z = x + yi`,
+//! TOMS 23, 1997, \[HFT97\]): with `X = |x|`, `Y = |y|` for `z = x + yi`,
 //!
 //! ```text
 //! A = (|z + 1| + |z - 1|) / 2 >= 1,   D = √(A^2 - X^2) = √((A - X)(A + X))

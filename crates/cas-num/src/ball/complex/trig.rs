@@ -12,11 +12,11 @@
 //!
 //! `tan` as `sin z / cos z` would cancel in its real part for large `|b|`
 //! (`sin a cos a (cosh^2 b - sinh^2 b)` as a difference of two numbers near
-//! `e^(2|b|)`); the form above has only sums of non-negative terms, its
-//! denominator included (`cos 2a + cosh 2b` would cancel next to the poles
-//! `a = π/2 + kπ`, `b = 0`). Beyond `exp`'s range, `tan z` is `±i` within
-//! `2^(4 - 2|b|)` in each part. `sin_pi` and `cos_pi` take the real
-//! functions' exact values at integers and half-integers.
+//! `e^(2|b|)`); the form above (ours, CAS-102) has only sums of
+//! non-negative terms, its denominator included (`cos 2a + cosh 2b` would
+//! cancel next to the poles `a = π/2 + kπ`, `b = 0`). Beyond `exp`'s range,
+//! `tan z` is `±i` within `2^(4 - 2|b|)` in each part. `sin_pi` and `cos_pi`
+//! take the real functions' exact values at integers and half-integers.
 //!
 //! An inexact ball is evaluated at its exact midpoint and widened by a bound
 //! on `|f'|` over the rectangle times its radii, from 64-bit balls of the

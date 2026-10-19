@@ -4,13 +4,13 @@
 //!
 //! The algorithms are those of Joldes, Muller and Popescu, "Tight and
 //! rigorous error bounds for basic building blocks of double-word
-//! arithmetic" (ACM TOMS 44, 2017), built on the error-free two-sum and
-//! two-product. With `u = 2^-53`, their proved relative error bounds are
-//! `3u²/(1 - 4u)` for [`Dd::add`] (Alg. 6), `1.5u² + 4u³` for [`Dd::mul_f64`]
-//! (Alg. 7), `7u²` for [`Dd::mul`] (Alg. 10) and `15u² + 56u³` for
-//! [`Dd::div`] (Alg. 17); [`Dd::sqrt`], one Newton step, is within `6u²`
-//! (proved next to it). All are below [`OP_ERR`] `= 2^-102 = 16u²`, the one
-//! bound the kernels use.
+//! arithmetic" (ACM TOMS 44, 2017, \[JMP17\]), built on the error-free
+//! two-sum \[Knu97\] and two-product \[Dek71\]. With `u = 2^-53`, their
+//! proved relative error bounds are `3u²/(1 - 4u)` for [`Dd::add`] (Alg. 6),
+//! `1.5u² + 4u³` for [`Dd::mul_f64`] (Alg. 7), `7u²` for [`Dd::mul`]
+//! (Alg. 10) and `15u² + 56u³` for [`Dd::div`] (Alg. 17); [`Dd::sqrt`], one
+//! Newton step, is within `6u²` (proved next to it). All are below
+//! [`OP_ERR`] `= 2^-102 = 16u²`, the one bound the kernels use.
 //!
 //! The two-product is exact while nothing overflows or underflows: inputs
 //! here stay within `2^-600 <= |x| <= 2^600`, which the kernels guarantee
