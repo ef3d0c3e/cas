@@ -49,6 +49,9 @@ impl Float {
         {
             return Some(r);
         }
+        if let Some(r) = super::small::quotient(self, rhs, prec, rnd) {
+            return Some(r.build());
+        }
         let (ka, kb) = (a.len(), b.len());
         // q >= 2^(64 (ka + t - kb) - 1) has 64 (ka + t - kb) bits or more.
         let need = usize::try_from(prec.div_ceil(LIMB_BITS)).expect("precision fits") + 1;
@@ -106,6 +109,9 @@ impl Float {
         {
             return Some(r);
         }
+        if let Some(r) = super::small::root(self, prec, rnd) {
+            return Some(r.build());
+        }
         // self = M 2^E with E = exp - 64 k; shift M left by s, with E - s even.
         let (m, e) = self.to_integer_exp();
         let bits = self.mant_bits_stored();
@@ -136,6 +142,41 @@ impl Float {
     pub fn sqrt_round(&self, prec: u64, rnd: Round) -> (Float, Ordering) {
         self.checked_sqrt_round(prec, rnd)
             .expect("square root of a negative number")
+    }
+
+    /// `self = a / b` correctly rounded to `prec` bits, and `rounded.cmp(exact)`:
+    /// [`Float::div_round`] into an existing value, written in place up to
+    /// four limbs (CAS-99).
+    ///
+    /// # Panics
+    ///
+    /// If `b` is zero or `prec` is 0.
+    #[inline]
+    pub fn div_round_from(&mut self, a: &Float, b: &Float, prec: u64, rnd: Round) -> Ordering {
+        assert!(prec >= 1, "Float::div_round_from: precision 0");
+        if let Some(r) = super::small::quotient(a, b, prec, rnd) {
+            return r.write(self);
+        }
+        let (r, ord) = a.div_round(b, prec, rnd);
+        *self = r;
+        ord
+    }
+
+    /// `self = sqrt(a)` correctly rounded to `prec` bits, and
+    /// `rounded.cmp(exact)`, as [`Float::div_round_from`].
+    ///
+    /// # Panics
+    ///
+    /// If `a` is negative or `prec` is 0.
+    #[inline]
+    pub fn sqrt_round_from(&mut self, a: &Float, prec: u64, rnd: Round) -> Ordering {
+        assert!(prec >= 1, "Float::sqrt_round_from: precision 0");
+        if let Some(r) = super::small::root(a, prec, rnd) {
+            return r.write(self);
+        }
+        let (r, ord) = a.sqrt_round(prec, rnd);
+        *self = r;
+        ord
     }
 
     /// `q` near `self / rhs` with `|q| <= |self / rhs|` and

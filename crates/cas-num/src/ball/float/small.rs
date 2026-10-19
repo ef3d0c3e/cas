@@ -27,6 +27,10 @@
     reason = "a, b, x, y, w, e, z, p: the operands, window and textbook names"
 )]
 #![allow(
+    clippy::manual_memcpy,
+    reason = "indexed copies: `copy_from_slice` of a variable length becomes a `memcpy` call, measured 1.6x slower here"
+)]
+#![allow(
     clippy::inline_always,
     reason = "measured: without it the 2-limb shapes keep `finish` out of line, 1.3-1.7x slower"
 )]
@@ -121,6 +125,47 @@ pub(super) fn product(a: &Float, b: &Float, prec: u64, rnd: Round) -> Option<Par
         2 => product_n::<2, 4>(x, y, e, neg, prec, rnd),
         3 => product_n::<3, 6>(x, y, e, neg, prec, rnd),
         4 => product_n::<4, 8>(x, y, e, neg, prec, rnd),
+        _ => None,
+    }
+}
+
+/// `a / b` rounded through a fixed schoolbook division when both operands
+/// and the precision take 2 to 4 limbs (CAS-99); `None` otherwise, for a
+/// zero operand, or when an exponent leaves `i64`.
+#[inline]
+pub(super) fn quotient(a: &Float, b: &Float, prec: u64, rnd: Round) -> Option<Parts> {
+    let (x, y) = (a.mant(), b.mant());
+    if x.is_empty() || y.is_empty() {
+        return None;
+    }
+    let e = a.exp.to_i64()?.checked_sub(b.exp.to_i64()?)?;
+    let neg = a.neg != b.neg;
+    match x.len().max(y.len()).max(prec_limbs(prec)?).max(2) {
+        2 => quotient_n::<2, 4, 5>(x, y, e, neg, prec, rnd),
+        3 => quotient_n::<3, 5, 7>(x, y, e, neg, prec, rnd),
+        4 => quotient_n::<4, 6, 9>(x, y, e, neg, prec, rnd),
+        _ => None,
+    }
+}
+
+/// `sqrt(a)` rounded through integer Newton steps on fixed arrays when the
+/// operand and the precision take up to 4 limbs (`prec + 1` bits then 2 to
+/// 5) (CAS-99);
+/// `None` otherwise, for zero or a negative operand, or when the exponent
+/// leaves `i64`.
+#[inline]
+pub(super) fn root(a: &Float, prec: u64, rnd: Round) -> Option<Parts> {
+    let x = a.mant();
+    // The result's mantissa is written inline: at most 4 limbs.
+    if x.is_empty() || a.neg || prec_limbs(prec)? > INLINE {
+        return None;
+    }
+    let e = a.exp.to_i64()?;
+    match x.len().max(prec_limbs(prec.checked_add(1)?)?).max(2) {
+        2 => root_n::<2, 5, 3, 6, 6>(x, e, prec, rnd),
+        3 => root_n::<3, 7, 4, 8, 8>(x, e, prec, rnd),
+        4 => root_n::<4, 9, 5, 10, 10>(x, e, prec, rnd),
+        5 => root_n::<5, 11, 6, 12, 12>(x, e, prec, rnd),
         _ => None,
     }
 }
@@ -255,7 +300,10 @@ fn finish<const W: usize>(
 ) -> Option<Parts> {
     debug_assert!(w[W - 1] & TOP != 0);
     let kept = prec_limbs(prec)?;
-    debug_assert!(kept < W && kept <= INLINE);
+    assert!(
+        kept < W && kept <= INLINE,
+        "small::finish: precision beyond the window"
+    );
     let low = W - kept;
     #[allow(clippy::cast_possible_truncation, reason = "below 64")]
     let z = (LIMB_BITS * kept as u64 - prec) as u32;
@@ -306,9 +354,7 @@ fn finish<const W: usize>(
     }
     let mut buf = [0; INLINE];
     let len = W - first;
-    // An indexed loop: `copy_from_slice`, or a zip, of a variable length
-    // becomes a `memcpy` call, measured 1.6x slower here.
-    #[allow(clippy::manual_memcpy, reason = "see above")]
+    // An indexed loop, not `copy_from_slice` (see the module's allows).
     for i in 0..len {
         buf[i] = w[first + i];
     }
@@ -410,4 +456,201 @@ fn product_n<const N: usize, const W: usize>(
         e
     };
     finish(neg, &mut p, false, e, prec, rnd)
+}
+
+/// `quotient` of `N`-limb mantissas (shorter ones padded with low zero
+/// limbs), at `2^e`: `A B^(N+1) / D` by schoolbook division
+/// (`kernel::div::sb_div_qr`) on `NN = 2N + 1` limbs, the remainder as the
+/// sticky bit. As `A / D` lies in `(1/2, 2)`, the quotient `Q` lies in `(B^(N
+/// +1) / 2, 2 B^(N+1))`: at least `64 (N + 1) > prec` bits. Placed in a
+/// window of `W = N + 2` limbs (its top bit in limb `N + 1` or at the top of
+/// limb `N`) and normalised by `lz` bits, `Q / B^(N+1) = 0.w × 2^(64 - lz)`.
+#[inline(always)]
+fn quotient_n<const N: usize, const W: usize, const NN: usize>(
+    x: &[Limb],
+    y: &[Limb],
+    e: i64,
+    neg: bool,
+    prec: u64,
+    rnd: Round,
+) -> Option<Parts> {
+    debug_assert!(W == N + 2 && NN == 2 * N + 1);
+    let mut num = top_aligned::<NN>(x);
+    let d = top_aligned::<N>(y);
+    let v = crate::kernel::div::reciprocal_3by2(d[N - 1], d[N - 2]);
+    let mut q = [0; W];
+    let qh = crate::kernel::div::sb_div_qr(&mut q[..=N], &mut num, &d, v);
+    q[N + 1] = qh;
+    let mut sticky = false;
+    for &r in &num[..N] {
+        sticky |= r != 0;
+    }
+    let lz = leading_zeros(&q);
+    debug_assert!(lz == 63 || lz == 64);
+    shl_window(&mut q, lz);
+    finish(
+        neg,
+        &mut q,
+        sticky,
+        e.checked_add(64 - i64::from(lz))?,
+        prec,
+        rnd,
+    )
+}
+
+/// `floor(x / d)` into `q`, for `x` of `NX` limbs and `d` of at least two
+/// significant limbs: both shifted so that `d`'s top bit is set
+/// (`NX1 = NX + 1` limbs for `x`), then [`sb_div_qr`](crate::kernel::div::sb_div_qr).
+#[inline(always)]
+fn div_floor<const NX: usize, const NX1: usize>(x: &[Limb; NX], d: &[Limb], q: &mut [Limb; NX]) {
+    debug_assert_eq!(NX1, NX + 1);
+    let mut dn = d.len();
+    while d[dn - 1] == 0 {
+        dn -= 1;
+    }
+    debug_assert!(dn >= 2 && dn <= NX);
+    let sh = d[dn - 1].leading_zeros();
+    let mut dd = [0; NX];
+    let mut nn = [0; NX1];
+    for i in 0..dn {
+        dd[i] = d[i];
+    }
+    for i in 0..NX {
+        nn[i] = x[i];
+    }
+    shl_window(&mut dd, sh);
+    shl_window(&mut nn, sh);
+    let v = crate::kernel::div::reciprocal_3by2(dd[dn - 1], dd[dn - 2]);
+    *q = [0; NX];
+    let qn = NX1 - dn;
+    let qh = crate::kernel::div::sb_div_qr(&mut q[..qn], &mut nn, &dd[..dn], v);
+    if qn < NX {
+        q[qn] = qh;
+    } else {
+        debug_assert_eq!(qh, 0);
+    }
+}
+
+/// `x × x` for `x` of `R` limbs into `SQ = 2R` limbs.
+#[inline(always)]
+fn square<const R: usize, const SQ: usize>(x: &[Limb; R]) -> [Limb; SQ] {
+    debug_assert_eq!(SQ, 2 * R);
+    let mut p = [0; SQ];
+    for i in 0..R {
+        let mut carry: Limb = 0;
+        for j in 0..R {
+            let t = u128::from(x[i]) * u128::from(x[j]) + u128::from(p[i + j]) + u128::from(carry);
+            #[allow(clippy::cast_possible_truncation, reason = "splitting a double limb")]
+            {
+                p[i + j] = t as Limb;
+                carry = (t >> Limb::BITS) as Limb;
+            }
+        }
+        p[i + R] = carry;
+    }
+    p
+}
+
+/// `root` with the mantissa padded to `N` limbs, `prec + 1 <= 64 N`.
+///
+/// `a = M 2^(e - 64 N)` for the `N`-limb `M`, so `a = X 2^(2 h)` with `X = M
+/// B^N` and `2 h = e - 128 N`, or `X = 2 M B^N` and `2 h = e - 128 N - 1` when
+/// `e` is odd: `X` has `NX = 2N + 1` limbs and `R = floor(sqrt(X))`, between
+/// `B^N / sqrt(2)` and `sqrt(2) B^N`, has at least `64 N > prec` bits and
+/// `NR = N + 1` limbs.
+///
+/// Newton's iteration from above: `r0 = (isqrt(T) + 1) 2^(t/2)` for the top
+/// 128 bits `T = floor(X / 2^t)` (`t` even) exceeds `sqrt(X)` by a factor
+/// below `1 + 2^-62`, and `r <- floor((r + floor(X / r)) / 2)` never goes
+/// below `R` (it is `floor` of the arithmetic mean of `r` and `X / r`, whose
+/// geometric mean is `sqrt(X)`) while it roughly squares the relative error:
+/// `k` steps with `62 2^k` above `R`'s bits leave `r` within one or two of
+/// `R`. Then `r` steps down while `r^2 > X` (at most four times, else the
+/// general path takes over), and `X - R^2 != 0` is the sticky bit.
+#[inline(always)]
+fn root_n<const N: usize, const NX: usize, const NR: usize, const NX1: usize, const SQ: usize>(
+    m: &[Limb],
+    e: i64,
+    prec: u64,
+    rnd: Round,
+) -> Option<Parts> {
+    debug_assert!(NX == 2 * N + 1 && NR == N + 1 && NX1 == NX + 1 && SQ == 2 * NR);
+    let odd = e.rem_euclid(2) == 1;
+    let mut x = [0; NX];
+    for (i, &v) in top_aligned::<N>(m).iter().enumerate() {
+        x[N + i] = v;
+    }
+    if odd {
+        shl_window(&mut x, 1);
+    }
+    let h = (e - 128 * i64::try_from(N).ok()? - i64::from(odd)) / 2;
+    // The overestimate from the top 128 bits.
+    let bits = 64 * NX as u64 - u64::from(leading_zeros(&x));
+    let t = (bits - 128).next_multiple_of(2);
+    let mut top = x;
+    shr_window(&mut top, t);
+    let top = (u128::from(top[1]) << Limb::BITS) | u128::from(top[0]);
+    let start = top.isqrt() + 1;
+    let mut r = [0; NR];
+    #[allow(clippy::cast_possible_truncation, reason = "splitting a double limb")]
+    {
+        r[0] = start as Limb;
+        r[1] = (start >> Limb::BITS) as Limb;
+    }
+    shl_window(&mut r, u32::try_from(t / 2).ok()?);
+    // Newton steps: 62 2^k bits against R's at most 64 N + 1.
+    let mut good = 62u64;
+    while good < 64 * N as u64 + 4 {
+        let mut q = [0; NX];
+        div_floor::<NX, NX1>(&x, &r, &mut q);
+        // r = (r + q) / 2; q <= X / R < sqrt(2) B^N + 1 fits NR limbs.
+        let mut carry = false;
+        for i in 0..NR {
+            let (s, c1) = r[i].overflowing_add(q[i]);
+            let (s, c2) = s.overflowing_add(Limb::from(carry));
+            r[i] = s;
+            carry = c1 || c2;
+        }
+        shr_window(&mut r, 1);
+        if carry {
+            r[NR - 1] |= TOP;
+        }
+        good *= 2;
+    }
+    // Step down to R, then the remainder's sign.
+    let mut x_wide = [0; SQ];
+    for i in 0..NX {
+        x_wide[i] = x[i];
+    }
+    let mut steps = 0;
+    let rem = loop {
+        let mut s = square::<NR, SQ>(&r);
+        if cmp(&s, &x_wide) != Ordering::Greater {
+            let mut d = x_wide;
+            sub_assign(&mut d, &s, false);
+            s = d;
+            break s;
+        }
+        steps += 1;
+        if steps > 4 {
+            debug_assert!(false, "small::root_n: Newton's steps fell short");
+            return None;
+        }
+        let mut borrow = true;
+        for v in &mut r {
+            let (s, b) = v.overflowing_sub(Limb::from(borrow));
+            *v = s;
+            borrow = b;
+            if !borrow {
+                break;
+            }
+        }
+    };
+    let sticky = rem.iter().any(|&v| v != 0);
+    let lz = leading_zeros(&r);
+    debug_assert!(lz == 63 || lz == 64);
+    shl_window(&mut r, lz);
+    // R 2^h = 0.r × 2^(64 NR - lz + h).
+    let exp = h.checked_add(64 * i64::try_from(NR).ok()? - i64::from(lz))?;
+    finish(false, &mut r, sticky, exp, prec, rnd)
 }

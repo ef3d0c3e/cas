@@ -201,6 +201,17 @@ proptest! {
             prop_assert_eq!(&z, &want.0, "{}_round_assign", name);
             prop_assert_eq!(ord, want.1, "{}_round_assign ternary", name);
         }
+        if !y.is_zero() {
+            let want = x.div_round(&y, p, r);
+            let mut d = fresh();
+            prop_assert_eq!(d.div_round_from(&x, &y, p, r), want.1, "div_round_from ternary");
+            prop_assert_eq!(&d, &want.0, "div_round_from");
+        }
+        let ax = x.abs();
+        let want = ax.sqrt_round(p, r);
+        let mut d = fresh();
+        prop_assert_eq!(d.sqrt_round_from(&ax, p, r), want.1, "sqrt_round_from ternary");
+        prop_assert_eq!(&d, &want.0, "sqrt_round_from");
     }
 
     #[test]
@@ -254,8 +265,8 @@ proptest! {
 
     /// Mantissas of one to four limbs in adversarial shapes at gaps around
     /// every limb boundary, against MPFR: the fixed windows of `small`
-    /// (CAS-91), where bits start to fall off, a carry shifts the lowest bit
-    /// out, or a difference cancels.
+    /// (CAS-91, CAS-99), where bits start to fall off, a carry shifts the
+    /// lowest bit out, a difference cancels, or a quotient is exact.
     #[test]
     fn small_window_edges(
         (kx, ky) in (1usize..=4, 1usize..=4),
@@ -274,6 +285,12 @@ proptest! {
         check_round(a.sub_round(&b, p, r), MpFloat::with_val_round(pp, &f - &g, rug_round(r)))?;
         check_round(b.sub_round(&a, p, r), MpFloat::with_val_round(pp, &g - &f, rug_round(r)))?;
         check_round(a.mul_round(&b, p, r), MpFloat::with_val_round(pp, &f * &g, rug_round(r)))?;
+        check_round(a.div_round(&b, p, r), MpFloat::with_val_round(pp, &f / &g, rug_round(r)))?;
+        let (aa, fa) = (a.abs(), f.clone().abs());
+        check_round(aa.sqrt_round(p, r), MpFloat::with_val_round(pp, fa.sqrt_ref(), rug_round(r)))?;
+        // Squares are exact roots; their neighbours sit next to a root.
+        let sq = aa.mul(&aa);
+        check_round(sq.sqrt_round(p, r), MpFloat::with_val_round(pp, mp(&sq.to_rug()).sqrt_ref(), rug_round(r)))?;
     }
 
     /// Values near powers of two, where a rounding carry or a cancellation
