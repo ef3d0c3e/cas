@@ -19,7 +19,7 @@ use std::cmp::Ordering;
 
 use super::exp::to_fixed;
 use super::fixed::{atan_sum, shr};
-use super::{exponent, one, upper, working};
+use super::{BIT_BURST_MIN_PREC, TABLE_MAX_PREC, bitburst, exponent, one, tables, upper, working};
 use crate::ball::{Ball, Float, Mag};
 use crate::{Integer, Natural};
 
@@ -43,7 +43,21 @@ fn around_pi() -> Ball {
 /// is at most `|y|^n / (1 - |y|) <= 2^(2 ex n + 1)`. The sum's error count
 /// grows like `n √n / 2`, so `w` has that many more bits, and `|ex|` more to
 /// stay relative to `atan x ≈ x`. Below `2^-wp`, `atan x ∈ x ± |x|^3`.
-fn atan_series(x: &Float, wp: u64) -> Ball {
+pub(super) fn atan_series(x: &Float, wp: u64) -> Ball {
+    odd_series(x, wp, false)
+}
+
+/// A ball containing `atanh(x)` for an exact `|x| <= 1/2`, at about `wp`
+/// bits relative to the result: [`atan_series`]'s sum at `y = -x^2`, with the
+/// same bounds (they only use `|y|`) except the shift from `x` to its fixed
+/// point value, which moves `atanh` by up to `4/3` of a unit; below `2^-wp`, `atanh x ∈ x ± |x|^3`
+/// (`atanh x - x = x^3/3 + x^5/5 + … <= |x|^3 / (3 (1 - x^2))`).
+pub(super) fn atanh_series(x: &Float, wp: u64) -> Ball {
+    odd_series(x, wp, true)
+}
+
+/// [`atan_series`], or [`atanh_series`] when `hyperbolic`.
+fn odd_series(x: &Float, wp: u64, hyperbolic: bool) -> Ball {
     if x.is_zero() {
         return Ball::ZERO;
     }
@@ -59,19 +73,45 @@ fn atan_series(x: &Float, wp: u64) -> Ball {
     let w = w0 + u64::from(u64::BITS - (n * (n.isqrt() + 4)).leading_zeros());
     let xf = to_fixed(x, w);
     let yf = shr(&xf * &xf, w);
+    let yf = if hyperbolic { -yf } else { yf };
     let (s, e) = atan_sum(&yf, w, n);
     let unit = |k: Natural| Mag::from_integer(&Integer::from(k)).mul_2exp(&-Integer::from(w));
     let tail = Mag::power_of_two(&(Integer::from(2 * ex) * Integer::from(n) + Integer::ONE));
     let at = |v: Integer| Float::from_integer_exp(&v, &-Integer::from(w));
     let ratio = Ball::new(at(s), unit(&e + &Natural::from(1u64)).add(&tail));
+    // x' = X / 2^w is within a unit of x: atan' <= 1, atanh' <= 4/3 there.
     Ball::exact(at(xf))
         .mul(&ratio, wp + 8)
-        .add_error(&unit(Natural::from(1u64)))
+        .add_error(&unit(Natural::from(if hyperbolic { 2u64 } else { 1 })))
 }
 
 /// A ball containing `atan(x)` for every `x` in `b`, a ball with `|mid| <=
-/// 1`, by halvings and [`atan_series`].
-fn atan_small(b: &Ball, wp: u64) -> Ball {
+/// 1`: from the core for `wp` (see the [module comment](super)) at the
+/// midpoint, then the radius (`atan` is 1-Lipschitz), or [`atan_halving`].
+pub(super) fn atan_small(b: &Ball, wp: u64) -> Ball {
+    let m = b.mid();
+    if m.is_zero() {
+        return Ball::new(Float::ZERO, b.rad().clone());
+    }
+    let e = exponent(m);
+    let fast = |f: fn(&Float, u64) -> Ball| {
+        let v = f(&m.abs(), wp);
+        let v = if m.is_negative() { v.neg() } else { v };
+        v.add_error(b.rad())
+    };
+    let within_one = m.cmp_abs(&Float::from(1i64)) != Ordering::Greater;
+    if within_one && wp >= BIT_BURST_MIN_PREC {
+        return fast(bitburst::atan);
+    }
+    if within_one && wp <= TABLE_MAX_PREC && e >= -15 {
+        return fast(tables::atan);
+    }
+    atan_halving(b, wp)
+}
+
+/// [`atan_small`] by the baseline: halvings of the whole ball, then
+/// [`atan_series`] (the tables are built by this).
+pub(super) fn atan_halving(b: &Ball, wp: u64) -> Ball {
     let m = b.mid();
     if m.is_zero() {
         return Ball::new(Float::ZERO, b.rad().clone());

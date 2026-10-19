@@ -279,9 +279,11 @@ impl Ball {
     }
 }
 
-/// Frees the cached constants; the next request recomputes from scratch.
+/// Frees the cached constants and the elementary functions' tables; the
+/// next request recomputes from scratch.
 pub fn clear_constant_cache() {
     for cache in [&PI, &LOG2, &E_CACHE] {
         *cache.write().unwrap_or_else(PoisonError::into_inner) = empty();
     }
+    super::fns::clear_tables();
 }

@@ -15,13 +15,18 @@
 //! Newton only runs to half the precision: the cost is about one `exp` at
 //! half precision and one at full.
 //!
+//! Up to [`TABLE_MAX_PREC`](super::TABLE_MAX_PREC) both go to the tables
+//! instead, with no Newton iteration ([`tables::log1p`]); above, `exp`'s own
+//! cores (bit-burst from [`BIT_BURST_MIN_PREC`](super::BIT_BURST_MIN_PREC))
+//! carry the iteration and the certificate.
+//!
 //! Arguments within `1/4` of 1 go through `log1p` of the exact `m - 1`,
 //! whose Newton step `y ← y + e^-y (x - expm1(y))` keeps the precision
 //! relative to the small result, with `e^-y = 1 / (1 + expm1(y))` from the
 //! same `expm1`.
 
 use super::exp::{exp_exact, expm1_exact};
-use super::{exponent, one, working};
+use super::{TABLE_MAX_PREC, exponent, one, tables, working};
 use crate::Integer;
 use crate::ball::{Ball, Float, Mag, Round};
 
@@ -120,6 +125,9 @@ pub(super) fn log_exact(m: &Float, wp: u64) -> Ball {
             return log1p_exact(&d, wp);
         }
     }
+    if wp <= TABLE_MAX_PREC {
+        return log_table(m, wp);
+    }
     let p = wp + 16;
     // To half the bits: the certificate's u^2 then stays below 2^-p.
     let y = log_approx(m, p / 2 + 16);
@@ -132,6 +140,39 @@ pub(super) fn log_exact(m: &Float, wp: u64) -> Ball {
         debug_assert!(false, "Newton missed log({m:?})");
         Ball::INDETERMINATE
     }
+}
+
+/// `log(m)` for an exact `m > 0` from the tables: `m = f 2^e` with `f` in
+/// `[1, 2)`, `log m = e log 2 + log1p(f - 1)` (`f - 1` exact, as short as
+/// `m`). The two terms cancel only for `m` in `[1/2, 3/4]` (`e = -1`, the
+/// caller takes `m` within `1/4` of 1 to `log1p`), by at most 2 bits.
+fn log_table(m: &Float, wp: u64) -> Ball {
+    let e = m.exponent() - &Integer::ONE;
+    let u = m.mul_2exp(&-e.clone()).sub(&Float::from(1i64));
+    let q = wp + 8 + e.bit_length();
+    let l = tables::log1p(&u, q);
+    if e.is_zero() {
+        return l;
+    }
+    Ball::const_log2(q)
+        .mul(&Ball::from_integer(&e), q)
+        .add(&l, q)
+}
+
+/// `log1p(x)` for an exact `x` with `|x| < 1/4` from the tables: directly
+/// for `x >= 0`, and as `-log1p(x')`, `x' = -x / (1 + x)` in `(0, 1/3)`
+/// below (no cancellation; `log1p' <= 2` on `x'`'s ball, which keeps `x'`'s
+/// radius relative to the result).
+fn log1p_table(x: &Float, wp: u64) -> Ball {
+    if !x.is_negative() {
+        return tables::log1p(x, wp);
+    }
+    let q = wp + 16;
+    let bx = Ball::exact(x.clone());
+    let xp = bx.neg().div(&bx.add(&one(), q), q);
+    tables::log1p(xp.mid(), wp)
+        .add_error(&xp.rad().mul_2exp(&Integer::ONE))
+        .neg()
 }
 
 /// A ball containing `log1p(x)` for an exact `x > -1`, at about `wp` bits
@@ -149,6 +190,9 @@ pub(super) fn log1p_exact(x: &Float, wp: u64) -> Ball {
     }
     if e < -i64::try_from(wp).unwrap_or(i64::MAX) {
         return Ball::new(x.clone(), Mag::from_float(x).mul(&Mag::from_float(x)));
+    }
+    if wp <= TABLE_MAX_PREC {
+        return log1p_table(x, wp);
     }
     let p = wp + 16;
     let y = log1p_approx(x, p / 2 + 16);

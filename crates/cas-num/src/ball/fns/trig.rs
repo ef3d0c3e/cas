@@ -5,9 +5,11 @@
 //! about 333 more), `t = x 2^h` with `|x| <= 2^-r`, `sin x` and `cos x` from
 //! their Taylor series in `y = x^2` summed in fixed point ([`hyp_sum`]),
 //! then `h` doublings `sin 2a = 2 sin a cos a`, `cos 2a = 1 - 2 sin^2 a` as
-//! balls, and the quadrant `k mod 4`. Both are 1-Lipschitz, so the input
-//! radius `ρ` adds `min(ρ, 2)`. Arguments of exponent above `HUGE_EXP`, an
-//! indeterminate input, or a radius from 2 give `[0 ± 1]`.
+//! balls, and the quadrant `k mod 4`; tables or bit-burst replace the
+//! halvings and the series at the precisions they serve (see the [module
+//! comment](super)). Both are 1-Lipschitz, so the input radius `ρ` adds
+//! `min(ρ, 2)`. Arguments of exponent above `HUGE_EXP`, an indeterminate
+//! input, or a radius from 2 give `[0 ± 1]`.
 //!
 //! `sin_pi(x) = sin(π x)` reduces `x` modulo 2 exactly (it is dyadic), so
 //! integers and half-integers give exact results and no π is needed for
@@ -17,7 +19,9 @@ use std::cmp::Ordering;
 
 use super::exp::to_fixed;
 use super::fixed::{hyp_sum, shr};
-use super::{exponent, one, working};
+use super::{
+    BIT_BURST_MIN_PREC, TABLE_MAX_PREC, bitburst, exponent, factorial_lower, one, tables, working,
+};
 use crate::ball::decimal::to_integer;
 use crate::ball::{Ball, Float, Mag, Round};
 use crate::{Integer, Natural};
@@ -28,13 +32,6 @@ const HUGE_EXP: i64 = 1 << 16;
 /// `[0 ± 1]`, which contains every sine and cosine.
 fn unit_ball() -> Ball {
     Ball::new(Float::ZERO, Mag::ONE)
-}
-
-/// A lower bound of `n!`.
-fn factorial_lower(n: u64) -> Mag {
-    (2..=n).fold(Mag::ONE, |acc, k| {
-        acc.mul_lower(&Mag::from_integer_lower(&Integer::from(k)))
-    })
 }
 
 /// Balls containing `sin(t)` and `cos(t)` for an exact `|t| < 1`, at about
@@ -48,7 +45,7 @@ fn factorial_lower(n: u64) -> Mag {
 /// tails beyond `n` terms are at most `2 |y|^n / (2n)!` and `2 |y|^n /
 /// (2n+1)!`. The `h` doublings double the absolute error each, hence `2h`
 /// more bits in the sums and `h` in the doublings.
-fn sin_cos_small(t: &Float, wp: u64) -> (Ball, Ball) {
+pub(super) fn sin_cos_small(t: &Float, wp: u64) -> (Ball, Ball) {
     if t.is_zero() {
         return (Ball::ZERO, one());
     }
@@ -114,6 +111,24 @@ fn sin_cos_small(t: &Float, wp: u64) -> (Ball, Ball) {
     (sin, cos)
 }
 
+/// Balls containing `sin(t)` and `cos(t)` for an exact `|t| < 0.789` (just
+/// above `π/4`), at about `wp` bits relative to each, from the core for `wp`
+/// (see the [module comment](super)).
+fn sin_cos_reduced(t: &Float, wp: u64) -> (Ball, Ball) {
+    if t.is_zero() {
+        return (Ball::ZERO, one());
+    }
+    if wp >= BIT_BURST_MIN_PREC {
+        return bitburst::sin_cos(t, wp);
+    }
+    if wp <= TABLE_MAX_PREC && exponent(t) >= -15 {
+        if let Some(v) = tables::sin_cos(t, wp) {
+            return v;
+        }
+    }
+    sin_cos_small(t, wp)
+}
+
 /// Balls containing `sin(m)` and `cos(m)` for an exact `m` of exponent at
 /// most `HUGE_EXP`, at about `wp` bits, relative to each result.
 fn sin_cos_exact(m: &Float, wp: u64) -> (Ball, Ball) {
@@ -122,7 +137,7 @@ fn sin_cos_exact(m: &Float, wp: u64) -> (Ball, Ball) {
     }
     let e = exponent(m);
     if e <= -1 {
-        return sin_cos_small(m, wp);
+        return sin_cos_reduced(m, wp);
     }
     // k = round(m / (π/2)) < 2^(e + 1), from π at 64 bits beyond k's.
     let kbits = e.unsigned_abs() + 2;
@@ -149,7 +164,7 @@ fn sin_cos_exact(m: &Float, wp: u64) -> (Ball, Ball) {
             .unwrap_or(cap)
             .max(extra);
     };
-    let (s, c) = sin_cos_small(t.mid(), wp);
+    let (s, c) = sin_cos_reduced(t.mid(), wp);
     let (s, c) = (s.add_error(t.rad()), c.add_error(t.rad()));
     // (sin, cos)(t + k π/2): rotate by the quadrant.
     let quadrant = k
@@ -207,11 +222,11 @@ fn sin_pi_half(b: &Float, prec: u64) -> Ball {
     let at = |c: &Float| Ball::const_pi(wp + 8).mul(&Ball::exact(c.clone()), wp + 8);
     let v = if *b <= quarter {
         let t = at(b);
-        let (s, _) = sin_cos_small(t.mid(), wp);
+        let (s, _) = sin_cos_reduced(t.mid(), wp);
         s.add_error(t.rad())
     } else {
         let t = at(&half.sub(b));
-        let (_, c) = sin_cos_small(t.mid(), wp);
+        let (_, c) = sin_cos_reduced(t.mid(), wp);
         c.add_error(t.rad())
     };
     v.round_to_accuracy(prec)

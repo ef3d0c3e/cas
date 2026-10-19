@@ -114,15 +114,16 @@ fn powers(x: &Integer, w: u64, m: u64) -> Vec<Integer> {
     pow
 }
 
-/// `Σ_{j < n} (-y)^j / (2j + 1)` for `y = Y / 2^w` with `0 <= y <= 1/4`,
-/// `n >= 1` (`atan(x) / x` in `y = x^2`): `(S, e)` as for [`hyp_sum`].
+/// `Σ_{j < n} (-y)^j / (2j + 1)` for `y = Y / 2^w` with `|y| <= 1/4`, `n >=
+/// 1` (`atan(x) / x` in `y = x^2`, and `atanh(x) / x` in `y = -x^2`): `(S,
+/// e)` as for [`hyp_sum`].
 ///
 /// The coefficients do not telescope into products, so each block is summed
 /// directly, `Σ_l (-1)^j trunc(P_l / (2j + 1))` for `j = m i + l`, and
 /// Horner's rule joins the blocks, `acc_i = block_i + trunc(P_m acc_(i+1) /
 /// 2^w)`: still `m + n/m` full products. Errors: a term `e_l / (2j+1) + 1 <=
 /// e_l + 1` (`e_l = l - 1` as before), the join `e_A + 2 e_m + 2` (`|acc| <=
-/// Σ y^k <= 2`), all added.
+/// Σ |y|^k <= 2`), all added.
 pub(super) fn atan_sum(y: &Integer, w: u64, n: u64) -> (Integer, Natural) {
     assert!(n >= 1, "atan_sum: no terms");
     let m = n.isqrt().max(1);
@@ -239,8 +240,8 @@ mod tests {
         }
 
         #[test]
-        fn atan_within_the_bound(w in 8u64..400, n in 1u64..80, num in any::<i64>()) {
-            let y = fixed(w, num, false, true);
+        fn atan_within_the_bound(w in 8u64..400, n in 1u64..80, num in any::<i64>(), neg in any::<bool>()) {
+            let y = fixed(w, num, neg, true);
             let yr = &Rational::from(y.clone()) / &scale(w);
             let (s, e) = atan_sum(&y, w, n);
             // About m^2 / 2 per block of m terms, so n √n / 2 in all.

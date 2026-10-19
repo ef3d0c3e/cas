@@ -9,7 +9,8 @@
 //! 4096); constants and functions run at decimal digit counts up to
 //! `CAS_BENCH_MAX_DIGITS` (default 10^4; the tickets' sweeps go to 10^6).
 //! The `mulhi` group times the short products of the midpoint kernels
-//! against the full product, on limb counts.
+//! against the full product, on limb counts; `first_use` the first call of
+//! each function with the caches cleared (building its tables).
 //! Pass a filter to run part of it: `cargo bench -p cas-num --bench ball -- '^mul/'`.
 //!
 //! Targets (CAS-DOC-5 §11): `Float` add/mul within 1.3× of MPFR at 1–4 limbs,
@@ -371,6 +372,32 @@ fn functions(c: &mut Criterion) {
     }
 }
 
+/// The first call of each function at 100 and 1000 digits, with every cache
+/// cleared before it: the cost of building the tables (CAS-86) and the
+/// constants they need, which later calls at those precisions skip.
+fn first_use(c: &mut Criterion) {
+    type Ours = fn(&ball::Ball, u64) -> ball::Ball;
+    let funs: [(&str, Ours); 4] = [
+        ("exp", ball::Ball::exp),
+        ("log", ball::Ball::log),
+        ("sin", ball::Ball::sin),
+        ("atan", ball::Ball::atan),
+    ];
+    let mut group = c.benchmark_group("first_use");
+    for (name, g) in funs {
+        for d in [100, 1000] {
+            let b = ball::Ball::exact(to_ours(&operand(bits(d), 2)));
+            group.bench_function(BenchmarkId::new(name, d), |bench| {
+                bench.iter(|| {
+                    ball::clear_constant_cache();
+                    g(black_box(&b), u64::from(bits(d)))
+                });
+            });
+        }
+    }
+    group.finish();
+}
+
 fn config() -> Criterion {
     Criterion::default()
         .sample_size(20)
@@ -381,6 +408,6 @@ fn config() -> Criterion {
 criterion_group! {
     name = benches;
     config = config();
-    targets = short_products, arithmetic, mag_ops, machine, constants, decimal, functions
+    targets = short_products, arithmetic, mag_ops, machine, constants, decimal, functions, first_use
 }
 criterion_main!(benches);

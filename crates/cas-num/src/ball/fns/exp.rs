@@ -4,14 +4,19 @@
 //! (a ball, from `log 2` at enough bits for `k`), `t = x 2^h` with `|x| <=
 //! 2^-r`, `r ≈ p^(1/3)`, the Taylor series of `exp(x)` summed in fixed point
 //! by rectangular splitting ([`exp_sum`]), then squared back `h` times and
-//! scaled by `2^k`, as balls. The input radius `ρ` adds `exp(m) (e^ρ - 1)`.
+//! scaled by `2^k`, as balls. Tables or bit-burst replace the halvings and
+//! the series at the precisions they serve (see the [module
+//! comment](super)). The input radius `ρ` adds `exp(m) (e^ρ - 1)`.
 //!
 //! Arguments of exponent above `HUGE_EXP` (`|m| >= 2^65536`) would need `log
 //! 2` to that many bits: a positive one gives the indeterminate ball, a
 //! negative one `[0 ± 2^(-2^(e - 2))]`, a bound on `exp` of every point.
 
 use super::fixed::{exp_sum, shr};
-use super::{exponent, one, upper, working};
+use super::{
+    BIT_BURST_MIN_PREC, TABLE_MAX_PREC, bitburst, exponent, factorial_lower, one, tables, upper,
+    working,
+};
 use crate::ball::decimal::to_integer;
 use crate::ball::{Ball, Float, Mag, Round};
 use crate::{Integer, Natural};
@@ -34,13 +39,6 @@ pub(super) fn to_fixed(x: &Float, w: u64) -> Integer {
     }
 }
 
-/// A lower bound of `n!`.
-fn factorial_lower(n: u64) -> Mag {
-    (2..=n).fold(Mag::ONE, |acc, k| {
-        acc.mul_lower(&Mag::from_integer_lower(&Integer::from(k)))
-    })
-}
-
 /// A ball containing `exp(t)` for an exact `|t| < 1`, at about `wp` bits.
 ///
 /// With `|t| < 2^et`, `h = max(0, r + et)` halvings give `x = t / 2^h` with
@@ -51,7 +49,7 @@ fn factorial_lower(n: u64) -> Mag {
 /// `n` is the first count with `ex n - log2(n!) <= -(w + 2)`. The `h`
 /// squarings double the relative error each, so the sum has `w = wp + 2h +
 /// 16` bits and the squarings `wp + h + 8`.
-fn exp_small(t: &Float, wp: u64) -> Ball {
+pub(super) fn exp_small(t: &Float, wp: u64) -> Ball {
     if t.is_zero() {
         return one();
     }
@@ -102,6 +100,21 @@ fn exp_small(t: &Float, wp: u64) -> Ball {
     b
 }
 
+/// A ball containing `exp(t)` for an exact `|t| < 1/2`, at about `wp` bits,
+/// from the core for `wp` (see the [module comment](super)).
+fn exp_reduced(t: &Float, wp: u64) -> Ball {
+    if t.is_zero() {
+        return one();
+    }
+    if wp >= BIT_BURST_MIN_PREC {
+        bitburst::exp(t, wp)
+    } else if wp <= TABLE_MAX_PREC && exponent(t) >= -15 {
+        tables::exp(t, wp)
+    } else {
+        exp_small(t, wp)
+    }
+}
+
 /// A ball containing `exp(m)` for an exact `m` with exponent at most
 /// `HUGE_EXP`, at about `wp` bits.
 pub(super) fn exp_exact(m: &Float, wp: u64) -> Ball {
@@ -110,7 +123,7 @@ pub(super) fn exp_exact(m: &Float, wp: u64) -> Ball {
     }
     let e = exponent(m);
     if e <= -1 {
-        return exp_small(m, wp);
+        return exp_reduced(m, wp);
     }
     // k = round(m / log 2) < 2^(e + 1), from log 2 at 64 bits beyond k's:
     // only |t| needs to be small, not k exact.
@@ -124,7 +137,7 @@ pub(super) fn exp_exact(m: &Float, wp: u64) -> Ball {
     let kl = Ball::const_log2(p).mul(&Ball::from_integer(&k), p);
     let t = Ball::exact(m.clone()).sub(&kl, p);
     // exp(t ± ρ) ⊂ exp(t) (1 ± (e^ρ - 1)).
-    let s = exp_small(t.mid(), wp);
+    let s = exp_reduced(t.mid(), wp);
     let s = s.add_error(&upper(&s).mul(&t.rad().expm1()));
     s.mul_2exp(&k)
 }
