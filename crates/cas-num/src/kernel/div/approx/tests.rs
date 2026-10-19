@@ -240,7 +240,12 @@ fn rsqrt_wrapped_residual() {
             .max_by_key(|&&(n, _, w)| (w, std::cmp::Reverse(n))),
     );
     for (n, m, w) in picks {
-        assert!(m.is_power_of_two() && w >= 1 && m + w == n + n / 2 + 4);
+        assert!(crate::kernel::mul::wraps_cyclically(m) && w >= 1 && m + w == n + n / 2 + 4);
+        let span = m + w - 1;
+        assert!(
+            3 * (w - 1) <= span,
+            "w = {w} beyond a third of the span {span}"
+        );
         let ones = vec![Limb::MAX; n];
         let mut quarter = vec![0; n];
         quarter[n - 1] = 1 << (Limb::BITS - 2);
@@ -298,7 +303,9 @@ proptest! {
         prop_assert_eq!(val(&full), r.clone().abs());
         prop_assert_eq!(full_negative, r <= 0);
         let span = n + h + 2;
-        for m in (0..usize::BITS).map(|k| 1usize << k).take_while(|&m| m <= span) {
+        // Every length works, transform lengths or not (the others fold the
+        // full product).
+        for m in 1..=span {
             let w = span + 1 - m;
             if w > m || w > n || w > 2 * h + 2 {
                 continue;

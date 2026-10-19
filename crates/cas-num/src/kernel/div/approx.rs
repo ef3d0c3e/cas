@@ -31,8 +31,8 @@ const RSQRT_NEWTON_THRESHOLD: usize = 3;
 /// CAS-90), the Newton path takes 1.4–2.1× the exact Karatsuba root from 64
 /// to 8192 limbs (1.59× at 8192), and is within 10% only around 16–32
 /// limbs. Its residual `A Yh^2` is wrapped where the cyclic transform
-/// applies (from about 1400 limbs in the default tuning), which saves only
-/// 3–5% at powers of two: there the low part `w` is about `n / 2` limbs.
+/// applies (from about 1400 limbs in the default tuning), which saved only
+/// 3–5% with power-of-two moduli; CAS-98 takes `3 2^k` moduli too.
 const SQRT_NEWTON_THRESHOLD: Option<usize> = None;
 
 fn sqrt_by_newton(n: usize) -> bool {
@@ -284,15 +284,23 @@ fn rsqrt_unchecked(y: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) {
 }
 
 /// `(m, w)` of the wrapped residual for `n` limbs, when the cyclic transform
-/// applies: `m` the largest power of two up to `n + h + 2`, and `w = n + h +
-/// 3 - m` low limbs (at least 1, at most `m`, `n` and `2h + 2`).
+/// applies: `m` the largest transform length (`2^k` or `3 2^k`) up to the
+/// span `n + h + 2`, and `w = n + h + 3 - m` low limbs (at least 1, at most
+/// `m`, `n` and `2h + 2`). Consecutive transform lengths are at most 1.5
+/// apart, so `w` is at most a third of the span, plus one.
 fn rsqrt_wrap_lens(n: usize) -> Option<(usize, usize)> {
     if n < RSQRT_NEWTON_THRESHOLD {
         return None;
     }
     let (h, _) = rsqrt_lens(n);
     let span = n + h + 2;
-    let m = 1usize << (usize::BITS - 1 - span.leading_zeros());
+    let pow2 = 1usize << (usize::BITS - 1 - span.leading_zeros());
+    let three = 3 * (pow2 / 2);
+    let m = if pow2 >= 2 && three <= span {
+        three
+    } else {
+        pow2
+    };
     let w = span + 1 - m;
     (wraps_cyclically(m) && w <= n.min(2 * h + 2)).then_some((m, w))
 }
@@ -325,8 +333,10 @@ fn rsqrt_residual_full(
 }
 
 /// [`rsqrt_residual_full`] from `A T mod (B^m - 1)` (a cyclic transform of
-/// `m` coefficients, where the full product has `n + 2h + 2`) and `A T mod
-/// B^w` (a short product of `w` limbs), for `(m, w)` from [`rsqrt_wrap_lens`].
+/// `m` coefficients, where the full product has `n + 2h + 2`; any `m >= w`
+/// gives the same result, the transform only applies at its lengths) and
+/// `A T mod B^w` (a short product of `w` limbs), for `(m, w)` from
+/// [`rsqrt_wrap_lens`].
 ///
 /// `|R| < B^(n + h + 1)` (see [`rsqrt_approx`]). With `e = R mod (B^m - 1)`
 /// in `[0, B^m - 1)`, `R = e + j (B^m - 1)` for an integer `j` with
