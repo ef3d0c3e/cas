@@ -19,6 +19,18 @@
 //! big division; everything before it is products of growing size, so the
 //! cost is our multiplication's. The tail beyond `n` terms is each series'
 //! business: callers bound it and add it to the ball's radius.
+//!
+//! A power of two in `q`, as in the bit-burst series of `x = p / 2^b`
+//! (CAS-95), is kept apart: `q(k) 2^s(k)` with `s` from [`Series::shift`],
+//! and a range carries `E = Σ s` instead of multiplying it into `Q`. Then
+//! `S = T / (B Q 2^E)` and the merge becomes
+//!
+//! ```text
+//! T = 2^Er Br Qr Tl + Bl Pl Tr,   E = El + Er,
+//! ```
+//!
+//! a shift where there was a product, and `Q` and every product with it
+//! stay as short as the odd part.
 
 use super::Ball;
 use crate::Integer;
@@ -33,6 +45,12 @@ pub(crate) trait Series {
     fn q(&self, k: u64) -> Integer;
     fn a(&self, k: u64) -> Option<Integer>;
     fn b(&self, k: u64) -> Option<Integer>;
+
+    /// The power of two in `q(k)`'s place, kept out of the products: the
+    /// term's denominator is `q(k) 2^shift(k)`.
+    fn shift(&self, _k: u64) -> u64 {
+        0
+    }
 }
 
 /// `P, Q, B, T` of a range; `None` is 1 (or, for `p`, not computed: the
@@ -42,6 +60,16 @@ pub(super) struct Split {
     q: Integer,
     b: Option<Integer>,
     t: Integer,
+    e: u64,
+}
+
+/// `x 2^k`.
+fn shl(x: Integer, k: u64) -> Integer {
+    if k == 0 {
+        return x;
+    }
+    let (neg, mag) = x.into_parts();
+    Integer::from_parts(neg, mag << k)
 }
 
 /// `x · y`, with `None` as 1.
@@ -75,13 +103,14 @@ pub(super) fn split<S: Series>(s: &S, lo: u64, hi: u64, need_p: bool) -> Split {
             q: s.q(lo),
             b: s.b(lo),
             t,
+            e: s.shift(lo),
         };
     }
     let mid = lo + (hi - lo) / 2;
     let l = split(s, lo, mid, true);
     let r = split(s, mid, hi, need_p);
-    // T = Br Qr Tl + Bl Pl Tr.
-    let mut t = mul_opt(&r.q * &l.t, r.b.as_ref());
+    // T = 2^Er Br Qr Tl + Bl Pl Tr.
+    let mut t = shl(mul_opt(&r.q * &l.t, r.b.as_ref()), r.e);
     t += &mul_opt(mul_opt(r.t, l.p.as_ref()), l.b.as_ref());
     Split {
         p: if need_p {
@@ -92,16 +121,27 @@ pub(super) fn split<S: Series>(s: &S, lo: u64, hi: u64, need_p: bool) -> Split {
         q: &l.q * &r.q,
         b: mul_opts(l.b, r.b.as_ref()),
         t,
+        e: l.e + r.e,
     }
 }
 
 /// The first `n` terms as `(T, B Q, Q)`: `S = T / (B Q)`, and `Q` alone,
-/// which tail bounds are often stated in. `n` must be at least 1.
+/// which tail bounds are often stated in. `n` must be at least 1; the
+/// series has no [`Series::shift`] (see [`sum_shifted`]).
 pub(crate) fn sum<S: Series>(s: &S, n: u64) -> (Integer, Integer, Integer) {
     assert!(n >= 1, "bsplit::sum: no terms");
-    let Split { q, b, t, .. } = split(s, 0, n, false);
+    let Split { q, b, t, e, .. } = split(s, 0, n, false);
+    debug_assert_eq!(e, 0, "bsplit::sum of a shifted series");
     let d = mul_opt(q.clone(), b.as_ref());
     (t, d, q)
+}
+
+/// The first `n` terms as `(T, B Q, E)`: `S = T / (B Q 2^E)`. `n` must be
+/// at least 1.
+pub(crate) fn sum_shifted<S: Series>(s: &S, n: u64) -> (Integer, Integer, u64) {
+    assert!(n >= 1, "bsplit::sum_shifted: no terms");
+    let Split { q, b, t, e, .. } = split(s, 0, n, false);
+    (t, mul_opt(q, b.as_ref()), e)
 }
 
 /// `t / d` as a ball at `prec` bits; both are rounded to `prec` bits first,

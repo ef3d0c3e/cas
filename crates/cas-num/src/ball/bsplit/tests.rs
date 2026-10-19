@@ -1,10 +1,11 @@
 //! The binary-splitting sum against the series summed term by term in exact
-//! rationals, on random sequences with each factor present or always 1.
+//! rationals, on random sequences with each factor present or always 1,
+//! and with powers of two kept apart by [`Series::shift`].
 
 use proptest::prelude::*;
 
-use super::{Series, quotient, sum};
-use crate::{Integer, Rational};
+use super::{Series, quotient, sum, sum_shifted};
+use crate::{Integer, Natural, Rational};
 
 /// Tabulated sequences; an empty table is the constant 1.
 #[derive(Debug, Clone)]
@@ -13,6 +14,8 @@ struct Table {
     q: Vec<i64>,
     a: Vec<i64>,
     b: Vec<i64>,
+    /// Shifts; empty is 0.
+    s: Vec<u64>,
 }
 
 fn entry(v: &[i64], k: u64) -> Option<Integer> {
@@ -35,6 +38,18 @@ impl Series for Table {
     fn b(&self, k: u64) -> Option<Integer> {
         entry(&self.b, k)
     }
+
+    fn shift(&self, k: u64) -> u64 {
+        self.s
+            .get(usize::try_from(k).unwrap())
+            .copied()
+            .unwrap_or(0)
+    }
+}
+
+/// `2^k` as a rational.
+fn pow2(k: u64) -> Rational {
+    Rational::from(Integer::from_parts(false, Natural::from(1u64) << k))
 }
 
 fn direct(s: &Table, n: u64) -> Rational {
@@ -42,7 +57,7 @@ fn direct(s: &Table, n: u64) -> Rational {
     let (mut sum, mut prod) = (Rational::from(Integer::ZERO), one.clone());
     for k in 0..n {
         let get = |x: Option<Integer>| x.map_or_else(|| one.clone(), Rational::from);
-        prod = &(&prod * &get(s.p(k))) / &Rational::from(s.q(k));
+        prod = &(&(&prod * &get(s.p(k))) / &Rational::from(s.q(k))) / &pow2(s.shift(k));
         sum = &sum + &(&(&prod * &get(s.a(k))) / &get(s.b(k)));
     }
     sum
@@ -73,7 +88,27 @@ fn table() -> impl Strategy<Value = (Table, u64)> {
             seq(false),
             seq(true),
         )
-            .prop_map(move |(p, q, a, b)| (Table { p, q, a, b }, n as u64))
+            .prop_map(move |(p, q, a, b)| {
+                (
+                    Table {
+                        p,
+                        q,
+                        a,
+                        b,
+                        s: Vec::new(),
+                    },
+                    n as u64,
+                )
+            })
+    })
+}
+
+/// [`table`] with shifts in each term, from 0 to beyond a limb.
+fn shifted_table() -> impl Strategy<Value = (Table, u64)> {
+    table().prop_flat_map(|(t, n)| {
+        let len = usize::try_from(n).unwrap();
+        proptest::collection::vec(prop_oneof![Just(0u64), 0u64..8, 60u64..200], len)
+            .prop_map(move |s| (Table { s, ..t.clone() }, n))
     })
 }
 
@@ -91,6 +126,18 @@ proptest! {
         // The rounded quotient contains it.
         prop_assert!(ball.contains_rational(&got));
     }
+
+    #[test]
+    fn shifts_match_term_by_term((s, n) in shifted_table()) {
+        let (t, d, e) = sum_shifted(&s, n);
+        prop_assert!(!d.is_zero());
+        let got = &Rational::new(t.clone(), d.clone()) / &pow2(e);
+        prop_assert_eq!(&got, &direct(&s, n));
+        prop_assert_eq!(e, (0..n).map(|k| s.shift(k)).sum::<u64>());
+        // The scaled quotient contains it.
+        let ball = quotient(&t, &d, 64).mul_2exp(&-Integer::from(e));
+        prop_assert!(ball.contains_rational(&got));
+    }
 }
 
 #[test]
@@ -102,6 +149,7 @@ fn zero_terms() {
             q: vec![1],
             a: vec![],
             b: vec![],
+            s: vec![],
         },
         0,
     );

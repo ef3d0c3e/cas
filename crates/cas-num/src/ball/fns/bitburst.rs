@@ -13,17 +13,21 @@
 //! there are `log2(p / 8)` chunks. Chunks stop a few bits past the working
 //! precision; the rest goes to the baseline's tiny-argument bound.
 //!
-//! - `exp(t) = Π exp(x_j)`, each from `Σ x^k / k!` (`p(k) = p_j`, `q(k) = k
-//!   2^b`), tail `<= 2 |x|^n / n!` for `|x| <= 1/2`.
+//! - `exp(t) = Π exp(x_j)`, each from `Σ x^k / k!` (`p(k) = p_j`, `q(k) = k`,
+//!   shift `b`), tail `<= 2 |x|^n / n!` for `|x| <= 1/2`.
 //! - `sin`, `cos` by angle addition from each chunk's `cos x = Σ (-x^2)^k /
 //!   (2k)!` and `sin x = x Σ (-x^2)^k / (2k+1)!`; alternating series of
 //!   decreasing terms for `|x| < 1`, so each tail is at most its first term.
 //! - `atan x = atan(c) + atan((x - c) / (1 + x c))` with `c` the next chunk
 //!   of the current argument (a ball, so the residual's rounding is in its
-//!   radius) and `atan c = Σ (-1)^k c^(2k+1) / (2k+1)` (`p(0) = p_j`, `q(0) =
-//!   2^b`, `p(k) = -p_j^2`, `q(k) = 2^(2b)`, `b(k) = 2k + 1`), tail at most
+//!   radius) and `atan c = Σ (-1)^k c^(2k+1) / (2k+1)` (`p(0) = p_j`, shift
+//!   `b`, `p(k) = -p_j^2`, shift `2b`, `b(k) = 2k + 1`), tail at most
 //!   `|c|^(2n+1)`. Arguments above 1/2 first take `atan x = π/4 - atan((1 -
 //!   x) / (1 + x))`.
+//!
+//! The powers of two of `x = p_j / 2^b` are [`Series::shift`]s, not factors
+//! of `q` (CAS-95): `Q` holds only the odd part (`k!`, `(2k+1)!`, 1), so the
+//! merges multiply integers about half as long.
 //!
 //! `log` needs no series of its own: its Newton iteration and certificate
 //! run on `exp` ([`super::log`]), which is bit-burst at these precisions.
@@ -32,9 +36,9 @@ use super::atan::atan_series;
 use super::exp::{exp_small, to_fixed};
 use super::factorial_lower;
 use super::trig::sin_cos_small;
+use crate::Integer;
 use crate::ball::bsplit::{self, Series};
 use crate::ball::{Ball, Float, Mag};
-use crate::{Integer, Natural};
 
 /// The first chunk boundary `b_1`.
 const FIRST: u64 = 8;
@@ -44,9 +48,9 @@ fn at(p: &Integer, b: u64) -> Float {
     Float::from_integer_exp(p, &-Integer::from(b))
 }
 
-/// `2^k` as an integer.
-fn pow2(k: u64) -> Integer {
-    Integer::from_parts(false, Natural::from(1u64) << k)
+/// `t / (d 2^e)` as a ball at `prec` bits.
+fn shifted_quotient(t: &Integer, d: &Integer, e: u64, prec: u64) -> Ball {
+    bsplit::quotient(t, d, prec).mul_2exp(&-Integer::from(e))
 }
 
 /// An upper bound of `|p| / 2^b`.
@@ -106,11 +110,7 @@ impl Series for ExpChunk<'_> {
     }
 
     fn q(&self, k: u64) -> Integer {
-        if k == 0 {
-            Integer::ONE
-        } else {
-            Integer::from_parts(false, Natural::from(k) << self.b)
-        }
+        Integer::from(k.max(1))
     }
 
     fn a(&self, _: u64) -> Option<Integer> {
@@ -120,19 +120,23 @@ impl Series for ExpChunk<'_> {
     fn b(&self, _: u64) -> Option<Integer> {
         None
     }
+
+    fn shift(&self, k: u64) -> u64 {
+        if k == 0 { 0 } else { self.b }
+    }
 }
 
 /// `exp(p / 2^b)` for `|p / 2^b| <= 1/2` at `q` bits.
 #[allow(clippy::cast_precision_loss, reason = "term count estimates")]
 fn exp_chunk(p: &Integer, b: u64, q: u64) -> Ball {
     let n = terms(per_term(p, b), q + 2, |k| k as f64);
-    let (t, d, _) = bsplit::sum(&ExpChunk { p, b }, n);
+    let (t, d, e) = bsplit::sum_shifted(&ExpChunk { p, b }, n);
     // Tail Σ_{k >= n} |x|^k / k! <= 2 |x|^n / n!.
     let tail = bound(p, b)
         .pow(n)
         .mul_2exp(&Integer::ONE)
         .div(&factorial_lower(n));
-    bsplit::quotient(&t, &d, q).add_error(&tail)
+    shifted_quotient(&t, &d, e, q).add_error(&tail)
 }
 
 /// A ball containing `exp(t)` for an exact `|t| < 1/2`, at about `wp` bits.
@@ -174,7 +178,7 @@ impl Series for TrigChunk<'_> {
         } else {
             (2 * k - 1) * 2 * k
         };
-        Integer::from_parts(false, Natural::from(f) << (2 * self.b))
+        Integer::from(f)
     }
 
     fn a(&self, _: u64) -> Option<Integer> {
@@ -183,6 +187,10 @@ impl Series for TrigChunk<'_> {
 
     fn b(&self, _: u64) -> Option<Integer> {
         None
+    }
+
+    fn shift(&self, k: u64) -> u64 {
+        if k == 0 { 0 } else { 2 * self.b }
     }
 }
 
@@ -193,10 +201,10 @@ fn sin_cos_chunk(p: &Integer, b: u64, q: u64) -> (Ball, Ball) {
     let p2 = p * p;
     let x = bound(p, b);
     let series = |odd: bool| {
-        let (t, d, _) = bsplit::sum(&TrigChunk { p2: &p2, b, odd }, n);
+        let (t, d, e) = bsplit::sum_shifted(&TrigChunk { p2: &p2, b, odd }, n);
         // The first omitted term: |x|^(2n) / (2n)! or / (2n + 1)!.
         let tail = x.pow(2 * n).div(&factorial_lower(2 * n + u64::from(odd)));
-        bsplit::quotient(&t, &d, q).add_error(&tail)
+        shifted_quotient(&t, &d, e, q).add_error(&tail)
     };
     let s = Ball::exact(at(p, b)).mul(&series(true), q);
     (s, series(false))
@@ -235,8 +243,8 @@ impl Series for AtanChunk<'_> {
         })
     }
 
-    fn q(&self, k: u64) -> Integer {
-        pow2(if k == 0 { self.b } else { 2 * self.b })
+    fn q(&self, _: u64) -> Integer {
+        Integer::ONE
     }
 
     fn a(&self, _: u64) -> Option<Integer> {
@@ -246,6 +254,10 @@ impl Series for AtanChunk<'_> {
     fn b(&self, k: u64) -> Option<Integer> {
         Some(Integer::from(2 * u128::from(k) + 1))
     }
+
+    fn shift(&self, k: u64) -> u64 {
+        if k == 0 { self.b } else { 2 * self.b }
+    }
 }
 
 /// `atan(p / 2^b)` for `|p / 2^b| <= 1/2` at `q` bits.
@@ -253,9 +265,9 @@ fn atan_chunk(p: &Integer, b: u64, q: u64) -> Ball {
     // (2n + 1) per >= q + 2, per >= 1 as |x| <= 1/2.
     let n = (q + 2).div_ceil(2 * per_term(p, b).max(1)).max(1);
     let p2 = p * p;
-    let (t, d, _) = bsplit::sum(&AtanChunk { p, p2: &p2, b }, n);
+    let (t, d, e) = bsplit::sum_shifted(&AtanChunk { p, p2: &p2, b }, n);
     let tail = bound(p, b).pow(2 * n + 1);
-    bsplit::quotient(&t, &d, q).add_error(&tail)
+    shifted_quotient(&t, &d, e, q).add_error(&tail)
 }
 
 /// A ball containing `atan(x)` for an exact `0 <= x <= 1`, at about `wp`
