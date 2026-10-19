@@ -5,9 +5,8 @@
 //! division gives the low half of the root. It costs a constant times a
 //! division of the same size.
 //!
-//! The nth root is Newton's iteration from an overestimate, which is the
-//! root of the top part, recursively, so a couple of iterations finish each
-//! level.
+//! The kth root, for `k >= 3`, takes one Newton step per doubling of the
+//! precision ([`nth`]).
 #![allow(
     clippy::many_single_char_names,
     reason = "the algorithms use the textbook names (m, s, r, q, u, k, x, n, p)"
@@ -19,6 +18,7 @@ use crate::modular::ModWord;
 use crate::prime::is_prime_u64;
 use crate::{Limb, kernel};
 
+mod nth;
 #[cfg(test)]
 mod tests;
 
@@ -104,7 +104,7 @@ impl Natural {
             0 => panic!("zeroth root"),
             1 => self.clone(),
             2 => self.isqrt(),
-            _ => root(self, n),
+            _ => nth::root(self, n),
         }
     }
 
@@ -115,12 +115,12 @@ impl Natural {
     /// If `n` is zero.
     #[must_use]
     pub fn root_rem(&self, n: u32) -> (Natural, Natural) {
-        if n == 2 {
-            return self.sqrt_rem();
+        match n {
+            0 => panic!("zeroth root"),
+            1 => (self.clone(), Natural::ZERO),
+            2 => self.sqrt_rem(),
+            _ => nth::root_rem(self, n),
         }
-        let s = self.nth_root(n);
-        let r = self - s.pow(u64::from(n));
-        (s, r)
     }
 
     /// Whether `self` is the square of an integer (0 and 1 are).
@@ -171,55 +171,6 @@ impl Natural {
         }
         (exp > 1).then_some((base, exp))
     }
-}
-
-/// `⌊x^(1/n)⌋` for `n >= 3`.
-///
-/// Newton's iteration `y = ((n - 1) r + ⌊x / r^(n-1)⌋) / n` decreases
-/// strictly from any `r > ⌊x^(1/n)⌋` and does not go below it, so it stops
-/// exactly at the root. The start is `(⌊(x / 2^(nh))^(1/n)⌋ + 1) 2^h`, an
-/// overestimate with about half the bits of the root correct.
-fn root(x: &Natural, n: u32) -> Natural {
-    if let Ok(v) = u64::try_from(x) {
-        return Natural::from(root_u64(v, n));
-    }
-    // The root has at most this many bits; x >= 1, so one bit means 1.
-    let bits = x.bit_length().div_ceil(u64::from(n));
-    if bits == 1 {
-        return Natural::one();
-    }
-    let h = bits / 2;
-    let mut r = (root(&(x >> (h * u64::from(n))), n) + 1) << h;
-    let n_1 = u64::from(n - 1);
-    loop {
-        let y = (&r * n_1 + x / r.pow(n_1)) / u64::from(n);
-        if y >= r {
-            return r;
-        }
-        r = y;
-    }
-}
-
-/// `⌊v^(1/n)⌋` for `n >= 2`: a floating-point estimate, corrected.
-fn root_u64(v: u64, n: u32) -> u64 {
-    if v < 2 || n >= u64::BITS {
-        return v.min(1);
-    }
-    #[allow(
-        clippy::cast_precision_loss,
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "an estimate, corrected below"
-    )]
-    let mut r = (v as f64).powf(1.0 / f64::from(n)) as u64;
-    let fits = |r: u64| r.checked_pow(n).is_some_and(|p| p <= v);
-    while !fits(r) {
-        r -= 1;
-    }
-    while fits(r + 1) {
-        r += 1;
-    }
-    r
 }
 
 /// `a` with `x = a^p`, for `x >= 1` and a prime `p`, if there is one.

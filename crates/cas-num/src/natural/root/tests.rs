@@ -213,3 +213,157 @@ fn root_edge_cases() {
 fn zeroth_root_panics() {
     let _ = Natural::one().nth_root(0);
 }
+
+/// A degree for the kth root kernel, and its root's largest length in limbs:
+/// enough for several Newton steps and the guard bits at small degrees,
+/// a single limb (its first step) at large ones.
+fn kth_degree() -> BoxedStrategy<(u32, usize)> {
+    prop::sample::select(vec![(3, 40), (4, 30), (5, 24), (7, 17), (11, 10), (64, 1)]).boxed()
+}
+
+/// `(x, k)` around the kth power of a root `s` with up to the degree's
+/// limbs (random, all ones or a power of two): `s^k + d` for `d` in
+/// `-1..=1`, `(s + 1)^k - 1` (the largest remainder), or `s^k` plus a random
+/// remainder.
+fn kth_root_input() -> BoxedStrategy<(Mag, u32)> {
+    kth_degree()
+        .prop_flat_map(|(k, limbs)| {
+            let bits = 1..=64 * u32::try_from(limbs).unwrap();
+            let root = prop_oneof![
+                3 => strategy::natural_up_to(limbs),
+                1 => bits.clone().prop_map(|b| Mag::from_rug(&((Integer::from(1) << b) - 1u32))),
+                1 => bits.prop_map(|b| Mag::from_rug(&(Integer::from(1) << (b - 1)))),
+            ];
+            (
+                root,
+                0..5u8,
+                strategy::natural_up_to(limbs * k as usize),
+                Just(k),
+            )
+        })
+        .prop_map(|(s, shape, extra, k)| {
+            let s = s.to_rug();
+            let p = Integer::from((&s).pow(k));
+            let next = Integer::from(&s + 1u32).pow(k);
+            let x = match shape {
+                0 => p - 1u32,
+                1 => p,
+                2 => p + 1u32,
+                3 => next - 1u32,
+                _ => {
+                    let gap = Integer::from(&next - &p);
+                    p + extra.to_rug() % gap
+                }
+            };
+            (Mag::from_rug(&x.max(Integer::new())), k)
+        })
+        .boxed()
+}
+
+differential! {
+    /// Every number of Newton steps, with and without the guard bits.
+    fn kth_root_near_powers((a, k) in kth_root_input()) {
+        ours: {
+            let x = a.to_natural();
+            let (s, r) = x.root_rem(k);
+            prop_assert_eq!(&x.nth_root(k), &s);
+            (s, r)
+        },
+        gmp: a.to_rug().root_rem(Integer::new(), k),
+    }
+}
+
+/// Runs `f` and returns how often it reached `counter`.
+fn count(counter: &'static std::thread::LocalKey<std::cell::Cell<u64>>, f: impl FnOnce()) -> u64 {
+    counter.with(|c| c.set(0));
+    f();
+    counter.with(std::cell::Cell::get)
+}
+
+/// `nth_root` and `root_rem` of `x` against GMP.
+fn check_root(x: &Integer, k: u32) {
+    let (s, r) = Mag::from_rug(x).to_natural().root_rem(k);
+    let (gs, gr) = x.clone().root_rem(Integer::new(), k);
+    assert_eq!(
+        (s.to_rug(), r.to_rug()),
+        (gs.clone(), gr),
+        "root_rem, k = {k}"
+    );
+    assert_eq!(
+        Mag::from_rug(x).to_natural().nth_root(k).to_rug(),
+        gs,
+        "nth_root, k = {k}"
+    );
+}
+
+/// Inputs that reach the kth root's rare branches: `(s + 1)^k - 1`, whose
+/// remainder is the largest, makes the last step's estimate too large, and
+/// all-ones values make it reach past its bits; exact powers make the
+/// guard bits ambiguous, and with roots of about 46 bits the floating-point
+/// estimate of the first step too small.
+#[test]
+fn kth_root_rare_branches() {
+    use super::nth::{FIRST_INCREMENT, GUARD_CHECK, STEP_CLAMP, STEP_DECREMENT};
+    let mut hits = [0; 4];
+    for k in [3, 5, 7] {
+        for i in 1..40u32 {
+            let s = Integer::from(3).pow(40 + 7 * i) + i;
+            hits[0] += count(&STEP_DECREMENT, || {
+                check_root(&(Integer::from(&s + 1u32).pow(k) - 1u32), k);
+            });
+            let ones = (Integer::from(1) << (k * (64 + 13 * i))) - 1u32;
+            hits[1] += count(&STEP_CLAMP, || check_root(&ones, k));
+            hits[2] += count(&GUARD_CHECK, || check_root(&Integer::from((&s).pow(k)), k));
+            let small = Integer::from(1u32 << 15) * (1u32 << 30) + Integer::from(3).pow(10 + i);
+            hits[3] += count(&FIRST_INCREMENT, || check_root(&small.pow(k), k));
+        }
+    }
+    assert!(hits.iter().all(|&h| h > 0), "{hits:?}");
+}
+
+/// Where a step's division would just pass a transform length, the step
+/// takes fewer bits; the roots stay exact.
+#[test]
+fn kth_root_fits_transforms() {
+    use super::nth::STEP_FIT;
+    use crate::kernel::mul::{MUL_WRAP_NTT_THRESHOLD, wrap_len};
+    use crate::testkit::TESTED_SIZE_MAX;
+    if MUL_WRAP_NTT_THRESHOLD > TESTED_SIZE_MAX {
+        return;
+    }
+    // With c = 8 for cube roots, the last step to a root of 128 f - 56
+    // bits appends 64 f - 32, so its divisor has f + 1 limbs, one past the
+    // transform length f (at least 32, for a limb of slack).
+    let fit = u32::try_from(wrap_len(MUL_WRAP_NTT_THRESHOLD.max(32))).unwrap();
+    let bits = 128 * fit - 56;
+    let s = (Integer::from(1) << (bits - 1)) + Integer::from(3).pow(bits / 4);
+    let fits = count(&STEP_FIT, || {
+        check_root(&(Integer::from(&s + 1u32).pow(3) - 1u32), 3);
+        check_root(&Integer::from((&s).pow(3)), 3);
+    });
+    assert!(fits > 0);
+}
+
+/// Exact powers (and ±1) whose root ends in a tiny last digit `e` below a
+/// top part with random low bits. The last step's dividend `D` then exceeds
+/// `e k s'^(k-1)` by a small amount, and its low bits, the input's next
+/// bits, are what bring it there.
+#[test]
+fn kth_root_low_digits() {
+    for k in [3u32, 5, 7] {
+        let c = u32::BITS - (k - 1).leading_zeros() + 6;
+        for n in [100u32, 129, 200, 250] {
+            // The last step appends b bits (see `step_bits`).
+            let b = (n - c) / 2;
+            let half = Integer::from(1) << (n - b - 1);
+            let top = &half + Integer::from(3).pow(2 * n) % &half;
+            for e in 1..4u32 {
+                let s = (Integer::from(&top) << b) + e;
+                let p = Integer::from((&s).pow(k));
+                check_root(&p, k);
+                check_root(&(Integer::from(&p) - 1u32), k);
+                check_root(&(p + 1u32), k);
+            }
+        }
+    }
+}
