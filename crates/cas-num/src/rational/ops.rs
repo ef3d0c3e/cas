@@ -40,7 +40,7 @@ fn sum(a: &Integer, b: &Integer, c: &Integer, d: &Integer) -> Rational {
         // gcd(ad + bc, bd) = 1 when b and d are coprime.
         return Rational::from_canonical(a * d + b * c, b * d);
     }
-    let (b_g, d_g) = (b.div_exact_unchecked(&g), d.div_exact_unchecked(&g));
+    let (b_g, d_g) = (b.div_exact(&g), d.div_exact(&g));
     let t = a * &d_g + c * &b_g;
     // t = 0 means a/b = -c/d, so b = d, which returned above.
     debug_assert!(!t.is_zero());
@@ -49,7 +49,7 @@ fn sum(a: &Integer, b: &Integer, c: &Integer, d: &Integer) -> Rational {
     if g2.is_one() {
         Rational::from_canonical(t, b_g * d)
     } else {
-        Rational::from_canonical(t.div_exact_unchecked(&g2), b_g * d.div_exact_unchecked(&g2))
+        Rational::from_canonical(t.div_exact(&g2), b_g * d.div_exact(&g2))
     }
 }
 
@@ -65,7 +65,7 @@ fn product(a: &Integer, b: &Integer, c: &Integer, d: &Integer) -> Rational {
         if g.is_one() {
             x.clone()
         } else {
-            x.div_exact_unchecked(g)
+            x.div_exact(g)
         }
     };
     Rational::from_canonical(

@@ -107,30 +107,19 @@ impl Natural {
         kernel::rem_1(self.limbs(), d)
     }
 
-    /// `self / d` where `d` is known to divide `self`.
-    ///
-    /// Short divisors use Hensel (2-adic) division from the low end, which
-    /// needs no quotient estimates and whose remainder proves the division
-    /// exact; longer ones divide with remainder, which is cheaper than Hensel
-    /// division plus a check.
+    /// `self / d` for a `d` that divides `self` (GMP's `mpz_divexact`
+    /// contract): the caller guarantees the division is exact, as for a gcd
+    /// or a known factor, and the quotient is the 2-adic one, by Hensel
+    /// division from the low end, with no quotient estimates and no
+    /// remainder. If `d` does not divide `self`, the result is unspecified;
+    /// debug builds check and panic. [`Natural::is_divisible_by`] or
+    /// [`Natural::div_rem`] tell an exact division from another.
     ///
     /// # Panics
     ///
-    /// If `d` is zero or does not divide `self`.
+    /// If `d` is zero; in debug builds, also if `d` does not divide `self`.
     #[must_use]
     pub fn div_exact(&self, d: &Natural) -> Natural {
-        if let [d] = d.limbs() {
-            return self.div_exact_limb(*d);
-        }
-        assert!(!d.is_zero(), "{DIV_BY_ZERO}");
-        self.hensel_div(d).expect(NOT_EXACT)
-    }
-
-    /// `self / d` for a non-zero `d` that divides `self` by construction (a
-    /// gcd, a found factor): [`Natural::div_exact`] without its check, by the
-    /// 2-adic quotient alone. Checked in debug builds; otherwise an inexact
-    /// division gives an unspecified value.
-    pub(crate) fn div_exact_unchecked(&self, d: &Natural) -> Natural {
         let q = match d.limbs() {
             [] => panic!("{DIV_BY_ZERO}"),
             [d] => return self.div_exact_limb(*d),
@@ -141,8 +130,11 @@ impl Natural {
     }
 
     /// The 2-adic quotient of `self` and the multi-limb `d`, both without
-    /// `d`'s factors of two, to `an - dn + 1` limbs: `self / d` when it is
-    /// exact.
+    /// `d`'s factors of two: `self / d` when it is exact. An exact quotient
+    /// has `an - dn + 1` limbs only when `a`'s top `dn` limbs reach `d`, so
+    /// otherwise this takes one fewer: a 2n/n division then works in blocks
+    /// of n/2 limbs rather than just past them, as `kernel::div_rem` avoids
+    /// its extra dividend limb.
     fn bdiv_q(&self, d: &Natural) -> Natural {
         let twos = d.trailing_zeros().expect("non-zero divisor");
         without_twos(self.limbs(), d.limbs(), twos, |a, d| {
@@ -150,14 +142,18 @@ impl Natural {
             if an < dn {
                 return Natural::ZERO;
             }
-            let mut q = LimbVec::zeroed(an - dn + 1);
-            if let [d] = d {
+            let q = if let [d] = d {
+                let mut q = LimbVec::zeroed(an);
                 kernel::divexact_1(q.as_mut_slice(), a, *d);
+                q
             } else {
-                with_scratch(kernel::bdiv_q_scratch_len(an - dn + 1, dn), |s| {
+                let qn = an - dn + usize::from(kernel::cmp_n(&a[an - dn..], d).is_ge());
+                let mut q = LimbVec::zeroed(qn);
+                with_scratch(kernel::bdiv_q_scratch_len(qn, dn), |s| {
                     kernel::bdiv_q(q.as_mut_slice(), a, d, s);
                 });
-            }
+                q
+            };
             let mut q = Natural { limbs: q };
             q.normalize();
             q.debug_check();
@@ -197,17 +193,20 @@ impl Natural {
         })
     }
 
-    /// `self / d` for a single limb `d` known to divide `self`.
+    /// `self / d` for a single limb `d` that divides `self`, with
+    /// [`Natural::div_exact`]'s contract: otherwise the result is
+    /// unspecified, and debug builds panic.
     ///
     /// # Panics
     ///
-    /// If `d` is zero or does not divide `self`.
+    /// If `d` is zero; in debug builds, also if `d` does not divide `self`.
     #[must_use]
     pub fn div_exact_limb(&self, d: Limb) -> Natural {
         assert!(d != 0, "{DIV_BY_ZERO}");
         let a = self.limbs();
         let mut q = LimbVec::zeroed(a.len());
-        assert!(kernel::divexact_1(q.as_mut_slice(), a, d), "{NOT_EXACT}");
+        let exact = kernel::divexact_1(q.as_mut_slice(), a, d);
+        debug_assert!(exact, "{NOT_EXACT}");
         let mut q = Natural { limbs: q };
         q.normalize();
         q.debug_check();

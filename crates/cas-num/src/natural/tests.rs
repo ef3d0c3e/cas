@@ -320,10 +320,10 @@ differential! {
     }
 
     /// Even divisors too: both sides lose the divisor's factors of two.
-    fn div_exact_unchecked(q in strategy::natural(), d in divisor(), twos in 0..130u64) {
+    fn div_exact_even(q in strategy::natural(), d in divisor(), twos in 0..130u64) {
         ours: {
             let d = d.to_natural() << twos;
-            (q.to_natural() * &d).div_exact_unchecked(&d)
+            (q.to_natural() * &d).div_exact(&d)
         },
         gmp: q.to_rug(),
     }
@@ -510,15 +510,68 @@ fn rem_by_zero_limb_panics() {
     let _ = Natural::one() % 0;
 }
 
+/// `div_exact` where Hensel division works in blocks, against GMP: quotients
+/// as long as `an - dn + 1` limbs (the dividend's top limbs reach the
+/// divisor) and one limb shorter, longer and shorter than the divisor.
+/// Skipped when the configuration starts the blocks above 20000 limbs.
 #[test]
+fn div_exact_in_blocks() {
+    let t = crate::kernel::div::bdiv::BDIV_MU_THRESHOLD;
+    if t > 20_000 {
+        return;
+    }
+    let mut state = 0x1357_9bdf_0246_8ace_u64;
+    let mut random = |n: usize, top: Limb| -> Vec<Limb> {
+        let mut v: Vec<Limb> = (0..n)
+            .map(|_| {
+                state ^= state >> 12;
+                state ^= state << 25;
+                state ^= state >> 27;
+                state.wrapping_mul(0x2545_f491_4f6c_dd1d)
+            })
+            .collect();
+        v[n - 1] = top;
+        v
+    };
+    for (qn, dn) in [(t + 7, t + 7), (2 * t, t + 1), (t / 2 + 1, t)] {
+        for (q_top, d_top) in [(Limb::MAX, 1), (1, Limb::MAX)] {
+            let (q, d) = (random(qn, q_top), random(dn, d_top));
+            let (q, d) = (Natural::from_limbs(&q), Natural::from_limbs(&d));
+            let a = &q * &d;
+            assert_eq!(a.div_exact(&d).to_rug(), q.to_rug(), "qn = {qn}, dn = {dn}");
+        }
+    }
+}
+
+/// Debug builds check `div_exact`'s contract.
+#[test]
+#[cfg(debug_assertions)]
 #[should_panic(expected = "division is not exact")]
 fn div_exact_panics_when_inexact() {
     let _ = Natural::from(u128::MAX).div_exact(&Natural::from(1u128 << 64));
 }
 
 #[test]
+#[cfg(debug_assertions)]
 #[should_panic(expected = "division is not exact")]
 fn div_exact_limb_panics_when_inexact() {
+    let _ = Natural::from(7u64).div_exact_limb(2);
+}
+
+/// Release builds trust it, as GMP's `mpz_divexact` does: an inexact
+/// division returns an unspecified value instead of panicking, for divisors
+/// with more trailing zeros than the dividend, longer than it, or odd.
+#[test]
+#[cfg(not(debug_assertions))]
+fn div_exact_inexact_returns() {
+    let a = Natural::from(u128::MAX);
+    for d in [
+        Natural::from(1u128 << 64),
+        Natural::from(u128::MAX) * 3u64,
+        Natural::from(3u128 << 64 | 5),
+    ] {
+        let _ = a.div_exact(&d);
+    }
     let _ = Natural::from(7u64).div_exact_limb(2);
 }
 

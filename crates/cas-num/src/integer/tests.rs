@@ -321,13 +321,17 @@ fn div_by_zero_panics() {
     let _ = Integer::ONE / Integer::ZERO;
 }
 
+/// Debug builds check `div_exact`'s contract; release builds return an
+/// unspecified value (see the `Natural` tests).
 #[test]
+#[cfg(debug_assertions)]
 #[should_panic(expected = "division is not exact")]
 fn div_exact_panics_when_inexact() {
     let _ = Integer::from(-7).div_exact(&Integer::from(2));
 }
 
 #[test]
+#[cfg(debug_assertions)]
 #[should_panic(expected = "division is not exact")]
 fn div_exact_big_panics_when_inexact() {
     let _ = Integer::from(i128::MIN + 1).div_exact(&Integer::from(1i128 << 64));

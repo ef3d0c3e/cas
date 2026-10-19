@@ -200,7 +200,7 @@ fn split(n: Natural, multiplicity: u64, effort: u64, found: &mut Vec<Factor>) {
     }
     match rho(&n, effort) {
         Some(d) => {
-            let e = n.div_exact_unchecked(&d);
+            let e = n.div_exact(&d);
             split(d, multiplicity, effort, found);
             split(e, multiplicity, effort, found);
         }

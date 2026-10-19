@@ -130,29 +130,17 @@ impl Integer {
         self.div_rem_rounded(d, Rounding::Euclid)
     }
 
-    /// `self / d` where `d` is known to divide `self`.
+    /// `self / d` for a `d` that divides `self`, with
+    /// [`Natural::div_exact`](crate::Natural::div_exact)'s contract (GMP's
+    /// `mpz_divexact`): if `d` does
+    /// not divide `self`, the result is unspecified, and debug builds panic.
     ///
     /// # Panics
     ///
-    /// If `d` is zero or does not divide `self`.
+    /// If `d` is zero; in debug builds, also if `d` does not divide `self`.
     #[must_use]
     pub fn div_exact(&self, d: &Integer) -> Integer {
         assert!(!d.is_zero(), "{DIV_BY_ZERO}");
-        if let (Repr::Small(a), Repr::Small(b)) = (&self.0, &d.0) {
-            assert!(a.wrapping_rem(*b) == 0, "division is not exact");
-            if let Some(q) = a.checked_div(*b) {
-                return Integer::from(q);
-            }
-        }
-        let (a_negative, a) = self.sign_mag();
-        let (d_negative, dm) = d.sign_mag();
-        Integer::from_parts(a_negative != d_negative, a.div_exact(&dm))
-    }
-
-    /// `self / d` for a non-zero `d` that divides `self` by construction:
-    /// [`Integer::div_exact`] without its check (see
-    /// [`Natural::div_exact_unchecked`]).
-    pub(crate) fn div_exact_unchecked(&self, d: &Integer) -> Integer {
         if let (Repr::Small(a), Repr::Small(b)) = (&self.0, &d.0) {
             if let Some(q) = a.checked_div(*b) {
                 debug_assert!(a.wrapping_rem(*b) == 0, "division is not exact");
@@ -161,7 +149,7 @@ impl Integer {
         }
         let (a_negative, a) = self.sign_mag();
         let (d_negative, dm) = d.sign_mag();
-        Integer::from_parts(a_negative != d_negative, a.div_exact_unchecked(&dm))
+        Integer::from_parts(a_negative != d_negative, a.div_exact(&dm))
     }
 
     /// Whether `d` divides `self`. Zero divides only zero.
