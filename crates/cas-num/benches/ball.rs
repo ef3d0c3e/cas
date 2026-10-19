@@ -368,15 +368,17 @@ fn to_ours(x: &Float) -> ball::Float {
     ball::Float::from_integer_exp(&m, &cas_num::Integer::from(i64::from(e)))
 }
 
-/// π, log 2 and e from scratch. Both sides cache constants, so each
-/// iteration clears the caches first; the cost of clearing is negligible
-/// next to the computation from 100 digits up. MPFR has no `e` constant:
-/// its row is `exp(1)`.
+/// π, log 2, e, Euler's γ and Catalan's G from scratch. Both sides cache
+/// constants, so each iteration clears the caches first; the cost of
+/// clearing is negligible next to the computation from 100 digits up. MPFR
+/// has no `e` constant: its row is `exp(1)`.
 fn constants(c: &mut Criterion) {
     type Ours = fn(u64) -> ball::Ball;
-    let consts: [(&str, Constant, Ours); 2] = [
+    let consts: [(&str, Constant, Ours); 4] = [
         ("pi", Constant::Pi, ball::Ball::const_pi),
         ("log2", Constant::Log2, ball::Ball::const_log2),
+        ("euler", Constant::Euler, ball::Ball::const_euler),
+        ("catalan", Constant::Catalan, ball::Ball::const_catalan),
     ];
     for (name, k, ours) in consts {
         let mut group = c.benchmark_group(name);

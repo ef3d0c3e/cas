@@ -1,9 +1,11 @@
-//! π, log 2 and e by binary splitting, with a global cache (CAS-DOC-5 §7.1).
+//! π, log 2, e, Euler's γ and Catalan's G by binary splitting, with a global
+//! cache (CAS-DOC-5 §7.1).
 //!
-//! Each constant is computed at `prec + GUARD` bits by one [`bsplit`] sum and
-//! a few ball operations, with the series tail bounded rigorously and added
+//! Each constant is computed at `prec + GUARD` bits by [`bsplit`] sums and a
+//! few ball operations, with the series tails bounded rigorously and added
 //! to the radius, so the result is a ball like any other: correct whatever
 //! the term count, and tight because the count is chosen for the precision.
+//! γ is in [`euler`].
 //!
 //! The cache keeps, per constant, the ball at the highest precision computed
 //! so far. A request at or below it rounds the cached ball (half an ulp more
@@ -22,6 +24,7 @@ use super::bsplit::{self, Series};
 use super::{Ball, Mag};
 use crate::Integer;
 
+mod euler;
 #[cfg(test)]
 mod tests;
 
@@ -202,6 +205,64 @@ fn e_tail(n: u64, q: &Integer) -> Mag {
     Mag::ONE.mul_2exp(&Integer::ONE).div(&nf)
 }
 
+/// `2G = Σ (-8)^k (3k + 2) / ((2k+1)^3 C(2k, k)^3)` (Lima, "A rapidly
+/// converging Ramanujan-type series for Catalan's constant", 2012, arXiv
+/// 1207.3139, Theorem 1; Guillera's series shifted by one index). The ratio
+/// of consecutive `h_k = (-8)^k / ((2k+1)^3 C(2k, k)^3)` is `-k^3 / (2k+1)^3`:
+/// `p(k) = -k^3`, `q(k) = (2k+1)^3`, `a(k) = 3k + 2` (`p(0) = q(0) = 1`).
+/// Three bits per term, and no π or logarithm, unlike Ramanujan's
+/// `G = π/8 log(2 + √3) + 3/8 Σ 1 / ((2k+1)^2 C(2k, k))` (two bits).
+struct Catalan;
+
+impl Series for Catalan {
+    fn p(&self, k: u64) -> Option<Integer> {
+        let k = u128::from(k);
+        Some(if k == 0 {
+            Integer::ONE
+        } else {
+            -Integer::from(k * k * k)
+        })
+    }
+
+    fn q(&self, k: u64) -> Integer {
+        // (2k+1)^3 fits a u128 below k = 2^41, far beyond any precision.
+        let x = 2 * u128::from(k) + 1;
+        Integer::from(x * x * x)
+    }
+
+    fn a(&self, k: u64) -> Option<Integer> {
+        Some(Integer::from(3 * u128::from(k) + 2))
+    }
+
+    fn b(&self, _: u64) -> Option<Integer> {
+        None
+    }
+}
+
+/// `Σ_{k >= n} |t_k| <= 5/4 (3n + 2) 8^-n` for `n >= 1`: `|h_k| <= 8^-k`, as
+/// `C(2k, k) >= 4^k / (2k + 1)` (the largest of the `2k + 1` binomials that
+/// sum to `4^k`), and from `k = n` on the ratio of `|t_k| = (3k + 2) |h_k|`
+/// is at most `(3n + 5) / (3n + 2) / 8 <= 1/5`.
+fn catalan_tail(n: u64) -> Mag {
+    let first = Integer::from(5 * (3 * u128::from(n) + 2));
+    Mag::from_integer(&first).mul_2exp(&-Integer::from(3 * u128::from(n) + 2))
+}
+
+fn catalan_uncached(prec: u64) -> Ball {
+    let w = prec + GUARD;
+    // 3n >= w + bits(w) + 8 puts the tail below 2^-w, its factor 3n + 2
+    // included (the count only sets the accuracy).
+    catalan_terms((w + u64::from(w.ilog2()) + 6).div_ceil(3) + 1, w)
+}
+
+/// G at `w` bits from `n >= 1` terms and the tail bound.
+fn catalan_terms(n: u64, w: u64) -> Ball {
+    let (t, d, _) = bsplit::sum(&Catalan, n);
+    bsplit::quotient(&t, &d, w)
+        .add_error(&catalan_tail(n))
+        .mul_2exp(&-Integer::ONE)
+}
+
 /// A constant's cached ball and the precision it was computed for (0: none).
 struct Cached {
     prec: u64,
@@ -220,6 +281,8 @@ const fn empty() -> Cached {
 static PI: Cache = RwLock::new(empty());
 static LOG2: Cache = RwLock::new(empty());
 static E_CACHE: Cache = RwLock::new(empty());
+static EULER: Cache = RwLock::new(empty());
+static CATALAN: Cache = RwLock::new(empty());
 
 /// The constant at `prec` bits through `cache`; see the module comment.
 fn cached(cache: &Cache, prec: u64, compute: fn(u64) -> Ball) -> Ball {
@@ -277,12 +340,33 @@ impl Ball {
     pub fn const_e(prec: u64) -> Ball {
         cached(&E_CACHE, prec, e_uncached)
     }
+
+    /// Euler's constant `γ = 0.5772…` at `prec` bits, as [`Ball::const_pi`].
+    ///
+    /// # Panics
+    ///
+    /// If `prec` is 0.
+    #[must_use]
+    pub fn const_euler(prec: u64) -> Ball {
+        cached(&EULER, prec, euler::euler_uncached)
+    }
+
+    /// Catalan's constant `G = 1 - 1/3^2 + 1/5^2 - … = 0.9159…` at `prec`
+    /// bits, as [`Ball::const_pi`].
+    ///
+    /// # Panics
+    ///
+    /// If `prec` is 0.
+    #[must_use]
+    pub fn const_catalan(prec: u64) -> Ball {
+        cached(&CATALAN, prec, catalan_uncached)
+    }
 }
 
 /// Frees the cached constants and the elementary functions' tables; the
 /// next request recomputes from scratch.
 pub fn clear_constant_cache() {
-    for cache in [&PI, &LOG2, &E_CACHE] {
+    for cache in [&PI, &LOG2, &E_CACHE, &EULER, &CATALAN] {
         *cache.write().unwrap_or_else(PoisonError::into_inner) = empty();
     }
     super::fns::clear_tables();

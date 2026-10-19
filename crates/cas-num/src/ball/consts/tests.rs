@@ -1,5 +1,6 @@
 //! The constants against MPFR brackets at `prec + 64` bits, the tail bounds
-//! against the true tails, and the cache's rounding and growth rules.
+//! against the true tails, and the cache's rounding and growth rules. γ's
+//! own pieces are tested in `euler/tests.rs`.
 #![allow(
     clippy::many_single_char_names,
     reason = "the series' t, d, q and the precisions w, n of the formulas"
@@ -12,9 +13,10 @@ use rug::float::{Constant, Round as MpRound};
 use rug::{Float as MpFloat, Rational as MpRat};
 
 use super::bsplit::{self, Series};
+use super::euler::euler_uncached;
 use super::{
-    Atanh, Ball, Cache, Chudnovsky, E, atanh_tail, cached, chudnovsky_tail, e_tail, e_uncached,
-    empty, log2_uncached, pi_uncached,
+    Atanh, Ball, Cache, Catalan, Chudnovsky, E, atanh_tail, cached, catalan_tail, catalan_terms,
+    catalan_uncached, chudnovsky_tail, e_tail, e_uncached, empty, log2_uncached, pi_uncached,
 };
 use crate::Rational;
 use crate::testkit::ToRug;
@@ -37,10 +39,23 @@ fn mp_e(p: u32, r: MpRound) -> MpFloat {
     x
 }
 
-const CONSTANTS: [(&str, Ours, Oracle); 3] = [
-    ("pi", pi_uncached, mp_pi),
-    ("log2", log2_uncached, mp_log2),
-    ("e", e_uncached, mp_e),
+fn mp_euler(p: u32, r: MpRound) -> MpFloat {
+    MpFloat::with_val_round(p, Constant::Euler, r).0
+}
+
+fn mp_catalan(p: u32, r: MpRound) -> MpFloat {
+    MpFloat::with_val_round(p, Constant::Catalan, r).0
+}
+
+/// Each constant with MPFR's, and the largest precision of
+/// [`large_precisions`] in release: γ and G cost tens of times π, and run to
+/// `10^6` bits in [`million_bits`].
+const CONSTANTS: [(&str, Ours, Oracle, u64); 5] = [
+    ("pi", pi_uncached, mp_pi, 1_000_000),
+    ("log2", log2_uncached, mp_log2, 1_000_000),
+    ("e", e_uncached, mp_e, 1_000_000),
+    ("euler", euler_uncached, mp_euler, 100_001),
+    ("catalan", catalan_uncached, mp_catalan, 100_001),
 ];
 
 /// Fails unless `b` meets MPFR's bracket at `prec + 64` bits and knows at
@@ -65,7 +80,7 @@ fn check(name: &str, b: &Ball, prec: u64, oracle: Oracle, min_bits: i64) {
 
 #[test]
 fn every_small_precision() {
-    for (name, f, oracle) in CONSTANTS {
+    for (name, f, oracle, _) in CONSTANTS {
         for prec in 1..=300 {
             let b = f(prec);
             #[allow(clippy::cast_possible_wrap, reason = "small precisions")]
@@ -86,14 +101,33 @@ fn sweep(max: u64) -> Vec<u64> {
 
 #[test]
 fn large_precisions() {
-    // 10^6 bits takes seconds in release, minutes in debug.
-    let max = if cfg!(debug_assertions) {
-        20_000
-    } else {
-        1_000_000
-    };
-    for (name, f, oracle) in CONSTANTS {
+    for (name, f, oracle, max) in CONSTANTS {
+        // 10^6 bits takes seconds in release, minutes in debug.
+        let max = if cfg!(debug_assertions) { 20_000 } else { max };
         for prec in sweep(max) {
+            #[allow(clippy::cast_possible_wrap, reason = "precisions below 2^63")]
+            check(
+                name,
+                &f(prec),
+                prec,
+                oracle,
+                (prec + super::GUARD) as i64 - 6,
+            );
+        }
+    }
+}
+
+/// γ and G at `10^6` bits (CAS-104): 15 s in release, MPFR's side included,
+/// within 256 MB. Run under the memory cap:
+/// `cargo test --release -p cas-num --lib million_bits -- --ignored`.
+#[test]
+#[ignore = "15 s in release"]
+fn million_bits() {
+    for (name, f, oracle) in [
+        ("euler", euler_uncached as Ours, mp_euler as Oracle),
+        ("catalan", catalan_uncached, mp_catalan),
+    ] {
+        for prec in [1_000_000, 1_000_001] {
             #[allow(clippy::cast_possible_wrap, reason = "precisions below 2^63")]
             check(
                 name,
@@ -158,6 +192,27 @@ fn tail_bounds() {
         let sum = Rational::new(t, d).to_rug();
         check_tail(&name, &truth, &sum, &mag_value(&e_tail(n, &q)));
     }
+    // 2G, the series' own sum.
+    let truth = MpFloat::with_val(p, Constant::Catalan) * 2u32;
+    for n in 1..=200 {
+        let name = format!("Catalan, {n} terms");
+        let tail = mag_value(&catalan_tail(n));
+        check_tail(&name, &truth, &partial(&Catalan, n), &tail);
+    }
+}
+
+/// G from too few terms for the precision: the tail dominates the radius,
+/// and the ball must still hold G.
+#[test]
+fn catalan_few_terms() {
+    let br = bracket(300, mp_catalan);
+    for n in 1..=60 {
+        let b = catalan_terms(n, 300);
+        let (mid, rad) = (b.mid().to_rational().to_rug(), mag_value(b.rad()));
+        if let Err(e) = check_encloses(&mid, &rad, &br) {
+            panic!("{n} terms: {e}");
+        }
+    }
 }
 
 #[test]
@@ -202,6 +257,9 @@ fn public_entries() {
                     check("pi", &Ball::const_pi(prec), prec, mp_pi, min);
                     check("log2", &Ball::const_log2(prec), prec, mp_log2, min);
                     check("e", &Ball::const_e(prec), prec, mp_e, min);
+                    check("euler", &Ball::const_euler(prec), prec, mp_euler, min);
+                    let g = Ball::const_catalan(prec);
+                    check("catalan", &g, prec, mp_catalan, min);
                 }
             })
         })
@@ -211,6 +269,7 @@ fn public_entries() {
     }
     super::clear_constant_cache();
     check("pi", &Ball::const_pi(100), 100, mp_pi, 99);
+    check("euler", &Ball::const_euler(100), 100, mp_euler, 99);
 }
 
 #[test]

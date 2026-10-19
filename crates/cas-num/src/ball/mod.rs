@@ -9,8 +9,9 @@
 //! - [`Ball`]: midpoint ± radius, with arithmetic whose results contain every
 //!   exact result for points of the inputs, three-valued predicates, and the
 //!   [`RealBalls`] ring object (§5).
-//! - Constants: [`Ball::const_pi`], [`Ball::const_log2`] and [`Ball::const_e`]
-//!   by binary splitting, cached process-wide (§7.1).
+//! - Constants: [`Ball::const_pi`], [`Ball::const_log2`], [`Ball::const_e`],
+//!   [`Ball::const_euler`] and [`Ball::const_catalan`] by binary splitting,
+//!   cached process-wide (§7.1).
 //! - Elementary functions: [`Ball::exp`], [`Ball::expm1`], [`Ball::log`],
 //!   [`Ball::log1p`], [`Ball::sin_cos`], [`Ball::tan`], [`Ball::sin_pi`],
 //!   [`Ball::atan`], [`Ball::asin`], [`Ball::acos`], [`Ball::atan2`] (§7.2);
