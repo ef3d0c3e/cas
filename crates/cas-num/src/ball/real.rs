@@ -13,10 +13,16 @@
 //! Precision is passed to every operation (§5.1); [`RealBalls`] wraps it in a
 //! ring object.
 
+#![allow(
+    clippy::many_single_char_names,
+    reason = "a, b, r, s, m, q, k: the radius formulas' textbook names"
+)]
+
 use std::cmp::Ordering;
 use std::fmt;
 
 use super::float::sum_sign;
+use super::mag::SmallMag;
 use super::{Float, Mag, Round};
 use crate::{Integer, Rational};
 
@@ -44,6 +50,86 @@ fn ulps(x: &Float, prec: u64, k: u64) -> Mag {
         2 => ulp.mul_2exp(&Integer::ONE),
         _ => ulp.mul(&Mag::from_integer(&Integer::from(k))),
     }
+}
+
+/// [`ulps`] of one ulp in [`SmallMag`]s.
+#[inline]
+fn ulp_small(x: &Float, prec: u64, inexact: bool) -> Option<SmallMag> {
+    ulps_small(x, prec, u64::from(inexact))
+}
+
+/// [`ulps`] in [`SmallMag`]s for `k <= 2` (the kernels' bound is
+/// `APPROX_ULPS = 2`); `None` beyond, or when an exponent leaves `i64`.
+#[inline]
+fn ulps_small(x: &Float, prec: u64, k: u64) -> Option<SmallMag> {
+    if k == 0 || x.is_zero() {
+        return Some(SmallMag::ZERO);
+    }
+    let e = x
+        .exponent()
+        .to_i64()?
+        .checked_sub(i64::try_from(prec).ok()?)?;
+    let ulp = SmallMag::power_of_two(e)?;
+    match k {
+        1 => Some(ulp),
+        2 => ulp.mul_2exp(1),
+        _ => None,
+    }
+}
+
+/// The radius of a quotient, `(|a| s + |b| r) / (|b| (|b| - s)) + k ulps`,
+/// as [`sum_radius`], given the gap `|b| - s` from below.
+#[inline]
+fn quotient_radius(a: &Ball, b: &Ball, gap: SmallMag, q: &Float, k: u64, prec: u64) -> Option<Mag> {
+    let (r, s) = (SmallMag::from_mag(&a.rad)?, SmallMag::from_mag(&b.rad)?);
+    let rad = if r.is_zero() && s.is_zero() {
+        SmallMag::ZERO
+    } else {
+        let num = SmallMag::from_float(&a.mid)?
+            .mul(s)?
+            .add(SmallMag::from_float(&b.mid)?.mul(r)?)?;
+        num.div(SmallMag::from_float_lower(&b.mid)?.mul_lower(gap)?)?
+    };
+    Some(rad.add(ulps_small(q, prec, k)?)?.to_mag())
+}
+
+/// The radius of a square root, `r / (sqrt(a - r) + sqrt(a)) + k ulps`, as
+/// [`sum_radius`].
+#[inline]
+fn root_radius(a: &Ball, s: &Float, k: u64, prec: u64) -> Option<Mag> {
+    let r = SmallMag::from_mag(&a.rad)?;
+    let rad = if r.is_zero() {
+        SmallMag::ZERO
+    } else {
+        let m = SmallMag::from_float_lower(&a.mid)?;
+        let den = m.sub_lower(r)?.sqrt_lower()?.add_lower(m.sqrt_lower()?)?;
+        r.div(den)?
+    };
+    Some(rad.add(ulps_small(s, prec, k)?)?.to_mag())
+}
+
+/// The radius of a sum or difference, `r + s + ε`, in [`SmallMag`]s (the
+/// same steps as the [`Mag`] path, so the same bound; CAS-100), or `None`.
+#[inline]
+fn sum_radius(a: &Ball, b: &Ball, m: &Float, inexact: bool, prec: u64) -> Option<Mag> {
+    let (r, s) = (SmallMag::from_mag(&a.rad)?, SmallMag::from_mag(&b.rad)?);
+    Some(r.add(s)?.add(ulp_small(m, prec, inexact)?)?.to_mag())
+}
+
+/// The radius of a product, `|a| s + |b| r + r s + ε`, as [`sum_radius`].
+#[inline]
+fn product_radius(a: &Ball, b: &Ball, m: &Float, inexact: bool, prec: u64) -> Option<Mag> {
+    let (r, s) = (SmallMag::from_mag(&a.rad)?, SmallMag::from_mag(&b.rad)?);
+    let mut rad = SmallMag::ZERO;
+    if !s.is_zero() {
+        rad = rad.add(SmallMag::from_float(&a.mid)?.mul(s)?)?;
+    }
+    if !r.is_zero() {
+        rad = rad
+            .add(SmallMag::from_float(&b.mid)?.mul(r)?)?
+            .add(r.mul(s)?)?;
+    }
+    Some(rad.add(ulp_small(m, prec, inexact)?)?.to_mag())
 }
 
 /// Compares `|x - a|` with the non-negative exact `r`: at 64 bits rounded
@@ -184,6 +270,9 @@ impl Ball {
             return Ball::INDETERMINATE;
         }
         let (m, o) = self.mid.add_round(&rhs.mid, prec, Round::Down);
+        if let Some(rad) = sum_radius(self, rhs, &m, o != Ordering::Equal, prec) {
+            return Ball::new(m, rad);
+        }
         Ball::with_error(
             m,
             self.rad.add(&rhs.rad),
@@ -199,6 +288,9 @@ impl Ball {
             return Ball::INDETERMINATE;
         }
         let (m, o) = self.mid.sub_round(&rhs.mid, prec, Round::Down);
+        if let Some(rad) = sum_radius(self, rhs, &m, o != Ordering::Equal, prec) {
+            return Ball::new(m, rad);
+        }
         Ball::with_error(
             m,
             self.rad.add(&rhs.rad),
@@ -214,6 +306,9 @@ impl Ball {
             return Ball::INDETERMINATE;
         }
         let (m, o) = self.mid.mul_round(&rhs.mid, prec, Round::Down);
+        if let Some(rad) = product_radius(self, rhs, &m, o != Ordering::Equal, prec) {
+            return Ball::new(m, rad);
+        }
         let (r, s) = (&self.rad, &rhs.rad);
         let mut rad = Mag::ZERO;
         if !s.is_zero() {
@@ -233,14 +328,24 @@ impl Ball {
         if !self.is_finite() || !rhs.is_finite() {
             return Ball::INDETERMINATE;
         }
-        // |b| - s, from below: 0 when rhs may contain 0.
-        let gap = Mag::from_float_lower(&rhs.mid).sub_lower(&rhs.rad);
+        // |b| - s, from below: 0 when rhs may contain 0. In SmallMags when
+        // the exponents allow (the same steps, so the same bound).
+        let small_gap = SmallMag::from_float_lower(&rhs.mid)
+            .zip(SmallMag::from_mag(&rhs.rad))
+            .and_then(|(b, s)| b.sub_lower(s));
+        let gap = match small_gap {
+            Some(g) => g.to_mag(),
+            None => Mag::from_float_lower(&rhs.mid).sub_lower(&rhs.rad),
+        };
         if gap.is_zero() {
             return Ball::INDETERMINATE;
         }
         let Some((q, k)) = self.mid.div_mid(&rhs.mid, prec) else {
             return Ball::INDETERMINATE;
         };
+        if let Some(rad) = small_gap.and_then(|g| quotient_radius(self, rhs, g, &q, k, prec)) {
+            return Ball::new(q, rad);
+        }
         let (r, s) = (&self.rad, &rhs.rad);
         let rad = if r.is_zero() && s.is_zero() {
             Mag::ZERO
@@ -268,15 +373,24 @@ impl Ball {
         }
         let r = &self.rad;
         if !r.is_zero() {
-            // Needs a - r >= 0, decided exactly.
-            match r.to_float() {
-                Some(rf) if self.mid.cmp_abs(&rf) != Ordering::Less => {}
-                _ => return Ball::INDETERMINATE,
+            // Needs a - r >= 0, decided exactly: a lower bound of a at or
+            // above r settles it without building r as a Float.
+            let settled = SmallMag::from_float_lower(&self.mid)
+                .zip(SmallMag::from_mag(r))
+                .is_some_and(|(a, r)| r.le(a));
+            if !settled {
+                match r.to_float() {
+                    Some(rf) if self.mid.cmp_abs(&rf) != Ordering::Less => {}
+                    _ => return Ball::INDETERMINATE,
+                }
             }
         }
         let Some((s, k)) = self.mid.sqrt_mid(prec) else {
             return Ball::INDETERMINATE;
         };
+        if let Some(rad) = root_radius(self, &s, k, prec) {
+            return Ball::new(s, rad);
+        }
         let rad = if r.is_zero() {
             Mag::ZERO
         } else {
@@ -520,19 +634,76 @@ impl Ball {
         Ball::new(m, self.rad.add(&err))
     }
 
-    /// `*self = *self + rhs` at `prec` bits.
+    /// `*self = *self + rhs` at `prec` bits, the midpoint updated in place
+    /// when the radii have `i64` exponents (CAS-100).
     pub fn add_assign(&mut self, rhs: &Ball, prec: u64) {
-        *self = self.add(rhs, prec);
+        self.sum_assign(rhs, prec, false);
     }
 
-    /// `*self = *self - rhs` at `prec` bits.
+    /// `*self = *self - rhs` at `prec` bits, as [`Ball::add_assign`].
     pub fn sub_assign(&mut self, rhs: &Ball, prec: u64) {
-        *self = self.sub(rhs, prec);
+        self.sum_assign(rhs, prec, true);
     }
 
-    /// `*self = *self × rhs` at `prec` bits.
+    /// [`Ball::add_assign`] or [`Ball::sub_assign`]: `r + s` from the old
+    /// radii, the midpoint in place, then its rounding error.
+    fn sum_assign(&mut self, rhs: &Ball, prec: u64, minus: bool) {
+        let pre = (self.is_finite() && rhs.is_finite())
+            .then(|| SmallMag::from_mag(&self.rad)?.add(SmallMag::from_mag(&rhs.rad)?))
+            .flatten();
+        let Some(pre) = pre else {
+            *self = if minus {
+                self.sub(rhs, prec)
+            } else {
+                self.add(rhs, prec)
+            };
+            return;
+        };
+        let o = if minus {
+            self.mid.sub_round_assign(&rhs.mid, prec, Round::Down)
+        } else {
+            self.mid.add_round_assign(&rhs.mid, prec, Round::Down)
+        };
+        self.finish_assign(pre, prec, o);
+    }
+
+    /// `*self = *self × rhs` at `prec` bits, as [`Ball::add_assign`]: the
+    /// radius part `|a| s + |b| r + r s` from the old operands first.
     pub fn mul_assign(&mut self, rhs: &Ball, prec: u64) {
-        *self = self.mul(rhs, prec);
+        let pre = (self.is_finite() && rhs.is_finite())
+            .then(|| {
+                let (r, s) = (
+                    SmallMag::from_mag(&self.rad)?,
+                    SmallMag::from_mag(&rhs.rad)?,
+                );
+                let mut rad = SmallMag::ZERO;
+                if !s.is_zero() {
+                    rad = rad.add(SmallMag::from_float(&self.mid)?.mul(s)?)?;
+                }
+                if !r.is_zero() {
+                    rad = rad
+                        .add(SmallMag::from_float(&rhs.mid)?.mul(r)?)?
+                        .add(r.mul(s)?)?;
+                }
+                Some(rad)
+            })
+            .flatten();
+        let Some(pre) = pre else {
+            *self = self.mul(rhs, prec);
+            return;
+        };
+        let o = self.mid.mul_round_assign(&rhs.mid, prec, Round::Down);
+        self.finish_assign(pre, prec, o);
+    }
+
+    /// The radius `pre + ε` after the midpoint was rounded in place with
+    /// ternary `o`; the full [`Mag`] path when the ulp leaves `i64`.
+    fn finish_assign(&mut self, pre: SmallMag, prec: u64, o: Ordering) {
+        let inexact = o != Ordering::Equal;
+        self.rad = match ulp_small(&self.mid, prec, inexact).and_then(|u| pre.add(u)) {
+            Some(rad) => rad.to_mag(),
+            None => pre.to_mag().add(&ulps(&self.mid, prec, u64::from(inexact))),
+        };
     }
 
     /// `*self = *self / rhs` at `prec` bits.

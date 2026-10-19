@@ -330,10 +330,11 @@ impl Float {
     /// A ball midpoint for `sqrt(self)`, as [`Float::div_mid`]; `None` for a
     /// negative argument.
     pub(crate) fn sqrt_mid(&self, prec: u64) -> Option<(Float, u64)> {
-        let (n, _) = if self.is_zero() || self.neg {
-            (1, Integer::ZERO)
+        // `sqrt_layout`'s length, without its half exponent.
+        let n = if self.is_zero() || self.neg {
+            1
         } else {
-            self.sqrt_layout(prec)
+            approx_len(prec, self.mant().len()) + usize::from(is_odd(&self.exp))
         };
         if kernel::sqrt_approx_error(n) == 0 {
             let (s, o) = self.checked_sqrt_round(prec, Round::Down)?;

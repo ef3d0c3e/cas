@@ -11,7 +11,7 @@ use proptest::prelude::*;
 use rug::Float as MpFloat;
 use rug::float::Round as MpRound;
 
-use super::{HIGH, LOW, Mag};
+use super::{HIGH, LOW, Mag, SmallMag};
 use crate::testkit::float::{bracket, huge_shift};
 use crate::testkit::{Signed, ToRug};
 use crate::{Integer, Rational};
@@ -297,4 +297,67 @@ fn exp_saturation() {
     let huge = Mag::new(LOW, Integer::from(crate::Natural::power_of_two(70)));
     let l = huge.log1p();
     assert!(l.is_finite() && l.exponent() == &Integer::from(70));
+}
+
+proptest! {
+    #[test]
+    fn isqrt_u64_is_the_floor(n in prop_oneof![any::<u64>().prop_map(|n| n >> 1), (1u64..(1 << 31)).prop_map(|r| r * r), (1u64..(1 << 31)).prop_map(|r| r * r - 1)]) {
+        prop_assert_eq!(super::isqrt_u64(n), n.isqrt());
+    }
+
+    /// `SmallMag`'s operations (CAS-100) give exactly `Mag`'s results, near
+    /// gaps of 64 and with exponents near `i64`'s edges, where they decline.
+    #[test]
+    fn small_mag_agrees(
+        a in mag(),
+        b in mag(),
+        x in crate::testkit::float::dyadic(),
+        k in prop_oneof![-400i64..400, Just(i64::MAX), Just(i64::MAX - 1), Just(i64::MIN)],
+        shift in prop_oneof![Just(0i64), -70i64..70, Just(i64::MAX / 2)],
+    ) {
+        let b = b.mul_2exp(&Integer::from(shift));
+        let (sa, sb) = (SmallMag::from_mag(&a), SmallMag::from_mag(&b));
+        if let (Some(sa), Some(sb)) = (sa, sb) {
+            if let Some(s) = sa.add(sb) {
+                prop_assert_eq!(s.to_mag(), a.add(&b), "add");
+            }
+            if let Some(p) = sa.mul(sb) {
+                prop_assert_eq!(p.to_mag(), a.mul(&b), "mul");
+            }
+            if let Some(v) = sa.add_lower(sb) {
+                prop_assert_eq!(v.to_mag(), a.add_lower(&b), "add_lower");
+            }
+            if let Some(v) = sa.sub_lower(sb) {
+                prop_assert_eq!(v.to_mag(), a.sub_lower(&b), "sub_lower");
+            }
+            if let Some(v) = sb.sub_lower(sa) {
+                prop_assert_eq!(v.to_mag(), b.sub_lower(&a), "sub_lower reversed");
+            }
+            if let Some(v) = sa.mul_lower(sb) {
+                prop_assert_eq!(v.to_mag(), a.mul_lower(&b), "mul_lower");
+            }
+            if let Some(v) = sa.div(sb) {
+                prop_assert_eq!(v.to_mag(), a.div(&b), "div");
+            }
+            if let Some(v) = sa.sqrt_lower() {
+                prop_assert_eq!(v.to_mag(), a.sqrt_lower(), "sqrt_lower");
+            }
+            if let Some(v) = sa.mul_2exp(3) {
+                prop_assert_eq!(v.to_mag(), a.mul_2exp(&Integer::from(3)), "mul_2exp");
+            }
+            prop_assert_eq!(sa.to_mag(), a.clone());
+        } else {
+            prop_assert!(a.is_inf() || b.is_inf() || a.exponent().to_i64().is_none() || b.exponent().to_i64().is_none());
+        }
+        let x = x.to_ours();
+        if let Some(f) = SmallMag::from_float(&x) {
+            prop_assert_eq!(f.to_mag(), Mag::from_float(&x), "from_float");
+        }
+        if let Some(f) = SmallMag::from_float_lower(&x) {
+            prop_assert_eq!(f.to_mag(), Mag::from_float_lower(&x), "from_float_lower");
+        }
+        if let Some(p) = SmallMag::power_of_two(k) {
+            prop_assert_eq!(p.to_mag(), Mag::power_of_two(&Integer::from(k)), "power_of_two");
+        }
+    }
 }

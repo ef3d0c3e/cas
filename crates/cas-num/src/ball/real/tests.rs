@@ -332,3 +332,27 @@ fn radii_are_tight() {
         assert!(r.rel_accuracy_bits() >= 96, "{r:?}");
     }
 }
+
+proptest! {
+    /// The in-place forms (CAS-100) give exactly the value forms' balls,
+    /// including indeterminate operands and exponents beyond `i64`.
+    #[test]
+    fn assign_forms_agree(a in ball(), b in ball(), p in prec(), huge: bool) {
+        type Value = fn(&Ball, &Ball, u64) -> Ball;
+        type Assign = fn(&mut Ball, &Ball, u64);
+        let b = if huge { b.mul_2exp(&(Integer::from(i64::MAX) * Integer::from(4))) } else { b };
+        let forms: [(&str, Value, Assign); 3] = [
+            ("add", Ball::add, Ball::add_assign),
+            ("sub", Ball::sub, Ball::sub_assign),
+            ("mul", Ball::mul, Ball::mul_assign),
+        ];
+        for (name, value, assign) in forms {
+            for (x, y) in [(&a, &b), (&b, &a), (&a, &a)] {
+                let want = value(x, y, p);
+                let mut z = x.clone();
+                assign(&mut z, y, p);
+                prop_assert_eq!(&z, &want, "{}_assign", name);
+            }
+        }
+    }
+}

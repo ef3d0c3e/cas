@@ -70,6 +70,317 @@ fn gap(a: &Integer, b: &Integer) -> Option<u32> {
     u32::try_from(d).ok()
 }
 
+/// `floor(sqrt(n))` for `n < 2^63`: `f64`'s correctly rounded root is within
+/// one of it (`n`'s conversion moves it by below `2^-21`), then corrected
+/// exactly; a few instructions where `u64::isqrt` takes about seventy.
+#[inline]
+fn isqrt_u64(n: u64) -> u64 {
+    debug_assert_eq!(n >> 63, 0);
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss,
+        reason = "an estimate below 2^32, corrected below"
+    )]
+    let mut r = (n as f64).sqrt() as u64;
+    while r * r > n {
+        r -= 1;
+    }
+    while (r + 1) * (r + 1) <= n {
+        r += 1;
+    }
+    r
+}
+
+/// A finite magnitude with an `i64` exponent, for the radius computations of
+/// ball arithmetic (CAS-100): the same 30-bit mantissa and the same upward
+/// rounding as [`Mag`]'s operations, step for step, so the results agree
+/// exactly, without an `Integer` per operation. `None` from any operation
+/// sends the caller back to [`Mag`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct SmallMag {
+    man: u32,
+    exp: i64,
+}
+
+impl SmallMag {
+    pub(crate) const ZERO: SmallMag = SmallMag { man: 0, exp: 0 };
+
+    /// `m`, if finite with an `i64` exponent.
+    #[inline]
+    pub(crate) fn from_mag(m: &Mag) -> Option<SmallMag> {
+        if m.is_inf() {
+            return None;
+        }
+        Some(SmallMag {
+            man: m.man,
+            exp: m.exp.to_i64()?,
+        })
+    }
+
+    /// `|x|` rounded up, as [`Mag::from_float`].
+    #[inline]
+    pub(crate) fn from_float(x: &Float) -> Option<SmallMag> {
+        SmallMag::from_float_dir(x, true)
+    }
+
+    /// `|x|` rounded down, as [`Mag::from_float_lower`].
+    #[inline]
+    pub(crate) fn from_float_lower(x: &Float) -> Option<SmallMag> {
+        SmallMag::from_float_dir(x, false)
+    }
+
+    #[inline]
+    fn from_float_dir(x: &Float, up: bool) -> Option<SmallMag> {
+        let m = x.mant();
+        let Some(&top) = m.last() else {
+            return Some(SmallMag::ZERO);
+        };
+        let shift = Limb::BITS - BITS;
+        #[allow(clippy::cast_possible_truncation, reason = "30 bits")]
+        let man = (top >> shift) as u32;
+        let lost = top & ((1 << shift) - 1) != 0 || m.len() > 1;
+        let e = x.exponent().to_i64()?;
+        Some(if !(up && lost) {
+            SmallMag { man, exp: e }
+        } else if man + 1 == HIGH {
+            SmallMag {
+                man: LOW,
+                exp: e.checked_add(1)?,
+            }
+        } else {
+            SmallMag {
+                man: man + 1,
+                exp: e,
+            }
+        })
+    }
+
+    /// `2^k`, as [`Mag::power_of_two`].
+    #[inline]
+    pub(crate) fn power_of_two(k: i64) -> Option<SmallMag> {
+        Some(SmallMag {
+            man: LOW,
+            exp: k.checked_add(1)?,
+        })
+    }
+
+    #[inline]
+    pub(crate) fn is_zero(self) -> bool {
+        self.man == 0
+    }
+
+    /// `self × 2^k`, as [`Mag::mul_2exp`].
+    #[inline]
+    pub(crate) fn mul_2exp(self, k: i64) -> Option<SmallMag> {
+        if self.is_zero() {
+            return Some(self);
+        }
+        Some(SmallMag {
+            man: self.man,
+            exp: self.exp.checked_add(k)?,
+        })
+    }
+
+    /// `m × 2^(e - 30)` rounded to 30 bits, as `Mag::from_u64`.
+    #[inline]
+    fn normalise(m: u64, e: i64, up: bool) -> Option<SmallMag> {
+        debug_assert!(m > 0 && m >> 63 == 0);
+        let bits = u64::BITS - m.leading_zeros();
+        if bits <= BITS {
+            let shift = BITS - bits;
+            #[allow(clippy::cast_possible_truncation, reason = "at most 30 bits")]
+            let man = (m << shift) as u32;
+            return Some(SmallMag {
+                man,
+                exp: e.checked_sub(i64::from(shift))?,
+            });
+        }
+        let shift = bits - BITS;
+        #[allow(clippy::cast_possible_truncation, reason = "30 bits")]
+        let mut man = (m >> shift) as u32;
+        let mut adj = i64::from(shift);
+        if up && m & ((1 << shift) - 1) != 0 {
+            man += 1;
+            if man == HIGH {
+                man = LOW;
+                adj += 1;
+            }
+        }
+        Some(SmallMag {
+            man,
+            exp: e.checked_add(adj)?,
+        })
+    }
+
+    /// An upper bound of `self + rhs`, as [`Mag::add`].
+    #[inline]
+    pub(crate) fn add(self, rhs: SmallMag) -> Option<SmallMag> {
+        self.add_dir(rhs, true)
+    }
+
+    /// A lower bound of `self + rhs`, as [`Mag::add_lower`].
+    #[inline]
+    pub(crate) fn add_lower(self, rhs: SmallMag) -> Option<SmallMag> {
+        self.add_dir(rhs, false)
+    }
+
+    #[inline]
+    fn add_dir(self, rhs: SmallMag, up: bool) -> Option<SmallMag> {
+        if rhs.is_zero() {
+            return Some(self);
+        }
+        if self.is_zero() {
+            return Some(rhs);
+        }
+        let (x, y) = if self.exp >= rhs.exp {
+            (self, rhs)
+        } else {
+            (rhs, self)
+        };
+        let xm = u64::from(x.man) << 2;
+        let ym = u64::from(y.man) << 2;
+        let gap = x.exp.checked_sub(y.exp).and_then(|d| u32::try_from(d).ok());
+        let (ys, lost) = match gap {
+            Some(d) if d < 64 => {
+                let ys = ym >> d;
+                (ys, ys << d != ym)
+            }
+            _ => (0, true),
+        };
+        SmallMag::normalise(xm + ys + u64::from(up && lost), x.exp.checked_sub(2)?, up)
+    }
+
+    /// `self <= rhs`, as `Mag`'s order on finite values.
+    #[inline]
+    pub(crate) fn le(self, rhs: SmallMag) -> bool {
+        if self.is_zero() {
+            return true;
+        }
+        if rhs.is_zero() {
+            return false;
+        }
+        (self.exp, self.man) <= (rhs.exp, rhs.man)
+    }
+
+    /// A lower bound of `max(self - rhs, 0)`, as [`Mag::sub_lower`].
+    #[inline]
+    pub(crate) fn sub_lower(self, rhs: SmallMag) -> Option<SmallMag> {
+        if rhs.is_zero() {
+            return Some(self);
+        }
+        if self.le(rhs) {
+            return Some(SmallMag::ZERO);
+        }
+        let xm = u64::from(self.man) << 32;
+        let ym = u64::from(rhs.man) << 32;
+        let gap = self
+            .exp
+            .checked_sub(rhs.exp)
+            .and_then(|d| u32::try_from(d).ok());
+        let d = match gap {
+            Some(d) if d < 63 => {
+                let ys = ym >> d;
+                xm - ys - u64::from(ys << d != ym)
+            }
+            _ => xm - 1,
+        };
+        if d == 0 {
+            return Some(SmallMag::ZERO);
+        }
+        SmallMag::normalise(d, self.exp.checked_sub(32)?, false)
+    }
+
+    /// An upper bound of `self × rhs`, as [`Mag::mul`].
+    #[inline]
+    pub(crate) fn mul(self, rhs: SmallMag) -> Option<SmallMag> {
+        self.mul_dir(rhs, true)
+    }
+
+    /// A lower bound of `self × rhs`, as [`Mag::mul_lower`].
+    #[inline]
+    pub(crate) fn mul_lower(self, rhs: SmallMag) -> Option<SmallMag> {
+        self.mul_dir(rhs, false)
+    }
+
+    #[inline]
+    fn mul_dir(self, rhs: SmallMag, up: bool) -> Option<SmallMag> {
+        if self.is_zero() || rhs.is_zero() {
+            return Some(SmallMag::ZERO);
+        }
+        let p = u64::from(self.man) * u64::from(rhs.man);
+        SmallMag::normalise(
+            p,
+            self.exp
+                .checked_add(rhs.exp)?
+                .checked_sub(i64::from(BITS))?,
+            up,
+        )
+    }
+
+    /// An upper bound of `self / rhs`, as [`Mag::div`]; `None` for a zero
+    /// divisor (whose bound is `+∞`).
+    #[inline]
+    pub(crate) fn div(self, rhs: SmallMag) -> Option<SmallMag> {
+        if self.is_zero() {
+            return Some(SmallMag::ZERO);
+        }
+        if rhs.is_zero() {
+            return None;
+        }
+        let k = if self.man >= rhs.man { BITS - 1 } else { BITS };
+        let num = u64::from(self.man) << k;
+        let den = u64::from(rhs.man);
+        let q = num / den;
+        let exact = q * den == num;
+        let e = self
+            .exp
+            .checked_sub(rhs.exp)?
+            .checked_add(i64::from(BITS) - i64::from(k))?;
+        let m = SmallMag::normalise(q, e, true)?;
+        if exact {
+            return Some(m);
+        }
+        // The next value up, as `Mag::next_up`.
+        Some(if m.man + 1 == HIGH {
+            SmallMag {
+                man: LOW,
+                exp: m.exp.checked_add(1)?,
+            }
+        } else {
+            SmallMag {
+                man: m.man + 1,
+                exp: m.exp,
+            }
+        })
+    }
+
+    /// A lower bound of `sqrt(self)`, as [`Mag::sqrt_lower`].
+    #[inline]
+    pub(crate) fn sqrt_lower(self) -> Option<SmallMag> {
+        if self.is_zero() {
+            return Some(self);
+        }
+        let e = self.exp.checked_sub(i64::from(BITS))?;
+        let (m, e) = if e.rem_euclid(2) == 1 {
+            (u64::from(self.man) << 1, e - 1)
+        } else {
+            (u64::from(self.man), e)
+        };
+        let r = isqrt_u64(m << 32);
+        SmallMag::normalise(r, (e / 2).checked_add(14)?, false)
+    }
+
+    /// As a [`Mag`].
+    #[inline]
+    pub(crate) fn to_mag(self) -> Mag {
+        if self.is_zero() {
+            return Mag::ZERO;
+        }
+        Mag::new(self.man, Integer::from(self.exp))
+    }
+}
+
 /// An upper (or lower) bound on a non-negative real number.
 #[derive(Clone, PartialEq, Eq, Hash)]
 pub struct Mag {
@@ -126,6 +437,9 @@ impl Mag {
     )]
     fn from_u64(m: u64, exp: Integer, up: bool) -> Mag {
         debug_assert!(m > 0 && m >> 63 == 0);
+        if let Some(r) = exp.to_i64().and_then(|e| Mag::from_u64_small(m, e, up)) {
+            return r;
+        }
         let bits = u64::BITS - m.leading_zeros();
         if bits <= BITS {
             // Exact: shift left.
@@ -147,6 +461,36 @@ impl Mag {
             }
         }
         Mag::new(man, offset(&exp, adj))
+    }
+
+    /// [`Mag::from_u64`] with an `i64` exponent, building one `Integer` at
+    /// the end (CAS-100); `None` if the result's exponent leaves `i64`.
+    #[inline]
+    fn from_u64_small(m: u64, e: i64, up: bool) -> Option<Mag> {
+        debug_assert!(m > 0 && m >> 63 == 0);
+        let bits = u64::BITS - m.leading_zeros();
+        if bits <= BITS {
+            let shift = BITS - bits;
+            #[allow(clippy::cast_possible_truncation, reason = "at most 30 bits")]
+            let man = (m << shift) as u32;
+            return Some(Mag::new(
+                man,
+                Integer::from(e.checked_sub(i64::from(shift))?),
+            ));
+        }
+        let shift = bits - BITS;
+        #[allow(clippy::cast_possible_truncation, reason = "30 bits")]
+        let mut man = (m >> shift) as u32;
+        let lost = m & ((1 << shift) - 1) != 0;
+        let mut adj = i64::from(shift);
+        if up && lost {
+            man += 1;
+            if man == HIGH {
+                man = LOW;
+                adj += 1;
+            }
+        }
+        Some(Mag::new(man, Integer::from(e.checked_add(adj)?)))
     }
 
     /// Wraps a normalised mantissa.
@@ -181,6 +525,18 @@ impl Mag {
         #[allow(clippy::cast_possible_truncation, reason = "30 bits")]
         let mut man = (top >> shift) as u32;
         let lost = top & ((1 << shift) - 1) != 0 || m.len() > 1;
+        let carry = up && lost && man + 1 == HIGH;
+        if let Some(e) = x.exponent().to_i64() {
+            // The i64 path: one `Integer` built, no arithmetic on it.
+            if let Some(e) = e.checked_add(i64::from(carry)) {
+                let man = if carry {
+                    LOW
+                } else {
+                    man + u32::from(up && lost)
+                };
+                return Mag::new(man, Integer::from(e));
+            }
+        }
         let mut exp = x.exponent().clone();
         if up && lost {
             man += 1;
@@ -265,7 +621,11 @@ impl Mag {
             (rhs, self)
         };
         // Both at 2 guard bits: x m 2^2, y shifted by the exponent gap.
-        let gap = gap(&x.exp, &y.exp);
+        let small = x.exp.to_i64().zip(y.exp.to_i64());
+        let gap = match small {
+            Some((xe, ye)) => xe.checked_sub(ye).and_then(|d| u32::try_from(d).ok()),
+            None => gap(&x.exp, &y.exp),
+        };
         let xm = u64::from(x.man) << 2;
         let ym = u64::from(y.man) << 2;
         let (ys, lost) = match gap {
@@ -278,6 +638,9 @@ impl Mag {
         let mut s = xm + ys;
         if up && lost {
             s += 1;
+        }
+        if let Some(r) = small.and_then(|(xe, _)| Mag::from_u64_small(s, xe.checked_sub(2)?, up)) {
+            return r;
         }
         Mag::from_u64(s, offset(&x.exp, -2), up)
     }
@@ -368,6 +731,12 @@ impl Mag {
         }
         // man_a man_b < 2^60, the value (man_a man_b) 2^(ea + eb - 60).
         let p = u64::from(self.man) * u64::from(rhs.man);
+        let small = self.exp.to_i64().zip(rhs.exp.to_i64()).and_then(|(a, b)| {
+            Mag::from_u64_small(p, a.checked_add(b)?.checked_sub(i64::from(BITS))?, up)
+        });
+        if let Some(r) = small {
+            return r;
+        }
         Mag::from_u64(p, combine(&self.exp, &rhs.exp, false, -i64::from(BITS)), up)
     }
 
