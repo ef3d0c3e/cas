@@ -186,6 +186,15 @@ fn builtins_have_fixed_ids() {
     }
     let names: std::collections::HashSet<&str> = builtins.iter().map(|s| s.name()).collect();
     assert_eq!(names.len(), builtins.len(), "names are unique");
+    // The language escapes user names that start with an ASCII capital
+    // (CAS-DOC-7 §5), which is safe only while every builtin's name does.
+    for name in names {
+        assert!(
+            name.starts_with(|c: char| c.is_ascii_uppercase())
+                && name.chars().all(|c| c.is_ascii_alphanumeric()),
+            "{name}: a builtin's name is an ASCII capital, then ASCII letters and digits"
+        );
+    }
     assert_eq!(Symbol::PLUS.name(), "Plus");
     assert_eq!(Symbol::BLANK_NULL_SEQUENCE.name(), "BlankNullSequence");
     assert!(!Symbol::new("builtins_user").is_builtin());

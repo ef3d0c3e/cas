@@ -110,6 +110,23 @@ fn kinds_then_names() {
     assert_increasing(&[Expr::string("a"), Expr::string("A"), Expr::string("b")]);
     // Non-ASCII: folded case first, then lowercase first, then code point.
     assert_increasing(&[sym("z"), sym("ß"), sym("é"), sym("É")]);
+    // A name the language escaped sorts as its spelling, just before it.
+    assert_increasing(&[
+        sym("a"),
+        sym("$A"),
+        sym("A"),
+        sym("ab"),
+        sym("$Ab"),
+        sym("Ab"),
+        sym("b"),
+        sym("$Delta"),
+        sym("e"),
+        sym("$E"),
+        sym("E"),
+        sym("f"),
+    ]);
+    // Strings keep their `$`.
+    assert_increasing(&[Expr::string("$b"), Expr::string("a")]);
 }
 
 #[test]
@@ -193,7 +210,7 @@ fn independent_of_creation_order() {
 /// A tree over a few names, biased towards `Times` and `Power`.
 fn tree() -> impl Strategy<Value = Expr> {
     let leaf = prop_oneof![
-        prop::sample::select(vec!["a", "A", "b", "f", "Times", "Power"]).prop_map(sym),
+        prop::sample::select(vec!["a", "A", "$A", "b", "f", "Times", "Power"]).prop_map(sym),
         (-2i64..3).prop_map(int),
         (-3i64..4, 1i64..4).prop_map(|(n, d)| q(n, d)),
         prop::sample::select(vec![-(1i128 << 64), 1 << 63, 3 << 70]).prop_map(big),

@@ -1,0 +1,90 @@
+# English surface names, the base of every locale (CAS-DOC-7 §5).
+#
+# Format, shared with locale overlays:
+# - `#` starts a comment, and blank lines are ignored.
+# - `[section]` starts a section.
+# - `Target: name name …` gives the names of a target. The first name is the
+#   spelling printers use; the others are aliases. A name is one identifier of
+#   the language, in Unicode normal form C, and not a keyword.
+#
+# Sections:
+# - [builtins]: builtins of cas-core, by internal name.
+# - [planned]: builtins the design pages name that cas-core does not define
+#   yet. Their names are reserved now. An entry moves to [builtins] when its
+#   builtin is added; a test fails until it does.
+# - [constants]: `imaginary`, the imaginary unit.
+# - [syntax]: forms that lowering and the session handle: `call`, `assume`,
+#   `purge`.
+# - [types]: the types written after `::`, in a namespace of their own.
+# - [internal]: builtins without a surface name, each reached through syntax
+#   or not at all. Every builtin is in [builtins] or here; a test checks it.
+#
+# A locale overlay may use [builtins] (for any builtin named in this file,
+# planned or not), [constants], [syntax] and [types]. Its first name for a
+# target becomes that target's spelling in the locale, and the English names
+# stay valid. Names follow Xcas where Xcas has one.
+
+[builtins]
+Exp: exp
+Log: ln log
+Sin: sin
+Cos: cos
+Tan: tan
+Pi: pi
+E: e
+Hold: hold
+
+[planned]
+# Elementary functions.
+Sqrt: sqrt
+Abs: abs
+Factorial: factorial
+# Logical constants and infinities (CAS-DOC-4 §6.1, R14).
+True: true
+False: false
+Indeterminate: undef
+ComplexInfinity: infinity
+Infinity: inf
+# Structure and rules (CAS-DOC-4 §6.1, CAS-DOC-7 §4 and §6).
+Length: size length
+Map: map
+ReplaceAll: subst replace
+Unapply: unapply
+# Calculus, algebra and numerics (CAS-DOC-1, CAS-DOC-4 §1 and §8, CAS-DOC-5).
+D: diff
+Integrate: integrate int
+Sum: sum
+Expand: expand
+Factor: factor
+Simplify: simplify
+N: evalf approx
+Ball: ball
+
+[constants]
+imaginary: i
+
+[syntax]
+call: call
+assume: assume
+purge: purge
+
+[types]
+any: any
+integer: integer
+rational: rational
+number: number
+real: real
+complex: complex
+list: list
+matrix: matrix
+string: string
+symbol: symbol
+
+[internal]
+# Operators and brackets.
+Plus Times Power List
+# Splicing and rules, written as equations and definitions.
+Sequence Rule RuleDelayed
+# Patterns, written with parameters, `::`, `when` and `...`.
+Blank BlankSequence BlankNullSequence Pattern Alternatives Optional Condition PatternTest
+HoldPattern

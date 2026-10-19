@@ -4,6 +4,10 @@
 //! builtin's id is its index here and its constant is known at compile time.
 //! Builtin attributes never change (CAS-DOC-3, D3). Ids are not persisted, so
 //! builtins can be added anywhere in the list.
+//!
+//! A name is an ASCII capital, then ASCII letters and digits. The language
+//! stores a user's name that starts with a capital with a `$` in front (`E`
+//! becomes `$E`), so it never meets a builtin's, now or later (CAS-DOC-7 §5).
 
 use crate::attributes::Attributes;
 use crate::symbol::Symbol;

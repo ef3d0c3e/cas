@@ -31,7 +31,10 @@ static ONE: Expr = Expr(Repr::Int(1));
 /// 3. **Everything else**, and ties left by rule 2 (`x` and `Times[x]`), by
 ///    kind: strings, then symbols, then applications. Strings and symbol
 ///    names are ordered alphabetically ignoring case, then lowercase before
-///    uppercase (`a < A < b`), then by code point. Applications are ordered
+///    uppercase (`a < A < b`), then by code point. A symbol name with a `$`
+///    in front, how the language stores a user's capitalised name (`$E` for
+///    `E`), sorts as the name without it, just before that name itself.
+///    Applications are ordered
 ///    by head, then by argument count, then by their arguments from the
 ///    first.
 ///
@@ -161,7 +164,7 @@ fn structural(a: &Expr, b: &Expr) -> Ordering {
     debug_assert!(!(is_number(a) && is_number(b)));
     match (a.view(), b.view()) {
         (View::String(l), View::String(r)) => cmp_names(l, r),
-        (View::Symbol(l), View::Symbol(r)) => cmp_names(l.name(), r.name()),
+        (View::Symbol(l), View::Symbol(r)) => cmp_symbol_names(l.name(), r.name()),
         (
             View::Apply {
                 head: head_a,
@@ -208,6 +211,18 @@ fn cmp_by<'a>(
     } else {
         Ordering::Equal
     }
+}
+
+/// Symbol names as [`cmp_names`], reading a name the language escaped (`$E`
+/// for a user's `E`, CAS-DOC-7 §5) as it was written, so it sorts where its
+/// spelling does. A tie with the unescaped name, the builtin `E`, goes by the
+/// full names.
+fn cmp_symbol_names(a: &str, b: &str) -> Ordering {
+    cmp_names(unescaped(a), unescaped(b)).then_with(|| cmp_names(a, b))
+}
+
+fn unescaped(name: &str) -> &str {
+    name.strip_prefix('$').unwrap_or(name)
 }
 
 /// Alphabetical ignoring case, then lowercase first, then by code point; the
