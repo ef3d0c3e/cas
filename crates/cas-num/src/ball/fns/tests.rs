@@ -440,6 +440,40 @@ proptest! {
 }
 
 #[test]
+fn sin_cos_pi_next_to_zeros() {
+    // cos_pi next to half-integers and sin_pi next to integers keep their
+    // relative accuracy at any distance (CAS-102: cos_pi once added 1/2
+    // rounded at prec + 64 bits, and at 6 bits gave [2^-68.4 ± 2^-68.3] for
+    // cos_pi(1/2 - 2^-128) ≈ π 2^-128).
+    for k in [61i64, 100, 128, 200, 1000] {
+        let d = Float::from(1i64).mul_2exp(&Integer::from(-k));
+        for n in [0i64, 3, -8] {
+            let half = Float::from(n).add(&Float::from(1i64).mul_2exp(&-Integer::ONE));
+            for (x, cos) in [
+                (half.sub(&d), true),
+                (half.add(&d), true),
+                (Float::from(n).add(&d), false),
+            ] {
+                for prec in [6u64, 64, 200] {
+                    let b = Ball::exact(x.clone());
+                    let v = if cos { b.cos_pi(prec) } else { b.sin_pi(prec) };
+                    #[allow(clippy::cast_possible_wrap, reason = "small precisions")]
+                    let want = prec as i64 - 3;
+                    assert!(v.rel_accuracy_bits() >= want, "{x:?} at {prec}: {v:?}");
+                    // |value| = sin(π 2^-k), within (π 2^-k)^3 of π 2^-k.
+                    let pi_d = Ball::const_pi(prec + 64).mul_2exp(&Integer::from(-k));
+                    let cube = Mag::from_float(pi_d.mid()).add(pi_d.rad()).pow(3);
+                    assert!(
+                        v.abs().overlaps(&pi_d.add_error(&cube)),
+                        "{x:?} at {prec}: {v:?}"
+                    );
+                }
+            }
+        }
+    }
+}
+
+#[test]
 fn huge_and_near_pole_arguments() {
     // sin(10^100): π at about p + 333 bits for the reduction.
     let big = Integer::from(10u64).pow(100);
@@ -503,6 +537,20 @@ fn huge_and_near_pole_arguments() {
     // atan2 on the branch cut: [0 ± π].
     let cut = Ball::new(Float::ZERO, Mag::ONE).atan2(&Ball::from_integer(&Integer::from(-1)), 64);
     assert!(cut.contains(&Float::ZERO) && cut.rad() >= &Mag::from_integer(&Integer::from(3)));
+    // A wide x next to 0 under y = 2 (CAS-102's atanh near |z| = 1): the
+    // angle is π/2 + O(2^-29), where 2 / x would be a ball across 0.
+    let wide = Ball::new(
+        Float::from_f64(-1.4e-9).unwrap(),
+        Mag::power_of_two(&Integer::from(-30)),
+    );
+    for (x, side) in [(wide.clone(), 1.0), (wide.neg(), -1.0)] {
+        let a = Ball::from_integer(&Integer::from(2)).atan2(&x, 64);
+        let at_mid = Float::from_f64(std::f64::consts::FRAC_PI_2 + side * 7e-10).unwrap();
+        assert!(
+            a.contains(&at_mid) && a.rad() < &Mag::power_of_two(&Integer::from(-28)),
+            "{a:?}"
+        );
+    }
     assert!(atan_huge_consistent());
 }
 

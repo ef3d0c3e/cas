@@ -19,13 +19,20 @@
 //! z^w = exp(w log z), integer w by squaring
 //! ```
 //!
-//! Branch cuts are the principal ones (`log`, `sqrt`, `pow` on the negative
-//! real axis, `atan` on the imaginary axis beyond `±i`). A ball straddling
-//! a cut gets an enclosure of both sides: `arg` is then `[0 ± π]`, and
-//! `sqrt`'s imaginary part `[0 ± t]`. A point exactly on a cut takes the
-//! side of the counter-clockwise convention for `log` and `sqrt` (`arg` in
-//! `(-π, π]`) and, for `atan`, the side continuous with `Re z > 0`, as C99
-//! and MPC do for a `+0` real part.
+//! The other elementary functions (CAS-102) are in [`trig`] (`tan`, the
+//! hyperbolic functions, `sin_pi`, `cos_pi`), [`inverse`] (`asin`, `acos`
+//! and the inverse hyperbolic functions) and [`near`] (`expm1`, `log1p`,
+//! `root`).
+//!
+//! Branch cuts are the principal ones (`log`, `sqrt`, `pow`, `root`,
+//! `log1p` on the negative real axis, from `-1` for `log1p`; `atan`,
+//! `asinh` on the imaginary axis beyond `±i`; `asin`, `acos`, `atanh` on
+//! the real axis beyond `±1`, `acosh` below 1). A ball straddling a cut
+//! gets an enclosure of both sides: `arg` is then `[0 ± π]`, and `sqrt`'s
+//! imaginary part `[0 ± t]`. A point exactly on a cut takes the side a `+0`
+//! in the zero part selects in C99 and MPC: `arg` in `(-π, π]` for `log`
+//! and `sqrt`, the side of `Re z > 0` for `atan` and `asinh`, of `Im z > 0`
+//! for the others.
 
 use std::cmp::Ordering;
 use std::fmt;
@@ -33,6 +40,12 @@ use std::fmt;
 use super::{Ball, Float, Mag};
 use crate::{Complex, Integer};
 
+mod inverse;
+mod near;
+mod trig;
+
+#[cfg(test)]
+mod fn_tests;
 #[cfg(test)]
 mod tests;
 
@@ -480,6 +493,116 @@ impl ComplexBall {
 /// An upper bound of `|x|` over the ball.
 fn upper(b: &Ball) -> Mag {
     Mag::from_float(b.mid()).add(b.rad())
+}
+
+/// Whether the ball is the exact 0.
+fn is_zero(b: &Ball) -> bool {
+    b.is_exact() && b.mid().is_zero()
+}
+
+/// The ball `[0, u]`.
+fn hull0(u: &Mag) -> Ball {
+    match u.to_float() {
+        Some(f) => Ball::new(f.mul_2exp(&-Integer::ONE), u.mul_2exp(&-Integer::ONE)),
+        None => Ball::INDETERMINATE,
+    }
+}
+
+/// `x^2` as a ball of values `>= 0`: the product `x × x` when it stays
+/// above 0, else `[0, (|m| + r)^2]` (the product of a ball near 0 with
+/// itself reaches below 0).
+fn square(x: &Ball, prec: u64) -> Ball {
+    let p = x.mul(x, prec);
+    if p.is_exact() || p.sign() == Some(Ordering::Greater) {
+        p
+    } else {
+        let u = upper(x);
+        hull0(&u.mul(&u))
+    }
+}
+
+/// A ball whose values are known to be `>= 0`: itself, or `[0, |m| + r]`
+/// if its radius reaches below 0 (a quotient of such terms, whose ball is
+/// symmetric about the midpoint).
+fn clamp0(x: Ball) -> Ball {
+    if x.is_exact() || x.sign() == Some(Ordering::Greater) {
+        x
+    } else {
+        hull0(&upper(&x))
+    }
+}
+
+/// `√x` for a ball whose values are known to be `>= 0` but whose radius
+/// may reach below 0 (a sum of such terms): `[0, √(|m| + r)]` then.
+fn sqrt_nonneg(x: &Ball, prec: u64) -> Ball {
+    if x.is_exact() || x.sign() == Some(Ordering::Greater) {
+        x.sqrt(prec)
+    } else {
+        hull0(&upper(x).sqrt())
+    }
+}
+
+/// `|x|` as a ball of values `>= 0` and the sign of `x`; for a ball across
+/// 0 the hull `[0, |m| + r]` and `None`.
+fn fold(x: &Ball) -> (Ball, Option<Ordering>) {
+    match x.sign() {
+        Some(Ordering::Less) => (x.neg(), Some(Ordering::Less)),
+        None => (hull0(&upper(x)), None),
+        sign => (x.clone(), sign),
+    }
+}
+
+/// An odd function's value from its value `v` at `|x|`, for `x` of the
+/// given sign ([`fold`]): `v`, `-v`, or `[0 ± |v|]` across 0. An exact 0
+/// counts as `+0`.
+fn unfold(v: Ball, sign: Option<Ordering>) -> Ball {
+    match sign {
+        Some(Ordering::Less) => v.neg(),
+        Some(_) => v,
+        None => Ball::new(Float::ZERO, upper(&v)),
+    }
+}
+
+/// `x / 2`, exactly.
+fn half(x: &Ball) -> Ball {
+    x.mul_2exp(&-Integer::ONE)
+}
+
+/// A lower bound of `|x|` over the ball (0 if it contains 0).
+fn lower(b: &Ball) -> Mag {
+    Mag::from_float_lower(b.mid()).sub_lower(b.rad())
+}
+
+impl ComplexBall {
+    /// `f` at the exact midpoint, widened in each part by `d √(ρ_re^2 +
+    /// ρ_im^2)` for `d = deriv()` an upper bound of `|f'|` on the
+    /// rectangle: `f` holomorphic there, the mean value inequality along the
+    /// segment from the midpoint gives `|f(w) - f(m)| <= d |w - m|`. An exact
+    /// ball is `f` itself.
+    fn at_midpoint(
+        &self,
+        prec: u64,
+        f: impl FnOnce(&ComplexBall, u64) -> ComplexBall,
+        deriv: impl FnOnce() -> Mag,
+    ) -> ComplexBall {
+        if self.is_exact() {
+            return f(self, prec);
+        }
+        if !self.is_finite() {
+            return ComplexBall::INDETERMINATE;
+        }
+        let mid = ComplexBall {
+            re: Ball::exact(self.re.mid().clone()),
+            im: Ball::exact(self.im.mid().clone()),
+        };
+        let value = f(&mid, prec);
+        let (rre, rim) = (self.re.rad(), self.im.rad());
+        let err = deriv().mul(&rre.mul(rre).add(&rim.mul(rim)).sqrt());
+        ComplexBall {
+            re: value.re.add_error(&err),
+            im: value.im.add_error(&err),
+        }
+    }
 }
 
 /// `[re] + [im] i` with the `Debug` forms of both parts.

@@ -11,9 +11,11 @@
 //! `min(ρ, 2)`. Arguments of exponent above `HUGE_EXP`, an indeterminate
 //! input, or a radius from 2 give `[0 ± 1]`.
 //!
-//! `sin_pi(x) = sin(π x)` reduces `x` modulo 2 exactly (it is dyadic), so
-//! integers and half-integers give exact results and no π is needed for
-//! the reduction; the rest is `sin` or `cos` of `π b` with `0 < b < 1/4`.
+//! `sin_pi(x) = sin(π x)` and `cos_pi(x)` reduce `x` modulo 2 exactly (it
+//! is dyadic) and fold it onto `[0, 1/2]` by exact differences, so integers
+//! and half-integers give exact results, no π is needed for the reduction
+//! and values next to 0 keep their relative accuracy; the rest is `sin` or
+//! `cos` of `π b` with `0 < b < 1/4`.
 
 use std::cmp::Ordering;
 
@@ -207,29 +209,29 @@ fn mod2(x: &Float) -> Float {
     Float::from_integer_exp(&r, &-Integer::from(s))
 }
 
-/// `sin(π b)` for an exact `b` in `[0, 1/2]`, at `prec` bits: exact at 0
-/// and 1/2, else `sin` or `cos` of `π b'` with `b' <= 1/4`.
-fn sin_pi_half(b: &Float, prec: u64) -> Ball {
+/// `sin(π b)`, or `cos(π b)` when `cos`, for an exact `b` in `[0, 1/2]`,
+/// at `prec` bits: exact at 0 and 1/2, else `sin` or `cos` of `π b'` with
+/// `b' <= 1/4`, `b' = b` or `1/2 - b` (exact, and no longer than `b` since
+/// `b > 1/4`), as `sin(π b) = cos(π (1/2 - b))`.
+fn sin_pi_half(b: &Float, prec: u64, cos: bool) -> Ball {
     let quarter = Float::from(1i64).mul_2exp(&Integer::from(-2i64));
     let half = Float::from(1i64).mul_2exp(&-Integer::ONE);
     if b.is_zero() {
-        return Ball::ZERO;
+        return if cos { one() } else { Ball::ZERO };
     }
     if *b == half {
-        return one();
+        return if cos { Ball::ZERO } else { one() };
     }
     let wp = working(prec);
     let at = |c: &Float| Ball::const_pi(wp + 8).mul(&Ball::exact(c.clone()), wp + 8);
-    let v = if *b <= quarter {
-        let t = at(b);
-        let (s, _) = sin_cos_reduced(t.mid(), wp);
-        s.add_error(t.rad())
+    let (t, take_cos) = if *b <= quarter {
+        (at(b), cos)
     } else {
-        let t = at(&half.sub(b));
-        let (_, c) = sin_cos_reduced(t.mid(), wp);
-        c.add_error(t.rad())
+        (at(&half.sub(b)), !cos)
     };
-    v.round_to_accuracy(prec)
+    let (s, c) = sin_cos_reduced(t.mid(), wp);
+    let v = if take_cos { c } else { s };
+    v.add_error(t.rad()).round_to_accuracy(prec)
 }
 
 impl Ball {
@@ -308,7 +310,7 @@ impl Ball {
         if a > half {
             a = Float::from(1i64).sub(&a);
         }
-        let v = sin_pi_half(&a, prec);
+        let v = sin_pi_half(&a, prec, false);
         let v = if neg { v.neg() } else { v };
         spread_pi(v, self.rad(), prec)
     }
@@ -325,12 +327,17 @@ impl Ball {
         if !self.is_finite() {
             return unit_ball();
         }
-        // cos(π x) = sin(π (x + 1/2)), with x reduced first. The sum is
-        // rounded (exact when it fits, as at half-integers): for a tiny x the
-        // exact sum would be as long as x's exponent.
-        let half = Ball::exact(Float::from(1i64).mul_2exp(&-Integer::ONE));
-        let shifted = Ball::exact(mod2(self.mid())).add(&half, prec + 64);
-        spread_pi(shifted.sin_pi(prec), self.rad(), prec)
+        // x mod 2 in [-1, 1); cos(π x) = cos(π |x|), and cos(π a) = -cos(π (1
+        // - a)) folds a in (1/2, 1] onto [0, 1/2), the difference exact.
+        let mut a = mod2(self.mid()).abs();
+        let half = Float::from(1i64).mul_2exp(&-Integer::ONE);
+        let neg = a > half;
+        if neg {
+            a = Float::from(1i64).sub(&a);
+        }
+        let v = sin_pi_half(&a, prec, true);
+        let v = if neg { v.neg() } else { v };
+        spread_pi(v, self.rad(), prec)
     }
 }
 

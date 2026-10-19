@@ -13,7 +13,10 @@
 //! ball compositions, whose radii propagate through every operation; exact
 //! `±1` are special-cased. `atan2(y, x)` decides its quadrant from the signs
 //! of the balls; a ball straddling the branch cut (`x < 0`, `y ∋ 0`), or
-//! both balls containing 0, gives `[0 ± π]`, which holds every value.
+//! both balls containing 0, gives `[0 ± π]`, which holds every value. It
+//! takes `atan(y / x)` (`± π` on the left) for `|y| < |x|` and `±π/2 -
+//! atan(x / y)` otherwise, so the quotient stays at most 1: a wide `x` next
+//! to 0 under a larger `y` would make `y / x` a ball across 0.
 
 use std::cmp::Ordering;
 
@@ -251,7 +254,19 @@ impl Ball {
         let wp = working(prec);
         let y = self;
         let pi = || Ball::const_pi(wp);
+        // ±π/2 - atan(x / y) from the sign of y, for any x.
+        let from_y = |up: bool| {
+            let hp = if up { half_pi(wp) } else { half_pi(wp).neg() };
+            hp.sub(&x.div(y, wp).atan(wp), wp)
+        };
         let v = match (x.sign(), y.sign()) {
+            // |y| >= |x|: the quotient x / y is at most 1, where atan(y / x)
+            // would turn a wide x next to 0 into a quotient across 0.
+            (_, Some(side @ (Ordering::Greater | Ordering::Less)))
+                if y.mid().cmp_abs(x.mid()) != Ordering::Less =>
+            {
+                from_y(side == Ordering::Greater)
+            }
             // Right half-plane: the principal atan.
             (Some(Ordering::Greater), _) => y.div(x, wp).atan(wp),
             // Left half-plane, off the cut (y = 0 exactly gives π).
@@ -259,9 +274,9 @@ impl Ball {
                 y.div(x, wp).atan(wp).add(&pi(), wp)
             }
             (Some(Ordering::Less), Some(Ordering::Less)) => y.div(x, wp).atan(wp).sub(&pi(), wp),
-            // x may be 0: ±π/2 - atan(x / y) from the sign of y.
-            (_, Some(Ordering::Greater)) => half_pi(wp).sub(&x.div(y, wp).atan(wp), wp),
-            (_, Some(Ordering::Less)) => half_pi(wp).neg().sub(&x.div(y, wp).atan(wp), wp),
+            // x may be 0.
+            (_, Some(Ordering::Greater)) => from_y(true),
+            (_, Some(Ordering::Less)) => from_y(false),
             _ => return around_pi(),
         };
         if v.is_finite() {

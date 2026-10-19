@@ -13,11 +13,11 @@ use crate::testkit::ToRug;
 use crate::testkit::float::{Bracket, Dyadic, check_encloses, dyadic_with};
 use crate::{Complex, Integer, Rational};
 
-fn ball(d: &Dyadic) -> Ball {
+pub(super) fn ball(d: &Dyadic) -> Ball {
     Ball::exact(d.to_ours())
 }
 
-fn mp(re: &Dyadic, im: &Dyadic, p: u32) -> MpComplex {
+pub(super) fn mp(re: &Dyadic, im: &Dyadic, p: u32) -> MpComplex {
     MpComplex::with_val(p, (re.to_rug().unwrap(), im.to_rug().unwrap()))
 }
 
@@ -25,7 +25,10 @@ fn mp(re: &Dyadic, im: &Dyadic, p: u32) -> MpComplex {
 /// `log` at low precisions misses `log|z|` for `|z|` within about `2^-126`
 /// of 1 (at 66 bits, `(1 - 2^-127) + 4.5e-28 i` gives `+1.03e-55` for
 /// `-5.88e-39`), so the oracle runs well above where that was seen.
-fn brackets(prec: u64, f: impl Fn(u32, (MpRound, MpRound)) -> MpComplex) -> (Bracket, Bracket) {
+pub(super) fn brackets(
+    prec: u64,
+    f: impl Fn(u32, (MpRound, MpRound)) -> MpComplex,
+) -> (Bracket, Bracket) {
     let p = u32::try_from(prec).unwrap() + 192;
     let lo = f(p, (MpRound::Down, MpRound::Down));
     let hi = f(p, (MpRound::Up, MpRound::Up));
@@ -36,7 +39,7 @@ fn brackets(prec: u64, f: impl Fn(u32, (MpRound, MpRound)) -> MpComplex) -> (Bra
     (part(lo.real(), hi.real()), part(lo.imag(), hi.imag()))
 }
 
-fn check(
+pub(super) fn check(
     what: &str,
     z: &ComplexBall,
     prec: u64,
@@ -62,11 +65,11 @@ fn check(
     Ok(())
 }
 
-fn prec() -> impl Strategy<Value = u64> {
+pub(super) fn prec() -> impl Strategy<Value = u64> {
     prop_oneof![2u64..80, 80u64..300, Just(1000u64)]
 }
 
-fn part() -> BoxedStrategy<Dyadic> {
+pub(super) fn part() -> BoxedStrategy<Dyadic> {
     // Values below 2^4 (mantissas of one limb at 2^-60, two at 2^-124).
     prop_oneof![3 => dyadic_with(2, -130..=-124), 1 => dyadic_with(1, -80..=-60)].boxed()
 }
