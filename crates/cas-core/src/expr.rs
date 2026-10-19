@@ -3,7 +3,7 @@
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
-use cas_num::{Integer, Rational};
+use cas_num::{Complex, Integer, Rational};
 
 use crate::intern;
 use crate::node::{Flags, Key, Kind, Meta, Node, hasher, tag};
@@ -12,10 +12,11 @@ use crate::symbol::Symbol;
 /// An immutable, hash-consed expression.
 ///
 /// Symbols and integers that fit an `i64` are stored inline; everything else
-/// (larger integers, rationals, strings, applications) is a node in the
-/// global interner, shared by every expression that contains it. Each value
-/// has exactly one representation (an integer is never a rational, and an
-/// `i64` never a node), so equality is O(1):
+/// (larger integers, rationals, complex numbers, strings, applications) is a
+/// node in the global interner, shared by every expression that contains it.
+/// Each value has exactly one representation (an integer is never a
+/// rational, a real number never a complex one, and an `i64` never a node),
+/// so equality is O(1):
 /// inline payloads compare by value and nodes by address. Cloning is a copy
 /// or a reference-count increment.
 ///
@@ -60,6 +61,8 @@ pub enum View<'a> {
     Integer(&'a Integer),
     /// A rational number that is not an integer.
     Rational(&'a Rational),
+    /// A complex number that is not real (CAS-51).
+    Complex(&'a Complex),
     String(&'a str),
     /// `head[args…]`; the head is any expression.
     Apply {
@@ -89,6 +92,7 @@ impl Expr {
             Repr::Node(n) => match &n.kind {
                 Kind::Integer(x) => View::Integer(x),
                 Kind::Rational(x) => View::Rational(x),
+                Kind::Complex(z) => View::Complex(z),
                 Kind::String(s) => View::String(s),
                 Kind::Apply { head, args } => View::Apply { head, args },
             },
@@ -166,13 +170,34 @@ impl Expr {
         }
     }
 
-    /// Whether this is a number atom: an integer or a rational. Unlike
-    /// [`Expr::is_numeric`], `Pi` and `Sin[1]` are not.
+    /// The value of a number atom as a complex number: any integer,
+    /// rational or complex atom.
+    ///
+    /// ```
+    /// use cas_core::{Complex, Expr, Rational};
+    ///
+    /// let z = Complex::new(Rational::from(2), Rational::from(3));
+    /// assert_eq!(Expr::from(z.clone()).to_complex(), Some(z));
+    /// // A real value is a real atom, so each number has one form.
+    /// let real = Complex::new(Rational::from(5), Rational::from(0));
+    /// assert_eq!(Expr::from(real), Expr::from(5));
+    /// assert_eq!(Expr::from(5).to_complex(), Some(Complex::from(5)));
+    /// ```
+    #[must_use]
+    pub fn to_complex(&self) -> Option<Complex> {
+        match self.view() {
+            View::Complex(z) => Some(z.clone()),
+            _ => self.to_rational().map(Complex::from),
+        }
+    }
+
+    /// Whether this is a number atom: an integer, a rational or a complex
+    /// number. Unlike [`Expr::is_numeric`], `Pi`, `I` and `Sin[1]` are not.
     #[must_use]
     pub fn is_number(&self) -> bool {
         matches!(
             self.view(),
-            View::Int(_) | View::Integer(_) | View::Rational(_)
+            View::Int(_) | View::Integer(_) | View::Rational(_) | View::Complex(_)
         )
     }
 
@@ -299,6 +324,23 @@ impl From<&Rational> for Expr {
             Expr::from(x.numer())
         } else {
             Expr(Repr::Node(intern::intern(Key::Rational(x))))
+        }
+    }
+}
+
+impl From<Complex> for Expr {
+    /// A rational or integer atom if the value is real.
+    fn from(z: Complex) -> Expr {
+        Expr::from(&z)
+    }
+}
+
+impl From<&Complex> for Expr {
+    fn from(z: &Complex) -> Expr {
+        if z.is_real() {
+            Expr::from(z.re())
+        } else {
+            Expr(Repr::Node(intern::intern(Key::Complex(z))))
         }
     }
 }

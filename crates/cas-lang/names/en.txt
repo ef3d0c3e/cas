@@ -83,6 +83,9 @@ symbol: symbol
 [internal]
 # Operators and brackets.
 Plus Times Power List
+# The imaginary unit's symbol, which the language skips: its `i` lowers to the
+# complex number itself. The head of complex numbers in full form.
+I Complex
 # Splicing and rules, written as equations and definitions.
 Sequence Rule RuleDelayed
 # Patterns, written with parameters, `::`, `when` and `...`.

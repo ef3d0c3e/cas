@@ -6,7 +6,7 @@ use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
-use cas_num::{Integer, Rational};
+use cas_num::{Complex, Integer, Rational};
 use foldhash::fast::{FixedState, FoldHasher};
 
 use crate::attributes::Attributes;
@@ -32,6 +32,9 @@ pub(crate) enum Kind {
     Integer(Integer),
     /// Only non-integers: an integer value is an integer atom.
     Rational(Rational),
+    /// Only non-real values: a real value is a rational or integer atom.
+    /// Boxed, so that it does not make every node larger.
+    Complex(Box<Complex>),
     String(Box<str>),
     Apply {
         head: Expr,
@@ -45,6 +48,7 @@ pub(crate) enum Kind {
 pub(crate) enum Key<'a> {
     Integer(&'a Integer),
     Rational(&'a Rational),
+    Complex(&'a Complex),
     String(&'a str),
     Apply { head: &'a Expr, args: &'a [Expr] },
 }
@@ -58,6 +62,7 @@ pub(crate) mod tag {
     pub(crate) const APPLY: u8 = 3;
     pub(crate) const INTEGER: u8 = 4;
     pub(crate) const RATIONAL: u8 = 5;
+    pub(crate) const COMPLEX: u8 = 6;
 }
 
 /// The structural hasher: fixed seed, no per-process randomness.
@@ -139,6 +144,10 @@ impl Key<'_> {
                 h.write_u8(tag::RATIONAL);
                 q.hash(&mut h);
             }
+            Key::Complex(z) => {
+                h.write_u8(tag::COMPLEX);
+                z.hash(&mut h);
+            }
             Key::String(s) => {
                 h.write_u8(tag::STRING);
                 h.write_usize(s.len());
@@ -158,7 +167,7 @@ impl Key<'_> {
 
     pub(crate) fn meta(self) -> Meta {
         match self {
-            Key::Integer(_) | Key::Rational(_) => Meta::atom(Flags::NUMERIC, 0),
+            Key::Integer(_) | Key::Rational(_) | Key::Complex(_) => Meta::atom(Flags::NUMERIC, 0),
             Key::String(_) => Meta::atom(Flags::NONE, 0),
             Key::Apply { head, args } => {
                 let mut m = head.meta();
@@ -192,6 +201,7 @@ impl Key<'_> {
         match (self, kind) {
             (Key::Integer(a), Kind::Integer(b)) => a == b,
             (Key::Rational(a), Kind::Rational(b)) => a == b,
+            (Key::Complex(a), Kind::Complex(b)) => *a == **b,
             (Key::String(a), Kind::String(b)) => a == &**b,
             (Key::Apply { head, args }, Kind::Apply { head: h, args: a }) => {
                 head == h && args.len() == a.len() && args.iter().zip(a.iter()).all(|(x, y)| x == y)
@@ -204,6 +214,7 @@ impl Key<'_> {
         match self {
             Key::Integer(n) => Kind::Integer(n.clone()),
             Key::Rational(q) => Kind::Rational(q.clone()),
+            Key::Complex(z) => Kind::Complex(Box::new(z.clone())),
             Key::String(s) => Kind::String(s.into()),
             Key::Apply { head, args } => Kind::Apply {
                 head: head.clone(),

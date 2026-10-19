@@ -15,7 +15,7 @@ use proptest::prelude::*;
 use crate::expr::Repr;
 use crate::intern::{self, entries_with_hash};
 use crate::node::Key;
-use crate::{Attributes, Expr, Integer, Rational, Symbol, View};
+use crate::{Attributes, Complex, Expr, Integer, Rational, Symbol, View};
 
 fn sym(name: &str) -> Expr {
     Symbol::new(name).into()
@@ -517,6 +517,8 @@ enum Tree {
     Int(i64),
     /// A number atom that is not an `i64`: a larger integer or a rational.
     Num(Rational),
+    /// A complex number with a nonzero imaginary part.
+    Cplx(Rational, Rational),
     Str(String),
     Apply(Box<Tree>, Vec<Tree>),
 }
@@ -552,6 +554,11 @@ fn tree() -> impl Strategy<Value = Tree> {
         ]
         .prop_map(Tree::Int),
         big_number().prop_map(Tree::Num),
+        (
+            prop_oneof![Just(Rational::ZERO), big_number()],
+            big_number()
+        )
+            .prop_map(|(re, im)| Tree::Cplx(re, im)),
         "[ab]{0,2}".prop_map(Tree::Str),
     ];
     leaf.prop_recursive(4, 32, 4, |inner| {
@@ -565,6 +572,7 @@ fn build(t: &Tree) -> Expr {
         Tree::Sym(i) => sym(SYMS[*i]),
         Tree::Int(x) => Expr::from(*x),
         Tree::Num(q) => Expr::from(q),
+        Tree::Cplx(re, im) => Expr::from(Complex::new(re.clone(), im.clone())),
         Tree::Str(s) => Expr::string(s),
         Tree::Apply(h, a) => Expr::apply(&build(h), &a.iter().map(build).collect::<Vec<_>>()),
     }
@@ -576,6 +584,7 @@ fn unbuild(e: &Expr) -> Tree {
         View::Int(x) => Tree::Int(x),
         View::Integer(x) => Tree::Num(Rational::from(x)),
         View::Rational(x) => Tree::Num(x.clone()),
+        View::Complex(z) => Tree::Cplx(z.re().clone(), z.im().clone()),
         View::String(s) => Tree::Str(s.to_owned()),
         View::Apply { head, args } => {
             Tree::Apply(Box::new(unbuild(head)), args.iter().map(unbuild).collect())
@@ -600,7 +609,7 @@ fn model_depth_size(t: &Tree) -> (u16, u32) {
 
 fn model_numeric(t: &Tree) -> bool {
     match t {
-        Tree::Int(_) | Tree::Num(_) => true,
+        Tree::Int(_) | Tree::Num(_) | Tree::Cplx(..) => true,
         Tree::Sym(i) => SYMS[*i] == "Pi",
         Tree::Apply(h, a) => {
             matches!(**h, Tree::Sym(i) if ["Plus", "Sin"].contains(&SYMS[i]))
@@ -718,4 +727,40 @@ fn numbers_have_one_form() {
     );
     assert!(!sym("Pi").is_number() && sym("Pi").is_numeric());
     assert!(!Expr::string("1").is_number());
+}
+
+/// A complex number is a node only when it is not real; a real value is the
+/// rational or integer atom, so each number keeps one form (CAS-51).
+#[test]
+fn complex_numbers_have_one_form() {
+    let q = |n: i64, d: i64| Rational::new(n.into(), d.into());
+    let z = |re: Rational, im: Rational| Complex::new(re, im);
+    // Real values, whatever builds them.
+    for re in [
+        q(0, 1),
+        q(5, 1),
+        q(-7, 2),
+        Rational::from(Integer::from(1i128 << 64)),
+    ] {
+        let e = Expr::from(z(re.clone(), Rational::ZERO));
+        assert_eq!(e, Expr::from(&re));
+        assert_eq!(e.to_complex(), Some(Complex::from(re)));
+    }
+    assert_eq!(Expr::from(Complex::ZERO), Expr::from(0));
+    // Non-real values: one shared node each, apart from every real.
+    let a = Expr::from(z(q(2, 1), q(-3, 4)));
+    let b = Expr::from(z(q(4, 2), q(6, -8)));
+    assert!(Arc::ptr_eq(node(&a), node(&b)));
+    assert_eq!(a.view(), View::Complex(&z(q(2, 1), q(-3, 4))));
+    assert_eq!(a.to_complex(), Some(z(q(2, 1), q(-3, 4))));
+    assert_eq!((a.to_rational(), a.to_integer()), (None, None));
+    assert!(a.is_number() && a.is_numeric() && a.is_atom());
+    assert_ne!(a, Expr::from(z(q(-3, 4), q(2, 1))));
+    assert_ne!(Expr::from(Complex::I), Expr::from(1));
+    assert_eq!(crate::build::i(), Expr::from(Complex::I));
+    // The symbol `I` evaluates to the number; it is not the number.
+    let unit = Expr::from(Symbol::I);
+    assert_ne!(unit, crate::build::i());
+    assert!(!unit.is_number() && unit.is_numeric());
+    assert_eq!(-crate::build::i(), Expr::from(-Complex::I));
 }

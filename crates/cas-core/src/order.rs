@@ -18,7 +18,8 @@ static ONE: Expr = Expr(Repr::Int(1));
 /// and values: never on symbol ids, hashes, addresses or interning order, so
 /// it is the same in every run.
 ///
-/// 1. **Numbers** (integers and rationals) come first, by value.
+/// 1. **Numbers** come first: integers and rationals by value, then complex
+///    numbers by real part and then imaginary part (`2 < I < 1 - I < 1 + I`).
 /// 2. **Products and powers** — `Times[…]`, and `Power[b, n]` with two
 ///    arguments — compare as products of powers, as do all other expressions
 ///    against them (`x` is `x^1`, and `x^2` is the product of one factor).
@@ -87,7 +88,8 @@ fn is_number(e: &Expr) -> bool {
     e.is_number()
 }
 
-/// By value; only rationals need a `Rational` comparison.
+/// Real numbers by value, then complex numbers by real part and imaginary
+/// part; only rationals need a `Rational` comparison.
 fn cmp_numbers(a: &Expr, b: &Expr) -> Ordering {
     let integer = |v: View<'_>| match v {
         View::Int(x) => Some(Integer::from(x)),
@@ -96,6 +98,9 @@ fn cmp_numbers(a: &Expr, b: &Expr) -> Ordering {
     };
     match (a.view(), b.view()) {
         (View::Int(l), View::Int(r)) => l.cmp(&r),
+        (View::Complex(l), View::Complex(r)) => l.re().cmp(r.re()).then_with(|| l.im().cmp(r.im())),
+        (View::Complex(_), _) => Ordering::Greater,
+        (_, View::Complex(_)) => Ordering::Less,
         (l, r) => match (integer(l), integer(r)) {
             (Some(l), Some(r)) => l.cmp(&r),
             _ => rational(a).cmp(&rational(b)),
@@ -183,7 +188,7 @@ fn structural(a: &Expr, b: &Expr) -> Ordering {
 
 fn rank(v: View<'_>) -> u8 {
     match v {
-        View::Int(_) | View::Integer(_) | View::Rational(_) => 0,
+        View::Int(_) | View::Integer(_) | View::Rational(_) | View::Complex(_) => 0,
         View::String(_) => 1,
         View::Symbol(_) => 2,
         View::Apply { .. } => 3,

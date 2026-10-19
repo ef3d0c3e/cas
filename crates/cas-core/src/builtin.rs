@@ -56,6 +56,12 @@ builtins! {
     // Constants.
     PI = "Pi" [CONSTANT, PROTECTED];
     E = "E" [CONSTANT, PROTECTED];
+    // The imaginary unit's symbol: it evaluates to the complex number
+    // `0 + 1·I`, which the builder and the language produce directly
+    // (CAS-51).
+    I = "I" [CONSTANT, PROTECTED];
+    // Numbers: the head of a complex number in full form, `Complex[re, im]`.
+    COMPLEX = "Complex" [PROTECTED];
     // Structure.
     LIST = "List" [PROTECTED];
     SEQUENCE = "Sequence" [PROTECTED];

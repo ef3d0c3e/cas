@@ -4,7 +4,7 @@ use std::cmp::Ordering;
 
 use proptest::prelude::*;
 
-use crate::{Expr, Integer, Rational, Symbol};
+use crate::{Complex, Expr, Integer, Rational, Symbol};
 
 fn sym(name: &str) -> Expr {
     Symbol::new(name).into()
@@ -20,6 +20,11 @@ fn q(n: i64, d: i64) -> Expr {
 
 fn big(x: i128) -> Expr {
     Integer::from(x).into()
+}
+
+/// The complex number `re + im·I` with integer parts.
+fn cplx(re: i64, im: i64) -> Expr {
+    Complex::new(re.into(), im.into()).into()
 }
 
 fn apply(head: &Expr, args: &[Expr]) -> Expr {
@@ -82,6 +87,18 @@ fn all_numbers_by_value() {
         big(max + 1),
         big(max * 4),
         times(&[]),
+    ]);
+    // Complex numbers after every real one, by real part, then imaginary.
+    assert_increasing(&[
+        big(max * 4),
+        cplx(-2, 5),
+        cplx(0, -1),
+        cplx(0, 1),
+        Expr::from(Complex::new(q(1, 2).to_rational().unwrap(), 7.into())),
+        cplx(1, -3),
+        cplx(1, 2),
+        times(&[]),
+        sym("I"),
     ]);
     // A rational coefficient orders like an integer one.
     let x = sym("x");
@@ -214,6 +231,7 @@ fn tree() -> impl Strategy<Value = Expr> {
         (-2i64..3).prop_map(int),
         (-3i64..4, 1i64..4).prop_map(|(n, d)| q(n, d)),
         prop::sample::select(vec![-(1i128 << 64), 1 << 63, 3 << 70]).prop_map(big),
+        (-2i64..3, prop_oneof![-2i64..0, 1i64..3]).prop_map(|(re, im)| cplx(re, im)),
         prop::sample::select(vec!["", "a", "B"]).prop_map(Expr::string),
     ];
     leaf.prop_recursive(4, 24, 3, |inner| {

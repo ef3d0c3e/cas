@@ -9,7 +9,8 @@ use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 
 /// An expression in full form, `Plus[x, Times[2, Power[y, 3]]]`: every
-/// application as `head[args…]`, unambiguous. See [`Expr::full_form`].
+/// application as `head[args…]`, and a complex number as `Complex[re, im]`;
+/// unambiguous. See [`Expr::full_form`].
 #[derive(Clone, Copy, Debug)]
 pub struct FullForm<'a>(&'a Expr);
 
@@ -48,6 +49,7 @@ impl fmt::Display for FullForm<'_> {
                         }
                         stack.extend([Piece::Text("["), Piece::Expr(head)]);
                     }
+                    View::Complex(z) => write!(f, "Complex[{}, {}]", z.re(), z.im())?,
                     _ => atom(e, f)?,
                 },
             }
@@ -61,14 +63,15 @@ enum Piece<'a> {
     Expr(&'a Expr),
 }
 
-/// Symbols by name, numbers in decimal (`-3/2` for a rational), strings
-/// quoted and escaped.
+/// Symbols by name, numbers in decimal (`-3/2` for a rational, `1 - 3/4*I`
+/// for a complex number), strings quoted and escaped.
 fn atom(e: &Expr, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match e.view() {
         View::Symbol(s) => f.write_str(s.name()),
         View::Int(x) => write!(f, "{x}"),
         View::Integer(x) => write!(f, "{x}"),
         View::Rational(x) => write!(f, "{x}"),
+        View::Complex(z) => write!(f, "{z}"),
         View::String(s) => string(s, f),
         View::Apply { .. } => unreachable!("not an atom"),
     }
@@ -106,6 +109,9 @@ impl fmt::Debug for Expr {
 ///
 /// - Numbers print in decimal, a rational as `3/2`, which binds like a
 ///   quotient: `x^(1/2)`, `2*(3/4)`, and `1/2*x` as a leading coefficient.
+/// - A complex number prints as `2 + 3*I`, `3*I` or `I`, and binds like the
+///   sum, product or atom it reads as: `x*(2 + 3*I)`, `(3*I)^2`, `I^2`. The
+///   symbol `I` prints as `I` too; full form tells them apart.
 /// - A term with a negative coefficient is subtracted: `x - 2*y`, and
 ///   `Times[-1, x]` is `-x`.
 /// - Factors with a negative integer exponent are a denominator:
@@ -143,6 +149,8 @@ impl fmt::Display for Expr {
                     View::Int(n) => write!(f, "{}", n.unsigned_abs())?,
                     View::Integer(n) => write!(f, "{}", n.unsigned_abs())?,
                     View::Rational(q) => write!(f, "{}", q.abs())?,
+                    // Only a negative imaginary number has a sign to drop.
+                    View::Complex(z) => write!(f, "{}", -z)?,
                     _ => unreachable!("only numbers have a magnitude"),
                 },
                 Task::Expr { e, min, no_minus } => {
@@ -224,7 +232,7 @@ enum Form<'a> {
 
 fn form(e: &Expr) -> Form<'_> {
     match e.view() {
-        View::Int(_) | View::Integer(_) | View::Rational(_) => Form::Number,
+        View::Int(_) | View::Integer(_) | View::Rational(_) | View::Complex(_) => Form::Number,
         View::Apply { head, args } => match (head.as_symbol(), args) {
             (Some(Symbol::PLUS), [_, _, ..]) => Form::Plus(args),
             (Some(Symbol::TIMES), [_, _, ..]) => Form::Times(args),
@@ -241,9 +249,19 @@ fn prec(e: &Expr) -> Prec {
         Form::Plus(_) => Prec::Sum,
         Form::Times(_) => Prec::Product,
         Form::Power(..) => Prec::Power,
-        // A rational reads as a quotient.
-        Form::Number if is_rational(e) => Prec::Product,
-        Form::Number | Form::List(_) | Form::Other => Prec::Atom,
+        Form::Number => number_prec(e),
+        Form::List(_) | Form::Other => Prec::Atom,
+    }
+}
+
+/// A rational reads as a quotient, and a complex number as the sum
+/// (`2 + 3*I`), product (`3*I`) or atom (`I`) it prints as.
+fn number_prec(e: &Expr) -> Prec {
+    match e.view() {
+        View::Rational(_) => Prec::Product,
+        View::Complex(z) if !z.re().is_zero() => Prec::Sum,
+        View::Complex(z) if !z.im().abs().is_one() => Prec::Product,
+        _ => Prec::Atom,
     }
 }
 
@@ -262,12 +280,16 @@ fn leading_minus(e: &Expr) -> bool {
     }
 }
 
-/// Whether `e` is a negative number.
+/// Whether `e` is a negative number, or a negative imaginary one (`-3*I`),
+/// which also prints with a sign that a product or a sum can take out. A
+/// complex number with a real part binds like a sum, so precedence already
+/// parenthesises it where a sign would matter.
 fn is_negative(e: &Expr) -> bool {
     match e.view() {
         View::Int(n) => n < 0,
         View::Integer(n) => n.is_negative(),
         View::Rational(q) => q.is_negative(),
+        View::Complex(z) => z.re().is_zero() && z.im().is_negative(),
         _ => false,
     }
 }

@@ -32,7 +32,7 @@ mod symbol;
 mod traverse;
 
 pub use attributes::Attributes;
-pub use cas_num::{Integer, Rational};
+pub use cas_num::{Complex, Integer, Rational};
 pub use context::{Context, ContextError, EvalError, Limits, StateId};
 pub use expr::{Expr, View};
 pub use intern::{InternerStats, interner_stats};

@@ -3,7 +3,7 @@
 use proptest::prelude::*;
 
 use crate::build::symbols;
-use crate::{Expr, Integer, Rational, Symbol};
+use crate::{Complex, Expr, Integer, Rational, Symbol};
 
 fn apply(head: Symbol, args: &[Expr]) -> Expr {
     Expr::apply(&head.into(), args)
@@ -260,6 +260,55 @@ fn full_form() {
     assert_eq!(e.full_form().to_string(), expected);
     assert_eq!(format!("{e:?}"), expected);
     assert_eq!(format!("{:?}", apply(Symbol::LIST, &[])), "List[]");
+}
+
+/// A complex number binds like what it reads as: a sum, a product or an
+/// atom (CAS-51). Full form gives `Complex[re, im]`.
+#[test]
+fn complex_numbers() {
+    let [x] = symbols(["x"]);
+    let r = |n: i64, d: i64| Rational::new(n.into(), d.into());
+    let z = |re: Rational, im: Rational| Expr::from(Complex::new(re, im));
+    let two_three = z(r(2, 1), r(3, 1));
+    let unit = z(r(0, 1), r(1, 1));
+    let minus_unit = z(r(0, 1), r(-1, 1));
+    let three = z(r(0, 1), r(3, 1));
+    let minus_three = z(r(0, 1), r(-3, 1));
+    check(&[
+        (two_three.clone(), "2 + 3*I"),
+        (z(r(1, 2), r(-3, 4)), "1/2 - 3/4*I"),
+        (z(r(-2, 1), r(1, 1)), "-2 + I"),
+        (unit.clone(), "I"),
+        (minus_unit.clone(), "-I"),
+        (three.clone(), "3*I"),
+        (z(r(0, 1), r(-1, 2)), "-1/2*I"),
+        // As operands.
+        (times(&[x.clone(), two_three.clone()]), "x*(2 + 3*I)"),
+        (pow(&two_three, 2), "(2 + 3*I)^2"),
+        (pow(&three, 2), "(3*I)^2"),
+        (pow(&unit, 2), "I^2"),
+        (pow(&minus_unit, 2), "(-I)^2"),
+        (pow(&x, unit.clone()), "x^I"),
+        (pow(&x, minus_unit.clone()), "x^(-I)"),
+        (plus(&[x.clone(), two_three.clone()]), "x + (2 + 3*I)"),
+        (plus(&[x.clone(), three.clone()]), "x + 3*I"),
+        (plus(&[x.clone(), minus_unit.clone()]), "x - I"),
+        (plus(&[x.clone(), minus_three.clone()]), "x - 3*I"),
+        (plus(&[two_three.clone(), x.clone()]), "(2 + 3*I) + x"),
+        (times(&[three.clone(), x.clone()]), "(3*I)*x"),
+        (times(&[minus_unit.clone(), x.clone()]), "-I*x"),
+        (times(&[minus_three, x.clone()]), "-3*I*x"),
+        (
+            crate::build::list([unit.clone(), two_three.clone()]),
+            "{I, 2 + 3*I}",
+        ),
+        // The symbol prints like the number it evaluates to.
+        (Expr::from(Symbol::I), "I"),
+    ]);
+    assert_eq!(format!("{two_three:?}"), "Complex[2, 3]");
+    assert_eq!(format!("{:?}", z(r(1, 2), r(-3, 4))), "Complex[1/2, -3/4]");
+    assert_eq!(format!("{:?}", plus(&[x, unit])), "Plus[x, Complex[0, 1]]");
+    assert_eq!(format!("{:?}", Expr::from(Symbol::I)), "I");
 }
 
 #[test]

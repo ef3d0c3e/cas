@@ -26,7 +26,7 @@
 use std::iter::{Product, Sum};
 use std::ops::{Add, AddAssign, Div, DivAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 
-use cas_num::Integer;
+use cas_num::{Complex, Integer};
 
 use crate::attributes::Attributes;
 use crate::expr::{Expr, View};
@@ -128,6 +128,7 @@ fn negate(e: Expr) -> Expr {
         },
         View::Integer(n) => Expr::from(-n),
         View::Rational(q) => Expr::from(-q),
+        View::Complex(z) => Expr::from(-z),
         _ => times((-1).into(), e),
     }
 }
@@ -270,6 +271,13 @@ fn fold(head: Symbol, empty: i64, mut args: Vec<Expr>) -> Expr {
 #[must_use]
 pub fn symbols<const N: usize>(names: [&str; N]) -> [Expr; N] {
     names.map(Expr::symbol)
+}
+
+/// The imaginary unit: the complex number `0 + 1·I`, not the symbol
+/// [`Symbol::I`], which evaluates to it.
+#[must_use]
+pub fn i() -> Expr {
+    Expr::from(Complex::I)
 }
 
 /// `List[items…]`.
