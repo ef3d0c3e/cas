@@ -1,21 +1,23 @@
 //! Square roots, nth roots and perfect powers.
 //!
-//! The square root is Zimmermann's Karatsuba square root (Brent and
-//! Zimmermann, *Modern Computer Arithmetic*, Algorithm 1.12): the root of the
-//! top half, recursively, then one division gives the low half of the root.
-//! It costs a constant times a division of the same size. The nth root is
-//! Newton's iteration from an overestimate, which is the root of the top
-//! part, recursively, so a couple of iterations finish each level.
+//! The square root is the kernel's ([`kernel::sqrtrem`]), Zimmermann's
+//! Karatsuba square root: the root of the top half, recursively, then one
+//! division gives the low half of the root. It costs a constant times a
+//! division of the same size.
+//!
+//! The nth root is Newton's iteration from an overestimate, which is the
+//! root of the top part, recursively, so a couple of iterations finish each
+//! level.
 #![allow(
     clippy::many_single_char_names,
     reason = "the algorithms use the textbook names (m, s, r, q, u, k, x, n, p)"
 )]
 
-use super::Natural;
-use super::bits::split_bit_index;
-use crate::Limb;
+use super::limb_vec::LimbVec;
+use super::{Natural, with_scratch};
 use crate::modular::ModWord;
 use crate::prime::is_prime_u64;
+use crate::{Limb, kernel};
 
 #[cfg(test)]
 mod tests;
@@ -74,19 +76,21 @@ impl Natural {
             let s = x.isqrt();
             return (Natural::from(s), Natural::from(x - s * s));
         }
-        // The algorithm needs a length of 4k - 1 or 4k bits; otherwise take
-        // the root of 4 self, (2s + b)² + r' = 4 (s² + r).
-        if matches!(self.bit_length() % 4, 1 | 2) {
-            let (s, r) = sqrt_rem_normalized(&(self << 2));
-            let r = if s.bit(0) {
-                (r + &s + &s - 1) >> 2
-            } else {
-                r >> 2
-            };
-            (s >> 1, r)
-        } else {
-            sqrt_rem_normalized(self)
-        }
+        let a = self.limbs();
+        let mut s = LimbVec::zeroed(a.len().div_ceil(2));
+        let rn = a.len() / 2 + 1;
+        let r = with_scratch(rn + kernel::sqrtrem_scratch_len(a.len()), |t| {
+            // The remainder's buffer has a limb more than the root, which
+            // a remainder of at most 2s rarely fills: it is in the scratch,
+            // so that a short remainder is copied out inline.
+            let (r, t) = t.split_at_mut(rn);
+            let len = kernel::sqrtrem(s.as_mut_slice(), r, a, t);
+            LimbVec::from_slice(&r[..len])
+        });
+        let (s, r) = (Natural { limbs: s }, Natural { limbs: r });
+        s.debug_check();
+        r.debug_check();
+        (s, r)
     }
 
     /// `⌊self^(1/n)⌋`.
@@ -167,44 +171,6 @@ impl Natural {
         }
         (exp > 1).then_some((base, exp))
     }
-}
-
-/// `sqrt_rem` for a length of `4k - 1` or `4k` bits, above 128.
-///
-/// With `β = 2^k`, `m = a₃β³ + a₂β² + a₁β + a₀` and `a₃ >= β/4`: the root of
-/// the top half `(s', r') = sqrt_rem(a₃β + a₂)` and the division
-/// `(q, u) = divrem(r'β + a₁, 2s')` give `s = s'β + q` and
-/// `r = uβ + a₀ - q²`, which is negative at most once, by a single step.
-fn sqrt_rem_normalized(m: &Natural) -> (Natural, Natural) {
-    let k = m.bit_length().div_ceil(4);
-    debug_assert!(k > 32 && m.bit_length() >= 4 * k - 1);
-    let (s1, r1) = (m >> (2 * k)).sqrt_rem();
-    let a1 = low_bits(&(m >> k), k);
-    let a0 = low_bits(m, k);
-    let (q, u) = ((r1 << k) + a1).div_rem(&(&s1 << 1));
-    let s = (s1 << k) + &q;
-    let t = (u << k) + a0;
-    let q2 = q.square();
-    if let Some(r) = t.checked_sub(&q2) {
-        return (s, r);
-    }
-    // r + 2s - 1 with the root s - 1.
-    let r = (t + &s + &s - 1)
-        .checked_sub(&q2)
-        .expect("one correction suffices");
-    (s - 1, r)
-}
-
-/// `x mod 2^k`.
-fn low_bits(x: &Natural, k: u64) -> Natural {
-    let (limb, bit) = split_bit_index(k);
-    let a = x.limbs();
-    if limb >= a.len() {
-        return x.clone();
-    }
-    let mut v = a[..=limb].to_vec();
-    v[limb] &= (1 << bit) - 1;
-    Natural::from_vec(v)
 }
 
 /// `⌊x^(1/n)⌋` for `n >= 3`.

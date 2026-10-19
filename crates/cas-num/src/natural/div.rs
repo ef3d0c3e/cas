@@ -2,25 +2,12 @@
 
 use std::ops::{Div, DivAssign, Rem, RemAssign};
 
-use super::Natural;
 use super::limb_vec::LimbVec;
+use super::{Natural, with_scratch};
 use crate::{Limb, kernel};
 
 const DIV_BY_ZERO: &str = "attempt to divide by zero";
 const NOT_EXACT: &str = "division is not exact";
-
-/// Scratch limbs that Hensel division takes from the stack instead of the
-/// heap, so that short exact divisions do not allocate for it.
-const STACK_SCRATCH: usize = 32;
-
-/// Runs `f` on `len` zeroed limbs, on the stack up to [`STACK_SCRATCH`].
-fn with_scratch<R>(len: usize, f: impl FnOnce(&mut [Limb]) -> R) -> R {
-    if len <= STACK_SCRATCH {
-        f(&mut [0; STACK_SCRATCH][..len])
-    } else {
-        f(&mut vec![0; len])
-    }
-}
 
 /// Runs `f` on `a` and `d` shifted right by `twos` bits, at most `d`'s
 /// trailing zeros (so `d` stays non-zero), both normalised; when `twos > 0`,
@@ -57,8 +44,9 @@ impl Natural {
             _ => {
                 let mut q = LimbVec::zeroed(num.len() - den.len() + 1);
                 let mut r = LimbVec::zeroed(den.len());
-                let mut scratch = vec![0; kernel::div_rem_scratch_len(num.len(), den.len())];
-                kernel::div_rem(q.as_mut_slice(), r.as_mut_slice(), num, den, &mut scratch);
+                with_scratch(kernel::div_rem_scratch_len(num.len(), den.len()), |t| {
+                    kernel::div_rem(q.as_mut_slice(), r.as_mut_slice(), num, den, t);
+                });
                 let (mut q, mut r) = (Natural { limbs: q }, Natural { limbs: r });
                 q.normalize();
                 r.normalize();

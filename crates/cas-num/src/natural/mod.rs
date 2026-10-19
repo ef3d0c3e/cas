@@ -22,6 +22,19 @@ use crate::{Limb, kernel};
 use limb_vec::LimbVec;
 pub(crate) use radix::check_radix;
 
+/// Scratch limbs that kernels called on short operands take from the stack
+/// instead of the heap.
+const STACK_SCRATCH: usize = 32;
+
+/// Runs `f` on `len` zeroed limbs, on the stack up to [`STACK_SCRATCH`].
+fn with_scratch<R>(len: usize, f: impl FnOnce(&mut [Limb]) -> R) -> R {
+    if len <= STACK_SCRATCH {
+        f(&mut [0; STACK_SCRATCH][..len])
+    } else {
+        f(&mut vec![0; len])
+    }
+}
+
 /// An arbitrary-precision natural number (non-negative integer).
 ///
 /// Stored as little-endian 64-bit limbs, inline up to 256 bits and on the heap

@@ -403,7 +403,7 @@ fn uses_mu(nn: usize, m: usize) -> bool {
 /// limbs: Barrett's estimates from Newton's reciprocal ([`mu::mu_div_qr`])
 /// when both the divisor and the quotient are long, else [`bz_div_qr`].
 /// Leaves the remainder in `n[..d.len()]`; returns the top quotient limb.
-fn div_qr_normalized(
+pub(crate) fn div_qr_normalized(
     q: &mut [Limb],
     n: &mut [Limb],
     d: &[Limb],
