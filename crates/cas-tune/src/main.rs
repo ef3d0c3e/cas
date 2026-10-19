@@ -118,6 +118,18 @@ fn params() -> Vec<Param> {
             window: None,
         },
         Param {
+            key: "mul_toom32_threshold",
+            op: "mul32",
+            grid: with_never(geometric(16, 320, 1.19)),
+            window: None,
+        },
+        Param {
+            key: "mul_toom42_threshold",
+            op: "mul42",
+            grid: with_never(geometric(16, 320, 1.19)),
+            window: None,
+        },
+        Param {
             key: "ntt_efficiency_exponent",
             op: "mul",
             grid: vec![0, 10, 15, 20, 25, 30, 40, 50, 60, 80],
@@ -132,6 +144,17 @@ fn params() -> Vec<Param> {
             op: "mul",
             grid: with_never(geometric(512, 16384, 1.19)),
             window: None,
+        },
+        Param {
+            key: "ntt_unbalanced_exponent",
+            op: "mul_wide",
+            grid: vec![6, 8, 10, 12, 14, 16, 18, 20, 25],
+            // Shorter operands around the balanced crossover, where the
+            // rule decides between one transform and Toom pieces.
+            window: Some(|c| {
+                let t = c["mul_ntt_threshold"].clamp(512, 16384);
+                geometric(t / 4, t * 2, 1.25)
+            }),
         },
         Param {
             key: "sqr_karatsuba_threshold",

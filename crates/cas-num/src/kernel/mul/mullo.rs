@@ -40,7 +40,7 @@ pub(crate) fn mullo_algorithm(n: usize) -> Mullo {
 /// proportions for the algorithm of the full product, in `1..=n / 2`.
 fn dc_split(n: usize) -> usize {
     let n1 = match algorithm(n, n) {
-        Algorithm::Basecase | Algorithm::Chunked => n / 2,
+        Algorithm::Basecase | Algorithm::Chunked | Algorithm::Toom32 | Algorithm::Toom42 => n / 2,
         Algorithm::Karatsuba => n * 11 / 36,
         Algorithm::Toom3 => n * 9 / 40,
         Algorithm::Toom4 | Algorithm::Ntt => n * 7 / 39,

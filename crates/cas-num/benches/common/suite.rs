@@ -171,6 +171,34 @@ fn staircase(c: &mut Criterion) {
     group.finish();
 }
 
+/// Unbalanced products `a * b` with `b` of `bn` limbs and `a` of `r bn`, for
+/// ratios `r` from 1.25 to 16, up to `CAS_BENCH_MAX_LIMBS` for the longer
+/// operand. Names are `mul_shape/{ours,gmp}/{bn}x{r}`.
+fn mul_shape(c: &mut Criterion) {
+    let max = std::env::var("CAS_BENCH_MAX_LIMBS")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(4096usize);
+    let mut group = c.benchmark_group("mul_shape");
+    for bn in [32usize, 128, 512, 2048, 8192, 32768] {
+        for (num, den) in [(5, 4), (3, 2), (2, 1), (5, 2), (3, 1), (4, 1), (6, 1), (8, 1), (16, 1)] {
+            let an = bn * num / den;
+            if an > max {
+                continue;
+            }
+            let ((a, ga), (b, gb)) = (operand(an, 13), operand(bn, 14));
+            let id = format!("{bn}x{}", f64::from(u32::try_from(num).unwrap()) / f64::from(u32::try_from(den).unwrap()));
+            group.bench_function(BenchmarkId::new("ours", &id), |bench| {
+                bench.iter(|| black_box(&a * &b));
+            });
+            group.bench_function(BenchmarkId::new("gmp", &id), |bench| {
+                bench.iter(|| black_box(rug::Integer::from(&ga * &gb)));
+            });
+        }
+    }
+    group.finish();
+}
+
 fn number_theory(c: &mut Criterion) {
     sweep(
         c,
@@ -353,6 +381,6 @@ fn config() -> Criterion {
 criterion_group! {
     name = benches;
     config = config();
-    targets = arithmetic, staircase, number_theory, radix, small_integers, few_limbs
+    targets = arithmetic, staircase, mul_shape, number_theory, radix, small_integers, few_limbs
 }
 criterion_main!(benches);

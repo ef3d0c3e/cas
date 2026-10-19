@@ -2,18 +2,23 @@
 # timing noise 0.4%) after the radix-3 NTT lengths and size-aware NTT
 # dispatch, then the NTT dispatch keys (179 s, noise 0.2%), redc_n_threshold
 # after REDC by two limbs (88 s, noise 0.5%), the short-product keys with
-# redc_n_threshold after short products in REDC (246 s, noise 0.8%), and the
+# redc_n_threshold after short products in REDC (246 s, noise 0.8%), the
 # Hensel division keys (292 s, then 178 s for the inverse and block keys;
-# noise 0.2-1.3%).
+# noise 0.2-1.3%), and on 2026-10-19 the unbalanced-product keys (204 s,
+# then 88 s for mul_toom32_threshold, whose timings were 22% noisy on a busy
+# machine over a flat optimum; the other two 0.3-0.5%).
 # Algorithm thresholds for cas-num, embedded at build time (see build.rs).
 # Sizes are in limbs unless noted. Measured on the development machine;
 # `cargo run --release -p cas-tune` writes a file for yours.
 
 # Multiplication: the shorter operand's length from which each algorithm is
-# used (kernel/mul.rs).
+# used (kernel/mul.rs). Toom-32 and Toom-42 take unbalanced products, with
+# the longer operand 4/3 to 7/4 and 7/4 to 11/4 times the shorter.
 mul_karatsuba_threshold = 21
 mul_toom3_threshold = 136
 mul_toom4_threshold = 459
+mul_toom32_threshold = 45
+mul_toom42_threshold = 70
 mul_ntt_threshold = 3799
 
 # Squaring (kernel/mul.rs).
@@ -25,6 +30,10 @@ sqr_ntt_threshold = 2254
 # as the size allows; at a size whose transform costs 1/e of the ideal, from
 # threshold times e^-(x / 10), x = ntt_efficiency_exponent (kernel/mul.rs).
 ntt_efficiency_exponent = 27
+# An unbalanced product (the longer operand at least 4/3 the shorter) takes
+# one NTT when the transform's modelled cost is below Toom's, scaled from the
+# balanced crossover as (an / bn) (bn / T)^(x / 10), x = ntt_unbalanced_exponent.
+ntt_unbalanced_exponent = 16
 
 # NTT (kernel/ntt.rs): transforms of at most this many coefficients run
 # layer by layer; longer ones split in halves first.

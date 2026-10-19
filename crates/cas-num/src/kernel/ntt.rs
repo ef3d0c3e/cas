@@ -441,6 +441,12 @@ fn plan(an: usize, bn: usize, radix3: bool) -> (usize, u64) {
     best
 }
 
+/// The cost of [`mul`] for operands of `an, bn >= 1` limbs in [`plan`]'s
+/// model.
+pub(crate) fn cost(an: usize, bn: usize) -> u64 {
+    plan(an, bn, true).1
+}
+
 /// How close the transform for operands of `an, bn >= 1` limbs comes to the
 /// ideal cost `len (log2 len + 3)` of [`plan`]'s model, in `(0, 1]`: low just
 /// above the steps of the staircase, where the transform is much longer than

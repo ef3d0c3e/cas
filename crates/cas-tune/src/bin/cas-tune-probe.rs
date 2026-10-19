@@ -70,6 +70,39 @@ fn measure(op: &str, n: usize, min: Duration) -> f64 {
                 kernel::mul(&mut r, black_box(&a), black_box(&b), &mut s);
             })
         }
+        // Unbalanced products with an n-limb shorter operand: 3n/2 x n
+        // (Toom-32), 2n x n and 4n x n (Toom-42 and its pieces), and 2n,
+        // 5n and 12n x n (the NTT's unbalanced rule).
+        // `mul:<num>/<den>`: one shape, (num/den) n x n.
+        op if op == "mul32" || op == "mul42" || op == "mul_wide" || op.starts_with("mul:") => {
+            let parsed;
+            let ratios: &[(usize, usize)] = match op {
+                "mul32" => &[(3, 2)],
+                "mul42" => &[(2, 1), (4, 1)],
+                "mul_wide" => &[(2, 1), (5, 1), (12, 1)],
+                _ => {
+                    let (num, den) = op[4..].split_once('/').expect("mul:<num>/<den>");
+                    parsed = [(num.parse().expect("num"), den.parse().expect("den"))];
+                    &parsed
+                }
+            };
+            let b = limbs(n, 2);
+            let mut shapes: Vec<_> = ratios
+                .iter()
+                .map(|&(num, den)| {
+                    let an = n * num / den;
+                    let a = limbs(an, 1);
+                    let r = vec![0; an + n];
+                    let s = vec![0; kernel::mul_scratch_len(an, n)];
+                    (a, r, s)
+                })
+                .collect();
+            time(min, || {
+                for (a, r, s) in &mut shapes {
+                    kernel::mul(r, black_box(a), black_box(&b), s);
+                }
+            })
+        }
         "sqr" => {
             let a = limbs(n, 3);
             let mut r = vec![0; 2 * n];

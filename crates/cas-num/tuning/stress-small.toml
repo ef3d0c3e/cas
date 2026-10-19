@@ -4,12 +4,15 @@
 mul_karatsuba_threshold = 2
 mul_toom3_threshold = 6
 mul_toom4_threshold = 7
+mul_toom32_threshold = 3
+mul_toom42_threshold = 4
 mul_ntt_threshold = 24
 sqr_karatsuba_threshold = 2
 sqr_toom3_threshold = 5
 sqr_toom4_threshold = 7
 sqr_ntt_threshold = 20
 ntt_efficiency_exponent = 25
+ntt_unbalanced_exponent = 14
 ntt_block = 2
 ntt_wrap_fraction = 1
 mul_wrap_ntt_threshold = 4

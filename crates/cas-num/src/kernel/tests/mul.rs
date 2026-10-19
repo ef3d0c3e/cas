@@ -15,10 +15,11 @@ use crate::kernel::mul::mullo::{
 };
 use crate::kernel::mul::{
     Algorithm, MUL_KARATSUBA_THRESHOLD, MUL_NTT_THRESHOLD, MUL_TOOM3_THRESHOLD,
-    MUL_TOOM4_THRESHOLD, MUL_WRAP_NTT_THRESHOLD, NTT_EFFICIENCY_EXPONENT, SQR_KARATSUBA_THRESHOLD,
-    SQR_NTT_THRESHOLD, SQR_TOOM3_THRESHOLD, SQR_TOOM4_THRESHOLD, algorithm, karatsuba,
-    karatsuba_scratch_len, mul_wrap, mul_wrap_scratch_len, sqr_algorithm, toom3, toom3_scratch_len,
-    toom4, toom4_scratch_len,
+    MUL_TOOM4_THRESHOLD, MUL_TOOM32_THRESHOLD, MUL_TOOM42_THRESHOLD, MUL_WRAP_NTT_THRESHOLD,
+    NTT_EFFICIENCY_EXPONENT, SQR_KARATSUBA_THRESHOLD, SQR_NTT_THRESHOLD, SQR_TOOM3_THRESHOLD,
+    SQR_TOOM4_THRESHOLD, algorithm, karatsuba, karatsuba_scratch_len, mul_wrap,
+    mul_wrap_scratch_len, sqr_algorithm, toom3, toom3_scratch_len, toom4, toom4_scratch_len,
+    toom32, toom32_fits, toom32_scratch_len, toom42, toom42_fits, toom42_scratch_len,
 };
 use crate::kernel::{
     addmul_1, mul, mul_1, mul_1_assign, mul_basecase, mul_scratch_len, sqr, sqr_basecase,
@@ -87,9 +88,10 @@ fn mul_thresholds() -> Vec<usize> {
 
 /// Operands `(a, b)` whose shorter length straddles a threshold and whose
 /// longer length is equal, slightly longer, around the Karatsuba and Toom-3
-/// balance limits (1.5x, 2x) or several times longer; in either order.
+/// balance limits (1.5x, 2x), the unbalanced dispatcher's (4/3, 7/4, 11/4)
+/// or several times longer; in either order.
 fn mul_operands() -> impl Strategy<Value = (Vec<Limb>, Vec<Limb>)> {
-    (len_around(&mul_thresholds()), 0..8usize, any::<bool>())
+    (len_around(&mul_thresholds()), 0..16usize, any::<bool>())
         .prop_flat_map(|(bn, shape, swap)| {
             let an = match shape {
                 0 => bn,
@@ -99,7 +101,17 @@ fn mul_operands() -> impl Strategy<Value = (Vec<Limb>, Vec<Limb>)> {
                 4 => 2 * bn - 1,
                 5 => 2 * bn,
                 6 => 2 * bn + 1,
-                _ => 3 * bn + 5,
+                7 => 3 * bn + 5,
+                // The unbalanced dispatcher's boundaries: 4/3, 7/4, 11/4.
+                8 => (4 * bn).div_ceil(3),
+                9 => (4 * bn).div_ceil(3) - 1,
+                10 => (7 * bn).div_ceil(4),
+                11 => (7 * bn).div_ceil(4) - 1,
+                12 => (11 * bn).div_ceil(4),
+                13 => (11 * bn).div_ceil(4) - 1,
+                // Pieces of 2 bn with a short and a long last one.
+                14 => 6 * bn + 1,
+                _ => 8 * bn - 1,
             }
             .max(bn);
             (strategy::raw_limbs(an), strategy::raw_limbs(bn), Just(swap))
@@ -124,6 +136,33 @@ fn toom3_lens(max: usize) -> impl Strategy<Value = (usize, usize)> {
     (3..=max)
         .prop_filter("an = 4 has no valid b", |&an| an != 4)
         .prop_flat_map(|an| (Just(an), 2 * an.div_ceil(3) + 1..=an))
+}
+
+/// Lengths `(an, bn)` that Toom-32 or Toom-42 takes (`fits`), with `an`
+/// between `bn` and `3 bn`.
+fn unbalanced_lens(
+    max: usize,
+    fits: fn(usize, usize) -> bool,
+) -> impl Strategy<Value = (usize, usize)> {
+    (2..=max)
+        .prop_flat_map(|bn| (bn..=3 * bn, Just(bn)))
+        .prop_filter("the variant takes the shape", move |&(an, bn)| fits(an, bn))
+}
+
+/// Signature of [`toom32`] and [`toom42`].
+type Unbalanced = fn(&mut [Limb], &[Limb], &[Limb], &mut [Limb]);
+
+/// Calls `toom32` or `toom42` directly with an exactly sized scratch.
+fn run_unbalanced(
+    f: Unbalanced,
+    scratch_len: fn(usize, usize) -> usize,
+    a: &[Limb],
+    b: &[Limb],
+) -> Vec<Limb> {
+    let mut r = vec![GARBAGE; a.len() + b.len()];
+    let mut scratch = vec![GARBAGE; scratch_len(a.len(), b.len())];
+    f(&mut r, a, b, &mut scratch);
+    r
 }
 
 fn raw_pair(lens: (usize, usize)) -> impl Strategy<Value = (Vec<Limb>, Vec<Limb>)> {
@@ -251,6 +290,46 @@ proptest! {
         prop_assert_eq!(ours, basecase(&a, &b));
     }
 
+    #[test]
+    fn toom32_matches_basecase(
+        (a, b) in unbalanced_lens(60, toom32_fits).prop_flat_map(raw_pair),
+    ) {
+        let ours = run_unbalanced(toom32, toom32_scratch_len, &a, &b);
+        prop_assert_eq!(ours, basecase(&a, &b));
+    }
+
+    #[test]
+    fn toom42_matches_basecase(
+        (a, b) in unbalanced_lens(60, toom42_fits).prop_flat_map(raw_pair),
+    ) {
+        let ours = run_unbalanced(toom42, toom42_scratch_len, &a, &b);
+        prop_assert_eq!(ours, basecase(&a, &b));
+    }
+
+    /// Toom-32's and Toom-42's evaluations at -1 and -2 go negative, and are
+    /// largest with all-ones pieces; mixing all-ones and zero pieces of `a`
+    /// (thirds or quarters) and `b` (halves) reaches every sign pattern.
+    #[test]
+    fn toom32_42_extreme_parts(
+        (an, bn) in unbalanced_lens(40, |an, bn| toom32_fits(an, bn) || toom42_fits(an, bn)),
+        pa in [any::<bool>(); 4],
+        pb in [any::<bool>(); 2],
+    ) {
+        let fill = |len: usize, n: usize, parts: &[bool]| -> Vec<Limb> {
+            (0..len).map(|i| if parts[(i / n).min(parts.len() - 1)] { Limb::MAX } else { 0 }).collect()
+        };
+        if toom32_fits(an, bn) {
+            let n = an.div_ceil(3).max(bn.div_ceil(2));
+            let (a, b) = (fill(an, n, &pa[..3]), fill(bn, n, &pb));
+            prop_assert_eq!(run_unbalanced(toom32, toom32_scratch_len, &a, &b), basecase(&a, &b));
+        }
+        if toom42_fits(an, bn) {
+            let n = an.div_ceil(4).max(bn.div_ceil(2));
+            let (a, b) = (fill(an, n, &pa), fill(bn, n, &pb));
+            prop_assert_eq!(run_unbalanced(toom42, toom42_scratch_len, &a, &b), basecase(&a, &b));
+        }
+    }
+
     /// Toom-3's evaluations go negative; all-ones and all-zero halves push
     /// them to their extremes.
     #[test]
@@ -342,6 +421,7 @@ fn every_algorithm_on_all_ones() {
     let t = MUL_TOOM3_THRESHOLD;
     let q = MUL_TOOM4_THRESHOLD;
     let f = MUL_NTT_THRESHOLD;
+    let (p, h) = (MUL_TOOM32_THRESHOLD, MUL_TOOM42_THRESHOLD);
     // A length past the NTT threshold whose transform is tight (a power of
     // two just covering the product), so the NTT takes it whatever the
     // efficiency rule.
@@ -349,20 +429,34 @@ fn every_algorithm_on_all_ones() {
     let cases = [
         (k - 1, k - 1, Algorithm::Basecase),
         (k, k, Algorithm::Karatsuba),
+        (k + k / 4, k, Algorithm::Karatsuba),
+        (k + k / 2, k, Algorithm::Karatsuba),
         (2 * k, k, Algorithm::Chunked),
-        (2 * k + 1, k, Algorithm::Chunked),
+        (p + p / 2, p, Algorithm::Toom32),
+        (2 * h, h, Algorithm::Toom42),
+        (2 * h + 1, h, Algorithm::Toom42),
+        (3 * h, h, Algorithm::Chunked),
         (t, t, Algorithm::Toom3),
-        (t + t / 2, t, Algorithm::Karatsuba),
+        (t + t / 2, t, Algorithm::Toom32),
         (q - 1, q - 1, Algorithm::Toom3),
         (q, q, Algorithm::Toom4),
-        (4 * q, 3 * q, Algorithm::Toom3),
-        (5 * t + 3, 2 * t, Algorithm::Chunked),
+        (4 * q - 1, 3 * q, Algorithm::Toom3),
+        (4 * q, 3 * q, Algorithm::Toom32),
+        (5 * t + 3, 2 * t, Algorithm::Toom42),
+        (7 * t, 2 * t, Algorithm::Chunked),
         (f - 1, f - 1, Algorithm::Toom4),
         (g, g, Algorithm::Ntt),
-        (2 * f + 1, f, Algorithm::Chunked),
+        (2 * f + 1, f, Algorithm::Ntt),
     ];
     let max = 3 * TESTED_SIZE_MAX;
-    let ordered = 2 * k <= t && t < q && 3 * q < f && 2 * g < max;
+    let ordered = 2 * k <= t
+        && k < p
+        && k < h
+        && 2 * p <= t
+        && 2 * h <= t
+        && t < q
+        && 3 * q < f
+        && 2 * g < max;
     let mut seen = HashSet::new();
     for (an, bn, expected) in cases {
         if an > max {
@@ -376,7 +470,7 @@ fn every_algorithm_on_all_ones() {
         assert_eq!(run_mul(&a, &b).to_rug(), val(&a) * val(&b), "({an}, {bn})");
     }
     if ordered {
-        assert_eq!(seen.len(), 6);
+        assert_eq!(seen.len(), 8);
     }
     // Around the threshold, where the efficiency rule picks either.
     for (an, bn) in [(f, f), (2 * f - 2, f), (3 * f / 2, f + 7)] {
@@ -424,8 +518,9 @@ fn every_algorithm_on_all_ones() {
     }
 }
 
-/// Products of about 10^5 limbs through the dispatcher (the NTT, chunked
-/// NTT, and squaring), on pseudo-random and all-ones operands, against GMP.
+/// Products of about 10^5 limbs through the dispatcher (the NTT, balanced
+/// and unbalanced, and squaring), on pseudo-random and all-ones operands,
+/// against GMP.
 /// Skipped when the configuration leaves these sizes to quadratic algorithms.
 #[test]
 fn mul_at_1e5_limbs() {
@@ -458,7 +553,8 @@ fn mul_at_1e5_limbs() {
         );
     }
     assert_eq!(algorithm(a.len(), b.len()), Algorithm::Ntt);
-    assert_eq!(algorithm(a.len(), c.len()), Algorithm::Chunked);
+    // One transform of the whole product beats chunks at this size.
+    assert_eq!(algorithm(a.len(), c.len()), Algorithm::Ntt);
     for x in [&a, &ones] {
         assert_eq!(run_sqr(x).to_rug(), val(x).square());
     }
@@ -671,6 +767,28 @@ fn ntt_dispatch_follows_efficiency() {
     }
     if NTT_EFFICIENCY_EXPONENT > 0 && f >= 16 {
         assert!(ntt > 0 && toom > 0, "ntt {ntt}, toom {toom}");
+    }
+}
+
+/// From both Toom thresholds on, every shape between `4/3 bn` and `11/4 bn`
+/// goes to Toom-32, Toom-42 or the NTT: none falls through to the fallbacks
+/// for tiny shapes. From `11/4 bn` on, the pieces are taken.
+#[test]
+fn unbalanced_shapes_have_a_toom() {
+    let from = MUL_TOOM32_THRESHOLD.max(MUL_TOOM42_THRESHOLD).max(8);
+    if from > TESTED_SIZE_MAX {
+        return;
+    }
+    for bn in from..from + 300 {
+        for an in (4 * bn).div_ceil(3)..=4 * bn {
+            let chosen = algorithm(an, bn);
+            let expected: &[Algorithm] = if 4 * an < 11 * bn {
+                &[Algorithm::Toom32, Algorithm::Toom42, Algorithm::Ntt]
+            } else {
+                &[Algorithm::Chunked, Algorithm::Ntt]
+            };
+            assert!(expected.contains(&chosen), "({an}, {bn}): {chosen:?}");
+        }
     }
 }
 

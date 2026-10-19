@@ -31,6 +31,11 @@ pub(crate) const MUL_TOOM4_THRESHOLD: usize = crate::tuning::MUL_TOOM4_THRESHOLD
 /// Shorter-operand length from which [`mul`] uses the NTT for products whose
 /// transform is as cheap as the size allows; see [`ntt_pays`].
 pub(crate) const MUL_NTT_THRESHOLD: usize = crate::tuning::MUL_NTT_THRESHOLD;
+/// Shorter operand's length from which unbalanced products use Toom-32.
+pub(crate) const MUL_TOOM32_THRESHOLD: usize = crate::tuning::MUL_TOOM32_THRESHOLD;
+/// Shorter operand's length from which unbalanced products use Toom-42, and
+/// longer ones pieces of twice that operand.
+pub(crate) const MUL_TOOM42_THRESHOLD: usize = crate::tuning::MUL_TOOM42_THRESHOLD;
 /// Smallest length at which [`sqr`] uses Karatsuba squaring.
 pub(crate) const SQR_KARATSUBA_THRESHOLD: usize = crate::tuning::SQR_KARATSUBA_THRESHOLD;
 /// Smallest length at which [`sqr`] uses Toom-3 squaring.
@@ -41,6 +46,8 @@ pub(crate) const SQR_TOOM4_THRESHOLD: usize = crate::tuning::SQR_TOOM4_THRESHOLD
 pub(crate) const SQR_NTT_THRESHOLD: usize = crate::tuning::SQR_NTT_THRESHOLD;
 /// Ten times the exponent of [`ntt_pays`]'s efficiency rule.
 pub(crate) const NTT_EFFICIENCY_EXPONENT: usize = crate::tuning::NTT_EFFICIENCY_EXPONENT;
+/// Ten times the exponent of [`ntt_pays_unbalanced`]'s Toom cost.
+pub(crate) const NTT_UNBALANCED_EXPONENT: usize = crate::tuning::NTT_UNBALANCED_EXPONENT;
 /// Smallest power-of-two modulus length at which [`mul_wrap`] uses a cyclic
 /// transform instead of reducing the full product.
 pub(crate) const MUL_WRAP_NTT_THRESHOLD: usize = crate::tuning::MUL_WRAP_NTT_THRESHOLD;
@@ -218,17 +225,20 @@ pub fn mul_scratch_len(an: usize, bn: usize) -> usize {
     match algorithm(an, bn) {
         Algorithm::Basecase => 0,
         Algorithm::Chunked => {
-            let last = an % bn;
+            let piece = chunk_len(bn);
+            let last = an % piece;
             let last = if last == 0 {
                 0
             } else {
-                mul_scratch_len(bn, last)
+                mul_scratch_len(last, bn)
             };
-            2 * bn + mul_scratch_len(bn, bn).max(last)
+            piece + bn + mul_scratch_len(piece, bn).max(last)
         }
         Algorithm::Karatsuba => karatsuba_scratch_len(an, bn, false),
         Algorithm::Toom3 => toom3_scratch_len(an, bn, false),
         Algorithm::Toom4 => toom4_scratch_len(an, bn, false),
+        Algorithm::Toom32 => toom32_scratch_len(an, bn),
+        Algorithm::Toom42 => toom42_scratch_len(an, bn),
         Algorithm::Ntt => ntt::mul_scratch_len(an, bn),
     }
 }
@@ -237,7 +247,7 @@ pub fn mul_scratch_len(an: usize, bn: usize) -> usize {
 #[must_use]
 pub fn sqr_scratch_len(n: usize) -> usize {
     match sqr_algorithm(n) {
-        Algorithm::Basecase | Algorithm::Chunked => 0,
+        Algorithm::Basecase | Algorithm::Chunked | Algorithm::Toom32 | Algorithm::Toom42 => 0,
         Algorithm::Karatsuba => karatsuba_scratch_len(n, n, true),
         Algorithm::Toom3 => toom3_scratch_len(n, n, true),
         Algorithm::Toom4 => toom4_scratch_len(n, n, true),
@@ -359,6 +369,8 @@ pub(crate) enum Algorithm {
     Karatsuba,
     Toom3,
     Toom4,
+    Toom32,
+    Toom42,
     Ntt,
 }
 
@@ -375,13 +387,34 @@ fn ntt_pays(an: usize, bn: usize, threshold: usize) -> bool {
 }
 
 /// The algorithm [`mul`] uses for `an >= bn`.
+///
+/// Up to `an < 4/3 bn` the balanced algorithms take the product. Longer `a`
+/// goes to the NTT if one transform of the whole product costs less than
+/// Toom ([`ntt_pays_unbalanced`]); else, from their thresholds, to Toom-32
+/// below `an = 7/4 bn`, Toom-42 below `11/4 bn`, and beyond to pieces of
+/// `2 bn` limbs, each a Toom-42 product. The boundaries are where the costs
+/// of the neighbours cross, counting a product of `n` limbs as `n^1.4`.
+/// Below the thresholds, Karatsuba takes `an < 2 bn` and pieces of `bn`
+/// limbs the rest.
 pub(crate) fn algorithm(an: usize, bn: usize) -> Algorithm {
     debug_assert!(an >= bn);
     if bn < MUL_KARATSUBA_THRESHOLD {
         Algorithm::Basecase
-    } else if bn <= an.div_ceil(2) {
-        // Karatsuba needs b's high half to be non-empty.
-        Algorithm::Chunked
+    } else if 3 * an >= 4 * bn {
+        if ntt_pays_unbalanced(an, bn) {
+            Algorithm::Ntt
+        } else if bn >= MUL_TOOM32_THRESHOLD && 4 * an < 7 * bn && toom32_fits(an, bn) {
+            Algorithm::Toom32
+        } else if bn >= MUL_TOOM42_THRESHOLD && 4 * an < 11 * bn && toom42_fits(an, bn) {
+            Algorithm::Toom42
+        } else if bn > an.div_ceil(2) {
+            Algorithm::Karatsuba
+        } else if an > chunk_len(bn) {
+            Algorithm::Chunked
+        } else {
+            // Only tiny shapes, which no Toom fits, get here.
+            Algorithm::Basecase
+        }
     } else if ntt_pays(an, bn, MUL_NTT_THRESHOLD) {
         Algorithm::Ntt
     } else if bn >= MUL_TOOM4_THRESHOLD && bn > 3 * an.div_ceil(4) {
@@ -391,6 +424,24 @@ pub(crate) fn algorithm(an: usize, bn: usize) -> Algorithm {
     } else {
         Algorithm::Karatsuba
     }
+}
+
+/// Whether one NTT of an unbalanced product `an x bn` (`an >= 4/3 bn`)
+/// costs less than Toom on it. Both are in the units of the NTT's cost model
+/// ([`ntt::cost`]); Toom's cost is scaled from the balanced crossover `T =
+/// MUL_NTT_THRESHOLD`, where it equals the NTT's, as `(an / bn) (bn /
+/// T)^x`, `x = NTT_UNBALANCED_EXPONENT / 10`: pieces of a `bn`-limb
+/// product, each growing like Toom.
+#[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
+fn ntt_pays_unbalanced(an: usize, bn: usize) -> bool {
+    let t = MUL_NTT_THRESHOLD;
+    if an + bn < t {
+        return false;
+    }
+    let x = NTT_UNBALANCED_EXPONENT as f64 / 10.0;
+    let at_t = ntt::cost(t, t) as f64;
+    let toom = at_t * (an as f64 / bn as f64) * (bn as f64 / t as f64).powf(x);
+    (ntt::cost(an, bn) as f64) < toom
 }
 
 /// The algorithm [`sqr`] uses for `n` limbs.
@@ -416,13 +467,17 @@ fn mul_unchecked(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]) {
         Algorithm::Karatsuba => karatsuba(r, a, b, scratch, false),
         Algorithm::Toom3 => toom3(r, a, b, scratch, false),
         Algorithm::Toom4 => toom4(r, a, b, scratch, false),
+        Algorithm::Toom32 => toom32(r, a, b, scratch),
+        Algorithm::Toom42 => toom42(r, a, b, scratch),
         Algorithm::Ntt => ntt::mul(r, a, b, scratch),
     }
 }
 
 fn sqr_unchecked(r: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) {
     match sqr_algorithm(a.len()) {
-        Algorithm::Basecase | Algorithm::Chunked => sqr_basecase(r, a),
+        Algorithm::Basecase | Algorithm::Chunked | Algorithm::Toom32 | Algorithm::Toom42 => {
+            sqr_basecase(r, a);
+        }
         Algorithm::Karatsuba => karatsuba(r, a, a, scratch, true),
         Algorithm::Toom3 => toom3(r, a, a, scratch, true),
         Algorithm::Toom4 => toom4(r, a, a, scratch, true),
@@ -448,18 +503,40 @@ fn product_scratch_len(xn: usize, yn: usize, square: bool) -> usize {
     }
 }
 
-/// `r = a * b` for `b.len() <= a.len() / 2` (rounded up): `a` is cut into
-/// chunks of `b.len()` limbs, each multiplied by `b` and added in place.
+/// The pieces of the longer operand that [`mul_chunked`] multiplies by a
+/// `bn`-limb one: `2 bn` limbs, a Toom-42 shape, from its threshold; `bn`
+/// limbs below.
+fn chunk_len(bn: usize) -> usize {
+    if bn >= MUL_TOOM42_THRESHOLD {
+        2 * bn
+    } else {
+        bn
+    }
+}
+
+/// `r = x * y` for operands in either order.
+fn mul_ordered(r: &mut [Limb], x: &[Limb], y: &[Limb], scratch: &mut [Limb]) {
+    if x.len() >= y.len() {
+        mul_unchecked(r, x, y, scratch);
+    } else {
+        mul_unchecked(r, y, x, scratch);
+    }
+}
+
+/// `r = a * b` for `a.len() > chunk_len(b.len())`: `a` is cut into pieces
+/// of [`chunk_len`] limbs (the last one shorter), each multiplied by `b` and
+/// added in place.
 fn mul_chunked(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]) {
     let bn = b.len();
-    let (first, rest) = a.split_at(bn);
-    mul_unchecked(&mut r[..2 * bn], first, b, scratch);
-    r[2 * bn..].fill(0);
-    let (tmp, scratch) = scratch.split_at_mut(2 * bn);
-    for (i, chunk) in rest.chunks(bn).enumerate() {
+    let piece = chunk_len(bn);
+    let (first, rest) = a.split_at(piece);
+    mul_unchecked(&mut r[..piece + bn], first, b, scratch);
+    r[piece + bn..].fill(0);
+    let (tmp, scratch) = scratch.split_at_mut(piece + bn);
+    for (i, chunk) in rest.chunks(piece).enumerate() {
         let tmp = &mut tmp[..chunk.len() + bn];
-        mul_unchecked(tmp, b, chunk, scratch);
-        let carry = add_assign(&mut r[(i + 1) * bn..], tmp);
+        mul_ordered(tmp, chunk, b, scratch);
+        let carry = add_assign(&mut r[(i + 1) * piece..], tmp);
         debug_assert_eq!(carry, 0);
     }
 }
@@ -722,7 +799,22 @@ pub(crate) fn toom3(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]
     }
     signed_product(vm2, pa, pb, ta, tb, rest);
 
-    // Interpolation (all mod B^w): afterwards v1 = c1, vm1 = c2, vm2 = c3.
+    toom3_interpolate(r, n, v1, vm1, vm2);
+}
+
+/// The interpolation of [`toom3`] and [`toom42`], whose products both have
+/// degree 4: from `c0 = v(0)` in `r[..2n]`, `c4 = v(∞)` in `r[4n..]` (and
+/// zeros between) and the values `v1`, `vm1`, `vm2` at `1, -1, -2` as
+/// two's complement values of `w` limbs (overwritten), adds the middle
+/// coefficients `c1`, `c2`, `c3` into `r` at `n`, `2n` and `3n` limbs.
+fn toom3_interpolate(
+    r: &mut [Limb],
+    n: usize,
+    v1: &mut [Limb],
+    vm1: &mut [Limb],
+    vm2: &mut [Limb],
+) {
+    // All mod B^w: afterwards v1 = c1, vm1 = c2, vm2 = c3.
     let (v0, rest_r) = r.split_at(2 * n);
     let vinf = &rest_r[2 * n..];
     sub_assign(vm2, v1); //            (v(-2) - v(1)) / 3
@@ -742,6 +834,186 @@ pub(crate) fn toom3(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]
     add_at(r, n, v1);
     add_at(r, 2 * n, vm1);
     add_at(r, 3 * n, vm2);
+}
+
+/// `x * y` into `out` for two's complement `x` and `y` (`e` limbs each),
+/// through their absolute values in `tx` and `ty`.
+fn signed_product(
+    out: &mut [Limb],
+    x: &[Limb],
+    y: &[Limb],
+    tx: &mut [Limb],
+    ty: &mut [Limb],
+    scratch: &mut [Limb],
+) {
+    let neg_x = abs_twos(tx, x);
+    let neg_y = abs_twos(ty, y);
+    mul_unchecked(out, tx, ty, scratch);
+    if neg_x != neg_y {
+        neg_assign(out);
+    }
+}
+
+/// `(n, s, t)` for Toom-32: pieces of `n` limbs, `a`'s top piece `s` and
+/// `b`'s `t` limbs.
+fn toom32_split(an: usize, bn: usize) -> (usize, usize, usize) {
+    let n = an.div_ceil(3).max(bn.div_ceil(2));
+    (n, an.saturating_sub(2 * n), bn.saturating_sub(n))
+}
+
+/// Whether [`toom32`] takes `an x bn`: both top pieces non-empty.
+pub(crate) fn toom32_fits(an: usize, bn: usize) -> bool {
+    let (_, s, t) = toom32_split(an, bn);
+    s >= 1 && t >= 1
+}
+
+pub(crate) fn toom32_scratch_len(an: usize, bn: usize) -> usize {
+    let (n, s, t) = toom32_split(an, bn);
+    let e = n + 1;
+    mul_scratch_len(n, n)
+        .max(mul_scratch_len(s, t))
+        .max(4 * e + 4 * e + mul_scratch_len(e, e))
+}
+
+/// Toom-32 (points `0, 1, -1, ∞`): with `X = B^n`, `a = a0 + a1 X + a2 X^2`
+/// and `b = b0 + b1 X`, four products of about `n` limbs for `an` about
+/// `3/2 bn`. The product `c0 + c1 X + c2 X^2 + c3 X^3` has `c0 = v(0)`,
+/// `c3 = v(∞)`, `c1 = (v(1) - v(-1)) / 2 - c3` and
+/// `c2 = (v(1) + v(-1)) / 2 - c0`. Needs [`toom32_fits`].
+pub(crate) fn toom32(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]) {
+    let (an, bn) = (a.len(), b.len());
+    let (n, s, t) = toom32_split(an, bn);
+    debug_assert!(s >= 1 && t >= 1 && r.len() == an + bn);
+    debug_assert!(scratch.len() >= toom32_scratch_len(an, bn));
+    let (a0, a12) = a.split_at(n);
+    let (a1, a2) = a12.split_at(n);
+    let (b0, b1) = b.split_at(n);
+
+    // v0 = c0 and vinf = c3 go straight to their final place.
+    mul_unchecked(&mut r[..2 * n], a0, b0, scratch);
+    mul_ordered(&mut r[3 * n..], a2, b1, scratch);
+    r[2 * n..3 * n].fill(0);
+
+    let e = n + 1;
+    let w = 2 * e;
+    let (v1, rest) = scratch.split_at_mut(w);
+    let (vm1, rest) = rest.split_at_mut(w);
+    let (pa, rest) = rest.split_at_mut(e);
+    let (pb, rest) = rest.split_at_mut(e);
+    let (ta, rest) = rest.split_at_mut(e);
+    let (tb, rest) = rest.split_at_mut(e);
+
+    // a(1) = (a0 + a2) + a1, a(-1) = (a0 + a2) - a1; b(+-1) = b0 +- b1.
+    load(pa, a0);
+    add_assign(pa, a2);
+    ta.copy_from_slice(pa);
+    add_assign(ta, a1);
+    sub_assign(pa, a1);
+    load(pb, b0);
+    tb.copy_from_slice(pb);
+    add_assign(tb, b1);
+    sub_assign(pb, b1);
+    mul_unchecked(v1, ta, tb, rest);
+    signed_product(vm1, pa, pb, ta, tb, rest);
+
+    // vm1 = (v(1) - v(-1)) / 2 - c3, v1 = (v(1) + v(-1)) / 2 - c0.
+    let (v0, rest_r) = r.split_at(2 * n);
+    let vinf = &rest_r[n..];
+    neg_assign(vm1);
+    add_assign(vm1, v1);
+    shl_assign(v1, 1);
+    sub_assign(v1, vm1);
+    half_assign(vm1);
+    half_assign(v1);
+    sub_assign(vm1, vinf);
+    sub_assign(v1, v0);
+
+    add_at(r, n, vm1);
+    add_at(r, 2 * n, v1);
+}
+
+/// `(n, s, t)` for Toom-42: pieces of `n` limbs, `a`'s top piece `s` and
+/// `b`'s `t` limbs.
+fn toom42_split(an: usize, bn: usize) -> (usize, usize, usize) {
+    let n = an.div_ceil(4).max(bn.div_ceil(2));
+    (n, an.saturating_sub(3 * n), bn.saturating_sub(n))
+}
+
+/// Whether [`toom42`] takes `an x bn`: both top pieces non-empty.
+pub(crate) fn toom42_fits(an: usize, bn: usize) -> bool {
+    let (_, s, t) = toom42_split(an, bn);
+    s >= 1 && t >= 1
+}
+
+pub(crate) fn toom42_scratch_len(an: usize, bn: usize) -> usize {
+    let (n, s, t) = toom42_split(an, bn);
+    let e = n + 1;
+    mul_scratch_len(n, n)
+        .max(mul_scratch_len(s, t))
+        .max(3 * 2 * e + 9 * e + mul_scratch_len(e, e))
+}
+
+/// Toom-42 (points `0, 1, -1, -2, ∞`): with `X = B^n`,
+/// `a = a0 + a1 X + a2 X^2 + a3 X^3` and `b = b0 + b1 X`, five products of
+/// about `n` limbs for `an` about `2 bn`. The product has degree 4, so
+/// [`toom3`]'s interpolation recovers it. Needs [`toom42_fits`].
+pub(crate) fn toom42(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]) {
+    let (an, bn) = (a.len(), b.len());
+    let (n, s, t) = toom42_split(an, bn);
+    debug_assert!(s >= 1 && t >= 1 && r.len() == an + bn);
+    debug_assert!(scratch.len() >= toom42_scratch_len(an, bn));
+    let pa = quarters(a, n);
+    let (b0, b1) = b.split_at(n);
+
+    // v0 = c0 and vinf = c4 go straight to their final place.
+    mul_unchecked(&mut r[..2 * n], pa[0], b0, scratch);
+    mul_ordered(&mut r[4 * n..], pa[3], b1, scratch);
+    r[2 * n..4 * n].fill(0);
+
+    let e = n + 1;
+    let w = 2 * e;
+    let (v, rest) = scratch.split_at_mut(3 * w);
+    let (ea, rest) = rest.split_at_mut(3 * e);
+    let (eb, rest) = rest.split_at_mut(3 * e);
+    let (ta, rest) = rest.split_at_mut(e);
+    let (tb, rest) = rest.split_at_mut(e);
+    let (tmp, rest) = rest.split_at_mut(e);
+
+    // a(+-1) = (a0 + a2) +- (a1 + a3), a(-2) = (a0 + 4 a2) - 2 (a1 + 4 a3).
+    let [a0, a1, a2, a3] = pa;
+    let (p1, m) = ea.split_at_mut(e);
+    let (m1, m2) = m.split_at_mut(e);
+    load(p1, a0);
+    add_assign(p1, a2);
+    load(tmp, a1);
+    add_assign(tmp, a3);
+    m1.copy_from_slice(p1);
+    add_assign(p1, tmp);
+    sub_assign(m1, tmp);
+    load_shifted(m2, a2, 2);
+    add_assign(m2, a0);
+    load_shifted(tmp, a3, 2);
+    add_assign(tmp, a1);
+    shl_assign(tmp, 1);
+    sub_assign(m2, tmp);
+    // b(+-1) = b0 +- b1, b(-2) = b0 - 2 b1.
+    let (q1, m) = eb.split_at_mut(e);
+    let (n1, n2) = m.split_at_mut(e);
+    load(q1, b0);
+    n1.copy_from_slice(q1);
+    n2.copy_from_slice(q1);
+    add_assign(q1, b1);
+    sub_assign(n1, b1);
+    load_shifted(tmp, b1, 1);
+    sub_assign(n2, tmp);
+
+    for (k, out) in v.chunks_exact_mut(w).enumerate() {
+        let (xa, xb) = (&ea[k * e..(k + 1) * e], &eb[k * e..(k + 1) * e]);
+        signed_product(out, xa, xb, ta, tb, rest);
+    }
+    let (v1, v) = v.split_at_mut(w);
+    let (vm1, vm2) = v.split_at_mut(w);
+    toom3_interpolate(r, n, v1, vm1, vm2);
 }
 
 fn toom4_split(an: usize, bn: usize) -> (usize, usize, usize) {
