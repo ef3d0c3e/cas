@@ -22,12 +22,23 @@ mod arith;
 mod convert;
 mod divsqrt;
 mod round;
+mod sign;
 
 #[cfg(test)]
 mod tests;
 
 pub use divsqrt::APPROX_ULPS;
 pub use round::Round;
+pub(crate) use sign::sum_sign;
+
+/// The largest exact result, in bits, that the exact operations build
+/// ([`Float::add`], [`Float::sub`], [`Float::to_rational`]): `2^30` bits,
+/// 128 MiB. Exponents are unbounded, so a value like `2^(10^30)` is cheap,
+/// but its exact sum with 1 would have `10^30` bits; past the limit the
+/// `checked_*` forms return `None` and the others panic, instead of
+/// exhausting memory. Comparisons and the ball predicates never build such
+/// sums.
+pub const EXACT_BITS_MAX: u64 = 1 << 30;
 
 /// Bits per limb, as the `u64` that bit counts use.
 const LIMB_BITS: u64 = Limb::BITS as u64;
@@ -371,7 +382,7 @@ impl From<&Float> for Rational {
     ///
     /// # Panics
     ///
-    /// If the exponent is so large that the integers don't fit in memory.
+    /// As [`Float::to_rational`].
     fn from(x: &Float) -> Rational {
         x.to_rational()
     }
@@ -382,19 +393,46 @@ impl Float {
     ///
     /// # Panics
     ///
-    /// If the exponent is so large that the integers don't fit in memory.
+    /// If the numerator or denominator would have more than
+    /// [`EXACT_BITS_MAX`] bits; [`Float::checked_to_rational`] returns `None`
+    /// instead.
     #[must_use]
     pub fn to_rational(&self) -> Rational {
-        let (m, e) = self.to_integer_exp();
-        let shift = |e: &Integer| -> u64 {
-            u64::try_from(&e.unsigned_abs()).expect("Float::to_rational: exponent too large")
+        self.checked_to_rational()
+            .expect("Float::to_rational: value beyond EXACT_BITS_MAX bits")
+    }
+
+    /// The exact value as a fraction, or `None` if its numerator or
+    /// denominator would have more than [`EXACT_BITS_MAX`] bits.
+    #[must_use]
+    #[allow(
+        clippy::missing_panics_doc,
+        reason = "the shift fits u64 once the size is below EXACT_BITS_MAX"
+    )]
+    pub fn checked_to_rational(&self) -> Option<Rational> {
+        if self.is_zero() {
+            return Some(Rational::from(Integer::ZERO));
+        }
+        // x = m 2^e with m of b bits: numerator b + e bits (e >= 0) or a
+        // denominator of -e bits.
+        let low = &self.exp - &Integer::from(self.bit_length());
+        let size = if low.is_negative() {
+            -&low
+        } else {
+            self.exp.clone()
         };
-        if e.is_negative() {
+        if size >= Integer::from(EXACT_BITS_MAX) {
+            return None;
+        }
+        let (m, e) = self.to_integer_exp();
+        let shift =
+            |e: &Integer| -> u64 { u64::try_from(&e.unsigned_abs()).expect("checked above") };
+        Some(if e.is_negative() {
             let den = Integer::from(Natural::power_of_two(shift(&e)));
             Rational::new(m, den)
         } else {
             let (neg, mag) = m.into_parts();
             Rational::from(Integer::from_parts(neg, &mag << shift(&e)))
-        }
+        })
     }
 }

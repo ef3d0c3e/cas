@@ -16,6 +16,7 @@
 use std::cmp::Ordering;
 use std::fmt;
 
+use super::float::sum_sign;
 use super::{Float, Mag, Round};
 use crate::{Integer, Rational};
 
@@ -56,7 +57,17 @@ fn cmp_dist(x: &Float, a: &Float, r: &Float) -> Ordering {
     if lo > *r {
         return Ordering::Greater;
     }
-    x.sub(a).abs().cmp(r)
+    dist_sign(x, a, &[(true, r)])
+}
+
+/// The sign of `|x - a| + Σ ±t`, exactly, without forming any sum (the
+/// operands' exponents may be far apart: see [`sum_sign`]).
+fn dist_sign(x: &Float, a: &Float, rest: &[(bool, &Float)]) -> Ordering {
+    // |x - a| = ±(x - a) by the sign of x - a.
+    let flip = sum_sign(&[(false, x), (true, a)]) == Ordering::Less;
+    let mut terms = vec![(flip, x), (!flip, a)];
+    terms.extend_from_slice(rest);
+    sum_sign(&terms)
 }
 
 impl Ball {
@@ -380,7 +391,8 @@ impl Ball {
         if cmp_dist(&other.mid, &self.mid, &above) == Ordering::Greater {
             return false;
         }
-        cmp_dist(&other.mid, &self.mid, &r.sub(&s)) != Ordering::Greater
+        // |b - a| + s - r <= 0, exactly.
+        dist_sign(&other.mid, &self.mid, &[(false, &s), (true, &r)]) != Ordering::Greater
     }
 
     /// Whether the balls share a point: `|a - b| <= r + s`.
@@ -397,7 +409,8 @@ impl Ball {
         if cmp_dist(&other.mid, &self.mid, &above) == Ordering::Greater {
             return false;
         }
-        cmp_dist(&other.mid, &self.mid, &r.add(&s)) != Ordering::Greater
+        // |a - b| - r - s <= 0, exactly.
+        dist_sign(&other.mid, &self.mid, &[(true, &r), (true, &s)]) != Ordering::Greater
     }
 
     /// The sign of every point of the ball, if they share one: `Some(Equal)`

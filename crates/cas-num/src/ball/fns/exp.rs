@@ -11,7 +11,7 @@
 //! negative one `[0 ± 2^(-2^(e - 2))]`, a bound on `exp` of every point.
 
 use super::fixed::{exp_sum, shr};
-use super::{one, upper, working};
+use super::{exponent, one, upper, working};
 use crate::ball::decimal::to_integer;
 use crate::ball::{Ball, Float, Mag, Round};
 use crate::{Integer, Natural};
@@ -55,8 +55,14 @@ fn exp_small(t: &Float, wp: u64) -> Ball {
     if t.is_zero() {
         return one();
     }
-    let et = t.exponent().to_i64().expect("|t| < 1");
+    let et = exponent(t);
     debug_assert!(et <= 0);
+    if et < -i64::try_from(wp + 8).unwrap_or(i64::MAX) {
+        // |e^t - 1 - t| <= t^2 for |t| <= 1; 1 + t rounded (an exact sum
+        // would be as long as t's exponent).
+        let t2 = Mag::from_float(t).mul(&Mag::from_float(t));
+        return Ball::exact(t.clone()).add(&one(), wp + 8).add_error(&t2);
+    }
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -102,7 +108,7 @@ pub(super) fn exp_exact(m: &Float, wp: u64) -> Ball {
     if m.is_zero() {
         return one();
     }
-    let e = m.exponent().to_i64().expect("checked by the caller");
+    let e = exponent(m);
     if e <= -1 {
         return exp_small(m, wp);
     }
@@ -199,7 +205,7 @@ impl Ball {
 /// (`|expm1(m)| >= |m| / 2`); below `2^-wp`, `expm1(m)` lies in `[m, m + m^2]`
 /// (`e^m - 1 - m = m^2/2 + m^3/6 + … ∈ [0, m^2]` for `|m| <= 1`).
 pub(super) fn expm1_exact(m: &Float, wp: u64) -> Ball {
-    let e = m.exponent().to_i64().expect("checked by the caller");
+    let e = exponent(m);
     let wpi = i64::try_from(wp).unwrap_or(i64::MAX);
     if e >= -1 {
         return exp_exact(m, wp + 4).sub(&one(), wp);

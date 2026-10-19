@@ -12,7 +12,7 @@
 use std::cmp::Ordering;
 
 use super::round::round_1;
-use super::{Float, LIMB_BITS, Round, with_limbs};
+use super::{EXACT_BITS_MAX, Float, LIMB_BITS, Round, with_limbs};
 use crate::kernel;
 use crate::{Integer, Limb};
 
@@ -21,15 +21,41 @@ const HALF: Limb = 1 << (Limb::BITS - 1);
 
 impl Float {
     /// `self + rhs`, exactly.
+    ///
+    /// # Panics
+    ///
+    /// If the exact sum would have more than [`EXACT_BITS_MAX`] bits (the
+    /// span from the higher operand's top bit to the lower one's lowest);
+    /// [`Float::checked_add`] returns `None` instead.
     #[must_use]
     pub fn add(&self, rhs: &Float) -> Float {
-        sum(self, rhs, rhs.neg, None).0
+        self.checked_add(rhs)
+            .expect("Float::add: exact sum beyond EXACT_BITS_MAX bits")
     }
 
     /// `self - rhs`, exactly.
+    ///
+    /// # Panics
+    ///
+    /// As [`Float::add`]; [`Float::checked_sub`] returns `None` instead.
     #[must_use]
     pub fn sub(&self, rhs: &Float) -> Float {
-        sum(self, rhs, !rhs.neg && !rhs.is_zero(), None).0
+        self.checked_sub(rhs)
+            .expect("Float::sub: exact difference beyond EXACT_BITS_MAX bits")
+    }
+
+    /// `self + rhs`, exactly, or `None` if that would take more than
+    /// [`EXACT_BITS_MAX`] bits.
+    #[must_use]
+    pub fn checked_add(&self, rhs: &Float) -> Option<Float> {
+        exact_sum_fits(self, rhs).then(|| sum(self, rhs, rhs.neg, None).0)
+    }
+
+    /// `self - rhs`, exactly, or `None` if that would take more than
+    /// [`EXACT_BITS_MAX`] bits.
+    #[must_use]
+    pub fn checked_sub(&self, rhs: &Float) -> Option<Float> {
+        exact_sum_fits(self, rhs).then(|| sum(self, rhs, !rhs.neg && !rhs.is_zero(), None).0)
     }
 
     /// `self + rhs` correctly rounded to `prec` bits, and `rounded.cmp(exact)`.
@@ -360,4 +386,16 @@ fn place(v: &mut [Limb], mant: &[Limb], offset: u64) {
     } else {
         debug_assert_eq!(out, 0);
     }
+}
+
+/// Whether the exact sum of `a` and `b` fits [`EXACT_BITS_MAX`] bits: from
+/// the higher top bit to the lower lowest bit, plus a carry.
+fn exact_sum_fits(a: &Float, b: &Float) -> bool {
+    if a.is_zero() || b.is_zero() {
+        return true;
+    }
+    let low = |x: &Float| x.exponent() - &Integer::from(x.bit_length());
+    let top = std::cmp::max(a.exponent(), b.exponent());
+    let bottom = std::cmp::min(low(a), low(b));
+    (top - &bottom) < Integer::from(EXACT_BITS_MAX)
 }

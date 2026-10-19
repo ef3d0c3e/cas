@@ -21,7 +21,7 @@
 //! same `expm1`.
 
 use super::exp::{exp_exact, expm1_exact};
-use super::{one, working};
+use super::{exponent, one, working};
 use crate::Integer;
 use crate::ball::{Ball, Float, Mag, Round};
 
@@ -143,7 +143,7 @@ pub(super) fn log1p_exact(x: &Float, wp: u64) -> Ball {
     if x.is_zero() {
         return Ball::ZERO;
     }
-    let e = x.exponent().to_i64().unwrap_or(i64::MAX);
+    let e = exponent(x);
     if e >= -1 {
         return Ball::exact(x.clone()).add(&one(), wp + 16).log(wp);
     }

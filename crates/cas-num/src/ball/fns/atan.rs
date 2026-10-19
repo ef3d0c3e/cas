@@ -19,7 +19,7 @@ use std::cmp::Ordering;
 
 use super::exp::to_fixed;
 use super::fixed::{atan_sum, shr};
-use super::{one, upper, working};
+use super::{exponent, one, upper, working};
 use crate::ball::{Ball, Float, Mag};
 use crate::{Integer, Natural};
 
@@ -47,7 +47,7 @@ fn atan_series(x: &Float, wp: u64) -> Ball {
     if x.is_zero() {
         return Ball::ZERO;
     }
-    let ex = x.exponent().to_i64().expect("|x| <= 1/2");
+    let ex = exponent(x);
     debug_assert!(ex <= 0);
     if ex < -i64::try_from(wp).unwrap_or(i64::MAX) {
         let x2 = Mag::from_float(x).mul(&Mag::from_float(x));
@@ -76,7 +76,7 @@ fn atan_small(b: &Ball, wp: u64) -> Ball {
     if m.is_zero() {
         return Ball::new(Float::ZERO, b.rad().clone());
     }
-    let e = m.exponent().to_i64().expect("|m| <= 1");
+    let e = exponent(m);
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,

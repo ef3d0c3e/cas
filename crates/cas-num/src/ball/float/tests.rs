@@ -14,7 +14,9 @@ use proptest::prelude::*;
 use rug::Float as MpFloat;
 
 use super::{Float, Round};
-use crate::testkit::float::{Dyadic, dyadic, dyadic_with, far_apart_pair, huge_shift, rug_round};
+use crate::testkit::float::{
+    Dyadic, div_round, dyadic, dyadic_with, far_apart_pair, huge_shift, rug_round,
+};
 use crate::testkit::{Signed, ToRug, check_same, strategy};
 use crate::{Integer, Limb, Rational};
 
@@ -415,7 +417,7 @@ proptest! {
             None => prop_assert!(y.is_zero()),
             Some(ours) => {
                 let pp = u32::try_from(p).unwrap();
-                check_round(ours, MpFloat::with_val_round(pp, &mp(&a) / &mp(&b), rug_round(r)))?;
+                check_round(ours, div_round(&a, &b, pp, rug_round(r)))?;
             }
         }
     }
@@ -436,12 +438,11 @@ proptest! {
         let hf = Float::from_integer_exp(&Integer::from(h), &Integer::from(-7));
         let x = y.mul(&hf);
         let pp = u32::try_from(p).unwrap();
-        let (f, g) = (mp(&x.to_rug()), mp(&b));
         let ours = x.div_round(&y, p, r);
         if exact {
             prop_assert_eq!(ours.1, Ordering::Equal);
         }
-        check_round(ours, MpFloat::with_val_round(pp, &f / &g, rug_round(r)))?;
+        check_round(ours, div_round(&x.to_rug(), &b, pp, rug_round(r)))?;
     }
 
     #[test]

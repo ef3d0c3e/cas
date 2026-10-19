@@ -29,6 +29,14 @@ fn working(prec: u64) -> u64 {
     prec + 20 + u64::from(u64::BITS - prec.leading_zeros())
 }
 
+/// `x`'s exponent as an `i64`, saturated: an exponent beyond `i64` is far
+/// outside every threshold the functions compare it with, on its side.
+fn exponent(x: &super::Float) -> i64 {
+    let e = x.exponent();
+    e.to_i64()
+        .unwrap_or(if e.is_negative() { i64::MIN } else { i64::MAX })
+}
+
 /// An upper bound of `|x|` over the ball.
 fn upper(b: &Ball) -> Mag {
     Mag::from_float(b.mid()).add(b.rad())

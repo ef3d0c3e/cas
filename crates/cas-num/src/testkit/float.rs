@@ -185,6 +185,23 @@ impl Bracket {
     }
 }
 
+/// `a / b` correctly rounded to `prec` bits in `rnd`, with MPFR's ternary
+/// value, *without* `mpfr_div`: MPFR 4.2.2's division misrounds some exact
+/// halfway quotients (`b = 0x20_ffffffffffffffff`, `a = b · h / 2^7` for an
+/// odd 64-bit `h`: at 63 bits it returns the odd neighbour with ternary
+/// `Greater`, and at 62 bits ternary `Equal` for an inexact result). The
+/// mantissas' exact quotient is rounded by `mpfr_set_q` instead and scaled by
+/// `2^(exp a - exp b)`, which commutes with rounding while the exponent
+/// stays in range. `b` must be non-zero.
+pub(crate) fn div_round(a: &Dyadic, b: &Dyadic, prec: u32, rnd: Round) -> (Float, Ordering) {
+    let quotient = Rational::from((a.mant().to_rug(), b.mant().to_rug()));
+    let (value, ternary) = Float::with_val_round(prec, &quotient, rnd);
+    let shift = (a.exp().to_rug() - b.exp().to_rug())
+        .to_i32()
+        .expect("exponent difference in MPFR's range");
+    (value << shift, ternary)
+}
+
 /// Encloses `f`'s true value: `f(prec + GUARD, Down)` and `f(prec + GUARD, Up)`.
 ///
 /// `f` computes the value in MPFR at the given precision and rounding, as one

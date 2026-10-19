@@ -17,7 +17,7 @@ use std::cmp::Ordering;
 
 use super::exp::to_fixed;
 use super::fixed::{hyp_sum, shr};
-use super::{one, working};
+use super::{exponent, one, working};
 use crate::ball::decimal::to_integer;
 use crate::ball::{Ball, Float, Mag, Round};
 use crate::{Integer, Natural};
@@ -52,7 +52,7 @@ fn sin_cos_small(t: &Float, wp: u64) -> (Ball, Ball) {
     if t.is_zero() {
         return (Ball::ZERO, one());
     }
-    let et = t.exponent().to_i64().expect("|t| < 1");
+    let et = exponent(t);
     debug_assert!(et <= 0);
     let wpi = i64::try_from(wp).unwrap_or(i64::MAX);
     if et < -wpi {
@@ -120,7 +120,7 @@ fn sin_cos_exact(m: &Float, wp: u64) -> (Ball, Ball) {
     if m.is_zero() {
         return (Ball::ZERO, one());
     }
-    let e = m.exponent().to_i64().expect("checked by the caller");
+    let e = exponent(m);
     if e <= -1 {
         return sin_cos_small(m, wp);
     }
@@ -165,8 +165,14 @@ fn sin_cos_exact(m: &Float, wp: u64) -> (Ball, Ball) {
     }
 }
 
-/// `x mod 2` in `[-1, 1)` for a dyadic `x`, exactly.
+/// `x mod 2` in `[-1, 1)` for a dyadic `x`, exactly. The work is bounded by
+/// the mantissa: below 1 in magnitude `x` is already reduced (the shift
+/// below would be as long as its exponent), and from 1 up its fraction has
+/// fewer bits than the mantissa.
 fn mod2(x: &Float) -> Float {
+    if x.is_zero() || x.exponent().is_negative() || x.exponent().is_zero() {
+        return x.clone();
+    }
     let (m, e) = x.to_integer_exp();
     if !e.is_negative() {
         // An integer: m 2^e mod 2.
@@ -304,9 +310,11 @@ impl Ball {
         if !self.is_finite() {
             return unit_ball();
         }
-        // cos(π x) = sin(π (x + 1/2)), with x reduced first so the sum is short.
-        let half = Float::from(1i64).mul_2exp(&-Integer::ONE);
-        let shifted = Ball::exact(mod2(self.mid()).add(&half));
+        // cos(π x) = sin(π (x + 1/2)), with x reduced first. The sum is
+        // rounded (exact when it fits, as at half-integers): for a tiny x the
+        // exact sum would be as long as x's exponent.
+        let half = Ball::exact(Float::from(1i64).mul_2exp(&-Integer::ONE));
+        let shifted = Ball::exact(mod2(self.mid())).add(&half, prec + 64);
         spread_pi(shifted.sin_pi(prec), self.rad(), prec)
     }
 }

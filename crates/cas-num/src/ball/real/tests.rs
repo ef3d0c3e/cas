@@ -17,7 +17,7 @@ use rug::Float as MpFloat;
 use super::{Ball, RealBalls};
 use crate::algebra::Ring;
 use crate::ball::{Float, Mag};
-use crate::testkit::float::{GUARD, bracket, check_encloses, dyadic_with, huge_shift};
+use crate::testkit::float::{GUARD, bracket, check_encloses, div_round, dyadic_with, huge_shift};
 use crate::testkit::{Signed, ToRug};
 use crate::{Integer, Rational};
 
@@ -142,7 +142,9 @@ proptest! {
         check_oracle(&x.sub(&y, p), p, |q, r| MpFloat::with_val_round(q, &f - &g, r).0)?;
         check_oracle(&x.mul(&y, p), p, |q, r| MpFloat::with_val_round(q, &f * &g, r).0)?;
         if !g.is_zero() {
-            check_oracle(&x.div(&y, p), p, |q, r| MpFloat::with_val_round(q, &f / &g, r).0)?;
+            // Not mpfr_div, which misrounds some halfway quotients (see
+            // testkit::float::div_round).
+            check_oracle(&x.div(&y, p), p, |q, r| div_round(&a, &b, q, r).0)?;
         }
         if !f.is_sign_negative() {
             check_oracle(&x.sqrt(p), p, |q, r| MpFloat::with_val_round(q, f.sqrt_ref(), r).0)?;

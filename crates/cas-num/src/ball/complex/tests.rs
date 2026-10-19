@@ -89,8 +89,9 @@ proptest! {
         if !zero {
             check("log", &z.log(prec), prec, &brackets(prec, |p, r| MpComplex::with_val_round(p, zr.ln_ref(), r).0))?;
             check("pow", &z.pow(&w, prec), prec, &brackets(prec, |p, r| MpComplex::with_val_round(p, rug::ops::Pow::pow(&zr, &wr), r).0))?;
-            // atan has poles at ±i, not hit by dyadic points of this size.
-            check("atan", &z.atan(prec), prec, &brackets(prec, |p, r| MpComplex::with_val_round(p, zr.atan_ref(), r).0))?;
+            // atan has poles at ±i (0 + 1i is a dyadic point too).
+            let pole = zr.real().is_zero() && zr.imag().clone().abs() == 1;
+            if !pole { check("atan", &z.atan(prec), prec, &brackets(prec, |p, r| MpComplex::with_val_round(p, zr.atan_ref(), r).0))?; }
         }
         // abs and arg are real balls.
         let real = |what: &str, b: &Ball, f: &dyn Fn(u32, MpRound) -> MpFloat| -> Result<(), TestCaseError> {

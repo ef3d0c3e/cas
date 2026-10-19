@@ -31,6 +31,8 @@ mod decimal;
 mod float;
 mod fns;
 mod hex;
+#[cfg(test)]
+mod huge_tests;
 mod machine;
 mod mag;
 mod real;
@@ -38,7 +40,7 @@ mod real;
 pub use complex::ComplexBall;
 pub use consts::clear_constant_cache;
 pub use decimal::DecimalStyle;
-pub use float::{APPROX_ULPS, Float, Round};
+pub use float::{APPROX_ULPS, EXACT_BITS_MAX, Float, Round};
 pub use machine::MachineBall;
 pub use mag::Mag;
 pub use real::{Ball, RealBalls};

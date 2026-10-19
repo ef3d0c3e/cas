@@ -172,9 +172,13 @@ impl Ball {
         if m.cmp_abs(&Float::from(1i64)) != std::cmp::Ordering::Less {
             return Ball::INDETERMINATE;
         }
-        // 1 - z from below, z = |m| + ρ (1 - |m| exact: |m| < 1); 0 when
-        // the ball reaches ±1. atanh' = 1 / ((1 - z)(1 + z)) <= 1 / (1 - z).
-        let gap = Mag::from_float_lower(&Float::from(1i64).sub(&m.abs())).sub_lower(self.rad());
+        // 1 - z from below, z = |m| + ρ (1 - |m| rounded down, not exact: for
+        // a tiny |m| that would be as long as its exponent); 0 when the ball
+        // reaches ±1. atanh' = 1 / ((1 - z)(1 + z)) <= 1 / (1 - z).
+        let one_minus = Float::from(1i64)
+            .sub_round(&m.abs(), 64, crate::ball::Round::Floor)
+            .0;
+        let gap = Mag::from_float_lower(&one_minus).sub_lower(self.rad());
         if gap.is_zero() {
             return Ball::INDETERMINATE;
         }
