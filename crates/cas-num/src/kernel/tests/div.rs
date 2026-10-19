@@ -21,7 +21,8 @@ use super::{base_pow, val};
 use crate::Limb;
 use crate::kernel::div::bdiv::{
     BDIV_MU_THRESHOLD, BDIV_Q_DC_THRESHOLD, BDIV_QR_DC_THRESHOLD, BINV_NEWTON_THRESHOLD,
-    DIVEXACT_DIV_THRESHOLD, binvert, binvert_scratch_len,
+    DIVEXACT_DIV_THRESHOLD, bdiv_prepared_divisor, bdiv_prepared_inverse, binvert,
+    binvert_scratch_len, binvert_shared,
 };
 use crate::kernel::div::mu::{
     INV_NEWTON_THRESHOLD, MU_DIV_THRESHOLD, block_inverse, block_len, invert, invert_scratch_len,
@@ -1104,6 +1105,66 @@ fn bdiv_q_wrapped_at_large_sizes() {
                 assert_eq!(val(&got), val(&q), "dn = {dn}, qn = {qn}");
             }
         }
+    }
+}
+
+/// Newton's step and the 2-adic quotient's blocks where they share prepared
+/// transforms ([`binvert_shared`], [`bdiv_prepared_inverse`] and
+/// [`bdiv_prepared_divisor`]), against GMP:
+/// around the shortest lengths where the model takes them (one limb more, a
+/// power-of-two and a radix-3 length, longer and shorter quotients, which it
+/// may take or not), with random and all-ones divisors. At a power-of-two
+/// length the all-ones divisor's product by the inverse is a multiple of
+/// `B^m - 1`, whose residue may come in either form. Skipped when the
+/// configuration takes neither below 20000 limbs.
+#[test]
+fn bdiv_shared_transforms_at_large_sizes() {
+    let mut state = 0x7766_5544_3322_1100_u64;
+    let mut random = |n: usize| -> Vec<Limb> {
+        (0..n)
+            .map(|_| {
+                state ^= state >> 12;
+                state ^= state << 25;
+                state ^= state >> 27;
+                state.wrapping_mul(0x2545_f491_4f6c_dd1d)
+            })
+            .collect()
+    };
+    if let Some(n) = (BINV_NEWTON_THRESHOLD..20_000).find(|&n| binvert_shared(n).is_some()) {
+        let three = 3 * (n / 3).next_power_of_two();
+        for n in [n, n + 1, n.next_power_of_two(), three] {
+            let mut d = random(n);
+            d[0] |= 1;
+            for d in [d, vec![Limb::MAX; n]] {
+                let mut x = vec![GARBAGE; n];
+                let mut scratch = vec![GARBAGE; binvert_scratch_len(n)];
+                binvert(&mut x, &d, &mut scratch);
+                assert_eq!(val(&x) * val(&d) % base_pow(n), 1, "n = {n}");
+            }
+        }
+    }
+    // Top bits set: the dividend has qn + dn limbs, and the 2-adic quotient
+    // qn + 1, the length the model is asked about.
+    let take = |dn: usize| bdiv_prepared_inverse(dn + 1, dn).is_some();
+    if let Some(dn) = (BDIV_MU_THRESHOLD..20_000).find(|&dn| take(dn)) {
+        // Two halves, a short last block of a long quotient, and halves of a
+        // quotient shorter than the divisor.
+        let (mut inverse, mut divisor) = (0, 0);
+        for (dn, qn) in [(dn, dn), (dn + 1, 3 * dn), (2 * dn, dn + 1)] {
+            let mut d = random(dn);
+            d[0] |= 1;
+            d[dn - 1] |= 1 << 63;
+            let mut q = random(qn);
+            q[qn - 1] |= 1 << 63;
+            for (d, q) in [(d, q), (vec![Limb::MAX; dn], vec![Limb::MAX; qn])] {
+                let a = limbs_of(&(val(&q) * val(&d)));
+                inverse += usize::from(bdiv_prepared_inverse(qn + 1, dn).is_some());
+                divisor += usize::from(bdiv_prepared_divisor(qn + 1, dn).is_some());
+                let got = run_bdiv_q(&a, &d, qn + 1);
+                assert_eq!(val(&got), val(&q), "dn = {dn}, qn = {qn}");
+            }
+        }
+        assert!(inverse >= 2 && divisor >= 2, "dn = {dn}");
     }
 }
 

@@ -16,7 +16,7 @@
 //! [`BDIV_QR_DC_THRESHOLD`]) leaves the remainder above `Q` for free; from
 //! [`DIVEXACT_DIV_THRESHOLD`] on, division with remainder is cheaper.
 
-use super::super::mul::mullo::{mullo, mullo_scratch_len};
+use super::super::mul::mullo::{cost as mullo_cost, mullo, mullo_scratch_len};
 use super::super::mul::{
     addmul_2_carries, limb_inverse, mul_add, mul_wrap, mul_wrap_scratch_len, wrap_len,
     wraps_cyclically,
@@ -24,7 +24,7 @@ use super::super::mul::{
 use super::{div_rem, div_rem_scratch_len};
 use crate::Limb;
 use crate::kernel::{
-    add_1_assign, add_assign, addmul_1, mul, mul_scratch_len, sub_1_assign, sub_assign, sub_n,
+    add_1_assign, add_assign, addmul_1, mul, mul_scratch_len, ntt, sub_1_assign, sub_assign, sub_n,
 };
 
 /// Smallest divisor length at which [`bdiv_q`] divides by divide and conquer
@@ -523,7 +523,24 @@ fn mul_known_low_scratch_len(xn: usize, yn: usize, k: usize) -> usize {
 /// y.len()`, the low `k` limbs unspecified), given those low `k = low.len()
 /// <= min(x.len(), y.len())` limbs: by a cyclic transform modulo `B^m - 1`
 /// with `m = wrap_len(p.len() - k)` when that wraps (as GMP's `mu_bdiv_q`
-/// and `binvert` use `mulmod_bnm1`), else the full product.
+/// and `binvert` use `mulmod_bnm1`, see [`unwrap_known_low`]), else the full
+/// product.
+fn mul_known_low(p: &mut [Limb], x: &[Limb], y: &[Limb], low: &[Limb], scratch: &mut [Limb]) {
+    let (n, k) = (p.len(), low.len());
+    debug_assert!(n == x.len() + y.len() && k <= x.len().min(y.len()));
+    let Some(m) = known_low_wrap(n, k) else {
+        mul(p, x, y, scratch);
+        debug_assert_eq!(&p[..k], low);
+        return;
+    };
+    mul_wrap(&mut p[..m], x, y, scratch);
+    unwrap_known_low(p, m, low);
+}
+
+/// The limbs of a product `P` of `p.len()` limbs from `k` on, into `p[k..]`,
+/// from its residue modulo `B^m - 1` in `p[..m]` (for a non-zero multiple
+/// either one, `0` or `B^m - 1`; for zero, `0`) and its low `k = low.len()`
+/// limbs, with `p.len() - m <= k` and `P`'s factors at least as long.
 ///
 /// With `P = L + B^m H`, `L < B^m` and `H < B^w`, `w = p.len() - m <= k`,
 /// the residue `r` is `L + H` or, when that reaches `B^m - 1`, that less
@@ -533,31 +550,67 @@ fn mul_known_low_scratch_len(xn: usize, yn: usize, k: usize) -> usize {
 /// turns `r`'s zero limbs back into ones and takes the one back from `H`.
 /// `H = B^w - 1` would need `P >= B^(m + w) - B^w`, which is above the
 /// largest product `(B^xn - 1) (B^yn - 1)` as `w <= min(xn, yn)`.
-fn mul_known_low(p: &mut [Limb], x: &[Limb], y: &[Limb], low: &[Limb], scratch: &mut [Limb]) {
-    let (n, k) = (p.len(), low.len());
-    debug_assert!(n == x.len() + y.len() && k <= x.len().min(y.len()));
-    let Some(m) = known_low_wrap(n, k) else {
-        mul(p, x, y, scratch);
-        debug_assert_eq!(&p[..k], low);
-        return;
-    };
-    let w = n - m;
+fn unwrap_known_low(p: &mut [Limb], m: usize, low: &[Limb]) {
+    let (w, k) = (p.len() - m, low.len());
     let (r, h) = p.split_at_mut(m);
-    mul_wrap(r, x, y, scratch);
     let borrow = sub_n(h, &r[..w], &low[..w]);
     let out = sub_1_assign(&mut p[w..], borrow);
     debug_assert!(out == 0 && p[w..k] == low[w..]);
+}
+
+/// The transform length at which [`mu_bdiv_q`] prepares the inverse for its
+/// blocks' short products, if it does: `wrap_len(2 b0)`, which holds each
+/// whole product, when one forward transform and then two per block cost
+/// less than a short product per block in the NTT's cost model.
+#[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
+pub(crate) fn bdiv_prepared_inverse(qn: usize, dn: usize) -> Option<usize> {
+    let (b0, blocks) = bdiv_blocks(qn, dn);
+    let len = wrap_len(2 * b0);
+    let (uses, fresh) = blocks.fold((0_usize, 0.0), |(uses, cost), (_, b, _)| {
+        (uses + 1, cost + mullo_cost(b))
+    });
+    let prepared = ntt::cyclic_cost(len) as f64 * (1 + 2 * uses) as f64 / 3.0;
+    (uses >= 2 && wraps_cyclically(len) && prepared < fresh).then_some(len)
+}
+
+/// The modulus length at which [`mu_bdiv_q`] prepares the divisor's
+/// transform for its updates, if it does: `m = wrap_len(dn)`, when two
+/// blocks or more of `b0` limbs update by a product with all of `d` that
+/// wraps there. One forward transform then saves one per update after the
+/// first.
+pub(crate) fn bdiv_prepared_divisor(qn: usize, dn: usize) -> Option<usize> {
+    let (b0, blocks) = bdiv_blocks(qn, dn);
+    let m = known_low_wrap(b0 + dn, b0)?;
+    let updates = blocks
+        .filter(|&(i, b, dl)| i + b < qn && b == b0 && dl == dn)
+        .count();
+    (updates >= 2).then_some(m)
 }
 
 /// Scratch limbs [`mu_bdiv_q`] needs for `qn` quotient limbs and `dn <= qn`
 /// divisor limbs.
 fn mu_bdiv_q_scratch_len(qn: usize, dn: usize) -> usize {
     let (b0, blocks) = bdiv_blocks(qn, dn);
+    let (prep_i, prep_d) = (bdiv_prepared_inverse(qn, dn), bdiv_prepared_divisor(qn, dn));
+    let cyclic = |len: Option<usize>| len.map_or(0, ntt::cyclic_prepared_scratch_len);
     let work = blocks
-        .map(|(_, b, dl)| mullo_scratch_len(b).max(mul_known_low_scratch_len(dl, b, b)))
+        .map(|(_, b, dl)| {
+            let short = match prep_i {
+                Some(len) => len + ntt::cyclic_prepared_scratch_len(len),
+                None => mullo_scratch_len(b),
+            };
+            let update = match prep_d {
+                Some(m) if b == b0 && dl == dn => ntt::cyclic_prepared_scratch_len(m),
+                _ => mul_known_low_scratch_len(dl, b, b),
+            };
+            short.max(update)
+        })
         .max()
-        .unwrap_or(0);
-    b0 + (b0 + dn) + work.max(binvert_scratch_len(b0))
+        .unwrap_or(0)
+        .max(cyclic(prep_i))
+        .max(cyclic(prep_d));
+    let prepared = prep_i.map_or(0, ntt::prepared_len) + prep_d.map_or(0, ntt::prepared_len);
+    b0 + (b0 + dn) + (prepared + work).max(binvert_scratch_len(b0))
 }
 
 /// `q = t d^-1 mod B^qn` for `qn = q.len() = t.len() >= dn = d.len()`, in
@@ -565,23 +618,64 @@ fn mu_bdiv_q_scratch_len(qn: usize, dn: usize) -> usize {
 /// mod B^b`, a short product, and its product with `d`, whose low `b` limbs
 /// are that block of `t` ([`mul_known_low`]), is subtracted from the limbs of
 /// `t` above it, modulo `B^qn`. Clobbers `t`.
+///
+/// With the inverse's transform prepared ([`bdiv_prepared_inverse`]), each
+/// short product is the low `b` limbs of a whole product by all `b0` limbs
+/// of the inverse, whose limbs from `b` on only reach the product's from `b`
+/// on. With the divisor's ([`bdiv_prepared_divisor`]), the updates of full
+/// blocks by all of `d` take its transform.
 fn mu_bdiv_q(q: &mut [Limb], t: &mut [Limb], d: &[Limb], scratch: &mut [Limb]) {
     let (qn, dn) = (q.len(), d.len());
     let (b0, blocks) = bdiv_blocks(qn, dn);
     let (inv, rest) = scratch.split_at_mut(b0);
     let (p, rest) = rest.split_at_mut(b0 + dn);
     binvert(inv, d, rest);
+    let (prep_i, prep_d) = (bdiv_prepared_inverse(qn, dn), bdiv_prepared_divisor(qn, dn));
+    let (inv_t, rest) = rest.split_at_mut(prep_i.map_or(0, ntt::prepared_len));
+    let (d_t, rest) = rest.split_at_mut(prep_d.map_or(0, ntt::prepared_len));
+    if let Some(len) = prep_i {
+        ntt::prepare_cyclic(inv_t, len, inv, rest);
+    }
+    if let Some(m) = prep_d {
+        ntt::prepare_cyclic(d_t, m, d, rest);
+    }
     for (i, b, dl) in blocks {
         let hi = i + b;
-        mullo(&mut q[i..hi], &t[i..hi], &inv[..b], rest);
+        if let Some(len) = prep_i {
+            let (c, rest) = rest.split_at_mut(len);
+            ntt::mul_cyclic_prepared(c, &t[i..hi], inv_t, rest);
+            debug_assert!(c[b + b0..].iter().all(|&x| x == 0));
+            q[i..hi].copy_from_slice(&c[..b]);
+        } else {
+            mullo(&mut q[i..hi], &t[i..hi], &inv[..b], rest);
+        }
         if hi == qn {
             break;
         }
         let p = &mut p[..b + dl];
-        mul_known_low(p, &d[..dl], &q[i..hi], &t[i..hi], rest);
+        match prep_d {
+            Some(m) if b == b0 && dl == dn => {
+                ntt::mul_cyclic_prepared(&mut p[..m], &q[i..hi], d_t, rest);
+                unwrap_known_low(p, m, &t[i..hi]);
+            }
+            _ => mul_known_low(p, &d[..dl], &q[i..hi], &t[i..hi], rest),
+        }
         let len = (qn - hi).min(dl);
         sub_assign(&mut t[hi..], &p[b..b + len]);
     }
+}
+
+/// The modulus length at which [`binvert`]'s Newton step to `n` limbs
+/// prepares `X`'s transform for both its products, if it does: when `d X`
+/// wraps at `m`, and the five transforms there cost less than that
+/// product's three and the short product of `n - h` limbs in the NTT's cost
+/// model.
+#[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
+pub(crate) fn binvert_shared(n: usize) -> Option<usize> {
+    let h = n - n / 2;
+    let m = known_low_wrap(n + h, h)?;
+    let cyclic = ntt::cyclic_cost(m) as f64;
+    (2.0 * cyclic < 3.0 * mullo_cost(n - h)).then_some(m)
 }
 
 /// Scratch limbs [`binvert`] needs for `n` limbs.
@@ -590,8 +684,11 @@ pub(crate) fn binvert_scratch_len(n: usize) -> usize {
         return bdiv_q_n_scratch_len(n);
     }
     let h = n - n / 2;
-    let product = h + mul_known_low_scratch_len(n, h, h);
-    let step = n + h + product.max((n - h) + mullo_scratch_len(n - h));
+    let products = match binvert_shared(n) {
+        Some(m) => ntt::prepared_len(m) + m + ntt::cyclic_prepared_scratch_len(m),
+        None => mul_known_low_scratch_len(n, h, h).max(mullo_scratch_len(n - h)),
+    };
+    let step = (n + h) + (n - h) + h + products;
     binvert_scratch_len(h).max(step)
 }
 
@@ -601,7 +698,9 @@ pub(crate) fn binvert_scratch_len(n: usize) -> usize {
 /// A Newton step from `X = d^-1 mod B^h`, `h = ceil(n / 2)`: `d X = 1 + E B^h`
 /// (a product whose low `h` limbs are known, [`mul_known_low`]), and `X (2 -
 /// d X) = X - X E B^h` is the inverse modulo `B^2h`, so the new limbs are `-(X
-/// E) mod B^(n - h)`, a short product.
+/// E) mod B^(n - h)`, a short product. Where it pays ([`binvert_shared`]),
+/// both products share `X`'s transform: `X E` has `n <= m` limbs, so it does
+/// not wrap, and its low `n - h` limbs are the short product's.
 pub(crate) fn binvert(x: &mut [Limb], d: &[Limb], scratch: &mut [Limb]) {
     let n = x.len();
     debug_assert!(n <= d.len() && d[0] & 1 == 1);
@@ -619,15 +718,24 @@ pub(crate) fn binvert(x: &mut [Limb], d: &[Limb], scratch: &mut [Limb]) {
     let h = n - n / 2;
     binvert(&mut x[..h], d, scratch);
     let (p, rest) = scratch.split_at_mut(n + h);
-    {
-        let (one, rest) = rest.split_at_mut(h);
-        one[0] = 1;
-        one[1..].fill(0);
-        mul_known_low(p, &d[..n], &x[..h], one, rest);
-    }
     let (c, rest) = rest.split_at_mut(n - h);
+    let (one, rest) = rest.split_at_mut(h);
+    one[0] = 1;
+    one[1..].fill(0);
     let (x_lo, x_hi) = x.split_at_mut(h);
-    mullo(c, &x_lo[..n - h], &p[h..n], rest);
+    if let Some(m) = binvert_shared(n) {
+        let (prep, rest) = rest.split_at_mut(ntt::prepared_len(m));
+        ntt::prepare_cyclic(prep, m, x_lo, rest);
+        ntt::mul_cyclic_prepared(&mut p[..m], &d[..n], prep, rest);
+        unwrap_known_low(p, m, one);
+        let (t, rest) = rest.split_at_mut(m);
+        ntt::mul_cyclic_prepared(t, &p[h..n], prep, rest);
+        debug_assert!(t[n..].iter().all(|&v| v == 0));
+        c.copy_from_slice(&t[..n - h]);
+    } else {
+        mul_known_low(p, &d[..n], x_lo, one, rest);
+        mullo(c, &x_lo[..n - h], &p[h..n], rest);
+    }
     for (y, &v) in x_hi.iter_mut().zip(c.iter()) {
         *y = !v;
     }

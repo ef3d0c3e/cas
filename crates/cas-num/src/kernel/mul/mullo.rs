@@ -62,6 +62,20 @@ pub fn mullo_scratch_len(n: usize) -> usize {
     }
 }
 
+/// The modelled cost of [`mullo`] for `n >= 1` limbs, in the units of
+/// [`super::cost`]: the full product, or Mulders' full product of `n2` limbs
+/// and two short products of `n1`; schoolbook as half a product.
+pub(crate) fn cost(n: usize) -> f64 {
+    match mullo_algorithm(n) {
+        Mullo::Basecase => super::cost(n, n) / 2.0,
+        Mullo::Full => super::cost(n, n),
+        Mullo::Dc => {
+            let n1 = dc_split(n);
+            super::cost(n - n1, n - n1) + 2.0 * cost(n1)
+        }
+    }
+}
+
 /// `r = a b mod B^n` for `n = r.len() == a.len() == b.len()` and
 /// `scratch.len() >= mullo_scratch_len(n)`.
 pub fn mullo(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]) {
