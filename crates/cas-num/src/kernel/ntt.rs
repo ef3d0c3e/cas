@@ -32,6 +32,9 @@
     reason = "the algorithms use the textbook names (a, b, f, m, n, p, r)"
 )]
 
+use std::collections::BTreeMap;
+use std::sync::{Arc, Mutex, PoisonError, RwLock};
+
 use super::div::{div_2by1, reciprocal_2by1};
 use crate::Limb;
 
@@ -293,6 +296,76 @@ fn tables(m: Modulus, root: Limb, n: usize, tw: &mut [Limb]) -> (&[Limb], &[Limb
     (tw2, if three { tw3 } else { &mut [] })
 }
 
+/// Transforms of at most this many coefficients take their twiddle tables
+/// from a cache shared by every product ([`with_tables`]): computing them
+/// costs a fifth of a forward transform for powers of two and over a third
+/// for `3 2^k`, per prime and product. Longer transforms compute them in
+/// scratch, which bounds what the cache keeps to about 18 MiB.
+const TABLE_CACHE_MAX: usize = 1 << 17;
+
+/// Per prime: the radix-2 table for the longest power-of-two part cached so
+/// far. Shorter ones are its prefixes: pair `h + j` holds `w_2h^j` with
+/// `w_2h` the root of order `2h`, whatever the table's length.
+static RADIX2: [RwLock<Option<Arc<Vec<Limb>>>>; 3] = [const { RwLock::new(None) }; 3];
+
+/// Per prime: the radix-3 tables by transform length.
+static RADIX3: [Mutex<BTreeMap<usize, Arc<Vec<Limb>>>>; 3] =
+    [const { Mutex::new(BTreeMap::new()) }; 3];
+
+/// Calls `f` with the twiddle tables of a transform of length `n` modulo
+/// prime number `prime` of [`PRIMES`] (as [`tables`] returns them): from
+/// the cache up to [`TABLE_CACHE_MAX`], else computed in `tw`
+/// (`tables_len(n)` limbs).
+fn with_tables<R>(
+    prime: usize,
+    n: usize,
+    tw: &mut [Limb],
+    f: impl FnOnce((&[Limb], &[Limb])) -> R,
+) -> R {
+    let (p, root) = PRIMES[prime];
+    let m = Modulus::new(p);
+    if n > TABLE_CACHE_MAX {
+        return f(tables(m, root, n, tw));
+    }
+    let (half, three) = radix_parts(n);
+    let r2 = radix2_table(prime, m, root, half);
+    let r3 = three.then(|| radix3_table(prime, m, root, n));
+    f((
+        &r2[..2 * half],
+        r3.as_deref().map_or(&[][..], Vec::as_slice),
+    ))
+}
+
+/// The cached radix-2 table of prime `prime`, covering power-of-two parts
+/// up to at least `half`: extended (recomputed at `half`) if shorter. A
+/// poisoned lock still holds a whole table, as tables are swapped in whole.
+fn radix2_table(prime: usize, m: Modulus, root: Limb, half: usize) -> Arc<Vec<Limb>> {
+    let lock = &RADIX2[prime];
+    let covers = |t: &Option<Arc<Vec<Limb>>>| t.as_ref().filter(|t| t.len() >= 2 * half).cloned();
+    if let Some(t) = covers(&lock.read().unwrap_or_else(PoisonError::into_inner)) {
+        return t;
+    }
+    let mut guard = lock.write().unwrap_or_else(PoisonError::into_inner);
+    if let Some(t) = covers(&guard) {
+        return t;
+    }
+    let mut t = vec![0; 2 * half];
+    twiddles(m, &mut t, root_of_order(m, root, half));
+    let t = Arc::new(t);
+    *guard = Some(Arc::clone(&t));
+    t
+}
+
+/// The cached radix-3 table of prime `prime` for the length `n = 3 m`.
+fn radix3_table(prime: usize, m: Modulus, root: Limb, n: usize) -> Arc<Vec<Limb>> {
+    let mut map = RADIX3[prime].lock().unwrap_or_else(PoisonError::into_inner);
+    Arc::clone(map.entry(n).or_insert_with(|| {
+        let mut t = vec![0; 2 + 8 * (n / 3)];
+        radix3_twiddles(m, &mut t, root_of_order(m, root, n));
+        Arc::new(t)
+    }))
+}
+
 /// The radix-3 table for `n = 3 m` from `w` of order `n` (`2 + 8 m` limbs):
 /// `(ω, shoup(ω))` for the cube root of unity `ω = w^m`, then for each `j < m`
 /// the pairs of `w^j` and `w^2j`, then of `w^-j` and `w^-2j`.
@@ -447,6 +520,12 @@ pub(crate) fn cost(an: usize, bn: usize) -> u64 {
     plan(an, bn, true).1
 }
 
+/// The cost of a cyclic product of transform length `n` in [`plan`]'s model.
+pub(crate) fn cyclic_cost(n: usize) -> u64 {
+    let (half, three) = radix_parts(n);
+    n as u64 * (u64::from(half.trailing_zeros()) + if three { 2 } else { 0 } + 3)
+}
+
 /// How close the transform for operands of `an, bn >= 1` limbs comes to the
 /// ideal cost `len (log2 len + 3)` of [`plan`]'s model, in `(0, 1]`: low just
 /// above the steps of the staircase, where the transform is much longer than
@@ -517,11 +596,10 @@ fn convolve(r: &mut [Limb], a: &[Limb], b: Option<&[Limb]>, scratch: &mut [Limb]
     let stride = buffer_len(an, bn, true);
     let (residues, rest) = scratch.split_at_mut(3 * stride);
     let (tw, work) = rest.split_at_mut(tables_len(n));
-    for (&(p, root), f) in PRIMES.iter().zip(residues.chunks_exact_mut(stride)) {
-        let m = Modulus::new(p);
+    for (prime, f) in residues.chunks_exact_mut(stride).enumerate() {
+        let m = Modulus::new(PRIMES[prime].0);
         // The smaller transforms of the wrapped coefficients use a prefix.
-        let (tw2, tw3) = tables(m, root, n, tw);
-        convolve_mod(m, f, a, b, (tw2, tw3), work, true);
+        with_tables(prime, n, tw, |tw| convolve_mod(m, f, a, b, tw, work, true));
     }
     let len = an + bn - 1;
     let (f0, f12) = residues.split_at(stride);
@@ -531,41 +609,109 @@ fn convolve(r: &mut [Limb], a: &[Limb], b: Option<&[Limb]>, scratch: &mut [Limb]
     debug_assert_eq!(carry >> Limb::BITS, 0, "ntt: product overflows");
 }
 
-/// Scratch limbs [`mul_cyclic`] needs for a transform of `n` limbs.
-pub(crate) fn cyclic_scratch_len(n: usize) -> usize {
-    6 * n
+/// Whether `n` is a cyclic transform length: `2^k` or `3 2^k`.
+pub(crate) fn is_transform_len(n: usize) -> bool {
+    n.is_power_of_two() || (n % 3 == 0 && (n / 3).is_power_of_two())
 }
 
-/// `r = a * b mod (B^n - 1)` for `n = r.len()` a power of two and operands of
-/// `1..=n` limbs, with `scratch.len() >= cyclic_scratch_len(n)`. The result
-/// is a residue in `[0, B^n)`: `B^n - 1` may stand for zero.
+/// Scratch limbs [`mul_cyclic`] needs for a transform of `n` limbs.
+pub(crate) fn cyclic_scratch_len(n: usize) -> usize {
+    4 * n + tables_len(n)
+}
+
+/// `r = a * b mod (B^n - 1)` for `n = r.len()` a transform length
+/// ([`is_transform_len`]) and operands of `1..=n` limbs, with
+/// `scratch.len() >= cyclic_scratch_len(n)`. The result is a residue in
+/// `[0, B^n)`: `B^n - 1` may stand for zero.
 ///
 /// `B^n = 1` modulo `B^n - 1`, so this is the cyclic convolution of the limbs,
 /// with no top coefficients to recompute. Each coefficient still sums at
 /// most `min(an, bn)` limb products, within the bound the primes cover.
 pub(crate) fn mul_cyclic(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]) {
     let n = r.len();
+    check_cyclic(n, a.len());
+    assert!((1..=n).contains(&b.len()), "ntt: cyclic length mismatch");
+    let (residues, rest) = scratch.split_at_mut(3 * n);
+    let (tw, g) = rest.split_at_mut(tables_len(n));
+    for (prime, f) in residues.chunks_exact_mut(n).enumerate() {
+        let m = Modulus::new(PRIMES[prime].0);
+        with_tables(prime, n, tw, |tw| {
+            cyclic_mod(m, f, a, Some(b), tw, &mut g[..n]);
+        });
+    }
+    recombine_cyclic(r, residues);
+}
+
+/// Panics unless `n` is a transform length within the roots' order and
+/// `an` in `1..=n`.
+fn check_cyclic(n: usize, an: usize) {
     assert!(
-        n.is_power_of_two() && (1..=n).contains(&a.len()) && (1..=n).contains(&b.len()),
+        is_transform_len(n) && (1..=n).contains(&an),
         "ntt: cyclic length mismatch"
     );
     assert!(
-        n.trailing_zeros() <= ROOT_ORDER_LOG2,
+        radix_parts(n).0.trailing_zeros() <= ROOT_ORDER_LOG2,
         "ntt: operands too long"
     );
-    let (residues, rest) = scratch.split_at_mut(3 * n);
-    let (tw, g) = rest.split_at_mut(2 * n);
-    for (&(p, root), f) in PRIMES.iter().zip(residues.chunks_exact_mut(n)) {
-        let m = Modulus::new(p);
-        let tw = tables(m, root, n, tw);
-        cyclic_mod(m, f, a, Some(b), tw, &mut g[..n]);
-    }
+}
+
+/// `r` from the residues of a cyclic product (`3 r.len()` limbs, one block
+/// per prime), the carry out of the top wrapped around.
+fn recombine_cyclic(r: &mut [Limb], residues: &[Limb]) {
+    let n = r.len();
     let (f0, f12) = residues.split_at(n);
     let (f1, f2) = f12.split_at(n);
-    let carry = recombine(r, f0, f1, f2);
+    let carry = recombine(r, f0, &f1[..n], &f2[..n]);
     // The carry is worth carry B^n = carry.
     add_wrapping(r, 0, carry as Limb);
     add_wrapping(r, 1 % n, (carry >> Limb::BITS) as Limb);
+}
+
+/// Limbs of an operand prepared for [`mul_cyclic_prepared`] at the cyclic
+/// length `n`: its transform modulo each prime.
+pub(crate) fn prepared_len(n: usize) -> usize {
+    3 * n
+}
+
+/// Scratch limbs [`prepare_cyclic`] and [`mul_cyclic_prepared`] need at the
+/// cyclic length `n`.
+pub(crate) fn cyclic_prepared_scratch_len(n: usize) -> usize {
+    3 * n + tables_len(n)
+}
+
+/// Prepares `b` (`1..=n` limbs) for products modulo `B^n - 1` by
+/// [`mul_cyclic_prepared`], into `prep` (`prepared_len(n)` limbs): each
+/// product then transforms only its other operand and the result.
+pub(crate) fn prepare_cyclic(prep: &mut [Limb], n: usize, b: &[Limb], scratch: &mut [Limb]) {
+    check_cyclic(n, b.len());
+    assert_eq!(prep.len(), prepared_len(n), "ntt: prepared length mismatch");
+    let tw = &mut scratch[..tables_len(n)];
+    for (prime, g) in prep.chunks_exact_mut(n).enumerate() {
+        let m = Modulus::new(PRIMES[prime].0);
+        load(m, g, b);
+        with_tables(prime, n, tw, |(tw2, tw3)| forward_any(m, g, tw2, tw3));
+    }
+}
+
+/// [`mul_cyclic`] for `n = r.len()` and the operand `b` prepared at `n` in
+/// `prep` by [`prepare_cyclic`], with `scratch.len() >=
+/// cyclic_prepared_scratch_len(n)`.
+pub(crate) fn mul_cyclic_prepared(r: &mut [Limb], a: &[Limb], prep: &[Limb], scratch: &mut [Limb]) {
+    let n = r.len();
+    check_cyclic(n, a.len());
+    assert_eq!(prep.len(), prepared_len(n), "ntt: prepared length mismatch");
+    let (residues, rest) = scratch.split_at_mut(3 * n);
+    let tw = &mut rest[..tables_len(n)];
+    for (prime, (g, f)) in prep
+        .chunks_exact(n)
+        .zip(residues.chunks_exact_mut(n))
+        .enumerate()
+    {
+        let m = Modulus::new(PRIMES[prime].0);
+        load(m, f, a);
+        with_tables(prime, n, tw, |tw| cyclic_with(m, f, g, tw));
+    }
+    recombine_cyclic(r, residues);
 }
 
 /// `r += x B^at` modulo `B^n - 1` (`n = r.len()`, `at < n`): a carry out of
@@ -627,28 +773,47 @@ fn cyclic_mod(
     (tw2, tw3): (&[Limb], &[Limb]),
     g: &mut [Limb],
 ) {
-    let (half, three) = radix_parts(f.len());
     load(m, f, a);
+    if let Some(b) = b {
+        load(m, g, b);
+        forward_any(m, g, tw2, tw3);
+        cyclic_with(m, f, g, (tw2, tw3));
+    } else {
+        forward_any(m, f, tw2, tw3);
+        let (k, ks) = pointwise_scale(m, f.len());
+        for x in f.iter_mut() {
+            *x = m.mul_shoup(m.redc(u128::from(*x) * u128::from(*x)), k, ks);
+        }
+        finish_cyclic(m, f, (tw2, tw3));
+    }
+}
+
+/// `f = f * g mod (x^n - 1, p)` for `f` loaded (residues in `[0, 2p)`) and
+/// `g` already transformed, `n = f.len()`; as residues in `[0, p)`.
+fn cyclic_with(m: Modulus, f: &mut [Limb], g: &[Limb], (tw2, tw3): (&[Limb], &[Limb])) {
     forward_any(m, f, tw2, tw3);
-    // Montgomery reduction leaves 2^-64 and the inverse transform n, so each
-    // pointwise product is scaled by 2^64 / n: 2^(64 - log m), over 3 for
-    // n = 3 m.
+    let (k, ks) = pointwise_scale(m, f.len());
+    for (x, &y) in f.iter_mut().zip(g) {
+        *x = m.mul_shoup(m.redc(u128::from(*x) * u128::from(y)), k, ks);
+    }
+    finish_cyclic(m, f, (tw2, tw3));
+}
+
+/// `(k, shoup(k))` for the factor of each pointwise product of a transform of
+/// length `n`: Montgomery reduction leaves `2^-64` and the inverse transform
+/// `n`, so `k = 2^64 / n`: `2^(64 - log m)`, over 3 for `n = 3 m`.
+fn pointwise_scale(m: Modulus, n: usize) -> (Limb, Limb) {
+    let (half, three) = radix_parts(n);
     let mut k = m.pow(2, u64::from(Limb::BITS - half.trailing_zeros()));
     if three {
         k = m.mul(k, m.inv(3));
     }
-    let ks = m.shoup(k);
-    if let Some(b) = b {
-        load(m, g, b);
-        forward_any(m, g, tw2, tw3);
-        for (x, &y) in f.iter_mut().zip(&*g) {
-            *x = m.mul_shoup(m.redc(u128::from(*x) * u128::from(y)), k, ks);
-        }
-    } else {
-        for x in f.iter_mut() {
-            *x = m.mul_shoup(m.redc(u128::from(*x) * u128::from(*x)), k, ks);
-        }
-    }
+    (k, m.shoup(k))
+}
+
+/// The inverse transform of the pointwise products in `f`, reduced to
+/// `[0, p)`.
+fn finish_cyclic(m: Modulus, f: &mut [Limb], (tw2, tw3): (&[Limb], &[Limb])) {
     inverse_any(m, f, tw2, tw3);
     for x in f.iter_mut() {
         *x = m.reduce_p(*x);

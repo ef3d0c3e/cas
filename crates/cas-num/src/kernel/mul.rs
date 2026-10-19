@@ -281,9 +281,19 @@ pub fn sqr(r: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) {
     sqr_unchecked(r, a, scratch);
 }
 
-/// Whether [`mul_wrap`] modulo `B^m - 1` uses the cyclic transform.
+/// Whether [`mul_wrap`] modulo `B^m - 1` uses the cyclic transform: for a
+/// transform length (`2^k` or `3 2^k`) from [`MUL_WRAP_NTT_THRESHOLD`] on.
 pub(crate) fn wraps_cyclically(m: usize) -> bool {
-    m.is_power_of_two() && m >= MUL_WRAP_NTT_THRESHOLD
+    m >= MUL_WRAP_NTT_THRESHOLD && ntt::is_transform_len(m)
+}
+
+/// The shortest transform length (a power of two or three times one) at
+/// least `x >= 1`: the modulus length `m >= x` for products known modulo
+/// `B^m - 1`.
+pub(crate) fn wrap_len(x: usize) -> usize {
+    let pow2 = x.next_power_of_two();
+    let three = 3 * x.div_ceil(3).next_power_of_two();
+    pow2.min(three)
 }
 
 /// Scratch limbs [`mul_wrap`] needs modulo `B^m - 1` for operands of `an`
@@ -303,9 +313,9 @@ pub(crate) fn mul_wrap_scratch_len(m: usize, an: usize, bn: usize) -> usize {
 /// any length, as the residue in `[0, B^m - 1)`, with `scratch.len() >=
 /// mul_wrap_scratch_len(m, a.len(), b.len())`.
 ///
-/// A power-of-two `m` from [`MUL_WRAP_NTT_THRESHOLD`] takes a cyclic transform
-/// of `m` coefficients where the full product would need about `a.len() +
-/// b.len()`; any other `m` reduces the full product.
+/// A transform length `m` (see [`wraps_cyclically`]) takes a cyclic
+/// transform of `m` coefficients where the full product would need about
+/// `a.len() + b.len()`; any other `m` reduces the full product.
 pub(crate) fn mul_wrap(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]) {
     let (m, an, bn) = (r.len(), a.len(), b.len());
     assert!(m >= 1 && an >= 1 && bn >= 1, "mul_wrap: empty operand");

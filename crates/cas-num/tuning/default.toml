@@ -4,9 +4,11 @@
 # after REDC by two limbs (88 s, noise 0.5%), the short-product keys with
 # redc_n_threshold after short products in REDC (246 s, noise 0.8%), the
 # Hensel division keys (292 s, then 178 s for the inverse and block keys;
-# noise 0.2-1.3%), and on 2026-10-19 the unbalanced-product keys (204 s,
-# then 88 s for mul_toom32_threshold, whose timings were 22% noisy on a busy
-# machine over a flat optimum; the other two 0.3-0.5%).
+# noise 0.2-1.3%); on 2026-10-19 the unbalanced-product keys (204 s, then
+# 88 s for mul_toom32_threshold, whose timings were 22% noisy on a busy
+# machine over a flat optimum; the other two 0.3-0.5%), and the Barrett
+# division keys after radix-3 wrap lengths, cached twiddles and reused
+# transforms (218 s, noise 0.1-0.3%).
 # Algorithm thresholds for cas-num, embedded at build time (see build.rs).
 # Sizes are in limbs unless noted. Measured on the development machine;
 # `cargo run --release -p cas-tune` writes a file for yours.
@@ -42,7 +44,8 @@ ntt_block = 256
 # is at most 1/ntt_wrap_fraction of the transform.
 ntt_wrap_fraction = 1
 # Products modulo B^m - 1 (Newton division) take a cyclic transform of m
-# coefficients from this power-of-two m; below it, the full product reduced.
+# coefficients from this m (a power of two or three times one); below it,
+# the full product reduced.
 mul_wrap_ntt_threshold = 2048
 # Short products a b mod B^n (Montgomery's quotient): length from which they
 # split by divide and conquer, and from which they take the full product.
@@ -55,7 +58,7 @@ dc_div_threshold = 14
 # Divisor and quotient length from which division uses Barrett's estimates
 # from Newton's reciprocal (kernel/div/mu.rs), and length from which that
 # reciprocal takes Newton steps instead of an exact division.
-mu_div_threshold = 6419
+mu_div_threshold = 2690
 inv_newton_threshold = 8
 # Hensel division (kernel/div/bdiv.rs): divisor length from which the 2-adic
 # quotient works in blocks with the 2-adic inverse, and length from which

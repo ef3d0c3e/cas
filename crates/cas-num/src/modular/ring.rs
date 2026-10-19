@@ -18,7 +18,9 @@ use std::cmp::Ordering;
 
 use crate::kernel::div::{div_2by1, reciprocal_2by1};
 use crate::kernel::mul::mullo::{mullo, mullo_scratch_len};
-use crate::kernel::mul::{addmul_2_carries, mul_wrap, mul_wrap_scratch_len, wraps_cyclically};
+use crate::kernel::mul::{
+    addmul_2_carries, mul_wrap, mul_wrap_scratch_len, wrap_len, wraps_cyclically,
+};
 use crate::kernel::{
     self, add_1_assign, add_n, add_n_assign, addmul_1, cmp_n, div_rem, div_rem_scratch_len,
     mul_scratch_len, sqr_scratch_len, sub_1_assign, sub_assign, sub_n, sub_n_assign, submul_1,
@@ -651,7 +653,7 @@ fn redc_2(r: &mut [Limb], t: &mut [Limb], n: &[Limb], ninv: Limb, ninv2: u128) -
 
 /// `r = (t + q n) / R` as [`redc_2`], with `q = t ninv_full mod R` a short
 /// product ([`mullo`]) and `q n` from a full product, or, when a cyclic
-/// transform of `m = next_pow2(k)` coefficients applies, modulo `B^m -
+/// transform of `m = wrap_len(k)` coefficients applies, modulo `B^m -
 /// 1` ([`wrapped_high`]). `u` holds `4k` limbs, `work` at least
 /// [`redc_n_scratch_len`]`(k)`.
 fn redc_n(
@@ -669,7 +671,7 @@ fn redc_n(
     // carry, unless both are zero.
     let low_carry = Limb::from(t[..k].iter().any(|&l| l != 0));
     let carry = if redc_wraps(k) {
-        let (w, h) = rest.split_at_mut(k.next_power_of_two());
+        let (w, h) = rest.split_at_mut(wrap_len(k));
         wrapped_high(&mut h[..k], w, q, n, &t[..k], work);
         add_n(r, &t[k..], &h[..k])
     } else {
@@ -680,16 +682,16 @@ fn redc_n(
     carry + add_1_assign(r, low_carry)
 }
 
-/// Whether [`redc_n`] takes `q n` modulo `B^m - 1`, `m = next_pow2(k)`
+/// Whether [`redc_n`] takes `q n` modulo `B^m - 1`, `m = wrap_len(k)`
 /// (always below `2k`).
 fn redc_wraps(k: usize) -> bool {
-    wraps_cyclically(k.next_power_of_two())
+    wraps_cyclically(wrap_len(k))
 }
 
 /// Scratch limbs `work` that [`redc_n`] needs for a `k`-limb modulus.
 fn redc_n_scratch_len(k: usize) -> usize {
     let product = if redc_wraps(k) {
-        mul_wrap_scratch_len(k.next_power_of_two(), k, k)
+        mul_wrap_scratch_len(wrap_len(k), k, k)
     } else {
         mul_scratch_len(k, k)
     };

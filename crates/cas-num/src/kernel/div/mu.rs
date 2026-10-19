@@ -5,12 +5,16 @@
 //!
 //! Both steps know the product they need up to a small window, so they take
 //! it modulo `B^m - 1` ([`mul_wrap`]: a cyclic transform of `m` coefficients
-//! instead of about twice as many), with `m` a power of two, and recover the
-//! exact value from one or two low limbs computed directly.
+//! instead of about twice as many), with `m` the shortest transform length
+//! that suffices ([`wrap_len`]), and recover the exact value from one or two
+//! low limbs computed directly.
 
 use super::{bz_div_qr, bz_div_qr_scratch_len, reciprocal_2by1};
 use crate::Limb;
-use crate::kernel::mul::{fold, mul_wrap, mul_wrap_scratch_len};
+use crate::kernel::mul::{
+    Algorithm, algorithm, fold, mul_wrap, mul_wrap_scratch_len, wrap_len, wraps_cyclically,
+};
+use crate::kernel::ntt;
 use crate::kernel::{
     add_1_assign, add_assign, add_n, cmp_n, mul, mul_scratch_len, sub_1_assign, sub_assign,
     sub_n_assign,
@@ -65,7 +69,7 @@ fn is_nonpositive(t: &[Limb]) -> bool {
 ///   B)`: `X < B^(2n) / A < X + 2`.
 ///
 /// `E` is in `(-2 B^n, 2 B^n)` before the decreases. It comes from `A Xh`
-/// modulo `B^m - 1` with `m >= n - 1` a power of two, and `A Xh mod B^2`: the
+/// modulo `B^m - 1` with `m >= n - 1` ([`wrap_len`]), and `A Xh mod B^2`: the
 /// two fix `A Xh` modulo `B^2 (B^m - 1) > 4 B^n`.
 pub(crate) fn invert(x: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) {
     let n = a.len();
@@ -137,7 +141,7 @@ pub(crate) fn invert(x: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) {
 /// limbs it leaves out, the modulus length and the limbs of `E`.
 fn newton_lens(n: usize) -> (usize, usize, usize, usize) {
     let h = n / 2 + 1;
-    let m = (n - 1).next_power_of_two();
+    let m = wrap_len(n - 1);
     (h, n - h, m, m.max(n + 1) + 2)
 }
 
@@ -198,6 +202,9 @@ fn block_len(qn: usize, dn: usize) -> usize {
 /// Wt B^dn / D <= W / D`, so `Q^` never exceeds the quotient `Q`, and `Q - Q^
 /// < (W mod B^dn) / D + (1 + 6 / B) + 1 < 4.1`. The last, shorter, block uses
 /// the reciprocal's top limbs, whose truncation adds 1: at most 5 corrections.
+///
+/// `D` and `I` are the same in every block, so their transforms are
+/// computed once ([`Plan`]) where the products take the NTT.
 pub(crate) fn mu_div_qr(q: &mut [Limb], n: &mut [Limb], d: &[Limb], scratch: &mut [Limb]) -> Limb {
     let dn = d.len();
     let qn = n.len() - dn;
@@ -207,19 +214,33 @@ pub(crate) fn mu_div_qr(q: &mut [Limb], n: &mut [Limb], d: &[Limb], scratch: &mu
         sub_n_assign(&mut n[qn..], d);
     }
     let k = block_len(qn, dn);
+    let plan = Plan::new(qn, dn);
     let (inv, scratch) = scratch.split_at_mut(k);
     block_inverse(inv, d, scratch);
-    let m = dn.next_power_of_two();
+    let (prep_d, scratch) = scratch.split_at_mut(plan.prep_d.map_or(0, ntt::prepared_len));
+    let (prep_i, scratch) = scratch.split_at_mut(plan.prep_i.map_or(0, ntt::prepared_len));
+    if let Some(m) = plan.prep_d {
+        ntt::prepare_cyclic(prep_d, m, d, scratch);
+    }
+    if let Some(len) = plan.prep_i {
+        ntt::prepare_cyclic(prep_i, len, inv, scratch);
+    }
     let mut top = qn;
     while top > 0 {
         let kb = k.min(top);
         let lo = top - kb;
+        let prep = Prepared {
+            d: plan.prep_d.map(|_| &*prep_d),
+            // Only full blocks use the whole reciprocal.
+            i: plan.prep_i.filter(|_| kb == k).map(|len| (len, &*prep_i)),
+        };
         mu_block(
             &mut q[lo..top],
             &mut n[lo..top + dn],
             d,
             &inv[k - kb..],
-            m,
+            plan.m,
+            prep,
             scratch,
         );
         top = lo;
@@ -227,18 +248,76 @@ pub(crate) fn mu_div_qr(q: &mut [Limb], n: &mut [Limb], d: &[Limb], scratch: &mu
     Limb::from(qh)
 }
 
+/// The products [`mu_div_qr`] reuses across its blocks: the divisor `D`,
+/// transformed at the modulus length `m` whenever there are two blocks or
+/// more and the cyclic transform applies, and the reciprocal `I`,
+/// transformed at `wrap_len(2k)` (which holds `Wt I` exactly) when that
+/// beats a fresh product per full block in the NTT's cost model.
+struct Plan {
+    m: usize,
+    prep_d: Option<usize>,
+    prep_i: Option<usize>,
+}
+
+impl Plan {
+    #[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
+    fn new(qn: usize, dn: usize) -> Self {
+        let k = block_len(qn, dn);
+        let m = wrap_len(dn);
+        let blocks = qn.div_ceil(k);
+        let full = qn / k;
+        let prep_d = (blocks >= 2 && wraps_cyclically(m)).then_some(m);
+        let len = wrap_len(2 * k);
+        // Prepared: one forward transform, then two per product; fresh: a
+        // whole product, three, at the planner's own length.
+        let prepared = ntt::cyclic_cost(len) as f64 * (1 + 2 * full) as f64 / 3.0;
+        let fresh = ntt::cost(k, k) as f64 * full as f64;
+        let prep_i =
+            (full >= 2 && algorithm(k, k) == Algorithm::Ntt && prepared < fresh).then_some(len);
+        Plan { m, prep_d, prep_i }
+    }
+
+    /// Scratch limbs the prepared operands take.
+    fn prepared_len(&self) -> usize {
+        self.prep_d.map_or(0, ntt::prepared_len) + self.prep_i.map_or(0, ntt::prepared_len)
+    }
+
+    /// Scratch limbs preparing them needs.
+    fn prepare_scratch_len(&self) -> usize {
+        let len = |m: Option<usize>| m.map_or(0, ntt::cyclic_prepared_scratch_len);
+        len(self.prep_d).max(len(self.prep_i))
+    }
+}
+
+/// Whether [`mu_div_qr`] prepares `D` and `I` for `qn` quotient and `dn`
+/// divisor limbs.
+#[cfg(test)]
+pub(crate) fn prepares(qn: usize, dn: usize) -> (bool, bool) {
+    let plan = Plan::new(qn, dn);
+    (plan.prep_d.is_some(), plan.prep_i.is_some())
+}
+
+/// The prepared operands of one block of [`mu_div_qr`]: `D` at the
+/// modulus length, and `I` with its transform length.
+#[derive(Clone, Copy)]
+struct Prepared<'a> {
+    d: Option<&'a [Limb]>,
+    i: Option<(usize, &'a [Limb])>,
+}
+
 /// Scratch limbs [`mu_div_qr`] needs for `nn` dividend and `dn` divisor limbs.
 pub(crate) fn mu_div_qr_scratch_len(nn: usize, dn: usize) -> usize {
     let qn = nn - dn;
     let k = block_len(qn, dn);
-    let m = dn.next_power_of_two();
+    let plan = Plan::new(qn, dn);
     let last = qn % k;
-    let blocks = mu_block_scratch_len(k, dn, m).max(if last == 0 {
+    let blocks = mu_block_scratch_len(k, dn, &plan).max(if last == 0 {
         0
     } else {
-        mu_block_scratch_len(last, dn, m)
+        mu_block_scratch_len(last, dn, &plan)
     });
-    k + (2 * k + 2 + invert_scratch_len(k + 1)).max(blocks)
+    k + (2 * k + 2 + invert_scratch_len(k + 1))
+        .max(plan.prepared_len() + plan.prepare_scratch_len().max(blocks))
 }
 
 /// `inv = I`, the `k = inv.len()` limbs of the reciprocal [`mu_div_qr`] uses.
@@ -262,7 +341,7 @@ pub(crate) fn block_inverse(inv: &mut [Limb], d: &[Limb], scratch: &mut [Limb]) 
 
 /// One block of [`mu_div_qr`]: the `kb = q.len()` quotient limbs of the window
 /// `w` (`d.len() + kb` limbs, below `d B^kb`), with `inv` the reciprocal's top
-/// `kb` limbs and `m` the power of two at least `d.len()`. Leaves the remainder
+/// `kb` limbs and `m = wrap_len(d.len())`. Leaves the remainder
 /// in `w[..d.len()]`; the limbs above it are unspecified.
 ///
 /// `R = W - Q^ D` is in `(0, 6D)`: positive since `X D < B^(dn + k)` strictly
@@ -277,17 +356,31 @@ fn mu_block(
     d: &[Limb],
     inv: &[Limb],
     m: usize,
+    prep: Prepared<'_>,
     scratch: &mut [Limb],
 ) {
     let (kb, dn) = (q.len(), d.len());
-    let (t, rest) = scratch.split_at_mut(2 * kb);
-    mul(t, &w[dn..], inv, rest);
-    let carry = add_n(q, &t[kb..], &w[dn..]);
-    debug_assert_eq!(carry, 0, "mu_div_qr: estimate above B^kb");
+    if let Some((len, prep_i)) = prep.i {
+        // len >= 2 kb, so the cyclic product is the whole product.
+        let (t, rest) = scratch.split_at_mut(len);
+        ntt::mul_cyclic_prepared(t, &w[dn..], prep_i, rest);
+        debug_assert!(t[2 * kb..].iter().all(|&x| x == 0));
+        let carry = add_n(q, &t[kb..2 * kb], &w[dn..]);
+        debug_assert_eq!(carry, 0, "mu_div_qr: estimate above B^kb");
+    } else {
+        let (t, rest) = scratch.split_at_mut(2 * kb);
+        mul(t, &w[dn..], inv, rest);
+        let carry = add_n(q, &t[kb..], &w[dn..]);
+        debug_assert_eq!(carry, 0, "mu_div_qr: estimate above B^kb");
+    }
 
     let (p, rest) = scratch.split_at_mut(m);
     let (r, rest) = rest.split_at_mut(m);
-    mul_wrap(p, q, d, rest);
+    if let Some(prep_d) = prep.d {
+        ntt::mul_cyclic_prepared(p, q, prep_d, rest);
+    } else {
+        mul_wrap(p, q, d, rest);
+    }
     fold(r, w);
     if sub_n_assign(r, p) != 0 {
         // As in `invert`: B^m - 1, not B^m.
@@ -319,6 +412,16 @@ fn mu_block(
     debug_assert!(corrections <= 5, "mu_div_qr: {corrections} corrections");
 }
 
-fn mu_block_scratch_len(kb: usize, dn: usize, m: usize) -> usize {
-    (2 * kb + mul_scratch_len(kb, kb)).max(2 * m + mul_wrap_scratch_len(m, kb, dn))
+fn mu_block_scratch_len(kb: usize, dn: usize, plan: &Plan) -> usize {
+    let m = plan.m;
+    let estimate = match plan.prep_i {
+        Some(len) => len + ntt::cyclic_prepared_scratch_len(len),
+        None => 0,
+    }
+    .max(2 * kb + mul_scratch_len(kb, kb));
+    let wrapped = match plan.prep_d {
+        Some(m) => ntt::cyclic_prepared_scratch_len(m),
+        None => mul_wrap_scratch_len(m, kb, dn),
+    };
+    estimate.max(2 * m + wrapped)
 }

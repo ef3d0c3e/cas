@@ -19,7 +19,8 @@ use crate::kernel::mul::{
     NTT_EFFICIENCY_EXPONENT, SQR_KARATSUBA_THRESHOLD, SQR_NTT_THRESHOLD, SQR_TOOM3_THRESHOLD,
     SQR_TOOM4_THRESHOLD, algorithm, karatsuba, karatsuba_scratch_len, mul_wrap,
     mul_wrap_scratch_len, sqr_algorithm, toom3, toom3_scratch_len, toom4, toom4_scratch_len,
-    toom32, toom32_fits, toom32_scratch_len, toom42, toom42_fits, toom42_scratch_len,
+    toom32, toom32_fits, toom32_scratch_len, toom42, toom42_fits, toom42_scratch_len, wrap_len,
+    wraps_cyclically,
 };
 use crate::kernel::{
     addmul_1, mul, mul_1, mul_1_assign, mul_basecase, mul_scratch_len, sqr, sqr_basecase,
@@ -362,11 +363,38 @@ fn wrap_modulus(m: usize) -> Integer {
     (Integer::from(1) << (64 * u32::try_from(m).unwrap())) - 1u32
 }
 
-/// Moduli `B^m - 1`: small ones of every length, and powers of two around the
-/// cyclic transform's threshold.
+/// Moduli `B^m - 1`: small ones of every length, and powers of two and
+/// three times powers of two around the cyclic transform's threshold.
 fn wrap_lens() -> BoxedStrategy<usize> {
     let t = tested(MUL_WRAP_NTT_THRESHOLD).next_power_of_two();
-    prop_oneof![1..=40usize, Just(t / 2), Just(t), Just(2 * t), Just(t + 1)].boxed()
+    prop_oneof![
+        1..=40usize,
+        Just(t / 2),
+        Just(t),
+        Just(2 * t),
+        Just(t + 1),
+        Just(3 * t / 4),
+        Just(3 * t / 2),
+        Just(3 * t),
+    ]
+    .boxed()
+}
+
+/// `wrap_len` is the shortest power of two or three times one at least its
+/// argument.
+#[test]
+fn wrap_len_is_shortest_transform_len() {
+    for x in 1..=5000usize {
+        let m = wrap_len(x);
+        assert!(m >= x && crate::kernel::ntt::is_transform_len(m), "{x}");
+        assert!(
+            (x..m).all(|y| !crate::kernel::ntt::is_transform_len(y)),
+            "{x}"
+        );
+    }
+    assert!(wraps_cyclically(
+        3 * MUL_WRAP_NTT_THRESHOLD.next_power_of_two()
+    ));
 }
 
 proptest! {

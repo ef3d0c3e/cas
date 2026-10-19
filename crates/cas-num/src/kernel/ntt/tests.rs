@@ -122,12 +122,12 @@ fn modulo_bnm1(x: Integer, n: usize) -> Integer {
 }
 
 proptest! {
-    /// Cyclic products of every operand length up to the transform length,
-    /// through the transform's recursion.
+    /// Cyclic products of every operand length up to the transform length
+    /// (`2^k` and `3 2^k`), through the transform's recursion.
     #[test]
     fn mul_cyclic_matches(
-        (n, a, b) in (0..=12u32)
-            .prop_map(|k| 1usize << k)
+        (n, a, b) in (0..=12u32, any::<bool>())
+            .prop_map(|(k, three)| if three { 3usize << k.min(10) } else { 1usize << k })
             .prop_flat_map(|n| (Just(n), 1..=n, 1..=n))
             .prop_flat_map(|(n, an, bn)| (Just(n), strategy::raw_limbs(an), strategy::raw_limbs(bn))),
     ) {
@@ -139,7 +139,19 @@ proptest! {
 /// largest, `n (B - 1)^2`, and the carry out of the top limb is two limbs.
 #[test]
 fn mul_cyclic_all_ones() {
-    for n in [1, 2, 4, 64, BLOCK, 2 * BLOCK] {
+    for n in [
+        1,
+        2,
+        3,
+        4,
+        6,
+        64,
+        96,
+        BLOCK,
+        3 * BLOCK / 2,
+        2 * BLOCK,
+        3 * BLOCK,
+    ] {
         for (an, bn) in [(n, n), (n, 1), (n / 2 + 1, n)] {
             let (a, b) = (vec![Limb::MAX; an], vec![Limb::MAX; bn]);
             assert_eq!(
@@ -250,4 +262,72 @@ fn wrap_shapes() {
 fn empty_operand_panics() {
     let mut r = [0; 1];
     mul(&mut r, &[1], &[], &mut []);
+}
+
+/// `a * b mod (B^n - 1)` with `b` prepared once by [`prepare_cyclic`], for
+/// each `a` in turn.
+fn run_prepared(n: usize, a: &[&[Limb]], b: &[Limb]) -> Vec<Integer> {
+    let mut prep = vec![GARBAGE; prepared_len(n)];
+    let mut scratch = vec![GARBAGE; cyclic_prepared_scratch_len(n)];
+    prepare_cyclic(&mut prep, n, b, &mut scratch);
+    a.iter()
+        .map(|a| {
+            let mut r = vec![GARBAGE; n];
+            scratch.fill(GARBAGE);
+            mul_cyclic_prepared(&mut r, a, &prep, &mut scratch);
+            modulo_bnm1(val(&r), n)
+        })
+        .collect()
+}
+
+proptest! {
+    /// A prepared operand gives the same products as [`mul_cyclic`], used
+    /// several times.
+    #[test]
+    fn mul_cyclic_prepared_matches(
+        (n, a1, a2, b) in (0..=11u32, any::<bool>())
+            .prop_map(|(k, three)| if three { 3usize << k.min(9) } else { 1usize << k })
+            .prop_flat_map(|n| (Just(n), 1..=n, 1..=n, 1..=n))
+            .prop_flat_map(|(n, x, y, z)| {
+                (Just(n), strategy::raw_limbs(x), strategy::raw_limbs(y), strategy::raw_limbs(z))
+            }),
+    ) {
+        let got = run_prepared(n, &[&a1, &a2, &a1], &b);
+        let want = |a: &[Limb]| modulo_bnm1(val(a) * val(&b), n);
+        prop_assert_eq!(got, vec![want(&a1), want(&a2), want(&a1)]);
+    }
+}
+
+/// The twiddle cache serves a short transform after a long one (from the
+/// long one's prefix), radix-3 lengths next to powers of two, and threads
+/// asking for different lengths at once.
+#[test]
+fn table_cache_lengths_and_threads() {
+    let lens = [4096usize, 64, 3 * 512, 2 * BLOCK, 6, 1 << 13, 3 << 11, 32];
+    let check = |n: usize, seed: u64| {
+        let a: Vec<Limb> = (0..n as u64)
+            .map(|i| (i + seed).wrapping_mul(0x9e37_79b9_7f4a_7c15))
+            .collect();
+        let b: Vec<Limb> = (0..=(n as u64 / 2))
+            .map(|i| (i ^ seed).wrapping_mul(0xbf58_476d_1ce4_e5b9))
+            .collect();
+        assert_eq!(
+            run_cyclic(n, &a, &b),
+            modulo_bnm1(val(&a) * val(&b), n),
+            "n = {n}"
+        );
+        assert_eq!(run_mul(&a, &b), val(&a) * val(&b), "n = {n}");
+    };
+    for (i, &n) in lens.iter().enumerate() {
+        check(n, i as u64);
+    }
+    std::thread::scope(|scope| {
+        for t in 0..4u64 {
+            scope.spawn(move || {
+                for (i, &n) in lens.iter().rev().enumerate() {
+                    check(n, 100 * t + i as u64);
+                }
+            });
+        }
+    });
 }

@@ -24,7 +24,7 @@ use crate::kernel::div::bdiv::{
 };
 use crate::kernel::div::mu::{
     INV_NEWTON_THRESHOLD, MU_DIV_THRESHOLD, block_inverse, invert, invert_scratch_len, mu_div_qr,
-    mu_div_qr_scratch_len,
+    mu_div_qr_scratch_len, prepares,
 };
 use crate::kernel::div::{
     DC_DIV_THRESHOLD, bz_div_qr, bz_div_qr_scratch_len, div_2by1, div_3by2, hits, reciprocal_2by1,
@@ -945,4 +945,75 @@ fn bdiv_q_extremes() {
             assert_eq!(val(&got), val(&q), "dn = {dn}, qn = {qn}");
         }
     }
+}
+
+/// Barrett division where the blocks reuse the divisor's and the
+/// reciprocal's transforms (divisors past the NTT threshold, two blocks or
+/// more), and moduli `B^m - 1` of `3 2^k` limbs, against GMP; and the plan
+/// prepares them where expected. Skipped when the configuration leaves
+/// these sizes to other algorithms.
+#[test]
+fn mu_div_prepared_at_large_sizes() {
+    use crate::kernel::mul::{MUL_NTT_THRESHOLD, MUL_WRAP_NTT_THRESHOLD, wrap_len};
+    let dn_big = (2 * MUL_NTT_THRESHOLD + 2).max(MU_DIV_THRESHOLD);
+    if dn_big > 20_000 || MUL_WRAP_NTT_THRESHOLD > 8192 {
+        return;
+    }
+    let mut state = 0x0123_4567_89ab_cdef_u64;
+    let mut random = |n: usize| -> Vec<Limb> {
+        (0..n)
+            .map(|_| {
+                state ^= state >> 12;
+                state ^= state << 25;
+                state ^= state >> 27;
+                state.wrapping_mul(0x2545_f491_4f6c_dd1d)
+            })
+            .collect()
+    };
+    // dn_big + 2 is even, so qn = dn gives two equal blocks; 3 2^k + 1 just
+    // above a radix-3 length; 3 2^k - 1 below one.
+    let three = 3 * (dn_big / 3).next_power_of_two();
+    for dn in [dn_big, dn_big + 2, three - 1, three + 1] {
+        for qn in [dn, 2 * dn + 5, dn / 2 + 1] {
+            let mut d = random(dn);
+            d[dn - 1] |= 1 << 63;
+            let a = random(dn + qn);
+            let mut q = vec![GARBAGE; qn];
+            let mut n = a.clone();
+            let mut scratch = vec![GARBAGE; mu_div_qr_scratch_len(dn + qn, dn)];
+            let qh = mu_div_qr(&mut q, &mut n, &d, &mut scratch);
+            let (gq, gr) = val(&a).div_rem(val(&d));
+            let ours_q = val(&q) + (Integer::from(qh) << (64 * u32::try_from(qn).unwrap()));
+            assert_eq!(ours_q, gq, "q: dn = {dn}, qn = {qn}");
+            assert_eq!(val(&n[..dn]), gr, "r: dn = {dn}, qn = {qn}");
+        }
+    }
+    // Blocks of k = a power of two past the NTT threshold, so the
+    // reciprocal's products take the NTT and both are prepared: three for
+    // qn = 3k - 1 and dn = 5k/4, the last one limb short (it takes the
+    // reciprocal's top limbs, so not the prepared transform).
+    let k = MUL_NTT_THRESHOLD.next_power_of_two();
+    let (qn, dn) = (3 * k - 1, k + k / 4);
+    if wrap_len(dn) >= MUL_WRAP_NTT_THRESHOLD && 2 * k <= 20_000 {
+        assert_eq!(prepares(qn, dn), (true, true));
+        let mut d = random(dn);
+        d[dn - 1] |= 1 << 63;
+        let a = random(dn + qn);
+        let mut q = vec![GARBAGE; qn];
+        let mut n = a.clone();
+        let mut scratch = vec![GARBAGE; mu_div_qr_scratch_len(dn + qn, dn)];
+        let qh = mu_div_qr(&mut q, &mut n, &d, &mut scratch);
+        let (gq, gr) = val(&a).div_rem(val(&d));
+        let ours_q = val(&q) + (Integer::from(qh) << (64 * u32::try_from(qn).unwrap()));
+        assert_eq!(ours_q, gq, "q: short last block");
+        assert_eq!(val(&n[..dn]), gr, "r: short last block");
+    }
+    // Two blocks of a power-of-two length past the NTT threshold prepare
+    // both; one block neither.
+    let dn = 2 * MUL_NTT_THRESHOLD.next_power_of_two();
+    if wrap_len(dn) >= MUL_WRAP_NTT_THRESHOLD {
+        assert_eq!(prepares(dn, dn), (true, true));
+        assert!(prepares(2 * dn + 5, dn).0);
+    }
+    assert_eq!(prepares(dn / 4, dn), (false, false));
 }

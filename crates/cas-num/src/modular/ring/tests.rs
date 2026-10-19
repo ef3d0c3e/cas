@@ -7,7 +7,7 @@ use rug::Integer;
 use super::{
     Form, ModRing, REDC_N_THRESHOLD, RingWork, redc_n, redc_n_scratch_len, redc_wraps, window_bits,
 };
-use crate::kernel::mul::MUL_WRAP_NTT_THRESHOLD;
+use crate::kernel::mul::{MUL_WRAP_NTT_THRESHOLD, wrap_len};
 use crate::testkit::{Mag, ToRug, differential, strategy, tested};
 use crate::{Limb, Natural};
 
@@ -365,7 +365,17 @@ proptest! {
 #[test]
 fn redc_n_extremes() {
     let m = tested(MUL_WRAP_NTT_THRESHOLD).next_power_of_two().max(4);
-    for k in [1, 2, 3, m / 2 + 1, m * 3 / 4, m] {
+    // Wrap lengths of 2^j and 3 2^j: m, 3m/4 (for k from 5m/8 + 1), m/2.
+    for k in [
+        1,
+        2,
+        3,
+        m / 2 + 1,
+        m * 5 / 8 + 1,
+        m * 3 / 4,
+        m * 3 / 4 + 1,
+        m,
+    ] {
         let n = vec![Limb::MAX; k];
         let nr = Mag::from_limbs(n.clone()).to_rug() << (64 * u32::try_from(k).unwrap());
         for tv in [Integer::from(&nr - 1), Integer::from(1), Integer::from(0)] {
@@ -376,9 +386,23 @@ fn redc_n_extremes() {
         }
     }
     if MUL_WRAP_NTT_THRESHOLD <= crate::testkit::TESTED_SIZE_MAX {
-        assert!(redc_wraps(m * 3 / 4) && redc_wraps(m));
-        assert_eq!(redc_wraps(m / 2), m / 2 >= MUL_WRAP_NTT_THRESHOLD);
-        assert!(redc_wraps(m + 1));
+        for k in [
+            m / 2,
+            m / 2 + 1,
+            m * 5 / 8 + 1,
+            m * 3 / 4,
+            m * 3 / 4 + 1,
+            m,
+            m + 1,
+        ] {
+            assert_eq!(
+                redc_wraps(k),
+                wrap_len(k) >= MUL_WRAP_NTT_THRESHOLD,
+                "k = {k}"
+            );
+        }
+        assert!(redc_wraps(m) && redc_wraps(m + 1));
+        assert_eq!(wrap_len(m * 5 / 8 + 1), m * 3 / 4);
     }
 }
 
