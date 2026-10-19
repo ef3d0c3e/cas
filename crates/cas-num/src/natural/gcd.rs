@@ -51,7 +51,7 @@ mod hgcd;
 #[cfg(test)]
 mod tests;
 
-use hgcd::HgcdMatrix;
+use hgcd::{HgcdMatrix, HgcdRow};
 
 impl Natural {
     /// The greatest common divisor; `gcd(0, 0) = 0`.
@@ -63,7 +63,8 @@ impl Natural {
     /// [`Natural::gcd`] with half-GCD steps from `dc` limbs.
     fn gcd_from(&self, other: &Natural, dc: usize) -> Natural {
         let (mut a, mut b) = ordered(self, other);
-        reduce(&mut a, &mut b, dc, false, |_| {});
+        halve(&mut a, &mut b, dc);
+        lehmer(&mut a, &mut b, |_| {});
         match *b {
             [] => Natural::from_vec(a),
             [d] => Natural::from(kernel::gcd_1(kernel::rem_1(&a, d), d)),
@@ -90,35 +91,217 @@ impl Natural {
     /// [`Natural::gcd_cofactor`] with half-GCD steps from `dc` limbs.
     fn gcd_cofactor_from(&self, other: &Natural, dc: usize) -> (Natural, Integer) {
         let (mut a, mut b) = ordered(self, other);
-        // sa and sb are the coefficients of `self` in a and b.
-        let (mut sa, mut sb) = if self >= other {
-            (Integer::ONE, Integer::ZERO)
+        let mut s = Cofactors::new(self < other, a.len());
+        let mut halved = false;
+        while b.len() >= dc.max(2) {
+            s.halve(&mut a, &mut b);
+            halved = true;
+        }
+        if !halved || b.len() < 2 {
+            return finish(a, b, s);
+        }
+        // As in GMP's `mpn_gcdext`, the Lehmer steps that remain start from
+        // fresh cofactors, x of a and y of b with g = x a + y b, which stay
+        // as short as a rather than growing from the length of s. The
+        // coefficient of the first operand is then x sa + y sb = σ (x u -
+        // y v), where x and y have opposite signs (or x is zero).
+        let (a0, b0) = (Natural::from_limbs(&a), Natural::from_limbs(&b));
+        let n = a.len();
+        let (g, x) = finish(a, b, Cofactors::new(false, n));
+        let (x_negative, x) = x.into_parts();
+        let positive = !x_negative && !x.is_zero();
+        // y = (g - x a0) / b0, of sign opposite to x.
+        let mut p = &x * &a0;
+        if positive {
+            p -= &g;
         } else {
-            (Integer::ZERO, Integer::ONE)
-        };
-        reduce(&mut a, &mut b, dc, true, |step| {
-            track(&mut sa, &mut sb, &step);
-        });
-        if b.is_empty() {
-            return (Natural::from_vec(a), sa);
+            p += &g;
         }
-        if a.len() > 1 {
-            let q = div_step(&mut a, &mut b);
-            track(&mut sa, &mut sb, &Step::Quotient(&q));
-        }
-        // Both fit a limb: finish with a word-level extended Euclid, whose
-        // cofactors are bounded by the operands and so fit an i128.
-        let (mut x, mut y) = (single(&a), single(&b));
-        let (mut p, mut q) = ((1i128, 0i128), (0i128, 1i128));
-        while y != 0 {
-            let k = i128::from(x / y);
-            (x, y) = (y, x % y);
-            let next = (p.0 - k * q.0, p.1 - k * q.1);
-            (p, q) = (q, next);
-        }
-        let s = &sa * &Integer::from(p.0) + &sb * &Integer::from(p.1);
-        (Natural::from(x), s)
+        let y = p.div_exact(&b0);
+        let mag = &x * &Natural::from_vec(s.u) + &y * &Natural::from_vec(s.v);
+        let negative = if positive { s.negative } else { !s.negative };
+        (g, Integer::from_parts(negative, mag))
     }
+}
+
+/// The GCD of the normalised `a >= b`, by Lehmer steps, and the coefficient
+/// of the first operand, whose coefficients in `a` and `b` are `s`.
+fn finish(mut a: Vec<Limb>, mut b: Vec<Limb>, mut s: Cofactors) -> (Natural, Integer) {
+    lehmer(&mut a, &mut b, |step| s.update(&step));
+    if b.is_empty() {
+        return (Natural::from_vec(a), s.combine(1, 0));
+    }
+    if a.len() > 1 {
+        let q = div_step(&mut a, &mut b);
+        s.update(&Step::Quotient(&q));
+    }
+    // Both fit a limb: finish with a word-level extended Euclid, whose
+    // cofactors are bounded by the operands and so fit an i128.
+    let (mut x, mut y) = (single(&a), single(&b));
+    let (mut p, mut q) = ((1i128, 0i128), (0i128, 1i128));
+    while y != 0 {
+        let k = i128::from(x / y);
+        (x, y) = (y, x % y);
+        let next = (p.0 - k * q.0, p.1 - k * q.1);
+        (p, q) = (q, next);
+    }
+    (Natural::from(x), s.combine(p.0, p.1))
+}
+
+/// The coefficients of the first operand in the pair `(a, b)` being reduced:
+/// `σ u` in `a` and `-σ v` in `b`, with `σ = -1` if `negative`, as GMP's
+/// `mpn_gcdext` keeps them. Every step subtracts a multiple of one value from
+/// the other or swaps them, so the coefficients keep opposite signs (or one
+/// is zero), and each row of a step's matrix adds the magnitudes.
+struct Cofactors {
+    u: Vec<Limb>,
+    v: Vec<Limb>,
+    negative: bool,
+}
+
+impl Cofactors {
+    /// The coefficients `(1, 0)`, or `(0, 1)` if the operands were swapped,
+    /// with room for `n + 2` limbs: the coefficients stay below the larger
+    /// operand, of `n` limbs, while both values are positive, and
+    /// [`mul_row`] works on two limbs more.
+    fn new(swapped: bool, n: usize) -> Cofactors {
+        let room = || Vec::with_capacity(n + 2);
+        let (mut u, mut v) = (room(), room());
+        if swapped { &mut v } else { &mut u }.push(1);
+        Cofactors {
+            u,
+            v,
+            negative: swapped,
+        }
+    }
+
+    /// Follows `step` on the pair.
+    fn update(&mut self, step: &Step<'_>) {
+        match step {
+            Step::Matrix(m) => {
+                // σ (m.a u - m.b v) and σ (m.c u - m.d v), where the entries
+                // of each row have opposite signs and the rows opposite
+                // patterns.
+                let flip = m.a < 0 || m.b > 0;
+                debug_assert_eq!(flip, m.c > 0 || m.d < 0);
+                let n = [[entry(m.a), entry(m.c)], [entry(m.b), entry(m.d)]];
+                mul_row(&mut self.u, &mut self.v, &n);
+                self.negative ^= flip;
+            }
+            Step::Hgcd(m) => {
+                // M^-1 = ±[[u11, -u01], [-u10, u00]] takes (σ u, -σ v) to
+                // ±(σ (u11 u + u01 v), -σ (u10 u + u00 v)).
+                let [[u00, u01], [u10, u11]] = &m.m;
+                let u = Natural::from_vec(std::mem::take(&mut self.u));
+                let v = Natural::from_vec(std::mem::take(&mut self.v));
+                self.u = (&(u11 * &u) + &(u01 * &v)).limbs().to_vec();
+                self.v = (&(u10 * &u) + &(u00 * &v)).limbs().to_vec();
+                self.negative ^= m.negative;
+            }
+            Step::Quotient(q) => {
+                // (σ u, -σ v) becomes (-σ v, σ (u + q v)).
+                let w = add_product(&self.u, q, &self.v);
+                self.u = std::mem::replace(&mut self.v, w);
+                self.negative = !self.negative;
+            }
+        }
+    }
+
+    /// One half-GCD step on `(a, b)`, normalised with `a >= b`, or a
+    /// division step if it can take none, followed on the coefficients. The
+    /// row `(v, u)` is multiplied by the step's matrix on the right: while
+    /// it is shorter than half of `a`, about the length the matrix entries
+    /// reach, step by step inside the half-GCD at its top level, which
+    /// costs less than building the matrix there; otherwise by the matrix.
+    fn halve(&mut self, a: &mut Vec<Limb>, b: &mut Vec<Limb>) {
+        let progress = if 2 * self.u.len().max(self.v.len()) < a.len() {
+            let mut row = HgcdRow {
+                r: [&self.v, &self.u].map(|x| Natural::from_limbs(x)),
+                negative: false,
+            };
+            let progress = hgcd::hgcd_row(a, b, &mut row);
+            let [v, u] = &row.r;
+            (self.u, self.v) = (u.limbs().to_vec(), v.limbs().to_vec());
+            self.negative ^= row.negative;
+            progress
+        } else if let Some(m) = hgcd::hgcd(a, b) {
+            self.update(&Step::Hgcd(&m));
+            true
+        } else {
+            false
+        };
+        if !progress {
+            let q = div_step(a, b);
+            self.update(&Step::Quotient(&q));
+        }
+        debug_assert!(kernel::is_normalized(a) && kernel::is_normalized(b));
+        debug_assert_ne!(kernel::cmp(a, b), Ordering::Less);
+    }
+
+    /// The coefficient `p sa + q sb` for coefficients `sa` of `a` and `sb` of
+    /// `b`, where `p` and `q` have opposite signs (or one is zero).
+    fn combine(mut self, p: i128, q: i128) -> Integer {
+        let flip = p < 0 || q > 0;
+        mul_row(&mut self.u, &mut self.v, &[[entry(p), 0], [entry(q), 0]]);
+        Integer::from_parts(self.negative ^ flip, Natural::from_vec(self.u))
+    }
+}
+
+/// The magnitude of a matrix entry or word-level cofactor, below `2^64`.
+#[expect(clippy::cast_possible_truncation, reason = "checked in debug builds")]
+fn entry(x: i128) -> Limb {
+    debug_assert!(x.unsigned_abs() <= u128::from(Limb::MAX));
+    x.unsigned_abs() as Limb
+}
+
+/// `u + q v`.
+fn add_product(u: &[Limb], q: &[Limb], v: &[Limb]) -> Vec<Limb> {
+    if q.is_empty() || v.is_empty() {
+        return u.to_vec();
+    }
+    let len = q.len() + v.len();
+    let mut w = vec![0; len.max(u.len()) + 1];
+    let mut scratch = vec![0; kernel::mul_scratch_len(q.len(), v.len())];
+    kernel::mul(&mut w[..len], q, v, &mut scratch);
+    let carry = kernel::add_assign(&mut w, u);
+    debug_assert_eq!(carry, 0);
+    w.truncate(kernel::normalized_len(&w));
+    w
+}
+
+/// `(x, y) = (x n00 + y n10, x n01 + y n11)`, the row `(x, y)` times the
+/// matrix `n`, in place and in one pass.
+fn mul_row(x: &mut Vec<Limb>, y: &mut Vec<Limb>, n: &[[Limb; 2]; 2]) {
+    let len = x.len().max(y.len());
+    // Each result is below 2 B^(len + 1).
+    x.resize(len + 2, 0);
+    y.resize(len + 2, 0);
+    let [[n00, n01], [n10, n11]] = *n;
+    let (mut cx, mut cy) = (Row::CLEAR, Row::CLEAR);
+    for (x, y) in x[..len].iter_mut().zip(&mut y[..len]) {
+        let (a, b) = (*x, *y);
+        *x = mul_add_2(n00, a, n10, b, &mut cx);
+        *y = mul_add_2(n01, a, n11, b, &mut cy);
+    }
+    for (r, (c0, c1)) in [(x, cx), (y, cy)] {
+        let (lo, carry) = c0.overflowing_add(c1);
+        (r[len], r[len + 1]) = (lo, Limb::from(carry));
+        r.truncate(kernel::normalized_len(r));
+    }
+}
+
+/// The next limb of `a x + b y`, with the running carries of both products.
+#[inline]
+#[expect(clippy::cast_possible_truncation, reason = "taking the low limb")]
+fn mul_add_2(a: Limb, x: Limb, b: Limb, y: Limb, (c0, c1): &mut (Limb, Limb)) -> Limb {
+    let s = u128::from(a) * u128::from(x) + u128::from(*c0);
+    let t = u128::from(b) * u128::from(y) + u128::from(*c1);
+    let (lo, carry) = (s as Limb).overflowing_add(t as Limb);
+    // s < 2^128 - 2^64 + 1, so its high limb is below 2^64 - 1 unless its
+    // low limb is zero, and the carry fits.
+    *c0 = (s >> 64) as Limb + Limb::from(carry);
+    *c1 = (t >> 64) as Limb;
+    lo
 }
 
 /// The limbs of the larger and the smaller operand.
@@ -136,64 +319,27 @@ fn single(x: &[Limb]) -> Limb {
     }
 }
 
-/// Applies `step` to the coefficients `(sa, sb)` of the pair it reduced.
-fn track(sa: &mut Integer, sb: &mut Integer, step: &Step<'_>) {
-    match step {
-        Step::Matrix(m) => {
-            let (a, b) = (std::mem::take(sa), std::mem::take(sb));
-            *sa = &a * &Integer::from(m.a) + &b * &Integer::from(m.b);
-            *sb = &a * &Integer::from(m.c) + &b * &Integer::from(m.d);
+/// Reduces normalised `a >= b` by half-GCD steps (or a division step where
+/// one takes none) while `b` has at least `dc` limbs, keeping `gcd(a, b)`
+/// and `a >= b`, without building their matrices at the top level.
+fn halve(a: &mut Vec<Limb>, b: &mut Vec<Limb>, dc: usize) {
+    while b.len() >= dc.max(2) {
+        if !hgcd::hgcd_values(a, b) {
+            div_step(a, b);
         }
-        Step::Hgcd(m) => {
-            // M^-1 = ±[[u11, -u01], [-u10, u00]].
-            let [[u00, u01], [u10, u11]] =
-                m.m.each_ref().map(|row| row.each_ref().map(Integer::from));
-            let (a, b) = (std::mem::take(sa), std::mem::take(sb));
-            let (x, y) = (&u11 * &a - &u01 * &b, &u00 * &b - &u10 * &a);
-            (*sa, *sb) = if m.negative { (-x, -y) } else { (x, y) };
-        }
-        Step::Quotient(q) => {
-            let next = &*sa - &(Integer::from(Natural::from_limbs(q)) * &*sb);
-            *sa = std::mem::replace(sb, next);
-        }
+        debug_assert!(kernel::is_normalized(a) && kernel::is_normalized(b));
+        // Equal only when a half-GCD stopped at a gcd of at least B^s.
+        debug_assert_ne!(kernel::cmp(a, b), Ordering::Less);
     }
 }
 
 /// Reduces normalised `a >= b` until `b` has at most one limb, keeping
-/// `gcd(a, b)` and `a >= b`, by half-GCD steps while `b` has at least `dc`
-/// limbs and Lehmer steps below. With `track`, reports every step to
-/// `on_step`; without, half-GCD steps are not reported, which saves building
-/// their matrices.
-fn reduce(
-    a: &mut Vec<Limb>,
-    b: &mut Vec<Limb>,
-    dc: usize,
-    track: bool,
-    mut on_step: impl FnMut(Step<'_>),
-) {
+/// `gcd(a, b)` and `a >= b`, by Lehmer steps, and division steps where the
+/// leading bits cannot decide one; reports every step to `on_step`.
+fn lehmer(a: &mut Vec<Limb>, b: &mut Vec<Limb>, mut on_step: impl FnMut(Step<'_>)) {
     let mut buf = [Vec::new(), Vec::new()];
     while b.len() >= 2 {
-        if b.len() >= dc {
-            let progress = if track {
-                hgcd::hgcd(a, b).map(|mut m| {
-                    if kernel::cmp(a, b) == Ordering::Less {
-                        std::mem::swap(a, b);
-                        m.swap_columns();
-                    }
-                    on_step(Step::Hgcd(&m));
-                })
-            } else {
-                hgcd::hgcd_values(a, b).then(|| {
-                    if kernel::cmp(a, b) == Ordering::Less {
-                        std::mem::swap(a, b);
-                    }
-                })
-            };
-            if progress.is_none() {
-                let q = div_step(a, b);
-                on_step(Step::Quotient(&q));
-            }
-        } else if let Some(mut m) = lehmer_matrix(a, b, None) {
+        if let Some(mut m) = lehmer_matrix(a, b, None) {
             apply(&m, a, b, &mut buf);
             if kernel::cmp(a, b) == Ordering::Less {
                 std::mem::swap(a, b);
@@ -210,7 +356,6 @@ fn reduce(
             on_step(Step::Quotient(&q));
         }
         debug_assert!(kernel::is_normalized(a) && kernel::is_normalized(b));
-        // Equal only when a half-GCD stopped at a gcd of at least B^s.
         debug_assert_ne!(kernel::cmp(a, b), Ordering::Less);
     }
 }

@@ -61,39 +61,6 @@ impl HgcdMatrix {
         }
     }
 
-    /// `M P` with `P` the swap, for `(x, y)` that changed places.
-    pub(super) fn swap_columns(&mut self) {
-        for row in &mut self.m {
-            row.swap(0, 1);
-        }
-        self.negative = !self.negative;
-    }
-
-    /// `M N` for `N = [[1, q], [0, 1]]`, the step `x -= q y`.
-    fn add_column(&mut self, q: &Natural) {
-        for [u0, u1] in &mut self.m {
-            *u1 += &(&*u0 * q);
-        }
-    }
-
-    /// `M L^-1` for the Lehmer matrix `L` that took `(x, y)` to `L (x, y)`,
-    /// in place with `buf` as working space. `L^-1` is the product of
-    /// `[[q, 1], [1, 0]]` over its quotients, so its entries are the
-    /// magnitudes of `L`'s, rearranged.
-    fn mul_lehmer(&mut self, l: &Matrix, buf: &mut [Vec<Limb>; 2]) {
-        let mag = |x: i128| Limb::try_from(x.unsigned_abs()).expect("Lehmer entry below 2^64");
-        let n = [[mag(l.d), mag(l.b)], [mag(l.c), mag(l.a)]];
-        for [u0, u1] in &mut self.m {
-            for (j, r) in buf.iter_mut().enumerate() {
-                add_products(r, u0.limbs(), n[0][j], u1.limbs(), n[1][j]);
-            }
-            assign(u0, &buf[0]);
-            assign(u1, &buf[1]);
-        }
-        // det L^-1 = det L = ±1; the products may wrap, the difference not.
-        self.negative ^= l.a.wrapping_mul(l.d).wrapping_sub(l.b.wrapping_mul(l.c)) < 0;
-    }
-
     /// The product `self other`: by Strassen's method once both matrices
     /// have an entry of at least [`MATRIX22_STRASSEN_THRESHOLD`] limbs, by
     /// eight products below.
@@ -108,6 +75,106 @@ impl HgcdMatrix {
             m,
             negative: self.negative != other.negative,
         }
+    }
+}
+
+/// The entries of `L^-1` for a Lehmer matrix `L`: the product of `[[q, 1],
+/// [1, 0]]` over its quotients, so the magnitudes of `L`'s, rearranged.
+fn lehmer_inverse(l: &Matrix) -> [[Limb; 2]; 2] {
+    let mag = |x: i128| Limb::try_from(x.unsigned_abs()).expect("Lehmer entry below 2^64");
+    [[mag(l.d), mag(l.b)], [mag(l.c), mag(l.a)]]
+}
+
+/// Whether `det L = det L^-1 = -1`; the products may wrap, the difference
+/// not.
+fn lehmer_negative(l: &Matrix) -> bool {
+    l.a.wrapping_mul(l.d).wrapping_sub(l.b.wrapping_mul(l.c)) < 0
+}
+
+/// `row n` for a row of naturals and a matrix of limbs, in place with `buf`
+/// as working space.
+fn mul_row_lehmer(row: &mut [Natural; 2], n: &[[Limb; 2]; 2], buf: &mut [Vec<Limb>; 2]) {
+    let [u0, u1] = row;
+    for (j, r) in buf.iter_mut().enumerate() {
+        add_products(r, u0.limbs(), n[0][j], u1.limbs(), n[1][j]);
+    }
+    assign(u0, &buf[0]);
+    assign(u1, &buf[1]);
+}
+
+/// What the steps of a half-GCD are appended to, as products on the right:
+/// their matrix, or one row of it, which is a vector of cofactors times that
+/// matrix.
+pub(super) trait Steps {
+    /// `S P` for `P` the swap, for `(x, y)` that changed places.
+    fn swap_columns(&mut self);
+    /// `S [[1, q], [0, 1]]`, for the step `x -= q y`.
+    fn add_column(&mut self, q: &Natural);
+    /// `S L^-1` for the Lehmer matrix `L` that took `(x, y)` to `L (x, y)`,
+    /// in place with `buf` as working space.
+    fn mul_lehmer(&mut self, l: &Matrix, buf: &mut [Vec<Limb>; 2]);
+    /// `S M` for the matrix `M` of a half-GCD.
+    fn mul_hgcd(&mut self, m: &HgcdMatrix);
+}
+
+impl Steps for HgcdMatrix {
+    fn swap_columns(&mut self) {
+        for row in &mut self.m {
+            row.swap(0, 1);
+        }
+        self.negative = !self.negative;
+    }
+
+    fn add_column(&mut self, q: &Natural) {
+        for [u0, u1] in &mut self.m {
+            *u1 += &(&*u0 * q);
+        }
+    }
+
+    fn mul_lehmer(&mut self, l: &Matrix, buf: &mut [Vec<Limb>; 2]) {
+        let n = lehmer_inverse(l);
+        for row in &mut self.m {
+            mul_row_lehmer(row, &n, buf);
+        }
+        self.negative ^= lehmer_negative(l);
+    }
+
+    fn mul_hgcd(&mut self, m: &HgcdMatrix) {
+        *self = self.mul(m);
+    }
+}
+
+/// One row `r` of the matrix of a half-GCD's steps, with the sign of the
+/// matrix's determinant: a vector of cofactors, which the steps update
+/// directly when it is shorter than the matrix entries would be.
+#[derive(Clone, Debug, Default)]
+pub(super) struct HgcdRow {
+    pub(super) r: [Natural; 2],
+    /// Whether the determinant is -1.
+    pub(super) negative: bool,
+}
+
+impl Steps for HgcdRow {
+    fn swap_columns(&mut self) {
+        self.r.swap(0, 1);
+        self.negative = !self.negative;
+    }
+
+    fn add_column(&mut self, q: &Natural) {
+        let [u0, u1] = &mut self.r;
+        *u1 += &(&*u0 * q);
+    }
+
+    fn mul_lehmer(&mut self, l: &Matrix, buf: &mut [Vec<Limb>; 2]) {
+        mul_row_lehmer(&mut self.r, &lehmer_inverse(l), buf);
+        self.negative ^= lehmer_negative(l);
+    }
+
+    fn mul_hgcd(&mut self, m: &HgcdMatrix) {
+        let [u0, u1] = &self.r;
+        let entry = |j: usize| &(u0 * &m.m[0][j]) + &(u1 * &m.m[1][j]);
+        self.r = [entry(0), entry(1)];
+        self.negative ^= m.negative;
     }
 }
 
@@ -151,8 +218,9 @@ pub(super) fn strassen(a: &[[Natural; 2]; 2], b: &[[Natural; 2]; 2]) -> [[Natura
 
 /// Reduces `(x, y)`, normalised with `x >= y` and of at most `n` limbs, by
 /// steps that keep both values at least `B^s`, `s = ⌊n/2⌋ + 1`, until no
-/// further step can (`|x - y| < B^s`). Returns the matrix of the steps, or
-/// `None`, with `(x, y)` unchanged, if none was possible.
+/// further step can (`|x - y| < B^s`), and leaves `x >= y`. Returns the
+/// matrix of the steps, or `None`, with `(x, y)` unchanged, if none was
+/// possible.
 pub(super) fn hgcd(x: &mut Vec<Limb>, y: &mut Vec<Limb>) -> Option<HgcdMatrix> {
     let mut m = Some(HgcdMatrix::identity());
     if run(x, y, &mut m) { m } else { None }
@@ -161,12 +229,22 @@ pub(super) fn hgcd(x: &mut Vec<Limb>, y: &mut Vec<Limb>) -> Option<HgcdMatrix> {
 /// [`hgcd`] without the matrix, which saves building it at this level;
 /// whether any step was taken.
 pub(super) fn hgcd_values(x: &mut Vec<Limb>, y: &mut Vec<Limb>) -> bool {
-    run(x, y, &mut None)
+    run::<HgcdMatrix>(x, y, &mut None)
+}
+
+/// [`hgcd`] with `row` multiplied by the matrix of its steps, one step at a
+/// time at this level, rather than building the matrix; whether any step was
+/// taken.
+pub(super) fn hgcd_row(x: &mut Vec<Limb>, y: &mut Vec<Limb>, row: &mut HgcdRow) -> bool {
+    let mut r = Some(std::mem::take(row));
+    let progress = run(x, y, &mut r);
+    *row = r.expect("the row is kept");
+    progress
 }
 
 /// [`hgcd`], appending its steps to `m` if there is one; whether any step was
 /// taken.
-fn run(x: &mut Vec<Limb>, y: &mut Vec<Limb>, m: &mut Option<HgcdMatrix>) -> bool {
+fn run<S: Steps>(x: &mut Vec<Limb>, y: &mut Vec<Limb>, m: &mut Option<S>) -> bool {
     debug_assert_ne!(kernel::cmp(x, y), Ordering::Less);
     let n = x.len();
     let s = n / 2 + 1;
@@ -192,12 +270,13 @@ fn run(x: &mut Vec<Limb>, y: &mut Vec<Limb>, m: &mut Option<HgcdMatrix>) -> bool
             }
         }
     }
+    // Lehmer steps end on `order`, which leaves x >= y.
     lehmer_steps(x, y, s, m) || progress
 }
 
 /// Half-GCD of the limbs of `(x, y)`, `x >= y`, from `p` up, applied to the
 /// full values and appended to `m`; whether any step was taken.
-fn reduce_top(x: &mut Vec<Limb>, y: &mut Vec<Limb>, p: usize, m: &mut Option<HgcdMatrix>) -> bool {
+fn reduce_top<S: Steps>(x: &mut Vec<Limb>, y: &mut Vec<Limb>, p: usize, m: &mut Option<S>) -> bool {
     let top = |v: &[Limb]| v.get(p..).map_or_else(Vec::new, <[Limb]>::to_vec);
     let (mut xh, mut yh) = (top(x), top(y));
     let Some(m1) = hgcd(&mut xh, &mut yh) else {
@@ -216,7 +295,7 @@ fn reduce_top(x: &mut Vec<Limb>, y: &mut Vec<Limb>, p: usize, m: &mut Option<Hgc
     *x = lift(xh, p, &xp, &xm);
     *y = lift(yh, p, &yp, &ym);
     if let Some(m) = m {
-        *m = m.mul(&m1);
+        m.mul_hgcd(&m1);
     }
     true
 }
@@ -230,7 +309,7 @@ fn lift(hi: Vec<Limb>, p: usize, plus: &Natural, minus: &Natural) -> Vec<Limb> {
 }
 
 /// Puts the larger value first.
-fn order(x: &mut Vec<Limb>, y: &mut Vec<Limb>, m: &mut Option<HgcdMatrix>) {
+fn order<S: Steps>(x: &mut Vec<Limb>, y: &mut Vec<Limb>, m: &mut Option<S>) {
     if kernel::cmp(x, y) == Ordering::Less {
         std::mem::swap(x, y);
         if let Some(m) = m {
@@ -264,11 +343,11 @@ fn assign(x: &mut Natural, v: &[Limb]) {
 
 /// Lehmer and division steps on `(x, y)`, keeping both at least `B^s`, until
 /// `|x - y| < B^s`; whether any step was taken.
-fn lehmer_steps(
+fn lehmer_steps<S: Steps>(
     x: &mut Vec<Limb>,
     y: &mut Vec<Limb>,
     s: usize,
-    m: &mut Option<HgcdMatrix>,
+    m: &mut Option<S>,
 ) -> bool {
     let floor = kernel::limbs_to_bits(s);
     let (mut values, mut entries) = ([Vec::new(), Vec::new()], [Vec::new(), Vec::new()]);
@@ -289,7 +368,7 @@ fn lehmer_steps(
 
 /// `x -= q y` for `x >= y >= B^s` with the largest `q` that leaves
 /// `x >= B^s`; `false`, with nothing changed, if `x - y < B^s`.
-fn division_step(x: &mut Vec<Limb>, y: &[Limb], s: usize, m: &mut Option<HgcdMatrix>) -> bool {
+fn division_step<S: Steps>(x: &mut Vec<Limb>, y: &[Limb], s: usize, m: &mut Option<S>) -> bool {
     let mut q = vec![0; x.len() - y.len() + 1];
     let mut r = vec![0; y.len() + 1];
     let mut scratch = vec![0; kernel::div_rem_scratch_len(x.len(), y.len())];

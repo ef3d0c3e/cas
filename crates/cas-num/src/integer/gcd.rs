@@ -1,10 +1,11 @@
 //! Greatest common divisor, extended GCD, least common multiple and modular
 //! inverse.
 
+use std::borrow::Cow;
 use std::cmp::Ordering;
 
 use super::{Integer, Repr};
-use crate::kernel;
+use crate::{Natural, kernel};
 
 #[cfg(test)]
 mod tests;
@@ -42,7 +43,7 @@ impl Integer {
     )]
     pub fn gcd_ext(&self, other: &Integer) -> (Integer, Integer, Integer) {
         let (a_negative, a) = self.sign_mag();
-        let b = other.sign_mag().1;
+        let (b_negative, b) = other.sign_mag();
         let (g, s) = a.gcd_cofactor(&b);
         if g.is_zero() {
             return (Integer::ZERO, Integer::ZERO, Integer::ZERO);
@@ -50,20 +51,41 @@ impl Integer {
         if b.is_zero() {
             return (Integer::from(g), signum(self), Integer::ZERO);
         }
-        let s = if a_negative { -s } else { s };
-        // Every coefficient of `self` is congruent to s modulo |b| / g; pick
-        // the one nearest zero.
-        let m = Integer::from(b.div_exact(&g));
-        let s = if m.to_i64() == Some(2) {
-            // s is odd, and +1 and -1 are equally near: GMP takes sgn(a).
-            signum(self)
+        // The sign of s as the coefficient of `self` rather than of |self|.
+        let (s_negative, s) = s.into_parts();
+        let s_negative = s_negative != a_negative;
+        // Every coefficient of `self` is congruent to s modulo m = |b| / g;
+        // pick the one nearest zero, which the tracked one usually is.
+        let m = if g.is_one() {
+            Cow::Borrowed(&*b)
         } else {
-            let r = s.div_rem_euclid(&m).1;
-            if &r + &r > m { r - &m } else { r }
+            Cow::Owned(b.div_exact(&g))
         };
-        let g = Integer::from(g);
-        let t = (&g - &(&s * self)).div_exact(other);
-        (g, s, t)
+        let (s_negative, s) = if m.limbs() == [2] {
+            // s is odd, and +1 and -1 are equally near: GMP takes sgn(a).
+            (a_negative, Natural::one())
+        } else if below_half(&s, &m) {
+            (s_negative, s)
+        } else {
+            // The residues ±r and ∓(m - r); 2r = m only for m = 2.
+            let r = s.div_rem(&m).1;
+            if below_half(&r, &m) {
+                (s_negative, r)
+            } else {
+                (!s_negative, &*m - &r)
+            }
+        };
+        // t = (g - s self) / other: p = |g - s self|, negative its sign.
+        let mut p = &s * &*a;
+        let negative = if s_negative == a_negative && !s.is_zero() {
+            p -= &g;
+            true
+        } else {
+            p += &g;
+            false
+        };
+        let t = Integer::from_parts(negative != b_negative, p.div_exact(&b));
+        (Integer::from(g), Integer::from_parts(s_negative, s), t)
     }
 
     /// The inverse of `self` modulo `m`, in `0 .. |m|`, or `None` if `m` is
@@ -76,6 +98,15 @@ impl Integer {
         let (g, s, _) = self.gcd_ext(m);
         g.is_one().then(|| s.div_rem_euclid(m).1)
     }
+}
+
+/// Whether `2 x < m`.
+fn below_half(x: &Natural, m: &Natural) -> bool {
+    let (xb, mb) = (x.bit_length(), m.bit_length());
+    if xb + 1 != mb {
+        return xb < mb;
+    }
+    (x + x) < *m
 }
 
 /// `-1`, `0` or `1`.

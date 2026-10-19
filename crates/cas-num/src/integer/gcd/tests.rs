@@ -82,6 +82,37 @@ differential! {
     }
 }
 
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(6))]
+
+    /// Operands past the default half-GCD threshold, with and without a
+    /// large common factor: GMP's exact cofactors.
+    #[test]
+    fn gcd_ext_large(
+        (a, b, c) in (850usize..1700).prop_flat_map(|n| {
+            let limbs = |n: usize| proptest::collection::vec(any::<u64>(), n);
+            (limbs(n), limbs(n - n / 8), proptest::collection::vec(any::<u64>(), 1..400))
+        }),
+        common in any::<bool>(),
+        (sa, sb) in (any::<bool>(), any::<bool>()),
+    ) {
+        let int = |l: &[u64], negative: bool| {
+            let x = Gmp::from_digits(l, rug::integer::Order::Lsf);
+            if negative { -x } else { x }
+        };
+        let (mut x, mut y) = (int(&a, sa), int(&b, sb));
+        if common {
+            let c = int(&c, false) + 1;
+            x *= &c;
+            y *= &c;
+        }
+        let (gx, gy) = (Signed::from_rug(&x), Signed::from_rug(&y));
+        let (g, s, t) = gx.to_integer().gcd_ext(&gy.to_integer());
+        let (eg, es, et) = x.extended_gcd(y, Gmp::new());
+        prop_assert_eq!((g.to_rug(), s.to_rug(), t.to_rug()), (eg, es, et));
+    }
+}
+
 #[test]
 fn exceptional_cofactors() {
     let ext = |a: i64, b: i64| {

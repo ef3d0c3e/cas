@@ -8,8 +8,8 @@
 use proptest::prelude::*;
 use rug::Integer;
 
-use super::hgcd::{classical, hgcd, hgcd_values, strassen};
-use super::{Step, reduce};
+use super::hgcd::{HgcdRow, classical, hgcd, hgcd_row, hgcd_values, strassen};
+use super::{Step, lehmer};
 use crate::Natural;
 use crate::testkit::strategy::{self, DEFAULT_MAX_LIMBS};
 use crate::testkit::{Mag, ToRug, differential};
@@ -22,11 +22,11 @@ fn pair() -> BoxedStrategy<(Mag, Mag)> {
     .boxed()
 }
 
-/// Matrix and division steps `reduce` takes on `(a, b)` without half-GCD.
+/// Matrix and division steps `lehmer` takes on `(a, b)`.
 fn steps(a: &Natural, b: &Natural) -> (usize, usize) {
     let (mut x, mut y) = super::ordered(a, b);
     let (mut matrices, mut divisions) = (0, 0);
-    reduce(&mut x, &mut y, usize::MAX, true, |step| match step {
+    lehmer(&mut x, &mut y, |step| match step {
         Step::Matrix(_) => matrices += 1,
         Step::Quotient(_) => divisions += 1,
         Step::Hgcd(_) => unreachable!("half-GCD is off"),
@@ -95,8 +95,8 @@ differential! {
 
 proptest! {
     /// `hgcd` returns `M` and `(x, y)` with `(a, b) = M (x, y)`, `det M` as
-    /// recorded, both values at least `B^s` and no step left (`|x - y| <
-    /// B^s`), and `hgcd_values` the same values.
+    /// recorded, `x >= y`, both values at least `B^s` and no step left
+    /// (`|x - y| < B^s`), and `hgcd_values` the same values.
     #[test]
     fn hgcd_contract((a, b) in hgcd_pair()) {
         let (a, b) = if a >= b { (a, b) } else { (b, a) };
@@ -118,6 +118,7 @@ proptest! {
             Some(m) => {
                 let [[u00, u01], [u10, u11]] = m.m.each_ref().map(|r| r.each_ref().map(ToRug::to_rug));
                 let (rx, ry) = (Natural::from_limbs(&x).to_rug(), Natural::from_limbs(&y).to_rug());
+                prop_assert!(rx >= ry, "hgcd left x < y");
                 prop_assert_eq!(&ra, &(u00.clone() * &rx + u01.clone() * &ry));
                 prop_assert_eq!(&rb, &(u10.clone() * &rx + u11.clone() * &ry));
                 let det = u00 * &u11 - u01 * &u10;
@@ -125,6 +126,30 @@ proptest! {
                 prop_assert!(rx >= floor && ry >= floor);
                 prop_assert!((rx - ry).abs() < floor);
             }
+        }
+    }
+
+    /// `hgcd_row` takes the steps `hgcd` takes and multiplies the row by
+    /// their matrix, keeping the sign of its determinant.
+    #[test]
+    fn hgcd_row_is_row_times_matrix(
+        (a, b) in hgcd_pair(),
+        r in [(); 2].map(|()| proptest::collection::vec(any::<u64>(), 0..30)),
+    ) {
+        let (a, b) = if a >= b { (a, b) } else { (b, a) };
+        let (mut x, mut y) = (a.limbs().to_vec(), b.limbs().to_vec());
+        let (mut x2, mut y2) = (x.clone(), y.clone());
+        let m = hgcd(&mut x, &mut y);
+        let r = r.map(|l| Natural::from_limbs(&l));
+        let mut row = HgcdRow { r: r.clone(), negative: false };
+        prop_assert_eq!(hgcd_row(&mut x2, &mut y2, &mut row), m.is_some());
+        prop_assert_eq!((&x2, &y2), (&x, &y));
+        if let Some(m) = m {
+            let entry = |j: usize| &(&r[0] * &m.m[0][j]) + &(&r[1] * &m.m[1][j]);
+            prop_assert_eq!(&row.r, &[entry(0), entry(1)]);
+            prop_assert_eq!(row.negative, m.negative);
+        } else {
+            prop_assert_eq!(&row.r, &r);
         }
     }
 
@@ -148,6 +173,20 @@ proptest! {
         let rest = s.to_rug() * a.to_rug() - g;
         let b = b.to_rug();
         prop_assert!(if b == 0 { rest == 0 } else { rest.is_divisible(&b) }, "s = {:?}", s);
+    }
+}
+
+proptest! {
+    /// Half-GCD steps down to `dc` limbs, whose cofactors are tracked by
+    /// matrix products, then Lehmer steps on fresh cofactors, which join
+    /// them at the end.
+    #[test]
+    fn fresh_cofactors_after_half_gcd((a, b) in hgcd_pair(), dc in 3usize..60) {
+        let g = a.to_rug().gcd(&b.to_rug());
+        let (g2, s) = a.gcd_cofactor_from(&b, dc);
+        prop_assert!(g2.to_rug() == g);
+        let rest = s.to_rug() * a.to_rug() - g;
+        prop_assert!(rest.is_divisible(&b.to_rug()), "s = {:?}", s);
     }
 }
 
