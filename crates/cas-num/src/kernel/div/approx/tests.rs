@@ -9,12 +9,16 @@ use super::{
     RSQRT_NEWTON_THRESHOLD, div_approx, div_approx_error, div_approx_newton,
     div_approx_newton_error, div_approx_newton_scratch_len, div_approx_scratch_len, recip_approx,
     recip_approx_error, recip_approx_scratch_len, rsqrt_approx, rsqrt_approx_error,
-    rsqrt_approx_scratch_len, sqrt_approx, sqrt_approx_error, sqrt_approx_newton,
+    rsqrt_approx_scratch_len, rsqrt_wrap_lens, sqrt_approx, sqrt_approx_error, sqrt_approx_newton,
     sqrt_approx_newton_error, sqrt_approx_newton_scratch_len, sqrt_approx_scratch_len,
 };
+use super::{rsqrt_lens, rsqrt_residual_full, rsqrt_residual_wrapped};
 use crate::Limb;
 use crate::kernel::div::mu::INV_NEWTON_THRESHOLD;
+use crate::kernel::mul::mul_wrap_scratch_len;
 use crate::kernel::mul::mullo::MULLO_DC_THRESHOLD;
+use crate::kernel::mul::mullo::mullo_scratch_len;
+use crate::kernel::mul_scratch_len;
 use crate::testkit::strategy::{self, len_around};
 use crate::testkit::{Mag, ToRug, tested};
 
@@ -213,6 +217,98 @@ fn worst_cases() {
             check_rsqrt(a).unwrap();
             check_sqrt(a, true).unwrap();
             check_sqrt(a, false).unwrap();
+        }
+    }
+}
+
+/// The wrapped residual of the Newton step (CAS-90) at the first lengths
+/// where the tuning lets it apply, at the one-limb edge `w = 1` and at the
+/// widest `w`, on the shapes of `worst_cases` and a pseudo-random operand.
+/// Under the stress tunings the property tests reach it at small lengths.
+#[test]
+fn rsqrt_wrapped_residual() {
+    let lens: Vec<(usize, usize, usize)> = (RSQRT_NEWTON_THRESHOLD..6000)
+        .filter_map(|n| rsqrt_wrap_lens(n).map(|(m, w)| (n, m, w)))
+        .collect();
+    let Some(&first) = lens.first() else {
+        return;
+    };
+    let mut picks = vec![first];
+    picks.extend(lens.iter().find(|&&(_, _, w)| w == 1));
+    picks.extend(
+        lens.iter()
+            .max_by_key(|&&(n, _, w)| (w, std::cmp::Reverse(n))),
+    );
+    for (n, m, w) in picks {
+        assert!(m.is_power_of_two() && w >= 1 && m + w == n + n / 2 + 4);
+        let ones = vec![Limb::MAX; n];
+        let mut quarter = vec![0; n];
+        quarter[n - 1] = 1 << (Limb::BITS - 2);
+        let mut state = 0x9e37_79b9_7f4a_7c15u64 ^ n as u64;
+        let mut random: Vec<Limb> = (0..n)
+            .map(|_| {
+                state = state
+                    .wrapping_mul(6_364_136_223_846_793_005)
+                    .wrapping_add(1);
+                state ^ (state >> 29)
+            })
+            .collect();
+        random[n - 1] |= 1 << (Limb::BITS - 2);
+        for a in [&ones, &quarter, &random] {
+            check_rsqrt(a).unwrap();
+            check_sqrt(a, true).unwrap();
+        }
+    }
+}
+
+/// `x` as `len` limbs.
+fn limbs(x: &Integer, len: usize) -> Vec<Limb> {
+    let mut v: Vec<Limb> = x.to_digits(rug::integer::Order::Lsf);
+    assert!(v.len() <= len, "limbs: too long");
+    v.resize(len, 0);
+    v
+}
+
+proptest! {
+    /// The wrapped residual against the full one and GMP, for every
+    /// power-of-two modulus it admits, whatever the tuning. `T` is set
+    /// around `B^(n + 2h) / A` with a signed offset of up to `h` limbs, so
+    /// `R = B^(n + 2h) - A T` takes both signs and its whole range: the
+    /// Newton step itself rarely makes `R` negative.
+    #[test]
+    fn residual_wrapped_matches_full(
+        (a, off, neg) in (RSQRT_NEWTON_THRESHOLD..64usize).prop_flat_map(|n| {
+            let (h, _) = rsqrt_lens(n);
+            (sqrt_normalised(n), strategy::raw_limbs(h), any::<bool>())
+        }),
+    ) {
+        let n = a.len();
+        let (h, _) = rsqrt_lens(n);
+        let target = pow_b(n + 2 * h);
+        let q = &target / val(&a);
+        let off = val(&off);
+        let t = if neg { q - off } else { q + off };
+        prop_assume!(t > 0);
+        let r = Integer::from(&target - &val(&a) * &t);
+        let t = limbs(&t, 2 * h + 2);
+        let size = n + 2 * h + 2;
+        let mut full = vec![GARBAGE; size];
+        let mut scratch = vec![GARBAGE; mul_scratch_len(n, 2 * h + 2)];
+        let full_negative = rsqrt_residual_full(&mut full, &a, &t, h, &mut scratch);
+        prop_assert_eq!(val(&full), r.clone().abs());
+        prop_assert_eq!(full_negative, r <= 0);
+        let span = n + h + 2;
+        for m in (0..usize::BITS).map(|k| 1usize << k).take_while(|&m| m <= span) {
+            let w = span + 1 - m;
+            if w > m || w > n || w > 2 * h + 2 {
+                continue;
+            }
+            let mut p = vec![GARBAGE; size];
+            let len = m + mul_wrap_scratch_len(m, n, 2 * h + 2).max(2 * w + mullo_scratch_len(w));
+            let mut scratch = vec![GARBAGE; len];
+            let negative = rsqrt_residual_wrapped(&mut p, &a, &t, h, m, w, &mut scratch);
+            prop_assert_eq!(&p, &full, "n = {}, m = {}, w = {}", n, m, w);
+            prop_assert_eq!(negative, full_negative, "n = {}, m = {}, w = {}", n, m, w);
         }
     }
 }

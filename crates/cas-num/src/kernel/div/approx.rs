@@ -13,9 +13,11 @@
 use super::mu::{INV_NEWTON_THRESHOLD, MU_DIV_THRESHOLD, invert, invert_scratch_len};
 use super::{div_rem, div_rem_scratch_len};
 use crate::kernel::mul::mulhi::{mulhi, mulhi_error, mulhi_scratch_len};
+use crate::kernel::mul::mullo::{mullo, mullo_scratch_len};
+use crate::kernel::mul::{mul_wrap, mul_wrap_scratch_len, wraps_cyclically};
 use crate::kernel::{
-    add_1_assign, add_assign, mul, mul_scratch_len, shl, shr, sqr, sqr_scratch_len, sub_1_assign,
-    sub_assign,
+    add_1_assign, add_assign, add_n_assign, mul, mul_scratch_len, shl, shr, sqr, sqr_scratch_len,
+    sub_1_assign, sub_assign, sub_n_assign,
 };
 use crate::{Limb, Natural};
 
@@ -25,11 +27,12 @@ use crate::{Limb, Natural};
 const RSQRT_NEWTON_THRESHOLD: usize = 3;
 
 /// Smallest length at which [`sqrt_approx`] goes through [`rsqrt_approx`]
-/// instead of the exact integer square root: never, for now. Measured
-/// (`tune_approx`), the Newton path takes 1.3–2.1× the exact Karatsuba root
-/// from 64 to 8192 limbs (1.67× at 8192), as its residual `A Yh^2` uses full
-/// products where `invert` uses wrapped ones. Below 64 limbs the two are
-/// within 10%.
+/// instead of the exact integer square root: never. Measured (`tune_approx`,
+/// CAS-90), the Newton path takes 1.4–2.1× the exact Karatsuba root from 64
+/// to 8192 limbs (1.59× at 8192), and is within 10% only around 16–32
+/// limbs. Its residual `A Yh^2` is wrapped where the cyclic transform
+/// applies (from about 1400 limbs in the default tuning), which saves only
+/// 3–5% at powers of two: there the low part `w` is about `n / 2` limbs.
 const SQRT_NEWTON_THRESHOLD: Option<usize> = None;
 
 fn sqrt_by_newton(n: usize) -> bool {
@@ -163,7 +166,9 @@ pub(crate) fn div_approx_newton_error(n: usize) -> usize {
 /// lower bound. Its computation:
 ///
 /// - `R = B^(n + 2h) - A Yh^2` exactly, so `1 - a y^2 = R / B^(n + 2h)`, and
-///   the step is `Y = Yh B^l + Yh R / (2 B^(3h))`.
+///   the step is `Y = Yh B^l + Yh R / (2 B^(3h))`. `R` comes from the full
+///   product, or from a wrapped one ([`rsqrt_residual_wrapped`]) where the
+///   cyclic transform applies.
 /// - `R` is truncated to `floor(R / B^k)` with `k = 2h - 1`, and the
 ///   correction to `floor(Yh floor(R / B^k) / (2 B^(h + 1)))`: floors also when
 ///   `R < 0`, so `Y` stays below the exact step. As `Yh <= 2 B^h`, the first
@@ -205,10 +210,14 @@ pub fn rsqrt_approx_scratch_len(n: usize) -> usize {
         return 0;
     }
     let (h, l) = rsqrt_lens(n);
+    let residual = match rsqrt_wrap_lens(n) {
+        Some((m, w)) => m + mul_wrap_scratch_len(m, n, 2 * h + 2).max(2 * w + mullo_scratch_len(w)),
+        None => mul_scratch_len(n, 2 * h + 2),
+    };
     let step = (2 * h + 2)
         + (n + 2 * h + 2)
         + sqr_scratch_len(h + 1)
-            .max(mul_scratch_len(n, 2 * h + 2))
+            .max(residual)
             .max((l + 2) + (n + 3) + (l + 2) + mul_scratch_len(h + 1, l + 2));
     h + 1 + rsqrt_approx_scratch_len(h).max(step)
 }
@@ -231,22 +240,10 @@ fn rsqrt_unchecked(y: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) {
     let (t, rest) = rest.split_at_mut(2 * h + 2);
     let (p, rest) = rest.split_at_mut(n + 2 * h + 2);
     sqr(t, yh, rest);
-    mul(p, a, t, rest);
-
-    // |R| = |B^(n + 2h) - A Yh^2| into p, and its sign.
-    let top = n + 2 * h;
-    let negative = p[top..].iter().any(|&x| x != 0);
-    if negative {
-        let borrow = sub_1_assign(&mut p[top..], 1);
-        debug_assert_eq!(borrow, 0);
-    } else {
-        // B^top - P = (B^top - 1 - P) + 1, with P > 0.
-        for x in &mut p[..top] {
-            *x = !*x;
-        }
-        let carry = add_1_assign(&mut p[..=top], 1);
-        debug_assert_eq!(carry, 0);
-    }
+    let negative = match rsqrt_wrap_lens(n) {
+        Some((m, w)) => rsqrt_residual_wrapped(p, a, t, h, m, w, rest),
+        None => rsqrt_residual_full(p, a, t, h, rest),
+    };
     debug_assert!(
         p[n + h + 1..].iter().all(|&x| x == 0),
         "rsqrt_approx: residual too large"
@@ -284,6 +281,110 @@ fn rsqrt_unchecked(y: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) {
         y[n] = 1;
     }
     debug_assert!(y[n] <= 2, "rsqrt_approx: above 2 B^n");
+}
+
+/// `(m, w)` of the wrapped residual for `n` limbs, when the cyclic transform
+/// applies: `m` the largest power of two up to `n + h + 2`, and `w = n + h +
+/// 3 - m` low limbs (at least 1, at most `m`, `n` and `2h + 2`).
+fn rsqrt_wrap_lens(n: usize) -> Option<(usize, usize)> {
+    if n < RSQRT_NEWTON_THRESHOLD {
+        return None;
+    }
+    let (h, _) = rsqrt_lens(n);
+    let span = n + h + 2;
+    let m = 1usize << (usize::BITS - 1 - span.leading_zeros());
+    let w = span + 1 - m;
+    (wraps_cyclically(m) && w <= n.min(2 * h + 2)).then_some((m, w))
+}
+
+/// `|R|` for `R = B^(n + 2h) - A T` into `p` (all of it, `n + 2h + 2` limbs),
+/// from the full product; whether `R <= 0`.
+fn rsqrt_residual_full(
+    p: &mut [Limb],
+    a: &[Limb],
+    t: &[Limb],
+    h: usize,
+    scratch: &mut [Limb],
+) -> bool {
+    let n = a.len();
+    mul(p, a, t, scratch);
+    let top = n + 2 * h;
+    let negative = p[top..].iter().any(|&x| x != 0);
+    if negative {
+        let borrow = sub_1_assign(&mut p[top..], 1);
+        debug_assert_eq!(borrow, 0);
+    } else {
+        // B^top - P = (B^top - 1 - P) + 1, with P > 0.
+        for x in &mut p[..top] {
+            *x = !*x;
+        }
+        let carry = add_1_assign(&mut p[..=top], 1);
+        debug_assert_eq!(carry, 0);
+    }
+    negative
+}
+
+/// [`rsqrt_residual_full`] from `A T mod (B^m - 1)` (a cyclic transform of
+/// `m` coefficients, where the full product has `n + 2h + 2`) and `A T mod
+/// B^w` (a short product of `w` limbs), for `(m, w)` from [`rsqrt_wrap_lens`].
+///
+/// `|R| < B^(n + h + 1)` (see [`rsqrt_approx`]). With `e = R mod (B^m - 1)`
+/// in `[0, B^m - 1)`, `R = e + j (B^m - 1)` for an integer `j` with
+/// `|j| < B^(n + h + 1 - m) + 1 <= 2 B^(w - 2) + 1` (`j` in `{-1, 0}` at
+/// `w = 1`). Modulo `B^w` (`m >= w`), `R = e - j`, and `R = -A T` as
+/// `w <= n + 2h`: so `j = e + A T mod B^w`, taken in `(-B^w / 2, B^w / 2)`.
+/// Then `R = e - j + j B^m` in two's complement on `m + w = n + h + 3`
+/// limbs, which holds `R` with room for its sign.
+fn rsqrt_residual_wrapped(
+    p: &mut [Limb],
+    a: &[Limb],
+    t: &[Limb],
+    h: usize,
+    m: usize,
+    w: usize,
+    scratch: &mut [Limb],
+) -> bool {
+    let n = a.len();
+    let (prod, rest) = scratch.split_at_mut(m);
+    mul_wrap(prod, a, t, rest);
+    // e = (B^((n + 2h) mod m) - W) mod (B^m - 1).
+    p.fill(0);
+    p[(n + 2 * h) % m] = 1;
+    if sub_n_assign(&mut p[..m], prod) != 0 {
+        // The borrow added B^m; the residue needs B^m - 1.
+        sub_1_assign(&mut p[..m], 1);
+    }
+    // j = e + A T mod B^w, its sign from the top bit.
+    let (j, rest) = rest.split_at_mut(w);
+    let (lo, rest) = rest.split_at_mut(w);
+    mullo(lo, &a[..w], &t[..w], rest);
+    j.copy_from_slice(&p[..w]);
+    add_n_assign(j, lo);
+    let j_negative = j[w - 1] >> (Limb::BITS - 1) == 1;
+    if j_negative {
+        for x in j.iter_mut() {
+            *x = !*x;
+        }
+        add_1_assign(j, 1);
+    }
+    // R = e - j + j B^m modulo B^(m + w), carries out of the top dropped.
+    let r = &mut p[..m + w];
+    if j_negative {
+        add_assign(r, j);
+        sub_n_assign(&mut r[m..], j);
+    } else {
+        sub_assign(r, j);
+        add_n_assign(&mut r[m..], j);
+    }
+    let negative = r[m + w - 1] >> (Limb::BITS - 1) == 1;
+    if negative {
+        for x in r.iter_mut() {
+            *x = !*x;
+        }
+        add_1_assign(r, 1);
+    }
+    // R = 0 counts as R <= 0, as in the full product.
+    negative || r.iter().all(|&x| x == 0)
 }
 
 /// `floor(sqrt(floor(B^(3n) / A)))`, through `Natural`.
