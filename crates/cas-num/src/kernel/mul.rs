@@ -436,22 +436,41 @@ pub(crate) fn algorithm(an: usize, bn: usize) -> Algorithm {
     }
 }
 
-/// Whether one NTT of an unbalanced product `an x bn` (`an >= 4/3 bn`)
-/// costs less than Toom on it. Both are in the units of the NTT's cost model
-/// ([`ntt::cost`]); Toom's cost is scaled from the balanced crossover `T =
+/// Toom's modelled cost for `an x bn` limbs (`an >= bn`), in the units of the
+/// NTT's cost model ([`ntt::cost`]): scaled from the balanced crossover `T =
 /// MUL_NTT_THRESHOLD`, where it equals the NTT's, as `(an / bn) (bn /
 /// T)^x`, `x = NTT_UNBALANCED_EXPONENT / 10`: pieces of a `bn`-limb
 /// product, each growing like Toom.
 #[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
-fn ntt_pays_unbalanced(an: usize, bn: usize) -> bool {
+fn toom_cost(an: usize, bn: usize) -> f64 {
     let t = MUL_NTT_THRESHOLD;
-    if an + bn < t {
-        return false;
-    }
     let x = NTT_UNBALANCED_EXPONENT as f64 / 10.0;
     let at_t = ntt::cost(t, t) as f64;
-    let toom = at_t * (an as f64 / bn as f64) * (bn as f64 / t as f64).powf(x);
-    (ntt::cost(an, bn) as f64) < toom
+    at_t * (an as f64 / bn as f64) * (bn as f64 / t as f64).powf(x)
+}
+
+/// Whether one NTT of an unbalanced product `an x bn` (`an >= 4/3 bn`)
+/// costs less than Toom on it ([`toom_cost`]).
+#[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
+fn ntt_pays_unbalanced(an: usize, bn: usize) -> bool {
+    if an + bn < MUL_NTT_THRESHOLD {
+        return false;
+    }
+    (ntt::cost(an, bn) as f64) < toom_cost(an, bn)
+}
+
+/// The modelled cost of [`mul`] for operands of `an, bn >= 1` limbs, in the
+/// units of the NTT's cost model: its plan where [`algorithm`] takes the
+/// NTT, else [`toom_cost`]. For choices between products of a few hundred
+/// limbs and more, where Toom-4 and the NTT take them.
+#[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
+pub(crate) fn cost(an: usize, bn: usize) -> f64 {
+    let (an, bn) = if an >= bn { (an, bn) } else { (bn, an) };
+    if algorithm(an, bn) == Algorithm::Ntt {
+        ntt::cost(an, bn) as f64
+    } else {
+        toom_cost(an, bn)
+    }
 }
 
 /// The algorithm [`sqr`] uses for `n` limbs.

@@ -366,8 +366,31 @@ fn div_block_scratch_len(k: usize, dn: usize) -> usize {
     inner.max(correction)
 }
 
+/// Scratch limbs [`dc_div_qr_n`] needs for `k` limbs: the most that one
+/// correction product of its recursion takes, `s + mul_scratch_len(j, s -
+/// j)` for a block of `j` of an `s`-limb division's quotient limbs (none for
+/// `j = 1`). At depth `t` the divisions have `k >> t` limbs or one more, and
+/// both halves of one take the same scratch, so one pass over the depths
+/// stands for the whole tree, whose size grows like `k`; `div_rem` checks
+/// its scratch on every call.
 pub(crate) fn dc_div_qr_n_scratch_len(k: usize) -> usize {
-    div_block_scratch_len(k - k / 2, k).max(div_block_scratch_len(k / 2, k))
+    let node = |s: usize| {
+        if s < 3 {
+            0
+        } else {
+            s + mul_scratch_len(s - s / 2, s / 2)
+        }
+    };
+    let mut len = node(k);
+    let (mut lo, mut hi) = (k / 2, k.div_ceil(2));
+    while hi >= DC_DIV_THRESHOLD {
+        len = len.max(node(hi));
+        if lo != hi && lo >= DC_DIV_THRESHOLD {
+            len = len.max(node(lo));
+        }
+        (lo, hi) = (lo / 2, hi.div_ceil(2));
+    }
+    len
 }
 
 /// Whether [`div_qr_normalized`] divides by Newton's reciprocal.
@@ -376,20 +399,21 @@ fn uses_mu(nn: usize, m: usize) -> bool {
 }
 
 /// Division of `n` by the normalised `d` (`d.len() >= 2`) with
-/// `q.len() == n.len() - d.len()`: Barrett's estimates from Newton's
-/// reciprocal ([`mu::mu_div_qr`]) when both the divisor and the quotient are
-/// long, else [`bz_div_qr`]. Leaves the remainder in `n[..d.len()]`; returns
-/// the top quotient limb.
-pub(crate) fn div_qr_normalized(
+/// `q.len() == n.len() - d.len()` and `v = reciprocal_3by2` of `d`'s top two
+/// limbs: Barrett's estimates from Newton's reciprocal ([`mu::mu_div_qr`])
+/// when both the divisor and the quotient are long, else [`bz_div_qr`].
+/// Leaves the remainder in `n[..d.len()]`; returns the top quotient limb.
+fn div_qr_normalized(
     q: &mut [Limb],
     n: &mut [Limb],
     d: &[Limb],
+    v: Limb,
     scratch: &mut [Limb],
 ) -> Limb {
     if uses_mu(n.len(), d.len()) {
         mu_div_qr(q, n, d, scratch)
     } else {
-        bz_div_qr(q, n, d, scratch)
+        bz_div_qr(q, n, d, v, scratch)
     }
 }
 
@@ -404,11 +428,17 @@ pub(crate) fn div_qr_normalized_scratch_len(nn: usize, m: usize) -> usize {
 /// [`div_qr_normalized`] without Newton's reciprocal: schoolbook for short
 /// divisors, otherwise quotient blocks of `d.len()` limbs from the top, each
 /// by divide and conquer.
-pub(crate) fn bz_div_qr(q: &mut [Limb], n: &mut [Limb], d: &[Limb], scratch: &mut [Limb]) -> Limb {
+pub(crate) fn bz_div_qr(
+    q: &mut [Limb],
+    n: &mut [Limb],
+    d: &[Limb],
+    v: Limb,
+    scratch: &mut [Limb],
+) -> Limb {
     let m = d.len();
     let qn = n.len() - m;
     debug_assert!(m >= 2 && q.len() == qn);
-    let v = reciprocal_3by2(d[m - 1], d[m - 2]);
+    debug_assert_eq!(v, reciprocal_3by2(d[m - 1], d[m - 2]));
     if m < DC_DIV_THRESHOLD || qn < 2 {
         return sb_div_qr(q, n, d, v);
     }
@@ -457,8 +487,14 @@ pub fn div_rem_scratch_len(an: usize, dn: usize) -> usize {
     if dn <= 1 || an < dn {
         return 0;
     }
-    // Shifted divisor, shifted dividend with one more limb, then the algorithm.
-    dn + an + 1 + div_qr_normalized_scratch_len(an + 1, dn)
+    // Shifted divisor, shifted dividend with one more limb, then the algorithm
+    // on all of it or on its low `an` limbs (see `div_rem`).
+    let algorithm = if uses_mu(an, dn) {
+        div_qr_normalized_scratch_len(an, dn)
+    } else {
+        div_qr_normalized_scratch_len(an + 1, dn).max(div_qr_normalized_scratch_len(an, dn))
+    };
+    dn + an + 1 + algorithm
 }
 
 /// `q = a / d` and `r = a mod d` for `a.len() >= d.len() >= 1` with a non-zero
@@ -484,9 +520,41 @@ pub fn div_rem(q: &mut [Limb], r: &mut [Limb], a: &[Limb], d: &[Limb], scratch: 
     let (ns, rest) = rest.split_at_mut(an + 1);
     let out = shl(ds, d, shift);
     debug_assert_eq!(out, 0);
-    ns[an] = shl(&mut ns[..an], a, shift);
-    // a < B^an, so the quotient fits in q and there is no top quotient limb.
-    let qh = div_qr_normalized(q, ns, ds, rest);
-    debug_assert_eq!(qh, 0);
+    let above = shl(&mut ns[..an], a, shift);
+    let v = reciprocal_3by2(ds[dn - 1], ds[dn - 2]);
+    // The quotient has qn + 1 limbs, the top one zero unless the shift
+    // carries a limb out of the dividend. Below Barrett's range that limb
+    // joins the dividend, whose quotient then fits in q. In Barrett's range,
+    // as in GMP's `mpn_tdiv_qr`, the top quotient limb comes from one
+    // schoolbook step on the top dn + 1 limbs instead: its quotient fits a
+    // limb, since `above` is below the divisor's top limb, and it leaves the
+    // top dn limbs below the divisor. The rest is then a division of `an`
+    // limbs, whose returned high limb is the top quotient limb when nothing
+    // was carried out. Dividing an + 1 limbs there would put the blocks of
+    // Barrett's division, and their transforms, just past a power of two for
+    // a 2n/n division.
+    let qn = an - dn;
+    let mut top = 0;
+    let nn = if above == 0 {
+        an
+    } else {
+        ns[an] = above;
+        if uses_mu(an, dn) {
+            let mut qt = [0];
+            let qh = sb_div_qr(&mut qt, &mut ns[qn..], ds, v);
+            debug_assert_eq!(qh, 0);
+            top = qt[0];
+            an
+        } else {
+            an + 1
+        }
+    };
+    let qh = div_qr_normalized(&mut q[..nn - dn], &mut ns[..nn], ds, v, rest);
+    if nn == an {
+        debug_assert!(top == 0 || qh == 0);
+        q[qn] = top + qh;
+    } else {
+        debug_assert_eq!(qh, 0);
+    }
     shr(r, &ns[..dn], shift);
 }

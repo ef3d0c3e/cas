@@ -24,8 +24,8 @@ use crate::kernel::div::bdiv::{
     DIVEXACT_DIV_THRESHOLD, binvert, binvert_scratch_len,
 };
 use crate::kernel::div::mu::{
-    INV_NEWTON_THRESHOLD, MU_DIV_THRESHOLD, block_inverse, invert, invert_scratch_len, mu_div_qr,
-    mu_div_qr_scratch_len, prepares,
+    INV_NEWTON_THRESHOLD, MU_DIV_THRESHOLD, block_inverse, block_len, invert, invert_scratch_len,
+    mu_div_qr, mu_div_qr_scratch_len, prepares,
 };
 use crate::kernel::div::{
     DC_DIV_THRESHOLD, bz_div_qr, bz_div_qr_scratch_len, div_2by1, div_3by2, hits, reciprocal_2by1,
@@ -314,7 +314,8 @@ fn check_bz(a: &[Limb], d: &[Limb]) {
     let mut n = a.to_vec();
     let mut q = vec![GARBAGE; a.len() - dn];
     let mut scratch = vec![GARBAGE; bz_div_qr_scratch_len(a.len(), dn)];
-    let qh = bz_div_qr(&mut q, &mut n, d, &mut scratch);
+    let v = reciprocal_3by2(d[dn - 1], d[dn - 2]);
+    let qh = bz_div_qr(&mut q, &mut n, d, v, &mut scratch);
     q.push(qh);
     let (q, r) = (Mag::from_limbs(q), Mag::from_limbs(n[..dn].to_vec()));
     assert_eq!((q.to_rug(), r.to_rug()), gmp_div(a, d));
@@ -445,6 +446,40 @@ fn word16_primitives_sampled() {
         let u = top << 16 | u64::from(u0);
         let (q, r) = div_3by2((top >> 16) as u16, top as u16, u0, d1, d0, v);
         assert_eq!((u64::from(q), u64::from(r)), (u / d, u % d));
+    }
+}
+
+/// [`dc_div_qr_n_scratch_len`]'s pass over the depths against the recursion
+/// it stands for: lengths whose halves fall on both sides of
+/// `DC_DIV_THRESHOLD` and around powers of two, with products of every
+/// algorithm.
+///
+/// [`dc_div_qr_n_scratch_len`]: crate::kernel::div::dc_div_qr_n_scratch_len
+#[test]
+fn dc_div_scratch_matches_recursion() {
+    use crate::kernel::div::dc_div_qr_n_scratch_len;
+    use crate::kernel::mul::mul_scratch_len;
+
+    fn block(k: usize, dn: usize) -> usize {
+        if k == 1 {
+            return 0;
+        }
+        let inner = if k < DC_DIV_THRESHOLD { 0 } else { dc(k) };
+        let correction = if k == dn {
+            0
+        } else {
+            dn + mul_scratch_len(k, dn - k)
+        };
+        inner.max(correction)
+    }
+    fn dc(k: usize) -> usize {
+        block(k - k / 2, k).max(block(k / 2, k))
+    }
+    let lens = (2..=400).chain([
+        511, 512, 513, 1000, 1023, 1025, 2047, 2049, 3001, 4097, 8191,
+    ]);
+    for k in lens.filter(|&k| k >= DC_DIV_THRESHOLD) {
+        assert_eq!(dc_div_qr_n_scratch_len(k), dc(k), "k = {k}");
     }
 }
 
@@ -711,7 +746,8 @@ fn mu_wrapped_is_reached() {
 
 /// Divisions through [`div_rem`] on both sides of the configured Barrett
 /// threshold, beyond the property tests' sizes: random and largest-remainder
-/// dividends, quotients of one block, two halves and several blocks.
+/// dividends, quotients of one block, two halves and several blocks, and
+/// dividends that the normalising shift carries past their length.
 /// Skipped when the configuration leaves these sizes to divide and conquer.
 #[test]
 fn div_rem_around_mu_threshold() {
@@ -739,6 +775,21 @@ fn div_rem_around_mu_threshold() {
                     "dn = {dn}, qn = {qn}"
                 );
             }
+            // A divisor shifted by 3 to normalise and a dividend with its top
+            // bit set: the shift carries a limb out, whose quotient limb takes
+            // a schoolbook step of its own.
+            let mut d = d;
+            d[dn - 1] = d[dn - 1] >> 3 | 1 << 60;
+            let mut a: Vec<Limb> = (0..(dn + qn) as u64)
+                .map(|i| i.wrapping_mul(0xd6e8_feb8_6659_fd93) ^ i >> 3)
+                .collect();
+            a[dn + qn - 1] |= 1 << 63;
+            let (q, r) = run_div(&a, &d);
+            assert_eq!(
+                (q.to_rug(), r.to_rug()),
+                gmp_div(&a, &d),
+                "carried: dn = {dn}, qn = {qn}"
+            );
         }
     }
 }
@@ -1079,8 +1130,9 @@ fn mu_div_prepared_at_large_sizes() {
             })
             .collect()
     };
-    // dn_big + 2 is even, so qn = dn gives two equal blocks; 3 2^k + 1 just
-    // above a radix-3 length; 3 2^k - 1 below one.
+    // Even and odd divisors, 3 2^k + 1 just above a radix-3 length and
+    // 3 2^k - 1 below one, with quotients that split into equal blocks or
+    // leave a short last one, whichever count the plan takes.
     let three = 3 * (dn_big / 3).next_power_of_two();
     for dn in [dn_big, dn_big + 2, three - 1, three + 1] {
         for qn in [dn, 2 * dn + 5, dn / 2 + 1] {
@@ -1104,7 +1156,7 @@ fn mu_div_prepared_at_large_sizes() {
     let k = MUL_NTT_THRESHOLD.next_power_of_two();
     let (qn, dn) = (3 * k - 1, k + k / 4);
     if wrap_len(dn) >= MUL_WRAP_NTT_THRESHOLD && 2 * k <= 20_000 {
-        assert_eq!(prepares(qn, dn), (true, true));
+        assert_eq!((block_len(qn, dn), prepares(qn, dn)), (k, (true, true)));
         let mut d = random(dn);
         d[dn - 1] |= 1 << 63;
         let a = random(dn + qn);
@@ -1121,8 +1173,14 @@ fn mu_div_prepared_at_large_sizes() {
     // both; one block neither.
     let dn = 2 * MUL_NTT_THRESHOLD.next_power_of_two();
     if wrap_len(dn) >= MUL_WRAP_NTT_THRESHOLD {
-        assert_eq!(prepares(dn, dn), (true, true));
+        assert_eq!(
+            (block_len(dn, dn), prepares(dn, dn)),
+            (dn / 2, (true, true))
+        );
         assert!(prepares(2 * dn + 5, dn).0);
     }
-    assert_eq!(prepares(dn / 4, dn), (false, false));
+    assert_eq!(
+        (block_len(dn / 4, dn), prepares(dn / 4, dn)),
+        (dn / 4, (false, false))
+    );
 }

@@ -9,10 +9,11 @@
 //! that suffices ([`wrap_len`]), and recover the exact value from one or two
 //! low limbs computed directly.
 
-use super::{bz_div_qr, bz_div_qr_scratch_len, reciprocal_2by1};
+use super::{bz_div_qr, bz_div_qr_scratch_len, reciprocal_2by1, reciprocal_3by2};
 use crate::Limb;
 use crate::kernel::mul::{
-    Algorithm, algorithm, fold, mul_wrap, mul_wrap_scratch_len, wrap_len, wraps_cyclically,
+    Algorithm, algorithm, cost as mul_cost, fold, mul_wrap, mul_wrap_scratch_len, wrap_len,
+    wraps_cyclically,
 };
 use crate::kernel::ntt;
 use crate::kernel::{
@@ -169,21 +170,44 @@ fn invert_exact(x: &mut [Limb], a: &[Limb], scratch: &mut [Limb]) {
     }
     let (num, rest) = scratch.split_at_mut(2 * n);
     num.fill(Limb::MAX);
-    let top = bz_div_qr(x, num, a, rest);
+    let top = bz_div_qr(x, num, a, reciprocal_3by2(a[n - 1], a[n - 2]), rest);
     debug_assert_eq!(top, 1);
 }
 
-/// The quotient block length for `qn` quotient limbs and a `dn`-limb divisor
-/// (GMP's choice): blocks of about `dn` limbs when the quotient is longer,
-/// else two halves, or one block for a quotient of at most `dn / 3` limbs.
-fn block_len(qn: usize, dn: usize) -> usize {
-    if qn > dn {
-        qn.div_ceil(qn.div_ceil(dn))
-    } else if 3 * qn > dn {
-        qn.div_ceil(2)
+/// The quotient block length for `qn` quotient limbs and a `dn`-limb divisor:
+/// of the fewest blocks of at most `dn` limbs and up to three more, the
+/// count whose [`Plan::cost`] is lowest. GMP takes the fewest (or two halves
+/// of a quotient up to `dn` limbs); here more, smaller blocks often pay, as
+/// the divisor's transform is prepared once and each block then costs only
+/// part of a wrapped product, while the reciprocal and the estimates shrink.
+pub(crate) fn block_len(qn: usize, dn: usize) -> usize {
+    let fewest = qn.div_ceil(dn);
+    (fewest..fewest + 4)
+        .map(|b| Plan::with_block(qn, dn, qn.div_ceil(b)))
+        .min_by(|x, y| x.cost(qn, dn).total_cmp(&y.cost(qn, dn)))
+        .map_or(qn, |plan| plan.k)
+}
+
+/// The modelled cost of [`mul_wrap`] modulo `B^m - 1` for `an x bn` limbs, in
+/// the units of [`mul_cost`].
+#[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
+fn wrap_cost(m: usize, an: usize, bn: usize) -> f64 {
+    if an + bn > m && wraps_cyclically(m) {
+        ntt::cyclic_cost(m) as f64
     } else {
-        qn
+        mul_cost(an, bn)
     }
+}
+
+/// The modelled cost of [`invert`] on `n` limbs, in the units of
+/// [`mul_cost`]: each Newton step's residual and correction products, down
+/// to the exact division, counted as a product.
+fn invert_cost(n: usize) -> f64 {
+    if n < INV_NEWTON_THRESHOLD {
+        return mul_cost(n, n);
+    }
+    let (h, _, m, _) = newton_lens(n);
+    invert_cost(h) + wrap_cost(m, n, h + 1) + mul_cost(h + 1, h + 1)
 }
 
 /// Division of `n` by the normalised `d` (`d.len() >= 2`, `n.len() > d.len()`)
@@ -213,8 +237,8 @@ pub(crate) fn mu_div_qr(q: &mut [Limb], n: &mut [Limb], d: &[Limb], scratch: &mu
     if qh {
         sub_n_assign(&mut n[qn..], d);
     }
-    let k = block_len(qn, dn);
     let plan = Plan::new(qn, dn);
+    let k = plan.k;
     let (inv, scratch) = scratch.split_at_mut(k);
     block_inverse(inv, d, scratch);
     let (prep_d, scratch) = scratch.split_at_mut(plan.prep_d.map_or(0, ntt::prepared_len));
@@ -248,21 +272,26 @@ pub(crate) fn mu_div_qr(q: &mut [Limb], n: &mut [Limb], d: &[Limb], scratch: &mu
     Limb::from(qh)
 }
 
-/// The products [`mu_div_qr`] reuses across its blocks: the divisor `D`,
-/// transformed at the modulus length `m` whenever there are two blocks or
-/// more and the cyclic transform applies, and the reciprocal `I`,
-/// transformed at `wrap_len(2k)` (which holds `Wt I` exactly) when that
-/// beats a fresh product per full block in the NTT's cost model.
+/// The block length `k` of [`mu_div_qr`] and the products it reuses across
+/// its blocks: the divisor `D`, transformed at the modulus length `m`
+/// whenever there are two blocks or more and the cyclic transform applies,
+/// and the reciprocal `I`, transformed at `wrap_len(2k)` (which holds `Wt I`
+/// exactly) when that beats a fresh product per full block in the NTT's
+/// cost model.
 struct Plan {
+    k: usize,
     m: usize,
     prep_d: Option<usize>,
     prep_i: Option<usize>,
 }
 
 impl Plan {
-    #[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
     fn new(qn: usize, dn: usize) -> Self {
-        let k = block_len(qn, dn);
+        Plan::with_block(qn, dn, block_len(qn, dn))
+    }
+
+    #[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
+    fn with_block(qn: usize, dn: usize, k: usize) -> Self {
         let m = wrap_len(dn);
         let blocks = qn.div_ceil(k);
         let full = qn / k;
@@ -274,7 +303,41 @@ impl Plan {
         let fresh = ntt::cost(k, k) as f64 * full as f64;
         let prep_i =
             (full >= 2 && algorithm(k, k) == Algorithm::Ntt && prepared < fresh).then_some(len);
-        Plan { m, prep_d, prep_i }
+        Plan {
+            k,
+            m,
+            prep_d,
+            prep_i,
+        }
+    }
+
+    /// The modelled cost of [`mu_div_qr`] for `qn` and `dn` limbs with this
+    /// plan, in the units of [`mul_cost`]: the reciprocal of `k + 1` limbs,
+    /// then per block the estimate and the product modulo `B^m - 1`, where a
+    /// prepared operand saves one of a cyclic product's three transforms.
+    #[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
+    fn cost(&self, qn: usize, dn: usize) -> f64 {
+        let k = self.k;
+        let (full, last) = (qn / k, qn % k);
+        let blocks = full + usize::from(last > 0);
+        let prepared =
+            |len: usize, uses: usize| ntt::cyclic_cost(len) as f64 * (1 + 2 * uses) as f64 / 3.0;
+        let mut cost = invert_cost(k + 1);
+        cost += match self.prep_i {
+            Some(len) => prepared(len, full),
+            None => full as f64 * mul_cost(k, k),
+        };
+        cost += match self.prep_d {
+            Some(m) => prepared(m, blocks),
+            None => full as f64 * wrap_cost(self.m, k, dn),
+        };
+        if last > 0 {
+            cost += mul_cost(last, last);
+            if self.prep_d.is_none() {
+                cost += wrap_cost(self.m, last, dn);
+            }
+        }
+        cost
     }
 
     /// Scratch limbs the prepared operands take.
@@ -308,8 +371,8 @@ struct Prepared<'a> {
 /// Scratch limbs [`mu_div_qr`] needs for `nn` dividend and `dn` divisor limbs.
 pub(crate) fn mu_div_qr_scratch_len(nn: usize, dn: usize) -> usize {
     let qn = nn - dn;
-    let k = block_len(qn, dn);
     let plan = Plan::new(qn, dn);
+    let k = plan.k;
     let last = qn % k;
     let blocks = mu_block_scratch_len(k, dn, &plan).max(if last == 0 {
         0
