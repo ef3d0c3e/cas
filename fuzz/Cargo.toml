@@ -11,6 +11,7 @@ cargo-fuzz = true
 
 [dependencies]
 arbitrary = "1.4.1"
+cas-lang = { path = "../crates/cas-lang" }
 cas-num = { path = "../crates/cas-num" }
 libfuzzer-sys = "0.4.13"
 rug = { version = "1.30.0", default-features = false, features = ["complex", "float", "integer", "rational", "std"] }
@@ -95,6 +96,13 @@ bench = false
 [[bin]]
 name = "ball_consts"
 path = "fuzz_targets/ball_consts.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "lang_lex"
+path = "fuzz_targets/lang_lex.rs"
 test = false
 doc = false
 bench = false

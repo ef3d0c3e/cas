@@ -1,8 +1,9 @@
 # cas-num fuzz targets
 
 libFuzzer targets (via [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz)) that cross-check
-cas-num against GMP (through `rug`). This crate is outside the main workspace because cargo-fuzz
-needs a nightly toolchain and its own build profile; the library itself stays on stable.
+cas-num against GMP (through `rug`), plus one for the cas-lang lexer. This crate is outside the
+main workspace because cargo-fuzz needs a nightly toolchain and its own build profile; the
+libraries themselves stay on stable.
 
 | Target | Checks |
 |---|---|
@@ -17,6 +18,7 @@ needs a nightly toolchain and its own build profile; the library itself stays on
 | `machine_fns` | The machine-ball functions and arithmetic against MPFR at 192 bits: `None` is always allowed; a `Some` meets the bracket at the midpoint, both ends and an interior point, and is `None` wherever MPFR has no finite value |
 | `ball_consts` | π, log 2, e, γ and G at sequences of fuzzer-chosen precisions from a cleared cache: each meets MPFR's bracket at `prec + 64` bits, knows `prec - 1` bits and has a midpoint of at most `prec` bits |
 | `number_theory` | `sqrt_rem`, `pow_mod` through every reduction, `ModRing` and `ModWord` operations and inverses, `crt`, `jacobi`, `primality`, `factor` (product and labels), `perfect_power` |
+| `lang_lex` | The cas-lang lexer on arbitrary text (bytes read as lossy UTF-8): the tokens cover the text exactly, each lexes alone as one token of the same kind, every error token has its error, errors are ordered and on character boundaries; the values of number, string and superscript tokens and the names of identifiers never panic (number exponents are bounded) |
 
 Inputs are decoded from the fuzzer's bytes (`src/lib.rs`): limbs mix boundary values (`0`,
 `u64::MAX`, `2^63`, low masks) with raw bytes, and lengths are weighted towards the algorithm

@@ -1,0 +1,21 @@
+[package]
+name = "cas-lang"
+description = "The surface language: lexer, parser and lowering to expressions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+readme = "README.md"
+
+[dependencies]
+cas-num.workspace = true
+unicode-ident.workspace = true
+unicode-normalization.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
+
+[lints]
+workspace = true

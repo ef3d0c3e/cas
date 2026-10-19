@@ -9,6 +9,7 @@ user-facing syntaxes are frontends built on top of it.
 |---|---|
 | `cas-num` | Arbitrary-precision integers, rationals, modular arithmetic, ball arithmetic |
 | `cas-core` | Hash-consed symbolic expressions, symbols and attributes |
+| `cas-lang` | The surface language: lexer (parser and lowering to come) |
 
 ## Development
 
