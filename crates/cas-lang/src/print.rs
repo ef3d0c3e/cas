@@ -305,7 +305,7 @@ fn shape(e: &Expr) -> Shape {
                 let p = product(factors);
                 match (p.numerator.len(), p.denominator.is_empty()) {
                     (1, true) if p.negative && !p.writes_one() => (Prec::Prefix, true),
-                    _ => (Prec::Product, p.negative),
+                    _ => (Prec::Product, p.negative || p.leads_with_sign()),
                 }
             }
             Form::Power(..) => (Prec::Power, false),
@@ -360,6 +360,19 @@ impl Product<'_> {
             _ => false,
         };
         self.negative && matches!(self.numerator.first(), Some(Item::Factor(f)) if absorbs_sign(f))
+    }
+
+    /// Whether the product has no sign of its own but its first factor
+    /// starts with one and binds at least like a prefix `-`. That factor is
+    /// written bare, since `-x*y` reads as `(-x)*y`, so the product prints
+    /// as `Times[-1, x, y]` does: where no sign may start, both are
+    /// parenthesised whole.
+    fn leads_with_sign(&self) -> bool {
+        !self.negative
+            && matches!(self.numerator.first(), Some(Item::Factor(f)) if {
+                let s = shape(f);
+                s.sign && s.prec >= Prec::Prefix
+            })
     }
 }
 
@@ -629,6 +642,8 @@ impl<'a> Printer<'a> {
     fn application(&mut self, e: &Expr) -> Result<(), PrintError> {
         match form(e) {
             Form::Sum(terms) => self.sum(terms),
+            // `operand` has parenthesised the product if it may not start
+            // with a sign here.
             Form::Product(factors) => self.product(&product(factors)),
             Form::Power(base, op, exponent) => {
                 self.base(base)?;
@@ -749,6 +764,13 @@ impl<'a> Printer<'a> {
                     // The right operand of a binary `-` binds at least like a
                     // product.
                     ([item], []) => self.item(item, Prec::Product),
+                    // After the `-`, no sign: `x - (-y*z)`.
+                    _ if p.leads_with_sign() => {
+                        self.out.push('(');
+                        self.product(p)?;
+                        self.out.push(')');
+                        Ok(())
+                    }
                     _ => self.product(p),
                 };
             }
@@ -757,7 +779,9 @@ impl<'a> Printer<'a> {
     }
 
     /// `-2*x*y/(3*z)`: the sign, the numerator, then the denominator,
-    /// parenthesised when it has more than one factor.
+    /// parenthesised when it has more than one factor. A first factor with
+    /// its own sign is written bare: callers parenthesise the product where
+    /// no sign may start.
     fn product(&mut self, p: &Product<'_>) -> Result<(), PrintError> {
         if p.negative {
             self.out.push('-');
@@ -781,6 +805,11 @@ impl<'a> Printer<'a> {
                 } else {
                     self.item(item, Prec::Power)?;
                 }
+            } else if i == 0 && p.leads_with_sign() {
+                let Item::Factor(f) = item else {
+                    unreachable!("a leading sign is a factor's");
+                };
+                self.expr(f)?;
             } else {
                 self.item(item, Prec::Prefix)?;
             }

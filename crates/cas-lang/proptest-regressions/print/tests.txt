@@ -6,3 +6,8 @@
 # everyone who runs the test benefits from these saved cases.
 cc 3ce34cbce59245f32c9fb6b86284bc46f4f4f1dbbb7fb4024c21354440a2b059 # shrinks to e = Power[Times[0, x, Power[x, -3]], -1]
 cc 627aa3b119d91825b869b6e5bfe4fb1cee5f921d6ec574feda42fe371927c8ec # shrinks to e = Power[x, Times[-1, 1, 0]]
+cc 3957295bc76c7e76c16298601aacd560adb9735be1f9ed314319ac89c77b5960 # shrinks to e = Times[1/2, -1, 1/2]
+cc fee1b66c891b5c2fc3ba930237bfd006db3501e12ed87aafb6f99cb8f80cc0f4 # shrinks to e = Power[Plus[x, Times[-1, DirectedInfinity[-1], Power[x, -2]]], -1]
+cc a6f183453e99c4b4a0e41b1b066bf25614755ae8edfffa2cdea1ba157c635283 # shrinks to e = Power[Not[Plus[x, Times[1/2, -1, DirectedInfinity[-1]]]], x]
+cc db9c78a68d97a8627fae236ef158004bc2ed1c83c43467019c200bab25fea849 # shrinks to e = Plus[x, Times[1/2, -1, -1]]
+cc 8b44c8ca86cb78dabddb00c6bf598d87c2142adaeb6dbbb6ba94566ad027399f # shrinks to e = ElementwiseTimes[Plus[x, Times[-1/2, -1, -1/2]], x]

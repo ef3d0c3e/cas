@@ -77,10 +77,45 @@ fn read_with(text: &str, names: &Names) -> Expr {
     lowered.statements[0].expr.clone()
 }
 
+/// Whether `text` has a sign right after an arithmetic operator, outside
+/// strings: `x + -y`, `2*-3`, `x^-1`, which the printer never writes (it
+/// writes `x - y`, `2*(-3)`, `x^(-1)`).
+fn sign_after_operator(text: &str) -> bool {
+    let mut in_string = false;
+    let mut escaped = false;
+    let mut after_operator = false;
+    for c in text.chars() {
+        if in_string {
+            match (escaped, c) {
+                (true, _) => escaped = false,
+                (false, '\\') => escaped = true,
+                (false, '"') => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            '"' => {
+                in_string = true;
+                after_operator = false;
+            }
+            ' ' => {}
+            '+' | '-' if after_operator => return true,
+            '+' | '-' | '*' | '/' | '^' => after_operator = true,
+            _ => after_operator = false,
+        }
+    }
+    false
+}
+
 /// Prints `e` with `names` and reads the text back: the same expression up
 /// to the arithmetic the text writes out. Returns the text.
 fn round_trip_with(e: &Expr, names: &Names) -> String {
     let text = print(e, names).unwrap_or_else(|err| panic!("{e:?}: {err}"));
+    assert!(
+        !sign_after_operator(&text),
+        "{e:?} printed as {text}: a sign after an operator"
+    );
     let back = read_with(&text, names);
     assert_eq!(
         fold_arithmetic(&back),
@@ -198,6 +233,35 @@ fn constants_and_functions_as_values() {
     ]);
 }
 
+/// A product whose first factor has its own sign prints as the product with
+/// the sign in front: `Times[Times[-1, x], y]` and `Times[-1, x, y]` read
+/// back as each other, so they must print alike everywhere (CAS-127).
+#[test]
+fn a_first_factor_with_its_own_sign() {
+    let [x, y, z] = ["x", "y", "z"].map(sym);
+    check(&[
+        // Written bare: `-x*y` reads as `(-x)*y`, the nested product.
+        (times([times([int(-1), x.clone()]), y.clone()]), "-x*y"),
+        (times([rat(1, 2), int(-1), rat(1, 2)]), "-1*(1/2)/2"),
+        // After an operator, parenthesised whole.
+        (
+            plus([x.clone(), times([times([int(-1), y.clone()]), z.clone()])]),
+            "x + (-y*z)",
+        ),
+        (
+            plus([
+                x.clone(),
+                times([int(-1), times([int(-1), y.clone()]), pow(&z, &int(-1))]),
+            ]),
+            "x - (-y/z)",
+        ),
+        (
+            times([x.clone(), times([times([int(-1), y.clone()]), z.clone()])]),
+            "x*(-y*z)",
+        ),
+    ]);
+}
+
 #[test]
 fn sums_and_products() {
     let [x, y, z] = ["x", "y", "z"].map(sym);
@@ -244,7 +308,6 @@ fn sums_and_products() {
         (times([int(-1), pow(&x, &int(-1))]), "-1/x"),
         (times([x.clone(), int(-2)]), "x*(-2)"),
         (times([x.clone(), times([y.clone(), z.clone()])]), "x*(y*z)"),
-        (times([times([int(-1), x.clone()]), y.clone()]), "(-x)*y"),
         (times([x.clone(), rat(1, 2)]), "x*(1/2)"),
         (
             times([
