@@ -41,7 +41,7 @@ fn english_names() {
         ("inf", Target::Builtin(Symbol::INFINITY)),
         ("true", Target::Builtin(Symbol::TRUE)),
         ("sqrt", Target::Builtin(Symbol::SQRT)),
-        ("abs", planned("Abs")),
+        ("abs", Target::Builtin(Symbol::ABS)),
     ];
     for (name, target) in cases {
         assert_eq!(names.target(name), Some(&target), "{name}");

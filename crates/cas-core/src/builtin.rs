@@ -93,6 +93,17 @@ builtins! {
     // Predicates that always decide (CAS-DOC-4 §6.1).
     SAME_Q = "SameQ" [PROTECTED];
     FREE_Q = "FreeQ" [PROTECTED];
+    // Signs, which assumptions decide (CAS-DOC-4 §7).
+    POSITIVE = "Positive" [LISTABLE, PROTECTED];
+    NEGATIVE = "Negative" [LISTABLE, PROTECTED];
+    NON_NEGATIVE = "NonNegative" [LISTABLE, PROTECTED];
+    NON_POSITIVE = "NonPositive" [LISTABLE, PROTECTED];
+    ABS = "Abs" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    // The number sets of `Element` (CAS-DOC-4 §7).
+    INTEGERS = "Integers" [PROTECTED];
+    RATIONALS = "Rationals" [PROTECTED];
+    REALS = "Reals" [PROTECTED];
+    COMPLEXES = "Complexes" [PROTECTED];
     // Structure.
     LIST = "List" [PROTECTED];
     SEQUENCE = "Sequence" [PROTECTED];

@@ -1,18 +1,23 @@
-//! Comparisons, predicates, `And`, `Or`, `Not` and `If` (CAS-DOC-4 §6.1).
+//! Comparisons, predicates, `And`, `Or`, `Not` and `If` (CAS-DOC-4 §6.1,
+//! §7).
 //!
 //! Comparisons decide on numbers, on the infinities `Infinity` and
-//! `-Infinity`, and on expressions that are structurally equal; anything
-//! else stays unevaluated until assumptions can decide it (CAS-58).
-//! Predicates (`SameQ`, `FreeQ`, `IntegerQ`, `NumberQ`) always decide.
+//! `-Infinity`, and on expressions that are structurally equal; otherwise
+//! the assumptions and the number domain decide them when they can (`assume`,
+//! CAS-58), and they stay unevaluated when not. So do `Positive`,
+//! `Negative`, `NonNegative`, `NonPositive` and `Element`. The type tests
+//! (`SameQ`, `FreeQ`, `IntegerQ` to `SymbolQ`) always decide; those of number
+//! sets are true of a value the assumptions put in the set.
 
 use std::cmp::Ordering;
 
 use cas_num::Rational;
 
 use super::number::{Infinity, Num};
+use crate::assume::{self, Set, Truth};
 use crate::context::EvalError;
 use crate::eval::Eval;
-use crate::expr::{Expr, View};
+use crate::expr::Expr;
 use crate::symbol::Symbol;
 
 type Native = Result<Option<Expr>, EvalError>;
@@ -64,51 +69,93 @@ fn extended(e: &Expr) -> Option<Extended> {
     }
 }
 
+/// `true` or `false` for a decided truth.
+fn decided(t: Truth) -> Option<bool> {
+    match t {
+        Truth::True => Some(true),
+        Truth::False => Some(false),
+        Truth::Unknown => None,
+    }
+}
+
 /// A chain of tests between neighbours: `True` if all hold, `False` if one
-/// fails, unevaluated otherwise.
-fn chain(e: &Expr, test: impl Fn(&Expr, &Expr) -> Option<bool>) -> Native {
-    let mut decided = true;
+/// fails, unevaluated otherwise. What `test` cannot tell, the assumptions
+/// may.
+fn chain(ev: &mut Eval<'_>, e: &Expr, test: impl Fn(&Expr, &Expr) -> Option<bool>) -> Native {
+    let head = e.head().and_then(Expr::as_symbol).expect("a comparison");
+    let mut all = true;
     for w in e.args().windows(2) {
-        match test(&w[0], &w[1]) {
+        let result = match test(&w[0], &w[1]) {
+            Some(b) => Some(b),
+            None => decided(assume::relation(ev, head, &w[0], &w[1])?),
+        };
+        match result {
             Some(false) => return Ok(Some(boolean(false))),
             Some(true) => {}
-            None => decided = false,
+            None => all = false,
         }
     }
-    Ok(decided.then(|| boolean(true)))
+    Ok(all.then(|| boolean(true)))
 }
 
-pub(super) fn equal_native(_: &mut Eval<'_>, e: &Expr) -> Native {
-    chain(e, equal)
+pub(super) fn equal_native(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    chain(ev, e, equal)
 }
 
-pub(super) fn unequal(_: &mut Eval<'_>, e: &Expr) -> Native {
+pub(super) fn unequal(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [a, b] = e.args() else {
         return Ok(None);
     };
-    Ok(equal(a, b).map(|eq| boolean(!eq)))
+    match equal(a, b) {
+        Some(eq) => Ok(Some(boolean(!eq))),
+        None => Ok(decided(assume::relation(ev, Symbol::UNEQUAL, a, b)?).map(boolean)),
+    }
 }
 
 /// `Less`, `LessEqual`, `Greater` or `GreaterEqual`, by the orderings they
 /// accept.
-fn order(e: &Expr, accept: fn(Ordering) -> bool) -> Native {
-    chain(e, |a, b| Some(accept(extended(a)?.cmp(&extended(b)?))))
+fn order(ev: &mut Eval<'_>, e: &Expr, accept: fn(Ordering) -> bool) -> Native {
+    chain(ev, e, |a, b| Some(accept(extended(a)?.cmp(&extended(b)?))))
 }
 
-pub(super) fn less(_: &mut Eval<'_>, e: &Expr) -> Native {
-    order(e, Ordering::is_lt)
+pub(super) fn less(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    order(ev, e, Ordering::is_lt)
 }
 
-pub(super) fn less_equal(_: &mut Eval<'_>, e: &Expr) -> Native {
-    order(e, Ordering::is_le)
+pub(super) fn less_equal(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    order(ev, e, Ordering::is_le)
 }
 
-pub(super) fn greater(_: &mut Eval<'_>, e: &Expr) -> Native {
-    order(e, Ordering::is_gt)
+pub(super) fn greater(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    order(ev, e, Ordering::is_gt)
 }
 
-pub(super) fn greater_equal(_: &mut Eval<'_>, e: &Expr) -> Native {
-    order(e, Ordering::is_ge)
+pub(super) fn greater_equal(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    order(ev, e, Ordering::is_ge)
+}
+
+/// `Positive`, `Negative`, `NonNegative` and `NonPositive`: by the sign of
+/// their argument, which the assumptions may tell. A number that is not
+/// real has none of these signs.
+pub(super) fn sign_predicate(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    let head = e.head().and_then(Expr::as_symbol).expect("a predicate");
+    let sign = assume::sign_of(ev.context(), x);
+    Ok(decided(assume::sign_test(head, sign, x.is_number())).map(boolean))
+}
+
+/// `Element[x, s]` for the number sets `Integers`, `Rationals`, `Reals` and
+/// `Complexes`.
+pub(super) fn element(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x, s] = e.args() else {
+        return Ok(None);
+    };
+    let Some(set) = Set::of(s) else {
+        return Ok(None);
+    };
+    Ok(decided(assume::element(ev.context(), x, set)).map(boolean))
 }
 
 /// `SameQ[a, b, …]`: structural equality, O(1) per pair.
@@ -124,14 +171,30 @@ pub(super) fn free_q(_: &mut Eval<'_>, e: &Expr) -> Native {
     Ok(Some(boolean(expr.free_of(x))))
 }
 
-pub(super) fn integer_q(_: &mut Eval<'_>, e: &Expr) -> Native {
+/// A type test of a number set: whether the value is known to be in it.
+fn in_set(ev: &mut Eval<'_>, e: &Expr, set: Set) -> Native {
     let [x] = e.args() else {
         return Ok(None);
     };
-    Ok(Some(boolean(matches!(
-        x.view(),
-        View::Int(_) | View::Integer(_)
-    ))))
+    Ok(Some(boolean(
+        assume::element(ev.context(), x, set) == Truth::True,
+    )))
+}
+
+pub(super) fn integer_q(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    in_set(ev, e, Set::Integers)
+}
+
+pub(super) fn rational_q(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    in_set(ev, e, Set::Rationals)
+}
+
+pub(super) fn real_q(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    in_set(ev, e, Set::Reals)
+}
+
+pub(super) fn complex_q(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    in_set(ev, e, Set::Complexes)
 }
 
 pub(super) fn number_q(_: &mut Eval<'_>, e: &Expr) -> Native {
@@ -139,6 +202,44 @@ pub(super) fn number_q(_: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(None);
     };
     Ok(Some(boolean(x.is_number())))
+}
+
+/// A structural type test.
+fn is(e: &Expr, test: impl Fn(&Expr) -> bool) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    Ok(Some(boolean(test(x))))
+}
+
+fn is_list(e: &Expr) -> bool {
+    e.head().and_then(Expr::as_symbol) == Some(Symbol::LIST)
+}
+
+pub(super) fn list_q(_: &mut Eval<'_>, e: &Expr) -> Native {
+    is(e, is_list)
+}
+
+/// `MatrixQ[m]`: a list of one or more rows, lists of one length, whose
+/// entries are not lists.
+pub(super) fn matrix_q(_: &mut Eval<'_>, e: &Expr) -> Native {
+    is(e, |m| {
+        is_list(m)
+            && !m.args().is_empty()
+            && m.args().iter().all(|row| {
+                is_list(row)
+                    && row.args().len() == m.args()[0].args().len()
+                    && !row.args().iter().any(is_list)
+            })
+    })
+}
+
+pub(super) fn string_q(_: &mut Eval<'_>, e: &Expr) -> Native {
+    is(e, |x| x.as_str().is_some())
+}
+
+pub(super) fn symbol_q(_: &mut Eval<'_>, e: &Expr) -> Native {
+    is(e, |x| x.as_symbol().is_some())
 }
 
 /// `And` (`HoldAll`): its arguments are evaluated in order until one is

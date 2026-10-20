@@ -5,6 +5,7 @@ use std::num::NonZeroU64;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
+use crate::assume::{Domain, Facts};
 use crate::attributes::Attributes;
 use crate::expr::{Expr, Repr};
 use crate::rules::Rules;
@@ -48,7 +49,11 @@ struct State {
     /// User symbols only; builtin attributes are fixed.
     attributes: SymbolMap<Attributes>,
     rules: Rules,
+    /// As written, outermost first.
     assumptions: Arc<Vec<Expr>>,
+    /// The assumptions read for queries.
+    facts: Arc<Facts>,
+    domain: Domain,
     limits: Limits,
 }
 
@@ -304,19 +309,40 @@ impl Context {
         }
     }
 
-    /// A child scope that also assumes `assumption`. `self` is unchanged;
-    /// the child has its own id.
+    /// A child scope that also assumes `assumption`, a proposition about
+    /// values: comparisons, `Positive` and its kin, `Element[x, Reals]` and
+    /// the other number sets, `And` of them, or anything else, which then
+    /// holds as written (CAS-DOC-4 §7). It is kept unevaluated; the
+    /// differences of its comparisons are evaluated in `self`. `self` is
+    /// unchanged; the child has its own id.
     #[must_use]
     pub fn assuming(&self, assumption: Expr) -> Context {
+        let mut facts = (*self.state.facts).clone();
+        facts.learn(self, &assumption);
         let mut child = self.clone();
-        Arc::make_mut(&mut child.state_mut().assumptions).push(assumption);
+        let state = child.state_mut();
+        Arc::make_mut(&mut state.assumptions).push(assumption);
+        state.facts = Arc::new(facts);
         child
     }
 
-    /// The assumptions in scope, outermost first.
+    /// The assumptions in scope, outermost first, as written.
     #[must_use]
     pub fn assumptions(&self) -> &[Expr] {
         &self.state.assumptions
+    }
+
+    pub(crate) fn facts(&self) -> &Facts {
+        &self.state.facts
+    }
+
+    pub(crate) fn number_domain(&self) -> Domain {
+        self.state.domain
+    }
+
+    /// Sets what symbols without facts range over (CAS-DOC-4 §7.1).
+    pub fn set_domain(&mut self, domain: Domain) {
+        self.state_mut().domain = domain;
     }
 
     #[must_use]
@@ -362,6 +388,7 @@ impl fmt::Debug for Context {
             .field("attributes", &self.state.attributes.len())
             .field("rules", &self.state.rules)
             .field("assumptions", &self.state.assumptions)
+            .field("domain", &self.state.domain)
             .field("limits", &self.state.limits)
             .finish()
     }

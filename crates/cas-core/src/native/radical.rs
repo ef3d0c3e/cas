@@ -13,8 +13,9 @@
 //! - a denominator goes into the numerator, `(2/3)^(1/2)` is `6^(1/2)/3`,
 //!   since `D^(-f)` is `D^(1 - f)/D`;
 //! - the square root of a negative number is imaginary, `(-4)^(1/2)` is
-//!   `2·i`. Other roots of negative numbers stay as they are until the number
-//!   domain (CAS-58) decides between the real root and the principal one.
+//!   `2·i`. In the Real domain an odd root of a negative is the real root
+//!   (O7): `(-8)^(1/3)` is `-2` and `(-2)^(2/3)` is `2^(2/3)`. Other roots of
+//!   negatives, and odd ones in the Complex domain, stay as they are.
 
 use std::collections::BTreeMap;
 
@@ -34,20 +35,28 @@ const MAX_ROOT: u64 = 1 << 16;
 pub(super) const MAX_POWER_BITS: u64 = 1 << 24;
 
 /// The canonical form of `b^r` for rationals `b != 0` and `r` not an
-/// integer, or `None` when it is `b^r` itself or cannot be computed.
-pub(super) fn power(b: &Rational, r: &Rational) -> Option<Expr> {
+/// integer, or `None` when it is `b^r` itself or cannot be computed;
+/// `real_domain` takes odd roots of negatives as real ones.
+pub(super) fn power(b: &Rational, r: &Rational, real_domain: bool) -> Option<Expr> {
     let (whole, numer, denom) = split_exponent(r)?;
     if denom > MAX_ROOT {
         return None;
     }
-    // The sign: `(-1)^(p/2)` is `i^p`; other roots of negatives wait.
+    // The sign of the root of `b`, the integer part of the exponent taking
+    // its own: `(-1)^(p/2)` is `i^p`, and in the Real domain `(-1)^(p/q)` is
+    // `(-1)^p` for an odd `q`.
     let mut coefficient = Num::one();
     if b.is_negative() {
-        if denom != 2 {
+        if denom == 2 {
+            let i = Num::of(&crate::build::i()).expect("a number");
+            coefficient = i.pow(i64::try_from(numer % 4).expect("small"))?;
+        } else if real_domain && denom % 2 == 1 {
+            if numer % 2 == 1 {
+                coefficient = Num::Real(Rational::from(-1));
+            }
+        } else {
             return None;
         }
-        let i = Num::of(&crate::build::i()).expect("a number");
-        coefficient = i.pow(i64::try_from(numer % 4).expect("small"))?;
     }
     let magnitude = b.abs();
     // The integer part of the exponent.

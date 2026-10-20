@@ -102,7 +102,8 @@ fn powers() {
         ("Power[1, x]", "1"),
         ("Power[Power[x, 2], 3]", "Power[x, 6]"),
         ("Power[Power[x, 1/2], 2]", "x"),
-        ("Power[Power[x, 2], 1/2]", "Power[Power[x, 2], 1/2]"),
+        // In the Real domain, the default (CAS-58): `x` is real.
+        ("Power[Power[x, 2], 1/2]", "Abs[x]"),
         ("Power[Power[x, a], -1]", "Power[x, Times[-1, a]]"),
         ("Power[Times[2, x], 2]", "Times[4, Power[x, 2]]"),
         (
@@ -143,13 +144,14 @@ fn radicals() {
             "Power[5/3, -2/3]",
             "Times[1/5, Power[3, 2/3], Power[5, 1/3]]",
         ),
-        // Square roots of negatives are imaginary; other roots wait (CAS-58).
+        // Square roots of negatives are imaginary; in the Real domain, odd
+        // roots are real (O7, CAS-58).
         ("Power[-4, 1/2]", "Complex[0, 2]"),
         ("Power[-4, 3/2]", "Complex[0, -8]"),
         ("Power[-1, 1/2]", "Complex[0, 1]"),
         ("Power[-2, 1/2]", "Times[Complex[0, 1], Power[2, 1/2]]"),
         ("Power[-1/4, 1/2]", "Complex[0, 1/2]"),
-        ("Power[-8, 1/3]", "Power[-8, 1/3]"),
+        ("Power[-8, 1/3]", "-2"),
         ("Power[Power[2, 1/2], 1/2]", "Power[2, 1/4]"),
         ("Power[0, 1/2]", "0"),
         ("Power[1, 1/3]", "1"),

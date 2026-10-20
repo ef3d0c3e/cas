@@ -44,10 +44,10 @@ ReplaceAll: subst replace
 # Structure (CAS-DOC-4 §6.1, CAS-DOC-7 §4).
 Length: size length
 Map: map
-
-[planned]
 # Elementary functions.
 Abs: abs
+
+[planned]
 # Structure (CAS-DOC-7 §4).
 Unapply: unapply
 # Calculus, algebra and numerics (CAS-DOC-1, CAS-DOC-4 §1 and §8, CAS-DOC-5).
@@ -92,6 +92,9 @@ Greater GreaterEqual Element And Or Not If Function Range FiniteSet At ReplaceAt
 Null DirectedInfinity
 # Predicates, structure and rules without a surface name yet (CAS-123 decides).
 SameQ FreeQ Part Apply Replace ReplaceRepeated MatchQ Slot
+# Signs and number sets, for assumptions (CAS-DOC-4 §7); the session's
+# `assume` writes them (CAS-121).
+Positive Negative NonNegative NonPositive Integers Rationals Reals Complexes
 # Statements, written with `:=`, `assume` and `purge` (CAS-DOC-7 §4).
 Set SetDelayed UpSetDelayed Assume Clear
 # The type tests of `::` (CAS-DOC-7 §6), named in [types].

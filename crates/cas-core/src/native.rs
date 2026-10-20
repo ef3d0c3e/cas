@@ -39,7 +39,19 @@ pub(crate) fn get(s: Symbol) -> Option<NativeFn> {
         Symbol::SAME_Q => logic::same_q,
         Symbol::FREE_Q => logic::free_q,
         Symbol::INTEGER_Q => logic::integer_q,
+        Symbol::RATIONAL_Q => logic::rational_q,
+        Symbol::REAL_Q => logic::real_q,
+        Symbol::COMPLEX_Q => logic::complex_q,
         Symbol::NUMBER_Q => logic::number_q,
+        Symbol::LIST_Q => logic::list_q,
+        Symbol::MATRIX_Q => logic::matrix_q,
+        Symbol::STRING_Q => logic::string_q,
+        Symbol::SYMBOL_Q => logic::symbol_q,
+        Symbol::POSITIVE | Symbol::NEGATIVE | Symbol::NON_NEGATIVE | Symbol::NON_POSITIVE => {
+            logic::sign_predicate
+        }
+        Symbol::ELEMENT => logic::element,
+        Symbol::ABS => arith::abs,
         Symbol::AND => logic::and,
         Symbol::OR => logic::or,
         Symbol::NOT => logic::not,

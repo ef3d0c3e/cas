@@ -28,6 +28,7 @@
 //!   compiled once and matched by backtracking. [`Limits`] bound recursion and rewrites;
 //!   [`Limits::deep`] evaluates on a thread of its own with a large stack.
 
+mod assume;
 mod attributes;
 pub mod build;
 mod builtin;
@@ -46,6 +47,7 @@ mod symbol;
 mod symbol_map;
 mod traverse;
 
+pub use assume::{Domain, Sign, Truth};
 pub use attributes::Attributes;
 pub use cas_num::{Complex, Integer, Rational};
 pub use context::{Context, ContextError, EvalError, Limits, StateId};

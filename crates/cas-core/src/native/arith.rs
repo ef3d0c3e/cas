@@ -10,6 +10,7 @@ use cas_num::Rational;
 
 use super::number::{Infinity, Num};
 use super::radical::{self, MAX_POWER_BITS};
+use crate::assume::{self, Domain, Set, Sign, Truth};
 use crate::context::EvalError;
 use crate::eval::{Eval, is_list_like, sort_arguments};
 use crate::expr::{Expr, View};
@@ -167,13 +168,53 @@ fn with_coefficient(c: &Num, m: Expr) -> Expr {
 /// Lists keep their order and are left to the products of R-10. Infinite
 /// factors: the coefficient's sign turns a direction, `0` times an infinity
 /// and `Indeterminate` give `Indeterminate`, and `ComplexInfinity` absorbs
-/// the other factors.
-pub(super) fn times(_: &mut Eval<'_>, e: &Expr) -> Native {
-    if is_normal_product(e.args()) {
+/// the other factors. The other factors of a directed infinity turn it when
+/// the assumptions tell their sign: `x Infinity` is `Infinity` for `x > 0`.
+pub(super) fn times(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let result = if is_normal_product(e.args()) {
         debug_assert_eq!(product(e), None, "the shortcut of `Times` misses a change");
-        return Ok(None);
+        None
+    } else {
+        product(e)
+    };
+    // Most products have no infinity, which their symbols tell in O(1).
+    let current = result.as_ref().unwrap_or(e);
+    if current.may_contain(Symbol::INFINITY) || current.may_contain(Symbol::DIRECTED_INFINITY) {
+        if let Some(turned) = signed_infinity(ev, current) {
+            return Ok(Some(turned));
+        }
     }
-    Ok(product(e))
+    Ok(result)
+}
+
+/// A directed infinity times factors of known sign, as the infinity turned
+/// by that sign.
+fn signed_infinity(ev: &Eval<'_>, e: &Expr) -> Option<Expr> {
+    if e.head().and_then(Expr::as_symbol) != Some(Symbol::TIMES) {
+        return None;
+    }
+    let mut direction = None;
+    let mut rest = Vec::new();
+    for a in e.args() {
+        match Infinity::of(a) {
+            Some(Infinity::Directed(d)) if direction.is_none() => direction = Some(d),
+            Some(_) => return None,
+            None if Num::of(a).is_some() => return None,
+            None => rest.push(a.clone()),
+        }
+    }
+    let direction = direction?;
+    let rest = match rest.as_slice() {
+        [] => return None,
+        [one] => one.clone(),
+        _ => apply(Symbol::TIMES, &rest),
+    };
+    let turned = match assume::sign_of(ev.context(), &rest) {
+        Sign::Positive => direction,
+        Sign::Negative => direction.mul(&Num::Real(Rational::from(-1))),
+        _ => return None,
+    };
+    Some(Infinity::Directed(turned).to_expr())
 }
 
 /// What `Times` makes of `e`, if anything.
@@ -367,10 +408,11 @@ fn merge_number_powers(factors: Vec<Expr>) -> Vec<Expr> {
     clippy::many_single_char_names,
     reason = "b^n, as written in mathematics"
 )]
-pub(super) fn power(_: &mut Eval<'_>, e: &Expr) -> Native {
+pub(super) fn power(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [b, n] = e.args() else {
         return Ok(None);
     };
+    let real_domain = ev.context().domain() == Domain::Real;
     let indeterminate = || Infinity::Indeterminate.to_expr();
     if matches!(Infinity::of(b), Some(Infinity::Indeterminate))
         || matches!(Infinity::of(n), Some(Infinity::Indeterminate))
@@ -378,7 +420,7 @@ pub(super) fn power(_: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(Some(indeterminate()));
     }
     if let (Some(base), Some(exponent)) = (Num::of(b), Num::of(n)) {
-        return Ok(number_power(&base, &exponent));
+        return Ok(number_power(&base, &exponent, real_domain));
     }
     let exponent = Num::of(n);
     if exponent.as_ref().is_some_and(Num::is_zero) {
@@ -428,6 +470,20 @@ pub(super) fn power(_: &mut Eval<'_>, e: &Expr) -> Native {
                     let product = apply(Symbol::TIMES, &[p.clone(), n.clone()]);
                     return Ok(Some(apply(Symbol::POWER, &[inner.clone(), product])));
                 }
+                if let Some(rewritten) = real_power_of_power(ev, inner, p, n, real_domain) {
+                    return Ok(Some(rewritten));
+                }
+            }
+            // `Abs[x]^n` is `x^n` for a real `x` and an even `n`.
+            (Some(Symbol::ABS), [inner])
+                if integer.as_ref().is_some_and(|n| {
+                    n.numer()
+                        .unsigned_abs()
+                        .trailing_zeros()
+                        .is_some_and(|t| t > 0)
+                }) && assume::element(ev.context(), inner, Set::Reals) == Truth::True =>
+            {
+                return Ok(Some(apply(Symbol::POWER, &[inner.clone(), n.clone()])));
             }
             // `(x y)^n`.
             (Some(Symbol::TIMES), factors) if integer.is_some() => {
@@ -443,8 +499,91 @@ pub(super) fn power(_: &mut Eval<'_>, e: &Expr) -> Native {
     Ok(None)
 }
 
-/// `base^exponent` for two numbers, or `None` to leave it.
-fn number_power(base: &Num, exponent: &Num) -> Option<Expr> {
+/// `(b^p)^q` for rationals `p` and `q`, when the assumptions allow
+/// (CAS-DOC-4 §6.1, §7):
+/// - `b^(p q)` for `b >= 0`;
+/// - in the Real domain, for a real `b`: `b^(p q)` for an integer `p` and an
+///   odd denominator of `q`, real odd roots being multiplicative (O7), and
+///   `Abs[b]^(p q)` for an even `p`, since `b^p` is `Abs[b]^p`.
+fn real_power_of_power(
+    ev: &Eval<'_>,
+    b: &Expr,
+    p: &Expr,
+    q: &Expr,
+    real_domain: bool,
+) -> Option<Expr> {
+    let (pr, qr) = (p.to_rational()?, q.to_rational()?);
+    let ctx = ev.context();
+    let product = apply(Symbol::TIMES, &[p.clone(), q.clone()]);
+    if matches!(
+        assume::sign_of(ctx, b),
+        Sign::Positive | Sign::NonNegative | Sign::Zero
+    ) {
+        return Some(apply(Symbol::POWER, &[b.clone(), product]));
+    }
+    if !real_domain || !pr.is_integer() || assume::element(ctx, b, Set::Reals) != Truth::True {
+        return None;
+    }
+    let even = |k: &cas_num::Integer| k.unsigned_abs().trailing_zeros().is_none_or(|t| t > 0);
+    if !even(qr.denom()) {
+        return Some(apply(Symbol::POWER, &[b.clone(), product]));
+    }
+    even(pr.numer()).then(|| {
+        let abs = apply(Symbol::ABS, std::slice::from_ref(b));
+        apply(Symbol::POWER, &[abs, product])
+    })
+}
+
+/// `Abs[x]`: of a number, its absolute value, the square root of its norm
+/// for a complex one; of an infinity, `Infinity`; `Abs[Abs[x]]` is
+/// `Abs[x]`; a numeric coefficient comes out, `Abs[-2 x]` is `2 Abs[x]`; and
+/// `x` or `-x` when the assumptions tell the sign of `x`.
+pub(super) fn abs(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    if let Some(n) = Num::of(x) {
+        return Ok(Some(match n {
+            Num::Real(q) => Expr::from(q.abs()),
+            Num::Complex(z) => {
+                let half = Expr::from(Rational::new(1.into(), 2.into()));
+                apply(Symbol::POWER, &[Expr::from(z.norm()), half])
+            }
+        }));
+    }
+    if matches!(
+        Infinity::of(x),
+        Some(Infinity::Directed(_) | Infinity::Complex)
+    ) {
+        return Ok(Some(Symbol::INFINITY.into()));
+    }
+    if let View::Apply { head, args } = x.view() {
+        match (head.as_symbol(), args) {
+            (Some(Symbol::ABS), [_]) => return Ok(Some(x.clone())),
+            (Some(Symbol::TIMES), [c, rest @ ..]) if Num::of(c).is_some() => {
+                let rest = match rest {
+                    [one] => one.clone(),
+                    _ => apply(Symbol::TIMES, rest),
+                };
+                let magnitude = apply(Symbol::ABS, std::slice::from_ref(c));
+                let inner = apply(Symbol::ABS, &[rest]);
+                return Ok(Some(apply(Symbol::TIMES, &[magnitude, inner])));
+            }
+            _ => {}
+        }
+    }
+    Ok(match assume::sign_of(ev.context(), x) {
+        Sign::Positive | Sign::NonNegative | Sign::Zero => Some(x.clone()),
+        Sign::Negative | Sign::NonPositive => {
+            Some(apply(Symbol::TIMES, &[Expr::from(-1), x.clone()]))
+        }
+        Sign::Nonzero | Sign::Unknown => None,
+    })
+}
+
+/// `base^exponent` for two numbers, or `None` to leave it. In the Real
+/// domain, an odd root of a negative is the real root (O7).
+fn number_power(base: &Num, exponent: &Num, real_domain: bool) -> Option<Expr> {
     let r = exponent.real()?;
     if base.is_zero() {
         return Some(if r.is_zero() {
@@ -462,7 +601,7 @@ fn number_power(base: &Num, exponent: &Num) -> Option<Expr> {
         }
         return base.pow(n).map(|v| v.to_expr());
     }
-    let result = radical::power(base.real()?, r)?;
+    let result = radical::power(base.real()?, r, real_domain)?;
     let original = Expr::apply(&Symbol::POWER.into(), &[base.to_expr(), exponent.to_expr()]);
     (result != original).then_some(result)
 }
