@@ -64,6 +64,7 @@ dependencies = [
  "foldhash",
  "hashbrown 0.16.1",
  "proptest",
+ "unicode-ident",
 ]
 
 [[package]]

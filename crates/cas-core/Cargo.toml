@@ -13,6 +13,7 @@ readme = "README.md"
 cas-num.workspace = true
 foldhash.workspace = true
 hashbrown.workspace = true
+unicode-ident.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

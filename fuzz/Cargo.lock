@@ -21,6 +21,7 @@ dependencies = [
  "cas-num",
  "foldhash",
  "hashbrown 0.16.1",
+ "unicode-ident",
 ]
 
 [[package]]
@@ -43,6 +44,7 @@ name = "cas-num-fuzz"
 version = "0.0.0"
 dependencies = [
  "arbitrary",
+ "cas-core",
  "cas-lang",
  "cas-num",
  "libfuzzer-sys",

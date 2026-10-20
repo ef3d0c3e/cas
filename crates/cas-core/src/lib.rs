@@ -8,7 +8,9 @@
 //!   applications) is interned. `Ord` is the canonical order that
 //!   evaluation sorts `Orderless` arguments into (see `order.rs`).
 //!   It prints in infix with `Display` (`x + 2*y^3`) and in full form with
-//!   `Debug` or [`Expr::full_form`] (`Plus[x, Times[2, Power[y, 3]]]`).
+//!   `Debug` or [`Expr::full_form`] (`Plus[x, Times[2, Power[y, 3]]]`), which
+//!   [`Expr::parse_full_form`] reads back; [`assert_eval!`] states evaluator
+//!   tests in full form.
 //!   Traversal (`part`, `positions`, `pre_order`, `distinct`, `contains`,
 //!   `replace`, `substitute`, `map_bottom_up`) is structural and memoised by
 //!   node identity, so it is linear in the distinct subexpressions.
@@ -28,6 +30,7 @@ mod intern;
 mod node;
 mod order;
 mod print;
+mod read;
 mod symbol;
 mod traverse;
 
@@ -37,6 +40,7 @@ pub use context::{Context, ContextError, EvalError, Limits, StateId};
 pub use expr::{Expr, View};
 pub use intern::{InternerStats, interner_stats};
 pub use print::FullForm;
+pub use read::{FullFormError, FullFormErrorKind};
 pub use symbol::Symbol;
 pub use traverse::{Distinct, PostOrder, PreOrder};
 
