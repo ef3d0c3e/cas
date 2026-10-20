@@ -5,6 +5,9 @@
 //!   linear in the terms, plus the sort.
 //! - `reeval/terms` evaluates the result again in the same state: the root's
 //!   fixpoint stamp answers at once, so the time is flat across sizes.
+//! - `traced/terms` evaluates it as `eval/terms` does, recording a trace at
+//!   the Rules level (CAS-61): what a trace costs when there is little to
+//!   record.
 //!
 //! Pass a filter to run part of it: `cargo bench -p cas-core --bench eval --
 //! '^reeval/'`.
@@ -12,7 +15,7 @@
 
 use std::hint::black_box;
 
-use cas_core::{Context, Expr, Symbol};
+use cas_core::{Context, EvalOptions, Expr, Symbol, TraceLevel};
 use criterion::{BenchmarkId, Criterion, Throughput, criterion_group, criterion_main};
 
 /// `Plus[f[n - 1], …, f[1], f[0]]`.
@@ -39,6 +42,18 @@ fn bench(c: &mut Criterion) {
         let r = ctx.eval(&sum(n)).unwrap();
         group.bench_with_input(BenchmarkId::new("terms", n), &r, |b, r| {
             b.iter(|| ctx.eval(black_box(r)).unwrap());
+        });
+    }
+    group.finish();
+    let mut group = c.benchmark_group("traced");
+    let options = EvalOptions {
+        trace: TraceLevel::Rules,
+    };
+    for n in sizes {
+        let e = sum(n);
+        group.throughput(Throughput::Elements(n.unsigned_abs()));
+        group.bench_with_input(BenchmarkId::new("terms", n), &e, |b, e| {
+            b.iter(|| Context::new().eval_with(black_box(e), &options).0.unwrap());
         });
     }
     group.finish();

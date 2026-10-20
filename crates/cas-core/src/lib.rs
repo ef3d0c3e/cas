@@ -27,6 +27,9 @@
 //!   stamped, so evaluating it again is O(1). [`Pattern`] and [`Rule`] are
 //!   compiled once and matched by backtracking. [`Limits`] bound recursion and rewrites;
 //!   [`Limits::deep`] evaluates on a thread of its own with a large stack.
+//!   [`Context::eval_with`] also reports [`Warning`]s and, as [`EvalOptions`]
+//!   ask, a [`Trace`] of the steps taken, which [`Trace::verify`] checks at
+//!   exact sample points.
 
 mod assume;
 mod attributes;
@@ -45,6 +48,7 @@ mod read;
 mod rules;
 mod symbol;
 mod symbol_map;
+mod trace;
 mod traverse;
 
 pub use assume::{Domain, Sign, Truth};
@@ -59,6 +63,10 @@ pub use print::FullForm;
 pub use read::{FullFormError, FullFormErrorKind};
 pub use rules::{DefineError, UserNative};
 pub use symbol::Symbol;
+pub use trace::{
+    Counterexample, EvalOptions, Origin, Report, RuleId, RuleKind, Step, StepKind, Trace,
+    TraceLevel, Verification, Warning,
+};
 pub use traverse::{Distinct, PostOrder, PreOrder};
 
 #[cfg(test)]

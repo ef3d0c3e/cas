@@ -9,7 +9,7 @@ use std::sync::{LazyLock, Mutex, PoisonError};
 use proptest::prelude::*;
 
 use super::{Eval, NativeFn, STACK_PER_LEVEL};
-use crate::{Attributes, Context, EvalError, Expr, Limits, Symbol};
+use crate::{Attributes, Context, EvalError, Expr, Limits, Symbol, TraceLevel};
 
 static NATIVES: LazyLock<Mutex<HashMap<Symbol, NativeFn>>> = LazyLock::new(Mutex::default);
 
@@ -456,8 +456,9 @@ fn stack_context(depth: u32, orderless: Symbol, flat: Symbol) -> Context {
 /// through heads, through a native that evaluates its arguments (`And` and
 /// `Or`, which alternate so they do not flatten), through the matcher,
 /// through rules whose conditions recurse, and through a native that
-/// evaluates what it builds (a matrix power): measured from the address of
-/// a local in a native at the bottom.
+/// evaluates what it builds (a matrix power), without a trace and with one
+/// at the Verbose level: measured from the address of a local in a native
+/// at the bottom.
 #[test]
 fn a_level_takes_less_than_stack_per_level() {
     static BOTTOM: AtomicUsize = AtomicUsize::new(usize::MAX);
@@ -535,21 +536,22 @@ fn a_level_takes_less_than_stack_per_level() {
                 } else {
                     (0..depth).fold(Expr::apply(&probe.into(), &[]), |e, _| shape(f, e))
                 };
-                BOTTOM.store(usize::MAX, Ordering::Relaxed);
-                let top = black_box(0u8);
-                let top = std::ptr::addr_of!(top) as usize;
-                ctx.eval_uncached(&e).unwrap();
-                (
-                    name,
-                    (top - BOTTOM.load(Ordering::Relaxed)) / (levels * depth as usize),
-                )
+                let measure = |level| {
+                    BOTTOM.store(usize::MAX, Ordering::Relaxed);
+                    let top = black_box(0u8);
+                    let top = std::ptr::addr_of!(top) as usize;
+                    ctx.eval_uncached_with(&e, level).0.unwrap();
+                    (top - BOTTOM.load(Ordering::Relaxed)) / (levels * depth as usize)
+                };
+                (name, measure(TraceLevel::Off), measure(TraceLevel::Verbose))
             })
         })
         .unwrap()
         .join()
         .unwrap();
-    eprintln!("stack per level: {measured:?}");
-    for (name, bytes) in measured {
+    eprintln!("stack per level, untraced and traced: {measured:?}");
+    for (name, untraced, traced) in measured {
+        let bytes = untraced.max(traced);
         assert!(bytes <= STACK_PER_LEVEL, "{name}: {bytes} bytes per level");
     }
 }

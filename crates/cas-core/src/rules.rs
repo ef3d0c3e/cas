@@ -12,7 +12,9 @@
 //! builtin head (§5.4) or the rules of a user's, exact first, and for a
 //! compound head the sub-rules of its innermost symbol. Each patterned rule
 //! has a filter on the subject's head, number of arguments and first
-//! argument, checked before matching.
+//! argument, checked before matching. In a trace, the rule that rewrote is
+//! named by a [`RuleId`], with its origin: a user's definition, or a system
+//! rule's name and place in the sources (CAS-61).
 //!
 //! A left-hand side is stored with its arguments evaluated and normalised, as
 //! the evaluator presents subjects. Changing the attributes or the default of
@@ -22,6 +24,7 @@
 //! under the new attributes; it does not evaluate them again (§4).
 
 use std::fmt;
+use std::panic::Location;
 use std::sync::{Arc, LazyLock};
 
 use foldhash::fast::FixedState;
@@ -35,6 +38,7 @@ use crate::expr::{Expr, View, symbol_bit};
 use crate::pattern::{Filter, Pattern, PatternError, Rule, substitute};
 use crate::symbol::Symbol;
 use crate::symbol_map::SymbolMap;
+use crate::trace::{Origin, RuleId, RuleKind, StepKind, Warning};
 
 /// The native function of a user's symbol (CAS-DOC-4 §6), tried after the
 /// up-rules and before the symbol's rules. Like a builtin's
@@ -191,6 +195,7 @@ struct Exact {
     rhs: Expr,
     rank: u64,
     written: u64,
+    origin: Origin,
 }
 
 /// Patterned rules in the order they are tried.
@@ -222,8 +227,13 @@ impl RuleList {
             let new = if stored.depends.contains(&s) {
                 let lhs = renormalised(ctx, &stored.lhs);
                 // The same constructs as before: compiling cannot fail.
-                ctx.compile(lhs, stored.rule.rhs().clone(), stored.written)
-                    .unwrap_or_else(|_| stored.clone())
+                ctx.compile(
+                    lhs,
+                    stored.rule.rhs().clone(),
+                    stored.written,
+                    stored.origin,
+                )
+                .unwrap_or_else(|_| stored.clone())
             } else {
                 stored.clone()
             };
@@ -259,11 +269,44 @@ struct Stored {
     depends: Vec<Symbol>,
     /// The time of the definition, among those of the symbol.
     written: u64,
+    origin: Origin,
 }
 
 /// The system rules of the builtins (§5.4), built on first use and shared by
 /// every context. CAS-59 adds those of `D`.
 static SYSTEM: LazyLock<Rules> = LazyLock::new(|| system(&[]));
+
+/// A system rule as written in the sources (§5.4): `lhs :> rhs` with a
+/// stable name, and where it is written, which a trace shows (§9).
+pub(crate) struct SystemRule {
+    name: &'static str,
+    lhs: Expr,
+    rhs: Expr,
+    location: &'static Location<'static>,
+}
+
+impl SystemRule {
+    /// `lhs :> rhs`, both in full form, named `name` and located where this
+    /// is called.
+    ///
+    /// # Panics
+    ///
+    /// If a side is not full form.
+    #[track_caller]
+    #[cfg_attr(
+        not(test),
+        expect(dead_code, reason = "CAS-59 writes the rules of D with it")
+    )]
+    pub(crate) fn new(name: &'static str, lhs: &str, rhs: &str) -> SystemRule {
+        let read = |s: &str| Expr::parse_full_form(s).unwrap_or_else(|e| panic!("{s:?}: {e}"));
+        SystemRule {
+            name,
+            lhs: read(lhs),
+            rhs: read(rhs),
+            location: Location::caller(),
+        }
+    }
+}
 
 /// The rules of `definitions`, delayed, on builtin heads. They are written in
 /// normal form and not evaluated, so building them evaluates nothing.
@@ -271,11 +314,15 @@ static SYSTEM: LazyLock<Rules> = LazyLock::new(|| system(&[]));
 /// # Panics
 ///
 /// If a definition has no head or is not a valid pattern.
-fn system(definitions: &[(Expr, Expr)]) -> Rules {
+fn system(definitions: &[SystemRule]) -> Rules {
     let mut ctx = Context::new();
-    for (lhs, rhs) in definitions {
-        let (owner, kind) = attachment(lhs).expect("a system rule has a head");
-        ctx.place(owner, kind, lhs.clone(), rhs.clone())
+    for rule in definitions {
+        let (owner, kind) = attachment(&rule.lhs).expect("a system rule has a head");
+        let origin = Origin::System {
+            name: rule.name,
+            location: rule.location,
+        };
+        ctx.place(owner, kind, rule.lhs.clone(), rule.rhs.clone(), origin)
             .expect("a valid system rule");
     }
     ctx.rules().clone()
@@ -305,7 +352,7 @@ fn up_rules(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Expr>, EvalError> {
         }
         tried.push(tag);
         if let Some(own) = rules.symbols.get(tag) {
-            if let Some(rewritten) = first(ev, &own.up, e)? {
+            if let Some(rewritten) = first(ev, &own.up, e, tag, RuleKind::Up)? {
                 return Ok(Some(rewritten));
             }
         }
@@ -316,30 +363,60 @@ fn up_rules(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Expr>, EvalError> {
 /// Step 6 for a symbol head, after a builtin's native function: a user's
 /// native function, then the system rules of a builtin or the rules of a
 /// user's symbol, exact first. Only a builtin head forces the system rules.
-#[inline]
+/// A user's symbol with down-rules of which none matches warns (§5.3).
+/// Inlined into the loop in release builds.
+#[allow(
+    clippy::inline_always,
+    reason = "inlined into the loop, which counting instructions measured (CAS-61)"
+)]
+#[cfg_attr(not(debug_assertions), inline(always))]
 pub(crate) fn down(ev: &mut Eval<'_>, e: &Expr, head: Symbol) -> Result<Option<Expr>, EvalError> {
-    let rules = if head.is_builtin() {
-        &*SYSTEM
-    } else {
-        ev.context().rules()
+    let user = !head.is_builtin();
+    let rules = if user { ev.context().rules() } else { &*SYSTEM };
+    let Some(own) = rules.symbols.get(head) else {
+        return Ok(None);
     };
-    match rules.symbols.get(head) {
-        Some(own) => own_rules(own, ev, e),
-        None => Ok(None),
+    let rewritten = own_rules(own, ev, e, head)?;
+    if user && rewritten.is_none() {
+        no_definition_matches(own, ev, e);
+    }
+    Ok(rewritten)
+}
+
+/// Warns that no rule of `own` rewrote `e`, if it has down-rules (§5.3).
+#[cold]
+fn no_definition_matches(own: &SymbolRules, ev: &mut Eval<'_>, e: &Expr) {
+    if !(own.exact.is_empty() && own.down.rules.is_empty()) {
+        ev.warn(Warning::NoDefinitionMatches(e.clone()));
     }
 }
 
-/// A symbol's native function, then its rules, exact ones first.
-fn own_rules(own: &SymbolRules, ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Expr>, EvalError> {
+/// The native function of `owner`, then its rules, exact ones first.
+fn own_rules(
+    own: &SymbolRules,
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    owner: Symbol,
+) -> Result<Option<Expr>, EvalError> {
     if let Some(native) = &own.native {
         if let Some(rewritten) = native(ev, e)? {
+            ev.trace_rewrote(|| StepKind::Native(owner));
             return Ok(Some(rewritten));
         }
+        ev.trace_failed(false);
     }
     if let Some(exact) = own.exact.get(e) {
+        ev.trace_rewrote(|| {
+            StepKind::Rule(RuleId {
+                symbol: owner,
+                kind: RuleKind::Exact,
+                index: exact.rank,
+                origin: exact.origin,
+            })
+        });
         return Ok(Some(exact.rhs.clone()));
     }
-    first(ev, &own.down, e)
+    first(ev, &own.down, e, owner, RuleKind::Down)
 }
 
 /// Step 6 for any other head: the sub-rules of its innermost symbol.
@@ -362,18 +439,34 @@ fn sub_rules(
     f: Symbol,
 ) -> Result<Option<Expr>, EvalError> {
     match rules.symbols.get(f) {
-        Some(own) => first(ev, &own.sub, e),
+        Some(own) => first(ev, &own.sub, e, f, RuleKind::Sub),
         None => Ok(None),
     }
 }
 
-/// The first rule of `list` that rewrites `e`, applied.
-fn first(ev: &mut Eval<'_>, list: &RuleList, e: &Expr) -> Result<Option<Expr>, EvalError> {
-    for stored in &list.rules {
+/// The first rule of `list`, the rules of `kind` on `owner`, that rewrites
+/// `e`, applied.
+fn first(
+    ev: &mut Eval<'_>,
+    list: &RuleList,
+    e: &Expr,
+    owner: Symbol,
+    kind: RuleKind,
+) -> Result<Option<Expr>, EvalError> {
+    for (index, stored) in list.rules.iter().enumerate() {
         if stored.filter.admits(e) {
             if let Some(rewritten) = stored.rule.apply(ev, e)? {
+                ev.trace_rewrote(|| {
+                    StepKind::Rule(RuleId {
+                        symbol: owner,
+                        kind,
+                        index: index as u64,
+                        origin: stored.origin,
+                    })
+                });
                 return Ok(Some(rewritten));
             }
+            ev.trace_failed(true);
         }
     }
     Ok(None)
@@ -607,19 +700,21 @@ impl SymbolRules {
 
     /// Adds `lhs = rhs` to the exact table, in place of a definition of the
     /// same left-hand side.
-    fn insert_exact(&mut self, lhs: Expr, rhs: Expr) {
+    fn insert_exact(&mut self, lhs: Expr, rhs: Expr, origin: Origin) {
         let now = self.tick();
         match self.exact.entry(lhs) {
             Entry::Occupied(mut o) => {
                 let x = o.get_mut();
                 x.rhs = rhs;
                 x.written = now;
+                x.origin = origin;
             }
             Entry::Vacant(v) => {
                 v.insert(Exact {
                     rhs,
                     rank: now,
                     written: now,
+                    origin,
                 });
             }
         }
@@ -889,7 +984,7 @@ impl Context {
             };
             (lhs, rhs)
         };
-        self.place(owner, kind, lhs, rhs)
+        self.place(owner, kind, lhs, rhs, Origin::User)
     }
 
     /// Stores a definition of `owner`, its left-hand side normalised.
@@ -899,6 +994,7 @@ impl Context {
         kind: Kind,
         lhs: Expr,
         rhs: Expr,
+        origin: Origin,
     ) -> Result<(), DefineError> {
         match kind {
             Kind::Value => self.set(owner, rhs)?,
@@ -909,11 +1005,11 @@ impl Context {
                 rules
                     .symbols
                     .entry(owner, SymbolRules::default)
-                    .insert_exact(lhs, rhs);
+                    .insert_exact(lhs, rhs, origin);
             }
             Kind::Down | Kind::Sub => {
                 let now = self.rules().symbols.get(owner).map_or(0, |r| r.next);
-                let stored = self.compile(lhs, rhs, now)?;
+                let stored = self.compile(lhs, rhs, now, origin)?;
                 let rules = self.rules_mut();
                 rules.depend(&stored.depends, owner);
                 let own = rules.symbols.entry(owner, SymbolRules::default);
@@ -949,7 +1045,7 @@ impl Context {
             return Err(DefineError::NotATag(tag));
         }
         let now = self.rules().symbols.get(tag).map_or(0, |r| r.next);
-        let stored = self.compile(lhs, rhs, now)?;
+        let stored = self.compile(lhs, rhs, now, Origin::User)?;
         let rules = self.rules_mut();
         rules.depend(&stored.depends, tag);
         let own = rules.symbols.entry(tag, SymbolRules::default);
@@ -968,9 +1064,15 @@ impl Context {
         self.rules().symbols.get(s).and_then(|r| r.default.clone())
     }
 
-    /// The rule `lhs :> rhs`, defined at time `written`, compiled with the
-    /// attributes and defaults of this context.
-    fn compile(&self, lhs: Expr, rhs: Expr, written: u64) -> Result<Stored, PatternError> {
+    /// The rule `lhs :> rhs` from `origin`, defined at time `written`,
+    /// compiled with the attributes and defaults of this context.
+    fn compile(
+        &self,
+        lhs: Expr,
+        rhs: Expr,
+        written: u64,
+        origin: Origin,
+    ) -> Result<Stored, PatternError> {
         let pattern = Pattern::with_context(&lhs, self)?;
         Ok(Stored {
             key: key(&lhs, &rhs, pattern.variables()),
@@ -980,6 +1082,7 @@ impl Context {
             rule: Rule::from_pattern(pattern, rhs),
             lhs,
             written,
+            origin,
         })
     }
 

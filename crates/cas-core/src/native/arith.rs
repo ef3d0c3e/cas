@@ -16,6 +16,7 @@ use crate::context::EvalError;
 use crate::eval::{Eval, is_list_like, sort_arguments};
 use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
+use crate::trace::Warning;
 
 type Native = Result<Option<Expr>, EvalError>;
 
@@ -37,12 +38,23 @@ fn changed(e: &Expr, result: Expr) -> Option<Expr> {
 /// infinite term absorbs the finite ones, `Infinity + x` is `Infinity`;
 /// opposite directions, `ComplexInfinity` with another infinity, and
 /// `Indeterminate` give `Indeterminate`.
-pub(super) fn plus(_: &mut Eval<'_>, e: &Expr) -> Native {
+pub(super) fn plus(ev: &mut Eval<'_>, e: &Expr) -> Native {
     if is_normal_sum(e.args()) {
         debug_assert_eq!(sum(e), None, "the shortcut of `Plus` misses a change");
         return Ok(None);
     }
-    Ok(sum(e))
+    let result = sum(e);
+    warn_indeterminate(ev, e, result.as_ref());
+    Ok(result)
+}
+
+/// Warns that `e` is an indeterminate form if it gave `Indeterminate` and
+/// none of its arguments is.
+fn warn_indeterminate(ev: &mut Eval<'_>, e: &Expr, result: Option<&Expr>) {
+    let indeterminate = |x: &Expr| x.as_symbol() == Some(Symbol::INDETERMINATE);
+    if result.is_some_and(indeterminate) && !e.args().iter().any(indeterminate) {
+        ev.warn(Warning::Indeterminate(e.clone()));
+    }
 }
 
 /// What `Plus` makes of `e`, if anything.
@@ -190,6 +202,7 @@ pub(super) fn times(ev: &mut Eval<'_>, e: &Expr) -> Native {
             return Ok(Some(turned));
         }
     }
+    warn_indeterminate(ev, e, result.as_ref());
     Ok(result)
 }
 
@@ -461,15 +474,28 @@ fn scalar_power(ev: &mut Eval<'_>, b: &Expr, n: &Expr) -> Native {
     let real_domain = ev.context().domain() == Domain::Real;
     let indeterminate = || Infinity::Indeterminate.to_expr();
     if let (Some(base), Some(exponent)) = (Num::of(b), Num::of(n)) {
-        return Ok(number_power(&base, &exponent, real_domain));
+        let result = number_power(&base, &exponent, real_domain);
+        // `1/0` and `0^0`.
+        if base.is_zero() {
+            let power = || apply(Symbol::POWER, &[b.clone(), n.clone()]);
+            match result.as_ref().and_then(Expr::as_symbol) {
+                Some(Symbol::COMPLEX_INFINITY) => ev.warn(Warning::Infinite(power())),
+                Some(Symbol::INDETERMINATE) => ev.warn(Warning::Indeterminate(power())),
+                _ => {}
+            }
+        }
+        return Ok(result);
     }
     let exponent = Num::of(n);
     if exponent.as_ref().is_some_and(Num::is_zero) {
-        return Ok(Some(if Infinity::of(b).is_some() {
-            indeterminate()
-        } else {
-            Expr::from(1)
-        }));
+        if Infinity::of(b).is_some() {
+            ev.warn(Warning::Indeterminate(apply(
+                Symbol::POWER,
+                &[b.clone(), n.clone()],
+            )));
+            return Ok(Some(indeterminate()));
+        }
+        return Ok(Some(Expr::from(1)));
     }
     if exponent.as_ref().is_some_and(Num::is_one) {
         return Ok(Some(b.clone()));

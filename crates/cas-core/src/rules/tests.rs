@@ -7,6 +7,7 @@ use proptest::prelude::*;
 
 use super::*;
 use crate::Limits;
+use crate::trace::TraceLevel;
 
 fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
@@ -620,14 +621,16 @@ fn malformed_definitions() {
 #[test]
 fn system_rules_apply_to_builtin_heads() {
     let system = system(&[
-        (read("Factorial[0]"), read("1")),
-        (
-            read("Factorial[Pattern[n, Blank[]]]"),
-            read("Times[n, Factorial[Plus[n, -1]]]"),
+        SystemRule::new("Factorial/0", "Factorial[0]", "1"),
+        SystemRule::new(
+            "Factorial/n",
+            "Factorial[Pattern[n, Blank[]]]",
+            "Times[n, Factorial[Plus[n, -1]]]",
         ),
-        (
-            read("Range[Pattern[n, Blank[]]][Pattern[k, Blank[]]]"),
-            read("Plus[n, k]"),
+        SystemRule::new(
+            "Range/sub",
+            "Range[Pattern[n, Blank[]]][Pattern[k, Blank[]]]",
+            "Plus[n, k]",
         ),
     ]);
     let mut ctx = Context::new();
@@ -636,11 +639,11 @@ fn system_rules_apply_to_builtin_heads() {
     let factorial = Symbol::FACTORIAL;
     let own = system.symbols.get(factorial).unwrap();
     assert_eq!(
-        own_rules(own, &mut ev, &read("Factorial[0]")),
+        own_rules(own, &mut ev, &read("Factorial[0]"), factorial),
         Ok(Some(read("1")))
     );
     assert_eq!(
-        own_rules(own, &mut ev, &read("Factorial[3]")),
+        own_rules(own, &mut ev, &read("Factorial[3]"), factorial),
         Ok(Some(read("Times[3, Factorial[Plus[3, -1]]]")))
     );
     assert_eq!(
@@ -655,6 +658,71 @@ fn system_rules_apply_to_builtin_heads() {
     // The shared set has none yet.
     assert_eq!(down(&mut ev, &read("Factorial[0]"), factorial), Ok(None));
     assert_eq!(sub(&mut ev, &read("Range[2][3]")), Ok(None));
+}
+
+#[test]
+fn system_rules_carry_their_names_and_where_they_are_written() {
+    let rule = SystemRule::new(
+        "Factorial/n",
+        "Factorial[Pattern[n, Blank[]]]",
+        "Times[n, Factorial[Plus[n, -1]]]",
+    );
+    let line = line!() - 5;
+    let exact = SystemRule::new("Factorial/0", "Factorial[0]", "1");
+    let system = system(&[exact, rule]);
+    let own = system.symbols.get(Symbol::FACTORIAL).unwrap();
+    let ctx = Context::new();
+    let source = |input: &str| {
+        let e = read(input);
+        let report = ctx.traced_attempt(&e, TraceLevel::Rules, |ev| {
+            own_rules(own, ev, &e, Symbol::FACTORIAL)
+        });
+        let [step] = &report.trace.steps[..] else {
+            panic!("{:?}", report.trace)
+        };
+        let StepKind::Rule(id) = step.kind else {
+            panic!("{step:?}")
+        };
+        id
+    };
+    let id = source("Factorial[3]");
+    assert_eq!(
+        (id.symbol, id.kind, id.index),
+        (Symbol::FACTORIAL, RuleKind::Down, 0)
+    );
+    let Origin::System { name, location } = id.origin else {
+        panic!("{id:?}")
+    };
+    assert_eq!(
+        (name, location.file(), location.line()),
+        ("Factorial/n", file!(), line)
+    );
+    let id = source("Factorial[0]");
+    assert_eq!(id.kind, RuleKind::Exact);
+    assert!(matches!(
+        id.origin,
+        Origin::System {
+            name: "Factorial/0",
+            ..
+        }
+    ));
+    // A user's rules come from the user.
+    let mut ctx = Context::new();
+    define(&mut ctx, "fact[0]", "1");
+    let (_, report) = ctx.eval_with(
+        &read("fact[0]"),
+        &crate::EvalOptions {
+            trace: TraceLevel::Rules,
+        },
+    );
+    assert!(matches!(
+        report.trace.steps[0].kind,
+        StepKind::Rule(RuleId {
+            kind: RuleKind::Exact,
+            origin: Origin::User,
+            ..
+        })
+    ));
 }
 
 #[test]

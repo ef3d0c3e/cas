@@ -747,7 +747,7 @@ impl Matcher<'_, '_, '_> {
     }
 
     fn holds(&mut self, test: &Expr) -> Result<bool, EvalError> {
-        let value = self.ev.eval(test)?;
+        let value = self.ev.test(test)?;
         Ok(value.as_symbol() == Some(Symbol::TRUE))
     }
 
@@ -1217,7 +1217,7 @@ impl Rule {
                 .collect();
             match condition {
                 Some((body, test)) => {
-                    let value = ev.eval(&substitute(test, &map))?;
+                    let value = ev.test(&substitute(test, &map))?;
                     if value.as_symbol() != Some(Symbol::TRUE) {
                         return Ok(false);
                     }
