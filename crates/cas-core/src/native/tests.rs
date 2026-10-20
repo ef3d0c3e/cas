@@ -83,8 +83,9 @@ fn products() {
         ("Times[2, Power[2, 1/2]]", "Times[2, Power[2, 1/2]]"),
         ("Times[Power[6, 1/2], Power[2, -1/2]]", "Power[3, 1/2]"),
         // Lists are left to the products of linear algebra (R-10).
-        ("Times[2, 3, List[1, 2]]", "Times[6, List[1, 2]]"),
-        ("Times[0, List[1, 2]]", "Times[0, List[1, 2]]"),
+        // A scalar scales a list (CAS-62).
+        ("Times[2, 3, List[1, 2]]", "List[6, 12]"),
+        ("Times[0, List[1, 2]]", "List[0, 0]"),
     ]);
 }
 

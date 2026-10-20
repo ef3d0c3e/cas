@@ -11,6 +11,7 @@
 )]
 
 mod arith;
+mod linear;
 mod logic;
 mod number;
 mod radical;
@@ -52,6 +53,7 @@ pub(crate) fn get(s: Symbol) -> Option<NativeFn> {
         }
         Symbol::ELEMENT => logic::element,
         Symbol::ABS => arith::abs,
+        Symbol::ELEMENTWISE_TIMES => linear::elementwise_times,
         Symbol::AND => logic::and,
         Symbol::OR => logic::or,
         Symbol::NOT => logic::not,

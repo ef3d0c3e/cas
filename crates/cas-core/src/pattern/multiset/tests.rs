@@ -348,49 +348,58 @@ fn one_identity_lets_a_lone_expression_stand_for_the_application() {
 
 #[test]
 fn lists_in_times_keep_their_order() {
+    // Products of lists evaluate (CAS-62), so these subjects are matched as
+    // written, as in a held expression.
     let ctx = Context::new();
-    check(
-        &ctx,
-        &[
-            (
-                "Times[Pattern[x, Blank[]], Pattern[y, Blank[]]]",
-                "Times[List[1], List[2]]",
-                Some("x=List[1] y=List[2]"),
-            ),
-            (
-                "Times[Pattern[y, Blank[List]], Pattern[x, Blank[List]]]",
-                "Times[List[1], List[2]]",
-                Some("y=List[1] x=List[2]"),
-            ),
-            (
-                "Times[List[2], Pattern[x, Blank[]]]",
-                "Times[List[1], List[2]]",
-                None,
-            ),
-            (
-                "Times[Pattern[x, Blank[]], List[2]]",
-                "Times[List[1], List[2]]",
-                Some("x=List[1]"),
-            ),
-            (
-                "Times[Pattern[c, Blank[]], Pattern[x, Blank[]], Pattern[y, Blank[]]]",
-                "Times[2, List[1], List[2]]",
-                Some("c=2 x=List[1] y=List[2]"),
-            ),
-        ],
-    );
+    let mut wrong = Vec::new();
+    for (pattern, subject, expected) in [
+        (
+            "Times[Pattern[x, Blank[]], Pattern[y, Blank[]]]",
+            "Times[List[1], List[2]]",
+            Some("x=List[1] y=List[2]"),
+        ),
+        (
+            "Times[Pattern[y, Blank[List]], Pattern[x, Blank[List]]]",
+            "Times[List[1], List[2]]",
+            Some("y=List[1] x=List[2]"),
+        ),
+        (
+            "Times[List[2], Pattern[x, Blank[]]]",
+            "Times[List[1], List[2]]",
+            None,
+        ),
+        (
+            "Times[Pattern[x, Blank[]], List[2]]",
+            "Times[List[1], List[2]]",
+            Some("x=List[1]"),
+        ),
+        (
+            "Times[Pattern[c, Blank[]], Pattern[x, Blank[]], Pattern[y, Blank[]]]",
+            "Times[2, List[1], List[2]]",
+            Some("c=2 x=List[1] y=List[2]"),
+        ),
+    ] {
+        let p = Pattern::with_context(&read(pattern), &ctx).unwrap();
+        let found = first_match(&ctx, &p, &read(subject)).unwrap().map(|b| {
+            b.iter()
+                .map(|(x, v)| format!("{x}={v}"))
+                .collect::<Vec<_>>()
+                .join(" ")
+        });
+        if found.as_deref() != expected {
+            wrong.push(format!(
+                "{pattern} vs {subject}: {found:?}, expected {expected:?}"
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     // A pattern that matches only lists keeps its place in a product, as a
     // list does, so a rule for `y x` binds `y` to the left factor.
-    let mut ctx = Context::new();
-    ctx.define_delayed(
-        &read("f[Times[Pattern[y, Blank[List]], Pattern[x, Blank[List]]]]"),
-        &read("left[y]"),
-    )
-    .unwrap();
-    assert_eq!(
-        ctx.eval(&read("f[Times[List[1], List[2]]]")).unwrap(),
-        read("left[List[1]]")
+    let e = read(
+        "ReplaceAll[Hold[Times[List[1], List[2]]], \
+         Rule[Times[Pattern[y, Blank[List]], Pattern[x, Blank[List]]], left[y]]]",
     );
+    assert_eq!(ctx.eval(&e).unwrap(), read("Hold[left[List[1]]]"));
 }
 
 #[test]

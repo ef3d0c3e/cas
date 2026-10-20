@@ -8,6 +8,7 @@
 
 use cas_num::Rational;
 
+use super::linear;
 use super::number::{Infinity, Num};
 use super::radical::{self, MAX_POWER_BITS};
 use crate::assume::{self, Domain, Set, Sign, Truth};
@@ -165,17 +166,22 @@ fn with_coefficient(c: &Num, m: Expr) -> Expr {
 /// (`x^p x^q` is `x^(p + q)`, so `x x^(-1)` is 1, an accepted unsoundness
 /// like O3), powers of numbers with the same exponent multiplied
 /// (`2^(1/2) 3^(1/2)` is `6^(1/2)`), `0 x` is 0 (O3), `1 x` is `x`.
-/// Lists keep their order and are left to the products of R-10. Infinite
+/// Lists, in their order, are multiplied as in linear algebra and scaled by
+/// the rest (`linear`, CAS-62). Infinite
 /// factors: the coefficient's sign turns a direction, `0` times an infinity
 /// and `Indeterminate` give `Indeterminate`, and `ComplexInfinity` absorbs
 /// the other factors. The other factors of a directed infinity turn it when
 /// the assumptions tell their sign: `x Infinity` is `Infinity` for `x > 0`.
 pub(super) fn times(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let result = if is_normal_product(e.args()) {
-        debug_assert_eq!(product(e), None, "the shortcut of `Times` misses a change");
+        debug_assert_eq!(
+            product(e),
+            Ok(None),
+            "the shortcut of `Times` misses a change"
+        );
         None
     } else {
-        product(e)
+        product(e)?
     };
     // Most products have no infinity, which their symbols tell in O(1).
     let current = result.as_ref().unwrap_or(e);
@@ -218,7 +224,11 @@ fn signed_infinity(ev: &Eval<'_>, e: &Expr) -> Option<Expr> {
 }
 
 /// What `Times` makes of `e`, if anything.
-fn product(e: &Expr) -> Option<Expr> {
+///
+/// # Errors
+///
+/// [`EvalError::Shape`] for lists whose dimensions do not fit.
+fn product(e: &Expr) -> Result<Option<Expr>, EvalError> {
     let mut coefficient = Num::one();
     let mut infinity: Option<Infinity> = None;
     // `(base, exponents, the factor itself)`; equal bases are adjacent.
@@ -249,10 +259,10 @@ fn product(e: &Expr) -> Option<Expr> {
     }
     if let Some(i) = infinity {
         let finite_only = powers.is_empty() && lists.is_empty();
-        return changed(e, times_infinity(e, i, &coefficient, finite_only));
+        return Ok(changed(e, times_infinity(e, i, &coefficient, finite_only)));
     }
     if coefficient.is_zero() && lists.is_empty() {
-        return changed(e, Expr::from(0));
+        return Ok(changed(e, Expr::from(0)));
     }
     let mut factors = Vec::new();
     for (base, exponents, factor) in powers {
@@ -267,21 +277,41 @@ fn product(e: &Expr) -> Option<Expr> {
         out.push(coefficient.to_expr());
     }
     out.extend(factors);
+    // Vectors and matrices, from the left, scaled by the rest.
+    if lists.iter().all(linear::is_list) {
+        if let Some(folded) = linear::fold(&lists)? {
+            let scalar = match out.len() {
+                0 => None,
+                1 => out.pop(),
+                _ => Some(apply(Symbol::TIMES, &out)),
+            };
+            let result = match (scalar, linear::shape(&folded)) {
+                (None, _) => folded,
+                (Some(c), Some(_)) => linear::scale(&c, &folded),
+                (Some(c), None) => apply(Symbol::TIMES, &[c, folded]),
+            };
+            return Ok(changed(e, result));
+        }
+    }
     out.extend(lists);
-    changed(
+    Ok(changed(
         e,
         match out.len() {
             1 => out.pop().expect("one factor"),
             _ => apply(Symbol::TIMES, &out),
         },
-    )
+    ))
 }
 
 /// Whether `Times` leaves these arguments as they are: one number at most,
 /// first, neither 0 nor 1, no infinity, no equal bases, and no two powers of
 /// numbers with one exponent.
 fn is_normal_product(args: &[Expr]) -> bool {
-    if args.len() < 2 || args.iter().any(|a| Infinity::of(a).is_some()) {
+    if args.len() < 2
+        || args
+            .iter()
+            .any(|a| Infinity::of(a).is_some() || linear::is_list(a))
+    {
         return false;
     }
     let numbers = args.iter().filter(|a| a.is_number()).count();
@@ -404,21 +434,32 @@ fn merge_number_powers(factors: Vec<Expr>) -> Vec<Expr> {
 ///   rational `b`, `(b^p)^q` is `b^(p q)` for any real `q`;
 /// - infinities: a direction to a positive integer power, 0 for a negative
 ///   power, `Indeterminate` for `Infinity^0`.
-#[allow(
-    clippy::many_single_char_names,
-    reason = "b^n, as written in mathematics"
-)]
 pub(super) fn power(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [b, n] = e.args() else {
         return Ok(None);
     };
-    let real_domain = ev.context().domain() == Domain::Real;
-    let indeterminate = || Infinity::Indeterminate.to_expr();
     if matches!(Infinity::of(b), Some(Infinity::Indeterminate))
         || matches!(Infinity::of(n), Some(Infinity::Indeterminate))
     {
-        return Ok(Some(indeterminate()));
+        return Ok(Some(Infinity::Indeterminate.to_expr()));
     }
+    // A matrix power, or nothing for a vector: never `x^0` (CAS-62). Apart
+    // from the rest, whose frame would stay on the stack while the products
+    // evaluate.
+    if linear::is_list(b) {
+        return linear::power(ev, b, n);
+    }
+    scalar_power(ev, b, n)
+}
+
+/// [`power`] of a base that is not a list, neither side `Indeterminate`.
+#[allow(
+    clippy::many_single_char_names,
+    reason = "b^n, as written in mathematics"
+)]
+fn scalar_power(ev: &mut Eval<'_>, b: &Expr, n: &Expr) -> Native {
+    let real_domain = ev.context().domain() == Domain::Real;
+    let indeterminate = || Infinity::Indeterminate.to_expr();
     if let (Some(base), Some(exponent)) = (Num::of(b), Num::of(n)) {
         return Ok(number_power(&base, &exponent, real_domain));
     }

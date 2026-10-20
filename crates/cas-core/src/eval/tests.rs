@@ -213,11 +213,9 @@ fn listable_heads_thread_over_lists() {
                 "Plus[List[1, 2], List[a, b]]",
                 "List[Plus[1, a], Plus[2, b]]",
             ),
-            // `*` is linear algebra: `Times` and `Power` do not thread (R13).
-            (
-                "Times[List[1, 2], List[3, 4]]",
-                "Times[List[1, 2], List[3, 4]]",
-            ),
+            // `*` is linear algebra: `Times` and `Power` do not thread (R13);
+            // two vectors give their dot product (CAS-62).
+            ("Times[List[1, 2], List[3, 4]]", "11"),
             ("Power[List[1, 2], 2]", "Power[List[1, 2], 2]"),
         ],
     );
@@ -243,12 +241,17 @@ fn orderless_heads_sort() {
             ("sort_f[c, b, a]", "sort_f[a, b, c]"),
             ("sort_f[x, 2, 1/2]", "sort_f[1/2, 2, x]"),
             ("Plus[c, Plus[b, a], 1]", "Plus[1, a, b, c]"),
-            // In `Times`, lists keep their order, after the other factors.
+            // In `Times`, lists keep their order, after the other factors:
+            // lists that are neither vectors nor matrices stay there...
             (
-                "Times[List[2], b, List[1], a]",
-                "Times[a, b, List[2], List[1]]",
+                "Times[List[List[2], 2], b, List[List[1], 1], a]",
+                "Times[a, b, List[List[2], 2], List[List[1], 1]]",
             ),
-            ("Times[List[2], List[1]]", "Times[List[2], List[1]]"),
+            // ...and matrices are multiplied in that order, `A B` not `B A`.
+            (
+                "Times[List[List[1, 2], List[3, 4]], List[List[5, 6], List[7, 8]]]",
+                "List[List[19, 22], List[43, 50]]",
+            ),
         ],
     );
 }
@@ -414,11 +417,47 @@ fn matcher_layer(f: Symbol, e: Expr) -> Expr {
     Expr::apply(&f.into(), &[e])
 }
 
+/// A context for [`a_level_takes_less_than_stack_per_level`]: room for
+/// `depth` layers of each shape, `orderless` and `flat` with their
+/// attributes, and the rules of `stack_chain` and `stack_entry`.
+fn stack_context(depth: u32, orderless: Symbol, flat: Symbol) -> Context {
+    let mut ctx = Context::new();
+    let mut limits = ctx.limits();
+    limits.recursion = 10 * depth;
+    ctx.set_limits(limits);
+    let rules = [
+        ("stack_chain[0]", "stack_probe[]"),
+        (
+            "stack_chain[Pattern[n, Blank[]]]",
+            "Condition[done, SameQ[stack_chain[Plus[n, -1]], done]]",
+        ),
+    ];
+    for (lhs, rhs) in rules {
+        ctx.define_delayed(&read(lhs), &read(rhs)).unwrap();
+    }
+    let up = [
+        ("Times[stack_entry[0], stack_entry[0]]", "stack_probe[]"),
+        (
+            "Times[stack_entry[Pattern[n, Blank[]]], stack_entry[Pattern[n, Blank[]]]]",
+            "Power[List[List[stack_entry[Plus[n, -1]]]], 2]",
+        ),
+    ];
+    for (lhs, rhs) in up {
+        ctx.define_up_delayed(sym("stack_entry"), &read(lhs), &read(rhs))
+            .unwrap();
+    }
+    ctx.set_attributes(orderless, Attributes::ORDERLESS)
+        .unwrap();
+    ctx.set_attributes(flat, Attributes::FLAT).unwrap();
+    ctx
+}
+
 /// The stack each level of evaluation takes, at most, through arguments,
 /// through heads, through a native that evaluates its arguments (`And` and
-/// `Or`, which alternate so they do not flatten), through the matcher, and
-/// through rules whose conditions recurse: measured from the address of a
-/// local in a native at the bottom.
+/// `Or`, which alternate so they do not flatten), through the matcher,
+/// through rules whose conditions recurse, and through a native that
+/// evaluates what it builds (a matrix power): measured from the address of
+/// a local in a native at the bottom.
 #[test]
 fn a_level_takes_less_than_stack_per_level() {
     static BOTTOM: AtomicUsize = AtomicUsize::new(usize::MAX);
@@ -429,7 +468,7 @@ fn a_level_takes_less_than_stack_per_level() {
     });
     let f = sym("stack_f");
     // Each with the levels one layer takes.
-    let shapes: [(&str, Shape, usize); 7] = [
+    let shapes: [(&str, Shape, usize); 8] = [
         ("arguments", |f, e| Expr::apply(&f.into(), &[e]), 1),
         ("heads", |_, e| Expr::apply(&e, &[]), 1),
         (
@@ -457,30 +496,19 @@ fn a_level_takes_less_than_stack_per_level() {
         // rule's evaluation, its four match nodes and the condition's
         // evaluation per step.
         ("rules", |_, e| e, 6),
+        // `stack_entry[n] stack_entry[n]`, whose up-rule gives the power
+        // `{{stack_entry[n - 1]}}^2`: the product it evaluates, its row,
+        // and in it `stack_entry[n - 1] stack_entry[n - 1]` per step.
+        ("powers", |_, e| e, 3),
     ];
     let chain = sym("stack_chain");
+    let entry = sym("stack_entry");
     let (orderless, flat) = (sym("stack_o"), sym("stack_fl"));
     let depth = 2000;
     let measured = std::thread::Builder::new()
         .stack_size(64 << 20)
         .spawn(move || {
-            let mut ctx = Context::new();
-            let mut limits = ctx.limits();
-            limits.recursion = 10 * depth;
-            ctx.set_limits(limits);
-            let rules = [
-                ("stack_chain[0]", "stack_probe[]"),
-                (
-                    "stack_chain[Pattern[n, Blank[]]]",
-                    "Condition[done, SameQ[stack_chain[Plus[n, -1]], done]]",
-                ),
-            ];
-            for (lhs, rhs) in rules {
-                ctx.define_delayed(&read(lhs), &read(rhs)).unwrap();
-            }
-            ctx.set_attributes(orderless, Attributes::ORDERLESS)
-                .unwrap();
-            ctx.set_attributes(flat, Attributes::FLAT).unwrap();
+            let ctx = stack_context(depth, orderless, flat);
             shapes.map(|(name, shape, levels)| {
                 let f = match name {
                     "multiset" => orderless,
@@ -489,6 +517,9 @@ fn a_level_takes_less_than_stack_per_level() {
                 };
                 let e = if name == "rules" {
                     Expr::apply(&chain.into(), &[i64::from(depth).into()])
+                } else if name == "powers" {
+                    let e = Expr::apply(&entry.into(), &[i64::from(depth).into()]);
+                    Expr::apply(&Symbol::TIMES.into(), &[e.clone(), e])
                 } else if matches!(name, "matcher" | "multiset" | "runs") {
                     let condition = Expr::apply(
                         &Symbol::CONDITION.into(),
