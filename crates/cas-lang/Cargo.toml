@@ -1,6 +1,6 @@
 [package]
 name = "cas-lang"
-description = "The surface language: lexer, parser and lowering to expressions"
+description = "The surface language: lexer, parser, lowering to expressions and printing back"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

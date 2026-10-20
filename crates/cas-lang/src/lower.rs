@@ -1311,7 +1311,7 @@ fn placeholder(range: Range<usize>) -> Lowering {
 
 /// Whether a builtin is a value rather than a function: a constant, a
 /// logical value or an infinity.
-fn is_value(s: Symbol) -> bool {
+pub(crate) fn is_value(s: Symbol) -> bool {
     s.builtin_attributes()
         .is_some_and(|a| a.contains(Attributes::CONSTANT))
         || matches!(

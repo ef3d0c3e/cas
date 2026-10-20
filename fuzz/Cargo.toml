@@ -120,3 +120,10 @@ path = "fuzz_targets/lang_lower.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "lang_print"
+path = "fuzz_targets/lang_print.rs"
+test = false
+doc = false
+bench = false

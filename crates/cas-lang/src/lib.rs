@@ -19,6 +19,9 @@
 //!   values to evaluate, or statement heads for the session (`Set`,
 //!   `SetDelayed`, …), with [`Spans`] back into the text and
 //!   [`Diagnostic`]s, some with a [`Fix`].
+//! - [`print()`]: an expression as text that reads back as it (the input
+//!   form), for output that can be pasted as input; a [`PrintError`] for
+//!   what the language cannot write.
 //!
 //! The session comes with CAS-121.
 
@@ -27,6 +30,7 @@ mod literal;
 mod lower;
 mod names;
 mod parser;
+mod print;
 mod syntax;
 
 pub use lexer::{LexError, LexErrorKind, Lexed, lex};
@@ -38,4 +42,7 @@ pub use names::{
     Names, NamesError, NamesErrorKind, SyntaxForm, Target, TypeName, escape_name, unescape_name,
 };
 pub use parser::{MAX_DEPTH, Parse, ParseErrorKind, SyntaxError, SyntaxErrorKind, parse};
+#[doc(hidden)]
+pub use print::fold_arithmetic;
+pub use print::{MAX_PRINT_DEPTH, PrintError, PrintErrorKind, print};
 pub use syntax::{CasLanguage, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};

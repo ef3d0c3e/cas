@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 3ce34cbce59245f32c9fb6b86284bc46f4f4f1dbbb7fb4024c21354440a2b059 # shrinks to e = Power[Times[0, x, Power[x, -3]], -1]
+cc 627aa3b119d91825b869b6e5bfe4fb1cee5f921d6ec574feda42fe371927c8ec # shrinks to e = Power[x, Times[-1, 1, 0]]
