@@ -14,6 +14,7 @@ mod arith;
 mod logic;
 mod number;
 mod radical;
+mod replace;
 mod structure;
 
 use crate::build;
@@ -47,6 +48,10 @@ pub(crate) fn get(s: Symbol) -> Option<NativeFn> {
         Symbol::PART => structure::part,
         Symbol::MAP => structure::map,
         Symbol::APPLY => structure::apply,
+        Symbol::REPLACE_ALL => replace::replace_all,
+        Symbol::REPLACE => replace::replace,
+        Symbol::REPLACE_REPEATED => replace::replace_repeated,
+        Symbol::MATCH_Q => replace::match_q,
         _ => return None,
     })
 }

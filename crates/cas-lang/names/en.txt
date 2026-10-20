@@ -90,8 +90,8 @@ I Complex
 ElementwiseTimes ElementwiseDivide ElementwisePower Equation Equal Unequal Less LessEqual
 Greater GreaterEqual Element And Or Not If Function Range FiniteSet At ReplaceAt
 Null DirectedInfinity
-# Predicates and structure without a surface name yet (CAS-123 decides).
-SameQ FreeQ Part Apply
+# Predicates, structure and rules without a surface name yet (CAS-123 decides).
+SameQ FreeQ Part Apply Replace ReplaceRepeated MatchQ Slot
 # Statements, written with `:=`, `assume` and `purge` (CAS-DOC-7 §4).
 Set SetDelayed UpSetDelayed Assume Clear
 # The type tests of `::` (CAS-DOC-7 §6), named in [types].

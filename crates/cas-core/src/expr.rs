@@ -278,7 +278,7 @@ impl Expr {
 }
 
 /// The symbol's bit in the Bloom filter of [`Meta::symbols`].
-fn symbol_bit(s: Symbol) -> u64 {
+pub(crate) fn symbol_bit(s: Symbol) -> u64 {
     // Fibonacci hashing: the top 6 bits of the product are well mixed.
     1 << (s.id().wrapping_mul(0x9e37_79b9) >> 26)
 }

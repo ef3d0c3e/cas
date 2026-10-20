@@ -409,6 +409,11 @@ fn deep_evaluation_runs_on_a_thread_of_its_own() {
 /// A way to nest one more level around an expression.
 type Shape = fn(Symbol, Expr) -> Expr;
 
+/// `f[e]`, as a layer of a pattern or of its subject.
+fn matcher_layer(f: Symbol, e: Expr) -> Expr {
+    Expr::apply(&f.into(), &[e])
+}
+
 /// The stack each level of evaluation takes, at most, through arguments,
 /// through heads and through a native that evaluates its arguments
 /// (`And` and `Or`, which alternate so they do not flatten): measured from
@@ -423,7 +428,7 @@ fn a_level_takes_less_than_stack_per_level() {
     });
     let f = sym("stack_f");
     // Each with the levels one layer takes.
-    let shapes: [(&str, Shape, usize); 3] = [
+    let shapes: [(&str, Shape, usize); 4] = [
         ("arguments", |f, e| Expr::apply(&f.into(), &[e]), 1),
         ("heads", |_, e| Expr::apply(&e, &[]), 1),
         (
@@ -434,6 +439,9 @@ fn a_level_takes_less_than_stack_per_level() {
             },
             2,
         ),
+        // `MatchQ[f[…f[a]…], f[…f[Condition[_, probe[]]]…]]`: the matcher
+        // nests one node per level, and its condition evaluates the probe.
+        ("matcher", |f, e| matcher_layer(f, e), 1),
     ];
     let depth = 2000;
     let measured = std::thread::Builder::new()
@@ -444,7 +452,21 @@ fn a_level_takes_less_than_stack_per_level() {
             limits.recursion = 10 * depth;
             ctx.set_limits(limits);
             shapes.map(|(name, shape, levels)| {
-                let e = (0..depth).fold(Expr::apply(&probe.into(), &[]), |e, _| shape(f, e));
+                let e = if name == "matcher" {
+                    let condition = Expr::apply(
+                        &Symbol::CONDITION.into(),
+                        &[
+                            Expr::apply(&Symbol::BLANK.into(), &[]),
+                            Expr::apply(&probe.into(), &[]),
+                        ],
+                    );
+                    let pattern = (0..depth).fold(condition, |e, _| shape(f, e));
+                    let subject = (0..depth).fold(Expr::from(sym("stack_a")), |e, _| shape(f, e));
+                    let pattern = Expr::apply(&Symbol::HOLD_PATTERN.into(), &[pattern]);
+                    Expr::apply(&Symbol::MATCH_Q.into(), &[subject, pattern])
+                } else {
+                    (0..depth).fold(Expr::apply(&probe.into(), &[]), |e, _| shape(f, e))
+                };
                 BOTTOM.store(usize::MAX, Ordering::Relaxed);
                 let top = black_box(0u8);
                 let top = std::ptr::addr_of!(top) as usize;

@@ -15,7 +15,8 @@
 //!    them (§6.2).
 //! 6. Rewrite, by the first source that applies: up-rules, the head's native
 //!    function (the builtins' are in `native`, CAS-54), system rules,
-//!    down-rules, sub-rules. The rules come with CAS-55 and CAS-56.
+//!    down-rules, sub-rules, and the application of a `Function` head
+//!    (`pattern`, CAS-55). The rule sources come with CAS-56.
 //! 7. A change in step 5 or 6 goes back to step 1, counted against
 //!    [`Limits::iterations`]. Otherwise the expression is a fixpoint: it is
 //!    stamped, so evaluating it again in this state is O(1), and memoised
@@ -117,13 +118,25 @@ impl<'c> Eval<'c> {
     ///
     /// [`EvalError`] when a limit is reached or an operation has no result.
     pub fn eval(&mut self, e: &Expr) -> Result<Expr, EvalError> {
+        self.enter()?;
+        let result = self.evaluate(e);
+        self.leave();
+        result
+    }
+
+    /// Takes one level of [`Limits::recursion`], for evaluation or for the
+    /// recursion of a native, such as the matcher's; [`Eval::leave`] gives
+    /// it back.
+    pub(crate) fn enter(&mut self) -> Result<(), EvalError> {
         if self.depth >= self.recursion {
             return Err(EvalError::RecursionLimit);
         }
         self.depth += 1;
-        let result = self.evaluate(e);
+        Ok(())
+    }
+
+    pub(crate) fn leave(&mut self) {
         self.depth -= 1;
-        result
     }
 
     /// Steps 1 to 7.
@@ -241,8 +254,13 @@ impl<'c> Eval<'c> {
                 return Ok(Some(rewritten));
             }
         }
-        // 3. System rules, 4. down-rules, 5. sub-rules and the application of
-        // `Function` heads: CAS-55 and CAS-56.
+        // 3. System rules and 4. down-rules: CAS-56.
+        // 5. Sub-rules (CAS-56), and a `Function` head applied.
+        if let View::Apply { head, args } = e.view() {
+            if head.head().and_then(Expr::as_symbol) == Some(Symbol::FUNCTION) {
+                return Ok(crate::pattern::apply_function(head, args));
+            }
+        }
         Ok(None)
     }
 }

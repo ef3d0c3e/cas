@@ -110,6 +110,11 @@ builtins! {
     AT = "At" [PROTECTED];
     REPLACE_AT = "ReplaceAt" [PROTECTED];
     REPLACE_ALL = "ReplaceAll" [PROTECTED];
+    REPLACE = "Replace" [PROTECTED];
+    REPLACE_REPEATED = "ReplaceRepeated" [PROTECTED];
+    MATCH_Q = "MatchQ" [PROTECTED];
+    // `#n` of a pure function without named parameters (CAS-55).
+    SLOT = "Slot" [PROTECTED];
     // Statements: the session runs them, evaluation leaves them alone
     // (CAS-DOC-4 R1, CAS-DOC-7 §4).
     SET = "Set" [HOLD_FIRST, PROTECTED];
@@ -157,5 +162,6 @@ pub(crate) fn is_pattern_head(s: Symbol) -> bool {
             | Symbol::OPTIONAL
             | Symbol::CONDITION
             | Symbol::PATTERN_TEST
+            | Symbol::HOLD_PATTERN
     )
 }

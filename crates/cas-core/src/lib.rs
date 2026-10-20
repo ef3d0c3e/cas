@@ -23,8 +23,9 @@
 //!   values, holds, normalisation of `Sequence`, `Flat`, `Listable` and
 //!   `Orderless` heads, and native functions ([`NativeFn`], which receive
 //!   the call's [`Eval`]: exact arithmetic with radicals and infinities,
-//!   comparisons, logic, structure), to a fixpoint that is stamped, so
-//!   evaluating it again is O(1). [`Limits`] bound recursion and rewrites;
+//!   comparisons, logic, structure, `Replace`), to a fixpoint that is
+//!   stamped, so evaluating it again is O(1). [`Pattern`] and [`Rule`] are
+//!   compiled once and matched by backtracking. [`Limits`] bound recursion and rewrites;
 //!   [`Limits::deep`] evaluates on a thread of its own with a large stack.
 
 mod attributes;
@@ -37,6 +38,7 @@ mod intern;
 mod native;
 mod node;
 mod order;
+mod pattern;
 mod print;
 mod read;
 mod symbol;
@@ -48,6 +50,7 @@ pub use context::{Context, ContextError, EvalError, Limits, StateId};
 pub use eval::{Eval, NativeFn, STACK_PER_LEVEL};
 pub use expr::{Expr, View};
 pub use intern::{InternerStats, interner_stats};
+pub use pattern::{Pattern, PatternError, PatternErrorKind, Rule};
 pub use print::FullForm;
 pub use read::{FullFormError, FullFormErrorKind};
 pub use symbol::Symbol;
