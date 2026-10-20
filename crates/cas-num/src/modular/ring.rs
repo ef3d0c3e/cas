@@ -4,9 +4,12 @@
 //! `x R mod n` with `R = B^k` for a `k`-limb modulus, and products are
 //! reduced by REDC, which divides by `R` instead of by `n`. Below
 //! [`REDC_N_THRESHOLD`] limbs REDC eliminates two limbs per pass over `n`
-//! (GMP's `redc_2`); from it on, it multiplies by a precomputed
-//! `-n^(-1) mod R` (a short product) and by `n` with the subquadratic
-//! multiplication (`redc_n`). Even moduli store
+//! (GMP's `redc_2`). From it on (`redc_n`), it takes `q = t (-n^(-1)) mod R`
+//! by a short product and `q n` in full or modulo `B^m - 1`, from which the
+//! known low half recovers the high one. Below the cyclic transform that product
+//! splits `B^m - 1` ([`crate::kernel::mul::split`]); at transform sizes, `n`
+//! and `-n^(-1)` are transformed once per ring, so that each product
+//! transforms only `q` (or `t`'s low half) and the result. Even moduli store
 //! plain values and reduce products by division.
 #![allow(
     clippy::many_single_char_names,
@@ -16,14 +19,16 @@
 use std::cell::RefCell;
 use std::cmp::Ordering;
 
+use crate::kernel::div::bdiv::{binvert, binvert_scratch_len};
 use crate::kernel::div::{div_2by1, reciprocal_2by1};
-use crate::kernel::mul::mullo::{mullo, mullo_scratch_len};
+use crate::kernel::mul::mullo::{cost as mullo_cost, mullo, mullo_scratch_len};
+use crate::kernel::mul::split::{split_wrap_len, splits};
 use crate::kernel::mul::{
     addmul_2_carries, mul_wrap, mul_wrap_scratch_len, wrap_len, wraps_cyclically,
 };
 use crate::kernel::{
     self, add_1_assign, add_n, add_n_assign, addmul_1, cmp_n, div_rem, div_rem_scratch_len,
-    mul_scratch_len, sqr_scratch_len, sub_1_assign, sub_assign, sub_n, sub_n_assign, submul_1,
+    mul_scratch_len, ntt, sqr_scratch_len, sub_1_assign, sub_assign, sub_n, sub_n_assign, submul_1,
 };
 use crate::{Integer, Limb, Natural};
 
@@ -82,8 +87,8 @@ enum Form {
         ninv: Limb,
         /// `-n^(-1) mod B^2`, for `redc_2`.
         ninv2: u128,
-        /// `-n^(-1) mod R`, for `redc_n` (empty below `REDC_N_THRESHOLD`).
-        ninv_full: Vec<Limb>,
+        /// What `redc_n` needs, from `REDC_N_THRESHOLD` limbs on.
+        redc: Option<Redc>,
         /// `R mod n`, the residue 1.
         one: Box<[Limb]>,
         /// `R^2 mod n`, for conversion into Montgomery form.
@@ -116,15 +121,6 @@ impl ModRing {
         let k = n.limb_len();
         let form = if n.bit(0) {
             let r = Natural::power_of_two(kernel::limbs_to_bits(k));
-            let ninv_full = if k >= REDC_N_THRESHOLD {
-                let inv = Integer::from(&n)
-                    .mod_inverse(&Integer::from(&r))
-                    .expect("odd modulus is invertible modulo a power of two")
-                    .unsigned_abs();
-                padded(&(&r - &inv), k).into_vec()
-            } else {
-                Vec::new()
-            };
             let inv = limb_inverse(n.limbs()[0]);
             // One more Newton step takes the inverse to 128 bits.
             let low = u128::from(n.limbs()[0])
@@ -135,7 +131,7 @@ impl ModRing {
             Form::Montgomery {
                 ninv: inv.wrapping_neg(),
                 ninv2: inv2.wrapping_neg(),
-                ninv_full,
+                redc: (k >= REDC_N_THRESHOLD).then(|| Redc::new(n.limbs())),
                 one: padded(&(&r % &n), k),
                 r2: padded(&(r.square() % &n), k),
             }
@@ -373,12 +369,11 @@ impl ModRing {
     fn scratch(&self) -> Scratch {
         let k = self.len();
         let (u, work) = match &self.form {
-            Form::Montgomery { ninv_full, .. } => {
+            Form::Montgomery { redc, .. } => {
                 let product = mul_scratch_len(k, k).max(sqr_scratch_len(k));
-                if ninv_full.is_empty() {
-                    (0, product)
-                } else {
-                    (4 * k, product.max(redc_n_scratch_len(k)))
+                match redc {
+                    None => (0, product),
+                    Some(redc) => (4 * k, product.max(redc.scratch_len(k))),
                 }
             }
             Form::Plain => (
@@ -428,19 +423,15 @@ impl ModRing {
     /// `B^k + n`. Clobbers `s.t`.
     fn redc_carry(&self, r: &mut [Limb], s: &mut Scratch) -> Limb {
         let Form::Montgomery {
-            ninv,
-            ninv2,
-            ninv_full,
-            ..
+            ninv, ninv2, redc, ..
         } = &self.form
         else {
             unreachable!("REDC needs an odd modulus");
         };
         let n = self.n.limbs();
-        if ninv_full.is_empty() {
-            redc_2(r, &mut s.t, n, *ninv, *ninv2)
-        } else {
-            redc_n(r, &s.t, n, ninv_full, &mut s.u, &mut s.work)
+        match redc {
+            None => redc_2(r, &mut s.t, n, *ninv, *ninv2),
+            Some(redc) => redc_n(r, &s.t, n, redc, &mut s.u, &mut s.work),
         }
     }
 }
@@ -651,56 +642,153 @@ fn redc_2(r: &mut [Limb], t: &mut [Limb], n: &[Limb], ninv: Limb, ninv2: u128) -
     add_n(r, hi, lo)
 }
 
-/// `r = (t + q n) / R` as [`redc_2`], with `q = t ninv_full mod R` a short
-/// product ([`mullo`]) and `q n` from a full product, or, when a cyclic
-/// transform of `m = wrap_len(k)` coefficients applies, modulo `B^m -
-/// 1` ([`wrapped_high`]). `u` holds `4k` limbs, `work` at least
-/// [`redc_n_scratch_len`]`(k)`.
+/// What [`redc_n`] needs besides the modulus, chosen once per ring:
+/// `-n^(-1) mod R` and how to take its two products.
+#[derive(Clone, Debug)]
+struct Redc {
+    /// `-n^(-1) mod R`.
+    ninv: Vec<Limb>,
+    /// The modulus length `m` of `q n` modulo `B^m - 1` ([`redc_wrap_len`]),
+    /// or 0 for the full product.
+    wrap: usize,
+    /// `n`'s transform at the cyclic length `wrap` ([`prepare_cyclic`]),
+    /// when `wrap` takes the cyclic transform; else empty.
+    n_prep: Vec<Limb>,
+    /// A cyclic length `m >= 2k` at which `ninv` is prepared in
+    /// `ninv_prep`, so that `q = t ninv mod R` is the low half of a cyclic
+    /// product that does not wrap; or 0 for [`mullo`].
+    ninv_len: usize,
+    ninv_prep: Vec<Limb>,
+}
+
+impl Redc {
+    /// The choice for an odd `k`-limb modulus `n`. `q n` is taken modulo
+    /// `B^m - 1` as [`redc_wrap_len`] says, with `n` prepared when that is
+    /// cyclic. `q` comes from `ninv` prepared at the shortest transform
+    /// length from `2k` when that product's two transforms cost less than
+    /// [`mullo`]. Each prepared product transforms only the other operand
+    /// and the result, two transforms instead of three.
+    #[allow(clippy::cast_precision_loss, reason = "a cost estimate")]
+    fn new(n: &[Limb]) -> Redc {
+        let k = n.len();
+        let m = wrap_len(2 * k);
+        let prepared = ntt::cyclic_cost(m) as f64 * 2.0 / 3.0;
+        let ninv_len = if wraps_cyclically(m) && prepared < mullo_cost(k) {
+            m
+        } else {
+            0
+        };
+        Redc::with(n, redc_wrap_len(k), ninv_len)
+    }
+
+    /// The products for `n` with the given `wrap` and `ninv_len`; `n` is
+    /// prepared whenever `wrap` takes the cyclic transform.
+    fn with(n: &[Limb], wrap: usize, ninv_len: usize) -> Redc {
+        let ninv = neg_inverse(n);
+        let prepare = |m: usize, x: &[Limb]| {
+            let mut p = vec![0; ntt::prepared_len(m)];
+            let mut scratch = vec![0; ntt::cyclic_prepared_scratch_len(m)];
+            ntt::prepare_cyclic(&mut p, m, x, &mut scratch);
+            p
+        };
+        let n_prep = if wrap != 0 && wraps_cyclically(wrap) {
+            prepare(wrap, n)
+        } else {
+            Vec::new()
+        };
+        let ninv_prep = if ninv_len == 0 {
+            Vec::new()
+        } else {
+            prepare(ninv_len, &ninv)
+        };
+        Redc {
+            ninv,
+            wrap,
+            n_prep,
+            ninv_len,
+            ninv_prep,
+        }
+    }
+
+    /// Scratch limbs `work` that [`redc_n`] needs for a `k`-limb modulus.
+    fn scratch_len(&self, k: usize) -> usize {
+        let q = if self.ninv_len == 0 {
+            mullo_scratch_len(k)
+        } else {
+            ntt::cyclic_prepared_scratch_len(self.ninv_len)
+        };
+        let qn = if self.wrap == 0 {
+            mul_scratch_len(k, k)
+        } else if self.n_prep.is_empty() {
+            mul_wrap_scratch_len(self.wrap, k, k)
+        } else {
+            ntt::cyclic_prepared_scratch_len(self.wrap)
+        };
+        q.max(qn)
+    }
+}
+
+/// `r = (t + q n) / R` as [`redc_2`], with `q = t ninv mod R` a short product
+/// ([`mullo`], or the low half of a prepared cyclic product) and `q n` from a
+/// full product or modulo `B^m - 1` ([`wrapped_high`]), as `redc` says. `u`
+/// holds `4k` limbs, `work` at least `redc.scratch_len(k)`.
 fn redc_n(
     r: &mut [Limb],
     t: &[Limb],
     n: &[Limb],
-    ninv_full: &[Limb],
+    redc: &Redc,
     u: &mut [Limb],
     work: &mut [Limb],
 ) -> Limb {
     let k = n.len();
     let (q, rest) = u.split_at_mut(k);
-    mullo(q, &t[..k], ninv_full, work);
+    if redc.ninv_len == 0 {
+        mullo(q, &t[..k], &redc.ninv, work);
+    } else {
+        // t_lo ninv < B^2k <= B^m does not wrap; ninv_len < 3k.
+        let p = &mut rest[..redc.ninv_len];
+        ntt::mul_cyclic_prepared(p, &t[..k], &redc.ninv_prep, work);
+        q.copy_from_slice(&p[..k]);
+    }
     // The low halves of t and q n add up to 0 mod R: to R exactly, with a
     // carry, unless both are zero.
     let low_carry = Limb::from(t[..k].iter().any(|&l| l != 0));
-    let carry = if redc_wraps(k) {
-        let (w, h) = rest.split_at_mut(wrap_len(k));
-        wrapped_high(&mut h[..k], w, q, n, &t[..k], work);
-        add_n(r, &t[k..], &h[..k])
-    } else {
+    let carry = if redc.wrap == 0 {
         let qn = &mut rest[..2 * k];
         kernel::mul(qn, q, n, work);
         add_n(r, &t[k..], &qn[k..])
+    } else {
+        let (w, h) = rest.split_at_mut(redc.wrap);
+        if redc.n_prep.is_empty() {
+            mul_wrap(w, q, n, work);
+        } else {
+            ntt::mul_cyclic_prepared(w, q, &redc.n_prep, work);
+        }
+        wrapped_high(&mut h[..k], w, &t[..k]);
+        add_n(r, &t[k..], &h[..k])
     };
     carry + add_1_assign(r, low_carry)
 }
 
-/// Whether [`redc_n`] takes `q n` modulo `B^m - 1`, `m = wrap_len(k)`
-/// (always below `2k`).
-fn redc_wraps(k: usize) -> bool {
-    wraps_cyclically(wrap_len(k))
+/// The modulus length `m` with which [`redc_n`] takes `q n` modulo `B^m - 1`
+/// for a `k`-limb modulus, or 0 for the full product: the shortest transform
+/// length from `k` on when it takes the cyclic transform, else `k` rounded
+/// up for [`splits`] when the split applies. Both are below `2k`.
+fn redc_wrap_len(k: usize) -> usize {
+    let m = wrap_len(k);
+    if wraps_cyclically(m) {
+        return m;
+    }
+    let m = split_wrap_len(k);
+    if splits(m, k, k) { m } else { 0 }
 }
 
-/// Scratch limbs `work` that [`redc_n`] needs for a `k`-limb modulus.
-fn redc_n_scratch_len(k: usize) -> usize {
-    let product = if redc_wraps(k) {
-        mul_wrap_scratch_len(wrap_len(k), k, k)
-    } else {
-        mul_scratch_len(k, k)
-    };
-    product.max(mullo_scratch_len(k))
-}
-
-/// `h = floor(q n / B^k)` for `k = n.len() = q.len()`, from the product
+/// `h = floor(q n / B^k)` for `k = h.len()`, from a residue `w` of `q n`
 /// modulo `B^m - 1` (`m = w.len()`, `k <= m < 2k`) and the low half `L = q n
-/// mod B^k`, which REDC knows: `B^k - t_lo`, or 0.
+/// mod B^k`, which REDC knows: `B^k - t_lo`, or 0. `w` may be `B^m - 1` for
+/// zero, as a cyclic transform leaves it: with `L > 0` both give `B^m - 1 -
+/// L` below, and `L = 0` means `t_lo = 0`, so `q = 0`, whose product is
+/// exactly zero.
 ///
 /// Write `H = h`: `q n = L + H B^k`, and `H B^k = H_lo B^k + H_hi B^m` for
 /// the low `m - k` limbs `H_lo` and the top `2k - m` limbs `H_hi` of `H`, so
@@ -709,17 +797,9 @@ fn redc_n_scratch_len(k: usize) -> usize {
 /// 1`, but `H_hi` has fewer than `k` limbs when `m > k`, and `H < n < B^k`
 /// when `m = k`. So the canonical residue holds `H` exactly. Clobbers `w`; `h`
 /// is the scratch for `L`.
-fn wrapped_high(
-    h: &mut [Limb],
-    w: &mut [Limb],
-    q: &[Limb],
-    n: &[Limb],
-    t_lo: &[Limb],
-    work: &mut [Limb],
-) {
-    let (k, m) = (n.len(), w.len());
+fn wrapped_high(h: &mut [Limb], w: &mut [Limb], t_lo: &[Limb]) {
+    let (k, m) = (h.len(), w.len());
     debug_assert!(k <= m && m < 2 * k);
-    mul_wrap(w, q, n, work);
     // L = B^k - t_lo, or 0.
     for (l, &x) in h.iter_mut().zip(t_lo) {
         *l = !x;
@@ -748,6 +828,21 @@ pub(super) fn window_bits(bits: u64) -> u64 {
         w += 1;
     }
     w
+}
+
+/// `-n^(-1) mod B^k` for an odd `k`-limb `n`, by the 2-adic Newton iteration
+/// ([`binvert`]) rather than an extended GCD.
+fn neg_inverse(n: &[Limb]) -> Vec<Limb> {
+    let k = n.len();
+    let mut x = vec![0; k];
+    let mut scratch = vec![0; binvert_scratch_len(k)];
+    binvert(&mut x, n, &mut scratch);
+    // B^k - x, as x is odd and so non-zero.
+    for l in &mut x {
+        *l = !*l;
+    }
+    add_1_assign(&mut x, 1);
+    x
 }
 
 /// `a^(-1) mod B` for odd `a`, by Newton's iteration: each step doubles the

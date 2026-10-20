@@ -15,7 +15,11 @@
 # re-run, 331 s, noise 0.3-0.4%, after load on a busy machine had skewed
 # them; binv_newton_threshold is a flat optimum); ntt_unbalanced_exponent
 # after chunked NTT products (three runs of 38 s, noise 0.1-0.5%, gave 14,
-# 13 and 15 over a flat optimum, all within 0.6%; the last is kept).
+# 13 and 15 over a flat optimum, all within 0.6%; the last is kept). On
+# 2026-10-20 mul_wrap_split_threshold and redc_n_threshold were set by hand:
+# cas-tune's run (noise 6-8% on a busy machine) disagreed with instruction
+# counts and with pow_mod timed on an idle machine (five rounds, medians):
+# the split pays from 32 (16 within 1%), REDC by -n^-1 from about 64 limbs.
 # Algorithm thresholds for cas-num, embedded at build time (see build.rs).
 # Sizes are in limbs unless noted. Measured on the development machine;
 # `cargo run --release -p cas-tune` writes a file for yours.
@@ -52,8 +56,11 @@ ntt_block = 256
 ntt_wrap_fraction = 1
 # Products modulo B^m - 1 (Newton division) take a cyclic transform of m
 # coefficients from this m (a power of two or three times one); below it,
-# the full product reduced.
+# the split below or the full product reduced.
 mul_wrap_ntt_threshold = 2048
+# Below the cyclic transform, products modulo B^m - 1 (Montgomery's REDC)
+# split B^m - 1 into B^(m/2) - 1 and B^(m/2) + 1 from this even m.
+mul_wrap_split_threshold = 32
 # Short products a b mod B^n (Montgomery's quotient): length from which they
 # split by divide and conquer, and from which they take the full product.
 mullo_dc_threshold = 50
@@ -80,8 +87,8 @@ binv_newton_threshold = 1219
 divexact_div_threshold = 2719
 
 # Montgomery reduction (modular/ring.rs): modulus length from which REDC
-# multiplies by -n^-1 mod R instead of eliminating one limb at a time.
-redc_n_threshold = 108
+# multiplies by -n^-1 mod R instead of eliminating two limbs at a time.
+redc_n_threshold = 64
 
 # GCD (natural/gcd.rs): smaller operand length from which half-GCD steps
 # replace Lehmer steps, and length from which the half-GCD recurses; entry

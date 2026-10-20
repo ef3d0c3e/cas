@@ -17,6 +17,7 @@
 )]
 
 pub(crate) mod mullo;
+pub(crate) mod split;
 
 use super::{add_1_assign, add_assign, cmp_n, ntt, shl_assign, shr_assign, sub_assign, sub_n};
 use crate::Limb;
@@ -51,6 +52,10 @@ pub(crate) const NTT_UNBALANCED_EXPONENT: usize = crate::tuning::NTT_UNBALANCED_
 /// Smallest power-of-two modulus length at which [`mul_wrap`] uses a cyclic
 /// transform instead of reducing the full product.
 pub(crate) const MUL_WRAP_NTT_THRESHOLD: usize = crate::tuning::MUL_WRAP_NTT_THRESHOLD;
+/// Smallest even modulus length at which [`mul_wrap`], below the cyclic
+/// transform, splits `B^m - 1` into `B^(m/2) - 1` and `B^(m/2) + 1`
+/// ([`split`]) instead of reducing the full product.
+pub(crate) const MUL_WRAP_SPLIT_THRESHOLD: usize = crate::tuning::MUL_WRAP_SPLIT_THRESHOLD;
 
 /// `a * b + c` as a double limb, returned as `(low, high)`; cannot overflow.
 #[inline]
@@ -304,6 +309,8 @@ pub(crate) fn mul_wrap_scratch_len(m: usize, an: usize, bn: usize) -> usize {
     } else if wraps_cyclically(m) {
         let folded = |len: usize| if len > m { m } else { 0 };
         folded(an) + folded(bn) + ntt::cyclic_scratch_len(m)
+    } else if split::splits(m, an, bn) {
+        split::mul_split_scratch_len(m, an, bn)
     } else {
         an + bn + mul_scratch_len(an, bn)
     }
@@ -315,7 +322,9 @@ pub(crate) fn mul_wrap_scratch_len(m: usize, an: usize, bn: usize) -> usize {
 ///
 /// A transform length `m` (see [`wraps_cyclically`]) takes a cyclic
 /// transform of `m` coefficients where the full product would need about
-/// `a.len() + b.len()`; any other `m` reduces the full product.
+/// `a.len() + b.len()`. Below it, an even `m` with long enough operands is
+/// split in two halves ([`split::splits`]); any other `m` reduces the full
+/// product.
 pub(crate) fn mul_wrap(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]) {
     let (m, an, bn) = (r.len(), a.len(), b.len());
     assert!(m >= 1 && an >= 1 && bn >= 1, "mul_wrap: empty operand");
@@ -330,6 +339,8 @@ pub(crate) fn mul_wrap(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Li
         let (a, scratch) = folded(a, m, scratch);
         let (b, scratch) = folded(b, m, scratch);
         ntt::mul_cyclic(r, a, b, scratch);
+    } else if split::splits(m, an, bn) {
+        split::mul_split(r, a, b, scratch);
     } else {
         let (t, scratch) = scratch.split_at_mut(an + bn);
         mul(t, a, b, scratch);

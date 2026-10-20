@@ -282,9 +282,19 @@ fn params() -> Vec<Param> {
             grid: with_never(geometric(512, 16384, 1.19)),
             window: None,
         },
+        // The split of B^m - 1 serves REDC's q n below the cyclic
+        // transform, so it is timed there, before REDC's own threshold. Both
+        // time powers, whose products reuse their buffers: a single product
+        // allocates them, which hides the split's gain.
+        Param {
+            key: "mul_wrap_split_threshold",
+            op: "redc_pow",
+            grid: with_never(geometric(16, 640, 1.19)),
+            window: Some(|c| geometric(c["redc_n_threshold"].min(640), 2048, 1.19)),
+        },
         Param {
             key: "redc_n_threshold",
-            op: "redc",
+            op: "redc_pow",
             grid: with_never(geometric(16, 640, 1.19)),
             window: None,
         },

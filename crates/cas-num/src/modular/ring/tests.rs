@@ -4,10 +4,11 @@
 use proptest::prelude::*;
 use rug::Integer;
 
-use super::{
-    Form, ModRing, REDC_N_THRESHOLD, RingWork, redc_n, redc_n_scratch_len, redc_wraps, window_bits,
+use super::{Form, ModRing, REDC_N_THRESHOLD, Redc, RingWork, redc_n, redc_wrap_len, window_bits};
+use crate::kernel::mul::split::split_wrap_len;
+use crate::kernel::mul::{
+    MUL_WRAP_NTT_THRESHOLD, MUL_WRAP_SPLIT_THRESHOLD, wrap_len, wraps_cyclically,
 };
-use crate::kernel::mul::{MUL_WRAP_NTT_THRESHOLD, wrap_len};
 use crate::testkit::{Mag, ToRug, differential, strategy, tested};
 use crate::{Limb, Natural};
 
@@ -155,6 +156,94 @@ differential! {
     }
 }
 
+/// `len` deterministic pseudo-random limbs (`SplitMix64` from `seed`).
+fn splitmix_limbs(len: usize, seed: u64) -> Vec<Limb> {
+    let mut state = seed;
+    (0..len)
+        .map(|_| {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        })
+        .collect()
+}
+
+/// Modulus lengths where `ModRing` changes how REDC takes its products, with
+/// their neighbours: the split of `B^m - 1` from its threshold (or REDC's,
+/// if higher); `ninv` prepared from the length whose double has a cyclic
+/// transform length; `n` prepared once the length's own transform length is
+/// cyclic, and the jump of that length past a power of two. Thresholds beyond
+/// test sizes are left out.
+fn redc_choice_lens() -> Vec<usize> {
+    use crate::testkit::TESTED_SIZE_MAX;
+    let mut lens = Vec::new();
+    let split = MUL_WRAP_SPLIT_THRESHOLD.max(REDC_N_THRESHOLD);
+    if split <= TESTED_SIZE_MAX {
+        lens.extend([split - 1, split, split + 1]);
+    }
+    if MUL_WRAP_NTT_THRESHOLD <= TESTED_SIZE_MAX {
+        let cyclic = MUL_WRAP_NTT_THRESHOLD.next_power_of_two().max(4);
+        lens.extend([
+            cyclic / 2 - 1,
+            cyclic / 2,
+            cyclic / 2 + 1,
+            cyclic * 3 / 4,
+            cyclic * 3 / 4 + 1,
+            cyclic,
+            cyclic + 1,
+        ]);
+    }
+    lens.retain(|&k| (2..=TESTED_SIZE_MAX).contains(&k));
+    lens.sort_unstable();
+    lens.dedup();
+    lens
+}
+
+/// Products and squares at [`redc_choice_lens`], against GMP, for the moduli
+/// `B^k - 1` (all ones), `2^(64k - 1) + 1`, `2^(64k - 1) - 1` and an odd
+/// random one, of the operands `m - 1`, `B^k - 1` reduced, `2^(64k - 1)`
+/// reduced and a random value; and a power of the random value.
+#[test]
+fn redc_choices_match() {
+    for k in redc_choice_lens() {
+        let bits = 64 * u32::try_from(k).unwrap();
+        let b = Integer::from(1) << bits;
+        let half = Integer::from(1) << (bits - 1);
+        let random = Mag::from_limbs(splitmix_limbs(k, k as u64)).to_rug() | 1u32;
+        for m in [
+            Integer::from(&b - 1u32),
+            Integer::from(&half + 1u32),
+            Integer::from(&half - 1u32),
+            random,
+        ] {
+            let ring = ModRing::new(Mag::from_rug(&m).to_natural());
+            let random = Mag::from_limbs(splitmix_limbs(k, 7 + k as u64)).to_rug();
+            let values = [
+                Integer::from(&m - 1u32),
+                Integer::from(&b - 1u32) % &m,
+                Integer::from(&half % &m),
+                random % &m,
+            ];
+            let elem = |v: &Integer| ring.elem(&Mag::from_rug(v).to_natural());
+            let value = |x: &super::Residue| ring.to_natural(x).to_rug();
+            for (i, x) in values.iter().enumerate() {
+                let rx = elem(x);
+                let y = &values[(i + 1) % values.len()];
+                let want = Integer::from(x * y) % &m;
+                assert_eq!(value(&ring.mul(&rx, &elem(y))), want, "mul, k = {k}");
+                let want = Integer::from(x * x) % &m;
+                assert_eq!(value(&ring.square(&rx)), want, "square, k = {k}");
+            }
+            let (x, e) = (&values[3], Integer::from(0xf7u32));
+            let want = x.clone().pow_mod(&e, &m).unwrap();
+            let got = ring.pow(&elem(x), &Mag::from_rug(&e).to_natural());
+            assert_eq!(value(&got), want, "pow, k = {k}");
+        }
+    }
+}
+
 /// `RingWork`'s in-place operations, each writing over a residue that holds
 /// another value, against `ModRing`'s allocating ones.
 fn in_place_matches(m: &Mag, a: &Mag, b: &Mag) -> Result<(), TestCaseError> {
@@ -292,9 +381,43 @@ fn modulus_one() {
     assert_eq!(r.to_natural(&r.pow(&x, &Natural::ZERO)), Natural::ZERO);
 }
 
-/// `(t R^-1 mod n, the result of redc_n)` for an odd `n` and `t < n R`; the
-/// result is `r + carry R`, which must be `< 2n`.
+/// `(t R^-1 mod n, the result of redc_n)` for an odd `n` and `t < n R`, with
+/// `q n` taken each way that applies (the full product, and modulo `B^m - 1`
+/// for the ring's choice of `m`, the shortest transform length and the
+/// split's length) and `q` by `mullo` or, where the transform applies, from
+/// `ninv` prepared at the shortest transform length from `2k`. Every way must
+/// give the same result `r + carry R`, which must be `< 2n`.
 fn run_redc_n(n: &[Limb], t: &[Limb]) -> (Integer, Integer) {
+    let k = n.len();
+    let mut wraps = vec![0, redc_wrap_len(k), wrap_len(k), split_wrap_len(k)];
+    wraps.sort_unstable();
+    wraps.dedup();
+    let mut ninv_lens = vec![0];
+    if wraps_cyclically(wrap_len(2 * k)) {
+        ninv_lens.push(wrap_len(2 * k));
+    }
+    let mut results = Vec::new();
+    for &wrap in &wraps {
+        for &ninv_len in &ninv_lens {
+            results.push((
+                wrap,
+                ninv_len,
+                run_redc_n_with(n, t, &Redc::with(n, wrap, ninv_len)),
+            ));
+        }
+    }
+    results.push((0, 0, run_redc_n_with(n, t, &Redc::new(n))));
+    for (wrap, ninv_len, r) in &results {
+        assert_eq!(
+            r, &results[0].2,
+            "redc_n with wrap {wrap} and ninv_len {ninv_len} differs, k = {k}"
+        );
+    }
+    results.swap_remove(0).2
+}
+
+/// [`run_redc_n`] for one choice of products.
+fn run_redc_n_with(n: &[Limb], t: &[Limb], redc: &Redc) -> (Integer, Integer) {
     let k = n.len();
     let (nv, tv) = (
         Mag::from_limbs(n.to_vec()).to_rug(),
@@ -302,12 +425,15 @@ fn run_redc_n(n: &[Limb], t: &[Limb]) -> (Integer, Integer) {
     );
     let r_big = Integer::from(1) << (64 * u32::try_from(k).unwrap());
     let ninv = &r_big - nv.clone().invert(&r_big).unwrap();
-    let mut ninv_full = Mag::from_rug(&ninv).limbs().to_vec();
-    ninv_full.resize(k, 0);
+    assert_eq!(
+        Mag::from_limbs(redc.ninv.clone()).to_rug(),
+        ninv,
+        "-n^-1 mod R"
+    );
     let mut r = vec![0xdead_beef; k];
     let mut u = vec![0xdead_beef; 4 * k];
-    let mut work = vec![0xdead_beef; redc_n_scratch_len(k)];
-    let carry = redc_n(&mut r, t, n, &ninv_full, &mut u, &mut work);
+    let mut work = vec![0xdead_beef; redc.scratch_len(k)];
+    let carry = redc_n(&mut r, t, n, redc, &mut u, &mut work);
     let got =
         Mag::from_limbs(r).to_rug() + (Integer::from(carry) << (64 * u32::try_from(k).unwrap()));
     assert!(got < Integer::from(2 * &nv), "redc_n: result >= 2n");
@@ -315,10 +441,13 @@ fn run_redc_n(n: &[Limb], t: &[Limb]) -> (Integer, Integer) {
     (want, got % nv)
 }
 
-/// Modulus lengths for `redc_n`: small ones, and lengths around the powers of
-/// two from which `q n` is taken modulo `B^m - 1`.
+/// Modulus lengths for `redc_n`: small ones, lengths around the powers of
+/// two from which `q n` is taken modulo `B^m - 1` by a cyclic transform, and
+/// lengths around the split's threshold, odd and even, including those
+/// rounded up for three halvings.
 fn redc_lens() -> BoxedStrategy<usize> {
     let m = tested(MUL_WRAP_NTT_THRESHOLD).next_power_of_two().max(4);
+    let s = tested(MUL_WRAP_SPLIT_THRESHOLD).max(2);
     prop_oneof![
         1..=12usize,
         Just(m / 2),
@@ -326,7 +455,12 @@ fn redc_lens() -> BoxedStrategy<usize> {
         Just(m * 3 / 4),
         Just(m - 1),
         Just(m),
-        Just(m + 1)
+        Just(m + 1),
+        s - 1..=s + 2,
+        Just(2 * s + 1),
+        Just(4 * s + 3),
+        Just(8 * s + 5),
+        Just(8 * s + 8),
     ]
     .boxed()
 }
@@ -396,31 +530,31 @@ fn redc_n_extremes() {
             m + 1,
         ] {
             assert_eq!(
-                redc_wraps(k),
+                wraps_cyclically(redc_wrap_len(k)),
                 wrap_len(k) >= MUL_WRAP_NTT_THRESHOLD,
                 "k = {k}"
             );
         }
-        assert!(redc_wraps(m) && redc_wraps(m + 1));
+        assert!(redc_wrap_len(m) == m && redc_wrap_len(m + 1) == wrap_len(m + 1));
         assert_eq!(wrap_len(m * 5 / 8 + 1), m * 3 / 4);
     }
 }
 
 #[test]
 fn forms() {
-    let ninv_full_len = |limbs: usize| {
+    let ninv_len = |limbs: usize| {
         let ring = ModRing::new(Natural::power_of_two(64 * limbs as u64) - 1u64);
-        let Form::Montgomery { ninv_full, .. } = &ring.form else {
+        let Form::Montgomery { redc, .. } = &ring.form else {
             panic!("odd modulus not in Montgomery form");
         };
-        ninv_full.len()
+        redc.as_ref().map_or(0, |r| r.ninv.len())
     };
     if REDC_N_THRESHOLD <= crate::testkit::TESTED_SIZE_MAX {
-        assert_eq!(ninv_full_len(REDC_N_THRESHOLD), REDC_N_THRESHOLD);
+        assert_eq!(ninv_len(REDC_N_THRESHOLD), REDC_N_THRESHOLD);
     }
     if REDC_N_THRESHOLD > 1 {
         let short = crate::testkit::tested(REDC_N_THRESHOLD - 1);
-        assert_eq!(ninv_full_len(short), 0);
+        assert_eq!(ninv_len(short), 0);
     }
     assert!(matches!(
         ModRing::new(Natural::from(7u64)).form,
@@ -458,17 +592,11 @@ fn tune_redc() {
         };
         let mut one = ModRing::new(n.clone());
         let mut full = ModRing::new(n.clone());
-        let r = Natural::power_of_two(64 * k as u64);
-        let inv = crate::Integer::from(&n)
-            .mod_inverse(&crate::Integer::from(&r))
-            .unwrap()
-            .unsigned_abs();
-        let inv = super::padded(&(&r - &inv), k).into_vec();
-        if let Form::Montgomery { ninv_full, .. } = &mut one.form {
-            ninv_full.clear();
+        if let Form::Montgomery { redc, .. } = &mut one.form {
+            *redc = None;
         }
-        if let Form::Montgomery { ninv_full, .. } = &mut full.form {
-            *ninv_full = inv;
+        if let Form::Montgomery { redc, .. } = &mut full.form {
+            *redc = Some(Redc::new(n.limbs()));
         }
         println!(
             "k = {k:4}: redc_1 {:9.0} ns, redc_n {:9.0} ns",

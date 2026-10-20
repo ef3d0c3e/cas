@@ -13,14 +13,15 @@ use crate::kernel::mul::mullo::{
     MULLO_DC_THRESHOLD, MULLO_MUL_THRESHOLD, Mullo, mullo, mullo_algorithm, mullo_basecase,
     mullo_scratch_len,
 };
+use crate::kernel::mul::split::{split_wrap_len, splits};
 use crate::kernel::mul::{
     Algorithm, MUL_KARATSUBA_THRESHOLD, MUL_NTT_THRESHOLD, MUL_TOOM3_THRESHOLD,
     MUL_TOOM4_THRESHOLD, MUL_TOOM32_THRESHOLD, MUL_TOOM42_THRESHOLD, MUL_WRAP_NTT_THRESHOLD,
-    NTT_EFFICIENCY_EXPONENT, SQR_KARATSUBA_THRESHOLD, SQR_NTT_THRESHOLD, SQR_TOOM3_THRESHOLD,
-    SQR_TOOM4_THRESHOLD, algorithm, karatsuba, karatsuba_scratch_len, mul_wrap,
-    mul_wrap_scratch_len, sqr_algorithm, toom3, toom3_scratch_len, toom4, toom4_scratch_len,
-    toom32, toom32_fits, toom32_scratch_len, toom42, toom42_fits, toom42_scratch_len, wrap_len,
-    wraps_cyclically,
+    MUL_WRAP_SPLIT_THRESHOLD, NTT_EFFICIENCY_EXPONENT, SQR_KARATSUBA_THRESHOLD, SQR_NTT_THRESHOLD,
+    SQR_TOOM3_THRESHOLD, SQR_TOOM4_THRESHOLD, algorithm, karatsuba, karatsuba_scratch_len,
+    mul_wrap, mul_wrap_scratch_len, sqr_algorithm, toom3, toom3_scratch_len, toom4,
+    toom4_scratch_len, toom32, toom32_fits, toom32_scratch_len, toom42, toom42_fits,
+    toom42_scratch_len, wrap_len, wraps_cyclically,
 };
 use crate::kernel::{
     addmul_1, mul, mul_1, mul_1_assign, mul_basecase, mul_scratch_len, sqr, sqr_basecase,
@@ -363,10 +364,13 @@ fn wrap_modulus(m: usize) -> Integer {
     (Integer::from(1) << (64 * u32::try_from(m).unwrap())) - 1u32
 }
 
-/// Moduli `B^m - 1`: small ones of every length, and powers of two and
-/// three times powers of two around the cyclic transform's threshold.
+/// Moduli `B^m - 1`: small ones of every length, powers of two and three
+/// times powers of two around the cyclic transform's threshold, and even and
+/// odd lengths around the split's threshold, some halving evenly three
+/// times.
 fn wrap_lens() -> BoxedStrategy<usize> {
     let t = tested(MUL_WRAP_NTT_THRESHOLD).next_power_of_two();
+    let s = tested(MUL_WRAP_SPLIT_THRESHOLD).max(2);
     prop_oneof![
         1..=40usize,
         Just(t / 2),
@@ -376,8 +380,85 @@ fn wrap_lens() -> BoxedStrategy<usize> {
         Just(3 * t / 4),
         Just(3 * t / 2),
         Just(3 * t),
+        s - 1..=s + 3,
+        Just(2 * s + 2),
+        Just(split_wrap_len(8 * s + 1)),
+        Just(split_wrap_len(5 * s)),
     ]
     .boxed()
+}
+
+/// `split_wrap_len` rounds up so that three halvings (fewer near the
+/// threshold) stay even, stays below twice its argument, and gives a
+/// length that splits for two operands of that argument.
+#[test]
+fn split_wrap_len_halves_evenly() {
+    let s = MUL_WRAP_SPLIT_THRESHOLD.max(2);
+    for x in (1..=200).chain([s - 1, s, s + 1, 4 * s + 3, 8 * s + 5]) {
+        let m = split_wrap_len(x);
+        assert!(m >= x && (x < 2 || m < 2 * x), "x = {x}, m = {m}");
+        if x >= 8 * s {
+            assert_eq!(m % 8, 0, "x = {x}");
+        }
+        if x >= s && !wraps_cyclically(m) {
+            assert!(splits(m, x, x), "x = {x}, m = {m}");
+        }
+    }
+}
+
+/// The split's edge values modulo `B^m - 1`, `m = 2h`, at split lengths:
+/// operands whose residue modulo `B^h + 1` is `B^h` (that is, -1) or zero,
+/// residues modulo `B^h - 1` that are zero or all ones, and products that
+/// are multiples of either factor or of both.
+#[test]
+#[allow(
+    clippy::many_single_char_names,
+    reason = "m and h as in the split's notation"
+)]
+fn mul_wrap_split_edges() {
+    let s = tested(MUL_WRAP_SPLIT_THRESHOLD).max(2);
+    for m in [s, s + 1, 2 * s + 2, split_wrap_len(8 * s + 1)] {
+        let m = m + m % 2;
+        if m > TESTED_SIZE_MAX {
+            continue;
+        }
+        let h = u32::try_from(m / 2).unwrap();
+        let bh = Integer::from(1) << (64 * h);
+        let modulus = wrap_modulus(m);
+        let limbs = |v: &Integer| {
+            let mut l = Mag::from_rug(&(v.clone() % &modulus)).limbs().to_vec();
+            if l.is_empty() {
+                l.push(0);
+            }
+            l
+        };
+        let values = [
+            Integer::from(&bh - 1u32),
+            bh.clone(),
+            Integer::from(&bh + 1u32),
+            Integer::from(&bh * 2u32),
+            Integer::from(&bh * 3u32) - 1u32,
+            Integer::from(&modulus - 1u32),
+            Integer::from(&modulus - &bh),
+            Integer::from(1),
+            Integer::from(2),
+            Integer::from(&modulus / 3u32),
+        ];
+        for x in &values {
+            for y in &values {
+                let (a, b) = (limbs(x), limbs(y));
+                // Full-length copies too, so that the split, not the short
+                // product, takes them.
+                let mut af = a.clone();
+                af.resize(m, 0);
+                let mut bf = b.clone();
+                bf.resize(m, 0);
+                let want = val(&a) * val(&b) % &modulus;
+                assert_eq!(run_wrap(m, &af, &bf), want, "m = {m}, {x} * {y}");
+                assert_eq!(run_wrap(m, &a, &b), want, "m = {m}, {x} * {y}");
+            }
+        }
+    }
 }
 
 /// `wrap_len` is the shortest power of two or three times one at least its

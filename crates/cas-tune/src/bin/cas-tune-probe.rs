@@ -163,6 +163,18 @@ fn measure(op: &str, n: usize, min: Duration) -> f64 {
                 drop(black_box(ring.mul(black_box(&x), black_box(&y))));
             })
         }
+        "redc_pow" => {
+            // x^e modulo an odd n-limb modulus, with a four-limb exponent:
+            // Montgomery products as powers use them, buffers reused.
+            let mut m = limbs(n, 6);
+            m[0] |= 1;
+            let ring = ModRing::new(Natural::from_limbs(&m));
+            let x = ring.elem(&Natural::from_limbs(&limbs(n, 7)));
+            let e = Natural::from_limbs(&limbs(4, 9));
+            time(min, || {
+                drop(black_box(ring.pow(black_box(&x), black_box(&e))));
+            })
+        }
         "powm" => {
             // x^e modulo an odd n-limb modulus, with an n-limb exponent.
             let mut m = limbs(n, 6);

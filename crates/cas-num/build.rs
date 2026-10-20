@@ -17,7 +17,7 @@ use std::path::PathBuf;
 
 /// `(key, minimum)`. Every algorithm is correct for any value at or above
 /// its minimum; below it some algorithm would be called outside its domain.
-const KEYS: [(&str, u64); 31] = [
+const KEYS: [(&str, u64); 32] = [
     // A 1x1 product would be "chunked" into 1x1 products forever.
     ("mul_karatsuba_threshold", 2),
     // Toom-3 checks its own balance condition, so any size works.
@@ -42,6 +42,8 @@ const KEYS: [(&str, u64); 31] = [
     // A divisor: wrap when 2e - 1 <= n / ntt_wrap_fraction.
     ("ntt_wrap_fraction", 1),
     ("mul_wrap_ntt_threshold", 1),
+    // Splitting B^m - 1 needs halves of at least one limb.
+    ("mul_wrap_split_threshold", 2),
     // Divide and conquer splits off a non-empty half for the cross terms.
     ("mullo_dc_threshold", 2),
     ("mullo_mul_threshold", 1),

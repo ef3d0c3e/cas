@@ -16,6 +16,7 @@ ntt_unbalanced_exponent = 14
 ntt_block = 2
 ntt_wrap_fraction = 1
 mul_wrap_ntt_threshold = 4
+mul_wrap_split_threshold = 4
 mullo_dc_threshold = 2
 mullo_mul_threshold = 9
 dc_div_threshold = 2
