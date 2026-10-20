@@ -116,28 +116,36 @@ impl fmt::Display for Shown<'_> {
     }
 }
 
-impl fmt::Display for Warning {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+impl Warning {
+    /// The message, with each expression in it written by `show`, as the
+    /// session writes them in the language's notation. `Display` writes them
+    /// in the evaluator's, a large one by its head.
+    pub fn message(&self, show: impl Fn(&Expr) -> String) -> String {
         match self {
-            Warning::Infinite(e) => write!(f, "infinite expression {} encountered", Shown(e)),
+            Warning::Infinite(e) => format!("infinite expression {} encountered", show(e)),
             Warning::Indeterminate(e) => {
-                write!(f, "indeterminate expression {} encountered", Shown(e))
+                format!("indeterminate expression {} encountered", show(e))
             }
             Warning::NoDefinitionMatches(e) => match e.head() {
-                Some(head) => write!(f, "no definition of {} matches {}", Shown(head), Shown(e)),
-                None => write!(f, "no definition matches {}", Shown(e)),
+                Some(head) => format!("no definition of {} matches {}", show(head), show(e)),
+                None => format!("no definition matches {}", show(e)),
             },
             Warning::NumberApplied(e) => match e.head() {
-                Some(head) => write!(
-                    f,
+                Some(head) => format!(
                     "the number {} applied as a function in {}",
-                    Shown(head),
-                    Shown(e)
+                    show(head),
+                    show(e)
                 ),
-                None => write!(f, "a number applied as a function in {}", Shown(e)),
+                None => format!("a number applied as a function in {}", show(e)),
             },
-            Warning::Native { message, expr } => write!(f, "{message}: {}", Shown(expr)),
+            Warning::Native { message, expr } => format!("{message}: {}", show(expr)),
         }
+    }
+}
+
+impl fmt::Display for Warning {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message(|e| Shown(e).to_string()))
     }
 }
 

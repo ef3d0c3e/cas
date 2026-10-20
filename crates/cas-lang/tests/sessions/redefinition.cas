@@ -1,0 +1,15 @@
+// A later definition replaces an earlier one with the same parameters.
+f(x) := x^2
+f(3)
+f(x) := x^3
+f(3)
+// Rules for particular arguments come first.
+f(0) := 42
+f(0)
+f(2)
+x := 1
+x := x + 1
+x
+purge(f, x)
+f(3)
+x

@@ -1,7 +1,7 @@
 # cas-num fuzz targets
 
 libFuzzer targets (via [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz)) that cross-check
-cas-num against GMP (through `rug`), plus targets for the cas-core reader and evaluator and the cas-lang lexer, parser, lowering and printer. This crate is outside the
+cas-num against GMP (through `rug`), plus targets for the cas-core reader and evaluator and the cas-lang lexer, parser, lowering, printer and session. This crate is outside the
 main workspace because cargo-fuzz needs a nightly toolchain and its own build profile; the
 libraries themselves stay on stable.
 
@@ -23,6 +23,7 @@ libraries themselves stay on stable.
 | `lang_lex` | The cas-lang lexer on arbitrary text (bytes read as lossy UTF-8): the tokens cover the text exactly, each lexes alone as one token of the same kind, every error token has its error, errors are ordered and on character boundaries; the values of number, string and superscript tokens and the names of identifiers never panic (number exponents are bounded) |
 | `lang_parse` | The cas-lang parser on arbitrary text: the tree's text is the input, every node's children cover it exactly and in order, errors are ordered, within the text and on character boundaries, and nesting beyond `MAX_DEPTH` stops cleanly instead of overflowing the stack |
 | `lang_lower` | Parsing and lowering of arbitrary text (seeded with the `lang_parse` corpus): lowering never panics, every diagnostic, fix and statement span lies within the text, and every lowered statement prints in full form |
+| `lang_session` | The cas-lang session on arbitrary text (seeded with the `lang_lower` corpus and the session scripts), with small limits and a watchdog that interrupts evaluation after a second and every 10 ms after: no panic, every output, message and fix within the text on character boundaries, and every result shown in input form parses and lowers without errors |
 | `lang_print` | The input form on what lowering makes of arbitrary text (seeded with the `lang_parse` corpus): every expression that prints reads back without errors or notes as itself, up to the arithmetic the text writes out (`fold_arithmetic`), and printing what it reads back is stable |
 
 Inputs are decoded from the fuzzer's bytes (`src/lib.rs`): limbs mix boundary values (`0`,

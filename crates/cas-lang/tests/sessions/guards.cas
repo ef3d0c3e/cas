@@ -1,0 +1,11 @@
+// Guards and types decide which rule applies.
+fact(0) := 1
+fact(n) := n * fact(n - 1) when n > 0
+fact(5)
+fact(-1)
+half(n :: integer) := n / 2
+half(4)
+half(x)
+sign_of(x) := 1 when x > 0
+sign_of(x) := -1 when x < 0
+[sign_of(3), sign_of(-2), sign_of(0)]

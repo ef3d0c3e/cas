@@ -1,0 +1,37 @@
+> 1 + [1, 2][5]
+error at 2:5 `[1, 2][5]`: index out of range
+> [1, 2] + 1
+error at 3:1 `[1, 2] + 1`: lists of different shapes
+> x := x + 1
+error at 4:1 `x`: recursive definition: the value refers to x, which has no value
+> [a, b] := [1, 2, 3]
+error at 5:11 `[1, 2, 3]`: this is not a list of 2 elements
+> v[0] := 1
+error at 6:1 `v`: v is not a list, or the index is neither an integer nor a slice
+> w := [1, 2]
+= [1, 2]
+> w[5] := 0
+error at 8:1 `w[5]`: index out of range
+> w[0] := 7
+= [7, 2]
+> 1/0
+warning at 10:1 `1/0`: infinite expression 1/0 encountered
+= infinity
+> two := 2
+= 2
+> two(x + 1)
+warning at 12:1 `two(x + 1)`: the number 2 applied as a function in call(2, 1 + x)
+= call(2, 1 + x)
+> sin x
+error at 13:1 `sin`: sin takes its argument in parentheses: sin(x)
+  fix: `sin(x)`
+> integrate(x, x)
+error at 14:1 `integrate(x, x)`: integrate is not available yet
+> f(x) := x
+> f(1, 2)
+warning at 16:1 `f(1, 2)`: no definition of f matches f(1, 2)
+= f(1, 2)
+> 2 * * 3
+error at 17:5 `*`: expected an expression
+> 1 +
+error at 19:1 ``: expected an expression

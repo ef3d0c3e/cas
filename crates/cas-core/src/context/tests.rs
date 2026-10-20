@@ -126,6 +126,87 @@ fn child_scopes_do_not_leak() {
     assert_eq!(parent.value(x), Some(&1.into()));
 }
 
+/// `forgetting` drops the assumptions that mention a symbol and keeps the
+/// others, in order, as Xcas's `purge` does.
+#[test]
+fn forgetting_drops_the_assumptions_on_a_symbol() {
+    let read = |s: &str| Expr::parse_full_form(s).unwrap();
+    let mut ctx = Context::new();
+    ctx.set(sym("v"), 3.into()).unwrap();
+    let ctx = ctx
+        .assuming(read("Greater[x, 0]"))
+        .assuming(read("Greater[y, 0]"))
+        .assuming(read("Less[x, y]"));
+    let forgot = ctx.forgetting(sym("x"));
+    assert_eq!(forgot.assumptions(), &[read("Greater[y, 0]")]);
+    assert_ne!(forgot.id(), ctx.id());
+    assert_eq!(forgot.value(sym("v")), Some(&Expr::from(3)));
+    let positive = |c: &Context, e: &str| c.eval(&read(&format!("Positive[{e}]"))).unwrap();
+    assert_eq!(positive(&ctx, "x"), read("True"));
+    assert_eq!(positive(&forgot, "x"), read("Positive[x]"));
+    assert_eq!(positive(&forgot, "y"), read("True"));
+    // Nothing to forget: the same scope.
+    let same = forgot.forgetting(sym("z"));
+    assert_eq!(same.id(), forgot.id());
+    assert_eq!(ctx.assumptions().len(), 3, "self is unchanged");
+}
+
+/// An `Interrupt` stops an evaluation from another thread: here a branching
+/// recursion with 2^25 distinct calls (`2x` and `2x + 1`, which the memo
+/// cannot share), minutes of work that no limit stops.
+#[test]
+fn an_interrupt_stops_an_evaluation_from_another_thread() {
+    let read = |s: &str| Expr::parse_full_form(s).unwrap();
+    let mut ctx = Context::new();
+    // Rules are tried in definition order: the base case first.
+    ctx.define_delayed(&read("g[0, Pattern[x, Blank[]]]"), &read("x"))
+        .unwrap();
+    ctx.define_delayed(
+        &read("g[Pattern[n, Blank[]], Pattern[x, Blank[]]]"),
+        &read("Plus[g[Plus[n, -1], Times[2, x]], g[Plus[n, -1], Plus[Times[2, x], 1]]]"),
+    )
+    .unwrap();
+    let interrupt = Interrupt::new();
+    ctx.set_interrupt(interrupt.clone());
+    let started = std::time::Instant::now();
+    std::thread::scope(|scope| {
+        scope.spawn(|| {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            interrupt.interrupt();
+        });
+        let (result, _) = ctx.eval_with(&read("g[25, 0]"), &crate::EvalOptions::default());
+        assert_eq!(result, Err(EvalError::Interrupted));
+    });
+    assert!(started.elapsed() < std::time::Duration::from_secs(20));
+    // Until it is reset, every evaluation stops; then they run again.
+    assert_eq!(ctx.eval(&read("g[2, 0]")), Err(EvalError::Interrupted));
+    interrupt.reset();
+    assert_eq!(ctx.eval(&read("g[2, 0]")), Ok(read("6")));
+    assert_eq!(EvalError::Interrupted.to_string(), "interrupted");
+}
+
+/// The matcher checks the flag too, every 1024 steps, so a long match stops
+/// before its budget runs out.
+#[test]
+fn an_interrupt_stops_a_long_match() {
+    let read = |s: &str| Expr::parse_full_form(s).unwrap();
+    let mut ctx = Context::new();
+    let mut limits = ctx.limits();
+    limits.match_steps = 2000;
+    ctx.set_limits(limits);
+    let args: Vec<String> = (1..=30).map(|i| i.to_string()).collect();
+    let e = read(&format!(
+        "MatchQ[f[{}], f[Pattern[a, BlankNullSequence[]], Pattern[b, BlankNullSequence[]], \
+         Pattern[c, BlankNullSequence[]], 99]]",
+        args.join(", ")
+    ));
+    assert_eq!(ctx.eval(&e), Err(EvalError::MatchLimit));
+    let interrupt = Interrupt::new();
+    ctx.set_interrupt(interrupt.clone());
+    interrupt.interrupt();
+    assert_eq!(ctx.eval(&e), Err(EvalError::Interrupted));
+}
+
 #[test]
 fn ids_are_unique_across_threads() {
     const THREADS: usize = 8;

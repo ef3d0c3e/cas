@@ -1,0 +1,18 @@
+> fact(0) := 1
+> fact(n) := n * fact(n - 1) when n > 0
+> fact(5)
+= 120
+> fact(-1)
+warning at 5:1 `fact(-1)`: no definition of fact matches fact(-1)
+= fact(-1)
+> half(n :: integer) := n / 2
+> half(4)
+= 2
+> half(x)
+warning at 8:1 `half(x)`: no definition of half matches half(x)
+= half(x)
+> sign_of(x) := 1 when x > 0
+> sign_of(x) := -1 when x < 0
+> [sign_of(3), sign_of(-2), sign_of(0)]
+warning at 11:1 `[sign_of(3), sign_of(-2), sign_of(0)]`: no definition of sign_of matches sign_of(0)
+= [1, -1, sign_of(0)]

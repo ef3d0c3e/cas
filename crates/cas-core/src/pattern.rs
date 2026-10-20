@@ -711,11 +711,21 @@ struct Matcher<'e, 'c, 'p> {
 }
 
 impl Matcher<'_, '_, '_> {
-    /// Counts a step: a node tried, or a way of splitting arguments.
+    /// Counts a step: a node tried, or a way of splitting arguments. Every
+    /// 1024 steps, an interrupted evaluation stops here: a match can take
+    /// many steps without a rewrite.
     fn step(&mut self) -> Result<(), EvalError> {
         self.steps += 1;
         if self.steps > self.budget {
             Err(EvalError::MatchLimit)
+        } else if self.steps % 1024 == 0
+            && self
+                .ev
+                .context()
+                .interrupt_flag()
+                .load(std::sync::atomic::Ordering::Relaxed)
+        {
+            Err(EvalError::Interrupted)
         } else {
             Ok(())
         }

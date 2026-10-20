@@ -3,7 +3,7 @@
 use std::fmt;
 use std::num::NonZeroU64;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::assume::{Domain, Facts};
 use crate::attributes::Attributes;
@@ -38,6 +38,8 @@ use crate::symbol_map::SymbolMap;
 pub struct Context {
     state: Arc<State>,
     id: StateId,
+    /// Not part of the state: setting it changes no id.
+    interrupt: Option<Interrupt>,
 }
 
 /// The maps are persistent, so a change to a shared state copies O(log n)
@@ -82,9 +84,60 @@ impl Default for Context {
         Context {
             state: Arc::default(),
             id: StateId::fresh(),
+            interrupt: None,
         }
     }
 }
+
+/// Stops evaluations from another thread (CAS-121): once
+/// [`Interrupt::interrupt`] is called, an evaluation in a context that holds
+/// this handle ([`Context::set_interrupt`]) returns
+/// [`EvalError::Interrupted`] at its next level, as do those that start
+/// later, until [`Interrupt::reset`]. Clones share the flag.
+///
+/// It is not a budget (CAS-DOC-4 R8): only a caller decides to stop.
+///
+/// ```
+/// use cas_core::{Context, EvalError, Expr, Interrupt};
+///
+/// let mut ctx = Context::new();
+/// let interrupt = Interrupt::new();
+/// ctx.set_interrupt(interrupt.clone());
+/// let e = Expr::parse_full_form("Plus[1, 2]").unwrap();
+/// interrupt.interrupt();
+/// assert_eq!(ctx.eval(&e), Err(EvalError::Interrupted));
+/// interrupt.reset();
+/// assert_eq!(ctx.eval(&e), Ok(Expr::from(3)));
+/// ```
+#[derive(Clone, Debug, Default)]
+pub struct Interrupt(Arc<AtomicBool>);
+
+impl Interrupt {
+    /// A handle that has not interrupted anything yet.
+    #[must_use]
+    pub fn new() -> Interrupt {
+        Interrupt::default()
+    }
+
+    /// Stops the evaluations of the contexts that hold this handle.
+    pub fn interrupt(&self) {
+        self.0.store(true, Ordering::Relaxed);
+    }
+
+    /// Lets evaluations run again.
+    pub fn reset(&self) {
+        self.0.store(false, Ordering::Relaxed);
+    }
+
+    /// Whether [`Interrupt::interrupt`] was called since the last reset.
+    #[must_use]
+    pub fn is_interrupted(&self) -> bool {
+        self.0.load(Ordering::Relaxed)
+    }
+}
+
+/// The flag of a context without an [`Interrupt`], never set.
+static NEVER: AtomicBool = AtomicBool::new(false);
 
 /// Evaluation limits (CAS-DOC-4 §2.1).
 ///
@@ -171,6 +224,8 @@ pub enum EvalError {
     /// An index out of range (CAS-DOC-7 §7): `[10, 20][2]`, or a slice that
     /// does not fit in the list.
     IndexOutOfRange,
+    /// Stopped from another thread through an [`Interrupt`].
+    Interrupted,
 }
 
 impl fmt::Display for EvalError {
@@ -181,6 +236,7 @@ impl fmt::Display for EvalError {
             EvalError::Shape => "lists of different shapes",
             EvalError::MatchLimit => "match step limit exceeded",
             EvalError::IndexOutOfRange => "index out of range",
+            EvalError::Interrupted => "interrupted",
         })
     }
 }
@@ -335,6 +391,27 @@ impl Context {
         child
     }
 
+    /// This scope without the assumptions that mention `s`, as Xcas's
+    /// `purge` forgets them: the others are assumed again in order, in a
+    /// scope with the same definitions. `self` is unchanged.
+    #[must_use]
+    pub fn forgetting(&self, s: Symbol) -> Context {
+        let s = Expr::from(s);
+        if self.state.assumptions.iter().all(|a| a.free_of(&s)) {
+            return self.clone();
+        }
+        let mut child = self.clone();
+        let state = child.state_mut();
+        let assumptions = std::mem::take(Arc::make_mut(&mut state.assumptions));
+        state.facts = Arc::default();
+        for a in assumptions {
+            if a.free_of(&s) {
+                child = child.assuming(a);
+            }
+        }
+        child
+    }
+
     /// The assumptions in scope, outermost first, as written.
     #[must_use]
     pub fn assumptions(&self) -> &[Expr] {
@@ -347,6 +424,17 @@ impl Context {
 
     pub(crate) fn number_domain(&self) -> Domain {
         self.state.domain
+    }
+
+    /// Evaluations in this context, and in the scopes made from it, stop
+    /// when `interrupt` is set. Not part of the state: the id stays.
+    pub fn set_interrupt(&mut self, interrupt: Interrupt) {
+        self.interrupt = Some(interrupt);
+    }
+
+    /// The flag evaluations check, never set without an [`Interrupt`].
+    pub(crate) fn interrupt_flag(&self) -> &AtomicBool {
+        self.interrupt.as_ref().map_or(&NEVER, |i| &i.0)
     }
 
     /// Sets what symbols without facts range over (CAS-DOC-4 §7.1).
@@ -399,6 +487,10 @@ impl fmt::Debug for Context {
             .field("assumptions", &self.state.assumptions)
             .field("domain", &self.state.domain)
             .field("limits", &self.state.limits)
+            .field(
+                "interrupted",
+                &self.interrupt.as_ref().map(Interrupt::is_interrupted),
+            )
             .finish()
     }
 }

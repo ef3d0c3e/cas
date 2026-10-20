@@ -1,0 +1,11 @@
+// A definition of a builtin is an up-rule on the user's names in it.
+phi^2 := phi + 1
+phi^2
+phi^3
+sin(myangle) := 1/2
+sin(myangle) + 1
+sin(other)
+// The head of an argument carries the rule too.
+size(pair(x :: any, y :: any)) := 7
+size(pair(1, 2))
+size([1, 2])

@@ -37,6 +37,7 @@
 
 use std::borrow::Cow;
 use std::fmt;
+use std::sync::atomic::Ordering;
 
 use foldhash::fast::FixedState;
 use hashbrown::{HashMap, HashSet};
@@ -440,10 +441,15 @@ impl<'c> Eval<'c> {
         Ok(result)
     }
 
+    /// Counts a rewrite against [`Limits::iterations`]. An evaluation that
+    /// does not end rewrites again and again, so an interrupted one stops
+    /// here.
     fn count(&self, rewrites: &mut u32) -> Result<(), EvalError> {
         *rewrites += 1;
         if *rewrites > self.iterations {
             Err(EvalError::IterationLimit)
+        } else if self.context.interrupt_flag().load(Ordering::Relaxed) {
+            Err(EvalError::Interrupted)
         } else {
             Ok(())
         }

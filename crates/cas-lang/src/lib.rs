@@ -22,8 +22,9 @@
 //! - [`print()`]: an expression as text that reads back as it (the input
 //!   form), for output that can be pasted as input; a [`PrintError`] for
 //!   what the language cannot write.
-//!
-//! The session comes with CAS-121.
+//! - [`Session`]: a program run one statement at a time against a
+//!   `Context` (CAS-121): definitions, `assume` and `purge`, results in
+//!   input form, and [`Message`]s that point into the text.
 
 mod lexer;
 mod literal;
@@ -31,6 +32,7 @@ mod lower;
 mod names;
 mod parser;
 mod print;
+mod session;
 mod syntax;
 
 pub use lexer::{LexError, LexErrorKind, Lexed, lex};
@@ -45,4 +47,5 @@ pub use parser::{MAX_DEPTH, Parse, ParseErrorKind, SyntaxError, SyntaxErrorKind,
 #[doc(hidden)]
 pub use print::fold_arithmetic;
 pub use print::{MAX_PRINT_DEPTH, PrintError, PrintErrorKind, print};
+pub use session::{Level, Message, Output, Session, Shown};
 pub use syntax::{CasLanguage, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};

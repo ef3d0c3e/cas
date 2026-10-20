@@ -55,7 +55,7 @@ mod traverse;
 pub use assume::{Domain, Sign, Truth};
 pub use attributes::Attributes;
 pub use cas_num::{Complex, Integer, Rational};
-pub use context::{Context, ContextError, EvalError, Limits, StateId};
+pub use context::{Context, ContextError, EvalError, Interrupt, Limits, StateId};
 pub use eval::{Eval, NativeFn, STACK_PER_LEVEL};
 pub use expr::{Expr, View};
 pub use intern::{InternerStats, interner_stats};

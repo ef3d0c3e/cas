@@ -130,6 +130,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "lang_session"
+path = "fuzz_targets/lang_session.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "lang_print"
 path = "fuzz_targets/lang_print.rs"
 test = false

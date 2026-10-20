@@ -444,7 +444,8 @@ impl Lowerer<'_> {
                 let mut args = vec![target.clone()];
                 args.extend(arguments(&lhs).iter().map(|i| self.expr(i)));
                 args.push(self.expr(&rhs));
-                let copy = apply(Symbol::REPLACE_AT, args, self::range(&rhs));
+                // The copy comes from `v[k]`: where an index out of range is.
+                let copy = apply(Symbol::REPLACE_AT, args, self::range(&lhs));
                 apply(Symbol::SET, vec![target, copy], range)
             }
             _ => self.rule_definition(&lhs, &rhs, guard.as_ref(), range),

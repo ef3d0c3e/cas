@@ -1,0 +1,11 @@
+// `assume` holds until `purge`.
+sqrt(x^2)
+assume(x > 0)
+sqrt(x^2)
+abs(x)
+abs(y)
+assume(y < 0)
+abs(y)
+purge(x)
+abs(x)
+abs(y)

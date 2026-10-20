@@ -1,0 +1,17 @@
+> sqrt(x^2)
+= abs(x)
+> assume(x > 0)
+> sqrt(x^2)
+= x
+> abs(x)
+= x
+> abs(y)
+= abs(y)
+> assume(y < 0)
+> abs(y)
+= -y
+> purge(x)
+> abs(x)
+= abs(x)
+> abs(y)
+= -y
