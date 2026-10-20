@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc f1f3c5f908143c30e8e12d6fff35eb676408b03e003ad47ec0614a6b8829d3bf # shrinks to lhs = [[Pattern[x, Blank[]], f[f[]]]], subjects = [], f_attributes = Flat, g_attributes = None
+cc f1c1053570d7048ea755a8b6a13f711336e4f2f2dca41fb59cdcbd2ac890127f # shrinks to lhs = [[f[]], [f[f[]]], [f[]]], subjects = [], f_attributes = Flat | Orderless, g_attributes = None

@@ -415,9 +415,10 @@ fn matcher_layer(f: Symbol, e: Expr) -> Expr {
 }
 
 /// The stack each level of evaluation takes, at most, through arguments,
-/// through heads and through a native that evaluates its arguments
-/// (`And` and `Or`, which alternate so they do not flatten): measured from
-/// the address of a local in a native at the bottom.
+/// through heads, through a native that evaluates its arguments (`And` and
+/// `Or`, which alternate so they do not flatten), through the matcher, and
+/// through rules whose conditions recurse: measured from the address of a
+/// local in a native at the bottom.
 #[test]
 fn a_level_takes_less_than_stack_per_level() {
     static BOTTOM: AtomicUsize = AtomicUsize::new(usize::MAX);
@@ -428,7 +429,7 @@ fn a_level_takes_less_than_stack_per_level() {
     });
     let f = sym("stack_f");
     // Each with the levels one layer takes.
-    let shapes: [(&str, Shape, usize); 4] = [
+    let shapes: [(&str, Shape, usize); 5] = [
         ("arguments", |f, e| Expr::apply(&f.into(), &[e]), 1),
         ("heads", |_, e| Expr::apply(&e, &[]), 1),
         (
@@ -442,7 +443,12 @@ fn a_level_takes_less_than_stack_per_level() {
         // `MatchQ[f[…f[a]…], f[…f[Condition[_, probe[]]]…]]`: the matcher
         // nests one node per level, and its condition evaluates the probe.
         ("matcher", |f, e| matcher_layer(f, e), 1),
+        // `chain[n]`, whose rule's condition evaluates `chain[n - 1]`: the
+        // rule's evaluation, its four match nodes and the condition's
+        // evaluation per step.
+        ("rules", |_, e| e, 6),
     ];
+    let chain = sym("stack_chain");
     let depth = 2000;
     let measured = std::thread::Builder::new()
         .stack_size(64 << 20)
@@ -451,8 +457,20 @@ fn a_level_takes_less_than_stack_per_level() {
             let mut limits = ctx.limits();
             limits.recursion = 10 * depth;
             ctx.set_limits(limits);
+            let rules = [
+                ("stack_chain[0]", "stack_probe[]"),
+                (
+                    "stack_chain[Pattern[n, Blank[]]]",
+                    "Condition[done, SameQ[stack_chain[Plus[n, -1]], done]]",
+                ),
+            ];
+            for (lhs, rhs) in rules {
+                ctx.define_delayed(&read(lhs), &read(rhs)).unwrap();
+            }
             shapes.map(|(name, shape, levels)| {
-                let e = if name == "matcher" {
+                let e = if name == "rules" {
+                    Expr::apply(&chain.into(), &[i64::from(depth).into()])
+                } else if name == "matcher" {
                     let condition = Expr::apply(
                         &Symbol::CONDITION.into(),
                         &[

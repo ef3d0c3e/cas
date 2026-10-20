@@ -23,5 +23,9 @@ proptest.workspace = true
 name = "eval"
 harness = false
 
+[[bench]]
+name = "rules"
+harness = false
+
 [lints]
 workspace = true

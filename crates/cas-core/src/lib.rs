@@ -41,7 +41,9 @@ mod order;
 mod pattern;
 mod print;
 mod read;
+mod rules;
 mod symbol;
+mod symbol_map;
 mod traverse;
 
 pub use attributes::Attributes;
@@ -53,6 +55,7 @@ pub use intern::{InternerStats, interner_stats};
 pub use pattern::{Pattern, PatternError, PatternErrorKind, Rule};
 pub use print::FullForm;
 pub use read::{FullFormError, FullFormErrorKind};
+pub use rules::{DefineError, UserNative};
 pub use symbol::Symbol;
 pub use traverse::{Distinct, PostOrder, PreOrder};
 

@@ -1,6 +1,5 @@
 //! The evaluation context: everything semantic about expressions.
 
-use std::collections::HashMap;
 use std::fmt;
 use std::num::NonZeroU64;
 use std::sync::Arc;
@@ -8,9 +7,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use crate::attributes::Attributes;
 use crate::expr::{Expr, Repr};
+use crate::rules::Rules;
 use crate::symbol::Symbol;
+use crate::symbol_map::SymbolMap;
 
-/// Values, the attributes of user symbols, assumptions and limits.
+/// Values, rules, the attributes of user symbols, assumptions and limits.
 ///
 /// Expressions do not depend on a context; evaluation always does. A
 /// `Context` is a value: cloning it is O(1) and shares the state, mutation
@@ -38,12 +39,15 @@ pub struct Context {
     id: StateId,
 }
 
-/// Each map has its own `Arc`, so changing one copies only that one.
+/// The maps are persistent, so a change to a shared state copies O(log n)
+/// of one map, never a whole map: a session that keeps each state it passes
+/// through loads n definitions in O(n log n).
 #[derive(Clone, Default)]
 struct State {
-    values: Arc<HashMap<Symbol, Expr>>,
+    values: SymbolMap<Expr>,
     /// User symbols only; builtin attributes are fixed.
-    attributes: Arc<HashMap<Symbol, Attributes>>,
+    attributes: SymbolMap<Attributes>,
+    rules: Rules,
     assumptions: Arc<Vec<Expr>>,
     limits: Limits,
 }
@@ -116,12 +120,18 @@ pub enum ContextError {
     /// The symbol is `PROTECTED`: a builtin, or a user symbol given that
     /// attribute.
     Protected(Symbol),
+    /// A value for a symbol with up-rules: it would replace the symbol before
+    /// they could apply (CAS-DOC-4 §5.2, O6).
+    HasUpRules(Symbol),
 }
 
 impl fmt::Display for ContextError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ContextError::Protected(s) => write!(f, "symbol {s:?} is protected"),
+            ContextError::HasUpRules(s) => {
+                write!(f, "symbol {s:?} has up-rules, which a value would hide")
+            }
         }
     }
 }
@@ -178,11 +188,13 @@ impl Context {
     #[must_use]
     pub fn attributes(&self, s: Symbol) -> Attributes {
         s.builtin_attributes()
-            .or_else(|| self.state.attributes.get(&s).copied())
+            .or_else(|| self.state.attributes.get(s).copied())
             .unwrap_or(Attributes::NONE)
     }
 
-    /// Replaces the attributes of `s`.
+    /// Replaces the attributes of `s`, and recompiles the rules that depend
+    /// on them (CAS-DOC-4 §4): those of `s`, and those whose patterns mention
+    /// `s`.
     ///
     /// # Errors
     ///
@@ -194,11 +206,17 @@ impl Context {
         attributes: Attributes,
     ) -> Result<(), ContextError> {
         self.check_unprotected(s)?;
-        let map = Arc::make_mut(&mut self.state_mut().attributes);
+        let before = self.attributes(s);
+        let map = &mut self.state_mut().attributes;
         if attributes.is_empty() {
-            map.remove(&s);
+            map.remove(s);
         } else {
             map.insert(s, attributes);
+        }
+        // Protection changes nothing in matching.
+        if before.difference(Attributes::PROTECTED) != attributes.difference(Attributes::PROTECTED)
+        {
+            self.recompile(s);
         }
         Ok(())
     }
@@ -215,9 +233,9 @@ impl Context {
         let a = self.attributes(s);
         if a.contains(Attributes::PROTECTED) {
             let rest = a.difference(Attributes::PROTECTED);
-            let map = Arc::make_mut(&mut self.state_mut().attributes);
+            let map = &mut self.state_mut().attributes;
             if rest.is_empty() {
-                map.remove(&s);
+                map.remove(s);
             } else {
                 map.insert(s, rest);
             }
@@ -228,17 +246,21 @@ impl Context {
     /// The value of `s`, if set.
     #[must_use]
     pub fn value(&self, s: Symbol) -> Option<&Expr> {
-        self.state.values.get(&s)
+        self.state.values.get(s)
     }
 
     /// Sets the value of `s`.
     ///
     /// # Errors
     ///
-    /// [`ContextError::Protected`] if `s` is protected.
+    /// [`ContextError::Protected`] if `s` is protected, and
+    /// [`ContextError::HasUpRules`] if it has up-rules.
     pub fn set(&mut self, s: Symbol, value: Expr) -> Result<(), ContextError> {
         self.check_unprotected(s)?;
-        Arc::make_mut(&mut self.state_mut().values).insert(s, value);
+        if self.rules().has_up_rules(s) {
+            return Err(ContextError::HasUpRules(s));
+        }
+        self.state_mut().values.insert(s, value);
         Ok(())
     }
 
@@ -249,13 +271,23 @@ impl Context {
     /// [`ContextError::Protected`] if `s` is protected.
     pub fn unset(&mut self, s: Symbol) -> Result<(), ContextError> {
         self.check_unprotected(s)?;
-        if self.state.values.contains_key(&s) {
-            Arc::make_mut(&mut self.state_mut().values).remove(&s);
+        if self.state.values.get(s).is_some() {
+            self.state_mut().values.remove(s);
         }
         Ok(())
     }
 
-    fn check_unprotected(&self, s: Symbol) -> Result<(), ContextError> {
+    /// The rules of this state.
+    pub(crate) fn rules(&self) -> &Rules {
+        &self.state.rules
+    }
+
+    /// The rules, for a change: a new state.
+    pub(crate) fn rules_mut(&mut self) -> &mut Rules {
+        &mut self.state_mut().rules
+    }
+
+    pub(crate) fn check_unprotected(&self, s: Symbol) -> Result<(), ContextError> {
         if self.attributes(s).contains(Attributes::PROTECTED) {
             Err(ContextError::Protected(s))
         } else {
@@ -319,6 +351,7 @@ impl fmt::Debug for Context {
             .field("id", &self.id)
             .field("values", &self.state.values.len())
             .field("attributes", &self.state.attributes.len())
+            .field("rules", &self.state.rules)
             .field("assumptions", &self.state.assumptions)
             .field("limits", &self.state.limits)
             .finish()

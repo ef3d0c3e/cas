@@ -22,7 +22,7 @@
 use std::fmt;
 
 use crate::context::{Context, EvalError};
-use crate::eval::Eval;
+use crate::eval::{Eval, run};
 use crate::expr::{Expr, View, symbol_bit};
 use crate::symbol::Symbol;
 
@@ -136,7 +136,20 @@ impl Pattern {
     ///
     /// A [`PatternError`] for a malformed construct.
     pub fn new(e: &Expr) -> Result<Pattern, PatternError> {
-        let mut compiler = Compiler::default();
+        Pattern::with_defaults(e, &|_| None)
+    }
+
+    /// Compiles `e`, where `x_.` as an argument of a user head `f` takes
+    /// `defaults(f)` when it is missing (`Context::set_default`, CAS-56).
+    pub(crate) fn with_defaults(
+        e: &Expr,
+        defaults: &dyn Fn(Symbol) -> Option<Expr>,
+    ) -> Result<Pattern, PatternError> {
+        let mut compiler = Compiler {
+            variables: Vec::new(),
+            heads: Vec::new(),
+            defaults,
+        };
         let root = compiler.node(e, None)?;
         let mut required = 0;
         root.required(&mut required);
@@ -196,19 +209,120 @@ impl Pattern {
     pub(crate) fn matches(&self, ev: &mut Eval<'_>, subject: &Expr) -> Result<bool, EvalError> {
         self.match_with(ev, subject, &mut |_, _| Ok(true))
     }
+
+    /// What a subject must be for this pattern to match it, read from the
+    /// compiled nodes so that it agrees with the matcher.
+    pub(crate) fn filter(&self) -> Filter {
+        let mut root = &self.root;
+        while let Node::Bind { inner, .. }
+        | Node::Condition { inner, .. }
+        | Node::Test { inner, .. } = root
+        {
+            root = inner;
+        }
+        let Node::Apply { head, args } = root else {
+            return Filter::default();
+        };
+        let (mut min, mut max) = (0, Some(0));
+        for a in args {
+            let (least, most) = match (a, sequence(a)) {
+                (Node::Optional { .. }, _) => (0, Some(1)),
+                (_, Some((_, least, _))) => (least, None),
+                (_, None) => (1, Some(1)),
+            };
+            min += least;
+            max = max.zip(most).map(|(m, n)| m + n);
+        }
+        Filter {
+            head: match head.as_ref() {
+                Node::Literal(h) => Some(h.clone()),
+                _ => None,
+            },
+            min,
+            max,
+            first: args.first().map_or(First::Any, first_argument),
+        }
+    }
+}
+
+/// What a subject must be for a pattern to match it (CAS-DOC-4 §5.1): its
+/// head, its number of arguments, and its first argument, or that
+/// argument's head, when the pattern fixes them. Checked before matching,
+/// it skips most rules of a head in O(1).
+///
+/// Matching is syntactic: CAS-57 widens the filter for `Flat` and
+/// `Orderless` heads, whose arguments may group or move.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct Filter {
+    head: Option<Expr>,
+    min: usize,
+    /// `None`: any number from `min`.
+    max: Option<usize>,
+    first: First,
+}
+
+#[derive(Clone, Debug, Default)]
+enum First {
+    #[default]
+    Any,
+    /// The first argument has this head.
+    Head(Expr),
+    /// The first argument is this.
+    Is(Expr),
+}
+
+impl Filter {
+    /// Whether a match of `e` is possible.
+    pub(crate) fn admits(&self, e: &Expr) -> bool {
+        let args = e.args();
+        self.head.as_ref().is_none_or(|h| e.head() == Some(h))
+            && args.len() >= self.min
+            && self.max.is_none_or(|max| args.len() <= max)
+            && match &self.first {
+                First::Any => true,
+                First::Head(h) => args.first().and_then(Expr::head) == Some(h),
+                First::Is(x) => args.first() == Some(x),
+            }
+    }
+}
+
+/// What the first argument of a subject must be for `node`, the first
+/// argument node, to match it. Only nodes that always take exactly the
+/// first argument fix anything.
+fn first_argument(node: &Node) -> First {
+    match node {
+        Node::Literal(e) => First::Is(e.clone()),
+        Node::Blank(Some(h))
+        | Node::Sequence {
+            min: 1..,
+            head: Some(h),
+        } => First::Head(h.clone()),
+        Node::Bind { inner, .. } | Node::Condition { inner, .. } | Node::Test { inner, .. } => {
+            first_argument(inner)
+        }
+        Node::Apply { head, .. } => match head.as_ref() {
+            Node::Literal(h) => First::Head(h.clone()),
+            _ => First::Any,
+        },
+        Node::Blank(None)
+        | Node::Sequence { .. }
+        | Node::Alternatives(_)
+        | Node::Optional { .. } => First::Any,
+    }
 }
 
 /// What receives a complete set of bindings, by slot, and says whether it
 /// accepts them.
 type Accept<'a> = &'a mut dyn FnMut(&mut Eval<'_>, &[Expr]) -> Result<bool, EvalError>;
 
-#[derive(Default)]
-struct Compiler {
+struct Compiler<'d> {
     variables: Vec<Symbol>,
     heads: Vec<Symbol>,
+    /// The defaults of user heads.
+    defaults: &'d dyn Fn(Symbol) -> Option<Expr>,
 }
 
-impl Compiler {
+impl Compiler<'_> {
     fn slot(&mut self, x: Symbol) -> usize {
         if let Some(i) = self.variables.iter().position(|&v| v == x) {
             return i;
@@ -271,7 +385,8 @@ impl Compiler {
             Some(Symbol::OPTIONAL) => match args {
                 [p] => Node::Optional {
                     inner: Box::new(self.node(p, position)?),
-                    default: position.and_then(|(h, i)| default(h, i)),
+                    default: position
+                        .and_then(|(h, i)| default(h, i).or_else(|| (self.defaults)(h))),
                 },
                 [p, d] => Node::Optional {
                     inner: Box::new(self.node(p, position)?),
@@ -320,8 +435,8 @@ impl Compiler {
     }
 }
 
-/// The default of `Optional[p]` as argument `i` of `head`: 0 in sums, 1 in
-/// products and as an exponent (CAS-DOC-4 §3).
+/// The default of `Optional[p]` as argument `i` of a builtin `head`: 0 in
+/// sums, 1 in products and as an exponent (CAS-DOC-4 §3).
 fn default(head: Symbol, i: usize) -> Option<Expr> {
     match (head, i) {
         (Symbol::PLUS, _) => Some(Expr::from(0)),
@@ -687,6 +802,11 @@ impl Rule {
         })
     }
 
+    /// The rule `lhs -> rhs` for a compiled `lhs`.
+    pub(crate) fn from_pattern(lhs: Pattern, rhs: Expr) -> Rule {
+        Rule { lhs, rhs }
+    }
+
     /// The rule an expression `Rule[lhs, rhs]` or `RuleDelayed[lhs, rhs]`
     /// stands for; `None` for anything else.
     pub(crate) fn of(e: &Expr) -> Option<Result<Rule, PatternError>> {
@@ -705,6 +825,12 @@ impl Rule {
     #[must_use]
     pub fn lhs(&self) -> &Pattern {
         &self.lhs
+    }
+
+    /// The right-hand side, with the pattern variables.
+    #[must_use]
+    pub fn rhs(&self) -> &Expr {
+        &self.rhs
     }
 
     /// The right-hand side, instantiated for the first match of `subject`
@@ -795,8 +921,9 @@ impl Context {
     ///
     /// [`EvalError`] from evaluating a condition or a test.
     pub fn matches(&self, e: &Expr, pattern: &Pattern) -> Result<bool, EvalError> {
-        let mut ev = Eval::new(self, self.limits().recursion);
-        pattern.matches(&mut ev, e)
+        run(self.limits(), |recursion| {
+            pattern.matches(&mut Eval::new(self, recursion), e)
+        })
     }
 
     /// `e` with every part that a rule rewrites replaced, then evaluated
@@ -806,9 +933,11 @@ impl Context {
     ///
     /// [`EvalError`] from conditions, tests or the evaluation.
     pub fn replace_all(&self, e: &Expr, rules: &[Rule]) -> Result<Expr, EvalError> {
-        let mut ev = Eval::new(self, self.limits().recursion);
-        let replaced = replace_all(&mut ev, rules, e)?;
-        ev.eval(&replaced)
+        run(self.limits(), |recursion| {
+            let mut ev = Eval::new(self, recursion);
+            let replaced = replace_all(&mut ev, rules, e)?;
+            ev.eval(&replaced)
+        })
     }
 }
 

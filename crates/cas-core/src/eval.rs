@@ -13,10 +13,12 @@
 //!    the arguments of an `Orderless` head sorted. In `Times`, lists keep
 //!    their order, after the other factors, since `*` does not commute on
 //!    them (§6.2).
-//! 6. Rewrite, by the first source that applies: up-rules, the head's native
-//!    function (the builtins' are in `native`, CAS-54), system rules,
-//!    down-rules, sub-rules, and the application of a `Function` head
-//!    (`pattern`, CAS-55). The rule sources come with CAS-56.
+//! 6. Rewrite, by the first source that applies (R10): the up-rules of the
+//!    arguments, the head's native function (the builtins' are in `native`,
+//!    CAS-54, a user's in the context), the system rules or the down-rules
+//!    of the head, exact ones first (`rules`, CAS-56), then for a compound
+//!    head its sub-rules and the application of a `Function` (`pattern`,
+//!    CAS-55).
 //! 7. A change in step 5 or 6 goes back to step 1, counted against
 //!    [`Limits::iterations`]. Otherwise the expression is a fixpoint: it is
 //!    stamped, so evaluating it again in this state is O(1), and memoised
@@ -36,6 +38,7 @@ use crate::attributes::Attributes;
 use crate::build::flatten;
 use crate::context::{Context, EvalError, Limits};
 use crate::expr::{Expr, View};
+use crate::rules;
 use crate::symbol::Symbol;
 
 /// The stack one level of evaluation may take, in bytes. A test measures the
@@ -217,12 +220,7 @@ impl<'c> Eval<'c> {
             .map_or(Attributes::NONE, |s| self.context.attributes(s));
         let mut evaluated = Vec::with_capacity(args.len());
         for (i, a) in args.iter().enumerate() {
-            let hold = if i == 0 {
-                Attributes::HOLD_FIRST
-            } else {
-                Attributes::HOLD_REST
-            };
-            evaluated.push(if attributes.contains(hold) {
+            evaluated.push(if holds(attributes, i) {
                 a.clone()
             } else {
                 self.eval(a)?
@@ -247,15 +245,25 @@ impl<'c> Eval<'c> {
     /// Step 6: the first source that rewrites `e`, an application with
     /// `head`.
     fn rewrite(&mut self, e: &Expr, head: Option<Symbol>) -> Result<Option<Expr>, EvalError> {
-        // 1. The up-rules of the arguments' heads: CAS-56.
-        // 2. The head's native function.
-        if let Some(native) = head.and_then(native) {
-            if let Some(rewritten) = native(self, e)? {
-                return Ok(Some(rewritten));
-            }
+        // 1. The up-rules of the arguments.
+        if let Some(rewritten) = rules::up(self, e)? {
+            return Ok(Some(rewritten));
         }
-        // 3. System rules and 4. down-rules: CAS-56.
-        // 5. Sub-rules (CAS-56), and a `Function` head applied.
+        if let Some(head) = head {
+            // 2. A builtin's native function.
+            if let Some(native) = native(head) {
+                if let Some(rewritten) = native(self, e)? {
+                    return Ok(Some(rewritten));
+                }
+            }
+            // 2 to 4. A user's native function, the system rules of a
+            // builtin, the down-rules of a user's symbol.
+            return rules::down(self, e, head);
+        }
+        // 5. Sub-rules, and a `Function` head applied.
+        if let Some(rewritten) = rules::sub(self, e)? {
+            return Ok(Some(rewritten));
+        }
         if let View::Apply { head, args } = e.view() {
             if head.head().and_then(Expr::as_symbol) == Some(Symbol::FUNCTION) {
                 return Ok(crate::pattern::apply_function(head, args));
@@ -263,6 +271,15 @@ impl<'c> Eval<'c> {
         }
         Ok(None)
     }
+}
+
+/// Whether argument `i` (from 0) of a head with `attributes` is held.
+pub(crate) fn holds(attributes: Attributes, i: usize) -> bool {
+    attributes.contains(if i == 0 {
+        Attributes::HOLD_FIRST
+    } else {
+        Attributes::HOLD_REST
+    })
 }
 
 /// The native function of a builtin (CAS-54), or one a test gave.
@@ -279,7 +296,7 @@ fn test_native(_: Symbol) -> Option<NativeFn> {
 }
 
 /// What step 5 makes of evaluated arguments.
-enum Normal {
+pub(crate) enum Normal {
     Same,
     Changed(Vec<Expr>),
     /// A `Listable` head threaded over lists: the list of its applications.
@@ -287,8 +304,14 @@ enum Normal {
 }
 
 /// Step 5 on the evaluated arguments of `head`, whose attributes are
-/// `attributes`.
-fn normalise(head: &Expr, attributes: Attributes, args: &[Expr]) -> Result<Normal, EvalError> {
+/// `attributes`. Inlined into the loop, as it was when the loop was its
+/// only caller.
+#[inline]
+pub(crate) fn normalise(
+    head: &Expr,
+    attributes: Attributes,
+    args: &[Expr],
+) -> Result<Normal, EvalError> {
     let sequence = Expr::from(Symbol::SEQUENCE);
     let mut args = Cow::Borrowed(args);
     if args.iter().any(|a| a.head() == Some(&sequence)) {
@@ -378,19 +401,8 @@ impl Context {
     ///
     /// If the evaluation thread cannot start.
     pub fn eval(&self, e: &Expr) -> Result<Expr, EvalError> {
-        let limits = self.limits();
-        if limits.stack == 0 {
-            return Eval::new(self, limits.recursion).eval(e);
-        }
-        let recursion = limits.recursion.min(levels(limits.stack));
-        std::thread::scope(|scope| {
-            std::thread::Builder::new()
-                .name("cas-eval".into())
-                .stack_size(limits.stack)
-                .spawn_scoped(scope, || Eval::new(self, recursion).eval(e))
-                .expect("the evaluation thread starts")
-                .join()
-                .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+        run(self.limits(), |recursion| {
+            Eval::new(self, recursion).eval(e)
         })
     }
 
@@ -402,6 +414,28 @@ impl Context {
         ev.caches = false;
         ev.eval(e)
     }
+}
+
+/// Runs `f`, which evaluates, with the recursion limit of `limits`: on a
+/// thread of its own when they ask for one, whose stack caps the limit.
+///
+/// # Panics
+///
+/// If the thread cannot start.
+pub(crate) fn run<R: Send>(limits: Limits, f: impl FnOnce(u32) -> R + Send) -> R {
+    if limits.stack == 0 {
+        return f(limits.recursion);
+    }
+    let recursion = limits.recursion.min(levels(limits.stack));
+    std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .name("cas-eval".into())
+            .stack_size(limits.stack)
+            .spawn_scoped(scope, move || f(recursion))
+            .expect("the evaluation thread starts")
+            .join()
+            .unwrap_or_else(|panic| std::panic::resume_unwind(panic))
+    })
 }
 
 /// The levels of evaluation a thread with `stack` bytes of stack holds.
