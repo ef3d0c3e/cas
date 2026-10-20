@@ -1,0 +1,44 @@
+> count := 0
+= 0
+> bump() := begin count := count + 1 end
+error at 3:26 `count`: count may not be assigned yet here: a name assigned in a block is local to it, so a block cannot change a global
+> f(n) := begin n := n + 1; n end
+error at 5:15 `n`: n is a parameter, which cannot be assigned: copy it into a local first, m := n
+> g(x) := begin h(y) := y; 1 end
+error at 6:15 `h(y) := y`: definitions belong at the top level, not in a block
+> begin break end
+error at 8:7 `break`: break belongs inside a loop
+> for k in 1..3 do k end
+error at 9:1 `for k in 1..3 do k end`: a loop belongs inside begin … end
+> return 1
+error at 10:1 `return 1`: return belongs inside begin … end
+> p(c) := begin if c then t := 1 end; t end
+error at 12:37 `t`: t may not be assigned yet here: a name assigned in a block is local to it, so a block cannot change a global
+> q(c) := begin if c then t := 1 else t := 2 end; t end
+> q(true)
+= 1
+> r(c) := begin if c then t := 1 else return 0 end; t end
+> [r(true), r(false)]
+= [1, 0]
+> begin y := if true then a := 1; a else 2 end; y end
+error at 18:25 `a := 1; a`: an if inside an expression has one expression per branch: make it a statement of its own
+> w(x) := begin while x > 0 do x2 := 1 end; 0 end
+> w(z)
+error at 21:1 `w(z)`: the condition of an if or a while is neither true nor false
+> begin for k in x do 1 end end
+error at 22:1 `begin for k in x do 1 end end`: for runs over a range of integers, a list or a set
+> begin for k in 1..n do 1 end end
+error at 23:1 `begin for k in 1..n do 1 end end`: for runs over a range of integers, a list or a set
+> adder(n) := begin y := n; t -> t + y end
+> adder(3)(4)
+= 7
+> begin a := 2; b := begin c := a + 1; c * 2 end; b end
+= 6
+> begin s := 0; begin s := s + 1 end; s end
+error at 29:26 `s`: s may not be assigned yet here: a name assigned in a block is local to it, so a block cannot change a global
+> begin local u; u := 5; u end
+= 5
+> begin local u; u end
+error at 31:16 `u`: u may not be assigned yet here: a name assigned in a block is local to it, so a block cannot change a global
+> begin v := [1, 2, 3]; v[1] := 9; v end
+= [1, 9, 3]

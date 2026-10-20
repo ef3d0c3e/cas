@@ -120,3 +120,19 @@ fn results_the_language_cannot_write() {
         "shown in the evaluator's notation: the language has no syntax for Rule with 2 arguments"
     );
 }
+
+/// A loop that never ends, and rewrites nothing, stops at an interrupt too.
+#[test]
+fn an_endless_loop_is_interrupted() {
+    let mut session = Session::new();
+    let interrupt = session.interrupt();
+    let outputs = std::thread::scope(|scope| {
+        scope.spawn(|| {
+            std::thread::sleep(Duration::from_millis(100));
+            interrupt.interrupt();
+        });
+        session.run("begin while true do end end\n1 + 1")
+    });
+    assert_eq!(results(&outputs), [None, Some("2")]);
+    assert_eq!(outputs[0].messages[0].text, "interrupted");
+}

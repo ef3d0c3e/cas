@@ -315,20 +315,50 @@ fn errors_leave_statements_out() {
             "f(assume(x))",
             &[("assume(x)", E::MisplacedForm("assume".into()))],
         ),
-        (
-            "begin x end",
-            &[("begin x end", E::NotYetSupported("blocks"))],
-        ),
-        (
-            "local x",
-            &[(
-                "local x",
-                E::NotYetSupported("local variables, loops and `return`"),
-            )],
-        ),
+        // Procedures (§8): statements outside blocks, jumps outside loops.
+        ("local x", &[("local x", E::OutsideBlock("local"))]),
         (
             "if a then b; c end",
-            &[("b; c", E::NotYetSupported("branches of several statements"))],
+            &[("b; c", E::OutsideBlock("an if with statements in a branch"))],
+        ),
+        (
+            "for k in r do k end",
+            &[("for k in r do k end", E::OutsideBlock("a loop"))],
+        ),
+        ("return 1", &[("return 1", E::OutsideBlock("return"))]),
+        ("break", &[("break", E::OutsideLoop("break"))]),
+        (
+            "begin continue end",
+            &[("continue", E::OutsideLoop("continue"))],
+        ),
+        // A parameter is not assigned, nor a global; no definitions inside.
+        (
+            "f(n) := begin n := 1 end",
+            &[("n", E::AssignedParameter("n".into()))],
+        ),
+        (
+            "g() := begin h(y) := y end",
+            &[("h(y) := y", E::DefinitionInBlock)],
+        ),
+        (
+            "p() := begin t := t + 1 end",
+            &[("t", E::ReadBeforeAssignment("t".into()))],
+        ),
+        (
+            "p(c) := begin if c then t := 1 end; t end",
+            &[("t", E::ReadBeforeAssignment("t".into()))],
+        ),
+        (
+            "p() := begin while c do t := 1 end; t end",
+            &[("t", E::ReadBeforeAssignment("t".into()))],
+        ),
+        (
+            "p() := begin local t; t end",
+            &[("t", E::ReadBeforeAssignment("t".into()))],
+        ),
+        (
+            "begin y := if c then a := 1; a else 2 end end",
+            &[("a := 1; a", E::StatementsInValue)],
         ),
         (
             "1e2000000",
@@ -344,6 +374,71 @@ fn errors_leave_statements_out() {
         assert!(lowered(text).statements.is_empty(), "{text:?} is left out");
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Blocks, their statements and their locals (CAS-DOC-7 §8).
+#[test]
+fn procedures() {
+    check(&[
+        ("begin x := 1; x end", "Block[List[x], Set[x, 1], x]"),
+        ("begin end", "Block[List[]]"),
+        (
+            "f(n) := begin m := n; while m > 1 do m := m - 1 end; m end",
+            "SetDelayed[f[Pattern[n, Blank[]]], Block[List[m], Set[m, n], \
+             While[Greater[m, 1], Statements[Set[m, Plus[m, -1]]]], m]]",
+        ),
+        (
+            "begin s := 0; for k in 1..3 do s := s + k end; s end",
+            "Block[List[s, k], Set[s, 0], For[k, Range[1, 3], Statements[Set[s, Plus[s, k]]]], s]",
+        ),
+        // A statement `if` has groups for branches, `elif` nested.
+        (
+            "begin if a then x := 1 elif b then x := 2 else x := 3 end; x end",
+            "Block[List[x], If[a, Statements[Set[x, 1]], If[b, Statements[Set[x, 2]], \
+             Statements[Set[x, 3]]]], x]",
+        ),
+        // A name first assigned in a loop's body is a local too.
+        (
+            "begin for k in 1..3 do t := k end; 0 end",
+            "Block[List[k, t], For[k, Range[1, 3], Statements[Set[t, k]]], 0]",
+        ),
+        // `local`, with and without a value; destructuring; indexing.
+        (
+            "begin local u, v := 2; u := v; [a, b] := [u, v]; a[0] := 1; a end",
+            "Block[List[u, v, a, b], Set[v, 2], Set[u, v], Set[List[a, b], List[u, v]], \
+             Set[a, ReplaceAt[a, 0, 1]], a]",
+        ),
+        // Jumps.
+        (
+            "begin for k in r do if k > 2 then break end; continue end; return end",
+            "Block[List[k], For[k, r, Statements[If[Greater[k, 2], Statements[Break[]]], \
+             Continue[]]], Return[]]",
+        ),
+        // A nested block and a lambda are scopes of their own.
+        (
+            "begin a := 1; b := begin c := a; c end; t -> t + a end",
+            "Block[List[a, b], Set[a, 1], Set[b, Block[List[c], Set[c, a], c]], \
+             Function[List[t], Plus[t, a]]]",
+        ),
+        // An `if` with statements is a block of its own as a body.
+        (
+            "f(x) := if x > 0 then return 1 else return -1 end",
+            "SetDelayed[f[Pattern[x, Blank[]]], Block[List[], If[Greater[x, 0], \
+             Statements[Return[1]], Statements[Return[-1]]]]]",
+        ),
+        // A lambda's parameter is not the local of the same name, assigned
+        // later.
+        (
+            "begin g := (y -> y^2); y := 3; g(y) end",
+            "Block[List[g, y], Set[g, Function[List[y], Power[y, 2]]], Set[y, 3], g[y]]",
+        ),
+        // A lambda's parameter is bound, not assigned.
+        (
+            "f(x) := begin g := (x -> x^2); g(x) end",
+            "SetDelayed[f[Pattern[x, Blank[]]], Block[List[g], \
+             Set[g, Function[List[x], Power[x, 2]]], g[x]]]",
+        ),
+    ]);
 }
 
 #[test]

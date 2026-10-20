@@ -176,8 +176,22 @@ pub enum LowerErrorKind {
     NoUserName(String),
     /// A number without an exact value.
     Number(NumberError),
-    /// Statements of procedures, which come with stage 2 (CAS-122).
+    /// A construct the language does not have yet.
     NotYetSupported(&'static str),
+    /// A local of a block read where it may not be assigned yet (CAS-DOC-7
+    /// §8, O5): how an attempt to change a global shows, as in
+    /// `count := count + 1`.
+    ReadBeforeAssignment(String),
+    /// A parameter assigned in a body: the rule puts its value there.
+    AssignedParameter(String),
+    /// A definition inside a block.
+    DefinitionInBlock,
+    /// A loop, `local`, `return` or statements in a branch outside a block.
+    OutsideBlock(&'static str),
+    /// `break` or `continue` outside a loop.
+    OutsideLoop(&'static str),
+    /// An `if` inside an expression with statements in a branch.
+    StatementsInValue,
     /// A note: `name(arg)` read as a product.
     ProductReading(String),
 }
@@ -220,6 +234,25 @@ impl fmt::Display for LowerErrorKind {
             ),
             LowerErrorKind::Number(e) => e.fmt(f),
             LowerErrorKind::NotYetSupported(what) => write!(f, "{what} are not supported yet"),
+            LowerErrorKind::ReadBeforeAssignment(n) => write!(
+                f,
+                "{n} may not be assigned yet here: a name assigned in a block is local to it, \
+                 so a block cannot change a global"
+            ),
+            LowerErrorKind::AssignedParameter(n) => write!(
+                f,
+                "{n} is a parameter, which cannot be assigned: copy it into a local first, \
+                 m := {n}"
+            ),
+            LowerErrorKind::DefinitionInBlock => {
+                f.write_str("definitions belong at the top level, not in a block")
+            }
+            LowerErrorKind::OutsideBlock(what) => write!(f, "{what} belongs inside begin … end"),
+            LowerErrorKind::OutsideLoop(what) => write!(f, "{what} belongs inside a loop"),
+            LowerErrorKind::StatementsInValue => f.write_str(
+                "an if inside an expression has one expression per branch: make it a statement \
+                 of its own",
+            ),
             LowerErrorKind::ProductReading(reading) => write!(f, "read as {reading}"),
         }
     }
@@ -249,6 +282,8 @@ pub fn lower(parse: &Parse, names: &Names) -> Lowered {
         failed: false,
         mode: Mode::Value,
         sequences: Vec::new(),
+        parameters: Vec::new(),
+        scope: None,
     };
     let mut statements = Vec::new();
     for node in parse.syntax().children() {
@@ -304,6 +339,17 @@ struct Lowerer<'a> {
     /// lowered: there, `xs` is the list of the arguments and `xs...` splices
     /// them.
     sequences: Vec<String>,
+    /// The parameters in scope, of the definition and of the lambdas around:
+    /// a body cannot assign them.
+    parameters: Vec<Symbol>,
+    /// The block whose statements are being lowered.
+    scope: Option<Scope>,
+}
+
+/// A block being lowered (CAS-DOC-7 §8).
+struct Scope {
+    /// How many loops of the block enclose the statement.
+    loops: usize,
 }
 
 impl Lowerer<'_> {
@@ -347,10 +393,14 @@ impl Lowerer<'_> {
                 None => self.fail_silently(range(node)),
             },
             K::Definition => self.definition(node),
-            _ => self.fail(
-                range(node),
-                LowerErrorKind::NotYetSupported("local variables, loops and `return`"),
-            ),
+            K::ForStmt | K::WhileStmt => {
+                self.fail(range(node), LowerErrorKind::OutsideBlock("a loop"))
+            }
+            K::LocalStmt => self.fail(range(node), LowerErrorKind::OutsideBlock("local")),
+            K::ReturnStmt => self.fail(range(node), LowerErrorKind::OutsideBlock("return")),
+            K::BreakStmt => self.fail(range(node), LowerErrorKind::OutsideLoop("break")),
+            K::ContinueStmt => self.fail(range(node), LowerErrorKind::OutsideLoop("continue")),
+            _ => self.fail_silently(range(node)),
         }
     }
 
@@ -410,6 +460,9 @@ impl Lowerer<'_> {
         let guard = children.next().and_then(|w| w.first_child());
         let range = range(node);
         let assignment = matches!(lhs.kind(), K::Name | K::ListExpr | K::IndexExpr);
+        if !assignment && self.scope.is_some() {
+            return self.fail(range, LowerErrorKind::DefinitionInBlock);
+        }
         if assignment {
             if let Some(guard) = &guard {
                 self.error(self::range(guard), LowerErrorKind::GuardOnAssignment, None);
@@ -452,9 +505,19 @@ impl Lowerer<'_> {
         }
     }
 
-    /// A name to assign or bind: a user symbol, or an error for a name of
-    /// the table.
+    /// A name to assign: a user symbol, or an error for a name of the table,
+    /// and in a body for a parameter.
     fn assignable(&mut self, node: &SyntaxNode) -> Lowering {
+        let n = name_of(node);
+        if self.scope.is_some() && self.parameters.contains(&user_symbol(&n)) {
+            return self.fail(range(node), LowerErrorKind::AssignedParameter(n));
+        }
+        self.bindable(node)
+    }
+
+    /// A name to bind, as a parameter: a user symbol, or an error for a name
+    /// of the table.
+    fn bindable(&mut self, node: &SyntaxNode) -> Lowering {
         let n = name_of(node);
         let range = range(node);
         if self.names.is_reserved(&n) {
@@ -476,7 +539,11 @@ impl Lowerer<'_> {
             Defined::User => {
                 self.sequences.clear();
                 let pattern = self.in_mode(Mode::Parameters, |l| l.defined_application(lhs));
+                let mut parameters = Vec::new();
+                pattern_variables(&pattern.0, &mut parameters);
+                let saved = std::mem::replace(&mut self.parameters, parameters);
                 let body = self.body(rhs, guard);
+                self.parameters = saved;
                 self.sequences.clear();
                 apply(Symbol::SET_DELAYED, vec![pattern, body], range)
             }
@@ -561,7 +628,12 @@ impl Lowerer<'_> {
 
     /// The right-hand side of a definition, with its guard.
     fn body(&mut self, rhs: &SyntaxNode, guard: Option<&SyntaxNode>) -> Lowering {
-        let value = self.expr(rhs);
+        // An `if` with statements in its branches is a block of its own.
+        let value = if rhs.kind() == K::IfExpr && has_statements(rhs) {
+            self.block_of(std::slice::from_ref(rhs), range(rhs))
+        } else {
+            self.expr(rhs)
+        };
         match guard {
             Some(guard) => {
                 let test = self.expr(guard);
@@ -625,7 +697,7 @@ impl Lowerer<'_> {
             }
             K::Lambda => self.lambda(node),
             K::IfExpr => self.if_expr(node),
-            K::BlockExpr => self.fail(range, LowerErrorKind::NotYetSupported("blocks")),
+            K::BlockExpr => self.block(node),
             _ => self.fail_silently(range),
         }
     }
@@ -1156,15 +1228,29 @@ impl Lowerer<'_> {
         } else {
             params.children().collect()
         };
-        let parameters = names.iter().map(|n| self.assignable(n)).collect();
+        let parameters: Vec<Lowering> = names.iter().map(|n| self.bindable(n)).collect();
+        let outer = self.parameters.len();
+        self.parameters
+            .extend(parameters.iter().filter_map(|(p, _)| p.as_symbol()));
         let parameters = apply(Symbol::LIST, parameters, self::range(&params));
+        // A block in the body is a scope of its own.
+        let scope = self.scope.take();
         let body = self.expr(&body);
+        self.scope = scope;
+        self.parameters.truncate(outer);
         apply(Symbol::FUNCTION, vec![parameters, body], range)
     }
 
     /// `if c then a elif d then b else e end`: nested `If`s. In stage 1 a
     /// branch is one expression.
     fn if_expr(&mut self, node: &SyntaxNode) -> Lowering {
+        self.conditional(node, false)
+    }
+
+    /// `if … end`: in an expression, one expression per branch (`If[c, a,
+    /// b]`); as a statement of a block, a group per branch
+    /// (`If[c, Statements[…], Statements[…]]`).
+    fn conditional(&mut self, node: &SyntaxNode, statement: bool) -> Lowering {
         let range = range(node);
         let nodes: Vec<SyntaxNode> = node.children().collect();
         let has_else = node.children_with_tokens().any(|e| e.kind() == K::ElseKw);
@@ -1174,20 +1260,360 @@ impl Lowerer<'_> {
             branches.push((nodes[i].clone(), nodes[i + 1].clone()));
             i += 2;
         }
+        let lower_branch = |l: &mut Self, body: &SyntaxNode| {
+            if statement {
+                l.group(body)
+            } else {
+                l.branch(body)
+            }
+        };
         let mut result = if has_else {
-            nodes.get(i).map(|b| self.branch(b))
+            nodes.get(i).map(|b| lower_branch(self, b))
         } else {
             None
         };
         for (condition, body) in branches.iter().rev() {
             let condition = self.expr(condition);
-            let value = self.branch(body);
+            let value = lower_branch(self, body);
             let span = condition.1.range.start..range.end;
             let mut args = vec![condition, value];
             args.extend(result.take());
             result = Some(apply(Symbol::IF, args, span));
         }
         result.unwrap_or_else(|| self.fail_silently(range))
+    }
+
+    /// `begin … end`: a block (CAS-DOC-7 §8).
+    fn block(&mut self, node: &SyntaxNode) -> Lowering {
+        let range = range(node);
+        match node.children().find(|c| c.kind() == K::Body) {
+            Some(body) => self.block_of(&body.children().collect::<Vec<_>>(), range),
+            None => self.fail_silently(range),
+        }
+    }
+
+    /// `Block[{locals…}, statements…]`: the locals are the names the
+    /// statements assign, those declared `local`, and the loop variables;
+    /// each must be assigned before it is read, on every path (O5).
+    fn block_of(&mut self, statements: &[SyntaxNode], range: Range<usize>) -> Lowering {
+        let mut locals = Vec::new();
+        for s in statements {
+            assigned_names(s, &mut locals);
+        }
+        locals.retain(|n| !self.names.is_reserved(n) && !self.parameters.contains(&user_symbol(n)));
+        let mut assigned = Vec::new();
+        self.check_group(statements, &locals, &mut assigned);
+        let saved = self.scope.replace(Scope { loops: 0 });
+        let declared = locals
+            .iter()
+            .map(|n| (Expr::from(user_symbol(n)), Spans::leaf(range.clone())))
+            .collect();
+        let mut args = vec![apply(Symbol::LIST, declared, range.clone())];
+        for s in statements {
+            if let Some(lowered) = self.block_statement(s) {
+                args.push(lowered);
+            }
+        }
+        self.scope = saved;
+        apply(Symbol::BLOCK, args, range)
+    }
+
+    /// A statement of a block; `None` for one that does nothing, `local x`.
+    fn block_statement(&mut self, node: &SyntaxNode) -> Option<Lowering> {
+        let range = range(node);
+        Some(match node.kind() {
+            K::ExprStmt => {
+                let expr = node.first_child()?;
+                if expr.kind() == K::IfExpr {
+                    self.conditional(&expr, true)
+                } else {
+                    self.expr(&expr)
+                }
+            }
+            K::IfExpr => self.conditional(node, true),
+            K::Definition => self.definition(node),
+            K::LocalStmt => {
+                let mut assignments = Vec::new();
+                for item in node.children() {
+                    let mut parts = item.children();
+                    if let (Some(name), Some(value)) = (parts.next(), parts.next()) {
+                        let target = self.assignable(&name);
+                        let value = self.expr(&value);
+                        assignments.push(apply(
+                            Symbol::SET,
+                            vec![target, value],
+                            self::range(&item),
+                        ));
+                    }
+                }
+                match assignments.len() {
+                    0 => return None,
+                    1 => assignments.pop().expect("one"),
+                    _ => apply(Symbol::STATEMENTS, assignments, range),
+                }
+            }
+            K::ReturnStmt => {
+                let value = node.first_child().map(|e| self.expr(&e));
+                apply(Symbol::RETURN, value.into_iter().collect(), range)
+            }
+            K::BreakStmt | K::ContinueStmt => {
+                let (head, word) = if node.kind() == K::BreakStmt {
+                    (Symbol::BREAK, "break")
+                } else {
+                    (Symbol::CONTINUE, "continue")
+                };
+                if self.scope.as_ref().is_some_and(|s| s.loops > 0) {
+                    apply(head, Vec::new(), range)
+                } else {
+                    self.fail(range, LowerErrorKind::OutsideLoop(word))
+                }
+            }
+            K::ForStmt => {
+                let mut parts = node.children();
+                let (Some(variable), Some(values), Some(body)) =
+                    (parts.next(), parts.next(), parts.next())
+                else {
+                    return Some(self.fail_silently(range));
+                };
+                let variable = self.assignable(&variable);
+                let values = self.expr(&values);
+                let body = self.loop_body(&body);
+                apply(Symbol::FOR, vec![variable, values, body], range)
+            }
+            K::WhileStmt => {
+                let mut parts = node.children();
+                let (Some(condition), Some(body)) = (parts.next(), parts.next()) else {
+                    return Some(self.fail_silently(range));
+                };
+                let condition = self.expr(&condition);
+                let body = self.loop_body(&body);
+                apply(Symbol::WHILE, vec![condition, body], range)
+            }
+            _ => self.fail_silently(range),
+        })
+    }
+
+    /// The statements of a branch or of a loop, in the enclosing block:
+    /// `Statements[…]`.
+    fn group(&mut self, body: &SyntaxNode) -> Lowering {
+        let statements: Vec<SyntaxNode> = body.children().collect();
+        let lowered = statements
+            .iter()
+            .filter_map(|s| self.block_statement(s))
+            .collect();
+        apply(Symbol::STATEMENTS, lowered, range(body))
+    }
+
+    /// The body of a loop, where `break` and `continue` belong.
+    fn loop_body(&mut self, body: &SyntaxNode) -> Lowering {
+        if let Some(scope) = &mut self.scope {
+            scope.loops += 1;
+        }
+        let lowered = self.group(body);
+        if let Some(scope) = &mut self.scope {
+            scope.loops -= 1;
+        }
+        lowered
+    }
+
+    /// Checks the reads of `locals` in `statements`, whose assigned locals
+    /// are `assigned` before them and after; whether control can reach their
+    /// end.
+    fn check_group(
+        &mut self,
+        statements: &[SyntaxNode],
+        locals: &[String],
+        assigned: &mut Vec<String>,
+    ) -> bool {
+        statements
+            .iter()
+            .all(|s| self.check_statement(s, locals, assigned))
+    }
+
+    fn check_statement(
+        &mut self,
+        node: &SyntaxNode,
+        locals: &[String],
+        assigned: &mut Vec<String>,
+    ) -> bool {
+        let assign = |assigned: &mut Vec<String>, name: &SyntaxNode| {
+            let n = name_of(name);
+            if !assigned.contains(&n) {
+                assigned.push(n);
+            }
+        };
+        match node.kind() {
+            K::ExprStmt => match node.first_child() {
+                Some(expr) if expr.kind() == K::IfExpr => self.check_if(&expr, locals, assigned),
+                Some(expr) => {
+                    self.check_reads(&expr, locals, assigned, &[]);
+                    true
+                }
+                None => true,
+            },
+            K::IfExpr => self.check_if(node, locals, assigned),
+            K::Definition => {
+                let mut parts = node.children();
+                let (Some(lhs), Some(rhs)) = (parts.next(), parts.next()) else {
+                    return true;
+                };
+                self.check_reads(&rhs, locals, assigned, &[]);
+                match lhs.kind() {
+                    K::Name => assign(assigned, &lhs),
+                    K::ListExpr => {
+                        for item in lhs.children().filter(|i| i.kind() == K::Name) {
+                            assign(assigned, &item);
+                        }
+                    }
+                    // `v[k] := e` reads `v` and `k`.
+                    K::IndexExpr => self.check_reads(&lhs, locals, assigned, &[]),
+                    _ => {}
+                }
+                true
+            }
+            K::LocalStmt => {
+                for item in node.children() {
+                    let mut parts = item.children();
+                    if let (Some(name), Some(value)) = (parts.next(), parts.next()) {
+                        self.check_reads(&value, locals, assigned, &[]);
+                        assign(assigned, &name);
+                    }
+                }
+                true
+            }
+            K::ReturnStmt => {
+                if let Some(value) = node.first_child() {
+                    self.check_reads(&value, locals, assigned, &[]);
+                }
+                false
+            }
+            K::BreakStmt | K::ContinueStmt => false,
+            K::ForStmt => {
+                let mut parts = node.children();
+                if let (Some(variable), Some(values), Some(body)) =
+                    (parts.next(), parts.next(), parts.next())
+                {
+                    self.check_reads(&values, locals, assigned, &[]);
+                    let mut inside = assigned.clone();
+                    assign(&mut inside, &variable);
+                    self.check_group(&body.children().collect::<Vec<_>>(), locals, &mut inside);
+                }
+                true
+            }
+            K::WhileStmt => {
+                let mut parts = node.children();
+                if let (Some(condition), Some(body)) = (parts.next(), parts.next()) {
+                    self.check_reads(&condition, locals, assigned, &[]);
+                    let mut inside = assigned.clone();
+                    self.check_group(&body.children().collect::<Vec<_>>(), locals, &mut inside);
+                    // A second round reads what the first assigned.
+                    self.check_reads(&condition, locals, &inside, &[]);
+                }
+                true
+            }
+            _ => true,
+        }
+    }
+
+    /// An `if` as a statement: after it, a local is assigned if every branch
+    /// that reaches its end assigns it.
+    fn check_if(
+        &mut self,
+        node: &SyntaxNode,
+        locals: &[String],
+        assigned: &mut Vec<String>,
+    ) -> bool {
+        let nodes: Vec<SyntaxNode> = node.children().collect();
+        let has_else = node.children_with_tokens().any(|e| e.kind() == K::ElseKw);
+        let mut after: Option<Vec<String>> = None;
+        let through = |inside: Vec<String>, after: &mut Option<Vec<String>>| {
+            *after = Some(match after.take() {
+                None => inside,
+                Some(mut both) => {
+                    both.retain(|n| inside.contains(n));
+                    both
+                }
+            });
+        };
+        let mut i = 0;
+        while i + 1 < nodes.len() && nodes[i].kind() != K::Body {
+            self.check_reads(&nodes[i], locals, assigned, &[]);
+            let mut inside = assigned.clone();
+            let body: Vec<SyntaxNode> = nodes[i + 1].children().collect();
+            if self.check_group(&body, locals, &mut inside) {
+                through(inside, &mut after);
+            }
+            i += 2;
+        }
+        match nodes.get(i).filter(|_| has_else) {
+            Some(other) => {
+                let mut inside = assigned.clone();
+                let body: Vec<SyntaxNode> = other.children().collect();
+                if self.check_group(&body, locals, &mut inside) {
+                    through(inside, &mut after);
+                }
+            }
+            None => through(assigned.clone(), &mut after),
+        }
+        match after {
+            Some(after) => {
+                *assigned = after;
+                true
+            }
+            None => false,
+        }
+    }
+
+    /// Reports the reads in `node` of the locals not in `assigned`, except
+    /// those bound inside: `bound`, a lambda's parameters, a nested block's
+    /// locals, the variables of patterns.
+    fn check_reads(
+        &mut self,
+        node: &SyntaxNode,
+        locals: &[String],
+        assigned: &[String],
+        bound: &[String],
+    ) {
+        match node.kind() {
+            K::Name => {
+                let n = name_of(node);
+                if locals.contains(&n) && !assigned.contains(&n) && !bound.contains(&n) {
+                    self.error(range(node), LowerErrorKind::ReadBeforeAssignment(n), None);
+                }
+            }
+            K::Typed => {}
+            K::Lambda => {
+                let mut children = node.children();
+                let (Some(params), Some(body)) = (children.next(), children.next()) else {
+                    return;
+                };
+                let mut inner = bound.to_vec();
+                if params.kind() == K::Name {
+                    inner.push(name_of(&params));
+                } else {
+                    inner.extend(params.children().map(|p| name_of(&p)));
+                }
+                self.check_reads(&body, locals, assigned, &inner);
+            }
+            K::BlockExpr => {
+                let mut inner = bound.to_vec();
+                for s in node
+                    .children()
+                    .filter(|c| c.kind() == K::Body)
+                    .flat_map(|b| b.children())
+                {
+                    assigned_names(&s, &mut inner);
+                }
+                for child in node.children() {
+                    self.check_reads(&child, locals, assigned, &inner);
+                }
+            }
+            _ => {
+                for child in node.children() {
+                    self.check_reads(&child, locals, assigned, bound);
+                }
+            }
+        }
     }
 
     fn branch(&mut self, body: &SyntaxNode) -> Lowering {
@@ -1198,10 +1624,11 @@ impl Lowerer<'_> {
                 Some(expr) => self.expr(&expr),
                 None => self.fail_silently(range(body)),
             },
-            _ => self.fail(
+            _ if self.scope.is_none() => self.fail(
                 range(body),
-                LowerErrorKind::NotYetSupported("branches of several statements"),
+                LowerErrorKind::OutsideBlock("an if with statements in a branch"),
             ),
+            _ => self.fail(range(body), LowerErrorKind::StatementsInValue),
         }
     }
 }
@@ -1345,6 +1772,88 @@ fn occurs_in(n: &str, arg: &SyntaxNode) -> bool {
                 .is_some_and(|p| p.kind() == K::Application && p.first_child().as_ref() == Some(d))
         })
         .any(|d| name_of(&d) == n)
+}
+
+/// The names `node`, a statement, assigns to: the targets of assignments,
+/// `local` names and loop variables, in branches and loop bodies too, but
+/// not in nested blocks and lambdas, which are scopes of their own.
+fn assigned_names(node: &SyntaxNode, out: &mut Vec<String>) {
+    let mut add = |name: &SyntaxNode| {
+        let n = name_of(name);
+        if !out.contains(&n) {
+            out.push(n);
+        }
+    };
+    match node.kind() {
+        K::Definition => match node.first_child() {
+            Some(lhs) if lhs.kind() == K::Name => add(&lhs),
+            Some(lhs) if lhs.kind() == K::ListExpr => {
+                for item in lhs.children().filter(|i| i.kind() == K::Name) {
+                    add(&item);
+                }
+            }
+            Some(lhs) if lhs.kind() == K::IndexExpr => {
+                if let Some(base) = lhs.first_child().filter(|b| b.kind() == K::Name) {
+                    add(&base);
+                }
+            }
+            _ => {}
+        },
+        K::LocalStmt => {
+            for name in node.children().filter_map(|item| item.first_child()) {
+                add(&name);
+            }
+        }
+        K::ForStmt => {
+            if let Some(variable) = node.first_child() {
+                add(&variable);
+            }
+            for body in node.children().filter(|c| c.kind() == K::Body) {
+                for s in body.children() {
+                    assigned_names(&s, out);
+                }
+            }
+        }
+        K::WhileStmt | K::IfExpr => {
+            for body in node.children().filter(|c| c.kind() == K::Body) {
+                for s in body.children() {
+                    assigned_names(&s, out);
+                }
+            }
+        }
+        K::ExprStmt => {
+            if let Some(expr) = node.first_child().filter(|e| e.kind() == K::IfExpr) {
+                assigned_names(&expr, out);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Whether an `if` has statements in a branch, rather than one expression
+/// each: then it is a statement.
+fn has_statements(node: &SyntaxNode) -> bool {
+    node.children().filter(|c| c.kind() == K::Body).any(|body| {
+        let statements: Vec<SyntaxNode> = body.children().collect();
+        match statements.as_slice() {
+            [] => false,
+            [s] if s.kind() == K::ExprStmt => s
+                .first_child()
+                .is_some_and(|e| e.kind() == K::IfExpr && has_statements(&e)),
+            _ => true,
+        }
+    })
+}
+
+/// The names of the pattern variables in `e`, the parameters of a
+/// definition.
+fn pattern_variables(e: &Expr, out: &mut Vec<Symbol>) {
+    if e.head().and_then(Expr::as_symbol) == Some(Symbol::PATTERN) {
+        out.extend(e.args().first().and_then(Expr::as_symbol));
+    }
+    for a in e.args() {
+        pattern_variables(a, out);
+    }
 }
 
 /// Whether a left-hand side holds a user's name at level 1, where an

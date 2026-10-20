@@ -1,0 +1,32 @@
+// A block cannot change a global (O5): caught when it is defined.
+count := 0
+bump() := begin count := count + 1 end
+// A parameter is not assigned; definitions stay at the top level.
+f(n) := begin n := n + 1; n end
+g(x) := begin h(y) := y; 1 end
+// `break` and `continue` belong to loops, loops and `return` to blocks.
+begin break end
+for k in 1..3 do k end
+return 1
+// A local assigned on one branch only may not be assigned.
+p(c) := begin if c then t := 1 end; t end
+q(c) := begin if c then t := 1 else t := 2 end; t end
+q(true)
+r(c) := begin if c then t := 1 else return 0 end; t end
+[r(true), r(false)]
+// An `if` inside an expression has one expression per branch.
+begin y := if true then a := 1; a else 2 end; y end
+// Conditions must be true or false; `for` needs something to run over.
+w(x) := begin while x > 0 do x2 := 1 end; 0 end
+w(z)
+begin for k in x do 1 end end
+begin for k in 1..n do 1 end end
+// A lambda keeps the values of the locals it reads, when it is made.
+adder(n) := begin y := n; t -> t + y end
+adder(3)(4)
+// A nested block reads the locals around it; what it assigns is its own.
+begin a := 2; b := begin c := a + 1; c * 2 end; b end
+begin s := 0; begin s := s + 1 end; s end
+begin local u; u := 5; u end
+begin local u; u end
+begin v := [1, 2, 3]; v[1] := 9; v end

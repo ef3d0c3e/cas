@@ -226,6 +226,12 @@ pub enum EvalError {
     IndexOutOfRange,
     /// Stopped from another thread through an [`Interrupt`].
     Interrupted,
+    /// The condition of an `if` or a `while` in a procedure that is
+    /// neither true nor false (CAS-DOC-7 §8).
+    UndecidedCondition,
+    /// A `for` over something other than a range of integers, a list or a
+    /// set.
+    NotIterable,
 }
 
 impl fmt::Display for EvalError {
@@ -237,6 +243,10 @@ impl fmt::Display for EvalError {
             EvalError::MatchLimit => "match step limit exceeded",
             EvalError::IndexOutOfRange => "index out of range",
             EvalError::Interrupted => "interrupted",
+            EvalError::UndecidedCondition => {
+                "the condition of an if or a while is neither true nor false"
+            }
+            EvalError::NotIterable => "for runs over a range of integers, a list or a set",
         })
     }
 }

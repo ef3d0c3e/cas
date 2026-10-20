@@ -103,6 +103,11 @@ builtins! {
     NON_NEGATIVE = "NonNegative" [LISTABLE, PROTECTED];
     NON_POSITIVE = "NonPositive" [LISTABLE, PROTECTED];
     ABS = "Abs" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    // Integer division, Euclidean, and parity (CAS-122).
+    REMAINDER = "Remainder" [LISTABLE, PROTECTED];
+    QUOTIENT = "Quotient" [LISTABLE, PROTECTED];
+    EVEN_Q = "EvenQ" [LISTABLE, PROTECTED];
+    ODD_Q = "OddQ" [LISTABLE, PROTECTED];
     // The number sets of `Element` (CAS-DOC-4 §7).
     INTEGERS = "Integers" [PROTECTED];
     RATIONALS = "Rationals" [PROTECTED];
@@ -132,6 +137,16 @@ builtins! {
     MATCH_Q = "MatchQ" [PROTECTED];
     // `#n` of a pure function without named parameters (CAS-55).
     SLOT = "Slot" [PROTECTED];
+    // Procedures (CAS-DOC-7 §8): a block with its locals, run statement by
+    // statement in a frame of their values; a group of statements in the
+    // enclosing block (a branch, the body of a loop); loops and jumps.
+    BLOCK = "Block" [HOLD_ALL, PROTECTED];
+    STATEMENTS = "Statements" [HOLD_ALL, PROTECTED];
+    FOR = "For" [HOLD_ALL, PROTECTED];
+    WHILE = "While" [HOLD_ALL, PROTECTED];
+    RETURN = "Return" [HOLD_ALL, PROTECTED];
+    BREAK = "Break" [PROTECTED];
+    CONTINUE = "Continue" [PROTECTED];
     // Statements: the session runs them, evaluation leaves them alone
     // (CAS-DOC-4 R1, CAS-DOC-7 §4).
     SET = "Set" [HOLD_FIRST, PROTECTED];

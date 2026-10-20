@@ -61,6 +61,7 @@ pub(crate) fn intern(key: Key<'_>) -> Arc<Node> {
 }
 
 /// Removes `node`'s entry; called from its drop.
+#[inline]
 pub(crate) fn remove(node: &Node) {
     let removed = shard(node.hash).remove(node);
     debug_assert!(removed, "a dropped node had no interner entry");

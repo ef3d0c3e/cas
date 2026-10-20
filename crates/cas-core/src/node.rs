@@ -132,7 +132,10 @@ impl Meta {
     }
 }
 
+// `#[inline]` keeps these in the interner's codegen unit, wherever the
+// partition puts them: the interner runs on every node made (CAS-122).
 impl Key<'_> {
+    #[inline]
     pub(crate) fn hash(self) -> u64 {
         let mut h = hasher();
         match self {
@@ -165,6 +168,7 @@ impl Key<'_> {
         h.finish()
     }
 
+    #[inline]
     pub(crate) fn meta(self) -> Meta {
         match self {
             Key::Integer(_) | Key::Rational(_) | Key::Complex(_) => Meta::atom(Flags::NUMERIC, 0),
@@ -210,6 +214,7 @@ impl Key<'_> {
         }
     }
 
+    #[inline]
     pub(crate) fn to_kind(self) -> Kind {
         match self {
             Key::Integer(n) => Kind::Integer(n.clone()),

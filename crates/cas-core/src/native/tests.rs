@@ -636,3 +636,41 @@ fn unapply() {
         ("Unapply[x]", "Unapply[x]"),
     ]);
 }
+
+/// `irem`, `iquo`, `even` and `odd` (CAS-122): Euclidean division, so the
+/// remainder is in `0..|b|`, as giac gives for a positive `b`.
+#[test]
+fn integer_division_and_parity() {
+    check(&[
+        ("Remainder[7, 2]", "1"),
+        ("Remainder[-7, 2]", "1"),
+        ("Remainder[7, -2]", "1"),
+        ("Remainder[-7, -2]", "1"),
+        ("Quotient[7, 2]", "3"),
+        ("Quotient[-7, 2]", "-4"),
+        ("Quotient[7, -2]", "-3"),
+        ("Quotient[-7, -2]", "4"),
+        ("Remainder[1000000000000000000000000000007, 10]", "7"),
+        ("Remainder[List[5, 6], List[4, 4]]", "List[1, 2]"),
+        // Division by zero, with a warning.
+        ("Remainder[7, 0]", "Indeterminate"),
+        ("Quotient[7, 0]", "ComplexInfinity"),
+        // What is not a pair of integers stays.
+        ("Remainder[x, 2]", "Remainder[x, 2]"),
+        ("Remainder[7/2, 2]", "Remainder[7/2, 2]"),
+        ("Quotient[7, 1/2]", "Quotient[7, 1/2]"),
+        ("EvenQ[4]", "True"),
+        ("EvenQ[-2]", "True"),
+        ("EvenQ[0]", "True"),
+        ("EvenQ[3]", "False"),
+        ("OddQ[3]", "True"),
+        ("OddQ[-3]", "True"),
+        ("OddQ[4]", "False"),
+        // A number that is not an integer is neither; a parity that is not
+        // known stays.
+        ("EvenQ[1/2]", "False"),
+        ("OddQ[Complex[1, 1]]", "False"),
+        ("EvenQ[x]", "EvenQ[x]"),
+        ("EvenQ[List[1, 2]]", "List[False, True]"),
+    ]);
+}

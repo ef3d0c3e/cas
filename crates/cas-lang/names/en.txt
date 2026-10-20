@@ -47,6 +47,11 @@ Map: map
 Unapply: unapply
 # Elementary functions.
 Abs: abs
+# Integer division, Euclidean, and parity (CAS-122).
+Remainder: irem
+Quotient: iquo
+EvenQ: even
+OddQ: odd
 # Calculus (CAS-DOC-4 §8, CAS-59).
 D: diff
 
@@ -99,6 +104,9 @@ SameQ FreeQ Part Apply Replace ReplaceRepeated MatchQ Slot
 Positive Negative NonNegative NonPositive Integers Rationals Reals Complexes
 # Statements, written with `:=`, `assume` and `purge` (CAS-DOC-7 §4).
 Set SetDelayed UpSetDelayed Assume Clear
+# Procedures, written with `begin … end`, the statements of a body, loops and
+# `return`, `break`, `continue` (CAS-DOC-7 §8).
+Block Statements For While Return Break Continue
 # The type tests of `::` (CAS-DOC-7 §6), named in [types].
 IntegerQ RationalQ NumberQ RealQ ComplexQ ListQ MatrixQ StringQ SymbolQ
 # Splicing and rules, written as equations and definitions.

@@ -1,0 +1,68 @@
+> collatz(n) := begin
+.   m := n
+.   steps := 0
+.   while m != 1 do
+.     m := if even(m) then m/2 else 3m + 1 end
+.     steps := steps + 1
+.   end
+.   steps
+. end
+> collatz(27)
+= 111
+> collatz(1)
+= 0
+> euclid(a, b) := begin
+.   x := a
+.   y := b
+.   while y != 0 do
+.     [x, y] := [y, irem(x, y)]
+.   end
+.   x
+. end
+> euclid(1071, 462)
+= 21
+> euclid(2^40 - 1, 2^30 - 1)
+= 1023
+> newton(steps) := begin
+.   x := 1
+.   for k in 1..steps do
+.     x := x - (x^2 - 2)/(2x)
+.   end
+.   x
+. end
+> newton(4)
+= 665857/470832
+> fib(0) := 0
+> fib(1) := 1
+> fib(n) := begin
+.   a := fib(n - 1)
+.   b := fib(n - 2)
+.   return a + b
+. end
+> fib(20)
+= 6765
+> first_square_above(t) := begin
+.   for k in 1..100 do
+.     if k^2 <= t then continue end
+.     return k
+.   end
+.   return -1
+. end
+> first_square_above(50)
+= 8
+> sum_until(t) := begin
+.   s := 0
+.   for k in [3, 1, 4, 1, 5, 9, 2, 6] do
+.     if s + k > t then break end
+.     s := s + k
+.   end
+.   s
+. end
+> sum_until(10)
+= 9
+> begin
+.   total := 0
+.   for k in {3, 1, 2, 3} do total := total + k end
+.   total
+. end
+= 6

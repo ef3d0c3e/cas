@@ -15,9 +15,11 @@
 mod arith;
 mod factorial;
 mod index;
+mod integer;
 mod linear;
 mod logic;
 mod number;
+mod procedure;
 mod radical;
 mod replace;
 mod structure;
@@ -60,6 +62,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::NON_POSITIVE, logic::sign_predicate),
         (Symbol::ELEMENT, logic::element),
         (Symbol::ABS, arith::abs),
+        (Symbol::REMAINDER, integer::remainder),
+        (Symbol::QUOTIENT, integer::quotient),
+        (Symbol::EVEN_Q, integer::even_q),
+        (Symbol::ODD_Q, integer::odd_q),
         (Symbol::ELEMENTWISE_TIMES, linear::elementwise_times),
         (Symbol::ELEMENTWISE_DIVIDE, linear::elementwise_divide),
         (Symbol::ELEMENTWISE_POWER, linear::elementwise_power),
@@ -76,6 +82,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::UNAPPLY, structure::unapply),
         (Symbol::AT, index::at),
         (Symbol::REPLACE_AT, index::replace_at),
+        (Symbol::BLOCK, procedure::block),
         (Symbol::REPLACE_ALL, replace::replace_all),
         (Symbol::REPLACE, replace::replace),
         (Symbol::REPLACE_REPEATED, replace::replace_repeated),

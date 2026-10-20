@@ -431,6 +431,11 @@ fn stack_context(depth: u32, orderless: Symbol, flat: Symbol) -> Context {
             "stack_chain[Pattern[n, Blank[]]]",
             "Condition[done, SameQ[stack_chain[Plus[n, -1]], done]]",
         ),
+        ("stack_proc[0]", "stack_probe[]"),
+        (
+            "stack_proc[Pattern[n, Blank[]]]",
+            "Block[List[r], While[True, Statements[Set[r, stack_proc[Plus[n, -1]]], Break[]]], r]",
+        ),
     ];
     for (lhs, rhs) in rules {
         ctx.define_delayed(&read(lhs), &read(rhs)).unwrap();
@@ -455,10 +460,10 @@ fn stack_context(depth: u32, orderless: Symbol, flat: Symbol) -> Context {
 /// The stack each level of evaluation takes, at most, through arguments,
 /// through heads, through a native that evaluates its arguments (`And` and
 /// `Or`, which alternate so they do not flatten), through the matcher,
-/// through rules whose conditions recurse, and through a native that
-/// evaluates what it builds (a matrix power), without a trace and with one
-/// at the Verbose level: measured from the address of a local in a native
-/// at the bottom.
+/// through rules whose conditions recurse, through a native that evaluates
+/// what it builds (a matrix power), and through procedures, without a trace
+/// and with one at the Verbose level: measured from the address of a local
+/// in a native at the bottom.
 #[test]
 fn a_level_takes_less_than_stack_per_level() {
     static BOTTOM: AtomicUsize = AtomicUsize::new(usize::MAX);
@@ -469,7 +474,7 @@ fn a_level_takes_less_than_stack_per_level() {
     });
     let f = sym("stack_f");
     // Each with the levels one layer takes.
-    let shapes: [(&str, Shape, usize); 8] = [
+    let shapes: [(&str, Shape, usize); 9] = [
         ("arguments", |f, e| Expr::apply(&f.into(), &[e]), 1),
         ("heads", |_, e| Expr::apply(&e, &[]), 1),
         (
@@ -501,9 +506,14 @@ fn a_level_takes_less_than_stack_per_level() {
         // `{{stack_entry[n - 1]}}^2`: the product it evaluates, its row,
         // and in it `stack_entry[n - 1] stack_entry[n - 1]` per step.
         ("powers", |_, e| e, 3),
+        // `stack_proc[n]`, a procedure whose loop assigns
+        // `stack_proc[n - 1]`: the block, the group of the loop's body and
+        // the evaluation of the assignment's value per step.
+        ("procedures", |_, e| e, 3),
     ];
     let chain = sym("stack_chain");
     let entry = sym("stack_entry");
+    let procedure = sym("stack_proc");
     let (orderless, flat) = (sym("stack_o"), sym("stack_fl"));
     let depth = 2000;
     let measured = std::thread::Builder::new()
@@ -518,6 +528,8 @@ fn a_level_takes_less_than_stack_per_level() {
                 };
                 let e = if name == "rules" {
                     Expr::apply(&chain.into(), &[i64::from(depth).into()])
+                } else if name == "procedures" {
+                    Expr::apply(&procedure.into(), &[i64::from(depth).into()])
                 } else if name == "powers" {
                     let e = Expr::apply(&entry.into(), &[i64::from(depth).into()]);
                     Expr::apply(&Symbol::TIMES.into(), &[e.clone(), e])
