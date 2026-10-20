@@ -30,7 +30,7 @@ fn english_names() {
         ("call", Target::Syntax(SyntaxForm::Call)),
         ("assume", Target::Syntax(SyntaxForm::Assume)),
         ("purge", Target::Syntax(SyntaxForm::Purge)),
-        ("diff", planned("D")),
+        ("diff", Target::Builtin(Symbol::D)),
         ("int", planned("Integrate")),
         ("integrate", planned("Integrate")),
         ("evalf", planned("N")),
@@ -146,8 +146,10 @@ fn locales() {
     assert_eq!(names.target("sin"), Some(&Target::Builtin(Symbol::SIN)));
     assert_eq!(names.spelling(&Target::Builtin(Symbol::SIN)), Some("sinus"));
     assert_eq!(names.spelling(&Target::Builtin(Symbol::LOG)), Some("logn"));
-    assert_eq!(names.target("derivee"), Some(&planned("D")));
-    assert_eq!(names.spelling(&planned("D")), Some("deriver"));
+    assert_eq!(names.target("derivee"), Some(&Target::Builtin(Symbol::D)));
+    assert_eq!(names.spelling(&Target::Builtin(Symbol::D)), Some("deriver"));
+    assert_eq!(names.target("developper"), Some(&planned("Expand")));
+    assert_eq!(names.spelling(&planned("Expand")), Some("developper"));
     assert_eq!(
         names.target("appel"),
         Some(&Target::Syntax(SyntaxForm::Call))

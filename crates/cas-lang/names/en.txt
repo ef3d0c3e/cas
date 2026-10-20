@@ -46,12 +46,13 @@ Length: size length
 Map: map
 # Elementary functions.
 Abs: abs
+# Calculus (CAS-DOC-4 §8, CAS-59).
+D: diff
 
 [planned]
 # Structure (CAS-DOC-7 §4).
 Unapply: unapply
 # Calculus, algebra and numerics (CAS-DOC-1, CAS-DOC-4 §1 and §8, CAS-DOC-5).
-D: diff
 Integrate: integrate int
 Sum: sum
 Expand: expand
@@ -104,3 +105,6 @@ Sequence Rule RuleDelayed
 # Patterns, written with parameters, `::`, `when` and `...`.
 Blank BlankSequence BlankNullSequence Pattern Alternatives Optional Condition PatternTest
 HoldPattern
+# The derivative of an unknown function, which `diff` gives: without a
+# surface name, as there is no prime notation (CAS-DOC-7 L13).
+Derivative

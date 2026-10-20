@@ -273,8 +273,8 @@ struct Stored {
 }
 
 /// The system rules of the builtins (§5.4), built on first use and shared by
-/// every context. CAS-59 adds those of `D`.
-static SYSTEM: LazyLock<Rules> = LazyLock::new(|| system(&[]));
+/// every context: those of `D` (`calculus`, CAS-59).
+static SYSTEM: LazyLock<Rules> = LazyLock::new(|| system(&crate::calculus::rules()));
 
 /// A system rule as written in the sources (§5.4): `lhs :> rhs` with a
 /// stable name, and where it is written, which a trace shows (§9).
@@ -293,10 +293,6 @@ impl SystemRule {
     ///
     /// If a side is not full form.
     #[track_caller]
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "CAS-59 writes the rules of D with it")
-    )]
     pub(crate) fn new(name: &'static str, lhs: &str, rhs: &str) -> SystemRule {
         let read = |s: &str| Expr::parse_full_form(s).unwrap_or_else(|e| panic!("{s:?}: {e}"));
         SystemRule {

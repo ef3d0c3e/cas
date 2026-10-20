@@ -55,6 +55,10 @@ builtins! {
     TAN = "Tan" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     SQRT = "Sqrt" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     FACTORIAL = "Factorial" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    // Calculus (CAS-DOC-4 §8): the derivative, as system rules, and the
+    // derivative of a function, `Derivative[n][f]`.
+    D = "D" [PROTECTED];
+    DERIVATIVE = "Derivative" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

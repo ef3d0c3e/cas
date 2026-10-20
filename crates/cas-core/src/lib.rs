@@ -35,6 +35,7 @@ mod assume;
 mod attributes;
 pub mod build;
 mod builtin;
+mod calculus;
 mod context;
 mod eval;
 mod expr;

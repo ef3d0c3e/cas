@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 061198ca7206124c05bde15404bb82ab6c5b5869f4a137c0c5bf9ce7d4adb0b9 # shrinks to p = Times[Power[0, 1], x], chain = [Log], r = 0

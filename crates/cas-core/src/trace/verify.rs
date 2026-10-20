@@ -9,10 +9,11 @@
 //! an assumption ties to the step's get values too. Both sides are evaluated
 //! at the point. Exact values (rationals, Gaussian rationals, `True` and
 //! `False`, lists of them) are compared; other values agree when they are
-//! equal and tell nothing otherwise, nor do infinities and failures. A step
-//! whose sides differ at a point is wrong; one where no point told is
-//! unchecked. So rational expressions are checked now, and those whose
-//! values need balls (`Sin[1/2]`) when Balls lands.
+//! equal and tell nothing otherwise, nor do infinities. A step whose sides
+//! differ at a point is wrong; one where no point told is unchecked, and so
+//! is one where an evaluation, of a side or an assumption, reaches a limit,
+//! as it would at the other points. So rational expressions are checked
+//! now, and those whose values need balls (`Sin[1/2]`) when Balls lands.
 
 use foldhash::fast::FixedState;
 use hashbrown::HashSet;
@@ -129,8 +130,10 @@ enum Value {
     /// A number, a truth value, or a list of them.
     Exact(Expr),
     Other(Expr),
-    /// An infinity, `Indeterminate`, or a failure.
+    /// An infinity or `Indeterminate`.
     Nothing,
+    /// A limit reached: as it would be at the other points.
+    Failed,
 }
 
 /// What each kind of free symbol is drawn from.
@@ -160,15 +163,20 @@ fn check(ctx: &Context, step: &Step) -> Outcome {
             .iter()
             .map(|(s, v)| (Expr::from(*s), v.clone()))
             .collect();
-        let holds = assumptions.iter().all(|a| {
-            ctx.eval(&a.substitute(&rules))
-                .is_ok_and(|t| t.as_symbol() == Some(Symbol::TRUE))
-        });
+        let mut holds = true;
+        for a in &assumptions {
+            match ctx.eval(&a.substitute(&rules)) {
+                Ok(t) if t.as_symbol() == Some(Symbol::TRUE) => {}
+                Ok(_) => holds = false,
+                Err(_) => return Outcome::Unchecked,
+            }
+        }
         if !holds {
             continue;
         }
         let at = |side: &Expr| value(ctx.eval(&side.substitute(&rules)));
         match (at(&step.before), at(&step.after)) {
+            (Value::Failed, _) | (_, Value::Failed) => return Outcome::Unchecked,
             (Value::Exact(b), Value::Exact(a)) if a != b => {
                 return Outcome::Differs(point, b, a);
             }
@@ -274,7 +282,7 @@ fn range(ctx: &Context, s: Symbol) -> Range {
 
 fn value(result: Result<Expr, crate::EvalError>) -> Value {
     let Ok(v) = result else {
-        return Value::Nothing;
+        return Value::Failed;
     };
     if [
         Symbol::COMPLEX_INFINITY,
