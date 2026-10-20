@@ -1,8 +1,10 @@
-//! `Length`, `Part`, `Map` and `Apply` (CAS-DOC-4 §6.1).
+//! `Length`, `Part`, `Map` and `Apply` (CAS-DOC-4 §6.1); `FiniteSet` and
+//! `Unapply` (CAS-DOC-7 §4, §9).
 
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
+use crate::symbol::Symbol;
 
 type Native = Result<Option<Expr>, EvalError>;
 
@@ -69,4 +71,43 @@ pub(super) fn apply(_: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(Some(x.clone()));
     }
     Ok(Some(Expr::apply(f, x.args())))
+}
+
+/// `FiniteSet[…]`, the language's `{…}`: its elements without repeats.
+/// `Orderless` sorted them, so a repeat comes right after its element.
+pub(super) fn finite_set(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let elements = e.args();
+    if elements.windows(2).all(|w| w[0] != w[1]) {
+        return Ok(None);
+    }
+    let mut unique = elements.to_vec();
+    unique.dedup();
+    Ok(Some(Expr::apply(&Symbol::FINITE_SET.into(), &unique)))
+}
+
+/// `Unapply[body, x…]`: the function `Function[{x…}, body]` of at least one
+/// variable, user symbols without repeats. Its body is the evaluated
+/// argument, so it is computed once, when the function is made:
+/// `unapply(diff(x^3, x), x)` is `x -> 3 x^2`, where `x -> diff(x^3, x)`
+/// would substitute first, and at 2 differentiate 8 by 2. Other variables
+/// leave it unevaluated.
+pub(super) fn unapply(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [body, variables @ ..] = e.args() else {
+        return Ok(None);
+    };
+    let user = |v: &Expr| {
+        v.as_symbol()
+            .is_some_and(|s| s.builtin_attributes().is_none())
+    };
+    if variables.is_empty()
+        || !variables.iter().all(user)
+        || (1..variables.len()).any(|i| variables[..i].contains(&variables[i]))
+    {
+        return Ok(None);
+    }
+    let parameters = Expr::apply(&Symbol::LIST.into(), variables);
+    Ok(Some(Expr::apply(
+        &Symbol::FUNCTION.into(),
+        &[parameters, body.clone()],
+    )))
 }

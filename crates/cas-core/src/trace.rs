@@ -84,6 +84,9 @@ pub enum Warning {
     /// A user's symbol with down-rules applied where none of them matches
     /// (CAS-DOC-4 §5.3): `f[1, 2]` for `f[x_] := …`.
     NoDefinitionMatches(Expr),
+    /// A number applied as a function (CAS-DOC-7 §3.1), as `a(x + 1)` after
+    /// `a := 2`, which stays as it is.
+    NumberApplied(Expr),
     /// A native function's own: its message, and the expression.
     Native {
         /// What went wrong.
@@ -123,6 +126,15 @@ impl fmt::Display for Warning {
             Warning::NoDefinitionMatches(e) => match e.head() {
                 Some(head) => write!(f, "no definition of {} matches {}", Shown(head), Shown(e)),
                 None => write!(f, "no definition matches {}", Shown(e)),
+            },
+            Warning::NumberApplied(e) => match e.head() {
+                Some(head) => write!(
+                    f,
+                    "the number {} applied as a function in {}",
+                    Shown(head),
+                    Shown(e)
+                ),
+                None => write!(f, "a number applied as a function in {}", Shown(e)),
             },
             Warning::Native { message, expr } => write!(f, "{message}: {}", Shown(expr)),
         }

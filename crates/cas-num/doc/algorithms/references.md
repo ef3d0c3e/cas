@@ -154,6 +154,8 @@ or is checked against, are listed.
   *GNU MP: The GNU Multiple Precision Arithmetic Library*, manual for version
   6.3.0, chapter "Algorithms". The source's `mpn_invertappr` takes its Newton
   residual as a product modulo `B^m - 1`, the wrap-around trick used here.
+  Its subsection "Factorial" gives the odd-part method of
+  `Natural::factorial`.
 - <a id="mpc"></a>**[MPC]** Andreas Enge, Philippe Théveny and Paul Zimmermann,
   *GNU MPC: The GNU Multiple Precision Complex Library*, manual for version
   1.4.1. The oracle for complex balls, and the reference for the side of a

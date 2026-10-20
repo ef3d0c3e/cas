@@ -168,6 +168,9 @@ pub enum EvalError {
     Shape,
     /// More steps in one match attempt than [`Limits::match_steps`].
     MatchLimit,
+    /// An index out of range (CAS-DOC-7 §7): `[10, 20][2]`, or a slice that
+    /// does not fit in the list.
+    IndexOutOfRange,
 }
 
 impl fmt::Display for EvalError {
@@ -177,6 +180,7 @@ impl fmt::Display for EvalError {
             EvalError::IterationLimit => "iteration limit exceeded",
             EvalError::Shape => "lists of different shapes",
             EvalError::MatchLimit => "match step limit exceeded",
+            EvalError::IndexOutOfRange => "index out of range",
         })
     }
 }

@@ -22,10 +22,13 @@ It covers the code of the Balls module (CAS-71 … CAS-104):
 - the approximate integer kernels for ball midpoints (`kernel/mul/mulhi.rs`
   and `kernel/div/approx.rs`);
 - everything under `ball/`;
-- the Gaussian rationals of `complex/` (CAS-50).
+- the Gaussian rationals of `complex/` (CAS-50);
+- the exact integer functions of [integers.md](integers.md): the factorial
+  (CAS-123).
 
 The exact integer arithmetic it builds on (the `kernel` multiplication and
-division algorithms, `Natural`, `Integer`) is outside this documentation.
+division algorithms, `Natural`, `Integer`) is otherwise outside this
+documentation.
 When an algorithm here calls into it, the call is named (for example "the
 exact integer square root, `Natural::sqrt_rem`") with that algorithm's
 reference.
@@ -95,6 +98,7 @@ Every bound is also tested:
 | [functions.md](functions.md) | Real elementary functions: fixed-point series, `exp`, `log`, trigonometric and inverse, `pow`, `root`, hyperbolic, table and bit-burst cores |
 | [complex.md](complex.md) | Complex balls: arithmetic, elementary functions, branch cuts; Gaussian rationals |
 | [machine.md](machine.md) | `MachineBall`: `f64` balls, error-free transformations, double-double kernels and their budgets |
+| [integers.md](integers.md) | Exact integer functions: the factorial |
 | [references.md](references.md) | Bibliography |
 
 ## Keeping it current

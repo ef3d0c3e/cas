@@ -113,6 +113,34 @@ fn powers_and_sums() {
     ]);
 }
 
+/// `./` and `.^`, as in Xcas on lists of one shape.
+#[test]
+fn elementwise_quotients_and_powers() {
+    check(&[
+        (
+            "ElementwiseDivide[List[1, 2, 3], List[2, 4, 6]]",
+            "List[1/2, 1/2, 1/2]",
+        ),
+        (
+            "ElementwisePower[List[1, 2, 3], List[2, 2, 2]]",
+            "List[1, 4, 9]",
+        ),
+        (
+            &format!("ElementwiseDivide[{A}, {B}]"),
+            "List[List[1/5, 1/3], List[3/7, 1/2]]",
+        ),
+        (
+            &format!("ElementwisePower[{A}, {A}]"),
+            "List[List[1, 4], List[27, 256]]",
+        ),
+        ("ElementwiseDivide[x, y]", "Times[x, Power[y, -1]]"),
+        ("ElementwisePower[x, 2]", "Power[x, 2]"),
+        ("ElementwiseDivide[6, 3]", "2"),
+        ("ElementwiseDivide[1, 0]", "ComplexInfinity"),
+        ("ElementwiseDivide[1, 2, 3]", "ElementwiseDivide[1, 2, 3]"),
+    ]);
+}
+
 #[test]
 fn dimensions_that_do_not_fit() {
     let ctx = Context::new();
@@ -126,6 +154,10 @@ fn dimensions_that_do_not_fit() {
         "Plus[List[1, 2], 1]".to_owned(),
         "ElementwiseTimes[List[1, 2], 3]".to_owned(),
         "ElementwiseTimes[List[1, 2], List[1, 2, 3]]".to_owned(),
+        // `./` and `.^` too, where Xcas spreads a scalar.
+        "ElementwiseDivide[List[1, 2], 2]".to_owned(),
+        "ElementwisePower[List[1, 2, 3], 2]".to_owned(),
+        "ElementwiseDivide[List[1, 2], List[1, 2, 3]]".to_owned(),
     ] {
         assert_eq!(ctx.eval(&read(&input)), Err(EvalError::Shape), "{input}");
     }

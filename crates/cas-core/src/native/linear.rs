@@ -1,5 +1,6 @@
 //! Products of lists (CAS-DOC-4 §6.2, R13, CAS-62): `*` is the product of
-//! linear algebra, as in Xcas, and `.*` the element-wise one.
+//! linear algebra, as in Xcas, and `.*` the element-wise one, with `./` and
+//! `.^` next to it (CAS-123).
 //!
 //! A vector is a list whose entries are not lists, and a matrix a non-empty
 //! list of vectors of one length, not zero. In a product, a scalar scales
@@ -189,6 +190,31 @@ pub(super) fn elementwise_times(_: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(None);
     }
     Ok(Some(Expr::apply(&Symbol::TIMES.into(), e.args())))
+}
+
+/// `ElementwiseDivide` (`./`): `Listable`, so once threaded its arguments
+/// are not lists, and it is their quotient.
+pub(super) fn elementwise_divide(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [a, b] = e.args() else {
+        return Ok(None);
+    };
+    if is_list(a) || is_list(b) {
+        return Ok(None);
+    }
+    let reciprocal = Expr::apply(&Symbol::POWER.into(), &[b.clone(), Expr::from(-1)]);
+    Ok(Some(times(a, &reciprocal)))
+}
+
+/// `ElementwisePower` (`.^`): `Listable`, so once threaded its arguments
+/// are not lists, and it is their power.
+pub(super) fn elementwise_power(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [a, b] = e.args() else {
+        return Ok(None);
+    };
+    if is_list(a) || is_list(b) {
+        return Ok(None);
+    }
+    Ok(Some(Expr::apply(&Symbol::POWER.into(), e.args())))
 }
 
 #[cfg(test)]

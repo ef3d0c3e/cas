@@ -12,7 +12,8 @@
 //! evaluator has no budget per call (CAS-DOC-4 R8). So a right-hand side
 //! applies a user head at most once and passes none as an argument, and
 //! has none of the natives that apply something to each part (`Map`,
-//! `Apply`, `ReplaceAll`, `Function`); the expression evaluated may. It
+//! `Apply`, `ReplaceAll`, `Function`, and `Unapply`, which makes one); the
+//! expression evaluated may. It
 //! uses each pattern variable at most once, and a rule on a `Flat` head
 //! has no tests or conditions (see [`pattern`]).
 #![no_main]
@@ -33,7 +34,7 @@ const ATOMS: [&str; 11] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 25] = [
+const BUILTINS: [&str; 33] = [
     "Plus",
     "Times",
     "Power",
@@ -59,13 +60,22 @@ const BUILTINS: [&str; 25] = [
     "IntegerQ",
     "FreeQ",
     "D",
+    // What the language lowers to (CAS-123).
+    "At",
+    "ReplaceAt",
+    "Range",
+    "FiniteSet",
+    "Factorial",
+    "Equation",
+    "ElementwiseDivide",
+    "ElementwisePower",
 ];
 
 /// Builtins that apply something to parts, only in the expression
-/// evaluated. Not `ReplaceRepeated`: a rule that matches what it makes,
-/// such as an integer becoming `-3 + y`, grows the expression at each of
-/// its rounds.
-const APPLYING: [&str; 4] = ["Map", "Apply", "ReplaceAll", "MatchQ"];
+/// evaluated, and `Unapply`, which makes a `Function`. Not
+/// `ReplaceRepeated`: a rule that matches what it makes, such as an integer
+/// becoming `-3 + y`, grows the expression at each of its rounds.
+const APPLYING: [&str; 5] = ["Map", "Apply", "ReplaceAll", "MatchQ", "Unapply"];
 
 /// The names pattern variables take.
 const VARIABLES: [&str; 3] = ["n", "m", "s"];
@@ -155,6 +165,7 @@ fn expr(u: &mut Unstructured<'_>, depth: u8, room: &mut Room) -> Result<Expr> {
             let second = match head {
                 "Map" | "Apply" => sym(u.choose(&HEADS)?),
                 "MatchQ" => pattern(u, depth - 1, true)?,
+                "Unapply" => sym(u.choose(&ATOMS)?),
                 _ => apply(
                     "Rule",
                     &[pattern(u, depth - 1, true)?, expr(u, depth - 1, room)?],
@@ -167,8 +178,17 @@ fn expr(u: &mut Unstructured<'_>, depth: u8, room: &mut Room) -> Result<Expr> {
         }
         10 if room.applying => {
             let body = expr(u, depth - 1, room)?;
-            let function = apply("Function", &[sym("n"), body]);
+            let function = if u.ratio(1, 3)? {
+                apply("Unapply", &[body, sym(u.choose(&["x", "y", "u"])?)])
+            } else {
+                apply("Function", &[sym("n"), body])
+            };
             Expr::apply(&function, &args(u, room)?)
+        }
+        // A number applied as a function, which warns.
+        11 if u.ratio(1, 4)? => {
+            let number = Expr::from(i64::from(u.int_in_range(-3i8..=9)?));
+            Expr::apply(&number, &args(u, room)?)
         }
         _ => apply("List", &args(u, room)?),
     })

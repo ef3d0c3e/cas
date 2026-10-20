@@ -537,3 +537,102 @@ fn powers_of_numbers_stay_within_the_number_bits() {
         assert_eq!(ctx.eval(&read(input)), Ok(read(expected)), "{input}");
     }
 }
+
+/// `Factorial`, the language's `n!`, checked against giac 1.9.
+#[test]
+fn factorials() {
+    check(&[
+        ("Factorial[0]", "1"),
+        ("Factorial[1]", "1"),
+        ("Factorial[20]", "2432902008176640000"),
+        ("Factorial[21]", "51090942171709440000"),
+        ("Factorial[30]", "265252859812191058636308480000000"),
+        ("Factorial[Plus[2, 3]]", "120"),
+        // Half-integers: `Γ(n + 1)`, a rational times `√π`.
+        ("Factorial[1/2]", "Times[1/2, Power[Pi, 1/2]]"),
+        ("Factorial[-1/2]", "Power[Pi, 1/2]"),
+        ("Factorial[5/2]", "Times[15/8, Power[Pi, 1/2]]"),
+        ("Factorial[7/2]", "Times[105/16, Power[Pi, 1/2]]"),
+        ("Factorial[-3/2]", "Times[-2, Power[Pi, 1/2]]"),
+        ("Factorial[-5/2]", "Times[4/3, Power[Pi, 1/2]]"),
+        // The poles of `Γ`, as giac's `infinity`.
+        ("Factorial[-1]", "ComplexInfinity"),
+        ("Factorial[-3]", "ComplexInfinity"),
+        ("Factorial[List[1, 2, 3]]", "List[1, 2, 6]"),
+        // Waiting for the Gamma function.
+        ("Factorial[1/3]", "Factorial[1/3]"),
+        ("Factorial[Complex[3, 1]]", "Factorial[Complex[3, 1]]"),
+        ("Factorial[x]", "Factorial[x]"),
+        ("Factorial[1, 2]", "Factorial[1, 2]"),
+    ]);
+}
+
+/// `Limits::number_bits` bounds the factorials computed, by estimate.
+#[test]
+fn factorials_stay_within_the_number_bits() {
+    let mut ctx = Context::new();
+    let mut limits = ctx.limits();
+    limits.number_bits = 1000;
+    ctx.set_limits(limits);
+    let hundred = Expr::from(Integer::from(cas_num::Natural::factorial(100)));
+    assert_eq!(ctx.eval(&read("Factorial[100]")), Ok(hundred));
+    for input in ["Factorial[200]", "Factorial[201/2]", "Factorial[-201/2]"] {
+        assert_eq!(ctx.eval(&read(input)), Ok(read(input)), "{input}");
+    }
+    assert_eq!(
+        ctx.eval(&read("Factorial[1000000000000000000000000]")),
+        Ok(read("Factorial[1000000000000000000000000]"))
+    );
+}
+
+/// What the language writes with `=`, `..`, `{…}` and an `if` without
+/// `else` (CAS-DOC-7 §9).
+#[test]
+fn equations_ranges_sets_and_null() {
+    check(&[
+        // `=` never becomes a boolean; `==` does.
+        ("Equation[2, 2]", "Equation[2, 2]"),
+        ("Equation[x, 1]", "Equation[x, 1]"),
+        ("Equation[Plus[1, 1], 2]", "Equation[2, 2]"),
+        ("Equal[2, 2]", "True"),
+        // Ranges are inclusive and kept symbolic.
+        ("Range[1, 3]", "Range[1, 3]"),
+        ("Range[3, 1]", "Range[3, 1]"),
+        ("Range[a, Plus[b, 1, 1]]", "Range[a, Plus[2, b]]"),
+        // Sets are sorted, without repeats.
+        ("FiniteSet[3, 1, 2, 1]", "FiniteSet[1, 2, 3]"),
+        ("FiniteSet[x, y, x, x]", "FiniteSet[x, y]"),
+        ("FiniteSet[Plus[1, 1], 2]", "FiniteSet[2]"),
+        (
+            "FiniteSet[FiniteSet[2, 1], FiniteSet[1, 2]]",
+            "FiniteSet[FiniteSet[1, 2]]",
+        ),
+        ("FiniteSet[]", "FiniteSet[]"),
+        ("If[False, 1]", "Null"),
+        ("If[True, 1]", "1"),
+    ]);
+}
+
+/// `Unapply` makes a function whose body is evaluated once
+/// (CAS-DOC-7 §4).
+#[test]
+fn unapply() {
+    check(&[
+        (
+            "Unapply[Plus[Power[x, 2], 1], x]",
+            "Function[List[x], Plus[1, Power[x, 2]]]",
+        ),
+        (
+            "Unapply[D[Power[x, 3], x], x]",
+            "Function[List[x], Times[3, Power[x, 2]]]",
+        ),
+        ("Unapply[D[Power[x, 3], x], x][2]", "12"),
+        ("Unapply[Times[x, y], x, y][2, 3]", "6"),
+        ("Unapply[Times[x, y], x][2]", "Times[2, y]"),
+        // At least one variable, user symbols without repeats.
+        ("Unapply[Power[x, 2], 2]", "Unapply[Power[x, 2], 2]"),
+        ("Unapply[x, Pi]", "Unapply[x, Pi]"),
+        ("Unapply[Times[x, y], x, x]", "Unapply[Times[x, y], x, x]"),
+        ("Unapply[x]", "Unapply[x]"),
+    ]);
+}

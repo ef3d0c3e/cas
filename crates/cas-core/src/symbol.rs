@@ -108,7 +108,7 @@ impl Symbol {
     }
 
     /// The table index; unique per name within one process.
-    pub(crate) fn id(self) -> u32 {
+    pub(crate) const fn id(self) -> u32 {
         self.0
     }
 }

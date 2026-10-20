@@ -3,6 +3,7 @@
 mod bits;
 mod convert;
 mod div;
+mod factorial;
 mod gcd;
 pub(crate) mod limb_vec;
 mod mul;

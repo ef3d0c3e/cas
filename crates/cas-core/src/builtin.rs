@@ -115,6 +115,8 @@ builtins! {
     RULE = "Rule" [PROTECTED];
     RULE_DELAYED = "RuleDelayed" [HOLD_REST, PROTECTED];
     FUNCTION = "Function" [HOLD_ALL, PROTECTED];
+    // A function whose body is evaluated once, as it is made (CAS-DOC-7 §4).
+    UNAPPLY = "Unapply" [PROTECTED];
     RANGE = "Range" [PROTECTED];
     FINITE_SET = "FiniteSet" [ORDERLESS, PROTECTED];
     LENGTH = "Length" [PROTECTED];

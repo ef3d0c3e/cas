@@ -44,14 +44,13 @@ ReplaceAll: subst replace
 # Structure (CAS-DOC-4 §6.1, CAS-DOC-7 §4).
 Length: size length
 Map: map
+Unapply: unapply
 # Elementary functions.
 Abs: abs
 # Calculus (CAS-DOC-4 §8, CAS-59).
 D: diff
 
 [planned]
-# Structure (CAS-DOC-7 §4).
-Unapply: unapply
 # Calculus, algebra and numerics (CAS-DOC-1, CAS-DOC-4 §1 and §8, CAS-DOC-5).
 Integrate: integrate int
 Sum: sum
@@ -91,7 +90,9 @@ I Complex
 ElementwiseTimes ElementwiseDivide ElementwisePower Equation Equal Unequal Less LessEqual
 Greater GreaterEqual Element And Or Not If Function Range FiniteSet At ReplaceAt
 Null DirectedInfinity
-# Predicates, structure and rules without a surface name yet (CAS-123 decides).
+# Predicates, structure and rules without a surface name. Xcas has none with
+# these meanings (its `has`, `op`, `part` and `apply` differ), and none is
+# needed yet (CAS-123); a ticket that needs one adds it.
 SameQ FreeQ Part Apply Replace ReplaceRepeated MatchQ Slot
 # Signs and number sets, for assumptions (CAS-DOC-4 §7); the session's
 # `assume` writes them (CAS-121).

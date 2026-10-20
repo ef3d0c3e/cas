@@ -353,6 +353,8 @@ fn warnings() {
         // No down-rules to match: an up-rule's tag, a builtin.
         ("t[1]", &[]),
         ("Length[1]", &[]),
+        // A pole of the factorial.
+        ("Factorial[-1]", &[Warning::Infinite(read("Factorial[-1]"))]),
     ];
     for (input, expected) in cases {
         for level in [TraceLevel::Off, TraceLevel::Verbose] {
@@ -394,6 +396,43 @@ fn warnings() {
     }
     let w = Warning::NoDefinitionMatches(big);
     assert_eq!(w.to_string(), "no definition of g matches g[…]");
+}
+
+/// A number applied as a function stays, with a warning (CAS-DOC-7 §3.1):
+/// `two(x+1)` after `two := 2`.
+#[test]
+fn numbers_applied_as_functions_warn() {
+    let mut ctx = Context::new();
+    ctx.set(Symbol::new("two"), 2.into()).unwrap();
+    let cases: &[(&str, &str, &[Warning])] = &[
+        (
+            "two[Plus[x, 1]]",
+            "2[Plus[1, x]]",
+            &[Warning::NumberApplied(read("2[Plus[1, x]]"))],
+        ),
+        (
+            "Times[1/2, 4][x]",
+            "2[x]",
+            &[Warning::NumberApplied(read("2[x]"))],
+        ),
+        (
+            "Complex[0, 1][]",
+            "Complex[0, 1][]",
+            &[Warning::NumberApplied(read("Complex[0, 1][]"))],
+        ),
+        ("g[a][x]", "g[a][x]", &[]),
+    ];
+    for (input, result, expected) in cases {
+        for level in [TraceLevel::Off, TraceLevel::Verbose] {
+            let (found, report) = traced(&ctx, input, level);
+            assert_eq!(found, Ok(read(result)), "{input} at {level:?}");
+            assert_eq!(report.warnings, *expected, "{input} at {level:?}");
+        }
+    }
+    assert_eq!(
+        Warning::NumberApplied(read("2[Plus[1, x]]")).to_string(),
+        "the number 2 applied as a function in 2[1 + x]"
+    );
 }
 
 #[test]

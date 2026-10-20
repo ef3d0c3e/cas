@@ -18,7 +18,7 @@
 //!    CAS-54, a user's in the context), the system rules or the down-rules
 //!    of the head, exact ones first (`rules`, CAS-56), then for a compound
 //!    head its sub-rules and the application of a `Function` (`pattern`,
-//!    CAS-55).
+//!    CAS-55). A number as the head stays, with a warning.
 //! 7. A change in step 5 or 6 goes back to step 1, counted against
 //!    [`Limits::iterations`]. Otherwise the expression is a fixpoint: it is
 //!    stamped, so evaluating it again in this state is O(1), and memoised
@@ -559,7 +559,12 @@ impl<'c> Eval<'c> {
             // builtin, the down-rules of a user's symbol.
             return rules::down(self, e, head);
         }
-        // 5. Sub-rules, and a `Function` head applied.
+        // 5. Sub-rules, and a `Function` head applied. A number applied as
+        // a function stays, with a warning (CAS-DOC-7 §3.1).
+        if e.head().is_some_and(Expr::is_number) {
+            self.number_applied(e);
+            return Ok(None);
+        }
         if let Some(rewritten) = rules::sub(self, e)? {
             return Ok(Some(rewritten));
         }
@@ -573,6 +578,16 @@ impl<'c> Eval<'c> {
             }
         }
         Ok(None)
+    }
+}
+
+impl Eval<'_> {
+    /// The warning of a number applied as a function: apart from
+    /// [`Eval::rewrite`], which is inlined into the loop.
+    #[cold]
+    #[inline(never)]
+    fn number_applied(&mut self, e: &Expr) {
+        self.warn(Warning::NumberApplied(e.clone()));
     }
 }
 
