@@ -31,13 +31,11 @@ const MAX_FACTORED_BITS: u64 = 4096;
 /// Exponents with a larger denominator are left alone.
 const MAX_ROOT: u64 = 1 << 16;
 
-/// Results with more bits than this, by estimate, are left unevaluated.
-pub(super) const MAX_POWER_BITS: u64 = 1 << 24;
-
 /// The canonical form of `b^r` for rationals `b != 0` and `r` not an
-/// integer, or `None` when it is `b^r` itself or cannot be computed;
+/// integer, or `None` when it is `b^r` itself or cannot be computed, as when
+/// its integer part would have more than `max_bits` bits by estimate;
 /// `real_domain` takes odd roots of negatives as real ones.
-pub(super) fn power(b: &Rational, r: &Rational, real_domain: bool) -> Option<Expr> {
+pub(super) fn power(b: &Rational, r: &Rational, real_domain: bool, max_bits: u64) -> Option<Expr> {
     let (whole, numer, denom) = split_exponent(r)?;
     if denom > MAX_ROOT {
         return None;
@@ -61,7 +59,7 @@ pub(super) fn power(b: &Rational, r: &Rational, real_domain: bool) -> Option<Exp
     let magnitude = b.abs();
     // The integer part of the exponent.
     let whole_power = Num::Real(b.clone());
-    if whole_power.power_bits(whole) > MAX_POWER_BITS {
+    if whole_power.power_bits(whole) > max_bits {
         return None;
     }
     coefficient = coefficient.mul(&whole_power.pow(whole)?);

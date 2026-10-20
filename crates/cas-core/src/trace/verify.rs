@@ -30,6 +30,11 @@ const POINTS: usize = 4;
 /// The points drawn for a step at most, counting those rejected.
 const DRAWS: usize = 32;
 
+/// The bits a power of numbers may have at a point, at most: a larger one
+/// stays unevaluated and tells nothing, where computing it could take
+/// seconds (`Limits::number_bits`).
+const NUMBER_BITS: u64 = 1 << 12;
+
 /// What [`Trace::verify`] found.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Verification<'t> {
@@ -61,7 +66,8 @@ impl Trace {
     /// assumptions of `ctx`, in the order the steps were taken, up to the
     /// first wrong one: "the result is wrong" becomes "this rule, at this
     /// position, is wrong" (CAS-DOC-4 §9). The points are drawn the same
-    /// way each time.
+    /// way each time. At a point, a power of numbers over 2¹² bits stays
+    /// unevaluated and tells nothing, which bounds the time each takes.
     ///
     /// ```
     /// use cas_core::{Context, EvalOptions, Expr, Symbol, TraceLevel};
@@ -80,6 +86,11 @@ impl Trace {
     /// ```
     #[must_use]
     pub fn verify(&self, ctx: &Context) -> Verification<'_> {
+        let mut ctx = ctx.clone();
+        let mut limits = ctx.limits();
+        limits.number_bits = limits.number_bits.min(NUMBER_BITS);
+        ctx.set_limits(limits);
+        let ctx = &ctx;
         let mut verification = Verification {
             wrong: None,
             unchecked: Vec::new(),

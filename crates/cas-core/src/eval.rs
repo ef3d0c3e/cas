@@ -39,7 +39,7 @@ use std::borrow::Cow;
 use std::fmt;
 
 use foldhash::fast::FixedState;
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 
 use crate::attributes::Attributes;
 use crate::build::flatten;
@@ -98,6 +98,7 @@ pub struct Eval<'c> {
 #[derive(Default)]
 struct Recording {
     warnings: Vec<Warning>,
+    seen: HashSet<Warning, FixedState>,
     tracer: Option<Tracer>,
 }
 
@@ -105,8 +106,8 @@ impl Recording {
     /// The recording of the evaluation of `input` with a trace at `level`.
     fn new(level: TraceLevel, input: &Expr) -> Recording {
         Recording {
-            warnings: Vec::new(),
             tracer: (level != TraceLevel::Off).then(|| Tracer::new(level, input)),
+            ..Recording::default()
         }
     }
 
@@ -243,7 +244,7 @@ impl<'c> Eval<'c> {
     pub fn warn(&mut self, warning: Warning) {
         self.warned = self.warned.wrapping_add(1);
         if let Some(r) = &mut self.recording {
-            if !r.warnings.contains(&warning) {
+            if r.seen.insert(warning.clone()) {
                 r.warnings.push(warning);
             }
         }

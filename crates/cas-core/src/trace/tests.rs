@@ -387,6 +387,13 @@ fn warnings() {
     for (w, message) in messages {
         assert_eq!(w.to_string(), message);
     }
+    // A large expression is not written out: this one has 2^40 parts.
+    let mut big = read("f[x]");
+    for _ in 0..40 {
+        big = Expr::apply(&read("g"), &[big.clone(), big]);
+    }
+    let w = Warning::NoDefinitionMatches(big);
+    assert_eq!(w.to_string(), "no definition of g matches g[…]");
 }
 
 #[test]
@@ -528,6 +535,42 @@ fn verify_draws_points_that_satisfy_the_assumptions() {
     for (ctx, input, expected) in cases {
         assert_eq!(outcome(ctx, input), *expected, "{input}");
     }
+}
+
+/// Points evaluate with small numbers only (`Limits::number_bits`): two
+/// sides equal once computed, but not in form, tell nothing where their
+/// powers would have over 2^12 bits.
+#[test]
+fn verify_leaves_large_powers_alone() {
+    let mut ctx = Context::new();
+    // `3^(200000 x)` reported as `9^(100000 x)`: equal, and at every point
+    // (`|x| >= 1/12`) over 2^12 bits, though at most 2^24.
+    ctx.define_native(
+        sym("big"),
+        Arc::new(|ev, e| {
+            let [x] = e.args() else { return Ok(None) };
+            let power = |b: i64, k: i64| {
+                let exponent = Expr::apply(&Symbol::TIMES.into(), &[k.into(), x.clone()]);
+                Expr::apply(&Symbol::POWER.into(), &[b.into(), exponent])
+            };
+            ev.step("square", &power(3, 200_000), &power(9, 100_000));
+            Ok(Some(power(9, 100_000)))
+        }),
+    )
+    .unwrap();
+    let (_, report) = traced(&ctx, "big[x]", TraceLevel::Rules);
+    let verification = report.trace.verify(&ctx);
+    assert_eq!(verification.wrong, None);
+    let algorithm: Vec<&StepKind> = verification.unchecked.iter().map(|s| &s.kind).collect();
+    assert_eq!(algorithm, [&StepKind::Algorithm("square".into())]);
+    // What the fuzz target found (CAS-60): its points made powers of
+    // millions of bits, minutes of verification.
+    let (_, report) = traced(
+        &ctx,
+        "Power[Power[Power[Power[Power[-3/4, -3], 7], Power[Plus[c, c, 4], 5]], -3], -3]",
+        TraceLevel::Rules,
+    );
+    assert_eq!(report.trace.verify(&ctx).wrong, None);
 }
 
 #[test]

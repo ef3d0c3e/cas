@@ -200,6 +200,24 @@ fn infinities_and_singular_cases() {
         ),
         ("Times[x, Infinity]", "Times[Infinity, x]"),
         ("Times[-2, x, Infinity]", "Times[x, DirectedInfinity[-1]]"),
+        // A coefficient whose direction is not exact stays, as one number
+        // (found by the evaluator fuzz target, CAS-60).
+        (
+            "Times[Complex[1, 2], Infinity, 1]",
+            "Times[Complex[1, 2], Infinity]",
+        ),
+        (
+            "Times[2, Complex[1, 2], Infinity]",
+            "Times[Complex[2, 4], Infinity]",
+        ),
+        (
+            "Times[2, Complex[1, 2], x, Infinity]",
+            "Times[Complex[2, 4], Infinity, x]",
+        ),
+        (
+            "Times[Complex[1, 2], Infinity, DirectedInfinity[I]]",
+            "Times[Complex[1, 2], DirectedInfinity[Complex[0, 1]]]",
+        ),
         ("Times[ComplexInfinity, x]", "ComplexInfinity"),
         ("Times[ComplexInfinity, Infinity]", "ComplexInfinity"),
         ("Times[Indeterminate, x]", "Indeterminate"),
@@ -481,5 +499,41 @@ proptest! {
             &[Expr::from(n), Expr::from(Rational::new(1.into(), i64::from(k).into()))],
         );
         prop_assert_eq!(ctx.eval(&e).unwrap(), Expr::from(i64::try_from(root).unwrap()));
+    }
+}
+
+/// What the evaluator fuzz target found (CAS-60), each in its context.
+#[test]
+fn fuzz_findings() {
+    // `Times` left `1 (1 + 2 i) Infinity` as it was, which the shortcut of
+    // `Plus` took for a normal term and its full computation did not, in
+    // the difference that `Less` evaluates.
+    let mut ctx = Context::new();
+    ctx.set_domain(crate::Domain::Complex);
+    let ctx = ctx
+        .assuming(read("Greater[x, 0]"))
+        .assuming(read("Less[b, x]"));
+    let e = read("Less[ElementwiseTimes[Complex[1, 2], Plus[Infinity], Times[]], b]");
+    assert_eq!(
+        ctx.eval(&e),
+        Ok(read("Less[Times[Complex[1, 2], Infinity], b]"))
+    );
+}
+
+/// `Limits::number_bits` bounds the powers of numbers computed: one
+/// estimated larger stays, its integer part for a rational exponent.
+#[test]
+fn powers_of_numbers_stay_within_the_number_bits() {
+    let mut ctx = Context::new();
+    let mut limits = ctx.limits();
+    limits.number_bits = 64;
+    ctx.set_limits(limits);
+    for (input, expected) in [
+        ("Power[3, 30]", "205891132094649"),
+        ("Power[3, 100]", "Power[3, 100]"),
+        ("Power[3, 201/2]", "Power[3, 201/2]"),
+        ("Power[3, 61/2]", "Times[205891132094649, Power[3, 1/2]]"),
+    ] {
+        assert_eq!(ctx.eval(&read(input)), Ok(read(expected)), "{input}");
     }
 }

@@ -10,7 +10,7 @@ use cas_num::Rational;
 
 use super::linear;
 use super::number::{Infinity, Num};
-use super::radical::{self, MAX_POWER_BITS};
+use super::radical;
 use crate::assume::{self, Domain, Set, Sign, Truth};
 use crate::context::EvalError;
 use crate::eval::{Eval, is_list_like, sort_arguments};
@@ -375,26 +375,27 @@ fn times_infinity(e: &Expr, i: Infinity, coefficient: &Num, finite_only: bool) -
         Infinity::Complex => i.to_expr(),
         Infinity::Directed(d) => {
             // The coefficient turns the direction when its own direction is
-            // exact; symbolic factors are kept, their sign being unknown.
-            let Some(unit) = coefficient.unit() else {
-                return e.clone();
+            // exact; otherwise it stays, as one number before the infinity.
+            // Symbolic factors are kept, their sign being unknown.
+            let (number, infinity) = match coefficient.unit() {
+                Some(unit) => (None, Infinity::Directed(d.mul(&unit))),
+                None => (Some(coefficient.to_expr()), Infinity::Directed(d)),
             };
-            let infinity = Infinity::Directed(d.mul(&unit)).to_expr();
-            if finite_only {
-                infinity
-            } else {
-                let mut out = vec![infinity];
-                out.extend(
-                    e.args()
-                        .iter()
-                        .filter(|a| Num::of(a).is_none() && Infinity::of(a).is_none())
-                        .cloned(),
-                );
-                // In canonical order: otherwise the next round sorts it back
-                // and this undoes it again, without end.
-                let out = sort_arguments(&Symbol::TIMES.into(), &out).unwrap_or(out);
-                apply(Symbol::TIMES, &out)
+            if finite_only && number.is_none() {
+                return infinity.to_expr();
             }
+            let mut out: Vec<Expr> = number.into_iter().collect();
+            out.push(infinity.to_expr());
+            out.extend(
+                e.args()
+                    .iter()
+                    .filter(|a| Num::of(a).is_none() && Infinity::of(a).is_none())
+                    .cloned(),
+            );
+            // In canonical order: otherwise the next round sorts it back and
+            // this undoes it again, without end.
+            let out = sort_arguments(&Symbol::TIMES.into(), &out).unwrap_or(out);
+            apply(Symbol::TIMES, &out)
         }
     }
 }
@@ -439,7 +440,7 @@ fn merge_number_powers(factors: Vec<Expr>) -> Vec<Expr> {
 ///
 /// - numbers to integer powers, exactly; `0^n` for `n < 0` is
 ///   `ComplexInfinity`, `0^0` is `Indeterminate`; a result estimated above
-///   2²⁴ bits stays unevaluated;
+///   `Limits::number_bits` bits (2²⁴ by default) stays unevaluated;
 /// - rational powers of rationals in canonical form ([`radical`]);
 /// - `x^0` is 1, `x^1` is `x`, `1^x` is 1;
 /// - `(b^p)^n` is `b^(p n)` and `(x y)^n` is `x^n y^n` for an integer `n`,
@@ -474,7 +475,12 @@ fn scalar_power(ev: &mut Eval<'_>, b: &Expr, n: &Expr) -> Native {
     let real_domain = ev.context().domain() == Domain::Real;
     let indeterminate = || Infinity::Indeterminate.to_expr();
     if let (Some(base), Some(exponent)) = (Num::of(b), Num::of(n)) {
-        let result = number_power(&base, &exponent, real_domain);
+        let result = number_power(
+            &base,
+            &exponent,
+            real_domain,
+            ev.context().limits().number_bits,
+        );
         // `1/0` and `0^0`.
         if base.is_zero() {
             let power = || apply(Symbol::POWER, &[b.clone(), n.clone()]);
@@ -648,9 +654,10 @@ pub(super) fn abs(ev: &mut Eval<'_>, e: &Expr) -> Native {
     })
 }
 
-/// `base^exponent` for two numbers, or `None` to leave it. In the Real
-/// domain, an odd root of a negative is the real root (O7).
-fn number_power(base: &Num, exponent: &Num, real_domain: bool) -> Option<Expr> {
+/// `base^exponent` for two numbers, or `None` to leave it, as when it would
+/// have more than `max_bits` bits by estimate (`Limits::number_bits`). In
+/// the Real domain, an odd root of a negative is the real root (O7).
+fn number_power(base: &Num, exponent: &Num, real_domain: bool, max_bits: u64) -> Option<Expr> {
     let r = exponent.real()?;
     if base.is_zero() {
         return Some(if r.is_zero() {
@@ -663,12 +670,12 @@ fn number_power(base: &Num, exponent: &Num, real_domain: bool) -> Option<Expr> {
     }
     if r.is_integer() {
         let n = r.numer().to_i64()?;
-        if base.power_bits(n) > MAX_POWER_BITS {
+        if base.power_bits(n) > max_bits {
             return None;
         }
         return base.pow(n).map(|v| v.to_expr());
     }
-    let result = radical::power(base.real()?, r, real_domain)?;
+    let result = radical::power(base.real()?, r, real_domain, max_bits)?;
     let original = Expr::apply(&Symbol::POWER.into(), &[base.to_expr(), exponent.to_expr()]);
     (result != original).then_some(result)
 }

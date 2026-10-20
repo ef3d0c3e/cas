@@ -69,7 +69,10 @@ pub struct Report {
 /// Something wrong that evaluation went past (CAS-DOC-4 O2).
 ///
 /// An expression whose evaluation gave a warning is not stamped as a
-/// fixpoint, so evaluating it again gives the warning again.
+/// fixpoint, so evaluating it again gives the warning again. Its message
+/// writes out an expression of at most 1000 parts, and of a larger one its
+/// head: an expression that shares its parts can have far more parts than
+/// it takes memory.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum Warning {
@@ -90,16 +93,38 @@ pub enum Warning {
     },
 }
 
+/// Messages write out an expression of at most this many parts: a larger one
+/// could take long, sharing parts that its text repeats.
+const MAX_SHOWN: u32 = 1000;
+
+/// An expression in a message: written out when small, else its head.
+struct Shown<'e>(&'e Expr);
+
+impl fmt::Display for Shown<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let e = self.0;
+        if e.size() <= MAX_SHOWN {
+            return write!(f, "{e}");
+        }
+        match e.head() {
+            Some(head) if head.size() <= MAX_SHOWN => write!(f, "{head}[…]"),
+            _ => f.write_str("…"),
+        }
+    }
+}
+
 impl fmt::Display for Warning {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Warning::Infinite(e) => write!(f, "infinite expression {e} encountered"),
-            Warning::Indeterminate(e) => write!(f, "indeterminate expression {e} encountered"),
+            Warning::Infinite(e) => write!(f, "infinite expression {} encountered", Shown(e)),
+            Warning::Indeterminate(e) => {
+                write!(f, "indeterminate expression {} encountered", Shown(e))
+            }
             Warning::NoDefinitionMatches(e) => match e.head() {
-                Some(head) => write!(f, "no definition of {head} matches {e}"),
-                None => write!(f, "no definition matches {e}"),
+                Some(head) => write!(f, "no definition of {} matches {}", Shown(head), Shown(e)),
+                None => write!(f, "no definition matches {}", Shown(e)),
             },
-            Warning::Native { message, expr } => write!(f, "{message}: {expr}"),
+            Warning::Native { message, expr } => write!(f, "{message}: {}", Shown(expr)),
         }
     }
 }

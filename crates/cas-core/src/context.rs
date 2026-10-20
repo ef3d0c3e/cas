@@ -111,6 +111,10 @@ pub struct Limits {
     /// evaluates on the caller's thread. On its own thread, evaluation stops
     /// at `stack / STACK_PER_LEVEL` levels, whatever `recursion` says.
     pub stack: usize,
+    /// The bits a power of numbers may have, by estimate: a larger one is
+    /// left unevaluated, as `2^(10^9)` is. Verification lowers it for its
+    /// sample points, a fuzz target to keep each input fast.
+    pub number_bits: u64,
 }
 
 impl Default for Limits {
@@ -120,6 +124,7 @@ impl Default for Limits {
             iterations: 4096,
             match_steps: 1_000_000,
             stack: 0,
+            number_bits: 1 << 24,
         }
     }
 }
