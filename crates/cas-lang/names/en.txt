@@ -41,13 +41,14 @@ ComplexInfinity: infinity
 Infinity: inf
 Hold: hold
 ReplaceAll: subst replace
+# Structure (CAS-DOC-4 §6.1, CAS-DOC-7 §4).
+Length: size length
+Map: map
 
 [planned]
 # Elementary functions.
 Abs: abs
-# Structure (CAS-DOC-4 §6.1, CAS-DOC-7 §4).
-Length: size length
-Map: map
+# Structure (CAS-DOC-7 §4).
 Unapply: unapply
 # Calculus, algebra and numerics (CAS-DOC-1, CAS-DOC-4 §1 and §8, CAS-DOC-5).
 D: diff
@@ -89,6 +90,8 @@ I Complex
 ElementwiseTimes ElementwiseDivide ElementwisePower Equation Equal Unequal Less LessEqual
 Greater GreaterEqual Element And Or Not If Function Range FiniteSet At ReplaceAt
 Null DirectedInfinity
+# Predicates and structure without a surface name yet (CAS-123 decides).
+SameQ FreeQ Part Apply
 # Statements, written with `:=`, `assume` and `purge` (CAS-DOC-7 §4).
 Set SetDelayed UpSetDelayed Assume Clear
 # The type tests of `::` (CAS-DOC-7 §6), named in [types].

@@ -24,7 +24,7 @@ pub(super) fn native(s: Symbol) -> Option<NativeFn> {
 }
 
 /// Gives the symbol `name` the native function `f`.
-fn define_native(name: &str, f: NativeFn) -> Symbol {
+pub(crate) fn define_native(name: &str, f: NativeFn) -> Symbol {
     let s = Symbol::new(name);
     NATIVES
         .lock()
@@ -386,7 +386,7 @@ fn deep_evaluation_runs_on_a_thread_of_its_own() {
     let mut ctx = Context::new();
     ctx.set_limits(Limits::deep());
     let levels = Limits::deep().recursion as usize;
-    assert!(levels >= 100_000, "{levels}");
+    assert!(levels >= 80_000, "{levels}");
     let f = sym("deep_f");
     let e = nested(f, Expr::from(1), levels - 1);
     // Compared without `assert_eq!`, which would print 10⁵ levels.
@@ -409,9 +409,10 @@ fn deep_evaluation_runs_on_a_thread_of_its_own() {
 /// A way to nest one more level around an expression.
 type Shape = fn(Symbol, Expr) -> Expr;
 
-/// The stack each level of evaluation takes, at most, through arguments and
-/// through heads: measured from the address of a local in a native at the
-/// bottom.
+/// The stack each level of evaluation takes, at most, through arguments,
+/// through heads and through a native that evaluates its arguments
+/// (`And` and `Or`, which alternate so they do not flatten): measured from
+/// the address of a local in a native at the bottom.
 #[test]
 fn a_level_takes_less_than_stack_per_level() {
     static BOTTOM: AtomicUsize = AtomicUsize::new(usize::MAX);
@@ -421,9 +422,18 @@ fn a_level_takes_less_than_stack_per_level() {
         Ok(None)
     });
     let f = sym("stack_f");
-    let shapes: [(&str, Shape); 2] = [
-        ("arguments", |f, e| Expr::apply(&f.into(), &[e])),
-        ("heads", |_, e| Expr::apply(&e, &[])),
+    // Each with the levels one layer takes.
+    let shapes: [(&str, Shape, usize); 3] = [
+        ("arguments", |f, e| Expr::apply(&f.into(), &[e]), 1),
+        ("heads", |_, e| Expr::apply(&e, &[]), 1),
+        (
+            "natives",
+            |_, e| {
+                let or = Expr::apply(&Symbol::OR.into(), &[e]);
+                Expr::apply(&Symbol::AND.into(), &[or])
+            },
+            2,
+        ),
     ];
     let depth = 2000;
     let measured = std::thread::Builder::new()
@@ -433,7 +443,7 @@ fn a_level_takes_less_than_stack_per_level() {
             let mut limits = ctx.limits();
             limits.recursion = 10 * depth;
             ctx.set_limits(limits);
-            shapes.map(|(name, shape)| {
+            shapes.map(|(name, shape, levels)| {
                 let e = (0..depth).fold(Expr::apply(&probe.into(), &[]), |e, _| shape(f, e));
                 BOTTOM.store(usize::MAX, Ordering::Relaxed);
                 let top = black_box(0u8);
@@ -441,7 +451,7 @@ fn a_level_takes_less_than_stack_per_level() {
                 ctx.eval_uncached(&e).unwrap();
                 (
                     name,
-                    (top - BOTTOM.load(Ordering::Relaxed)) / depth as usize,
+                    (top - BOTTOM.load(Ordering::Relaxed)) / (levels * depth as usize),
                 )
             })
         })

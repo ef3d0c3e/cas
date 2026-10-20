@@ -22,8 +22,9 @@
 //!   values. [`Context::eval`] evaluates in a context (CAS-DOC-4 §2): own
 //!   values, holds, normalisation of `Sequence`, `Flat`, `Listable` and
 //!   `Orderless` heads, and native functions ([`NativeFn`], which receive
-//!   the call's [`Eval`]), to a fixpoint that is stamped, so evaluating it
-//!   again is O(1). [`Limits`] bound recursion and rewrites;
+//!   the call's [`Eval`]: exact arithmetic with radicals and infinities,
+//!   comparisons, logic, structure), to a fixpoint that is stamped, so
+//!   evaluating it again is O(1). [`Limits`] bound recursion and rewrites;
 //!   [`Limits::deep`] evaluates on a thread of its own with a large stack.
 
 mod attributes;
@@ -33,6 +34,7 @@ mod context;
 mod eval;
 mod expr;
 mod intern;
+mod native;
 mod node;
 mod order;
 mod print;

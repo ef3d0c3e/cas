@@ -3,7 +3,7 @@
 //! `eval(e)`:
 //!
 //! 1. A number or a string is itself. A symbol with a value evaluates to its
-//!    value, and any other symbol is itself.
+//!    value (`I` has the value `i`), and any other symbol is itself.
 //! 2. A node stamped as a fixpoint of this state, or met before in this call
 //!    (the memo), is done at once.
 //! 3. The head is evaluated, and its attributes rule the rest.
@@ -14,8 +14,8 @@
 //!    their order, after the other factors, since `*` does not commute on
 //!    them (§6.2).
 //! 6. Rewrite, by the first source that applies: up-rules, the head's native
-//!    function, system rules, down-rules, sub-rules. Only native functions
-//!    exist yet; the rules come with CAS-55 and CAS-56.
+//!    function (the builtins' are in `native`, CAS-54), system rules,
+//!    down-rules, sub-rules. The rules come with CAS-55 and CAS-56.
 //! 7. A change in step 5 or 6 goes back to step 1, counted against
 //!    [`Limits::iterations`]. Otherwise the expression is a fixpoint: it is
 //!    stamped, so evaluating it again in this state is O(1), and memoised
@@ -41,7 +41,7 @@ use crate::symbol::Symbol;
 /// deepest path, in debug and release builds, and checks it stays below
 /// this. So a thread with `recursion * STACK_PER_LEVEL` bytes of stack never
 /// overflows, which is how [`Limits::deep`] is sized.
-pub const STACK_PER_LEVEL: usize = 2048;
+pub const STACK_PER_LEVEL: usize = 3072;
 
 /// The stack a thread of its own keeps besides its levels: for the thread
 /// itself, the start of evaluation and what a level deeper than the measured
@@ -134,14 +134,21 @@ impl<'c> Eval<'c> {
         let mut rewrites = 0;
         let result = loop {
             match e.view() {
-                View::Symbol(s) => match self.context.value(s) {
-                    Some(value) => {
-                        e = value.clone();
-                        self.count(&mut rewrites)?;
-                        continue;
+                View::Symbol(s) => {
+                    match self
+                        .context
+                        .value(s)
+                        .cloned()
+                        .or_else(|| crate::native::value(s))
+                    {
+                        Some(value) => {
+                            e = value;
+                            self.count(&mut rewrites)?;
+                            continue;
+                        }
+                        None => break e,
                     }
-                    None => break e,
-                },
+                }
                 View::Apply { .. } => {}
                 _ => break e,
             }
@@ -240,9 +247,9 @@ impl<'c> Eval<'c> {
     }
 }
 
-/// The native function of a builtin (CAS-54). None exists yet.
+/// The native function of a builtin (CAS-54), or one a test gave.
 fn native(s: Symbol) -> Option<NativeFn> {
-    test_native(s)
+    crate::native::get(s).or_else(|| test_native(s))
 }
 
 #[cfg(test)]
@@ -276,7 +283,7 @@ fn normalise(head: &Expr, attributes: Attributes, args: &[Expr]) -> Result<Norma
         return thread(head, &args).map(Normal::Threaded);
     }
     if attributes.contains(Attributes::ORDERLESS) {
-        if let Some(sorted) = sort(head, &args) {
+        if let Some(sorted) = sort_arguments(head, &args) {
             args = Cow::Owned(sorted);
         }
     }
@@ -313,7 +320,7 @@ fn thread(head: &Expr, args: &[Expr]) -> Result<Expr, EvalError> {
 /// The arguments of an `Orderless` head in canonical order, if they are not
 /// in it. In `Times`, lists come after the other factors, in their own
 /// order.
-fn sort(head: &Expr, args: &[Expr]) -> Option<Vec<Expr>> {
+pub(crate) fn sort_arguments(head: &Expr, args: &[Expr]) -> Option<Vec<Expr>> {
     let sorted: Vec<Expr> = if head.as_symbol() == Some(Symbol::TIMES) && args.iter().any(is_list) {
         let (lists, mut factors): (Vec<Expr>, Vec<Expr>) = args.iter().cloned().partition(is_list);
         factors.sort();
@@ -387,7 +394,7 @@ fn levels(stack: usize) -> u32 {
 impl Limits {
     /// The limits for deep evaluation (CAS-DOC-4 §2.1), which the session
     /// uses: a thread of its own with 256 MiB of stack, and the recursion
-    /// that stack holds, about 1.3·10⁵ levels.
+    /// that stack holds, about 8.7·10⁴ levels.
     #[must_use]
     pub fn deep() -> Limits {
         let stack = 256 << 20;
@@ -400,4 +407,4 @@ impl Limits {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;

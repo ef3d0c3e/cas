@@ -215,9 +215,8 @@ fn deep_text_reads_in_constant_stack() {
 
 #[test]
 fn assert_eval_reads_both_sides() {
-    // `eval` is a stub until CAS-53: the input comes back unchanged.
     assert_eval!("f[x, Complex[0, 1]]", "f[x, Complex[0, 1]]");
-    assert_eval!(&Context::new(), "Plus[1, 2]", "Plus[1, 2]",);
+    assert_eval!(&Context::new(), "Plus[1, 2]", "3",);
 }
 
 #[test]

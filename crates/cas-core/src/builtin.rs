@@ -90,6 +90,9 @@ builtins! {
     OR = "Or" [FLAT, ONE_IDENTITY, HOLD_ALL, PROTECTED];
     NOT = "Not" [PROTECTED];
     IF = "If" [HOLD_REST, PROTECTED];
+    // Predicates that always decide (CAS-DOC-4 §6.1).
+    SAME_Q = "SameQ" [PROTECTED];
+    FREE_Q = "FreeQ" [PROTECTED];
     // Structure.
     LIST = "List" [PROTECTED];
     SEQUENCE = "Sequence" [PROTECTED];
@@ -99,6 +102,10 @@ builtins! {
     FUNCTION = "Function" [HOLD_ALL, PROTECTED];
     RANGE = "Range" [PROTECTED];
     FINITE_SET = "FiniteSet" [ORDERLESS, PROTECTED];
+    LENGTH = "Length" [PROTECTED];
+    PART = "Part" [PROTECTED];
+    MAP = "Map" [PROTECTED];
+    APPLY = "Apply" [PROTECTED];
     // Indexing from 0, and a copy with an element replaced (CAS-DOC-7 §7).
     AT = "At" [PROTECTED];
     REPLACE_AT = "ReplaceAt" [PROTECTED];

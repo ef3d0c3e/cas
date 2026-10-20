@@ -49,7 +49,10 @@ fn english_names() {
     }
     assert_eq!(names.spelling(&Target::Builtin(Symbol::LOG)), Some("ln"));
     assert_eq!(names.spelling(&planned("Integrate")), Some("integrate"));
-    assert_eq!(names.spelling(&planned("Length")), Some("size"));
+    assert_eq!(
+        names.spelling(&Target::Builtin(Symbol::LENGTH)),
+        Some("size")
+    );
     assert_eq!(names.spelling(&Target::Builtin(Symbol::PLUS)), None);
     // User names, capitalised or not, and the aliases the lexer resolves.
     for name in ["x", "E", "D", "Sin", "N", "π", "∞", "Log"] {
