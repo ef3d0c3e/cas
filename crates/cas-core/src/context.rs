@@ -97,6 +97,11 @@ pub struct Limits {
     pub recursion: u32,
     /// Rewrites of one expression before giving up.
     pub iterations: u32,
+    /// Steps of one match attempt, one pattern against one subject: each
+    /// node tried and each way of splitting arguments counts one. Running
+    /// out is [`EvalError::MatchLimit`], never "no match" (CAS-DOC-4 §3.3,
+    /// R8).
+    pub match_steps: u64,
     /// The stack of a thread of its own to evaluate on, in bytes; `0`
     /// evaluates on the caller's thread. On its own thread, evaluation stops
     /// at `stack / STACK_PER_LEVEL` levels, whatever `recursion` says.
@@ -108,6 +113,7 @@ impl Default for Limits {
         Limits {
             recursion: 512,
             iterations: 4096,
+            match_steps: 1_000_000,
             stack: 0,
         }
     }
@@ -150,6 +156,8 @@ pub enum EvalError {
     /// `Listable` head, or a list with something that is not a list
     /// (CAS-DOC-4 §2, O8).
     Shape,
+    /// More steps in one match attempt than [`Limits::match_steps`].
+    MatchLimit,
 }
 
 impl fmt::Display for EvalError {
@@ -158,6 +166,7 @@ impl fmt::Display for EvalError {
             EvalError::RecursionLimit => "recursion limit exceeded",
             EvalError::IterationLimit => "iteration limit exceeded",
             EvalError::Shape => "lists of different shapes",
+            EvalError::MatchLimit => "match step limit exceeded",
         })
     }
 }

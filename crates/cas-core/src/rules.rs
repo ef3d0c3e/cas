@@ -963,11 +963,15 @@ impl Context {
         Ok(())
     }
 
+    /// The value `x_.` takes as a missing argument of `s`, if set.
+    pub(crate) fn default_of(&self, s: Symbol) -> Option<Expr> {
+        self.rules().symbols.get(s).and_then(|r| r.default.clone())
+    }
+
     /// The rule `lhs :> rhs`, defined at time `written`, compiled with the
-    /// defaults of this context.
+    /// attributes and defaults of this context.
     fn compile(&self, lhs: Expr, rhs: Expr, written: u64) -> Result<Stored, PatternError> {
-        let defaults = |s: Symbol| self.rules().symbols.get(s).and_then(|r| r.default.clone());
-        let pattern = Pattern::with_defaults(&lhs, &defaults)?;
+        let pattern = Pattern::with_context(&lhs, self)?;
         Ok(Stored {
             key: key(&lhs, &rhs, pattern.variables()),
             filter: pattern.filter(),

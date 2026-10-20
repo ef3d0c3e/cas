@@ -338,6 +338,24 @@ fn is_list(e: &Expr) -> bool {
     e.head().and_then(Expr::as_symbol) == Some(Symbol::LIST)
 }
 
+/// Whether `e` is a list, or a pattern that matches only lists: `_List`,
+/// `x_List`, or a test `ListQ` or `MatrixQ`. In `Times`, those keep their
+/// order, in patterns as in subjects, since `*` does not commute on them
+/// (R13).
+pub(crate) fn is_list_like(e: &Expr) -> bool {
+    match (e.head().and_then(Expr::as_symbol), e.args()) {
+        (Some(Symbol::LIST), _) => true,
+        (Some(Symbol::BLANK | Symbol::BLANK_SEQUENCE | Symbol::BLANK_NULL_SEQUENCE), [h]) => {
+            h.as_symbol() == Some(Symbol::LIST)
+        }
+        (Some(Symbol::PATTERN), [_, p]) | (Some(Symbol::CONDITION), [p, _]) => is_list_like(p),
+        (Some(Symbol::PATTERN_TEST), [p, test]) => {
+            matches!(test.as_symbol(), Some(Symbol::LIST_Q | Symbol::MATRIX_Q)) || is_list_like(p)
+        }
+        _ => false,
+    }
+}
+
 /// `head` threaded over `args`: `f[{a, b}, {c, d}]` is `{f[a, c], f[b, d]}`.
 /// Every argument must be a list, all of one length: a scalar is not
 /// broadcast (CAS-DOC-4 O8).
@@ -359,22 +377,24 @@ fn thread(head: &Expr, args: &[Expr]) -> Result<Expr, EvalError> {
 }
 
 /// The arguments of an `Orderless` head in canonical order, if they are not
-/// in it. In `Times`, lists come after the other factors, in their own
-/// order.
+/// in it. In `Times`, lists, and patterns that match only lists, come after
+/// the other factors, in their own order.
 pub(crate) fn sort_arguments(head: &Expr, args: &[Expr]) -> Option<Vec<Expr>> {
-    let sorted: Vec<Expr> = if head.as_symbol() == Some(Symbol::TIMES) && args.iter().any(is_list) {
-        let (lists, mut factors): (Vec<Expr>, Vec<Expr>) = args.iter().cloned().partition(is_list);
-        factors.sort();
-        factors.extend(lists);
-        factors
-    } else {
-        if args.windows(2).all(|w| w[0] <= w[1]) {
-            return None;
-        }
-        let mut sorted = args.to_vec();
-        sorted.sort();
-        sorted
-    };
+    let sorted: Vec<Expr> =
+        if head.as_symbol() == Some(Symbol::TIMES) && args.iter().any(is_list_like) {
+            let (lists, mut factors): (Vec<Expr>, Vec<Expr>) =
+                args.iter().cloned().partition(is_list_like);
+            factors.sort();
+            factors.extend(lists);
+            factors
+        } else {
+            if args.windows(2).all(|w| w[0] <= w[1]) {
+                return None;
+            }
+            let mut sorted = args.to_vec();
+            sorted.sort();
+            sorted
+        };
     (sorted != args).then_some(sorted)
 }
 

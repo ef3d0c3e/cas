@@ -11,7 +11,7 @@ use cas_num::Rational;
 use super::number::{Infinity, Num};
 use super::radical::{self, MAX_POWER_BITS};
 use crate::context::EvalError;
-use crate::eval::{Eval, sort_arguments};
+use crate::eval::{Eval, is_list_like, sort_arguments};
 use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 
@@ -191,7 +191,7 @@ fn product(e: &Expr) -> Option<Expr> {
                 Some(j) => j.mul(i),
                 None => i,
             });
-        } else if has_head(a, Symbol::LIST) {
+        } else if is_list_like(a) {
             lists.push(a.clone());
         } else {
             let (base, exponent) = match a.view() {
@@ -252,7 +252,7 @@ fn is_normal_product(args: &[Expr]) -> bool {
     }
     let factors: Vec<&Expr> = args[numbers..]
         .iter()
-        .filter(|a| !has_head(a, Symbol::LIST))
+        .filter(|a| !is_list_like(a))
         .collect();
     let base = |f: &Expr| -> Expr {
         match f.view() {

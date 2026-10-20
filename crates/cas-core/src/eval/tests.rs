@@ -429,7 +429,7 @@ fn a_level_takes_less_than_stack_per_level() {
     });
     let f = sym("stack_f");
     // Each with the levels one layer takes.
-    let shapes: [(&str, Shape, usize); 5] = [
+    let shapes: [(&str, Shape, usize); 7] = [
         ("arguments", |f, e| Expr::apply(&f.into(), &[e]), 1),
         ("heads", |_, e| Expr::apply(&e, &[]), 1),
         (
@@ -440,15 +440,26 @@ fn a_level_takes_less_than_stack_per_level() {
             },
             2,
         ),
-        // `MatchQ[f[…f[a]…], f[…f[Condition[_, probe[]]]…]]`: the matcher
-        // nests one node per level, and its condition evaluates the probe.
-        ("matcher", |f, e| matcher_layer(f, e), 1),
+        // `MatchQ[f[…f[a]…], f[…f[Condition[_, probe[]]]…]]`: each layer is
+        // an application node and its head's node, which stays on the stack
+        // while the arguments match; the condition evaluates the probe.
+        ("matcher", |f, e| matcher_layer(f, e), 2),
+        // The same under an `Orderless` head, through the multiset match.
+        ("multiset", |f, e| matcher_layer(f, e), 2),
+        // Under a `Flat` head, alternating with a plain one so that nothing
+        // flattens: two applications and their heads per layer.
+        (
+            "runs",
+            |f, e| matcher_layer(f, matcher_layer(Symbol::new("stack_g"), e)),
+            4,
+        ),
         // `chain[n]`, whose rule's condition evaluates `chain[n - 1]`: the
         // rule's evaluation, its four match nodes and the condition's
         // evaluation per step.
         ("rules", |_, e| e, 6),
     ];
     let chain = sym("stack_chain");
+    let (orderless, flat) = (sym("stack_o"), sym("stack_fl"));
     let depth = 2000;
     let measured = std::thread::Builder::new()
         .stack_size(64 << 20)
@@ -467,10 +478,18 @@ fn a_level_takes_less_than_stack_per_level() {
             for (lhs, rhs) in rules {
                 ctx.define_delayed(&read(lhs), &read(rhs)).unwrap();
             }
+            ctx.set_attributes(orderless, Attributes::ORDERLESS)
+                .unwrap();
+            ctx.set_attributes(flat, Attributes::FLAT).unwrap();
             shapes.map(|(name, shape, levels)| {
+                let f = match name {
+                    "multiset" => orderless,
+                    "runs" => flat,
+                    _ => f,
+                };
                 let e = if name == "rules" {
                     Expr::apply(&chain.into(), &[i64::from(depth).into()])
-                } else if name == "matcher" {
+                } else if matches!(name, "matcher" | "multiset" | "runs") {
                     let condition = Expr::apply(
                         &Symbol::CONDITION.into(),
                         &[

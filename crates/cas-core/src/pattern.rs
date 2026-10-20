@@ -12,15 +12,25 @@
 //! calls the rest of the match, and a failure undoes the bindings made since.
 //! So every way of matching is tried, in order, until one completes: shorter
 //! sequences first, alternatives from the first, and a repeated variable must
-//! bind the same expression, which is an O(1) check. Matching is syntactic:
-//! `Flat` and `Orderless` heads are matched like the others until CAS-57.
+//! bind the same expression, which is an O(1) check.
+//!
+//! The attributes of a head, as they are when the pattern is compiled, decide
+//! how its arguments match (§3.2–3.3, CAS-57): in order; under `Flat`, a run
+//! of arguments grouped in the head; under `Orderless`, as a multiset
+//! (`multiset`); and under `OneIdentity`, a lone expression stands for the
+//! application when the other arguments may be missing, so `a_. x_` matches
+//! `y`. One match attempt has a budget of steps,
+//! [`Limits::match_steps`](crate::Limits::match_steps).
 //!
 //! [`substitute`] instantiates a right-hand side: it replaces the variables,
 //! but never inside a `Function` that binds them, so `f[a_] :> x -> a x`
 //! keeps its parameter `x` (CAS-DOC-4 §3.1).
 
+mod multiset;
+
 use std::fmt;
 
+use crate::attributes::Attributes;
 use crate::context::{Context, EvalError};
 use crate::eval::{Eval, run};
 use crate::expr::{Expr, View, symbol_bit};
@@ -104,10 +114,12 @@ enum Node {
         slot: usize,
         inner: Box<Node>,
     },
-    /// `h[p1, …]`, its head matched by a node too.
+    /// `h[p1, …]`, its head matched by a node too, its arguments as the
+    /// head's attributes say.
     Apply {
         head: Box<Node>,
         args: Vec<Node>,
+        mode: Mode,
     },
     Alternatives(Vec<Node>),
     /// `Optional[p, d]`, as an argument: when it is missing, `p`'s variable
@@ -130,24 +142,43 @@ enum Node {
 }
 
 impl Pattern {
-    /// Compiles `e`.
+    /// Compiles `e` with the attributes of the builtins only: a user head
+    /// matches its arguments in order. [`Pattern::with_context`] knows the
+    /// attributes of user heads.
     ///
     /// # Errors
     ///
     /// A [`PatternError`] for a malformed construct.
     pub fn new(e: &Expr) -> Result<Pattern, PatternError> {
-        Pattern::with_defaults(e, &|_| None)
+        Pattern::compile(
+            e,
+            &|s| s.builtin_attributes().unwrap_or(Attributes::NONE),
+            &|_| None,
+        )
     }
 
-    /// Compiles `e`, where `x_.` as an argument of a user head `f` takes
-    /// `defaults(f)` when it is missing (`Context::set_default`, CAS-56).
-    pub(crate) fn with_defaults(
+    /// Compiles `e` with the attributes and the defaults that heads have in
+    /// `ctx` (CAS-DOC-4 §4): how a head's arguments match depends on its
+    /// attributes as they are now.
+    ///
+    /// # Errors
+    ///
+    /// A [`PatternError`] for a malformed construct.
+    pub fn with_context(e: &Expr, ctx: &Context) -> Result<Pattern, PatternError> {
+        Pattern::compile(e, &|s| ctx.attributes(s), &|s| ctx.default_of(s))
+    }
+
+    /// Compiles `e`: heads have `attributes`, and `x_.` as an argument of a
+    /// user head `f` takes `defaults(f)` when it is missing.
+    fn compile(
         e: &Expr,
+        attributes: &dyn Fn(Symbol) -> Attributes,
         defaults: &dyn Fn(Symbol) -> Option<Expr>,
     ) -> Result<Pattern, PatternError> {
         let mut compiler = Compiler {
             variables: Vec::new(),
             heads: Vec::new(),
+            attributes,
             defaults,
         };
         let root = compiler.node(e, None)?;
@@ -175,6 +206,12 @@ impl Pattern {
 
     /// Matches `subject`: `accept` receives each complete set of bindings,
     /// in order, until it accepts one. Returns whether one was accepted.
+    ///
+    /// # Errors
+    ///
+    /// [`EvalError::MatchLimit`] after
+    /// [`Limits::match_steps`](crate::Limits::match_steps) steps, and what
+    /// evaluating a condition or a test gives.
     pub(crate) fn match_with(
         &self,
         ev: &mut Eval<'_>,
@@ -184,11 +221,14 @@ impl Pattern {
         if (subject.meta().symbols & self.required) != self.required {
             return Ok(false);
         }
+        let budget = ev.context().limits().match_steps;
         let mut m = Matcher {
             ev,
             variables: &self.variables,
             bindings: vec![None; self.variables.len()],
             trail: Vec::new(),
+            steps: 0,
+            budget,
         };
         m.node(&self.root, subject, &mut |m| {
             // A variable left unbound, in an alternative not taken, is the
@@ -220,19 +260,14 @@ impl Pattern {
         {
             root = inner;
         }
-        let Node::Apply { head, args } = root else {
+        let Node::Apply { head, args, mode } = root else {
             return Filter::default();
         };
-        let (mut min, mut max) = (0, Some(0));
-        for a in args {
-            let (least, most) = match (a, sequence(a)) {
-                (Node::Optional { .. }, _) => (0, Some(1)),
-                (_, Some((_, least, _))) => (least, None),
-                (_, None) => (1, Some(1)),
-            };
-            min += least;
-            max = max.zip(most).map(|(m, n)| m + n);
+        // A lone expression may stand for the application.
+        if mode.lone {
+            return Filter::default();
         }
+        let (min, max) = mode.arity();
         Filter {
             head: match head.as_ref() {
                 Node::Literal(h) => Some(h.clone()),
@@ -240,7 +275,12 @@ impl Pattern {
             },
             min,
             max,
-            first: args.first().map_or(First::Any, first_argument),
+            // Under `Orderless`, any argument may come first.
+            first: if mode.orderless() {
+                First::Any
+            } else {
+                args.first().map_or(First::Any, first_argument)
+            },
         }
     }
 }
@@ -248,10 +288,10 @@ impl Pattern {
 /// What a subject must be for a pattern to match it (CAS-DOC-4 §5.1): its
 /// head, its number of arguments, and its first argument, or that
 /// argument's head, when the pattern fixes them. Checked before matching,
-/// it skips most rules of a head in O(1).
-///
-/// Matching is syntactic: CAS-57 widens the filter for `Flat` and
-/// `Orderless` heads, whose arguments may group or move.
+/// it skips most rules of a head in O(1). Under `Flat` any number of
+/// arguments from the least may group, under `Orderless` any may come
+/// first, and under `OneIdentity` the subject may not be an application of
+/// the head at all.
 #[derive(Clone, Debug, Default)]
 pub(crate) struct Filter {
     head: Option<Expr>,
@@ -300,8 +340,8 @@ fn first_argument(node: &Node) -> First {
         Node::Bind { inner, .. } | Node::Condition { inner, .. } | Node::Test { inner, .. } => {
             first_argument(inner)
         }
-        Node::Apply { head, .. } => match head.as_ref() {
-            Node::Literal(h) => First::Head(h.clone()),
+        Node::Apply { head, mode, .. } => match head.as_ref() {
+            Node::Literal(h) if !mode.lone => First::Head(h.clone()),
             _ => First::Any,
         },
         Node::Blank(None)
@@ -318,6 +358,7 @@ type Accept<'a> = &'a mut dyn FnMut(&mut Eval<'_>, &[Expr]) -> Result<bool, Eval
 struct Compiler<'d> {
     variables: Vec<Symbol>,
     heads: Vec<Symbol>,
+    attributes: &'d dyn Fn(Symbol) -> Attributes,
     /// The defaults of user heads.
     defaults: &'d dyn Fn(Symbol) -> Option<Expr>,
 }
@@ -418,19 +459,31 @@ impl Compiler<'_> {
                 };
                 self.node(p, position)?
             }
-            symbol => {
-                if let Some(s) = symbol.filter(|s| !s.is_builtin() && !self.heads.contains(s)) {
-                    self.heads.push(s);
-                }
-                let mut nodes = Vec::with_capacity(args.len());
-                for (i, a) in args.iter().enumerate() {
-                    nodes.push(self.node(a, symbol.map(|s| (s, i + 1)))?);
-                }
-                Node::Apply {
-                    head: Box::new(self.node(head, None)?),
-                    args: nodes,
-                }
-            }
+            symbol => self.application(head, args, symbol)?,
+        })
+    }
+
+    /// The node for `head[args…]` that is no pattern construct, `symbol`
+    /// its head when it is one.
+    fn application(
+        &mut self,
+        head: &Expr,
+        args: &[Expr],
+        symbol: Option<Symbol>,
+    ) -> Result<Node, PatternError> {
+        if let Some(s) = symbol.filter(|s| !s.is_builtin() && !self.heads.contains(s)) {
+            self.heads.push(s);
+        }
+        let mut nodes = Vec::with_capacity(args.len());
+        for (i, a) in args.iter().enumerate() {
+            nodes.push(self.node(a, symbol.map(|s| (s, i + 1)))?);
+        }
+        let attributes = symbol.map_or(Attributes::NONE, |s| (self.attributes)(s));
+        let mode = Mode::new(symbol, attributes, &nodes);
+        Ok(Node::Apply {
+            head: Box::new(self.node(head, None)?),
+            args: nodes,
+            mode,
         })
     }
 }
@@ -442,6 +495,168 @@ fn default(head: Symbol, i: usize) -> Option<Expr> {
         (Symbol::PLUS, _) => Some(Expr::from(0)),
         (Symbol::TIMES, _) | (Symbol::POWER, 2) => Some(Expr::from(1)),
         _ => None,
+    }
+}
+
+/// How the arguments of an application match: by the attributes its head
+/// had when the pattern was compiled (CAS-DOC-4 §3.2–3.4, §4).
+#[derive(Clone, Debug)]
+struct Mode {
+    /// The head, when it is a symbol: under `Flat`, a group of several
+    /// subjects is bound wrapped in it.
+    head: Option<Expr>,
+    /// The head's attributes, of which `Flat` and `Orderless` count here.
+    attributes: Attributes,
+    /// `OneIdentity`, and every argument but one may be missing: a lone
+    /// expression then stands for the application.
+    lone: bool,
+    /// `Times`, whose lists do not commute (R13): a multiset match takes
+    /// them in order.
+    times: bool,
+    /// The order in which the arguments take subjects: as written, or for a
+    /// multiset literals first, then fixed heads, blanks and sequences.
+    order: Vec<usize>,
+    /// Per argument: whether it may take a group of several subjects.
+    groups: Vec<bool>,
+    /// From each position of `order` on: the fewest subjects the arguments
+    /// take, and the most (`None`: any number).
+    least: Vec<usize>,
+    most: Vec<Option<usize>>,
+}
+
+impl Mode {
+    /// The mode of an application with a symbol head that has `attributes`,
+    /// or with a compound head (`None`), whose arguments match in order.
+    fn new(head: Option<Symbol>, attributes: Attributes, args: &[Node]) -> Mode {
+        let attributes = if head.is_some() {
+            attributes
+        } else {
+            Attributes::NONE
+        };
+        let flat = attributes.contains(Attributes::FLAT);
+        let h = head.map(Expr::from);
+        let groups: Vec<bool> = args
+            .iter()
+            .map(|a| flat && h.as_ref().is_some_and(|h| groupable(a, h)))
+            .collect();
+        let mut order: Vec<usize> = (0..args.len()).collect();
+        if attributes.contains(Attributes::ORDERLESS) {
+            order.sort_by_key(|&i| category(&args[i]));
+        }
+        let mut least = vec![0; args.len() + 1];
+        let mut most = vec![Some(0); args.len() + 1];
+        for k in (0..args.len()).rev() {
+            let i = order[k];
+            let (fewest, max) = takes(&args[i], groups[i]);
+            least[k] = least[k + 1] + fewest;
+            most[k] = most[k + 1].zip(max).map(|(a, b)| a + b);
+        }
+        Mode {
+            lone: attributes.contains(Attributes::ONE_IDENTITY)
+                && least[0] <= 1
+                && most[0] != Some(0),
+            times: head == Some(Symbol::TIMES),
+            head: h,
+            attributes,
+            order,
+            groups,
+            least,
+            most,
+        }
+    }
+
+    /// The fewest and the most arguments an application of the head may
+    /// have to match (`None`: any number).
+    fn arity(&self) -> (usize, Option<usize>) {
+        (self.least[0], self.most[0])
+    }
+
+    fn flat(&self) -> bool {
+        self.attributes.contains(Attributes::FLAT)
+    }
+
+    fn orderless(&self) -> bool {
+        self.attributes.contains(Attributes::ORDERLESS)
+    }
+}
+
+/// The fewest and the most subjects an argument node takes: one, or under
+/// `Flat` (`group`) any number from one; a sequence any number from its
+/// least; an optional argument may take none.
+fn takes(node: &Node, group: bool) -> (usize, Option<usize>) {
+    if let Some((_, min, _)) = sequence(node) {
+        return (min, None);
+    }
+    let most = if group { None } else { Some(1) };
+    match node {
+        Node::Optional {
+            default: Some(_), ..
+        } => (0, most),
+        _ => (1, most),
+    }
+}
+
+/// Where an argument comes in the order of a multiset match (CAS-DOC-4
+/// §3.3): literals, then fixed heads, then blanks, then applications that a
+/// lone expression may stand for (`x_^n_.`, which match anything but should
+/// take their own head's subjects, left by the blanks), then sequences; an
+/// optional argument where what it holds comes.
+fn category(node: &Node) -> u8 {
+    if sequence(node).is_some() {
+        return 4;
+    }
+    match node {
+        Node::Literal(_) => 0,
+        Node::Optional { inner, .. } => category(inner),
+        _ if stands_alone(node) => 3,
+        _ if fixed_head(node).is_some() => 1,
+        _ => 2,
+    }
+}
+
+/// Whether `node` is an application that a lone expression may stand for.
+fn stands_alone(node: &Node) -> bool {
+    match node {
+        Node::Apply { mode, .. } => mode.lone,
+        Node::Bind { inner, .. } | Node::Condition { inner, .. } | Node::Test { inner, .. } => {
+            stands_alone(inner)
+        }
+        _ => false,
+    }
+}
+
+/// The head of every expression `node` matches, when it fixes one.
+fn fixed_head(node: &Node) -> Option<&Expr> {
+    match node {
+        Node::Literal(e) => e.head(),
+        Node::Blank(head) => head.as_ref(),
+        Node::Bind { inner, .. } | Node::Condition { inner, .. } | Node::Test { inner, .. } => {
+            fixed_head(inner)
+        }
+        Node::Apply { head, mode, .. } => match head.as_ref() {
+            Node::Literal(h) if !mode.lone => Some(h),
+            _ => None,
+        },
+        Node::Sequence { .. } | Node::Alternatives(_) | Node::Optional { .. } => None,
+    }
+}
+
+/// Whether `node` may match an application of `h`: a group of several
+/// subjects under `Flat`.
+fn groupable(node: &Node, h: &Expr) -> bool {
+    match node {
+        Node::Literal(e) => e.head() == Some(h),
+        Node::Blank(head) => head.as_ref().is_none_or(|g| g == h),
+        Node::Sequence { .. } => false,
+        Node::Bind { inner, .. }
+        | Node::Condition { inner, .. }
+        | Node::Test { inner, .. }
+        | Node::Optional { inner, .. } => groupable(inner, h),
+        Node::Apply { head, mode, .. } => match head.as_ref() {
+            Node::Literal(g) => mode.lone || g == h,
+            _ => true,
+        },
+        Node::Alternatives(alternatives) => alternatives.iter().any(|a| groupable(a, h)),
     }
 }
 
@@ -463,8 +678,12 @@ impl Node {
             Node::Bind { inner, .. } | Node::Condition { inner, .. } | Node::Test { inner, .. } => {
                 inner.required(bits);
             }
-            Node::Apply { head, args } => {
-                head.required(bits);
+            Node::Apply { head, args, mode } => {
+                // A lone expression standing for the application need not
+                // have its head.
+                if !mode.lone {
+                    head.required(bits);
+                }
                 for a in args {
                     a.required(bits);
                 }
@@ -486,9 +705,22 @@ struct Matcher<'e, 'c, 'p> {
     bindings: Vec<Option<Expr>>,
     /// The slots bound so far, in order, to undo on backtracking.
     trail: Vec<usize>,
+    /// The steps taken in this attempt, and the most it may take.
+    steps: u64,
+    budget: u64,
 }
 
 impl Matcher<'_, '_, '_> {
+    /// Counts a step: a node tried, or a way of splitting arguments.
+    fn step(&mut self) -> Result<(), EvalError> {
+        self.steps += 1;
+        if self.steps > self.budget {
+            Err(EvalError::MatchLimit)
+        } else {
+            Ok(())
+        }
+    }
+
     fn undo(&mut self, mark: usize) {
         for slot in self.trail.drain(mark..) {
             self.bindings[slot] = None;
@@ -523,6 +755,7 @@ impl Matcher<'_, '_, '_> {
     /// level of the recursion limit while it is on the stack: the rest of
     /// the match runs inside it.
     fn node(&mut self, node: &Node, subject: &Expr, rest: Rest<'_>) -> Result<bool, EvalError> {
+        self.step()?;
         self.ev.enter()?;
         let result = self.node_inner(node, subject, rest);
         self.ev.leave();
@@ -558,17 +791,27 @@ impl Matcher<'_, '_, '_> {
                 self.undo(mark);
                 Ok(false)
             }
-            Node::Apply { head, args } => {
-                let View::Apply {
+            Node::Apply { head, args, mode } => {
+                if let View::Apply {
                     head: subject_head,
                     args: subject_args,
                 } = subject.view()
-                else {
-                    return Ok(false);
-                };
-                self.node(head, subject_head, &mut |m| {
-                    m.args(args, subject_args, rest)
-                })
+                {
+                    if self.node(head, subject_head, &mut |m| {
+                        m.arguments(mode, args, subject_args, rest)
+                    })? {
+                        return Ok(true);
+                    }
+                    // An application of the head matches only as one.
+                    if mode.head.as_ref() == Some(subject_head) {
+                        return Ok(false);
+                    }
+                }
+                if mode.lone {
+                    // `OneIdentity`: the subject is the only argument.
+                    return self.arguments(mode, args, std::slice::from_ref(subject), rest);
+                }
+                Ok(false)
             }
             Node::Alternatives(alternatives) => {
                 for a in alternatives {
@@ -592,8 +835,26 @@ impl Matcher<'_, '_, '_> {
         }
     }
 
-    /// Matches the argument nodes against the subject's arguments, then the
-    /// rest. A sequence takes the fewest arguments first.
+    /// Matches the argument nodes against the subject's arguments as `mode`
+    /// says, then the rest.
+    fn arguments(
+        &mut self,
+        mode: &Mode,
+        nodes: &[Node],
+        subjects: &[Expr],
+        rest: Rest<'_>,
+    ) -> Result<bool, EvalError> {
+        if mode.orderless() {
+            self.multiset(mode, nodes, subjects, rest)
+        } else if mode.flat() {
+            self.runs(mode, nodes, 0, subjects, rest)
+        } else {
+            self.args(nodes, subjects, rest)
+        }
+    }
+
+    /// Matches the argument nodes against the subject's arguments, in order,
+    /// then the rest. A sequence takes the fewest arguments first.
     fn args(
         &mut self,
         nodes: &[Node],
@@ -609,6 +870,7 @@ impl Matcher<'_, '_, '_> {
         };
         if let Some((slot, min, head)) = sequence(first) {
             for len in min..=subjects.len() {
+                self.step()?;
                 let run = &subjects[..len];
                 if head.is_some_and(|h| run.iter().any(|s| s.head() != Some(h))) {
                     continue;
@@ -637,21 +899,105 @@ impl Matcher<'_, '_, '_> {
             let Some(default) = default else {
                 return Ok(false);
             };
-            let mark = self.trail.len();
-            let bound = match inner.as_ref() {
-                Node::Bind { slot, .. } => self.bind(*slot, default.clone()),
-                _ => true,
-            };
-            if bound && self.args(more, subjects, rest)? {
-                return Ok(true);
-            }
-            self.undo(mark);
-            return Ok(false);
+            return self.missing(inner, default, &mut |m| m.args(more, subjects, rest));
         }
         let Some((subject, tail)) = subjects.split_first() else {
             return Ok(false);
         };
         self.node(first, subject, &mut |m| m.args(more, tail, rest))
+    }
+
+    /// An optional argument left out: its variable, if any, takes `default`,
+    /// then the rest.
+    fn missing(&mut self, inner: &Node, default: &Expr, rest: Rest<'_>) -> Result<bool, EvalError> {
+        self.step()?;
+        let mark = self.trail.len();
+        let bound = match inner {
+            Node::Bind { slot, .. } => self.bind(*slot, default.clone()),
+            _ => true,
+        };
+        if bound && rest(self)? {
+            return Ok(true);
+        }
+        self.undo(mark);
+        Ok(false)
+    }
+
+    /// The argument nodes of a `Flat` head that is not `Orderless`, from the
+    /// `k`-th, against the subjects left: each node takes a run, grouped in
+    /// the head when it has several subjects, shortest first; the last takes
+    /// what is left (CAS-DOC-4 §3.2).
+    fn runs(
+        &mut self,
+        mode: &Mode,
+        nodes: &[Node],
+        k: usize,
+        subjects: &[Expr],
+        rest: Rest<'_>,
+    ) -> Result<bool, EvalError> {
+        let Some(node) = nodes.get(k) else {
+            return if subjects.is_empty() {
+                rest(self)
+            } else {
+                Ok(false)
+            };
+        };
+        // What the nodes after this one leave it.
+        let Some(spare) = subjects.len().checked_sub(mode.least[k + 1]) else {
+            return Ok(false);
+        };
+        let last = k + 1 == nodes.len();
+        let lengths = |least: usize, most: usize| {
+            if last {
+                subjects.len()..=subjects.len()
+            } else {
+                least..=most
+            }
+        };
+        if let Some((slot, min, head)) = sequence(node) {
+            for len in lengths(min, spare) {
+                self.step()?;
+                let run = &subjects[..len];
+                if len < min || head.is_some_and(|h| run.iter().any(|s| s.head() != Some(h))) {
+                    continue;
+                }
+                let mark = self.trail.len();
+                let bound = match slot {
+                    Some(slot) => self.bind(slot, Expr::apply(&Symbol::SEQUENCE.into(), run)),
+                    None => true,
+                };
+                if bound && self.runs(mode, nodes, k + 1, &subjects[len..], rest)? {
+                    return Ok(true);
+                }
+                self.undo(mark);
+            }
+            return Ok(false);
+        }
+        let (inner, default) = match node {
+            Node::Optional { inner, default } => (inner.as_ref(), default.as_ref()),
+            _ => (node, None),
+        };
+        let most = if mode.groups[k] { spare } else { spare.min(1) };
+        for len in lengths(1, most) {
+            if len == 0 || len > 1 && !mode.groups[k] {
+                continue;
+            }
+            let item = match &subjects[..len] {
+                [one] => one.clone(),
+                run => Expr::apply(mode.head.as_ref().expect("a Flat head"), run),
+            };
+            if self.node(inner, &item, &mut |m| {
+                m.runs(mode, nodes, k + 1, &subjects[len..], rest)
+            })? {
+                return Ok(true);
+            }
+        }
+        match default {
+            Some(default) => self.missing(inner, default, &mut |m| {
+                m.runs(mode, nodes, k + 1, subjects, rest)
+            }),
+            None => Ok(false),
+        }
     }
 }
 
@@ -790,7 +1136,8 @@ pub struct Rule {
 }
 
 impl Rule {
-    /// The rule `lhs -> rhs`.
+    /// The rule `lhs -> rhs`, with the attributes of the builtins only, as
+    /// [`Pattern::new`].
     ///
     /// # Errors
     ///
@@ -802,14 +1149,27 @@ impl Rule {
         })
     }
 
+    /// The rule `lhs -> rhs`, with the attributes and defaults that heads
+    /// have in `ctx`, as [`Pattern::with_context`].
+    ///
+    /// # Errors
+    ///
+    /// A [`PatternError`] if `lhs` is not a pattern.
+    pub fn with_context(lhs: &Expr, rhs: &Expr, ctx: &Context) -> Result<Rule, PatternError> {
+        Ok(Rule {
+            lhs: Pattern::with_context(lhs, ctx)?,
+            rhs: rhs.clone(),
+        })
+    }
+
     /// The rule `lhs -> rhs` for a compiled `lhs`.
     pub(crate) fn from_pattern(lhs: Pattern, rhs: Expr) -> Rule {
         Rule { lhs, rhs }
     }
 
     /// The rule an expression `Rule[lhs, rhs]` or `RuleDelayed[lhs, rhs]`
-    /// stands for; `None` for anything else.
-    pub(crate) fn of(e: &Expr) -> Option<Result<Rule, PatternError>> {
+    /// stands for, compiled in `ctx`; `None` for anything else.
+    pub(crate) fn of(e: &Expr, ctx: &Context) -> Option<Result<Rule, PatternError>> {
         let View::Apply {
             head,
             args: [lhs, rhs],
@@ -818,7 +1178,7 @@ impl Rule {
             return None;
         };
         matches!(head.as_symbol(), Some(Symbol::RULE | Symbol::RULE_DELAYED))
-            .then(|| Rule::new(lhs, rhs))
+            .then(|| Rule::with_context(lhs, rhs, ctx))
     }
 
     /// The left-hand side.
@@ -871,13 +1231,13 @@ impl Rule {
     }
 }
 
-/// The rules of a `Replace` argument: one rule, or a list of them. `None` if
-/// anything is not a valid rule.
-pub(crate) fn rules(e: &Expr) -> Option<Vec<Rule>> {
+/// The rules of a `Replace` argument, compiled in `ctx`: one rule, or a list
+/// of them. `None` if anything is not a valid rule.
+pub(crate) fn rules(e: &Expr, ctx: &Context) -> Option<Vec<Rule>> {
     if e.head().and_then(Expr::as_symbol) == Some(Symbol::LIST) {
-        e.args().iter().map(|r| Rule::of(r)?.ok()).collect()
+        e.args().iter().map(|r| Rule::of(r, ctx)?.ok()).collect()
     } else {
-        Some(vec![Rule::of(e)?.ok()?])
+        Some(vec![Rule::of(e, ctx)?.ok()?])
     }
 }
 

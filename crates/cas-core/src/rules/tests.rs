@@ -747,13 +747,23 @@ proptest! {
         }
     }
 
-    /// The filters skip only rules that would not match.
+    /// The filters skip only rules that would not match, whatever the
+    /// attributes of the head.
     #[test]
     fn filters_change_nothing(
         lhs in prop::collection::vec(prop::collection::vec(argument(true), 0..4), 1..8),
         subjects in prop::collection::vec(prop::collection::vec(argument(false), 0..4), 1..8),
+        attributes in prop::sample::select(vec![
+            Attributes::NONE,
+            Attributes::ORDERLESS,
+            Attributes::FLAT,
+            Attributes::FLAT | Attributes::ORDERLESS,
+            Attributes::ORDERLESS | Attributes::ONE_IDENTITY,
+            Attributes::FLAT | Attributes::ORDERLESS | Attributes::ONE_IDENTITY,
+        ]),
     ) {
         let mut ctx = Context::new();
+        ctx.set_attributes(sym("g"), attributes).unwrap();
         define_all(&mut ctx, &lhs);
         let mut unfiltered = ctx.clone();
         let own = unfiltered.rules_mut().symbols.entry(sym("g"), SymbolRules::default);
