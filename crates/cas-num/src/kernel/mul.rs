@@ -16,11 +16,15 @@
     reason = "the algorithms use the textbook names (a, b, r, n, s, t)"
 )]
 
+mod fused;
 pub(crate) mod mulhi;
 pub(crate) mod mullo;
 pub(crate) mod split;
 
-use super::{add_1_assign, add_assign, cmp_n, ntt, shl_assign, shr_assign, sub_assign, sub_n};
+use super::{
+    add, add_1_assign, add_assign, add_n, add_n_assign, cmp_n, ntt, shl_assign, shr_assign,
+    sub_assign, sub_n, sub_n_assign,
+};
 use crate::Limb;
 
 /// Smallest shorter-operand length at which [`mul`] uses Karatsuba instead of
@@ -1120,7 +1124,7 @@ pub(crate) fn toom4_scratch_len(an: usize, bn: usize, square: bool) -> usize {
     let e = n + 1;
     product_scratch_len(n, n, square)
         .max(product_scratch_len(s, t, square))
-        .max(7 * 2 * e + 12 * e + product_scratch_len(e, e, square))
+        .max(4 * 2 * e + 11 * e + product_scratch_len(e, e, square))
 }
 
 /// `buf = x` zero-extended (`x.len() <= buf.len()`).
@@ -1137,39 +1141,32 @@ fn load_shifted(buf: &mut [Limb], x: &[Limb], k: u32) {
 }
 
 /// The values of `x0 + x1 X + x2 X^2 + x3 X^3` at `1, -1, 2, -2` and `8 x(1/2)`
-/// (`8 x0 + 4 x1 + 2 x2 + x3`), as `n + 1`-limb two's complement values, into
-/// the five chunks of `v`; `t` is one chunk of work.
-fn toom4_eval(v: &mut [Limb], t: &mut [Limb], x: [&[Limb]; 4]) {
+/// (`8 x0 + 4 x1 + 2 x2 + x3`) into the five `n + 1`-limb chunks of `v`, the
+/// ones at `-1` and `-2` as magnitudes; returns whether those two are
+/// negative. `t` is one chunk of work.
+fn toom4_eval(v: &mut [Limb], t: &mut [Limb], x: [&[Limb]; 4]) -> (bool, bool) {
     let e = t.len();
+    let n = e - 1;
     let [x0, x1, x2, x3] = x;
     let (p1, v) = v.split_at_mut(e);
     let (m1, v) = v.split_at_mut(e);
     let (p2, v) = v.split_at_mut(e);
     let (m2, h) = v.split_at_mut(e);
     // x(+-1) = (x0 + x2) +- (x1 + x3).
-    load(p1, x0);
-    add_assign(p1, x2);
-    load(t, x1);
-    add_assign(t, x3);
-    m1.copy_from_slice(p1);
-    add_assign(p1, t);
-    sub_assign(m1, t);
-    // x(+-2) = (x0 + 4 x2) +- 2 (x1 + 4 x3).
-    load_shifted(p2, x2, 2);
-    add_assign(p2, x0);
-    load_shifted(t, x3, 2);
-    add_assign(t, x1);
-    shl_assign(t, 1);
-    m2.copy_from_slice(p2);
-    add_assign(p2, t);
-    sub_assign(m2, t);
-    // 8 x(1/2) = ((2 x0 + x1) 2 + x2) 2 + x3.
-    load_shifted(h, x0, 1);
-    add_assign(h, x1);
-    shl_assign(h, 1);
-    add_assign(h, x2);
-    shl_assign(h, 1);
-    add_assign(h, x3);
+    p1[n] = add_n(&mut p1[..n], x0, x2);
+    t[n] = add(&mut t[..n], x1, x3);
+    let neg1 = abs_diff(m1, p1, t);
+    add_n_assign(p1, t);
+    // x(+-2) = (x0 + 4 x2) +- (2 x1 + 8 x3).
+    fused::lsh_add(p2, x0, 0, x2, 2);
+    fused::lsh_add(t, x1, 1, x3, 3);
+    let neg2 = abs_diff(m2, p2, t);
+    add_n_assign(p2, t);
+    // 8 x(1/2) = 2 (4 x0 + x2) + (4 x1 + x3).
+    fused::lsh_add(t, x2, 0, x0, 2);
+    fused::lsh_add(h, x3, 0, x1, 2);
+    fused::addlsh_assign(h, t, 1);
+    (neg1, neg2)
 }
 
 /// `x`'s pieces of `n`, `n`, `n` and the rest limbs.
@@ -1177,24 +1174,14 @@ fn quarters(x: &[Limb], n: usize) -> [&[Limb]; 4] {
     [&x[..n], &x[n..2 * n], &x[2 * n..3 * n], &x[3 * n..]]
 }
 
-/// Two's complement division by 4 of a multiple of 4.
-fn quarter_assign(a: &mut [Limb]) {
-    half_assign(a);
-    half_assign(a);
-}
-
 /// Toom-4 (Toom-Cook with points `0, 1, -1, 2, -2, 1/2, ∞`): with `X = B^n`,
 /// `a = a0 + a1 X + a2 X^2 + a3 X^3` and `b` likewise, seven quarter-size
 /// products. Needs `b.len() > 3 ceil(a.len() / 4)`.
 ///
-/// The product's coefficients `c0..c6` come back from the seven values by
-/// splitting even and odd parts: `E(k) = (v(k) + v(-k)) / 2` and `O(1) =
-/// (v(1) - v(-1)) / 2`, `O(2) = (v(2) - v(-2)) / 4` give `c2 + c4` and
-/// `c2 + 4 c4` (from `c0 = v(0)` and `c6 = v(∞)`), and with `H = (v(1/2) - 64
-/// c0 - 16 c2 - 4 c4 - c6) / 2 = 16 c1 + 4 c3 + c5` the odd coefficients
-/// solve `c5 - c1 = (O(2) - H) / 15` and `c1 + c5 = (O(2) + H - 8 O(1)) / 9`.
-/// Every division is exact. As in [`toom3`], the evaluations and the
-/// interpolation run in two's complement on fixed-width buffers.
+/// The evaluations at `-1` and `-2` are magnitudes with a sign, so the
+/// products are of nonnegative values and the interpolation adds or
+/// subtracts them by sign ([`toom4_interpolate`]). `v(0)` and `v(∞)` land in
+/// place, and `v(1)` between them, where `c2` ends up.
 pub(crate) fn toom4(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb], square: bool) {
     let (an, bn) = (a.len(), b.len());
     let (n, s, t) = toom4_split(an, bn);
@@ -1202,97 +1189,92 @@ pub(crate) fn toom4(r: &mut [Limb], a: &[Limb], b: &[Limb], scratch: &mut [Limb]
     debug_assert!(scratch.len() >= toom4_scratch_len(an, bn, square));
     let (pa, pb) = (quarters(a, n), quarters(b, n));
 
-    // v0 = c0 and vinf = c6 go straight to their final place.
     product(&mut r[..2 * n], pa[0], pb[0], scratch, square);
     product(&mut r[6 * n..], pa[3], pb[3], scratch, square);
-    r[2 * n..6 * n].fill(0);
 
     let e = n + 1;
     let w = 2 * e;
-    let (v, rest) = scratch.split_at_mut(5 * w);
-    let (tmp, rest) = rest.split_at_mut(w);
-    let (dif, rest) = rest.split_at_mut(w);
+    let (vm1, rest) = scratch.split_at_mut(w);
+    let (v2, rest) = rest.split_at_mut(w);
+    let (vm2, rest) = rest.split_at_mut(w);
+    let (vh, rest) = rest.split_at_mut(w);
     let (ea, rest) = rest.split_at_mut(5 * e);
     let (eb, rest) = rest.split_at_mut(5 * e);
-    let (ta, rest) = rest.split_at_mut(e);
-    let (tb, rest) = rest.split_at_mut(e);
-    toom4_eval(ea, ta, pa);
-    if !square {
-        toom4_eval(eb, tb, pb);
-    }
-    for (k, out) in v.chunks_exact_mut(w).enumerate() {
-        let xa = &ea[k * e..(k + 1) * e];
-        let neg_a = abs_twos(ta, xa);
-        if square {
-            product(out, ta, ta, rest, true);
+    let (tmp, rest) = rest.split_at_mut(e);
+    let (a1, a2) = toom4_eval(ea, tmp, pa);
+    let (b1, b2) = if square {
+        (a1, a2)
+    } else {
+        toom4_eval(eb, tmp, pb)
+    };
+    let eb: &[Limb] = if square { ea } else { eb };
+    let xa = |k: usize| &ea[k * e..(k + 1) * e];
+    let xb = |k: usize| &eb[k * e..(k + 1) * e];
+    product(&mut r[2 * n..2 * n + w], xa(0), xb(0), rest, square);
+    product(vm1, xa(1), xb(1), rest, square);
+    product(v2, xa(2), xb(2), rest, square);
+    product(vm2, xa(3), xb(3), rest, square);
+    product(vh, xa(4), xb(4), rest, square);
+    toom4_interpolate(r, n, [vm1, v2, vm2, vh], (a1 != b1, a2 != b2));
+}
+
+/// The interpolation of [`toom4`]: from `c0 = v(0)` in `r[..2n]`, `c6 =
+/// v(∞)` in `r[6n..]`, `v(1)` in `r[2n..4n + 2]` and, in `v`, `|v(-1)|`,
+/// `v(2)`, `|v(-2)|` and `64 v(1/2)` (all `w = 2n + 2` limbs, overwritten),
+/// with `neg` telling whether `v(-1)` and `v(-2)` are negative, writes the
+/// product `c0 + c1 X + ... + c6 X^6` into `r`.
+///
+/// Bodrato's sequence, as in GMP's `mpn_toom_interpolate_7pts`: the odd and
+/// even parts at `±1` and `±2` by halving sums or differences, `c2 + 4 c4`
+/// and `c2 + c4` from those, and the odd coefficients from `64 v(1/2) +
+/// v(2) - 65 (c0 + c2 + c4 + c6) + 45 (c2 + c4) = 34 c1 + 16 c3 + 34 c5`.
+/// Each step is one pass modulo `B^w`, where negative intermediate values
+/// wrap, with the shifts, multiples and exact divisions fused into the
+/// additions and subtractions next to them ([`fused`]).
+fn toom4_interpolate(r: &mut [Limb], n: usize, v: [&mut [Limb]; 4], neg: (bool, bool)) {
+    let [vm1, v2, vm2, vh] = v;
+    let w = vm1.len();
+    let rsh1 = |x: &mut [Limb], y: &[Limb], negative: bool| {
+        // x = (y - v(-k)) / 2 for x = |v(-k)|.
+        if negative {
+            fused::rsh_add_assign(x, y, 1);
         } else {
-            let neg_b = abs_twos(tb, &eb[k * e..(k + 1) * e]);
-            product(out, ta, tb, rest, false);
-            if neg_a != neg_b {
-                neg_assign(out);
-            }
+            fused::rsh_rsub_assign(x, y, 1);
         }
+    };
+    {
+        let (c0, rest) = r.split_at_mut(2 * n);
+        let (w2, rest) = rest.split_at_mut(w);
+        let (c0, c6) = (&*c0, &rest[2 * n - 2..]);
+        add_n_assign(vh, v2); //                    vh = 64 v(1/2) + v(2)
+        rsh1(vm2, v2, neg.1); //                    vm2 = 2 c1 + 8 c3 + 32 c5
+        sub_n_assign(v2, vm2);
+        sub_assign(v2, c0);
+        fused::sublsh_assign(v2, c6, 6); //         v2 = 4 c2 + 16 c4
+        rsh1(vm1, w2, neg.0); //                    vm1 = c1 + c3 + c5
+        sub_n_assign(w2, vm1); //                   w2 = c0 + c2 + c4 + c6
+        submul_1(vh, w2, 65);
+        sub_assign(w2, c6);
+        sub_assign(w2, c0); //                      w2 = c2 + c4
+        fused::addmul_1_rsh1(vh, w2, 45); //        vh = 17 c1 + 8 c3 + 17 c5
+        fused::rsh_sub_divexact_by3(v2, w2, 2); //  v2 = c4
+        sub_n_assign(w2, v2); //                    w2 = c2
+        fused::rsub_divexact_by15(vm2, vh); //      vm2 = c1 - c5
+        fused::sublsh3_divexact_by9(vh, vm1); //    vh = c1 + c5
+        sub_n_assign(vm1, vh); //                   vm1 = c3
+        fused::rsh_add_assign(vm2, vh, 1); //       vm2 = c1
+        sub_n_assign(vh, vm2); //                   vh = c5
     }
 
-    // Interpolation (all mod B^w).
-    let (v1, v) = v.split_at_mut(w);
-    let (vm1, v) = v.split_at_mut(w);
-    let (v2, v) = v.split_at_mut(w);
-    let (vm2, vh) = v.split_at_mut(w);
-    let (c0, rest_r) = r.split_at(2 * n);
-    let c6 = &rest_r[4 * n..];
-    // v1 = O(1), vm1 = E(1) - c0 - c6 = c2 + c4.
-    sub_assign(v1, vm1);
-    shl_assign(vm1, 1);
-    add_assign(vm1, v1);
-    half_assign(v1);
-    half_assign(vm1);
-    sub_assign(vm1, c0);
-    sub_assign(vm1, c6);
-    // v2 = O(2), vm2 = (E(2) - c0 - 64 c6) / 4 = c2 + 4 c4.
-    sub_assign(v2, vm2);
-    shl_assign(vm2, 1);
-    add_assign(vm2, v2);
-    quarter_assign(v2);
-    half_assign(vm2);
-    sub_assign(vm2, c0);
-    load_shifted(tmp, c6, 6);
-    sub_assign(vm2, tmp);
-    quarter_assign(vm2);
-    // vm2 = c4, vm1 = c2.
-    sub_assign(vm2, vm1);
-    divexact_by3_assign(vm2);
-    sub_assign(vm1, vm2);
-    // vh = H = (v(1/2) - 64 c0 - c6 - 4 (4 c2 + c4)) / 2.
-    sub_assign(vh, c6);
-    load_shifted(tmp, c0, 6);
-    sub_assign(vh, tmp);
-    tmp.copy_from_slice(vm1);
-    shl_assign(tmp, 2);
-    add_assign(tmp, vm2);
-    shl_assign(tmp, 2);
-    sub_assign(vh, tmp);
-    half_assign(vh);
-    // dif = c5 - c1, v2 = c1 + c5.
-    dif.copy_from_slice(v2);
-    sub_assign(dif, vh);
-    divexact_odd_assign(dif, 15, const { limb_inverse(15) });
-    add_assign(v2, vh);
-    tmp.copy_from_slice(v1);
-    shl_assign(tmp, 3);
-    sub_assign(v2, tmp);
-    divexact_odd_assign(v2, 9, const { limb_inverse(9) });
-    // v1 = c3, vh = c5, v2 = c1.
-    sub_assign(v1, v2);
-    vh.copy_from_slice(v2);
-    add_assign(vh, dif);
-    half_assign(vh);
-    sub_assign(v2, dif);
-    half_assign(v2);
-
-    add_at(r, n, v2);
-    add_at(r, 2 * n, vm1);
-    add_at(r, 3 * n, v1);
-    add_at(r, 4 * n, vm2);
+    // c2 sits in place, its top limb at 4n; c4 goes over the rest.
+    debug_assert!(r[4 * n + 1] == 0 && v2[2 * n + 1] == 0);
+    let top = r[4 * n];
+    r[4 * n..6 * n].copy_from_slice(&v2[..2 * n]);
+    let c = add_1_assign(&mut r[4 * n..], top);
+    debug_assert_eq!(c, 0);
+    let c = add_1_assign(&mut r[6 * n..], v2[2 * n]);
+    debug_assert_eq!(c, 0);
+    add_at(r, n, vm2);
+    add_at(r, 3 * n, vm1);
     add_at(r, 5 * n, vh);
 }
