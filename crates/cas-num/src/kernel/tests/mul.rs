@@ -197,7 +197,7 @@ differential! {
         gmp: val(&a) * val(&b),
     }
 
-    fn sqr_basecase_matches(a in (0..=40usize).prop_flat_map(strategy::raw_limbs)) {
+    fn sqr_basecase_matches(a in (0..=80usize).prop_flat_map(strategy::raw_limbs)) {
         ours: {
             let mut r = vec![GARBAGE; 2 * a.len()];
             sqr_basecase(&mut r, &a);
@@ -878,7 +878,10 @@ fn tune_ntt() {
 /// Schoolbook products and squares of all-ones operands, the largest carries
 /// through both double-limb sums of a two-row pass, at every small shape: odd
 /// and even row counts, the single last row, and squares whose triangle pairs
-/// rows down to an empty multiplicand.
+/// rows down to an empty multiplicand. Squares go up to the length where
+/// [`sqr`] leaves schoolbook (at least 24, at most 128 for the stress
+/// tunings): every unrolled length, and at each length the largest square,
+/// whose doubling pass carries into the top limb.
 #[test]
 fn basecase_all_ones() {
     for an in 1..=12 {
@@ -888,7 +891,7 @@ fn basecase_all_ones() {
             assert_eq!(val(&basecase(&a, &b)), val(&a) * val(&b), "({an}, {bn})");
         }
     }
-    for n in 0..=24 {
+    for n in 0..=SQR_KARATSUBA_THRESHOLD.clamp(24, 128) {
         let a = vec![Limb::MAX; n];
         let mut r = vec![GARBAGE; 2 * n];
         sqr_basecase(&mut r, &a);

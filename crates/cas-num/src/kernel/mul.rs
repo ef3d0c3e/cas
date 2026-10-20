@@ -191,17 +191,45 @@ pub fn mul_basecase(r: &mut [Limb], a: &[Limb], b: &[Limb]) {
 
 /// `r = a^2` by the schoolbook method with `r.len() == 2 * a.len()`: the
 /// off-diagonal products are computed once and doubled. Prefer [`sqr`].
+///
+/// Up to 6 limbs the lengths are constants, so LLVM unrolls the rows into
+/// straight-line code: the loops' setup costs a third to a half of a
+/// square of 3 to 6 limbs. Longer arms grow the code faster than they gain.
 pub fn sqr_basecase(r: &mut [Limb], a: &[Limb]) {
     let n = a.len();
     assert_eq!(r.len(), 2 * n, "sqr_basecase: length mismatch");
-    r.fill(0);
-    // Row i adds a[i] * a[i+1..] at position 2i + 1; its carry lands on the
-    // still untouched limb i + n. Rows i and i + 1 go together: a[i] a[i+1]
-    // at 2i + 1, then a[i] and a[i+1] times a[i+2..] from 2i + 2 by
-    // [`addmul_2`], which takes the high half of the first product as its
-    // carry in.
-    let rows = n.saturating_sub(1);
-    let mut i = 0;
+    match n {
+        0 => {}
+        1 => (r[0], r[1]) = mul_add(a[0], a[0], 0),
+        2 => sqr_rows(&mut r[..4], &a[..2]),
+        3 => sqr_rows(&mut r[..6], &a[..3]),
+        4 => sqr_rows(&mut r[..8], &a[..4]),
+        5 => sqr_rows(&mut r[..10], &a[..5]),
+        6 => sqr_rows(&mut r[..12], &a[..6]),
+        _ => sqr_rows(r, a),
+    }
+}
+
+/// [`sqr_basecase`] for `n = a.len() >= 2`: the off-diagonal triangle into
+/// `r[1..2n - 1]`, then [`sqr_diag_addlsh1`].
+///
+/// Row `i` holds `a[i] * a[i+1..]` at position `2i + 1`, and its carry the
+/// limb `i + n`, which no earlier row reaches. Row 0 writes its limbs, by
+/// [`mul_1`]; later rows add to them, two at a time: `a[i] a[i+1]` at
+/// `2i + 1`, then `a[i]` and `a[i+1]` times `a[i+2..]` from `2i + 2` by
+/// [`addmul_2`], which takes the high half of the first product as its
+/// carry in. An even number of rows after the first leaves the last to
+/// [`addmul_1`].
+#[allow(
+    clippy::inline_always,
+    reason = "inlined into each arm of sqr_basecase, so that a constant length unrolls"
+)]
+#[inline(always)]
+fn sqr_rows(r: &mut [Limb], a: &[Limb]) {
+    let n = a.len();
+    r[n] = mul_1(&mut r[1..n], &a[1..], a[0]);
+    let rows = n - 1;
+    let mut i = 1;
     while i + 1 < rows {
         let (lo, hi) = mul_add(a[i], a[i + 1], r[2 * i + 1]);
         r[2 * i + 1] = lo;
@@ -211,16 +239,39 @@ pub fn sqr_basecase(r: &mut [Limb], a: &[Limb]) {
     if i < rows {
         r[i + n] = addmul_1(&mut r[2 * i + 1..i + n], &a[i + 1..], a[i]);
     }
-    let out = shl_assign(r, 1);
-    debug_assert_eq!(out, 0);
-    let mut carry = false;
-    for (i, &x) in a.iter().enumerate() {
-        let (lo, hi) = mul_add(x, x, 0);
+    sqr_diag_addlsh1(r, a);
+}
+
+/// `r = 2 t + d` in one pass, as GMP's `mpn_sqr_diag_addlsh1`, for the
+/// triangle `t` in `r[1..2n - 1]` (`r[0]` and `r[2n - 1]` are ignored) and
+/// the squares `d = sum a[i]^2 B^(2i)`, with `n = a.len() >= 1`.
+///
+/// Each limb pair `(2i - 1, 2i)` takes its doubled triangle limbs, with the
+/// bit shifted out of the limb below, plus the high half of `a[i - 1]^2`
+/// and the low half of `a[i]^2`. The total is `a^2 < B^(2n)`, so the top
+/// limb takes the last bit and carry without overflow.
+#[allow(
+    clippy::inline_always,
+    reason = "inlined into each arm of sqr_basecase, so that a constant length unrolls"
+)]
+#[inline(always)]
+fn sqr_diag_addlsh1(r: &mut [Limb], a: &[Limb]) {
+    let n = a.len();
+    debug_assert_eq!(r.len(), 2 * n);
+    let (lo, mut hi) = mul_add(a[0], a[0], 0);
+    r[0] = lo;
+    let (mid, top) = r[1..].split_at_mut(2 * n - 2);
+    let (mut bit, mut carry) = (0, false);
+    for (t, &x) in mid.chunks_exact_mut(2).zip(&a[1..]) {
+        let (t0, t1) = (t[0], t[1]);
+        let (lo, next) = mul_add(x, x, 0);
         let c;
-        (r[2 * i], c) = super::adc(r[2 * i], lo, carry);
-        (r[2 * i + 1], carry) = super::adc(r[2 * i + 1], hi, c);
+        (t[0], c) = super::adc((t0 << 1) | bit, hi, carry);
+        (t[1], carry) = super::adc((t1 << 1) | (t0 >> (Limb::BITS - 1)), lo, c);
+        bit = t1 >> (Limb::BITS - 1);
+        hi = next;
     }
-    debug_assert!(!carry);
+    top[0] = bit + hi + Limb::from(carry);
 }
 
 /// Scratch limbs [`mul`] needs for operands of `an` and `bn` limbs.
