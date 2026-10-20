@@ -16,7 +16,12 @@ hashbrown.workspace = true
 unicode-ident.workspace = true
 
 [dev-dependencies]
+criterion = { version = "0.7.0", default-features = false, features = ["cargo_bench_support"] }
 proptest.workspace = true
+
+[[bench]]
+name = "eval"
+harness = false
 
 [lints]
 workspace = true

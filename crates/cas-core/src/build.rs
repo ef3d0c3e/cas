@@ -96,7 +96,7 @@ fn normalized(head: &Expr, mut args: Vec<Expr>) -> Expr {
 
 /// Splices nested applications of `head`, at any depth, into one argument
 /// list. Iterative, so deep nesting uses constant stack.
-fn flatten(head: &Expr, args: &[Expr]) -> Vec<Expr> {
+pub(crate) fn flatten(head: &Expr, args: &[Expr]) -> Vec<Expr> {
     let mut out = Vec::with_capacity(args.len());
     let mut stack = vec![args.iter()];
     while let Some(level) = stack.last_mut() {

@@ -19,12 +19,18 @@
 //! - [`build`]: operators (`x + 2 * y.pow(3)`), [`Expr::call`] and the
 //!   builtin functions, for building expressions from Rust without a context.
 //! - [`Context`]: values, user attributes and assumptions; scopes are child
-//!   values. Evaluation goes through a context.
+//!   values. [`Context::eval`] evaluates in a context (CAS-DOC-4 §2): own
+//!   values, holds, normalisation of `Sequence`, `Flat`, `Listable` and
+//!   `Orderless` heads, and native functions ([`NativeFn`], which receive
+//!   the call's [`Eval`]), to a fixpoint that is stamped, so evaluating it
+//!   again is O(1). [`Limits`] bound recursion and rewrites;
+//!   [`Limits::deep`] evaluates on a thread of its own with a large stack.
 
 mod attributes;
 pub mod build;
 mod builtin;
 mod context;
+mod eval;
 mod expr;
 mod intern;
 mod node;
@@ -37,6 +43,7 @@ mod traverse;
 pub use attributes::Attributes;
 pub use cas_num::{Complex, Integer, Rational};
 pub use context::{Context, ContextError, EvalError, Limits, StateId};
+pub use eval::{Eval, NativeFn, STACK_PER_LEVEL};
 pub use expr::{Expr, View};
 pub use intern::{InternerStats, interner_stats};
 pub use print::FullForm;

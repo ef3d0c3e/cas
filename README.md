@@ -8,7 +8,7 @@ user-facing syntaxes are frontends built on top of it.
 | Crate | Purpose |
 |---|---|
 | `cas-num` | Arbitrary-precision integers, rationals, modular arithmetic, ball arithmetic |
-| `cas-core` | Hash-consed symbolic expressions, symbols and attributes; printing and reading full form |
+| `cas-core` | Hash-consed symbolic expressions, symbols and attributes; printing and reading full form; the evaluation loop |
 | `cas-lang` | The surface language: lexer, parser, name table, lowering to expressions and the input-form printer (the session to come) |
 
 ## Development

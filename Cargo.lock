@@ -61,6 +61,7 @@ name = "cas-core"
 version = "0.1.0"
 dependencies = [
  "cas-num",
+ "criterion",
  "foldhash",
  "hashbrown 0.16.1",
  "proptest",

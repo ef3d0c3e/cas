@@ -207,13 +207,14 @@ fn builtin_attributes() {
     for s in Symbol::builtins() {
         assert!(attrs(s).contains(A::PROTECTED), "{s:?} is protected");
     }
-    let arith =
-        A::FLAT | A::ORDERLESS | A::ONE_IDENTITY | A::LISTABLE | A::NUMERIC_FUNCTION | A::PROTECTED;
-    assert_eq!(attrs(Symbol::PLUS), arith);
+    let arith = A::FLAT | A::ORDERLESS | A::ONE_IDENTITY | A::NUMERIC_FUNCTION | A::PROTECTED;
+    // `Plus` adds lists entrywise; `*` is the product of linear algebra, so
+    // `Times` and `Power` do not thread over lists (CAS-DOC-4 R13).
+    assert_eq!(attrs(Symbol::PLUS), arith | A::LISTABLE);
     assert_eq!(attrs(Symbol::TIMES), arith);
     assert_eq!(
         attrs(Symbol::POWER),
-        A::ONE_IDENTITY | A::LISTABLE | A::NUMERIC_FUNCTION | A::PROTECTED
+        A::ONE_IDENTITY | A::NUMERIC_FUNCTION | A::PROTECTED
     );
     assert_eq!(attrs(Symbol::PI), A::CONSTANT | A::PROTECTED);
     assert_eq!(attrs(Symbol::LIST), A::PROTECTED);

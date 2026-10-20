@@ -77,21 +77,34 @@ impl Default for Context {
     }
 }
 
-/// Evaluation limits.
+/// Evaluation limits (CAS-DOC-4 §2.1).
+///
+/// The defaults suit [`Context::eval`] on the caller's thread with a 2 MiB
+/// stack, the least a Rust thread gets by default. [`Limits::deep`] runs
+/// evaluation on a thread of its own with a large stack.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[non_exhaustive]
 pub struct Limits {
-    /// Maximum evaluation depth.
+    /// Nested evaluations allowed: each level of an expression takes one, and
+    /// so does each evaluation a native function or a rule starts. Reaching
+    /// it is [`EvalError::RecursionLimit`], before the stack runs out as long
+    /// as the stack has [`STACK_PER_LEVEL`](crate::STACK_PER_LEVEL) bytes per
+    /// level.
     pub recursion: u32,
-    /// Maximum rewrites of one expression before giving up.
+    /// Rewrites of one expression before giving up.
     pub iterations: u32,
+    /// The stack of a thread of its own to evaluate on, in bytes; `0`
+    /// evaluates on the caller's thread. On its own thread, evaluation stops
+    /// at `stack / STACK_PER_LEVEL` levels, whatever `recursion` says.
+    pub stack: usize,
 }
 
 impl Default for Limits {
     fn default() -> Limits {
         Limits {
-            recursion: 1024,
+            recursion: 512,
             iterations: 4096,
+            stack: 0,
         }
     }
 }
@@ -119,8 +132,14 @@ impl std::error::Error for ContextError {}
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[non_exhaustive]
 pub enum EvalError {
+    /// More nested evaluations than [`Limits::recursion`].
     RecursionLimit,
+    /// More rewrites of one expression than [`Limits::iterations`].
     IterationLimit,
+    /// Lists of different shapes: lists of different lengths under a
+    /// `Listable` head, or a list with something that is not a list
+    /// (CAS-DOC-4 §2, O8).
+    Shape,
 }
 
 impl fmt::Display for EvalError {
@@ -128,6 +147,7 @@ impl fmt::Display for EvalError {
         f.write_str(match self {
             EvalError::RecursionLimit => "recursion limit exceeded",
             EvalError::IterationLimit => "iteration limit exceeded",
+            EvalError::Shape => "lists of different shapes",
         })
     }
 }
@@ -265,15 +285,6 @@ impl Context {
 
     pub fn set_limits(&mut self, limits: Limits) {
         self.state_mut().limits = limits;
-    }
-
-    /// Evaluates `e`. A stub until Rewriting: returns `e` unchanged.
-    ///
-    /// # Errors
-    ///
-    /// [`EvalError`] when a limit is reached.
-    pub fn eval(&self, e: &Expr) -> Result<Expr, EvalError> {
-        Ok(e.clone())
     }
 
     /// Whether `e` was marked a fixpoint in this state
