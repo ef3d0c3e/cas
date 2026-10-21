@@ -97,6 +97,9 @@ Plus Times Power List
 # The imaginary unit's symbol, which the language skips: its `i` lowers to the
 # complex number itself. The head of complex numbers in full form.
 I Complex
+# The heads of atoms for typed blanks (CAS-150); the language writes types
+# with `::` instead (CAS-DOC-7 §6).
+Integer Rational Real String Symbol
 # Written with operators, brackets and keywords (CAS-DOC-7 §9).
 ElementwiseTimes ElementwiseDivide ElementwisePower Equation Equal Unequal Less LessEqual
 Greater GreaterEqual Element And Or Not If Function Range FiniteSet At ReplaceAt

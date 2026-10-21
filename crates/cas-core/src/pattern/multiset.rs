@@ -20,7 +20,7 @@
 //! In `Times`, lists do not commute (R13): once every node has its subjects,
 //! the lists must have been taken in the order of the nodes.
 
-use super::{Matcher, Mode, Node, Rest, fixed_head, sequence};
+use super::{Matcher, Mode, Node, Rest, fixed_head, has_typed_head, sequence};
 use crate::context::EvalError;
 use crate::eval::is_list_like;
 use crate::expr::Expr;
@@ -217,7 +217,7 @@ impl Matcher<'_, '_, '_> {
         // What the nodes after this one leave it.
         let spare = ms.free - ms.mode.least[k + 1];
         if let Some((slot, min, head)) = sequence(node) {
-            let runs = ms.runs(|s| head.is_none_or(|h| s.head() == Some(h)));
+            let runs = ms.runs(|s| head.is_none_or(|h| has_typed_head(s, h)));
             let sizes = if last { ms.free..=ms.free } else { min..=spare };
             for size in sizes {
                 let mut choices = Choices::new(&runs, size);
@@ -269,9 +269,10 @@ impl Matcher<'_, '_, '_> {
                 if size == 0 || size > 1 && !group {
                     continue;
                 }
-                // A group has the head of the application.
+                // A group has the head of the application; an atom, that of
+                // its kind (CAS-150).
                 let runs = ms.runs(|s| match fixed {
-                    Some(h) if size == 1 => s.head() == Some(h),
+                    Some(h) if size == 1 => has_typed_head(s, h),
                     Some(h) => Some(h) == ms.mode.head.as_ref(),
                     None => true,
                 });

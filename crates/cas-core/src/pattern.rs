@@ -320,9 +320,47 @@ impl Filter {
             && self.max.is_none_or(|max| args.len() <= max)
             && match &self.first {
                 First::Any => true,
-                First::Head(h) => args.first().and_then(Expr::head) == Some(h),
+                First::Head(h) => args.first().is_some_and(|a| has_typed_head(a, h)),
                 First::Is(x) => args.first() == Some(x),
             }
+    }
+}
+
+/// The head of an atom for typed blanks, as in Mathematica (CAS-150):
+/// `Integer`, `Rational`, `Real` for real balls, `Complex` for complex
+/// numbers and complex balls, `String` and `Symbol`. `None` for an
+/// application, whose head is its own.
+fn atom_head(e: &Expr) -> Option<Symbol> {
+    Some(match e.view() {
+        View::Int(_) | View::Integer(_) => Symbol::INTEGER,
+        View::Rational(_) => Symbol::RATIONAL,
+        View::Ball(_) => Symbol::REAL,
+        View::Complex(_) | View::ComplexBall(_) => Symbol::COMPLEX,
+        View::String(_) => Symbol::STRING,
+        View::Symbol(_) => Symbol::SYMBOL,
+        View::Apply { .. } => return None,
+    })
+}
+
+/// Whether `s` is the head of a kind of atom ([`atom_head`]).
+fn is_atom_head(s: Symbol) -> bool {
+    matches!(
+        s,
+        Symbol::INTEGER
+            | Symbol::RATIONAL
+            | Symbol::REAL
+            | Symbol::COMPLEX
+            | Symbol::STRING
+            | Symbol::SYMBOL
+    )
+}
+
+/// Whether `e` has the head `h` for a typed blank: its own as an
+/// application, that of its kind as an atom ([`atom_head`]).
+fn has_typed_head(e: &Expr, h: &Expr) -> bool {
+    match e.head() {
+        Some(head) => head == h,
+        None => atom_head(e).is_some_and(|s| h.as_symbol() == Some(s)),
     }
 }
 
@@ -671,7 +709,9 @@ impl Node {
                 head: Some(h),
                 min: 1..,
             } => {
-                if let Some(s) = h.as_symbol() {
+                // An atom that the head of its kind matches contains no
+                // symbol (CAS-150).
+                if let Some(s) = h.as_symbol().filter(|&s| !is_atom_head(s)) {
                     *bits |= symbol_bit(s);
                 }
             }
@@ -787,7 +827,7 @@ impl Matcher<'_, '_, '_> {
                 }
             }
             Node::Blank(head) | Node::Sequence { head, .. } => {
-                if head.as_ref().is_none_or(|h| subject.head() == Some(h)) {
+                if head.as_ref().is_none_or(|h| has_typed_head(subject, h)) {
                     rest(self)
                 } else {
                     Ok(false)
@@ -882,7 +922,7 @@ impl Matcher<'_, '_, '_> {
             for len in min..=subjects.len() {
                 self.step()?;
                 let run = &subjects[..len];
-                if head.is_some_and(|h| run.iter().any(|s| s.head() != Some(h))) {
+                if head.is_some_and(|h| run.iter().any(|s| !has_typed_head(s, h))) {
                     continue;
                 }
                 let mark = self.trail.len();
@@ -968,7 +1008,7 @@ impl Matcher<'_, '_, '_> {
             for len in lengths(min, spare) {
                 self.step()?;
                 let run = &subjects[..len];
-                if len < min || head.is_some_and(|h| run.iter().any(|s| s.head() != Some(h))) {
+                if len < min || head.is_some_and(|h| run.iter().any(|s| !has_typed_head(s, h))) {
                     continue;
                 }
                 let mark = self.trail.len();

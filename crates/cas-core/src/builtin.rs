@@ -72,6 +72,14 @@ builtins! {
     I = "I" [CONSTANT, PROTECTED];
     // Numbers: the head of a complex number in full form, `Complex[re, im]`.
     COMPLEX = "Complex" [PROTECTED];
+    // The heads atoms have for typed blanks, as in Mathematica (CAS-150):
+    // `Blank[Integer]` matches `2`. With `Complex`, for complex numbers and
+    // complex balls; `Real` is that of real balls.
+    INTEGER = "Integer" [PROTECTED];
+    RATIONAL = "Rational" [PROTECTED];
+    REAL = "Real" [PROTECTED];
+    STRING = "String" [PROTECTED];
+    SYMBOL = "Symbol" [PROTECTED];
     // A ball `Ball[c, r]` (CAS-DOC-5 §6.5), also the head of a ball in full
     // form. It threads over lists itself, a scalar radius spread over them.
     BALL = "Ball" [PROTECTED];

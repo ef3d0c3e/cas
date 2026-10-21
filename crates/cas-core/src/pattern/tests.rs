@@ -57,6 +57,108 @@ fn blanks_and_bindings() {
     ]);
 }
 
+/// A typed blank matches an atom by the head of its kind, as in
+/// Mathematica (CAS-150).
+#[test]
+fn typed_blanks_match_atoms_by_their_kind() {
+    let mut ctx = Context::new();
+    ctx.set_domain(crate::Domain::Complex);
+    check_in(
+        &ctx,
+        &[
+            ("MatchQ[2, Blank[Integer]]", "True"),
+            ("MatchQ[-5, Blank[Integer]]", "True"),
+            (
+                "MatchQ[1000000000000000000000000000000, Blank[Integer]]",
+                "True",
+            ),
+            ("MatchQ[1/2, Blank[Integer]]", "False"),
+            ("MatchQ[1/2, Blank[Rational]]", "True"),
+            ("MatchQ[2, Blank[Rational]]", "False"),
+            ("MatchQ[Decimal[5, -1], Blank[Real]]", "True"),
+            ("MatchQ[Decimal[5, -1], Blank[Integer]]", "False"),
+            ("MatchQ[I, Blank[Complex]]", "True"),
+            ("MatchQ[Times[Decimal[5, -1], I], Blank[Complex]]", "True"),
+            ("MatchQ[\"a\", Blank[String]]", "True"),
+            ("MatchQ[x, Blank[Symbol]]", "True"),
+            ("MatchQ[f[x], Blank[Symbol]]", "False"),
+            ("MatchQ[x, Blank[Integer]]", "False"),
+            // In rules, in sequences, and on the first argument.
+            (
+                "ReplaceAll[f[1, x, 2], RuleDelayed[Pattern[n, Blank[Integer]], g[n]]]",
+                "f[g[1], x, g[2]]",
+            ),
+            ("MatchQ[f[1, 2, 3], f[BlankSequence[Integer]]]", "True"),
+            ("MatchQ[f[1, x, 3], f[BlankSequence[Integer]]]", "False"),
+            // A sequence with more after it.
+            (
+                "MatchQ[f[1, 2, x], f[BlankSequence[Integer], Blank[Symbol]]]",
+                "True",
+            ),
+            (
+                "MatchQ[f[1, y, x], f[BlankSequence[Integer], Blank[Symbol]]]",
+                "False",
+            ),
+            ("MatchQ[f[1, x], f[Blank[Integer], Blank[Symbol]]]", "True"),
+            // Applications keep their own heads.
+            ("MatchQ[Complex[1, 2], Blank[Complex]]", "True"),
+            ("MatchQ[f[2], Blank[f]]", "True"),
+        ],
+    );
+    // Under `Flat` and `Orderless` heads, runs and candidates take their
+    // kinds too.
+    let mut ctx = Context::new();
+    ctx.set_attributes(Symbol::new("fl"), crate::Attributes::FLAT)
+        .unwrap();
+    ctx.set_attributes(Symbol::new("ol"), crate::Attributes::ORDERLESS)
+        .unwrap();
+    check_in(
+        &ctx,
+        &[
+            (
+                "MatchQ[fl[1, 2, x], fl[BlankSequence[Integer], Blank[Symbol]]]",
+                "True",
+            ),
+            (
+                "MatchQ[fl[1, y, x], fl[BlankSequence[Integer], Blank[Symbol]]]",
+                "False",
+            ),
+            (
+                "MatchQ[ol[a, 2], ol[Blank[Symbol], Blank[Integer]]]",
+                "True",
+            ),
+            (
+                "MatchQ[ol[x, 1, 2], ol[BlankSequence[Integer], Blank[Symbol]]]",
+                "True",
+            ),
+            (
+                "MatchQ[ol[x, 1, y], ol[BlankSequence[Integer], Blank[Symbol]]]",
+                "False",
+            ),
+            (
+                "ReplaceAll[Plus[2, a, b], RuleDelayed[Plus[Pattern[n, Blank[Integer]], Pattern[y, Blank[]]], g[n, y]]]",
+                "g[2, Plus[a, b]]",
+            ),
+        ],
+    );
+    // A definition by type.
+    let mut ctx = Context::new();
+    ctx.define_delayed(&read("h[Pattern[x, Blank[Integer]]]"), &read("Plus[x, 1]"))
+        .unwrap();
+    ctx.define_delayed(&read("h[Pattern[x, Blank[]]]"), &read("x"))
+        .unwrap();
+    check_in(&ctx, &[("List[h[1], h[1/2], h[y]]", "List[2, 1/2, y]")]);
+    // The heads of atoms are protected builtins: no up-rule hangs on them.
+    assert!(
+        ctx.define_up_delayed(
+            Symbol::INTEGER,
+            &read("g[Pattern[x, Blank[Integer]]]"),
+            &read("x")
+        )
+        .is_err()
+    );
+}
+
 #[test]
 fn sequences_take_the_fewest_first() {
     check(&[

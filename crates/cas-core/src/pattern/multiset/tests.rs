@@ -3,6 +3,7 @@
 
 use proptest::prelude::*;
 
+use crate::expr::View;
 use crate::{Attributes, Context, EvalError, Expr, Limits, Pattern, Symbol};
 
 fn read(text: &str) -> Expr {
@@ -529,6 +530,28 @@ fn head_symbol(e: &Expr) -> Option<Symbol> {
     e.head().and_then(Expr::as_symbol)
 }
 
+/// The head of an atom for typed blanks, as in Mathematica (CAS-150).
+fn kind(atom: &Expr) -> Option<Symbol> {
+    Some(match atom.view() {
+        View::Int(_) | View::Integer(_) => Symbol::INTEGER,
+        View::Rational(_) => Symbol::RATIONAL,
+        View::Ball(_) => Symbol::REAL,
+        View::Complex(_) | View::ComplexBall(_) => Symbol::COMPLEX,
+        View::String(_) => Symbol::STRING,
+        View::Symbol(_) => Symbol::SYMBOL,
+        View::Apply { .. } => return None,
+    })
+}
+
+/// Whether `s` has the head `h` for a typed blank: its own, or that of its
+/// kind for an atom.
+fn typed(s: &Expr, h: &Expr) -> bool {
+    match s.head() {
+        Some(head) => head == h,
+        None => kind(s).is_some_and(|k| h.as_symbol() == Some(k)),
+    }
+}
+
 /// `(variable, least, head)` for a sequence pattern.
 fn sequence(p: &Expr) -> Option<(Option<Symbol>, usize, Option<Expr>)> {
     match (head_symbol(p), p.args()) {
@@ -612,7 +635,7 @@ impl Oracle<'_> {
         let args = p.args();
         match head_symbol(p) {
             Some(Symbol::BLANK | Symbol::BLANK_SEQUENCE | Symbol::BLANK_NULL_SEQUENCE) => {
-                args.first().is_none_or(|h| s.head() == Some(h)) && found(b)
+                args.first().is_none_or(|h| typed(s, h)) && found(b)
             }
             Some(Symbol::PATTERN) => match bind(b, args[0].as_symbol().unwrap(), s) {
                 Some(b) => self.matches(&args[1], s, &b, found),
@@ -685,7 +708,7 @@ impl Oracle<'_> {
                 let run = &ss[..len];
                 if head
                     .as_ref()
-                    .is_some_and(|h| run.iter().any(|s| s.head() != Some(h)))
+                    .is_some_and(|h| run.iter().any(|s| !typed(s, h)))
                 {
                     continue;
                 }
@@ -761,7 +784,7 @@ impl Oracle<'_> {
                     let run: Vec<Expr> = chosen.iter().map(|&j| search.ss[j].clone()).collect();
                     if head
                         .as_ref()
-                        .is_some_and(|h| run.iter().any(|s| s.head() != Some(h)))
+                        .is_some_and(|h| run.iter().any(|s| !typed(s, h)))
                     {
                         continue;
                     }
@@ -850,9 +873,10 @@ fn combinations(items: &[usize], size: usize) -> Vec<Vec<usize>> {
 
 const HEADS: [&str; 6] = ["o", "fl", "ac", "aci", "oi", "pl"];
 
-/// Subjects: atoms with repeats, under the test heads, two levels deep.
+/// Subjects: atoms with repeats, symbols and integers, under the test
+/// heads, two levels deep.
 fn subject() -> impl Strategy<Value = Expr> {
-    let atom = prop::sample::select(vec!["a", "b", "c"]).prop_map(|s| Expr::from(sym(s)));
+    let atom = prop::sample::select(vec!["a", "b", "c", "1", "2"]).prop_map(read);
     atom.prop_recursive(2, 12, 5, |inner| {
         (
             prop::sample::select(HEADS.to_vec()),
@@ -863,8 +887,9 @@ fn subject() -> impl Strategy<Value = Expr> {
 }
 
 /// The arguments of a pattern: literals, blanks, variables (repeated),
-/// fixed heads, sequences, optional arguments and nested applications, among
-/// them one that a lone expression may stand for.
+/// fixed heads, of applications and of atoms, sequences, optional arguments
+/// and nested applications, among them one that a lone expression may stand
+/// for.
 fn pattern_arguments() -> impl Strategy<Value = Vec<Expr>> {
     let leaf = prop::sample::select(vec![
         "a",
@@ -874,6 +899,8 @@ fn pattern_arguments() -> impl Strategy<Value = Vec<Expr>> {
         "Pattern[x, Blank[]]",
         "Pattern[y, Blank[]]",
         "Pattern[x, Blank[o]]",
+        "Pattern[x, Blank[Integer]]",
+        "Pattern[y, BlankSequence[Symbol]]",
         "Pattern[x, BlankSequence[]]",
         "Pattern[y, BlankNullSequence[]]",
         "BlankSequence[]",
@@ -911,9 +938,10 @@ fn case() -> impl Strategy<Value = (Expr, Expr)> {
 }
 
 /// A subject and a pattern made from it: each argument kept, replaced by a
-/// blank, a variable (two names, so they may clash), a blank with its head
-/// or a sequence, or dropped, so that another node must take it; the
-/// pattern's arguments in order or reversed. Most of these match.
+/// blank, a variable (two names, so they may clash), a sequence, a blank or
+/// a sequence with its head (that of its kind for an atom), or dropped, so
+/// that another node must take it; the pattern's arguments in order or
+/// reversed. Most of these match.
 fn generalized() -> impl Strategy<Value = (Expr, Expr)> {
     (
         prop::sample::select(HEADS.to_vec()),
@@ -924,7 +952,7 @@ fn generalized() -> impl Strategy<Value = (Expr, Expr)> {
             (
                 Just(h),
                 Just(args),
-                prop::collection::vec(0u8..7, n),
+                prop::collection::vec(0u8..8, n),
                 any::<bool>(),
             )
         })
@@ -939,16 +967,18 @@ fn generalized() -> impl Strategy<Value = (Expr, Expr)> {
                     3 => pattern.push(read("Pattern[y, Blank[]]")),
                     4 if pattern.last() != Some(&sequence) => pattern.push(sequence.clone()),
                     4 | 5 => {}
-                    _ => pattern.push(match a.head() {
-                        Some(g) => Expr::apply(
+                    _ => {
+                        let g = a.head().cloned().or_else(|| kind(a).map(Expr::from));
+                        let g = g.expect("an application or an atom of a kind");
+                        let (x, blank) = match c {
+                            6 => ("x", Symbol::BLANK),
+                            _ => ("v", Symbol::BLANK_SEQUENCE),
+                        };
+                        pattern.push(Expr::apply(
                             &Symbol::PATTERN.into(),
-                            &[
-                                sym("x").into(),
-                                Expr::apply(&Symbol::BLANK.into(), std::slice::from_ref(g)),
-                            ],
-                        ),
-                        None => read("Blank[]"),
-                    }),
+                            &[sym(x).into(), Expr::apply(&blank.into(), &[g])],
+                        ));
+                    }
                 }
             }
             if reverse {

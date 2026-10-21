@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 0190d97d26deec23d09d69beb80afd3a1ba963307d96c4fe88756d20760833ad # shrinks to (p, s) = (ac[Pattern[x, Blank[Symbol]]], ac[a])

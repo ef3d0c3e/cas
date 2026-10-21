@@ -218,7 +218,9 @@ fn pattern(u: &mut Unstructured<'_>, depth: u8, tests: bool) -> Result<Expr> {
     let blank = |u: &mut Unstructured<'_>| -> Result<Expr> {
         let kind = *u.choose(&["Blank", "BlankSequence", "BlankNullSequence"])?;
         Ok(if u.ratio(1, 3)? {
-            apply(kind, &[sym(u.choose(&["List", "f", "Plus"])?)])
+            // Heads of applications, and of kinds of atoms (CAS-150).
+            let heads = ["List", "f", "Plus", "Integer", "Rational", "Real", "Complex", "Symbol"];
+            apply(kind, &[sym(u.choose(&heads)?)])
         } else {
             apply(kind, &[])
         })
