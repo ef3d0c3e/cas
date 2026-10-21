@@ -106,6 +106,9 @@ struct State {
     limits: Limits,
     /// The bits balls are made with and compared at (CAS-DOC-5 §6.4, §9.1).
     working_precision: u64,
+    /// Whether comparisons of balls decide only what they prove: in the
+    /// contexts `N` evaluates in (CAS-DOC-5 §9.4).
+    strict_comparisons: bool,
 }
 
 /// The working precision of a new context: 53 bits, a double's.
@@ -122,6 +125,7 @@ impl Default for State {
             domain: Domain::default(),
             limits: Limits::default(),
             working_precision: DEFAULT_WORKING_PRECISION,
+            strict_comparisons: false,
         }
     }
 }
@@ -534,6 +538,25 @@ impl Context {
     /// Sets the working precision, in bits, at least 2.
     pub fn set_working_precision(&mut self, bits: u64) {
         self.state_mut().working_precision = bits.max(2);
+    }
+
+    /// The context `N` evaluates in at `bits` bits (CAS-DOC-5 §9.4): this
+    /// one, at that working precision, where comparisons of balls decide
+    /// only what they prove. A state of its own, so that nothing cached in
+    /// it is taken for this one.
+    pub(crate) fn numeric(&self, bits: u64) -> Context {
+        let mut ctx = self.clone();
+        let state = ctx.state_mut();
+        state.working_precision = bits.max(2);
+        state.strict_comparisons = true;
+        ctx
+    }
+
+    /// Whether comparisons of balls decide only what they prove, as inside
+    /// `N`: overlapping balls are then never equal, unless both are exact.
+    #[must_use]
+    pub(crate) fn strict_comparisons(&self) -> bool {
+        self.state.strict_comparisons
     }
 
     #[must_use]

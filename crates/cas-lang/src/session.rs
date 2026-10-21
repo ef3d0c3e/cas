@@ -407,7 +407,11 @@ impl Session {
         let range = statement.spans.find(path);
         for w in &report.warnings {
             out.messages.push(Message {
-                level: Level::Warning,
+                level: if w.is_note() {
+                    Level::Note
+                } else {
+                    Level::Warning
+                },
                 range: range.clone(),
                 text: w.message(|e| self.written(e)),
                 fix: None,

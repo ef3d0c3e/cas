@@ -23,6 +23,11 @@ not.
 - **Real factors.** A real factor multiplies the parts directly.
 - **Division.** Indeterminate when the divisor may be 0.
 - **Powers.** `z^n` for an integer `n` is computed by squaring.
+- **`rel_accuracy_bits`.** Relative to the larger part, as Arb's
+  `acb_rel_accuracy_bits`: `max(exp(re), exp(im)) - exp(r)` for the larger
+  radius `r`. A part much smaller than the other, such as the inexact 0 of
+  a nearly real result, costs no accuracy. `N` measures complex results so
+  (CAS-84).
 
 ### Elementary functions (CAS-82)
 

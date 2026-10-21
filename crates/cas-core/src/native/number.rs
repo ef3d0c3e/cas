@@ -190,6 +190,28 @@ impl Num {
         Num::from_complex_ball(round_complex(&complex(&a, &b, working), bits))
     }
 
+    /// `real(x, bits)` of a real ball, or `complex(z, bits)` of a complex
+    /// one and of a real ball where the real function has no finite value
+    /// (`Log[-2.0]`, `ArcSin[2.0]`): the principal value, at the guarded
+    /// precision of [`ball_bits`], rounded back. `None` for an exact value.
+    pub(super) fn ball_function(
+        &self,
+        working: u64,
+        real: impl Fn(&Ball, u64) -> Ball,
+        complex: impl Fn(&ComplexBall, u64) -> ComplexBall,
+    ) -> Option<Num> {
+        let bits = ball_bits(&[self], working)?;
+        let prec = bits + GUARD;
+        if let Num::Ball(x) = self {
+            let y = real(x, prec);
+            if y.is_finite() {
+                return Some(Num::Ball(Box::new(y.round_to_accuracy(bits))));
+            }
+        }
+        let z = complex(&self.to_complex_ball(prec), prec);
+        Some(Num::from_complex_ball(round_complex(&z, bits)))
+    }
+
     /// Exactly 0 or 1, and exact: identities of ball arithmetic too, which
     /// must leave a ball as it is. Ball arithmetic by an exact 1 would still
     /// grow the radius, so `Times[ball, x]` would not be a fixpoint.
@@ -206,13 +228,29 @@ impl Num {
         }
     }
 
+    /// `k` when this is exactly `k/2` for an odd `k` that fits an `i64`.
+    fn odd_halves(&self) -> Option<i64> {
+        match self {
+            Num::Real(q) if *q.denom() == Integer::from(2) => q.numer().to_i64(),
+            // The lowest bit of an exact ball's midpoint weighs 1/2.
+            Num::Ball(b) if b.is_exact() && !b.mid().is_zero() => {
+                let low = b.mid().exponent() - &Integer::from(b.mid().bit_length());
+                if low != Integer::from(-1) {
+                    return None;
+                }
+                b.mid().to_rational().numer().to_i64()
+            }
+            _ => None,
+        }
+    }
+
     /// Exactly -1.
     fn is_minus_one(&self) -> bool {
         matches!(self, Num::Real(q) if *q == Rational::from(-1))
     }
 
     /// `-self`, exactly.
-    fn negated(&self) -> Num {
+    pub(super) fn negated(&self) -> Num {
         match self {
             Num::Real(q) => Num::Real(-q),
             Num::Complex(z) => Num::Complex(-z),
@@ -308,6 +346,18 @@ impl Num {
                     let power = root.pow(q.numer().to_i64()?, working);
                     return Some(Num::Ball(Box::new(power.round_to_accuracy(bits))));
                 }
+            }
+            // A negative real to an odd number of halves, `i^k·|x|^(k/2)`:
+            // its real part is exactly 0, where the principal complex power
+            // would give it a radius (`Sqrt[-2.0]`, CAS-84).
+            if let (Some(Ordering::Less), Some(k)) = (x.sign(), exponent.odd_halves()) {
+                let magnitude = x.neg().pow_ball(&y, working).round_to_accuracy(bits);
+                let im = if k.rem_euclid(4) == 1 {
+                    magnitude
+                } else {
+                    magnitude.neg()
+                };
+                return Some(Num::from_complex_ball(ComplexBall::new(Ball::ZERO, im)));
             }
             let power = x.pow_ball(&y, working);
             if power.is_finite() || x.sign() != Some(Ordering::Less) {

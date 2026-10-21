@@ -29,12 +29,12 @@ use libfuzzer_sys::fuzz_target;
 const HEADS: [&str; 4] = ["f", "g", "h", "k"];
 
 /// Atoms besides numbers.
-const ATOMS: [&str; 11] = [
-    "a", "b", "c", "x", "y", "u", "I", "Pi", "Infinity", "True", "False",
+const ATOMS: [&str; 12] = [
+    "a", "b", "c", "x", "y", "u", "I", "Pi", "E", "Infinity", "True", "False",
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 36] = [
+const BUILTINS: [&str; 43] = [
     "Plus",
     "Times",
     "Power",
@@ -73,6 +73,15 @@ const BUILTINS: [&str; 36] = [
     "Ball",
     "Decimal",
     "Exact",
+    // `N` and the elementary functions of balls (CAS-84); `N`'s precision
+    // stays within the limit on numbers.
+    "N",
+    "Exp",
+    "Log",
+    "Sin",
+    "Cos",
+    "ArcSin",
+    "ArcTan",
 ];
 
 /// Builtins that apply something to parts, only in the expression

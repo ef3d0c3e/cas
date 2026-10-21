@@ -30,6 +30,9 @@ Log: ln log
 Sin: sin
 Cos: cos
 Tan: tan
+ArcSin: asin arcsin
+ArcCos: acos arccos
+ArcTan: atan arctan
 Sqrt: sqrt
 Factorial: factorial
 Pi: pi
@@ -61,6 +64,8 @@ Exact: exact
 # The working precision in decimal digits, Xcas's `Digits` (CAS-151): the
 # one builtin name an assignment sets.
 Digits: Digits
+# Numeric evaluation with balls, Xcas's evalf (CAS-DOC-5 §9.2, CAS-84).
+N: evalf approx
 
 [planned]
 # Calculus, algebra and numerics (CAS-DOC-1, CAS-DOC-4 §1 and §8, CAS-DOC-5).
@@ -69,7 +74,6 @@ Sum: sum
 Expand: expand
 Factor: factor
 Simplify: simplify
-N: evalf approx
 
 [constants]
 imaginary: i

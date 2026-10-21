@@ -1,0 +1,50 @@
+// Numeric evaluation with balls, Xcas's evalf (CAS-84, CAS-DOC-5 §9.2, §9.4).
+evalf(pi)
+evalf(pi, 30)
+approx(sqrt(2))
+evalf(1/3, 5)
+evalf(2)
+// Raising the precision where digits cancel: e^(pi sqrt(163)) is nearly an
+// integer.
+evalf(exp(pi*sqrt(163)) - 640320^3 - 744, 30)
+// Numbers become balls where they stand for values; symbols remain.
+evalf(x + pi)
+evalf(x^2 + 2*x + 1/3)
+evalf(x - y)
+evalf(f(1/3))
+evalf([1/3, pi], 4)
+evalf(x < 1/3)
+evalf(sqrt(-2))
+evalf(ln(-1))
+// The working precision is the default target.
+Digits := 30
+evalf(1/3)
+Digits := 15
+// N of its own result changes nothing.
+evalf(evalf(pi, 20), 20)
+// No precision tells 0 from a ball around it.
+evalf(sin(pi))
+// The input limits what can be known: a note, not a failure.
+evalf(0.1, 30)
+evalf(sin(ball(1, 1/100000)), 20)
+// Discontinuities: exact input decides exactly; a constant equal to 1 that
+// is not seen as such cannot be decided; one just above 1 can, with digits
+// enough.
+step(t) := if t < 1 then 0 elif t == 1 then 1/2 else 1 end
+step(1)
+c := 2*sin(pi/6)
+evalf(step(c))
+evalf(step(c + 10^-1000), 400)
+evalf(step(ball(1, 1/100000)))
+// Bad digits.
+evalf(pi, 0)
+evalf(pi, 1/2)
+// Elementary functions of decimals.
+sin(0.5)
+exp(1.0)
+ln(-2.0)
+asin(2.0)
+atan(1.0)*4
+ln(0.0)
+sin(1/2)
+diff(atan(x^2), x)

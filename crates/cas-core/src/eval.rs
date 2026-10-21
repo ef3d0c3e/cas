@@ -237,6 +237,30 @@ impl<'c> Eval<'c> {
         result
     }
 
+    /// Evaluates `e` in `context`, one made from this call's (as `N` does,
+    /// CAS-84), as a call of its own: with the levels this one has left, a
+    /// memo of its own and no trace. The result, and the warnings given,
+    /// each once, for the caller to pass on as it sees fit.
+    pub(crate) fn eval_in(
+        &mut self,
+        context: &Context,
+        e: &Expr,
+    ) -> (Result<Expr, EvalError>, Vec<Warning>) {
+        let mut nested = Eval::new(context, self.recursion - self.depth);
+        nested.caches = self.caches;
+        let result = nested.part::<false>(e);
+        let mut warnings: Vec<Warning> = Vec::new();
+        if let Some(warned) = nested.warnings.0.take() {
+            let mut seen: HashSet<Warning, FixedState> = HashSet::default();
+            for (_, w) in warned.given {
+                if seen.insert(w.clone()) {
+                    warnings.push(w);
+                }
+            }
+        }
+        (result, warnings)
+    }
+
     /// Evaluates a condition's test, as [`Eval::eval`] but in a trace only
     /// at [`TraceLevel::Verbose`].
     pub(crate) fn test(&mut self, e: &Expr) -> Result<Expr, EvalError> {

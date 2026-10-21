@@ -18,6 +18,9 @@ unicode-ident.workspace = true
 [dev-dependencies]
 criterion = { version = "0.7.0", default-features = false, features = ["cargo_bench_support"] }
 proptest.workspace = true
+# MPFR, the oracle of `N` (CAS-84), with cas-num's features so that one build
+# serves both.
+rug = { version = "1.30.0", default-features = false, features = ["complex", "float", "integer", "rational", "std"] }
 
 [[bench]]
 name = "eval"

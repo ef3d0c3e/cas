@@ -60,6 +60,15 @@ fn derivatives() {
         ("D[Tan[x], x]", "Power[Cos[x], -2]"),
         ("D[Exp[Times[2, x]], x]", "Times[2, Exp[Times[2, x]]]"),
         ("D[Log[x], x]", "Power[x, -1]"),
+        (
+            "D[ArcSin[x], x]",
+            "Power[Plus[1, Times[-1, Power[x, 2]]], -1/2]",
+        ),
+        (
+            "D[ArcCos[Times[2, x]], x]",
+            "Times[-2, Power[Plus[1, Times[-4, Power[x, 2]]], -1/2]]",
+        ),
+        ("D[ArcTan[x], x]", "Power[Plus[1, Power[x, 2]], -1]"),
         ("D[Sin[Cos[x]], x]", "Times[-1, Cos[Cos[x]], Sin[x]]"),
         // Functions the table does not know.
         ("D[f[x], x]", "Derivative[1][f][x]"),

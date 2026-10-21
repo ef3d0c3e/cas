@@ -87,6 +87,36 @@ pub enum Warning {
     /// A number applied as a function (CAS-DOC-7 §3.1), as `a(x + 1)` after
     /// `a := 2`, which stays as it is.
     NumberApplied(Expr),
+    /// `N` did not reach its target within the most bits it may take,
+    /// `bits`: the value of `expr` is known to `digits` digits, none when it
+    /// may be 0, as `Sin[Pi]` (CAS-DOC-5 §9.2).
+    Inaccurate {
+        /// What `N` was asked for.
+        expr: Expr,
+        /// The digits known.
+        digits: u64,
+        /// The precision it stopped at.
+        bits: u64,
+    },
+    /// `N` stopped short of its target since raising the precision gained
+    /// nothing: the balls of its input know `expr` to `digits` digits only
+    /// (CAS-DOC-5 §9.4). A note, not a failure.
+    InputLimited {
+        /// What `N` was asked for.
+        expr: Expr,
+        /// The digits known.
+        digits: u64,
+    },
+    /// A comparison of balls that overlap, at least one of them inexact,
+    /// which ball arithmetic cannot decide at `bits` bits (CAS-DOC-5 §9.4).
+    /// Inside `N`, where it raises the precision; at its limit, `N` stays
+    /// unevaluated.
+    Undecided {
+        /// The comparison, with its balls.
+        comparison: Expr,
+        /// The precision of the balls.
+        bits: u64,
+    },
     /// A native function's own: its message, and the expression.
     Native {
         /// What went wrong.
@@ -138,8 +168,35 @@ impl Warning {
                 ),
                 None => format!("a number applied as a function in {}", show(e)),
             },
+            Warning::Inaccurate {
+                expr,
+                digits: 0,
+                bits,
+            } => format!(
+                "the value of {} could not be told from 0 within {bits} bits",
+                show(expr)
+            ),
+            Warning::Inaccurate { expr, digits, bits } => format!(
+                "only {digits} digits of {} could be certified within {bits} bits",
+                show(expr)
+            ),
+            Warning::InputLimited { expr, digits } => format!(
+                "the accuracy of {} is limited by its input: {digits} digits",
+                show(expr)
+            ),
+            Warning::Undecided { comparison, bits } => format!(
+                "could not decide {}: its sides overlap at {bits} bits",
+                show(comparison)
+            ),
             Warning::Native { message, expr } => format!("{message}: {}", show(expr)),
         }
+    }
+
+    /// Whether this is a note rather than a warning: it says how a result
+    /// was found, and nothing went wrong ([`Warning::InputLimited`]).
+    #[must_use]
+    pub fn is_note(&self) -> bool {
+        matches!(self, Warning::InputLimited { .. })
     }
 }
 

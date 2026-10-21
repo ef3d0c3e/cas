@@ -186,7 +186,7 @@ fn exact_ball(b: &Ball, prec: u64, max_bits: u64) -> Option<Rational> {
 /// The decimal `ball_decimal` writes, `-1.25e-5` as `(true, 125, -7)`: its
 /// sign, its digits without leading zeros, and the power of 10 they are
 /// scaled by. `None` for a ball that shows no digit (`[± 1.2e-16]`).
-fn shown_decimal(s: &str) -> Option<(bool, Integer, i64)> {
+pub(super) fn shown_decimal(s: &str) -> Option<(bool, Integer, i64)> {
     let (mantissa, exponent) = match s.split_once(['e', 'E']) {
         Some((m, e)) => (m, e.parse::<i64>().ok()?),
         None => (s, 0),

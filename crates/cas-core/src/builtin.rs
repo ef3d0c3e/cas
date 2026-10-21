@@ -53,6 +53,9 @@ builtins! {
     SIN = "Sin" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     COS = "Cos" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     TAN = "Tan" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    ARC_SIN = "ArcSin" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    ARC_COS = "ArcCos" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    ARC_TAN = "ArcTan" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     SQRT = "Sqrt" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     FACTORIAL = "Factorial" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     // Calculus (CAS-DOC-4 §8): the derivative, as system rules, and the
@@ -91,6 +94,10 @@ builtins! {
     // `Exact[e]`: each ball of `e` as the simplest fraction that matches the
     // digits it shows (CAS-DOC-5 §6.4, D4).
     EXACT = "Exact" [PROTECTED];
+    // `N[e, d]`: `e` with balls for its numbers, to `d` digits or those of
+    // the working precision, raised until they are reached (CAS-DOC-5 §9.2,
+    // CAS-84).
+    N = "N" [PROTECTED];
     // The decimal digits the working precision shows, Xcas's `Digits`: its
     // value is read from the context; the session sets it (CAS-151).
     DIGITS = "Digits" [PROTECTED];

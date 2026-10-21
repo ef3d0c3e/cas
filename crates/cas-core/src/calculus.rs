@@ -11,7 +11,8 @@
 //!   the sum at each;
 //! - the product rule, `D[a_ b__, x_]`, through AC matching;
 //! - powers: `f^n` with `n` free of `x`, `E^g`, and `f^g` in general;
-//! - the chain rule for `Sin`, `Cos`, `Tan`, `Exp` and `Log`, from a table;
+//! - the chain rule for `Sin`, `Cos`, `Tan`, `ArcSin`, `ArcCos`, `ArcTan`,
+//!   `Exp` and `Log`, from a table;
 //! - a function the table does not know: `Derivative[1][g][u] D[u, x]`, and
 //!   `Derivative[n + 1][g][u]` for the derivative of `Derivative[n][g][u]`;
 //! - higher derivatives, `D[f, {x, n}]` for an integer `n >= 0`, and partial
@@ -34,6 +35,7 @@ fn d(name: &'static str, f: &str, rhs: &str) -> SystemRule {
 }
 
 /// The rules of `D`, in the order they are tried.
+#[allow(clippy::too_many_lines, reason = "a table, one rule after another")]
 pub(crate) fn rules() -> Vec<SystemRule> {
     vec![
         d(
@@ -86,6 +88,21 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "D/Tan",
             "Tan[Pattern[f, Blank[]]]",
             "Times[Power[Cos[f], -2], D[f, x]]",
+        ),
+        d(
+            "D/ArcSin",
+            "ArcSin[Pattern[f, Blank[]]]",
+            "Times[Power[Plus[1, Times[-1, Power[f, 2]]], -1/2], D[f, x]]",
+        ),
+        d(
+            "D/ArcCos",
+            "ArcCos[Pattern[f, Blank[]]]",
+            "Times[-1, Power[Plus[1, Times[-1, Power[f, 2]]], -1/2], D[f, x]]",
+        ),
+        d(
+            "D/ArcTan",
+            "ArcTan[Pattern[f, Blank[]]]",
+            "Times[Power[Plus[1, Power[f, 2]], -1], D[f, x]]",
         ),
         d(
             "D/Exp",

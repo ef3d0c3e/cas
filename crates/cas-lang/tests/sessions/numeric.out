@@ -1,0 +1,82 @@
+> evalf(pi)
+= 3.14159265358979
+> evalf(pi, 30)
+= 3.14159265358979323846264338328
+> approx(sqrt(2))
+= 1.41421356237310
+> evalf(1/3, 5)
+= 0.33333
+> evalf(2)
+= 2.0
+> evalf(exp(pi*sqrt(163)) - 640320^3 - 744, 30)
+= -7.49927402801814311120646143663e-13
+> evalf(x + pi)
+= 3.14159265358979 + x
+> evalf(x^2 + 2*x + 1/3)
+= 0.333333333333333 + 2.0*x + x^2
+> evalf(x - y)
+= x - y
+> evalf(f(1/3))
+= f(1/3)
+> evalf([1/3, pi], 4)
+= [0.3333, 3.142]
+> evalf(x < 1/3)
+= x < 0.333333333333333
+> evalf(sqrt(-2))
+= 1.41421356237310*i
+> evalf(ln(-1))
+= 3.14159265358979*i
+> Digits := 30
+= 30
+> evalf(1/3)
+= 0.333333333333333333333333333333
+> Digits := 15
+= 15
+> evalf(evalf(pi, 20), 20)
+= 3.1415926535897932385
+> evalf(sin(pi))
+warning at 26:1 `evalf(sin(pi))`: the value of sin(pi) could not be told from 0 within 1448 bits
+= ball(0.0, 3.67e-436)
+> evalf(0.1, 30)
+note at 28:1 `evalf(0.1, 30)`: the accuracy of 0.1 is limited by its input: 15 digits
+= 0.1
+> evalf(sin(ball(1, 1/100000)), 20)
+note at 29:1 `evalf(sin(ball(1, 1/100000)), 20)`: the accuracy of 0.8415 is limited by its input: 4 digits
+= 0.8415
+> step(t) := if t < 1 then 0 elif t == 1 then 1/2 else 1 end
+> step(1)
+= 1/2
+> c := 2*sin(pi/6)
+= 2*sin(pi/6)
+> evalf(step(c))
+warning at 36:1 `evalf(step(c))`: could not decide 1.0 < 1.0: its sides overlap at 1448 bits
+= evalf(if 2*sin(pi/6) < 1 then 0 elif 2*sin(pi/6) == 1 then 1/2 else 1 end)
+> evalf(step(c + 10^-1000), 400)
+= 1.0
+> evalf(step(ball(1, 1/100000)))
+note at 38:1 `evalf(step(ball(1, 1/100000)))`: the accuracy of if 1.0 < 1 then 0 elif 1.0 == 1 then 1/2 else 1 end is limited by its input: 5 digits
+warning at 38:1 `evalf(step(ball(1, 1/100000)))`: could not decide 1.0 < 1.0: its sides overlap at 170 bits
+= evalf(if 1.0 < 1 then 0 elif 1.0 == 1 then 1/2 else 1 end)
+> evalf(pi, 0)
+warning at 40:1 `evalf(pi, 0)`: the number of digits must be a positive integer up to 5050444: evalf(pi, 0)
+= evalf(pi, 0)
+> evalf(pi, 1/2)
+warning at 41:1 `evalf(pi, 1/2)`: the number of digits must be a positive integer up to 5050444: evalf(pi, 1/2)
+= evalf(pi, 1/2)
+> sin(0.5)
+= 0.479425538604203
+> exp(1.0)
+= 2.71828182845905
+> ln(-2.0)
+= 0.693147180559945 + 3.14159265358979*i
+> asin(2.0)
+= 1.57079632679490 + 1.31695789692482*i
+> atan(1.0)*4
+= 3.14159265358979
+> ln(0.0)
+warning at 48:1 `ln(0.0)`: infinite expression ln(0.0) encountered
+= -infinity
+> sin(1/2)
+= sin(1/2)
+> diff(atan(x^2), x)
+= 2*x/(1 + x^4)

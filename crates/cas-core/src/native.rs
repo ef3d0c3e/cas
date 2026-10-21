@@ -14,12 +14,14 @@
 
 mod arith;
 mod ball;
+mod elementary;
 mod factorial;
 mod index;
 mod integer;
 mod linear;
 mod logic;
 mod number;
+mod numeric;
 mod procedure;
 mod radical;
 mod replace;
@@ -40,6 +42,14 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::TIMES, arith::times),
         (Symbol::POWER, arith::power),
         (Symbol::SQRT, arith::sqrt),
+        (Symbol::EXP, elementary::exp),
+        (Symbol::LOG, elementary::log),
+        (Symbol::SIN, elementary::sin),
+        (Symbol::COS, elementary::cos),
+        (Symbol::TAN, elementary::tan),
+        (Symbol::ARC_SIN, elementary::arc_sin),
+        (Symbol::ARC_COS, elementary::arc_cos),
+        (Symbol::ARC_TAN, elementary::arc_tan),
         (Symbol::DIRECTED_INFINITY, arith::directed_infinity),
         (Symbol::EQUAL, logic::equal_native),
         (Symbol::UNEQUAL, logic::unequal),
@@ -88,6 +98,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::BALL, ball::ball),
         (Symbol::DECIMAL, ball::decimal),
         (Symbol::EXACT, ball::exact),
+        (Symbol::N, numeric::n),
         (Symbol::REPLACE_ALL, replace::replace_all),
         (Symbol::REPLACE, replace::replace),
         (Symbol::REPLACE_REPEATED, replace::replace_repeated),

@@ -127,6 +127,37 @@ impl ComplexBall {
         self.re.is_finite() && self.im.is_finite()
     }
 
+    /// The bits known relative to the larger part, Arb's
+    /// `acb_rel_accuracy_bits`: about `max(exp(re), exp(im)) - exp(r)` for
+    /// the larger radius `r`, so that a part much smaller than the other
+    /// costs no accuracy. `i64::MAX` for an exact ball, `i64::MIN` for one
+    /// that is not finite or is centred at 0 with a non-zero radius.
+    #[must_use]
+    pub fn rel_accuracy_bits(&self) -> i64 {
+        if self.is_exact() {
+            return i64::MAX;
+        }
+        if !self.is_finite() {
+            return i64::MIN;
+        }
+        let mid = [self.re.mid(), self.im.mid()]
+            .into_iter()
+            .filter(|m| !m.is_zero())
+            .map(Float::exponent)
+            .max();
+        let rad = [self.re.rad(), self.im.rad()]
+            .into_iter()
+            .filter(|r| !r.is_zero())
+            .map(Mag::exponent)
+            .max();
+        let (Some(mid), Some(rad)) = (mid, rad) else {
+            return i64::MIN;
+        };
+        let d = mid - rad;
+        d.to_i64()
+            .unwrap_or(if d.is_negative() { i64::MIN } else { i64::MAX })
+    }
+
     /// Whether the imaginary part is exactly 0.
     #[must_use]
     pub fn is_real(&self) -> bool {

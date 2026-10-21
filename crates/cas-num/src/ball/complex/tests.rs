@@ -309,3 +309,39 @@ fn gaussian_rationals_and_reals() {
     assert_eq!(i3.pow_int(2, 64), sq);
     assert_eq!(format!("{i3:.3}"), "2 + 3*I");
 }
+
+#[test]
+fn relative_accuracy_is_that_of_the_larger_part() {
+    let exact = |n: i64| Ball::from_integer(&Integer::from(n));
+    let mag = |e: i64| Mag::from_float(&Float::from(1i64).mul_2exp(&Integer::from(e)));
+    // 1 ± 2^-100 beside 2^-200 ± 2^-200: the tiny part costs nothing.
+    let re = exact(1).add_error(&mag(-100));
+    let tiny = Ball::exact(Float::from(1i64).mul_2exp(&Integer::from(-200))).add_error(&mag(-200));
+    assert_eq!(
+        ComplexBall::new(re.clone(), tiny.clone()).rel_accuracy_bits(),
+        re.rel_accuracy_bits()
+    );
+    assert_eq!(
+        ComplexBall::new(tiny, re.clone()).rel_accuracy_bits(),
+        re.rel_accuracy_bits()
+    );
+    // An inexact 0 beside an exact 2: its radius against the 2.
+    let z = ComplexBall::new(Ball::ZERO.add_error(&mag(-80)), exact(2));
+    assert_eq!(
+        z.rel_accuracy_bits(),
+        exact(2).add_error(&mag(-80)).rel_accuracy_bits()
+    );
+    // The larger radius counts.
+    let z = ComplexBall::new(exact(4).add_error(&mag(-90)), exact(1).add_error(&mag(-60)));
+    assert_eq!(z.rel_accuracy_bits(), 3 - (-59));
+    // Exact, centred at 0, not finite: as real balls.
+    assert_eq!(
+        ComplexBall::new(exact(1), exact(2)).rel_accuracy_bits(),
+        i64::MAX
+    );
+    assert_eq!(
+        ComplexBall::new(Ball::ZERO.add_error(&mag(-10)), Ball::ZERO).rel_accuracy_bits(),
+        i64::MIN
+    );
+    assert_eq!(ComplexBall::INDETERMINATE.rel_accuracy_bits(), i64::MIN);
+}
