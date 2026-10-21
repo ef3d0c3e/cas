@@ -20,5 +20,10 @@ the tickets. This documentation describes the code as it is.
   substitution, with their measured thresholds; division over a field,
   pseudo-division and exact division; evaluation, derivative, content and
   primitive part; ℚ and ℚ(i) over a shared denominator.
+- [sparse.md](sparse.md): sparse multivariate polynomials (CAS-136). Packed
+  exponent vectors with guard bits; sums by merging; Johnson's heap for
+  products and Monagan and Pearce's for division, which widens its fields
+  when the guards report an overflow; evaluation, substitution, derivative,
+  the recursive view; the benchmarks of CAS-DOC-8 §13.
 - [references.md](references.md): the bibliography. Chapters and doc
   comments cite it by key, as in "Kronecker substitution [Sch82]".

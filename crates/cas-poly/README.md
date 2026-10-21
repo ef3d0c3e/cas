@@ -15,6 +15,7 @@ described in [`doc/algorithms`](doc/algorithms/README.md).
 | `dense::kronecker` | Kronecker substitution: signed coefficients packed at `2^w` (positives and negatives apart, one subtraction), one integer product, the digits read back balanced with carries. Also the unsigned version reduced modulo a word, and the measured thresholds. |
 | `dense::div` | Division over a field, pseudo-division, exact division. |
 | `shared` | ℚ\[x\] and ℚ(i)\[x\] as an integer, or Gaussian integer, polynomial over one positive natural denominator, reduced, as FLINT's `fmpq_poly`. `Shared<E>` with `SharedRing<N>` over `Numerators` (ℤ, ℤ\[i\]); the aliases `RationalPoly`, `RationalPolys`, `GaussianRationalPoly`, `GaussianRationalPolys`. Division pseudo-divides the numerators, then clears the leading coefficient's power, over ℤ\[i\] through its conjugate. |
+| `sparse` | `Sparse<E>`: a multivariate polynomial as its terms in decreasing lexicographic order, coefficients in one vector and exponents packed into words with guard bits (`sparse::layout`), in the narrowest layout that holds them. `SparseRing<R>`: the ring object of `nvars` variables, a `Ring`. Sums merge; products and powers go through Johnson's heap with lazy rows (`sparse::heap`). Division and the exact-divisibility test go through Monagan and Pearce's heap over a Euclidean domain, widening the fields when the guards report an overflow. Evaluation, partial evaluation, substitution, the derivative, degrees, coefficients and leading terms in a variable, the recursive view, and conversions to and from `Dense`. |
 | `cancel` | `Cancel`, what long loops poll to stop early, with `Never`, the default, and an implementation for `AtomicBool`. `Cancelled` is the error of the `_with` methods. |
 
 ## Testing
@@ -31,7 +32,13 @@ Property tests (`src/dense/tests.rs`, `src/shared/tests.rs`):
 - the shared-denominator types against coefficient-wise arithmetic, each
   result reduced.
 
-`products_workload` is an ignored test, a workload for instruction counts:
+Sparse polynomials are checked against a naive map from exponent vectors to
+coefficients for every operation, over ℤ, ℚ and 𝔽ₚ, with mixed layouts and
+targeted cases at the fields' boundaries (`src/sparse/tests.rs`).
+
+`products_workload` and `sparse_workload` (`CAS_POLY_SPARSE=fateman` or
+`pearce`, the products of CAS-DOC-8 §13) are ignored tests, workloads for
+instruction counts:
 
 ```sh
 cargo test --release -p cas-poly --lib --no-run

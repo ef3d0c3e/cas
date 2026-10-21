@@ -42,6 +42,7 @@
 mod cancel;
 mod dense;
 mod shared;
+mod sparse;
 
 pub use cancel::{Cancel, Cancelled, Never};
 pub use dense::{Coefficients, Dense, DenseRing};
@@ -49,3 +50,4 @@ pub use shared::{
     GaussianRationalPoly, GaussianRationalPolys, Numerators, RationalPoly, RationalPolys, Shared,
     SharedRing,
 };
+pub use sparse::{Sparse, SparseRing};
