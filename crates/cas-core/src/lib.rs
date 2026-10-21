@@ -55,12 +55,14 @@ mod traverse;
 pub use assume::{Domain, Sign, Truth};
 pub use attributes::Attributes;
 pub use cas_num::{Complex, Integer, Rational};
-pub use context::{Context, ContextError, EvalError, Interrupt, Limits, StateId};
+pub use context::{
+    Context, ContextError, DEFAULT_WORKING_PRECISION, EvalError, Interrupt, Limits, StateId,
+};
 pub use eval::{Eval, NativeFn, STACK_PER_LEVEL};
 pub use expr::{Expr, View};
 pub use intern::{InternerStats, interner_stats};
 pub use pattern::{Pattern, PatternError, PatternErrorKind, Rule};
-pub use print::FullForm;
+pub use print::{FullForm, ball_decimal};
 pub use read::{FullFormError, FullFormErrorKind};
 pub use rules::{DefineError, UserNative};
 pub use symbol::Symbol;

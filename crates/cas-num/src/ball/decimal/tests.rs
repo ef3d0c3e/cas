@@ -278,3 +278,106 @@ fn parse_rejections() {
         assert_eq!(Ball::from_decimal(s, 64).unwrap(), want, "{s}");
     }
 }
+
+/// The significant digits of a decimal, without the zeros that end its
+/// fraction: those of `2.0` and `1.0e-30` are 1.
+fn significant(s: &str) -> usize {
+    let mant = s.split_once('e').map_or(s, |(m, _)| m);
+    let mant = mant.strip_prefix('-').unwrap_or(mant);
+    let mant = match mant.split_once('.') {
+        Some((int, frac)) => format!("{int}{}", frac.trim_end_matches('0')),
+        None => mant.to_owned(),
+    };
+    mant.trim_start_matches('0')
+        .trim_end_matches('0')
+        .len()
+        .max(1)
+}
+
+proptest! {
+    /// The shortest decimal lies in the ball, has a point and at most `max`
+    /// digits, and none with one digit fewer does: neither neighbour of the
+    /// result on the coarser grid is in the ball, and a farther decimal
+    /// would put one of them in it.
+    #[test]
+    fn shortest_decimals_are_inside_and_shortest(b in ball(), max in 1u64..45) {
+        let Some(s) = b.to_shortest_decimal(max) else {
+            return Ok(());
+        };
+        prop_assert!(s.contains('.'), "{}", s);
+        let (v, _, _) = read(&s);
+        let sig = significant(&s);
+        let (lo, hi) = endpoints(&b);
+        prop_assert!(lo <= v && v <= hi, "{s} is outside {b:?}");
+        prop_assert!(sig <= usize::try_from(max).unwrap(), "{s}: more than {max} digits");
+        if sig >= 2 {
+            // The unit of the last significant digit, and the grid one
+            // digit coarser.
+            let (_, unit, all) = read(&s);
+            let unit = &unit * &ten(i64::try_from(all - sig).unwrap());
+            let coarse = &unit * &Rational::from(10i64);
+            let k = &v / &coarse;
+            for n in [k.floor(), k.ceil()] {
+                let d = &Rational::from(n) * &coarse;
+                prop_assert!(!(lo <= d && d <= hi), "{s}: {d} is shorter and inside {b:?}");
+            }
+        }
+    }
+
+    /// A decimal read at 53 bits shows with no more digits than it was
+    /// written with.
+    #[test]
+    fn typed_decimals_show_short(d in 1u64..100_000_000_000_000_000, e10 in -30i64..30) {
+        let mut ds = d.to_string();
+        while ds.ends_with('0') { ds.pop(); }
+        let k = u64::try_from(ds.len()).unwrap();
+        let typed = format(false, ds, e10, false, k);
+        let b = Ball::from_decimal(&typed, 53).unwrap();
+        let s = b.to_shortest_decimal(17).unwrap();
+        prop_assert!(significant(&s) <= usize::try_from(k).unwrap(), "{typed} shows as {s}");
+    }
+}
+
+#[test]
+fn shortest_decimals() {
+    let d = |s: &str| Ball::from_decimal(s, 53).unwrap();
+    let exact = |n: i64| Ball::from_integer(&Integer::from(n));
+    let third = exact(1).div(&d("3.0"), 69).round_to_accuracy(53);
+    let sum = d("0.1").add(&d("0.2"), 69).round_to_accuracy(53);
+    let cases: [(Ball, u64, Option<&str>); 14] = [
+        (d("0.1"), 15, Some("0.1")),
+        (sum, 15, Some("0.3")),
+        (exact(2), 15, Some("2.0")),
+        (exact(-25).mul_2exp(&Integer::from(-1)), 15, Some("-12.5")),
+        // 1/3 needs more digits than 53 bits carry.
+        (third.clone(), 15, None),
+        (third, 17, Some("0.3333333333333333")),
+        (d("1e-30"), 15, Some("1.0e-30")),
+        (d("0.001"), 15, Some("0.001")),
+        (d("0.00001"), 15, Some("1.0e-5")),
+        (exact(10).pow(20, 128), 15, Some("1.0e+20")),
+        (d("123456789.5"), 15, Some("123456789.5")),
+        // A ball around 0, and one that reaches the next power of 10.
+        (Ball::new(Float::from(0i64), Mag::ONE), 15, Some("0.0")),
+        (
+            d("9.99").add_error(&Mag::from_float(
+                &Float::from(1i64).mul_2exp(&Integer::from(-5)),
+            )),
+            15,
+            Some("10.0"),
+        ),
+        // A tie between 0.2 and 0.3 goes to the even digit.
+        (
+            Ball::new(
+                Float::from(1i64).mul_2exp(&Integer::from(-2)),
+                Mag::from_float(&Float::from(1i64).mul_2exp(&Integer::from(-3))),
+            ),
+            15,
+            Some("0.2"),
+        ),
+    ];
+    for (b, max, expected) in cases {
+        assert_eq!(b.to_shortest_decimal(max).as_deref(), expected, "{b:?}");
+    }
+    assert_eq!(Ball::INDETERMINATE.to_shortest_decimal(15), None);
+}

@@ -6,6 +6,7 @@ use std::mem;
 use std::sync::Arc;
 use std::sync::atomic::AtomicU64;
 
+use cas_num::ball::{Ball, ComplexBall};
 use cas_num::{Complex, Integer, Rational};
 use foldhash::fast::{FixedState, FoldHasher};
 
@@ -35,6 +36,10 @@ pub(crate) enum Kind {
     /// Only non-real values: a real value is a rational or integer atom.
     /// Boxed, so that it does not make every node larger.
     Complex(Box<Complex>),
+    /// A real ball (CAS-DOC-5 §9.1), boxed for the same reason.
+    Ball(Box<Ball>),
+    /// A complex ball whose imaginary part is not exactly 0.
+    ComplexBall(Box<ComplexBall>),
     String(Box<str>),
     Apply {
         head: Expr,
@@ -49,6 +54,8 @@ pub(crate) enum Key<'a> {
     Integer(&'a Integer),
     Rational(&'a Rational),
     Complex(&'a Complex),
+    Ball(&'a Ball),
+    ComplexBall(&'a ComplexBall),
     String(&'a str),
     Apply { head: &'a Expr, args: &'a [Expr] },
 }
@@ -63,6 +70,8 @@ pub(crate) mod tag {
     pub(crate) const INTEGER: u8 = 4;
     pub(crate) const RATIONAL: u8 = 5;
     pub(crate) const COMPLEX: u8 = 6;
+    pub(crate) const BALL: u8 = 7;
+    pub(crate) const COMPLEX_BALL: u8 = 8;
 }
 
 /// The structural hasher: fixed seed, no per-process randomness.
@@ -151,6 +160,14 @@ impl Key<'_> {
                 h.write_u8(tag::COMPLEX);
                 z.hash(&mut h);
             }
+            Key::Ball(b) => {
+                h.write_u8(tag::BALL);
+                b.hash(&mut h);
+            }
+            Key::ComplexBall(z) => {
+                h.write_u8(tag::COMPLEX_BALL);
+                z.hash(&mut h);
+            }
             Key::String(s) => {
                 h.write_u8(tag::STRING);
                 h.write_usize(s.len());
@@ -171,7 +188,11 @@ impl Key<'_> {
     #[inline]
     pub(crate) fn meta(self) -> Meta {
         match self {
-            Key::Integer(_) | Key::Rational(_) | Key::Complex(_) => Meta::atom(Flags::NUMERIC, 0),
+            Key::Integer(_)
+            | Key::Rational(_)
+            | Key::Complex(_)
+            | Key::Ball(_)
+            | Key::ComplexBall(_) => Meta::atom(Flags::NUMERIC, 0),
             Key::String(_) => Meta::atom(Flags::NONE, 0),
             Key::Apply { head, args } => {
                 let mut m = head.meta();
@@ -206,6 +227,8 @@ impl Key<'_> {
             (Key::Integer(a), Kind::Integer(b)) => a == b,
             (Key::Rational(a), Kind::Rational(b)) => a == b,
             (Key::Complex(a), Kind::Complex(b)) => *a == **b,
+            (Key::Ball(a), Kind::Ball(b)) => *a == **b,
+            (Key::ComplexBall(a), Kind::ComplexBall(b)) => *a == **b,
             (Key::String(a), Kind::String(b)) => a == &**b,
             (Key::Apply { head, args }, Kind::Apply { head: h, args: a }) => {
                 head == h && args.len() == a.len() && args.iter().zip(a.iter()).all(|(x, y)| x == y)
@@ -220,6 +243,8 @@ impl Key<'_> {
             Key::Integer(n) => Kind::Integer(n.clone()),
             Key::Rational(q) => Kind::Rational(q.clone()),
             Key::Complex(z) => Kind::Complex(Box::new(z.clone())),
+            Key::Ball(b) => Kind::Ball(Box::new(b.clone())),
+            Key::ComplexBall(z) => Kind::ComplexBall(Box::new(z.clone())),
             Key::String(s) => Kind::String(s.into()),
             Key::Apply { head, args } => Kind::Apply {
                 head: head.clone(),

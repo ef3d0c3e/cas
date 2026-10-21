@@ -6,9 +6,10 @@
 use std::fmt;
 use std::str::FromStr;
 
+use cas_num::ball::{Ball, ComplexBall, Float, Mag, Round};
 use cas_num::{Complex, Rational};
 
-use crate::expr::Expr;
+use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 
 /// Why [`Expr::parse_full_form`] cannot read a text.
@@ -36,6 +37,8 @@ pub enum FullFormErrorKind {
     UnterminatedString,
     /// An escape other than `\"`, `\\`, `\n`, `\t`, `\r` and `\u{…}`.
     InvalidEscape,
+    /// A malformed hexadecimal float.
+    HexFloat,
 }
 
 impl fmt::Display for FullFormError {
@@ -50,6 +53,7 @@ impl fmt::Display for FullFormError {
                 f.write_str("string without its closing quote")
             }
             FullFormErrorKind::InvalidEscape => f.write_str("invalid escape"),
+            FullFormErrorKind::HexFloat => f.write_str("invalid hexadecimal float"),
         }
     }
 }
@@ -66,7 +70,13 @@ impl Expr {
     ///   (Unicode identifiers), so `$E`, the language's escaped `E`, reads
     ///   back;
     /// - complex numbers: `Complex[re, im]` with two numbers is the number,
-    ///   never an application, so `Complex[2, 0]` is `2` (CAS-51).
+    ///   never an application, so `Complex[2, 0]` is `2` (CAS-51);
+    /// - hexadecimal floats, `0x1.8p+1`, as exact balls (radius 0), which
+    ///   hold any exponent;
+    /// - balls (CAS-DOC-5 §6.2): `Ball[mid, rad]` with a dyadic midpoint and
+    ///   a radius a `Mag` holds exactly is the ball, as `Expr::full_form`
+    ///   writes it in hexadecimal, and `Complex[re, im]` with a ball for a
+    ///   part the complex ball.
     ///
     /// Whitespace between tokens is ignored. Nothing is evaluated or
     /// normalised: `Plus[1, 2]` stays a sum. Any text that [`Expr::full_form`]
@@ -218,9 +228,15 @@ impl Reader<'_> {
         }
     }
 
-    /// `-?digits(/digits)?`.
+    /// `-?digits(/digits)?`, or a hexadecimal float.
     fn number(&mut self) -> Result<Expr, FullFormError> {
         let start = self.pos;
+        let unsigned = self.text[start..]
+            .strip_prefix('-')
+            .unwrap_or(&self.text[start..]);
+        if unsigned.starts_with("0x") || unsigned.starts_with("0X") {
+            return self.hex_float(start);
+        }
         let digits = |r: &mut Self| {
             let from = r.pos;
             r.pos += r.text[from..]
@@ -250,6 +266,32 @@ impl Reader<'_> {
                 kind: FullFormErrorKind::ZeroDenominator,
             }),
         }
+    }
+
+    /// `-?0x` hex digits with an optional point, then `p` and a signed
+    /// exponent if there is one: the exact ball of the float it spells.
+    fn hex_float(&mut self, start: usize) -> Result<Expr, FullFormError> {
+        let error = FullFormError {
+            position: start,
+            kind: FullFormErrorKind::HexFloat,
+        };
+        let rest = &self.text[start..];
+        let mut len = rest.find(['x', 'X']).expect("a hex prefix") + 1;
+        len += rest[len..]
+            .find(|c: char| !(c.is_ascii_hexdigit() || c == '.'))
+            .unwrap_or(rest.len() - len);
+        if rest[len..].starts_with(['p', 'P']) {
+            len += 1;
+            if rest[len..].starts_with(['+', '-']) {
+                len += 1;
+            }
+            len += rest[len..]
+                .find(|c: char| !c.is_ascii_digit())
+                .unwrap_or(rest.len() - len);
+        }
+        self.pos = start + len;
+        let float = Float::from_hex(&rest[..len]).map_err(|_| error)?;
+        Ok(Ball::exact(float).into())
     }
 
     /// `"…"`, with the escapes the printer writes.
@@ -307,16 +349,63 @@ impl Reader<'_> {
 }
 
 /// `head[args…]`; `Complex[re, im]` of two real numbers is the complex
-/// number.
+/// number, `Ball[mid, rad]` of a dyadic midpoint and a radius that a `Mag`
+/// holds exactly (exact balls or dyadic rationals) the ball, and
+/// `Complex[re, im]` with a ball for a part (the other a ball or dyadic)
+/// the complex ball.
 fn apply(head: &Expr, args: &[Expr]) -> Expr {
-    if head.as_symbol() == Some(Symbol::COMPLEX) {
-        if let [re, im] = args {
+    match (head.as_symbol(), args) {
+        (Some(Symbol::COMPLEX), [re, im]) => {
             if let (Some(re), Some(im)) = (re.to_rational(), im.to_rational()) {
                 return Complex::new(re, im).into();
             }
+            let has_ball = [re, im].iter().any(|p| matches!(p.view(), View::Ball(_)));
+            if let (true, Some(re), Some(im)) = (has_ball, ball_part(re), ball_part(im)) {
+                return ComplexBall::new(re, im).into();
+            }
         }
+        (Some(Symbol::BALL), [mid, rad]) => {
+            if let Some(b) = exact_ball(mid, rad) {
+                return b.into();
+            }
+        }
+        _ => {}
     }
     Expr::apply(head, args)
+}
+
+/// The float of an exact ball or a dyadic rational, exactly.
+fn dyadic(e: &Expr) -> Option<Float> {
+    if let View::Ball(b) = e.view() {
+        return b.is_exact().then(|| b.mid().clone());
+    }
+    let q = e.to_rational()?;
+    if !q.denom().unsigned_abs().is_power_of_two() {
+        return None;
+    }
+    let bits = q.numer().bit_length().max(1);
+    let (float, rounded) = Float::from_rational(&q, bits, Round::Nearest);
+    (rounded == std::cmp::Ordering::Equal).then_some(float)
+}
+
+/// The ball `mid ± rad` when both are exact in a ball: a dyadic midpoint,
+/// and a radius from 0 that a `Mag` holds exactly.
+fn exact_ball(mid: &Expr, rad: &Expr) -> Option<Ball> {
+    let mid = dyadic(mid)?;
+    let rad = dyadic(rad)?;
+    if rad.is_negative() {
+        return None;
+    }
+    let mag = Mag::from_float(&rad);
+    (mag.to_float()? == rad).then(|| Ball::new(mid, mag))
+}
+
+/// A part of a complex ball: a ball, or a dyadic rational as an exact ball.
+fn ball_part(e: &Expr) -> Option<Ball> {
+    match e.view() {
+        View::Ball(b) => Some(b.clone()),
+        _ => dyadic(e).map(Ball::exact),
+    }
 }
 
 /// Whether `c` starts a symbol's name: a letter (Unicode `XID_Start`), `_`
@@ -336,16 +425,14 @@ fn is_name_continue(c: char) -> bool {
 /// real numbers looks like a complex number. For tests.
 #[cfg(test)]
 pub(crate) fn reads_back(e: &Expr) -> bool {
-    use crate::expr::View;
     match e.view() {
         View::Symbol(s) => {
             let mut chars = s.name().chars();
             chars.next().is_some_and(is_name_start) && chars.all(is_name_continue)
         }
         View::Apply { head, args } => {
-            let complex_like = head.as_symbol() == Some(Symbol::COMPLEX)
-                && matches!(args, [re, im] if re.to_rational().is_some() && im.to_rational().is_some());
-            !complex_like && reads_back(head) && args.iter().all(reads_back)
+            let atom_like = !matches!(apply(head, args).view(), View::Apply { .. });
+            !atom_like && reads_back(head) && args.iter().all(reads_back)
         }
         _ => true,
     }

@@ -302,14 +302,16 @@ fn value(result: Result<Expr, crate::EvalError>) -> Value {
     }
 }
 
-/// Whether `v` is a number, `True`, `False`, or a list of such.
+/// Whether `v` is an exact number, `True`, `False`, or a list of such. A
+/// ball is not: two sides may round differently and still overlap, which
+/// CAS-85 compares.
 fn is_exact(v: &Expr) -> bool {
     match v.view() {
         View::Symbol(s) => s == Symbol::TRUE || s == Symbol::FALSE,
         View::Apply { head, args } if head.as_symbol() == Some(Symbol::LIST) => {
             args.iter().all(is_exact)
         }
-        _ => v.is_number(),
+        _ => v.is_exact_number(),
     }
 }
 

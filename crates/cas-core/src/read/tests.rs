@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use cas_num::ball::{Ball, ComplexBall, Float, Mag};
 use cas_num::{Complex, Integer, Rational};
 use proptest::prelude::*;
 
@@ -231,6 +232,23 @@ fn assert_eval_reports_unreadable_text() {
     assert_eval!("f[", "f[]");
 }
 
+/// Balls with midpoints of up to 128 bits and exponents of any size, exact
+/// or with a radius of 1 to 30 bits.
+fn ball() -> impl Strategy<Value = Ball> {
+    (
+        any::<i128>(),
+        prop_oneof![-200i64..200, Just(i64::MAX), Just(-(1i64 << 62))],
+        prop::option::of((1u32..(1 << 30), -300i64..100)),
+    )
+        .prop_map(|(m, e, r)| {
+            let mid = Float::from(Integer::from(m)).mul_2exp(&Integer::from(e));
+            let rad = r.map_or(Mag::ZERO, |(n, k)| {
+                Mag::from_float(&Float::from(i64::from(n)).mul_2exp(&Integer::from(k)))
+            });
+            Ball::new(mid, rad)
+        })
+}
+
 /// Random expressions whose full form reads back: symbols with identifier
 /// names, numbers of every kind, any strings, and applications with any
 /// heads.
@@ -239,7 +257,7 @@ fn expr() -> impl Strategy<Value = Expr> {
         .prop_map(|(n, d)| Rational::new(n.into(), Integer::from(d)));
     let leaf = prop_oneof![
         prop::sample::select(vec![
-            "x", "y", "f", "$E", "x_1", "_t", "θ", "a$b", "Plus", "Sin", "List", "Complex",
+            "x", "y", "f", "$E", "x_1", "_t", "θ", "a$b", "Plus", "Sin", "List", "Complex", "Ball",
         ])
         .prop_map(|n| Expr::from(Symbol::new(n))),
         any::<i64>().prop_map(Expr::from),
@@ -250,6 +268,8 @@ fn expr() -> impl Strategy<Value = Expr> {
         q.clone().prop_map(Expr::from),
         (q.clone(), q.prop_filter("not real", |im| !im.is_zero()))
             .prop_map(|(re, im)| Expr::from(Complex::new(re, im))),
+        ball().prop_map(Expr::from),
+        (ball(), ball()).prop_map(|(re, im)| Expr::from(ComplexBall::new(re, im))),
         any::<String>().prop_map(|s| Expr::string(&s)),
         // Mostly what the printer escapes.
         "[\\x00-\\x1f\\x7f\"\\\\aπ]{0,6}".prop_map(|s| Expr::string(&s)),
@@ -257,7 +277,7 @@ fn expr() -> impl Strategy<Value = Expr> {
     leaf.prop_recursive(4, 64, 5, |inner| {
         prop_oneof![
             (
-                prop::sample::select(vec!["f", "g", "Plus", "Complex", "$F"]),
+                prop::sample::select(vec!["f", "g", "Plus", "Complex", "Ball", "$F"]),
                 prop::collection::vec(inner.clone(), 0..5),
             )
                 .prop_map(|(head, args)| Expr::apply(&Symbol::new(head).into(), &args)),
@@ -325,5 +345,71 @@ proptest! {
             let printed = format!("{e:?}");
             prop_assert!(read(&printed) == e, "{:?} printed as {}", text, printed);
         }
+    }
+}
+
+/// Balls read and print exactly, in hexadecimal (CAS-DOC-5 §6.2).
+#[test]
+fn balls() {
+    let tenth = Ball::from_decimal("0.1", 53).unwrap();
+    let e = Expr::from(tenth.clone());
+    assert_eq!(format!("{e:?}"), "Ball[0x1.999999999999ap-4, 0x1p-57]");
+    assert_eq!(read("Ball[0x1.999999999999ap-4, 0x1p-57]"), e);
+    // Hexadecimal floats are exact balls, of any exponent; a dyadic
+    // midpoint and a radius a `Mag` holds make the ball.
+    let exact =
+        |n: i64, e: i64| Expr::from(Ball::exact(Float::from(n).mul_2exp(&Integer::from(e))));
+    assert_eq!(read("0x1.8p+1"), exact(3, 0));
+    assert_eq!(read("-0x1p-2"), exact(-1, -2));
+    assert_eq!(
+        read("0x1p+100000000000000000000"),
+        Expr::from(Ball::exact(
+            Float::from(1i64).mul_2exp(&Integer::from_str("100000000000000000000").unwrap())
+        ))
+    );
+    assert_eq!(
+        read("Ball[3, 0]"),
+        Expr::from(Ball::from_integer(&Integer::from(3)))
+    );
+    assert_eq!(
+        read("Ball[1/4, 1/1024]").view(),
+        View::Ball(&Ball::new(
+            Float::from(1i64).mul_2exp(&Integer::from(-2)),
+            Mag::power_of_two(&Integer::from(-10))
+        ))
+    );
+    // Otherwise an application, which the builtin evaluates.
+    for text in ["Ball[1/3, 0]", "Ball[1, -1]", "Ball[x, 0]", "Ball[1, 2, 3]"] {
+        assert!(matches!(read(text).view(), View::Apply { .. }), "{text}");
+    }
+    // A radius of more than 30 bits is not a `Mag`'s.
+    let wide = format!("Ball[0, {}]", (1u64 << 31) + 1);
+    assert!(matches!(read(&wide).view(), View::Apply { .. }));
+    // Complex balls, and a complex ball with an exact zero imaginary part.
+    let z = Expr::from(ComplexBall::new(
+        tenth.clone(),
+        Ball::from_integer(&Integer::from(2)),
+    ));
+    assert_eq!(
+        format!("{z:?}"),
+        "Complex[Ball[0x1.999999999999ap-4, 0x1p-57], Ball[0x1p+1, 0x0p+0]]"
+    );
+    assert_eq!(read(&format!("{z:?}")), z);
+    assert_eq!(read("Complex[Ball[0x1.999999999999ap-4, 0x1p-57], 0]"), e);
+    assert_eq!(
+        read("Complex[Ball[0x1p+0, 0x0p+0], 1/2]"),
+        Expr::from(ComplexBall::new(
+            Ball::from_integer(&Integer::from(1)),
+            Ball::exact(Float::from(1i64).mul_2exp(&Integer::from(-1)))
+        ))
+    );
+    let errors = [("0x", 0), ("0xg", 0), ("Ball[0x1p, 0]", 5), ("0x1p+", 0)];
+    for (text, position) in errors {
+        let error = Expr::parse_full_form(text).unwrap_err();
+        assert_eq!(
+            (error.kind, error.position),
+            (K::HexFloat, position),
+            "{text}"
+        );
     }
 }

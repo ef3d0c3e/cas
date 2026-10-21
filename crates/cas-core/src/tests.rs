@@ -16,6 +16,7 @@ use crate::expr::Repr;
 use crate::intern::{self, entries_with_hash};
 use crate::node::Key;
 use crate::{Attributes, Complex, Expr, Integer, Rational, Symbol, View};
+use cas_num::ball::{Ball, ComplexBall, Float, Mag};
 
 fn sym(name: &str) -> Expr {
     Symbol::new(name).into()
@@ -520,6 +521,10 @@ enum Tree {
     Num(Rational),
     /// A complex number with a nonzero imaginary part.
     Cplx(Rational, Rational),
+    /// A real ball (CAS-83).
+    Ball(Ball),
+    /// A complex ball whose imaginary part is not exactly 0.
+    CBall(Ball, Ball),
     Str(String),
     Apply(Box<Tree>, Vec<Tree>),
 }
@@ -542,6 +547,15 @@ fn big_number() -> impl Strategy<Value = Rational> {
     prop_oneof![edge, fraction]
 }
 
+/// Balls of small dyadic midpoints, exact or with a power-of-two radius.
+fn small_ball() -> impl Strategy<Value = Ball> {
+    (-50i64..50, -8i64..8, prop::option::of(-60i64..0)).prop_map(|(n, e, r)| {
+        let mid = Float::from(n).mul_2exp(&Integer::from(e));
+        let rad = r.map_or(Mag::ZERO, |r| Mag::power_of_two(&Integer::from(r)));
+        Ball::new(mid, rad)
+    })
+}
+
 fn tree() -> impl Strategy<Value = Tree> {
     let leaf = prop_oneof![
         (0..SYMS.len()).prop_map(Tree::Sym),
@@ -561,6 +575,10 @@ fn tree() -> impl Strategy<Value = Tree> {
         )
             .prop_map(|(re, im)| Tree::Cplx(re, im)),
         "[ab]{0,2}".prop_map(Tree::Str),
+        small_ball().prop_map(Tree::Ball),
+        (small_ball(), small_ball())
+            .prop_filter("not real", |(_, im)| !(im.is_exact() && im.mid().is_zero()))
+            .prop_map(|(re, im)| Tree::CBall(re, im)),
     ];
     leaf.prop_recursive(4, 32, 4, |inner| {
         (inner.clone(), prop::collection::vec(inner, 0..4))
@@ -574,6 +592,8 @@ fn build(t: &Tree) -> Expr {
         Tree::Int(x) => Expr::from(*x),
         Tree::Num(q) => Expr::from(q),
         Tree::Cplx(re, im) => Expr::from(Complex::new(re.clone(), im.clone())),
+        Tree::Ball(b) => Expr::from(b),
+        Tree::CBall(re, im) => Expr::from(ComplexBall::new(re.clone(), im.clone())),
         Tree::Str(s) => Expr::string(s),
         Tree::Apply(h, a) => Expr::apply(&build(h), &a.iter().map(build).collect::<Vec<_>>()),
     }
@@ -586,6 +606,8 @@ fn unbuild(e: &Expr) -> Tree {
         View::Integer(x) => Tree::Num(Rational::from(x)),
         View::Rational(x) => Tree::Num(x.clone()),
         View::Complex(z) => Tree::Cplx(z.re().clone(), z.im().clone()),
+        View::Ball(b) => Tree::Ball(b.clone()),
+        View::ComplexBall(z) => Tree::CBall(z.re().clone(), z.im().clone()),
         View::String(s) => Tree::Str(s.to_owned()),
         View::Apply { head, args } => {
             Tree::Apply(Box::new(unbuild(head)), args.iter().map(unbuild).collect())
@@ -610,7 +632,7 @@ fn model_depth_size(t: &Tree) -> (u16, u32) {
 
 fn model_numeric(t: &Tree) -> bool {
     match t {
-        Tree::Int(_) | Tree::Num(_) | Tree::Cplx(..) => true,
+        Tree::Int(_) | Tree::Num(_) | Tree::Cplx(..) | Tree::Ball(_) | Tree::CBall(..) => true,
         Tree::Sym(i) => SYMS[*i] == "Pi",
         Tree::Apply(h, a) => {
             matches!(**h, Tree::Sym(i) if ["Plus", "Sin"].contains(&SYMS[i]))

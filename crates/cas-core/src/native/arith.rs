@@ -82,6 +82,13 @@ fn sum(e: &Expr) -> Option<Expr> {
     if let Some(i) = infinity {
         return Some(i.to_expr());
     }
+    // `x - 1.0 x` is `0.0`: a zero coefficient that is a ball keeps the
+    // mark of a ball in the number.
+    for (c, _) in &terms {
+        if c.is_ball() && c.is_zero() {
+            number = number.add(c);
+        }
+    }
     let mut out = Vec::new();
     if !number.is_zero() {
         out.push(number.to_expr());
@@ -95,7 +102,8 @@ fn sum(e: &Expr) -> Option<Expr> {
     changed(
         e,
         match out.len() {
-            0 => Expr::from(0),
+            // 0, or `0.0` from balls.
+            0 => number.to_expr(),
             1 => out.pop().expect("one term"),
             _ => apply(Symbol::PLUS, &out),
         },
@@ -275,7 +283,8 @@ fn product(e: &Expr) -> Result<Option<Expr>, EvalError> {
         return Ok(changed(e, times_infinity(e, i, &coefficient, finite_only)));
     }
     if coefficient.is_zero() && lists.is_empty() {
-        return Ok(changed(e, Expr::from(0)));
+        // 0, or `0.0` for a ball.
+        return Ok(changed(e, coefficient.to_expr()));
     }
     let mut factors = Vec::new();
     for (base, exponents, factor) in powers {
@@ -622,6 +631,11 @@ pub(super) fn abs(ev: &mut Eval<'_>, e: &Expr) -> Native {
                 let half = Expr::from(Rational::new(1.into(), 2.into()));
                 apply(Symbol::POWER, &[Expr::from(z.norm()), half])
             }
+            Num::Ball(b) => Expr::from(b.abs()),
+            Num::ComplexBall(z) => {
+                let bits = Num::ComplexBall(z.clone()).precision();
+                Num::Ball(Box::new(z.abs(bits))).to_expr()
+            }
         }));
     }
     if matches!(
@@ -658,6 +672,14 @@ pub(super) fn abs(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// have more than `max_bits` bits by estimate (`Limits::number_bits`). In
 /// the Real domain, an odd root of a negative is the real root (O7).
 fn number_power(base: &Num, exponent: &Num, real_domain: bool, max_bits: u64) -> Option<Expr> {
+    if base.is_ball() || exponent.is_ball() {
+        return Some(match base.ball_power(exponent, real_domain) {
+            Some(power) => power.to_expr(),
+            // `0.0` to a power that is not positive, as `1/0` and `0^0`.
+            None if exponent.is_negative() => Infinity::Complex.to_expr(),
+            None => Infinity::Indeterminate.to_expr(),
+        });
+    }
     let r = exponent.real()?;
     if base.is_zero() {
         return Some(if r.is_zero() {

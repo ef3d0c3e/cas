@@ -45,7 +45,7 @@ pub struct Context {
 /// The maps are persistent, so a change to a shared state copies O(log n)
 /// of one map, never a whole map: a session that keeps each state it passes
 /// through loads n definitions in O(n log n).
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct State {
     values: SymbolMap<Expr>,
     /// User symbols only; builtin attributes are fixed.
@@ -57,6 +57,26 @@ struct State {
     facts: Arc<Facts>,
     domain: Domain,
     limits: Limits,
+    /// The bits balls are made with and compared at (CAS-DOC-5 §6.4, §9.1).
+    working_precision: u64,
+}
+
+/// The working precision of a new context: 53 bits, a double's.
+pub const DEFAULT_WORKING_PRECISION: u64 = 53;
+
+impl Default for State {
+    fn default() -> State {
+        State {
+            values: SymbolMap::default(),
+            attributes: SymbolMap::default(),
+            rules: Rules::default(),
+            assumptions: Arc::default(),
+            facts: Arc::default(),
+            domain: Domain::default(),
+            limits: Limits::default(),
+            working_precision: DEFAULT_WORKING_PRECISION,
+        }
+    }
 }
 
 /// Identifies one context state. Every new state (a new context, each
@@ -452,6 +472,19 @@ impl Context {
         self.state_mut().domain = domain;
     }
 
+    /// The bits balls are made with, at least 53 when they come out of
+    /// arithmetic (CAS-DOC-5 §9.1), and against which their accuracy is
+    /// judged when they are compared: 53 by default.
+    #[must_use]
+    pub fn working_precision(&self) -> u64 {
+        self.state.working_precision
+    }
+
+    /// Sets the working precision, in bits, at least 2.
+    pub fn set_working_precision(&mut self, bits: u64) {
+        self.state_mut().working_precision = bits.max(2);
+    }
+
     #[must_use]
     pub fn limits(&self) -> Limits {
         self.state.limits
@@ -497,6 +530,7 @@ impl fmt::Debug for Context {
             .field("assumptions", &self.state.assumptions)
             .field("domain", &self.state.domain)
             .field("limits", &self.state.limits)
+            .field("working_precision", &self.state.working_precision)
             .field(
                 "interrupted",
                 &self.interrupt.as_ref().map(Interrupt::is_interrupted),

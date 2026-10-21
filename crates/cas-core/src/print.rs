@@ -5,6 +5,8 @@
 
 use std::fmt::{self, Write as _};
 
+use cas_num::ball::{Ball, ComplexBall, DecimalStyle};
+
 use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 
@@ -50,6 +52,15 @@ impl fmt::Display for FullForm<'_> {
                         stack.extend([Piece::Text("["), Piece::Expr(head)]);
                     }
                     View::Complex(z) => write!(f, "Complex[{}, {}]", z.re(), z.im())?,
+                    // Exact: hexadecimal floats (CAS-DOC-5 §6.2).
+                    View::Ball(b) => full_form_ball(b, f)?,
+                    View::ComplexBall(z) => {
+                        f.write_str("Complex[")?;
+                        full_form_ball(z.re(), f)?;
+                        f.write_str(", ")?;
+                        full_form_ball(z.im(), f)?;
+                        f.write_str("]")?;
+                    }
                     _ => atom(e, f)?,
                 },
             }
@@ -63,6 +74,93 @@ enum Piece<'a> {
     Expr(&'a Expr),
 }
 
+/// `Ball[mid, rad]` with both in hexadecimal, as the reader reads them back.
+fn full_form_ball(b: &Ball, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "Ball[{}, {}]", b.mid().to_hex(), b.rad().to_hex())
+}
+
+/// The precision balls print at without a context: 53 bits, the default
+/// working precision.
+const DISPLAY_PRECISION: u64 = 53;
+
+/// A ball in decimal (CAS-DOC-5 §6.1, revised 2026-10-20). Known are the
+/// digits correct to ±1 in the last place, at most those of the larger of
+/// `prec` and the ball's accuracy, in bits. It shows the shortest decimal
+/// inside it when that has no more digits than are known, and the known
+/// digits otherwise: `0.1 + 0.2` shows as `0.3` and `1/3.0` as
+/// `0.333333333333333`. Always with a point: `2.0`.
+///
+/// ```
+/// use cas_core::ball_decimal;
+/// use cas_num::ball::Ball;
+///
+/// let tenth = Ball::from_decimal("0.1", 53).unwrap();
+/// assert_eq!(ball_decimal(&tenth, 53), "0.1");
+/// let third = Ball::from_decimal("0.3", 53).unwrap();
+/// let sum = tenth.add(&Ball::from_decimal("0.2", 53).unwrap(), 69).round_to_accuracy(53);
+/// assert_eq!(ball_decimal(&sum, 53), "0.3");
+/// assert!(sum.overlaps(&third));
+/// ```
+#[must_use]
+pub fn ball_decimal(b: &Ball, prec: u64) -> String {
+    let accuracy = u64::try_from(b.rel_accuracy_bits()).unwrap_or(0);
+    let bits = if b.is_exact() {
+        prec
+    } else {
+        prec.max(accuracy)
+    };
+    let digits = (bits.saturating_mul(30_103) / 100_000).max(1);
+    let known = b.to_decimal(digits, DecimalStyle::Digits);
+    let count = significant_digits(&known);
+    if count > 0 {
+        if let Some(shortest) = b.to_shortest_decimal(count) {
+            return shortest;
+        }
+    }
+    with_point(known)
+}
+
+/// The significant digits of a decimal `to_decimal` printed: leading zeros
+/// aside, trailing ones counted; 0 for `[± R]`.
+fn significant_digits(s: &str) -> u64 {
+    if s.starts_with('[') {
+        return 0;
+    }
+    let mantissa = s.split(['e', 'E']).next().unwrap_or(s);
+    let digits: String = mantissa.chars().filter(char::is_ascii_digit).collect();
+    u64::try_from(digits.trim_start_matches('0').len()).unwrap_or(u64::MAX)
+}
+
+/// A decimal with a point in its mantissa: `2` is `2.0`, `1e+20` is
+/// `1.0e+20`.
+fn with_point(s: String) -> String {
+    if s.starts_with('[') {
+        return s;
+    }
+    let (mantissa, exponent) = match s.find(['e', 'E']) {
+        Some(i) => s.split_at(i),
+        None => (s.as_str(), ""),
+    };
+    if mantissa.contains('.') {
+        return s;
+    }
+    format!("{mantissa}.0{exponent}")
+}
+
+/// A complex ball as `re + im*I`, its parts as [`ball_decimal`] writes
+/// them, the real part left out when it is exactly 0.
+fn complex_ball_decimal(z: &ComplexBall, prec: u64) -> String {
+    let im = ball_decimal(z.im(), prec);
+    if z.re().is_exact() && z.re().mid().is_zero() {
+        return format!("{im}*I");
+    }
+    let re = ball_decimal(z.re(), prec);
+    match im.strip_prefix('-') {
+        Some(magnitude) => format!("{re} - {magnitude}*I"),
+        None => format!("{re} + {im}*I"),
+    }
+}
+
 /// Symbols by name, numbers in decimal (`-3/2` for a rational, `1 - 3/4*I`
 /// for a complex number), strings quoted and escaped.
 fn atom(e: &Expr, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -72,6 +170,8 @@ fn atom(e: &Expr, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         View::Integer(x) => write!(f, "{x}"),
         View::Rational(x) => write!(f, "{x}"),
         View::Complex(z) => write!(f, "{z}"),
+        View::Ball(b) => f.write_str(&ball_decimal(b, DISPLAY_PRECISION)),
+        View::ComplexBall(z) => f.write_str(&complex_ball_decimal(z, DISPLAY_PRECISION)),
         View::String(s) => string(s, f),
         View::Apply { .. } => unreachable!("not an atom"),
     }
@@ -151,6 +251,10 @@ impl fmt::Display for Expr {
                     View::Rational(q) => write!(f, "{}", q.abs())?,
                     // Only a negative imaginary number has a sign to drop.
                     View::Complex(z) => write!(f, "{}", -z)?,
+                    View::Ball(b) => f.write_str(&ball_decimal(&b.neg(), DISPLAY_PRECISION))?,
+                    View::ComplexBall(z) => {
+                        f.write_str(&complex_ball_decimal(&z.neg(), DISPLAY_PRECISION))?;
+                    }
                     _ => unreachable!("only numbers have a magnitude"),
                 },
                 Task::Expr { e, min, no_minus } => {
@@ -232,7 +336,12 @@ enum Form<'a> {
 
 fn form(e: &Expr) -> Form<'_> {
     match e.view() {
-        View::Int(_) | View::Integer(_) | View::Rational(_) | View::Complex(_) => Form::Number,
+        View::Int(_)
+        | View::Integer(_)
+        | View::Rational(_)
+        | View::Complex(_)
+        | View::Ball(_)
+        | View::ComplexBall(_) => Form::Number,
         View::Apply { head, args } => match (head.as_symbol(), args) {
             (Some(Symbol::PLUS), [_, _, ..]) => Form::Plus(args),
             (Some(Symbol::TIMES), [_, _, ..]) => Form::Times(args),
@@ -261,6 +370,8 @@ fn number_prec(e: &Expr) -> Prec {
         View::Rational(_) => Prec::Product,
         View::Complex(z) if !z.re().is_zero() => Prec::Sum,
         View::Complex(z) if !z.im().abs().is_one() => Prec::Product,
+        View::ComplexBall(z) if z.re().is_exact() && z.re().mid().is_zero() => Prec::Product,
+        View::ComplexBall(_) => Prec::Sum,
         _ => Prec::Atom,
     }
 }
@@ -290,6 +401,12 @@ fn is_negative(e: &Expr) -> bool {
         View::Integer(n) => n.is_negative(),
         View::Rational(q) => q.is_negative(),
         View::Complex(z) => z.re().is_zero() && z.im().is_negative(),
+        View::Ball(b) => ball_decimal(b, DISPLAY_PRECISION).starts_with('-'),
+        View::ComplexBall(z) => {
+            z.re().is_exact()
+                && z.re().mid().is_zero()
+                && ball_decimal(z.im(), DISPLAY_PRECISION).starts_with('-')
+        }
         _ => false,
     }
 }

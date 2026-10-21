@@ -3,6 +3,7 @@
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
+use cas_num::ball::{Ball, ComplexBall};
 use cas_num::{Complex, Integer, Rational};
 
 use crate::intern;
@@ -63,6 +64,10 @@ pub enum View<'a> {
     Rational(&'a Rational),
     /// A complex number that is not real (CAS-51).
     Complex(&'a Complex),
+    /// A real ball, an inexact number (CAS-DOC-5 §9.1).
+    Ball(&'a Ball),
+    /// A complex ball whose imaginary part is not exactly 0.
+    ComplexBall(&'a ComplexBall),
     String(&'a str),
     /// `head[args…]`; the head is any expression.
     Apply {
@@ -93,6 +98,8 @@ impl Expr {
                 Kind::Integer(x) => View::Integer(x),
                 Kind::Rational(x) => View::Rational(x),
                 Kind::Complex(z) => View::Complex(z),
+                Kind::Ball(b) => View::Ball(b),
+                Kind::ComplexBall(z) => View::ComplexBall(z),
                 Kind::String(s) => View::String(s),
                 Kind::Apply { head, args } => View::Apply { head, args },
             },
@@ -191,10 +198,25 @@ impl Expr {
         }
     }
 
-    /// Whether this is a number atom: an integer, a rational or a complex
-    /// number. Unlike [`Expr::is_numeric`], `Pi`, `I` and `Sin[1]` are not.
+    /// Whether this is a number atom: an integer, a rational, a complex
+    /// number, or a ball, real or complex. Unlike [`Expr::is_numeric`],
+    /// `Pi`, `I` and `Sin[1]` are not.
     #[must_use]
     pub fn is_number(&self) -> bool {
+        matches!(
+            self.view(),
+            View::Int(_)
+                | View::Integer(_)
+                | View::Rational(_)
+                | View::Complex(_)
+                | View::Ball(_)
+                | View::ComplexBall(_)
+        )
+    }
+
+    /// Whether this is an exact number: a number atom other than a ball.
+    #[must_use]
+    pub fn is_exact_number(&self) -> bool {
         matches!(
             self.view(),
             View::Int(_) | View::Integer(_) | View::Rational(_) | View::Complex(_)
@@ -341,6 +363,37 @@ impl From<&Complex> for Expr {
             Expr::from(z.re())
         } else {
             Expr(Repr::Node(intern::intern(Key::Complex(z))))
+        }
+    }
+}
+
+impl From<Ball> for Expr {
+    /// The ball atom. Natives keep balls that are not finite out of
+    /// expressions: they give `Indeterminate` instead.
+    fn from(b: Ball) -> Expr {
+        Expr::from(&b)
+    }
+}
+
+impl From<&Ball> for Expr {
+    fn from(b: &Ball) -> Expr {
+        Expr(Repr::Node(intern::intern(Key::Ball(b))))
+    }
+}
+
+impl From<ComplexBall> for Expr {
+    /// A real ball atom if the imaginary part is exactly 0.
+    fn from(z: ComplexBall) -> Expr {
+        Expr::from(&z)
+    }
+}
+
+impl From<&ComplexBall> for Expr {
+    fn from(z: &ComplexBall) -> Expr {
+        if z.is_real() {
+            Expr::from(z.re())
+        } else {
+            Expr(Repr::Node(intern::intern(Key::ComplexBall(z))))
         }
     }
 }

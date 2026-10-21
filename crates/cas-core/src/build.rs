@@ -129,6 +129,9 @@ fn negate(e: Expr) -> Expr {
         View::Integer(n) => Expr::from(-n),
         View::Rational(q) => Expr::from(-q),
         View::Complex(z) => Expr::from(-z),
+        // Exact for balls too.
+        View::Ball(b) => Expr::from(b.neg()),
+        View::ComplexBall(z) => Expr::from(z.neg()),
         _ => times((-1).into(), e),
     }
 }

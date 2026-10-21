@@ -4,6 +4,8 @@ use std::cmp::Ordering;
 
 use proptest::prelude::*;
 
+use cas_num::ball::{Ball, ComplexBall, Float, Mag};
+
 use crate::{Complex, Expr, Integer, Rational, Symbol};
 
 fn sym(name: &str) -> Expr {
@@ -224,6 +226,18 @@ fn independent_of_creation_order() {
     assert!(apply(&alpha, &[]) < apply(&zeta, &[]));
 }
 
+/// Balls of small dyadic midpoints, so that they meet the exact numbers
+/// above, exact or with a radius.
+fn small_ball() -> impl Strategy<Value = Ball> {
+    (-12i64..12, 0i64..3, prop::option::of(-4i64..0)).prop_map(|(n, e, r)| {
+        let mid = Float::from(n).mul_2exp(&Integer::from(-e));
+        Ball::new(
+            mid,
+            r.map_or(Mag::ZERO, |r| Mag::power_of_two(&Integer::from(r))),
+        )
+    })
+}
+
 /// A tree over a few names, biased towards `Times` and `Power`.
 fn tree() -> impl Strategy<Value = Expr> {
     let leaf = prop_oneof![
@@ -233,6 +247,8 @@ fn tree() -> impl Strategy<Value = Expr> {
         prop::sample::select(vec![-(1i128 << 64), 1 << 63, 3 << 70]).prop_map(big),
         (-2i64..3, prop_oneof![-2i64..0, 1i64..3]).prop_map(|(re, im)| cplx(re, im)),
         prop::sample::select(vec!["", "a", "B"]).prop_map(Expr::string),
+        small_ball().prop_map(Expr::from),
+        (small_ball(), small_ball()).prop_map(|(re, im)| Expr::from(ComplexBall::new(re, im))),
     ];
     leaf.prop_recursive(4, 24, 3, |inner| {
         let head = prop_oneof![
@@ -283,6 +299,19 @@ proptest! {
         let (tc, td) = (times(&[q(c.0, c.1), m.clone()]), times(&[q(d.0, d.1), m.clone()]));
         let value = |(n, d): (i64, i64)| Rational::new(n.into(), d.into());
         prop_assert_eq!(tc.cmp(&td), value(c).cmp(&value(d)));
+    }
+
+    /// A ball sorts by its midpoint among exact numbers, after an exact
+    /// number of that value, and balls of one midpoint by radius
+    /// (CAS-DOC-5 §9.1).
+    #[test]
+    fn balls_sort_by_midpoint(b in small_ball(), c in small_ball(), n in -12i64..12, d in 1i64..5) {
+        let x = Rational::new(n.into(), d.into());
+        let mid = b.mid().to_rational();
+        let expected = mid.cmp(&x).then(Ordering::Greater);
+        prop_assert_eq!(Expr::from(b.clone()).cmp(&Expr::from(&x)), expected);
+        let expected = b.mid().cmp(c.mid()).then_with(|| b.rad().cmp(c.rad()));
+        prop_assert_eq!(Expr::from(b).cmp(&Expr::from(c)), expected);
     }
 
     /// Numbers compare by value, whatever their kind.

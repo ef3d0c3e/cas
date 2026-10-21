@@ -72,6 +72,9 @@ builtins! {
     I = "I" [CONSTANT, PROTECTED];
     // Numbers: the head of a complex number in full form, `Complex[re, im]`.
     COMPLEX = "Complex" [PROTECTED];
+    // A ball `Ball[c, r]` (CAS-DOC-5 §6.5), also the head of a ball in full
+    // form. It threads over lists itself, a scalar radius spread over them.
+    BALL = "Ball" [PROTECTED];
     // Logical values, infinities and nothing (CAS-DOC-4 §6.1, R14).
     TRUE = "True" [PROTECTED];
     FALSE = "False" [PROTECTED];

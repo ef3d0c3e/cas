@@ -2,6 +2,7 @@
 
 use std::cmp::Ordering;
 
+use cas_num::ball::{Ball, Float};
 use cas_num::{Integer, Rational};
 
 use crate::expr::{Expr, Repr, View};
@@ -89,18 +90,25 @@ fn is_number(e: &Expr) -> bool {
 }
 
 /// Real numbers by value, then complex numbers by real part and imaginary
-/// part; only rationals need a `Rational` comparison.
+/// part; only rationals need a `Rational` comparison. A ball sorts by its
+/// midpoint (CAS-DOC-5 §9.1), after an exact number of the same value, then
+/// by radius; a complex ball part by part.
 fn cmp_numbers(a: &Expr, b: &Expr) -> Ordering {
     let integer = |v: View<'_>| match v {
         View::Int(x) => Some(Integer::from(x)),
         View::Integer(x) => Some(x.clone()),
         _ => None,
     };
+    let complex = |v: View<'_>| matches!(v, View::Complex(_) | View::ComplexBall(_));
     match (a.view(), b.view()) {
         (View::Int(l), View::Int(r)) => l.cmp(&r),
-        (View::Complex(l), View::Complex(r)) => l.re().cmp(r.re()).then_with(|| l.im().cmp(r.im())),
-        (View::Complex(_), _) => Ordering::Greater,
-        (_, View::Complex(_)) => Ordering::Less,
+        (l, r) if complex(l) && complex(r) => {
+            let ((lre, lim), (rre, rim)) = (parts(l), parts(r));
+            cmp_reals(&lre, &rre).then_with(|| cmp_reals(&lim, &rim))
+        }
+        (l, _) if complex(l) => Ordering::Greater,
+        (_, r) if complex(r) => Ordering::Less,
+        (View::Ball(_), _) | (_, View::Ball(_)) => cmp_reals(&real(a.view()), &real(b.view())),
         (l, r) => match (integer(l), integer(r)) {
             (Some(l), Some(r)) => l.cmp(&r),
             _ => rational(a).cmp(&rational(b)),
@@ -110,6 +118,62 @@ fn cmp_numbers(a: &Expr, b: &Expr) -> Ordering {
 
 fn rational(e: &Expr) -> Rational {
     e.to_rational().expect("a number")
+}
+
+/// A real number as the order sees it: an exact value, or a ball.
+enum Real<'a> {
+    Exact(Rational),
+    Ball(&'a Ball),
+}
+
+fn real(v: View<'_>) -> Real<'_> {
+    match v {
+        View::Ball(b) => Real::Ball(b),
+        View::Int(x) => Real::Exact(Rational::from(x)),
+        View::Integer(x) => Real::Exact(Rational::from(x.clone())),
+        View::Rational(q) => Real::Exact(q.clone()),
+        _ => unreachable!("a real number"),
+    }
+}
+
+/// The real and imaginary parts of a complex number or ball.
+fn parts(v: View<'_>) -> (Real<'_>, Real<'_>) {
+    match v {
+        View::Complex(z) => (Real::Exact(z.re().clone()), Real::Exact(z.im().clone())),
+        View::ComplexBall(z) => (Real::Ball(z.re()), Real::Ball(z.im())),
+        _ => unreachable!("a complex number"),
+    }
+}
+
+/// By value, a ball by midpoint; an exact value before a ball of that
+/// midpoint, and balls of one midpoint by radius.
+fn cmp_reals(a: &Real<'_>, b: &Real<'_>) -> Ordering {
+    match (a, b) {
+        (Real::Exact(x), Real::Exact(y)) => x.cmp(y),
+        (Real::Exact(x), Real::Ball(b)) => cmp_exact(x, b.mid()).then(Ordering::Less),
+        (Real::Ball(a), Real::Exact(y)) => cmp_exact(y, a.mid()).reverse().then(Ordering::Greater),
+        (Real::Ball(a), Real::Ball(b)) => a.mid().cmp(b.mid()).then_with(|| a.rad().cmp(b.rad())),
+    }
+}
+
+/// `q` against the float `m`, exactly. A float too large or small for an
+/// exact rational is beyond every rational there is memory for, so its sign
+/// and exponent decide.
+fn cmp_exact(q: &Rational, m: &Float) -> Ordering {
+    if let Some(m) = m.checked_to_rational() {
+        return q.cmp(&m);
+    }
+    let huge = !m.exponent().is_negative();
+    match (m.is_negative(), huge) {
+        (false, true) => Ordering::Less,
+        (true, true) => Ordering::Greater,
+        // |m| is below every nonzero |q|.
+        (_, false) => q.cmp(&Rational::from(0)).then(if m.is_negative() {
+            Ordering::Greater
+        } else {
+            Ordering::Less
+        }),
+    }
 }
 
 /// `Times[…]`, or `Power[b, n]`.
@@ -188,7 +252,12 @@ fn structural(a: &Expr, b: &Expr) -> Ordering {
 
 fn rank(v: View<'_>) -> u8 {
     match v {
-        View::Int(_) | View::Integer(_) | View::Rational(_) | View::Complex(_) => 0,
+        View::Int(_)
+        | View::Integer(_)
+        | View::Rational(_)
+        | View::Complex(_)
+        | View::Ball(_)
+        | View::ComplexBall(_) => 0,
         View::String(_) => 1,
         View::Symbol(_) => 2,
         View::Apply { .. } => 3,

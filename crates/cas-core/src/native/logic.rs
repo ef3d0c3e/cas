@@ -2,7 +2,8 @@
 //! §7).
 //!
 //! Comparisons decide on numbers, on the infinities `Infinity` and
-//! `-Infinity`, and on expressions that are structurally equal; otherwise
+//! `-Infinity`, and on expressions that are structurally equal; on balls as
+//! [`ball_relation`] says; otherwise
 //! the assumptions and the number domain decide them when they can (`assume`,
 //! CAS-58), and they stay unevaluated when not. So do `Positive`,
 //! `Negative`, `NonNegative`, `NonPositive` and `Element`. The type tests
@@ -12,12 +13,13 @@
 use std::cmp::Ordering;
 
 use cas_num::Rational;
+use cas_num::ball::{Ball, ComplexBall};
 
 use super::number::{Infinity, Num};
 use crate::assume::{self, Set, Truth};
 use crate::context::EvalError;
 use crate::eval::Eval;
-use crate::expr::Expr;
+use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 
 type Native = Result<Option<Expr>, EvalError>;
@@ -34,12 +36,105 @@ fn truth(e: &Expr) -> Option<bool> {
     }
 }
 
+/// How two numbers stand when one is a ball (CAS-DOC-5 §9.1, revised
+/// 2026-10-20, D3).
+enum Relation {
+    /// They overlap, and both are accurate to within [`SLACK`] bits of the
+    /// working precision: equal, as in Xcas and Mathematica.
+    Equal,
+    /// They are disjoint, ordered when both are real.
+    Apart(Option<Ordering>),
+    /// They overlap, and one has lost accuracy: the honest "don't know".
+    Unknown,
+}
+
+/// The bits below the working precision that an accurate ball may lack:
+/// Mathematica ignores the last 7 for `Equal`.
+const SLACK: i64 = 8;
+
+/// Whether a ball knows its value to within [`SLACK`] bits of `prec`.
+fn accurate(b: &Ball, prec: u64) -> bool {
+    b.is_exact() || b.rel_accuracy_bits() >= i64::try_from(prec).unwrap_or(i64::MAX) - SLACK
+}
+
+/// The relation of overlapping or disjoint values: `Equal` when they
+/// overlap and both are accurate.
+fn relation(overlap: bool, accurate: bool, order: Option<Ordering>) -> Relation {
+    if !overlap {
+        Relation::Apart(order)
+    } else if accurate {
+        Relation::Equal
+    } else {
+        Relation::Unknown
+    }
+}
+
+/// [`Relation`] of `a` and `b` if one is a ball and the other a number;
+/// `prec` is the working precision.
+fn ball_relation(a: &Expr, b: &Expr, prec: u64) -> Option<Relation> {
+    // Most comparisons have no ball: no values to make for them.
+    let ball = |e: &Expr| matches!(e.view(), View::Ball(_) | View::ComplexBall(_));
+    if !ball(a) && !ball(b) {
+        return None;
+    }
+    let (left, right) = (Num::of(a)?, Num::of(b)?);
+    let close = |q: &Rational| Ball::from_rational(q, prec + 64);
+    Some(match (&left, &right) {
+        (Num::Ball(x), Num::Ball(y)) => relation(
+            x.overlaps(y),
+            accurate(x, prec) && accurate(y, prec),
+            x.cmp(y),
+        ),
+        (Num::Ball(x), Num::Real(q)) => {
+            relation(x.contains_rational(q), accurate(x, prec), x.cmp(&close(q)))
+        }
+        (Num::Real(q), Num::Ball(y)) => {
+            relation(y.contains_rational(q), accurate(y, prec), close(q).cmp(y))
+        }
+        _ => complex_relation(&left, &right, prec),
+    })
+}
+
+/// [`ball_relation`] with a complex value: equal only part by part, never
+/// ordered.
+fn complex_relation(left: &Num, right: &Num, prec: u64) -> Relation {
+    // Each side as a complex ball, and whether it is accurate.
+    let side = |n: &Num| -> (ComplexBall, bool) {
+        match n {
+            Num::ComplexBall(z) => (
+                ComplexBall::clone(z),
+                accurate(z.re(), prec) && accurate(z.im(), prec),
+            ),
+            Num::Ball(x) => (ComplexBall::from_real(Ball::clone(x)), accurate(x, prec)),
+            Num::Complex(z) => (ComplexBall::from_complex(z, prec + 64), true),
+            Num::Real(q) => (
+                ComplexBall::from_real(Ball::from_rational(q, prec + 64)),
+                true,
+            ),
+        }
+    };
+    let ((l, l_accurate), (r, r_accurate)) = (side(left), side(right));
+    let overlap = match (left, right) {
+        (Num::Complex(z), _) => r.contains_complex(z),
+        (_, Num::Complex(z)) => l.contains_complex(z),
+        _ => l.overlaps(&r),
+    };
+    relation(overlap, l_accurate && r_accurate, None)
+}
+
 /// Whether `a` and `b` are equal, when it can be told: structurally equal
 /// expressions are; numbers, strings, booleans and infinities that differ are
-/// not.
-fn equal(a: &Expr, b: &Expr) -> Option<bool> {
+/// not; balls as [`ball_relation`] says, at the working precision `prec`.
+fn equal(a: &Expr, b: &Expr, prec: u64) -> Option<bool> {
     if a == b {
         return Some(true);
+    }
+    if let Some(relation) = ball_relation(a, b, prec) {
+        return match relation {
+            Relation::Equal => Some(true),
+            Relation::Apart(_) => Some(false),
+            Relation::Unknown => None,
+        };
     }
     let known = |e: &Expr| {
         e.is_number()
@@ -99,23 +194,35 @@ fn chain(ev: &mut Eval<'_>, e: &Expr, test: impl Fn(&Expr, &Expr) -> Option<bool
 }
 
 pub(super) fn equal_native(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    chain(ev, e, equal)
+    let prec = ev.context().working_precision();
+    chain(ev, e, |a, b| equal(a, b, prec))
 }
 
 pub(super) fn unequal(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [a, b] = e.args() else {
         return Ok(None);
     };
-    match equal(a, b) {
+    match equal(a, b, ev.context().working_precision()) {
         Some(eq) => Ok(Some(boolean(!eq))),
         None => Ok(decided(assume::relation(ev, Symbol::UNEQUAL, a, b)?).map(boolean)),
     }
 }
 
 /// `Less`, `LessEqual`, `Greater` or `GreaterEqual`, by the orderings they
-/// accept.
+/// accept; balls agree with `Equal` (D3): accurate overlapping balls are
+/// equal, disjoint ones ordered, the others undecided.
 fn order(ev: &mut Eval<'_>, e: &Expr, accept: fn(Ordering) -> bool) -> Native {
-    chain(ev, e, |a, b| Some(accept(extended(a)?.cmp(&extended(b)?))))
+    let prec = ev.context().working_precision();
+    chain(ev, e, |a, b| {
+        if let Some(relation) = ball_relation(a, b, prec) {
+            return match relation {
+                Relation::Equal => Some(accept(Ordering::Equal)),
+                Relation::Apart(Some(o)) => Some(accept(o)),
+                Relation::Apart(None) | Relation::Unknown => None,
+            };
+        }
+        Some(accept(extended(a)?.cmp(&extended(b)?)))
+    })
 }
 
 pub(super) fn less(ev: &mut Eval<'_>, e: &Expr) -> Native {
@@ -143,7 +250,7 @@ pub(super) fn sign_predicate(ev: &mut Eval<'_>, e: &Expr) -> Native {
     };
     let head = e.head().and_then(Expr::as_symbol).expect("a predicate");
     let sign = assume::sign_of(ev.context(), x);
-    Ok(decided(assume::sign_test(head, sign, x.is_number())).map(boolean))
+    Ok(decided(assume::sign_test(head, sign, x.is_exact_number())).map(boolean))
 }
 
 /// `Element[x, s]` for the number sets `Integers`, `Rationals`, `Reals` and

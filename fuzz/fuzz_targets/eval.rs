@@ -34,7 +34,7 @@ const ATOMS: [&str; 11] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 33] = [
+const BUILTINS: [&str; 34] = [
     "Plus",
     "Times",
     "Power",
@@ -69,6 +69,8 @@ const BUILTINS: [&str; 33] = [
     "Equation",
     "ElementwiseDivide",
     "ElementwisePower",
+    // Balls (CAS-83).
+    "Ball",
 ];
 
 /// Builtins that apply something to parts, only in the expression
@@ -96,8 +98,19 @@ fn apply(head: &str, args: &[Expr]) -> Expr {
 fn leaf(u: &mut Unstructured<'_>, room: &mut Room) -> Result<Expr> {
     Ok(match u.int_in_range(0u8..=9)? {
         0..=3 => Expr::from(i64::from(u.int_in_range(-3i8..=9)?)),
-        4 => Expr::parse_full_form(*u.choose(&["1/2", "-3/4", "Complex[1, 2]", "2/3"])?)
-            .expect("a number"),
+        4 => Expr::parse_full_form(*u.choose(&[
+            "1/2",
+            "-3/4",
+            "Complex[1, 2]",
+            "2/3",
+            // Balls (CAS-83): 0.1 at 53 bits, an exact 2.0, an inexact
+            // ball around 0, a complex ball.
+            "Ball[0x1.999999999999ap-4, 0x1p-57]",
+            "Ball[0x1p+1, 0x0p+0]",
+            "Ball[0x0p+0, 0x1p-50]",
+            "Complex[Ball[0x1p-1, 0x1p-60], Ball[0x1p+0, 0x0p+0]]",
+        ])?)
+        .expect("a number"),
         5 if room.variables => {
             let i = u.choose_index(VARIABLES.len())?;
             match &mut room.used {

@@ -157,6 +157,37 @@ zeros.
 
 **Proof.** The doc comments of `digits` and `distance`.
 
+**Shortest decimal (CAS-83, ours).** `Ball::to_shortest_decimal(max)` gives
+the decimal with the fewest significant digits inside the ball, if it has at
+most `max` of them. The CAS shows it when it has no more digits than the
+Arb-style digits above (CAS-DOC-5 §6.1, revised 2026-10-20). So `0.1` read
+at 53 bits shows as `0.1`, and the sum of the balls of `0.1` and `0.2` as
+`0.3`.
+1. The ends `m - r` and `m + r` are exact rationals. `e10 = floor(log10 |m|)`
+   is computed exactly: an estimate from the bit lengths, corrected against
+   powers of 10.
+2. A decimal of `k` significant digits is inside when some integer `n` lies
+   in `[ceil((m - r) 10^s), floor((m + r) 10^s)]`, with `s = k - 1 - e10`.
+   That is monotone in `k`, since a decimal of `k` digits is one of `k + 1`
+   with a trailing zero. So a binary search over `k` in `1..=max` finds the
+   fewest, with `O(log max)` scalings of the ends.
+3. Of the integers in that range, the one nearest `m 10^s` (ties to even) is
+   the result. It always prints with a point (`2.0`, `1.0e-30`), so that it
+   reads back as a decimal.
+
+It is the interval form of shortest round-trip printing, where the interval
+is the ball itself rather than a float's rounding interval.
+
+**Tests.** `ball/decimal/tests.rs`:
+- the result lies in the ball; neither of its neighbours on the grid one
+  digit coarser does, and a farther shorter decimal would put one of them in
+  the ball;
+- a decimal read at 53 bits shows with no more digits than it was typed
+  with;
+- tables: `0.1`, `0.1 + 0.2`, exact integers, `1/3` (too long for 15 digits),
+  scientific forms, a ball around 0, a ball reaching the next power of 10,
+  and a tie.
+
 ### Parsing
 
 `Ball::from_decimal`. It accepts `[+-]digits[.digits][(e|E)[+-]digits]` and

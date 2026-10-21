@@ -54,6 +54,8 @@ EvenQ: even
 OddQ: odd
 # Calculus (CAS-DOC-4 §8, CAS-59).
 D: diff
+# A ball, `ball(c, r)` (CAS-DOC-5 §6.5, CAS-83).
+Ball: ball
 
 [planned]
 # Calculus, algebra and numerics (CAS-DOC-1, CAS-DOC-4 §1 and §8, CAS-DOC-5).
@@ -63,7 +65,6 @@ Expand: expand
 Factor: factor
 Simplify: simplify
 N: evalf approx
-Ball: ball
 
 [constants]
 imaginary: i

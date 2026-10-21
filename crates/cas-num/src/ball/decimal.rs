@@ -26,7 +26,7 @@ use std::fmt;
 
 use super::{Ball, Float, Mag, Round};
 use crate::error::{ParseErrorKind, ParseNumberError};
-use crate::{Integer, Natural};
+use crate::{Integer, Natural, Rational};
 
 #[cfg(test)]
 mod tests;
@@ -174,6 +174,58 @@ fn format(neg: bool, mut ds: String, e10: i64, exact: bool, n: u64) -> String {
     format!("{sign}{first}{dot}{rest}e{esign}{}", e10.unsigned_abs())
 }
 
+/// `floor(log10 q)` for a positive `q`, exactly: an estimate from the bit
+/// lengths, then corrected against powers of 10.
+fn floor_log10(q: &Rational) -> i64 {
+    let bits = i128::from(q.numer().bit_length()) - i128::from(q.denom().bit_length());
+    let mut e = i64::try_from((bits * LOG10_2_FIXED) >> 64).unwrap_or(0);
+    while scaled(q, -e) < Rational::from(1) {
+        e -= 1;
+    }
+    while scaled(q, -e - 1) >= Rational::from(1) {
+        e += 1;
+    }
+    e
+}
+
+/// `q · 10^s`.
+fn scaled(q: &Rational, s: i64) -> Rational {
+    let p = Rational::from(pow10(s.unsigned_abs()));
+    if s >= 0 { q * &p } else { q / &p }
+}
+
+/// `n · 10^-s` in decimal, always with a point: fixed notation from
+/// `1e-4` to `width` digits before the point, scientific otherwise.
+fn format_point(n: &Integer, mut s: i64, width: u64) -> String {
+    let ten = Integer::from(10u64);
+    let mut n = n.clone();
+    while !n.is_zero() && n.is_divisible_by(&ten) {
+        n = n.div_exact(&ten);
+        s -= 1;
+    }
+    let sign = if n.is_negative() { "-" } else { "" };
+    let ds = n.unsigned_abs().to_string();
+    let len = i64::try_from(ds.len()).expect("fits");
+    // The decimal exponent of the first digit.
+    let e10 = len - 1 - s;
+    let width = i64::try_from(width).unwrap_or(i64::MAX).max(len);
+    if (-4..0).contains(&e10) {
+        let zeros = usize::try_from(-e10 - 1).expect("small");
+        return format!("{sign}0.{}{ds}", "0".repeat(zeros));
+    }
+    if (0..width).contains(&e10) {
+        let int = usize::try_from(e10 + 1).expect("small");
+        if int >= ds.len() {
+            return format!("{sign}{ds}{}.0", "0".repeat(int - ds.len()));
+        }
+        return format!("{sign}{}.{}", &ds[..int], &ds[int..]);
+    }
+    let (first, rest) = ds.split_at(1);
+    let rest = if rest.is_empty() { "0" } else { rest };
+    let esign = if e10 < 0 { '-' } else { '+' };
+    format!("{sign}{first}.{rest}e{esign}{}", e10.unsigned_abs())
+}
+
 /// `m` rounded up to `RADIUS_DIGITS` digits, `inf` for `+∞`.
 fn format_upper(m: &Mag) -> String {
     let Some(x) = m.to_float() else {
@@ -242,6 +294,57 @@ impl Ball {
         }
         let bound = Mag::from_float(self.mid()).add(self.rad());
         format!("[± {}]", format_upper(&bound))
+    }
+
+    /// The decimal with the fewest significant digits inside the ball, if it
+    /// has at most `max` of them: the display of CAS-DOC-5 §6.1 (revised
+    /// 2026-10-20), where `0.1` read at 53 bits shows as `0.1` and the sum
+    /// of the balls of `0.1` and `0.2` as `0.3`. Among the shortest, the one
+    /// nearest the midpoint, ties to an even last digit.
+    ///
+    /// The text always has a point, so it reads back as a decimal: `2.0`,
+    /// `0.001`, `1.5e+20`; fixed notation from `1e-4` to `max` digits before
+    /// the point, scientific otherwise. `None` for a ball that is not finite
+    /// or too large or small for an exact rational.
+    ///
+    /// The ends of the ball are exact rationals, and having a decimal of `k`
+    /// significant digits inside is monotone in `k` (one of `k` digits is
+    /// one of `k + 1` with a zero), so a binary search over `k` finds the
+    /// fewest with `O(log max)` scalings of the ends.
+    #[must_use]
+    pub fn to_shortest_decimal(&self, max: u64) -> Option<String> {
+        if !self.is_finite() || max == 0 {
+            return None;
+        }
+        let mid = self.mid().checked_to_rational()?;
+        let rad = self.rad().to_float()?.checked_to_rational()?;
+        if mid.is_zero() {
+            return Some("0.0".to_owned());
+        }
+        let (lo, hi) = (&mid - &rad, &mid + &rad);
+        let e10 = floor_log10(&mid.abs());
+        // The candidates at `k` digits: the integers `n` with `n · 10^-s` in
+        // the ball, `s = k - 1 - e10`.
+        let candidates = |k: u64| -> Option<(Integer, Integer, i64)> {
+            let s = i64::try_from(k).ok()? - 1 - e10;
+            let lo = scaled(&lo, s).ceil();
+            let hi = scaled(&hi, s).floor();
+            (lo <= hi).then_some((lo, hi, s))
+        };
+        candidates(max)?;
+        let (mut fail, mut ok) = (0, max);
+        while ok - fail > 1 {
+            let k = fail + (ok - fail) / 2;
+            if candidates(k).is_some() {
+                ok = k;
+            } else {
+                fail = k;
+            }
+        }
+        let (lo, hi, s) = candidates(ok)?;
+        let nearest = scaled(&mid, s).round_ties_even();
+        let n = nearest.max(lo).min(hi);
+        Some(format_point(&n, s, max))
     }
 
     /// The ball of a decimal number at `prec` bits: the exact decimal value

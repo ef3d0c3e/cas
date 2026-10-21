@@ -26,6 +26,7 @@
 use foldhash::fast::FixedState;
 use hashbrown::HashMap;
 
+use cas_num::ball::Ball;
 use cas_num::{Integer, Rational};
 
 use crate::context::{Context, EvalError};
@@ -98,7 +99,8 @@ impl Set {
         }
     }
 
-    /// The smallest of these sets a number is in.
+    /// The smallest of these sets a number is in; a real ball is in the
+    /// reals.
     fn of_number(e: &Expr) -> Option<Set> {
         if let Some(q) = e.to_rational() {
             return Some(if q.is_integer() {
@@ -106,6 +108,9 @@ impl Set {
             } else {
                 Set::Rationals
             });
+        }
+        if matches!(e.view(), View::Ball(_)) {
+            return Some(Set::Reals);
         }
         e.is_number().then_some(Set::Complexes)
     }
@@ -636,8 +641,44 @@ fn linear_range(ctx: &Context, shift: &Rational, scale: &Rational, subject: &Exp
     r
 }
 
+/// The range of a ball: its closed interval, exactly (CAS-DOC-5 §9.3);
+/// some real for one too large for exact ends.
+fn ball_range(b: &Ball) -> Range {
+    let ends = b
+        .mid()
+        .checked_to_rational()
+        .zip(b.rad().to_float().and_then(|r| r.checked_to_rational()));
+    let Some((mid, rad)) = ends else {
+        return Range::real();
+    };
+    let (lo, hi) = (&mid - &rad, &mid + &rad);
+    let zero = Rational::from(0);
+    Range {
+        real: true,
+        nonzero: lo > zero || hi < zero,
+        lower: Some(Bound {
+            value: lo,
+            strict: false,
+        }),
+        upper: Some(Bound {
+            value: hi,
+            strict: false,
+        }),
+    }
+}
+
 /// The range of a subject from its structure alone.
 fn structure(ctx: &Context, e: &Expr) -> Range {
+    match e.view() {
+        View::Ball(b) => return ball_range(b),
+        View::ComplexBall(z) => {
+            return Range {
+                nonzero: !z.may_be_zero(),
+                ..Range::unknown()
+            };
+        }
+        _ => {}
+    }
     if e.is_number() {
         return match e.to_rational() {
             Some(q) => Range::point(q),
@@ -927,7 +968,7 @@ fn decide_in(ev: &mut Eval<'_>, prop: &Expr) -> Result<Truth, EvalError> {
             Ok(sign_test(
                 head,
                 sign_of(ev.context(), &value),
-                value.is_number(),
+                value.is_exact_number(),
             ))
         }
         (Symbol::ELEMENT, [value, set]) => {
@@ -973,7 +1014,8 @@ fn holds(ctx: &Context, p: &Expr) -> Truth {
 }
 
 /// The answer of a sign predicate, `Positive` to `NonPositive`, for a value
-/// with this sign; `number` when it is a number, which a non-real one fails.
+/// with this sign; `number` when it is an exact number, which a non-real one
+/// fails (a ball of unknown sign may be anything).
 pub(crate) fn sign_test(head: Symbol, sign: Sign, number: bool) -> Truth {
     use Sign as S;
     let (yes, no): (&[Sign], &[Sign]) = match head {

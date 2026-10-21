@@ -1,0 +1,8 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 364d5ebecc3ba4ec8b6f490b3b1fb315b4e148505413981b5d6a0192a8daa8ea # shrinks to e = Ball[0x1p+9223372036854775807, 0x0p+0], spaces = [""]
+cc 0bd3dcad0c8e663952543fce0f86715d1359abdf7c648a374a27324e3bf53662 # shrinks to e = -10336999608029465387892920734[Ball[0x1.99f3b4cc2320725e9088c9aa7e23f4dp-4611686018427387779, 0x0p+0]]

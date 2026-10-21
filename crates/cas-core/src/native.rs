@@ -13,6 +13,7 @@
 )]
 
 mod arith;
+mod ball;
 mod factorial;
 mod index;
 mod integer;
@@ -83,6 +84,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::AT, index::at),
         (Symbol::REPLACE_AT, index::replace_at),
         (Symbol::BLOCK, procedure::block),
+        (Symbol::BALL, ball::ball),
         (Symbol::REPLACE_ALL, replace::replace_all),
         (Symbol::REPLACE, replace::replace),
         (Symbol::REPLACE_REPEATED, replace::replace_repeated),

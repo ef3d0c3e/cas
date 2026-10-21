@@ -46,6 +46,9 @@ pub enum PrintErrorKind {
     Parameter,
     /// Nested deeper than [`MAX_PRINT_DEPTH`].
     TooDeep,
+    /// A ball, which has no input form yet: decimals read as exact numbers
+    /// until they are balls (CAS-DOC-5 §6.4).
+    Ball,
 }
 
 impl fmt::Display for PrintError {
@@ -67,6 +70,7 @@ impl fmt::Display for PrintError {
                 write!(f, "{:?} cannot be the parameter of a lambda", self.part)
             }
             PrintErrorKind::TooDeep => write!(f, "nested more than {MAX_PRINT_DEPTH} deep"),
+            PrintErrorKind::Ball => f.write_str("a ball has no input form yet"),
         }
     }
 }
@@ -583,6 +587,12 @@ impl<'a> Printer<'a> {
             View::Rational(q) => self.write(q),
             View::Complex(z) => self.complex(z),
             View::String(s) => self.string(s),
+            View::Ball(_) | View::ComplexBall(_) => {
+                return Err(PrintError {
+                    part: e.clone(),
+                    kind: PrintErrorKind::Ball,
+                });
+            }
             View::Apply { .. } => return self.application(e),
             _ => {
                 return Err(PrintError {
