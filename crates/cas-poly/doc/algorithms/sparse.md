@@ -78,9 +78,12 @@ The result comes out in order, and needs no sort.
   - Over a field this is the division with remainder by one polynomial.
   - Over ℤ it is the fraction-free division of [MP11]: `2x` divided by `3x`
     leaves `2x`.
-- **Exact division** (`div_exact`) stops at the first term of `r`. That is the
-  test gcd algorithms make, and it costs nothing past the point where the
-  answer is known.
+- **Exact division** (`div_exact`, `div_exact_with`) stops at the first term
+  of `r`. That is the test gcd algorithms make, and it costs nothing past the
+  point where the answer is known. It also stops at the first quotient term
+  past the degrees of `a` less those of `b` in some variable, which an exact
+  quotient has (ours, CAS-137), so that a failed division never outgrows `a`'s
+  exponents: `x^10` over `x − y^200` fails at once (gcd.md).
 - **Fields** (ours, CAS-136). Unlike a product, a lexicographic division has
   no bound on its exponents known before. A reduction replaces a monomial
   `m` with `m − lm(b) + bⱼ`, which can raise the later variables at every

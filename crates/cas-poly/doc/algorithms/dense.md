@@ -135,8 +135,9 @@ polls the `Cancel` at each quotient coefficient.
 
 ### Pseudo-division: Knuth's Algorithm R [Knu97, §4.6.1]
 
-Over a domain without division, such as ℤ, with `d` the leading coefficient
-of `b`, it computes
+Over a ring without division, such as ℤ or polynomials in further variables
+(over any coefficient ring since CAS-137, for the gcd), with `d` the leading
+coefficient of `b`, it computes
 
 ```text
 d^(deg a − deg b + 1) a = q b + r,   deg r < deg b.

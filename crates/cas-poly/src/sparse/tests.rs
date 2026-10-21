@@ -417,6 +417,23 @@ fn examples() {
     assert_eq!(ring.add(&ring.mul(&q, &b), &r), ten);
     let (q, r) = ring.div_rem(&x, &ring.add(&x, &ring.pow(&y, 200)));
     assert_eq!((q, r), (ring.one(), ring.neg(&ring.pow(&y, 200))));
+    // An exact division stops at the degrees of the quotient (CAS-137):
+    // x - y^200 has more y than x^10; x^2 y + 1 over x - y gives x y first,
+    // past the y-degree 0 of a quotient; x^3 y + y^4 = y (x + y)(x^2 - x y
+    // + y^2) divides.
+    assert_eq!(ring.div_exact(&ten, &b), None);
+    let xy = ring.mul(&x, &y);
+    let x_minus_y = ring.sub(&x, &y);
+    assert_eq!(
+        ring.div_exact(&ring.add(&ring.mul(&x, &xy), &ring.one()), &x_minus_y),
+        None
+    );
+    let a = ring.add(&ring.mul(&ring.pow(&x, 3), &y), &ring.pow(&y, 4));
+    assert_eq!(
+        ring.div_exact(&a, &ring.add(&x, &y))
+            .map(|q| ring.mul(&q, &ring.add(&x, &y))),
+        Some(a)
+    );
     // Constants and zero.
     let none = SparseRing::new(Integers, 0);
     assert_eq!(

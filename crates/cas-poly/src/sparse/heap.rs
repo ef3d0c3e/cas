@@ -201,6 +201,11 @@ type Divided<E> = Result<Option<QuoRem<E>>, Overflow>;
 /// when the guards report an overflow it starts over in fields twice as
 /// wide.
 ///
+/// An exact quotient has the degrees of `a` less those of `b` in every
+/// variable, so an exact division stops at the first quotient term past
+/// them (ours, CAS-137): a failed trial division then never outgrows
+/// `a`'s exponents.
+///
 /// # Panics
 ///
 /// If `b` is zero, or an exponent reaches `2^63`.
@@ -212,11 +217,30 @@ pub(super) fn divide<R: EuclideanDomain>(
     cancel: &dyn Cancel,
 ) -> Result<Option<QuoRem<R::Elem>>, Cancelled> {
     assert!(!b.is_zero(), "attempt to divide by zero");
+    let bound = if exact && !a.is_zero() {
+        let Some(bound) = a
+            .degrees()
+            .iter()
+            .zip(b.degrees())
+            .map(|(x, y)| x.checked_sub(y))
+            .collect::<Option<Vec<u64>>>()
+        else {
+            return Ok(None);
+        };
+        Some(bound)
+    } else {
+        None
+    };
     let mut bits = a.layout.bits().max(b.layout.bits());
     loop {
         let layout = Layout::new(ring.nvars(), bits);
         let (pa, pb) = (a.repacked(layout), b.repacked(layout));
-        if let Ok(result) = divide_in(ring, &pa, &pb, layout, exact, cancel)? {
+        let packed = bound.as_ref().map(|e| {
+            let mut mono = vec![0; layout.words()];
+            layout.pack(e, &mut mono);
+            mono
+        });
+        if let Ok(result) = divide_in(ring, &pa, &pb, layout, packed.as_deref(), cancel)? {
             return Ok(result);
         }
         assert!(bits < 64, "an exponent of 2^63 or more");
@@ -228,16 +252,19 @@ pub(super) fn divide<R: EuclideanDomain>(
 /// q b` come out of a heap in decreasing order, `a`'s and those of `−qₖ bⱼ`
 /// for `j ≥ 1` (`qₖ b₀` cancels the term `qₖ` was made from) \[MP07\]. A
 /// term that the leading term of `b` divides, coefficient included, makes a
-/// term of `q`; another goes to `r`, or, when `exact`, stops the division
-/// with `None`. `Overflow` when a product does not fit the fields.
+/// term of `q`; another goes to `r`. An exact division has the `bound` of
+/// its quotient's exponents, and a remainder term or a quotient term past
+/// the bound stops it with `None`. `Overflow` when a product does not fit
+/// the fields.
 fn divide_in<R: EuclideanDomain>(
     ring: &SparseRing<R>,
     a: &Sparse<R::Elem>,
     b: &Sparse<R::Elem>,
     layout: Layout,
-    exact: bool,
+    bound: Option<&[u64]>,
     cancel: &dyn Cancel,
 ) -> Result<Divided<R::Elem>, Cancelled> {
+    let exact = bound.is_some();
     let base = ring.base();
     let words = layout.words();
     let lead = &b.coeffs[0];
@@ -246,6 +273,7 @@ fn divide_in<R: EuclideanDomain>(
     let mut r: Terms<R::Elem> = Terms::new(layout);
     let mut mono = vec![0u64; words];
     let mut qmono = vec![0u64; words];
+    let mut spare = vec![0u64; words];
     let mut i = 0;
     let mut rounds = 0u32;
     loop {
@@ -287,6 +315,9 @@ fn divide_in<R: EuclideanDomain>(
             (base.zero(), c.clone())
         };
         if base.is_zero(&rest) {
+            if bound.is_some_and(|bound| !layout.divides(&qmono, bound, &mut spare)) {
+                return Ok(Ok(None));
+            }
             q.push(t, &qmono);
             if b.coeffs.len() > 1 {
                 let k = q.coeffs.len() - 1;
@@ -343,15 +374,34 @@ impl<R: EuclideanDomain> SparseRing<R> {
     }
 
     /// `a / b` when `b` divides `a`; `None` otherwise, as soon as a term of
-    /// the remainder appears: the test gcd algorithms make.
+    /// the remainder appears, or a term of the quotient past the degrees of
+    /// `a` less those of `b`: the test gcd algorithms make. Polls `cancel`.
+    ///
+    /// # Errors
+    ///
+    /// [`Cancelled`] when `cancel` says so.
+    ///
+    /// # Panics
+    ///
+    /// If `b` is zero.
+    pub fn div_exact_with(
+        &self,
+        a: &Sparse<R::Elem>,
+        b: &Sparse<R::Elem>,
+        cancel: &dyn Cancel,
+    ) -> Result<Option<Sparse<R::Elem>>, Cancelled> {
+        Ok(divide(self, a, b, true, cancel)?.map(|(q, _)| q))
+    }
+
+    /// As [`SparseRing::div_exact_with`], never cancelled.
     ///
     /// # Panics
     ///
     /// If `b` is zero.
     #[must_use]
     pub fn div_exact(&self, a: &Sparse<R::Elem>, b: &Sparse<R::Elem>) -> Option<Sparse<R::Elem>> {
-        match divide(self, a, b, true, &crate::cancel::Never) {
-            Ok(result) => result.map(|(q, _)| q),
+        match self.div_exact_with(a, b, &crate::cancel::Never) {
+            Ok(q) => q,
             Err(Cancelled) => unreachable!("never cancelled"),
         }
     }

@@ -41,3 +41,11 @@ impl fmt::Display for Cancelled {
 }
 
 impl std::error::Error for Cancelled {}
+
+/// The value of a computation polled with [`Never`], which never stops it.
+pub(crate) fn uncancelled<T>(result: Result<T, Cancelled>) -> T {
+    match result {
+        Ok(value) => value,
+        Err(Cancelled) => unreachable!("never cancelled"),
+    }
+}

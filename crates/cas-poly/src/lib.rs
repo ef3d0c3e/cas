@@ -16,6 +16,12 @@
 //!   integer (or Gaussian integer) polynomials over one shared denominator,
 //!   as FLINT's `fmpq_poly`, with their ring objects [`RationalPolys`] and
 //!   [`GaussianRationalPolys`].
+//! - [`Sparse`] and [`SparseRing`]: sparse multivariate polynomials, their
+//!   exponents packed into words, with heap products and division.
+//! - [`GcdDomain`]: the coefficient domains with gcds, resultants and
+//!   discriminants (ℤ, ℚ, ℤ\[i\], ℚ(i), the prime fields), each choosing
+//!   among the heuristic gcd, Brown's modular algorithm and subresultants,
+//!   the [`GcdMethod`]s.
 //! - [`Cancel`]: what long computations poll to stop early, with the
 //!   never-cancelled default [`Never`].
 //!
@@ -37,15 +43,22 @@
 //! let (q, r) = qx.div_rem(&qx.from_i64s(&[-1, 0, 1]), &qx.from_i64s(&[1, 1]));
 //! assert_eq!(q, qx.from_i64s(&[-1, 1]));
 //! assert!(qx.is_zero(&r));
+//!
+//! // gcd(6x^2 - 6, 4x - 4) = 2x - 2, and their resultant is 0.
+//! let (a, b) = (zx.from_i64s(&[-6, 0, 6]), zx.from_i64s(&[-4, 4]));
+//! assert_eq!(zx.gcd(&a, &b), zx.from_i64s(&[-2, 2]));
+//! assert_eq!(zx.resultant(&a, &b), Integer::ZERO);
 //! ```
 
 mod cancel;
 mod dense;
+mod gcd;
 mod shared;
 mod sparse;
 
 pub use cancel::{Cancel, Cancelled, Never};
 pub use dense::{Coefficients, Dense, DenseRing};
+pub use gcd::{Cofactors, GcdDomain, GcdMethod};
 pub use shared::{
     GaussianRationalPoly, GaussianRationalPolys, Numerators, RationalPoly, RationalPolys, Shared,
     SharedRing,

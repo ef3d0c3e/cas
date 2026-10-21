@@ -3,4 +3,4 @@
 ignore-interior-mutability = ["cas_core::expr::Expr"]
 
 # Names of products, not code: `..` keeps clippy's own list.
-doc-valid-idents = ["NumWorks", ".."]
+doc-valid-idents = ["NumWorks", "SymPy", ".."]

@@ -21,7 +21,7 @@ use std::cmp::Ordering;
 use cas_num::Integer;
 use cas_num::algebra::Ring;
 
-use crate::cancel::{Cancel, Cancelled, Never};
+use crate::cancel::{Cancel, Cancelled, Never, uncancelled};
 use crate::dense::{Coefficients, Dense, DenseRing};
 use layout::Layout;
 
@@ -76,6 +76,19 @@ impl<E> Sparse<E> {
             .iter()
             .enumerate()
             .map(|(k, c)| (self.exponents(k), c))
+    }
+
+    /// The degree of each variable, its largest exponent: all 0 for the
+    /// zero polynomial.
+    #[must_use]
+    pub fn degrees(&self) -> Vec<u64> {
+        let mut degrees = vec![0; self.nvars()];
+        for k in 0..self.coeffs.len() {
+            for (var, d) in degrees.iter_mut().enumerate() {
+                *d = (*d).max(self.layout.get(self.mono(k), var));
+            }
+        }
+        degrees
     }
 
     /// The packed monomial of term `k`.
@@ -493,6 +506,64 @@ impl<R: Ring> SparseRing<R> {
     }
 }
 
+impl<R: Ring + Clone> SparseRing<R> {
+    /// `p` as a dense polynomial in `x_var` whose coefficients are
+    /// polynomials without it, from one pass over the terms: those with a
+    /// power of `x_var` keep their order once it is cleared.
+    pub(crate) fn to_dense_in(&self, p: &Sparse<R::Elem>, var: usize) -> Dense<Sparse<R::Elem>> {
+        let Some(d) = self.degree(p, var) else {
+            return Dense::default();
+        };
+        let d = usize::try_from(d).expect("a degree that fits in memory");
+        let mut parts: Vec<Terms<R::Elem>> = (0..=d).map(|_| Terms::new(p.layout)).collect();
+        let mut mono = vec![0; p.layout.words()];
+        for (k, c) in p.coeffs.iter().enumerate() {
+            let e = p.layout.get(p.mono(k), var);
+            mono.copy_from_slice(p.mono(k));
+            p.layout.set(&mut mono, var, 0);
+            parts[usize::try_from(e).expect("at most the degree")].push(c.clone(), &mono);
+        }
+        DenseRing::new(self.clone()).poly(parts.into_iter().map(Terms::done).collect())
+    }
+
+    /// The polynomial `Σ cₖ x_var^k` of a dense polynomial in `x_var`, each
+    /// `cₖ` without `x_var`.
+    #[allow(
+        clippy::wrong_self_convention,
+        reason = "a ring object makes its elements, as from_dense does"
+    )]
+    pub(crate) fn from_dense_in(&self, d: &Dense<Sparse<R::Elem>>, var: usize) -> Sparse<R::Elem> {
+        let parts: Vec<(u64, Sparse<R::Elem>)> = d
+            .coeffs()
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| !c.is_zero())
+            .map(|(k, c)| (k as u64, c.clone()))
+            .collect();
+        self.from_recursive(var, &parts)
+    }
+
+    /// `p` with each coefficient mapped by `f` into the coefficients of
+    /// `target`, a ring of as many variables; terms mapped to zero drop
+    /// out.
+    pub(crate) fn map_into<S: Ring>(
+        &self,
+        p: &Sparse<R::Elem>,
+        target: &SparseRing<S>,
+        f: impl Fn(&R::Elem) -> S::Elem,
+    ) -> Sparse<S::Elem> {
+        debug_assert_eq!(self.nvars, target.nvars);
+        let mut out = Terms::new(p.layout);
+        for (k, c) in p.coeffs.iter().enumerate() {
+            let d = f(c);
+            if !target.base.is_zero(&d) {
+                out.push(d, p.mono(k));
+            }
+        }
+        out.done()
+    }
+}
+
 impl<R: Coefficients + Clone> SparseRing<R> {
     /// `p` as a dense polynomial in `x_var`; `None` when another variable
     /// occurs.
@@ -519,14 +590,6 @@ impl<R: Coefficients + Clone> SparseRing<R> {
             e[var] = k as u64;
             (e, c.clone())
         }))
-    }
-}
-
-/// Never fails: [`Never`] is never cancelled.
-fn uncancelled<T>(result: Result<T, Cancelled>) -> T {
-    match result {
-        Ok(value) => value,
-        Err(Cancelled) => unreachable!("never cancelled"),
     }
 }
 

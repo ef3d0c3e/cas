@@ -14,7 +14,7 @@ pub use mul::Coefficients;
 use cas_num::algebra::{EuclideanDomain, Field, Ring};
 use cas_num::{Integer, Natural};
 
-use crate::cancel::{Cancel, Cancelled, Never};
+use crate::cancel::{Cancel, Cancelled, Never, uncancelled};
 
 /// A polynomial `c₀ + c₁x + … + cₙxⁿ` with `cₙ ≠ 0`: its coefficients
 /// lowest degree first, without trailing zeros, so that the zero polynomial
@@ -246,14 +246,6 @@ impl<R: Coefficients> DenseRing<R> {
                 })
                 .collect(),
         )
-    }
-}
-
-/// Never fails: [`Never`] is never cancelled.
-fn uncancelled<T>(result: Result<T, Cancelled>) -> T {
-    match result {
-        Ok(value) => value,
-        Err(Cancelled) => unreachable!("never cancelled"),
     }
 }
 

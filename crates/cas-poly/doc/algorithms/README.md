@@ -25,5 +25,10 @@ the tickets. This documentation describes the code as it is.
   products and Monagan and Pearce's for division, which widens its fields
   when the guards report an overflow; evaluation, substitution, derivative,
   the recursive view; the benchmarks of CAS-DOC-8 §13.
+- [gcd.md](gcd.md): greatest common divisors, resultants and discriminants
+  (CAS-137). The subresultant reference; the heuristic gcd, with Parisse's
+  theorem behind its check; Brown's modular algorithm over ℤ and its dense
+  evaluation over prime fields; resultants modulo primes within Hadamard's
+  bound; the domains and their choices; the benchmarks against giac.
 - [references.md](references.md): the bibliography. Chapters and doc
   comments cite it by key, as in "Kronecker substitution [Sch82]".

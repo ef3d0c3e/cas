@@ -11,6 +11,7 @@ use cas_num::{Complex, Integer, Natural, Rational};
 
 use crate::cancel::{Cancel, Cancelled, Never};
 use crate::dense::{Coefficients, Dense, DenseRing};
+use crate::gcd::GcdDomain;
 
 #[cfg(test)]
 mod tests;
@@ -18,7 +19,7 @@ mod tests;
 /// The numerator rings of shared-denominator polynomials, ℤ and ℤ\[i\]:
 /// what reducing against a natural denominator takes, and the field of
 /// fractions the polynomials are over.
-pub trait Numerators: Coefficients + EuclideanDomain + Default {
+pub trait Numerators: GcdDomain + Default {
     /// ℚ for ℤ, ℚ(i) for ℤ\[i\].
     type Fractions: Field + Default;
 
@@ -172,7 +173,7 @@ pub type RationalPolys = SharedRing<Integers>;
 pub type GaussianRationalPolys = SharedRing<GaussianIntegers>;
 
 /// The elements of the field of fractions of `N`.
-type Fraction<N> = <<N as Numerators>::Fractions as Ring>::Elem;
+pub(crate) type Fraction<N> = <<N as Numerators>::Fractions as Ring>::Elem;
 
 /// A quotient and a remainder.
 type SharedQuoRem<E> = (Shared<E>, Shared<E>);
@@ -395,6 +396,12 @@ impl<N: Numerators> EuclideanDomain for SharedRing<N> {
             Ok(qr) => qr,
             Err(Cancelled) => unreachable!("never cancelled"),
         }
+    }
+
+    /// The gcd of the numerators, [`DenseRing::gcd`], made monic.
+    fn gcd(&self, a: &Self::Elem, b: &Self::Elem) -> Self::Elem {
+        let g = self.num.gcd(&a.num, &b.num);
+        self.normal_form(&self.from_parts(g, Natural::one())).0
     }
 
     /// The monic associate `a / lc(a)`, with `1 / lc(a)` as the unit.

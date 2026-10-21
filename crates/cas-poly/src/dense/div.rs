@@ -59,10 +59,11 @@ impl<F: Coefficients + Field> DenseRing<F> {
     }
 }
 
-impl<R: Coefficients + EuclideanDomain> DenseRing<R> {
+impl<R: Coefficients> DenseRing<R> {
     /// Pseudo-division (Knuth's Algorithm R of §4.6.1): `(q, r)` with
     /// `lc(b)^(deg a - deg b + 1) a = q b + r` and `deg r < deg b`, without
-    /// dividing in `R`. `(0, a)` when `deg a < deg b`.
+    /// dividing in `R`, so over any ring: polynomials in other variables
+    /// too. `(0, a)` when `deg a < deg b`.
     ///
     /// # Panics
     ///
@@ -95,7 +96,9 @@ impl<R: Coefficients + EuclideanDomain> DenseRing<R> {
         r.truncate(n);
         (self.poly(q), self.poly(r))
     }
+}
 
+impl<R: Coefficients + EuclideanDomain> DenseRing<R> {
     /// `a / b` when `b` divides `a` in `R[x]`; `None` otherwise. Long
     /// division in which each quotient coefficient must divide exactly.
     ///
