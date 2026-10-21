@@ -22,6 +22,7 @@ mod linear;
 mod logic;
 mod number;
 mod numeric;
+mod polynomial;
 mod procedure;
 mod radical;
 mod replace;
@@ -98,6 +99,28 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::BALL, ball::ball),
         (Symbol::DECIMAL, ball::decimal),
         (Symbol::EXACT, ball::exact),
+        (Symbol::EXPAND, polynomial::expand),
+        (Symbol::TOGETHER, polynomial::together),
+        (Symbol::GCD, polynomial::gcd),
+        (Symbol::LCM, polynomial::lcm),
+        (Symbol::POLYNOMIAL_QUOTIENT, polynomial::polynomial_quotient),
+        (
+            Symbol::POLYNOMIAL_REMAINDER,
+            polynomial::polynomial_remainder,
+        ),
+        (
+            Symbol::POLYNOMIAL_QUOTIENT_REMAINDER,
+            polynomial::polynomial_quotient_remainder,
+        ),
+        (Symbol::EXPONENT, polynomial::exponent),
+        (Symbol::COEFFICIENT, polynomial::coefficient),
+        (Symbol::LEADING_COEFFICIENT, polynomial::leading_coefficient),
+        (Symbol::NUMERATOR, polynomial::numerator),
+        (Symbol::DENOMINATOR, polynomial::denominator),
+        (Symbol::CONTENT, polynomial::content),
+        (Symbol::PRIMITIVE_PART, polynomial::primitive_part),
+        (Symbol::RESULTANT, polynomial::resultant),
+        (Symbol::DISCRIMINANT, polynomial::discriminant),
         (Symbol::N, numeric::n),
         (Symbol::REPLACE_ALL, replace::replace_all),
         (Symbol::REPLACE, replace::replace),

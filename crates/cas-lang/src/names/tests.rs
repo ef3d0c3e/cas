@@ -129,7 +129,7 @@ const TEST_LOCALE: &str = "
 Sin: sinus
 Log: logn ln
 D: deriver derivee
-Expand: developper
+Factor: factoriser
 
 [syntax]
 call: appel
@@ -152,8 +152,8 @@ fn locales() {
     assert_eq!(names.spelling(&Target::Builtin(Symbol::LOG)), Some("logn"));
     assert_eq!(names.target("derivee"), Some(&Target::Builtin(Symbol::D)));
     assert_eq!(names.spelling(&Target::Builtin(Symbol::D)), Some("deriver"));
-    assert_eq!(names.target("developper"), Some(&planned("Expand")));
-    assert_eq!(names.spelling(&planned("Expand")), Some("developper"));
+    assert_eq!(names.target("factoriser"), Some(&planned("Factor")));
+    assert_eq!(names.spelling(&planned("Factor")), Some("factoriser"));
     assert_eq!(
         names.target("appel"),
         Some(&Target::Syntax(SyntaxForm::Call))

@@ -10,7 +10,7 @@ use cas_num::{Complex, Integer, Rational};
 use cas_poly::{Never, Sparse, SparseRing};
 use proptest::prelude::*;
 
-use super::{CoefficientDomain, Fraction, PolyError, Polynomials};
+use super::{CoefficientDomain, Fraction, PolyError, Polynomials, product_terms};
 use crate::build::{exp, sin};
 use crate::{Context, Expr, Symbol};
 
@@ -643,5 +643,41 @@ proptest! {
         if u.is_exact_number() && v.is_exact_number() {
             prop_assert_eq!(u, v);
         }
+    }
+
+    /// The bound of a product's terms is at least its terms, and is them
+    /// for products of dense polynomials, every monomial up to a total
+    /// degree.
+    #[test]
+    fn product_terms_bound_the_product(
+        a in prop::collection::vec((prop::collection::vec(0u64..4, 3), -3i64..4), 0..12),
+        b in prop::collection::vec((prop::collection::vec(0u64..4, 3), -3i64..4), 0..12),
+        (n, da, db) in (1usize..4, 0u64..5, 0u64..5),
+    ) {
+        let ring = SparseRing::new(Integers, 3);
+        let poly = |t: &[(Vec<u64>, i64)]| ring.from_terms(t.iter().map(|(e, c)| (e.clone(), Integer::from(*c))));
+        let (a, b) = (poly(&a), poly(&b));
+        let bound = |a: &Sparse<Integer>, b: &Sparse<Integer>| {
+            let degrees: Vec<u64> = a.degrees().iter().zip(b.degrees()).map(|(x, y)| x + y).collect();
+            product_terms(a, b, &degrees)
+        };
+        prop_assert!(bound(&a, &b) >= ring.mul(&a, &b).term_count());
+        // Dense: all monomials of total degree at most d in n variables.
+        let dense = |d: u64| {
+            let mut terms = Vec::new();
+            for e0 in 0..=d {
+                for e1 in 0..=d - e0 {
+                    for e2 in 0..=d - e0 - e1 {
+                        let e = [e0, e1, e2];
+                        if e[n..].iter().all(|&k| k == 0) {
+                            terms.push((e.to_vec(), Integer::from(1)));
+                        }
+                    }
+                }
+            }
+            ring.from_terms(terms)
+        };
+        let (p, q) = (dense(da), dense(db));
+        prop_assert_eq!(bound(&p, &q), ring.mul(&p, &q).term_count());
     }
 }

@@ -14,5 +14,8 @@ cas-core.workspace = true
 cas-lang.workspace = true
 libc = "0.2.191"
 
+[dev-dependencies]
+proptest.workspace = true
+
 [lints]
 workspace = true

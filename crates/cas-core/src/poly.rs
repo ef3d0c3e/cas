@@ -33,6 +33,10 @@
 //! The way back, built then evaluated, keeps the value. Without roots it
 //! also converts to the same rational function; with them evaluation brings
 //! `(x^(1/2))^2` back to `x`, a generator of its own.
+//!
+//! [`expand`] reads expressions another way, as giac's `expand` does (P6):
+//! only positive powers multiply out, and every other power is a generator,
+//! so that each denominator stays with its own terms.
 
 #[cfg(test)]
 mod tests;
@@ -142,11 +146,22 @@ pub struct Polynomials {
     fractions: Vec<Fraction>,
 }
 
+/// What a conversion takes as a generator, beyond the kernels of §2.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Reading {
+    /// Nothing more: balls are refused.
+    Exact,
+    /// Balls.
+    Balls,
+    /// Balls, every power whose exponent is not an exact positive number,
+    /// and every `Exp`: the expressions are polynomials, for [`expand`].
+    Terms,
+}
+
 impl Polynomials {
     /// The rational functions of evaluated expressions, over their common
-    /// generators. `max_terms` bounds every numerator and denominator,
-    /// estimated before each product; `cancel` is polled in the long
-    /// products.
+    /// generators. `max_terms` bounds the terms of each product, estimated
+    /// before it is taken; `cancel` is polled in the long products.
     ///
     /// # Errors
     ///
@@ -160,21 +175,46 @@ impl Polynomials {
         max_terms: usize,
         cancel: &dyn Cancel,
     ) -> Result<Polynomials, PolyError> {
+        Polynomials::convert(exprs, max_terms, Reading::Exact, cancel)
+    }
+
+    /// As [`Polynomials::new`], each ball a generator of its own instead of
+    /// an error: for arithmetic, which works with balls (CAS-DOC-8 §9). The
+    /// way back multiplies them out in evaluation, so `(x + 1.5)^2` expands
+    /// to `x^2 + 3.0 x + 2.25`.
+    ///
+    /// # Errors
+    ///
+    /// As [`Polynomials::new`], but for balls.
+    pub fn with_balls(
+        exprs: &[Expr],
+        max_terms: usize,
+        cancel: &dyn Cancel,
+    ) -> Result<Polynomials, PolyError> {
+        Polynomials::convert(exprs, max_terms, Reading::Balls, cancel)
+    }
+
+    fn convert(
+        exprs: &[Expr],
+        max_terms: usize,
+        reading: Reading,
+        cancel: &dyn Cancel,
+    ) -> Result<Polynomials, PolyError> {
         for e in exprs {
             if let Some(infinite) = infinite(e) {
                 return Err(PolyError::Infinite(infinite));
             }
         }
-        let kernels = Kernels::scan(exprs)?;
+        let kernels = Kernels::scan(exprs, reading)?;
         let generators = kernels.generators();
         let domain = kernels.domain();
         let fractions = if domain.is_complex() {
-            convert::<GaussianIntegers>(exprs, &generators, max_terms, cancel)?
+            convert::<GaussianIntegers>(exprs, &generators, reading, max_terms, cancel)?
                 .into_iter()
                 .map(|(num, den)| Fraction::GaussianIntegers { num, den })
                 .collect()
         } else {
-            convert::<Integers>(exprs, &generators, max_terms, cancel)?
+            convert::<Integers>(exprs, &generators, reading, max_terms, cancel)?
                 .into_iter()
                 .map(|(num, den)| Fraction::Integers { num, den })
                 .collect()
@@ -199,6 +239,12 @@ impl Polynomials {
         self.domain
     }
 
+    /// The variable of the generator `g`, if it is one.
+    #[must_use]
+    pub fn variable(&self, g: &Expr) -> Option<usize> {
+        self.generators.iter().position(|h| h == g)
+    }
+
     /// The rational functions, one an expression, in their order.
     #[must_use]
     pub fn fractions(&self) -> &[Fraction] {
@@ -216,37 +262,34 @@ impl Polynomials {
     /// [`Polynomials::polynomial_expr`] of `p / d` for a constant `d`, each
     /// coefficient divided.
     fn terms_expr<E: Coefficient>(&self, p: &Sparse<E>, d: Option<&E>) -> Expr {
-        let one = Expr::from(1);
-        let terms: Vec<Expr> = p
-            .terms()
-            .map(|(exps, c)| {
-                let c = match d {
-                    Some(d) => c.over(d),
-                    None => c.to_expr(),
-                };
-                let mut factors = Vec::new();
-                if c != one {
-                    factors.push(c);
-                }
-                for (generator, &e) in self.generators.iter().zip(&exps) {
-                    match e {
-                        0 => {}
-                        1 => factors.push(generator.clone()),
-                        _ => factors.push(generator.pow(Expr::from(Integer::from(e)))),
-                    }
-                }
-                match factors.len() {
-                    0 => one.clone(),
-                    1 => factors.pop().expect("one factor"),
-                    _ => Expr::call(Symbol::TIMES, factors),
-                }
-            })
-            .collect();
-        match terms.len() {
-            0 => Expr::from(0),
-            1 => terms.into_iter().next().expect("one term"),
-            _ => Expr::call(Symbol::PLUS, terms),
+        sum(self.term_exprs(p, d))
+    }
+
+    /// The terms of `p / d`, built, for a constant `d`.
+    fn term_exprs<E: Coefficient>(&self, p: &Sparse<E>, d: Option<&E>) -> Vec<Expr> {
+        p.terms()
+            .map(|(exps, c)| self.term_expr(&exps, c, d))
+            .collect()
+    }
+
+    /// The term `c / d` times the generators to the powers `exps`, built.
+    fn term_expr<E: Coefficient>(&self, exps: &[u64], c: &E, d: Option<&E>) -> Expr {
+        let c = match d {
+            Some(d) => c.over(d),
+            None => c.to_expr(),
+        };
+        let mut factors = Vec::new();
+        if c != Expr::from(1) {
+            factors.push(c);
         }
+        for (generator, &e) in self.generators.iter().zip(exps) {
+            match e {
+                0 => {}
+                1 => factors.push(generator.clone()),
+                _ => factors.push(generator.pow(Expr::from(Integer::from(e)))),
+            }
+        }
+        product(factors)
     }
 
     /// The expression of a rational function, built, not evaluated: over a
@@ -255,12 +298,14 @@ impl Polynomials {
     #[must_use]
     pub fn fraction_expr(&self, fraction: &Fraction) -> Expr {
         match fraction {
-            Fraction::Integers { num, den } => self.quotient_expr(num, den),
-            Fraction::GaussianIntegers { num, den } => self.quotient_expr(num, den),
+            Fraction::Integers { num, den } => self.ratio_expr(num, den),
+            Fraction::GaussianIntegers { num, den } => self.ratio_expr(num, den),
         }
     }
 
-    fn quotient_expr<E: Coefficient>(&self, num: &Sparse<E>, den: &Sparse<E>) -> Expr {
+    /// [`Polynomials::fraction_expr`] of `num / den`.
+    #[must_use]
+    pub fn ratio_expr<E: Coefficient>(&self, num: &Sparse<E>, den: &Sparse<E>) -> Expr {
         if is_constant(den) {
             let d = &den.coeffs()[0];
             return self.terms_expr(num, (!d.is_one()).then_some(d));
@@ -269,6 +314,146 @@ impl Polynomials {
             Symbol::TIMES,
             [self.polynomial_expr(num), self.polynomial_expr(den).pow(-1)],
         )
+    }
+
+    /// `num / den` as `expand` writes it (CAS-DOC-8 P6): over a constant, a
+    /// polynomial with its coefficients divided; otherwise each term of the
+    /// numerator over the denominator, as giac writes
+    /// `x^2/(x^2-2*x+1) + 2*x/(x^2-2*x+1) + 1/(x^2-2*x+1)`, so that over a
+    /// monomial evaluation merges the powers (`x/y + 1/y`). Built, not
+    /// evaluated.
+    #[must_use]
+    pub fn expanded_expr<E: Coefficient>(&self, num: &Sparse<E>, den: &Sparse<E>) -> Expr {
+        if is_constant(den) {
+            return self.ratio_expr(num, den);
+        }
+        let inverse = self.polynomial_expr(den).pow(-1);
+        sum(self
+            .term_exprs(num, None)
+            .into_iter()
+            .map(|t| Expr::call(Symbol::TIMES, [t, inverse.clone()]))
+            .collect())
+    }
+}
+
+/// The sum of `terms`: 0 for none, the term for one.
+fn sum(mut terms: Vec<Expr>) -> Expr {
+    match terms.len() {
+        0 => Expr::from(0),
+        1 => terms.pop().expect("one term"),
+        _ => Expr::call(Symbol::PLUS, terms),
+    }
+}
+
+/// The product of `factors`: 1 for none, the factor for one.
+fn product(mut factors: Vec<Expr>) -> Expr {
+    match factors.len() {
+        0 => Expr::from(1),
+        1 => factors.pop().expect("one factor"),
+        _ => Expr::call(Symbol::TIMES, factors),
+    }
+}
+
+/// `e` expanded as giac's `expand` writes it (CAS-DOC-8 P6), built, not
+/// evaluated.
+///
+/// - Products and positive powers multiply out, of sums inside products
+///   too: `(1 + 1/(x + 1)) (x + 2)` is `x + 2 + x/(x + 1) + 2/(x + 1)`.
+/// - A power with a negative exponent is the denominator of its terms, its
+///   base expanded, and the denominators of one term multiply into one, so
+///   that `(x + 1)/(x (x + 2))` is `x/(x^2 + 2 x) + 1/(x^2 + 2 x)`.
+/// - Terms are never brought over a common denominator: `1/x + 1/(x + 1)`
+///   stays.
+/// - Numbers stay coefficients: `(x + 1)^2/(2 y)` is `x^2/(2 y) + x/y +
+///   1/(2 y)`. Balls are generators.
+/// - Other powers and `Exp` are generators, `exp(a + b)` among them.
+///
+/// giac also writes `1/(x + 1)/(x - 1)` as `1/((x + 1) (x - 1))`, where
+/// `1/((x + 1) (x - 1))` is `1/(x^2 - 1)`; evaluation makes them one
+/// expression, which is the second.
+///
+/// # Errors
+///
+/// As [`Polynomials::with_balls`].
+pub fn expand(e: &Expr, max_terms: usize, cancel: &dyn Cancel) -> Result<Expr, PolyError> {
+    let p = Polynomials::convert(std::slice::from_ref(e), max_terms, Reading::Terms, cancel)?;
+    match &p.fractions[0] {
+        Fraction::Integers { num, den } => p.expansion(num, den, max_terms, cancel),
+        Fraction::GaussianIntegers { num, den } => p.expansion(num, den, max_terms, cancel),
+    }
+}
+
+/// The base `b` and the exponent `-r` of a generator `b^r` with a negative
+/// exact `r`, which [`expand`] takes as a denominator.
+fn inverse(g: &Expr) -> Option<(Expr, Rational)> {
+    if let View::Apply { head, args: [b, r] } = g.view()
+        && head.as_symbol() == Some(Symbol::POWER)
+        && let Some(r) = r.to_rational()
+        && r.is_negative()
+    {
+        return Some((b.clone(), -r));
+    }
+    None
+}
+
+impl Polynomials {
+    /// [`expand`] of `num / den` for a constant `den`, read as
+    /// [`Reading::Terms`] reads: the terms with the same powers of the
+    /// inverses `b^(-r)` go over the expansion of their product of `b^r`.
+    fn expansion<E: Coefficient>(
+        &self,
+        num: &Sparse<E>,
+        den: &Sparse<E>,
+        max_terms: usize,
+        cancel: &dyn Cancel,
+    ) -> Result<Expr, PolyError> {
+        debug_assert!(is_constant(den), "only numbers have denominators");
+        let d = &den.coeffs()[0];
+        let d = (!d.is_one()).then_some(d);
+        let inverses: Vec<Option<(Expr, Rational)>> = self.generators.iter().map(inverse).collect();
+        let mut groups: BTreeMap<Vec<u64>, Vec<Expr>> = BTreeMap::new();
+        for (mut exps, c) in num.terms() {
+            let mut powers = vec![0; exps.len()];
+            for ((e, power), inverse) in exps.iter_mut().zip(&mut powers).zip(&inverses) {
+                if inverse.is_some() {
+                    *power = std::mem::take(e);
+                }
+            }
+            groups
+                .entry(powers)
+                .or_default()
+                .push(self.term_expr(&exps, c, d));
+        }
+        let mut terms = Vec::with_capacity(num.term_count());
+        for (powers, group) in groups {
+            if powers.iter().all(|&k| k == 0) {
+                terms.extend(group);
+                continue;
+            }
+            let factors = powers
+                .iter()
+                .zip(&inverses)
+                .filter(|&(&k, _)| k > 0)
+                .map(|(&k, inverse)| {
+                    let (b, r) = inverse.as_ref().expect("a power of an inverse");
+                    let r = r * &Rational::from(Integer::from(k));
+                    if r.is_one() {
+                        b.clone()
+                    } else {
+                        b.pow(Expr::from(r))
+                    }
+                })
+                .collect();
+            let over = expand(&product(factors), max_terms, cancel)?.pow(-1);
+            terms.extend(group.into_iter().map(|t| {
+                if t == Expr::from(1) {
+                    over.clone()
+                } else {
+                    Expr::call(Symbol::TIMES, [t, over.clone()])
+                }
+            }));
+        }
+        Ok(sum(terms))
     }
 }
 
@@ -517,6 +702,12 @@ fn powers(b: &Expr, e: &Expr) -> Vec<Power> {
     factors
 }
 
+/// Whether `e` is an exact positive number, an exponent that [`expand`]
+/// multiplies out.
+fn positive(e: &Expr) -> bool {
+    e.to_rational().is_some_and(|r| r.is_positive())
+}
+
 /// What `b^e` is to the conversion, for an `e` that is not a sum.
 fn power(b: &Expr, e: &Expr) -> Power {
     if let Some(n) = e.as_i64() {
@@ -545,7 +736,7 @@ fn power(b: &Expr, e: &Expr) -> Power {
 impl Kernels {
     /// Scans the polynomial operations of `exprs`, every distinct
     /// subexpression once.
-    fn scan(exprs: &[Expr]) -> Result<Kernels, PolyError> {
+    fn scan(exprs: &[Expr], reading: Reading) -> Result<Kernels, PolyError> {
         let mut k = Kernels {
             plain: BTreeSet::new(),
             roots: BTreeSet::new(),
@@ -566,9 +757,19 @@ impl Kernels {
                     k.complex = true;
                     k.fractional |= !z.is_gaussian_integer();
                 }
-                View::Ball(_) | View::ComplexBall(_) => return Err(PolyError::Ball(e.clone())),
+                View::Ball(_) | View::ComplexBall(_) => {
+                    if reading == Reading::Exact {
+                        return Err(PolyError::Ball(e.clone()));
+                    }
+                    k.plain.insert(e.clone());
+                }
                 View::Apply { head, args } => match (head.as_symbol(), args) {
                     (Some(Symbol::PLUS | Symbol::TIMES), _) => stack.extend(args.iter().cloned()),
+                    (Some(Symbol::POWER), [_, exponent])
+                        if reading == Reading::Terms && !positive(exponent) =>
+                    {
+                        k.plain.insert(e.clone());
+                    }
                     (Some(Symbol::POWER), [b, exponent]) => {
                         for p in powers(b, exponent) {
                             match p {
@@ -591,7 +792,7 @@ impl Kernels {
                             }
                         }
                     }
-                    (Some(Symbol::EXP), [x]) if !x.is_number() => {
+                    (Some(Symbol::EXP), [x]) if reading != Reading::Terms && !x.is_number() => {
                         let (c, u) = split_exponent(x);
                         k.exponentials
                             .entry((Form::Exp, Expr::from(Symbol::E), u))
@@ -658,6 +859,41 @@ impl Kernels {
     }
 }
 
+/// A bound on the terms of `a b`, whose degree in each variable is at most
+/// `degrees` (ours): the least of the products of terms; the monomials
+/// within those degrees, `∏ (d_i + 1)`; and the monomials of total degree
+/// at most `D = tdeg a + tdeg b` in the `n` variables of the product,
+/// `C(n + D, n)`. So a dense product is judged by its result, not by its
+/// products of terms: `(1 + x + y + z + t)^20` squared makes 113 million
+/// products of terms, and 135751 terms. Saturating.
+fn product_terms<E>(a: &Sparse<E>, b: &Sparse<E>, degrees: &[u64]) -> usize {
+    let pairs = a.term_count().saturating_mul(b.term_count());
+    let present: Vec<u64> = degrees.iter().copied().filter(|&d| d > 0).collect();
+    let boxed = present.iter().fold(1usize, |acc, &d| {
+        acc.saturating_mul(usize::try_from(d).unwrap_or(usize::MAX).saturating_add(1))
+    });
+    let bound = pairs.min(boxed);
+    let total = total_degree(a).saturating_add(total_degree(b));
+    // C(D + k, k) for k = 1, …, n, each step exact, until it passes the
+    // other bounds.
+    let mut simplex: u128 = 1;
+    for k in 1..=present.len() as u128 {
+        simplex = simplex.saturating_mul(u128::from(total) + k) / k;
+        if simplex > bound as u128 {
+            return bound;
+        }
+    }
+    usize::try_from(simplex).map_or(bound, |s| s.min(bound))
+}
+
+/// The largest total degree of the terms of `p`.
+fn total_degree<E>(p: &Sparse<E>) -> u64 {
+    p.terms()
+        .map(|(exps, _)| exps.iter().fold(0u64, |acc, &e| acc.saturating_add(e)))
+        .max()
+        .unwrap_or(0)
+}
+
 /// The gcd of two rationals, non-negative: the gcd of the numerators over
 /// the lcm of the denominators; `gcd(0, c) = |c|`.
 fn rational_gcd(a: &Rational, b: &Rational) -> Rational {
@@ -709,12 +945,14 @@ impl Numbers for GaussianIntegers {
 fn convert<N: Numbers>(
     exprs: &[Expr],
     generators: &Generators,
+    reading: Reading,
     max_terms: usize,
     cancel: &dyn Cancel,
 ) -> Result<Vec<Frac<N::Elem>>, PolyError> {
     let mut converter = Converter::<N> {
         ring: SparseRing::new(N::default(), generators.list.len()),
         generators,
+        reading,
         max_terms,
         cancel,
         memo: HashMap::default(),
@@ -728,6 +966,7 @@ fn convert<N: Numbers>(
 struct Converter<'a, N: Numbers> {
     ring: SparseRing<N>,
     generators: &'a Generators,
+    reading: Reading,
     max_terms: usize,
     cancel: &'a dyn Cancel,
     memo: HashMap<Expr, Frac<N::Elem>>,
@@ -777,6 +1016,11 @@ impl<N: Numbers> Converter<'_, N> {
                 }
                 Ok(product)
             }
+            (Some(Symbol::POWER), [_, exponent])
+                if self.reading == Reading::Terms && !positive(exponent) =>
+            {
+                Ok(self.generator(e))
+            }
             (Some(Symbol::POWER), [b, exponent]) => {
                 let mut product = self.constant(1);
                 for p in powers(b, exponent) {
@@ -785,7 +1029,7 @@ impl<N: Numbers> Converter<'_, N> {
                 }
                 Ok(product)
             }
-            (Some(Symbol::EXP), [x]) if !x.is_number() => {
+            (Some(Symbol::EXP), [x]) if self.reading != Reading::Terms && !x.is_number() => {
                 let (c, u) = split_exponent(x);
                 self.exponential(&(Form::Exp, Expr::from(Symbol::E), u), &c)
             }
@@ -851,13 +1095,16 @@ impl<N: Numbers> Converter<'_, N> {
     }
 
     /// Whether a product of `a` and `b` would pass the limits: more terms
-    /// than allowed, or an exponent past [`MAX_EXPONENT`].
+    /// than allowed, by [`product_terms`], or an exponent past
+    /// [`MAX_EXPONENT`].
     fn too_large(&self, a: &Sparse<N::Elem>, b: &Sparse<N::Elem>) -> bool {
-        a.term_count().saturating_mul(b.term_count()) > self.max_terms
-            || a.degrees()
-                .iter()
-                .zip(b.degrees())
-                .any(|(x, y)| x.saturating_add(y) > MAX_EXPONENT)
+        let degrees: Vec<u64> = a
+            .degrees()
+            .iter()
+            .zip(b.degrees())
+            .map(|(x, y)| x.saturating_add(y))
+            .collect();
+        degrees.iter().any(|&d| d > MAX_EXPONENT) || product_terms(a, b, &degrees) > self.max_terms
     }
 
     fn product(

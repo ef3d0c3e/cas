@@ -242,6 +242,13 @@ pub struct Limits {
     /// left unevaluated, as `2^(10^9)` is. Verification lowers it for its
     /// sample points, a fuzz target to keep each input fast.
     pub number_bits: u64,
+    /// The terms a product may make in a polynomial builtin (CAS-DOC-8 §15
+    /// detail 3), bounded before it is taken by the least of the factors'
+    /// products of terms, the monomials within its degrees and those within
+    /// its total degree; powers are products by squaring. A call past it
+    /// stays unevaluated, with a warning. Sums are not limited: their terms
+    /// were in the input.
+    pub terms: usize,
 }
 
 impl Default for Limits {
@@ -252,6 +259,7 @@ impl Default for Limits {
             match_steps: 1_000_000,
             stack: 0,
             number_bits: 1 << 24,
+            terms: 1_000_000,
         }
     }
 }

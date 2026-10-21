@@ -14,6 +14,11 @@
 //! is one where an evaluation, of a side or an assumption, reaches a limit,
 //! as it would at the other points. So rational expressions are checked
 //! now, and those whose values need balls (`Sin[1/2]`) when Balls lands.
+//!
+//! A step with a [`FORMAL`] head is unchecked: such a head reads the form
+//! of its arguments, not their values, so its value at a point is not its
+//! value there (`GCD[x^2 - 1, x - 1]` is `x - 1`, `GCD[5/4, 1/2]` is
+//! `1/4`).
 
 use foldhash::fast::FixedState;
 use hashbrown::HashSet;
@@ -35,6 +40,34 @@ const DRAWS: usize = 32;
 /// stays unevaluated and tells nothing, where computing it could take
 /// seconds (`Limits::number_bits`).
 const NUMBER_BITS: u64 = 1 << 12;
+
+/// The heads whose value depends on the form of their arguments, not only
+/// on their values, so that substituting a point does not commute with
+/// them: the polynomial builtins but `Expand` and `Together`, which claim
+/// identities (CAS-DOC-8 §11.5, CAS-140), and the structural predicates.
+const FORMAL: [Symbol; 16] = [
+    Symbol::GCD,
+    Symbol::LCM,
+    Symbol::POLYNOMIAL_QUOTIENT,
+    Symbol::POLYNOMIAL_REMAINDER,
+    Symbol::POLYNOMIAL_QUOTIENT_REMAINDER,
+    Symbol::EXPONENT,
+    Symbol::COEFFICIENT,
+    Symbol::LEADING_COEFFICIENT,
+    Symbol::NUMERATOR,
+    Symbol::DENOMINATOR,
+    Symbol::CONTENT,
+    Symbol::PRIMITIVE_PART,
+    Symbol::RESULTANT,
+    Symbol::DISCRIMINANT,
+    Symbol::FREE_Q,
+    Symbol::SAME_Q,
+];
+
+/// Whether `e` has a [`FORMAL`] head.
+fn formal(e: &Expr) -> bool {
+    FORMAL.iter().any(|&h| e.contains(&Expr::from(h)))
+}
 
 /// What [`Trace::verify`] found.
 #[derive(Clone, Debug, PartialEq)]
@@ -145,6 +178,9 @@ enum Range {
 }
 
 fn check(ctx: &Context, step: &Step) -> Outcome {
+    if formal(&step.before) || formal(&step.after) {
+        return Outcome::Unchecked;
+    }
     let Some(symbols) = free_symbols(ctx, &[&step.before, &step.after]) else {
         return Outcome::Unchecked;
     };

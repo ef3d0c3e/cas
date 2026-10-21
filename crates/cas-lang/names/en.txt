@@ -66,12 +66,28 @@ Exact: exact
 Digits: Digits
 # Numeric evaluation with balls, Xcas's evalf (CAS-DOC-5 §9.2, CAS-84).
 N: evalf approx
+# Polynomials, phase 1 (CAS-DOC-8 §10, §15 detail 1; CAS-140).
+Expand: expand
+Together: normal
+GCD: gcd
+LCM: lcm
+PolynomialQuotient: quo
+PolynomialRemainder: rem
+PolynomialQuotientRemainder: quorem
+Exponent: degree
+Coefficient: coeff
+LeadingCoefficient: lcoeff
+Numerator: numer
+Denominator: denom
+Content: content
+PrimitivePart: primpart
+Resultant: resultant
+Discriminant: discriminant
 
 [planned]
 # Calculus, algebra and numerics (CAS-DOC-1, CAS-DOC-4 §1 and §8, CAS-DOC-5).
 Integrate: integrate int
 Sum: sum
-Expand: expand
 Factor: factor
 Simplify: simplify
 

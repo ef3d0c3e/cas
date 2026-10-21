@@ -47,7 +47,8 @@ C entry points.
 An equation whose right side is a decimal would lose it.
 
 giac's own notations are rewritten where the language differs (CAS-DOC-7):
-`list[…]` is `[…]`, and `set[…]` is `{…}`.
+`list[…]` and the coefficient lists `poly1[…]` of `coeff(p, x)` are `[…]`,
+and `set[…]` is `{…}`.
 
 ## Comparing
 
@@ -81,6 +82,20 @@ giac's own notations are rewritten where the language differs (CAS-DOC-7):
 - `nws_caseval` against `caseval`;
 - `restart`;
 - the skip path, with a library that does not exist.
+
+`tests/polynomials.rs`, the polynomial builtins (CAS-140):
+- giac's answers to each of them, recorded as it prints them, read back and
+  compared with this CAS's value of the same input;
+- the departures of CAS-DOC-8 §15, each with giac's answer and this CAS's as
+  decided: gcds normalised, `resultant(c, b) = c^(deg b)`, `degree(0)`, the
+  inferred variable, the degree in `sin(x)`, an expanded `lcm`, one
+  expanded denominator a term in `expand`, and the main variable;
+- a few hundred random inputs a run (128 cases each) to `expand` (products,
+  powers, a product over a polynomial, two fractions), `normal` (a sum of two
+  fractions) and `gcd` (two products with a common factor). In one variable
+  giac's answer is this CAS's; in two, `normal` is compared once this CAS's
+  `normal` gives giac's answer the sign of §15 detail 5, and `gcd` up to the
+  sign, which giac takes from its inputs. 2000 cases each agree.
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.

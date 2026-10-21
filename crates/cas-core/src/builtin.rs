@@ -137,6 +137,26 @@ builtins! {
     QUOTIENT = "Quotient" [LISTABLE, PROTECTED];
     EVEN_Q = "EvenQ" [LISTABLE, PROTECTED];
     ODD_Q = "OddQ" [LISTABLE, PROTECTED];
+    // Polynomials, phase 1 (CAS-DOC-8 §10, §15 detail 1; CAS-140): Xcas's
+    // `expand`, `normal`, `gcd`, `lcm`, `quo`, `rem`, `quorem`, `degree`,
+    // `coeff`, `lcoeff`, `numer`, `denom`, `content`, `primpart`,
+    // `resultant` and `discriminant`.
+    EXPAND = "Expand" [LISTABLE, PROTECTED];
+    TOGETHER = "Together" [LISTABLE, PROTECTED];
+    GCD = "GCD" [FLAT, ORDERLESS, ONE_IDENTITY, LISTABLE, PROTECTED];
+    LCM = "LCM" [FLAT, ORDERLESS, ONE_IDENTITY, LISTABLE, PROTECTED];
+    POLYNOMIAL_QUOTIENT = "PolynomialQuotient" [PROTECTED];
+    POLYNOMIAL_REMAINDER = "PolynomialRemainder" [PROTECTED];
+    POLYNOMIAL_QUOTIENT_REMAINDER = "PolynomialQuotientRemainder" [PROTECTED];
+    EXPONENT = "Exponent" [LISTABLE, PROTECTED];
+    COEFFICIENT = "Coefficient" [LISTABLE, PROTECTED];
+    LEADING_COEFFICIENT = "LeadingCoefficient" [LISTABLE, PROTECTED];
+    NUMERATOR = "Numerator" [LISTABLE, PROTECTED];
+    DENOMINATOR = "Denominator" [LISTABLE, PROTECTED];
+    CONTENT = "Content" [LISTABLE, PROTECTED];
+    PRIMITIVE_PART = "PrimitivePart" [LISTABLE, PROTECTED];
+    RESULTANT = "Resultant" [PROTECTED];
+    DISCRIMINANT = "Discriminant" [LISTABLE, PROTECTED];
     // The number sets of `Element` (CAS-DOC-4 §7).
     INTEGERS = "Integers" [PROTECTED];
     RATIONALS = "Rationals" [PROTECTED];

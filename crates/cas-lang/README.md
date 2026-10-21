@@ -59,7 +59,8 @@ target checks both on what lowering makes of arbitrary bytes. Session tests are 
 `tests/sessions/*.cas`, whose transcripts (each statement, its messages with their line, column
 and text, its result) must match the `.out` files next to them; `BLESS=1` writes the transcripts.
 They cover results and `;`, redefinition and `purge`, guards and types, up-rules (on arguments and
-on heads of arguments), `assume` scoping, errors and warnings with their positions, and procedures:
+on heads of arguments), `assume` scoping, errors and warnings with their positions, the polynomial
+builtins with their warnings, and procedures:
 Collatz, Euclid, Newton's method, recursion through rules, jumps, closures and nested scopes, and
 every error at definition time and at run time. Unit tests
 in `src/session/tests.rs` interrupt a branching recursion from another thread and check that the
