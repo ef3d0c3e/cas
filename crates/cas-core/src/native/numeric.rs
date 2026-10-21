@@ -143,10 +143,15 @@ fn larger(z: &ComplexBall) -> &Float {
     }
 }
 
-/// Half a unit of the `d`-th significant digit of `m`, rounded up: the
-/// radius at which a ball around `m` shows `m` to `d` digits, the printer
-/// writing the shortest decimal inside a ball. `None` for 0, and for a value
-/// whose decimal exponent is beyond `i64`.
+/// Half a unit of the `d`-th significant digit of `m`, rounded down: the
+/// radius up to which a ball around `m` shows `m` to `d` digits, the
+/// printer writing the shortest decimal inside the ball, or else the digits
+/// it is sure of. Rounded up, a ball around a tie of the `d`-th digit,
+/// `0.12345` to 4 digits, held both neighbours, `0.1234` and `0.1235`, and
+/// showed a digit fewer (CAS-153). Rounded down it holds at most one, or
+/// both as its ends, when the tie is its midpoint and half a unit is exact,
+/// and the printer writes one of them. `None` for 0, and for a value whose
+/// decimal exponent is beyond `i64`.
 fn half_unit(m: &Float, d: u64) -> Option<Mag> {
     if m.is_zero() {
         return None;
@@ -159,7 +164,7 @@ fn half_unit(m: &Float, d: u64) -> Option<Mag> {
         .checked_add(length - 1)?
         .checked_sub(i64::try_from(d).ok()? - 1)?;
     let half = Ball::from_scaled(&Integer::from(5), unit.checked_sub(1)?, 64);
-    Some(Mag::from_float(half.mid()).add(half.rad()))
+    Some(Mag::from_float_lower(half.mid()).sub_lower(half.rad()))
 }
 
 /// `b` with a radius of half a unit of its `d`-th digit, if it is

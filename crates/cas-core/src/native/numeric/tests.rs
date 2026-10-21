@@ -435,6 +435,78 @@ fn comparisons_inside_n_decide_only_what_they_prove() {
     }
 }
 
+/// The digits a ball shows, `d` of them, zeros after the last as padding.
+fn shown_digits_of(b: &Ball, d: usize) -> String {
+    let mut shown = significant(&ball_decimal(b, 53))
+        .trim_end_matches('0')
+        .to_owned();
+    while shown.len() < d {
+        shown.push('0');
+    }
+    shown
+}
+
+/// Values at a tie of the `d`-th digit, and next to one, of both signs and
+/// in several decades, none of them dyadic: `N[x, d]` shows `d` digits, within one unit of the
+/// nearest, never a digit fewer (CAS-153: `N[-1422/8000, 4]`, -0.17775,
+/// showed `-0.178`).
+#[test]
+fn digits_next_to_ties() {
+    let cases: &[(i64, i64, u64)] = &[
+        (-1422, 8000, 4),
+        (1422, 8000, 4),
+        (17765, 100_000, 4),
+        (12345, 100_000, 4),
+        (-12345, 100_000, 4),
+        (12345, 100, 4),
+        (-1_234_565, 100, 6),
+        (2001, 2000, 4),
+        (1_234_567_890_123_455, 10_000_000_000_000_000, 15),
+        (-1_234_567_890_123_455, 10_000_000_000_000_000, 15),
+        (25, 1000, 1),
+        (35, 100, 1),
+        (123_456_785, 1_000_000_000, 8),
+        (17_769, 100_000, 4),
+    ];
+    for &(p, q, d) in cases {
+        let text = format!("N[Times[{p}, Power[{q}, -1]], {d}]");
+        let (e, warnings) = eval(&text);
+        assert_eq!(warnings, vec![], "{text}");
+        let b = ball_of(&e);
+        assert!(
+            b.contains_rational(&Rational::new(p.into(), q.into())),
+            "{text}"
+        );
+        // Dyadic values are exact balls, which show their own digits.
+        assert!(!b.is_exact(), "{text}");
+        let digits = usize::try_from(d).unwrap();
+        let shown = shown_digits_of(&b, digits);
+        assert_eq!(shown.len(), digits, "{text}: {e}");
+        let mut x = Mpfr::with_val(256, p);
+        x /= q;
+        let expected = mpfr_digits(&x, digits);
+        let gap = shown
+            .parse::<u128>()
+            .unwrap()
+            .abs_diff(expected.parse::<u128>().unwrap());
+        assert!(gap <= 1, "{text}: {e} shows {shown}, against {expected}");
+    }
+    // 1234.5 + 10^-27 is not dyadic, but its midpoint is the tie 1234.5,
+    // and half a unit of its 4th digit, 1/2, is dyadic: a radius of exactly
+    // 1/2 would hold 1234 and 1235.
+    let text =
+        "N[Times[1234500000000000000000000000001, Power[1000000000000000000000000000, -1]], 4]";
+    let (e, warnings) = eval(text);
+    assert_eq!(warnings, vec![], "{text}");
+    let b = ball_of(&e);
+    assert!(!b.is_exact(), "{text}");
+    let shown = shown_digits_of(&b, 4);
+    assert!(
+        shown == "1234" || shown == "1235",
+        "{text}: {e} shows {shown}"
+    );
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(256))]
 
