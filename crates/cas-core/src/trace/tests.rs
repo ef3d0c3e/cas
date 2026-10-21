@@ -301,6 +301,42 @@ fn natives_report_steps_and_warnings_of_their_own() {
     assert_eq!(report.warnings.len(), 1);
 }
 
+/// A part that warned in its own rewrite is attempted again where it is
+/// met; one whose parts warned is a stamp hit in later calls, which takes no
+/// step but gives the warning again (CAS-149).
+#[test]
+fn a_warned_part_met_again_warns_again() {
+    let mut ctx = Context::new();
+    delayed(
+        &mut ctx,
+        "f[PatternTest[Pattern[n, Blank[]], IntegerQ]]",
+        "Power[n, 2]",
+    );
+    check(
+        &ctx,
+        TraceLevel::Verbose,
+        &[(
+            "List[f[a], g[f[a]]]",
+            "
+[1] attempts 1: f[a] -> f[a]
+  [] evaluation: IntegerQ[a] -> False
+    [] native IntegerQ: IntegerQ[a] -> False
+[2, 1] attempts 1: f[a] -> f[a]
+  [] evaluation: IntegerQ[a] -> False
+    [] memo Some(0): IntegerQ[a] -> False",
+        )],
+    );
+    for input in ["List[f[a], g[f[a]]]", "g[f[a]]"] {
+        let (_, report) = traced(&ctx, input, TraceLevel::Verbose);
+        assert_eq!(
+            report.warnings,
+            [Warning::NoDefinitionMatches(read("f[a]"))],
+            "{input}"
+        );
+        assert!(report.trace.steps.is_empty(), "{input}");
+    }
+}
+
 #[test]
 fn warnings() {
     let mut ctx = Context::new();
@@ -362,7 +398,7 @@ fn warnings() {
             assert_eq!(report.warnings, *expected, "{input} at {level:?}");
         }
     }
-    // Plain evaluation drops them, and stamps nothing that warned: they
+    // Plain evaluation drops them, but stamps what warned with them: they
     // come again.
     assert_eq!(ctx.eval(&read("g[f[a]]")), Ok(read("g[f[a]]")));
     for _ in 0..2 {

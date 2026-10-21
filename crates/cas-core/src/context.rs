@@ -2,8 +2,11 @@
 
 use std::fmt;
 use std::num::NonZeroU64;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
+
+use foldhash::fast::FixedState;
+use hashbrown::HashMap;
 
 use crate::assume::{Domain, Facts};
 use crate::attributes::Attributes;
@@ -11,6 +14,7 @@ use crate::expr::{Expr, Repr};
 use crate::rules::Rules;
 use crate::symbol::Symbol;
 use crate::symbol_map::SymbolMap;
+use crate::trace::Warning;
 
 /// Values, rules, the attributes of user symbols, assumptions and limits.
 ///
@@ -40,6 +44,49 @@ pub struct Context {
     id: StateId,
     /// Not part of the state: setting it changes no id.
     interrupt: Option<Interrupt>,
+    /// The fixpoints of this state whose evaluation warned, with their
+    /// warnings; shared with the clones of the same state.
+    warned: Arc<WarnedFixpoints>,
+}
+
+/// The bit of a stamp that marks a fixpoint whose evaluation warned
+/// (CAS-149). Ids never reach it.
+pub(crate) const WARNED: u64 = 1 << 63;
+
+/// The stamp of `e`: the id of the state it was marked a fixpoint in, with
+/// [`WARNED`] if its evaluation warned; 0 for an atom.
+#[inline]
+pub(crate) fn stamp(e: &Expr) -> u64 {
+    match &e.0 {
+        Repr::Node(n) => n.eval_stamp.load(Ordering::Relaxed),
+        _ => 0,
+    }
+}
+
+/// The most warnings [`WarnedFixpoints`] holds, all fixpoints together.
+/// Past it, fixpoints that warn are not stamped: each call evaluates them
+/// again, and its memo keeps them.
+const MAX_WARNED: usize = 1 << 16;
+
+/// The fixpoints of one state whose evaluation warned, with what they
+/// warned: a stamp hit on one gives its warnings again, so that it warns in
+/// every call while it costs what any fixpoint does.
+#[derive(Default)]
+struct WarnedFixpoints {
+    table: Mutex<WarnedTable>,
+}
+
+impl WarnedFixpoints {
+    fn lock(&self) -> std::sync::MutexGuard<'_, WarnedTable> {
+        self.table.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+}
+
+#[derive(Default)]
+struct WarnedTable {
+    warnings: HashMap<Expr, Arc<[Warning]>, FixedState>,
+    /// How many warnings they hold together.
+    held: usize,
 }
 
 /// The maps are persistent, so a change to a shared state copies O(log n)
@@ -89,8 +136,10 @@ pub struct StateId(NonZeroU64);
 impl StateId {
     fn fresh() -> StateId {
         static NEXT: AtomicU64 = AtomicU64::new(1);
-        // 2^64 states are never reached; the check catches a wrap to zero.
+        // 2^63 states are never reached; the check keeps the stamps' bit
+        // for warnings free.
         let id = NEXT.fetch_add(1, Ordering::Relaxed);
+        assert!(id < WARNED, "StateId overflow");
         StateId(NonZeroU64::new(id).expect("StateId overflow"))
     }
 
@@ -105,6 +154,7 @@ impl Default for Context {
             state: Arc::default(),
             id: StateId::fresh(),
             interrupt: None,
+            warned: Arc::default(),
         }
     }
 }
@@ -290,6 +340,7 @@ impl Context {
     /// shared.
     fn state_mut(&mut self) -> &mut State {
         self.id = StateId::fresh();
+        self.warned = Arc::default();
         Arc::make_mut(&mut self.state)
     }
 
@@ -495,17 +546,49 @@ impl Context {
     }
 
     /// Whether `e` was marked a fixpoint in this state
-    /// ([`mark_fixpoint`](Self::mark_fixpoint)). Always `false` for atoms,
-    /// which have no stamp; the evaluator handles them directly.
+    /// ([`mark_fixpoint`](Self::mark_fixpoint)), or found one by an
+    /// evaluation that warned, which the stamp keeps. Always `false` for
+    /// atoms, which have no stamp; the evaluator handles them directly.
     ///
     /// A node holds one stamp, so marking it in another state forgets this
     /// one: a miss, never a wrong hit, since ids are unique.
     #[must_use]
     pub fn is_fixpoint(&self, e: &Expr) -> bool {
-        match &e.0 {
-            Repr::Node(n) => n.eval_stamp.load(Ordering::Relaxed) == self.id.get(),
-            _ => false,
+        stamp(e) & !WARNED == self.id.get()
+    }
+
+    /// The id of this state as stamps hold it.
+    #[inline]
+    pub(crate) fn stamp_id(&self) -> u64 {
+        self.id.get()
+    }
+
+    /// Marks `e` a fixpoint of this state whose evaluation gave `warnings`,
+    /// which a stamp hit gives again. `false` when the table of such
+    /// fixpoints is full ([`MAX_WARNED`]): `e` is then not stamped.
+    #[cold]
+    pub(crate) fn mark_warned_fixpoint(&self, e: &Expr, warnings: &Arc<[Warning]>) -> bool {
+        let Repr::Node(n) = &e.0 else {
+            return false;
+        };
+        let mut table = self.warned.lock();
+        if table.held + warnings.len() > MAX_WARNED {
+            return false;
         }
+        table.held += warnings.len();
+        if let Some(old) = table.warnings.insert(e.clone(), Arc::clone(warnings)) {
+            table.held -= old.len();
+        }
+        n.eval_stamp
+            .store(self.id.get() | WARNED, Ordering::Relaxed);
+        true
+    }
+
+    /// The warnings of `e`, stamped a fixpoint of this state by an
+    /// evaluation that warned.
+    #[cold]
+    pub(crate) fn fixpoint_warnings(&self, e: &Expr) -> Option<Arc<[Warning]>> {
+        self.warned.lock().warnings.get(e).cloned()
     }
 
     /// Records that evaluating `e` in this state gives `e` itself. For
@@ -531,6 +614,7 @@ impl fmt::Debug for Context {
             .field("domain", &self.state.domain)
             .field("limits", &self.state.limits)
             .field("working_precision", &self.state.working_precision)
+            .field("warned_fixpoints", &self.warned.lock().warnings.len())
             .field(
                 "interrupted",
                 &self.interrupt.as_ref().map(Interrupt::is_interrupted),

@@ -9,7 +9,9 @@ use std::sync::{LazyLock, Mutex, PoisonError};
 use proptest::prelude::*;
 
 use super::{Eval, NativeFn, STACK_PER_LEVEL};
-use crate::{Attributes, Context, EvalError, Expr, Limits, Symbol, TraceLevel};
+use crate::{
+    Attributes, Context, EvalError, EvalOptions, Expr, Limits, Symbol, TraceLevel, Warning,
+};
 
 static NATIVES: LazyLock<Mutex<HashMap<Symbol, NativeFn>>> = LazyLock::new(Mutex::default);
 
@@ -335,6 +337,161 @@ fn stamps_make_evaluating_a_result_again_free() {
     ctx.set(sym("stamp_x"), read("1")).unwrap();
     assert_eq!(ctx.eval(&r).unwrap(), r);
     assert_eq!(CALLS.load(Ordering::Relaxed), 4);
+}
+
+/// A part whose parts warned is stamped and memoised with their warnings,
+/// which a hit gives again. A part that warned only in its own rewrites is
+/// evaluated again where it is met, as before. Either way, every call warns
+/// (CAS-149).
+#[test]
+fn warned_parts_keep_their_warnings() {
+    static CALLS: AtomicUsize = AtomicUsize::new(0);
+    define_native("warn_counted", |ev, e| {
+        CALLS.fetch_add(1, Ordering::Relaxed);
+        ev.warn(Warning::NoDefinitionMatches(e.clone()));
+        Ok(None)
+    });
+    let calls = || CALLS.load(Ordering::Relaxed);
+    let report =
+        |ctx: &Context, input: &str| ctx.eval_with(&read(input), &EvalOptions::default()).1;
+    let mut ctx = Context::new();
+    let e = "warn_f[warn_counted[1], warn_counted[1], warn_g[warn_counted[1]]]";
+    let warned = [Warning::NoDefinitionMatches(read("warn_counted[1]"))];
+    // The part that warns is evaluated where it is met; what holds it, once.
+    assert_eq!(report(&ctx, e).warnings, warned);
+    assert_eq!(calls(), 3);
+    assert!(ctx.is_fixpoint(&read(e)) && !ctx.is_fixpoint(&read("warn_counted[1]")));
+    // A stamp hit gives the warnings again, evaluating nothing.
+    assert_eq!(report(&ctx, e).warnings, warned);
+    assert_eq!(calls(), 3);
+    // A plain call keeps no warnings, but stamps them all the same.
+    assert_eq!(
+        ctx.eval(&read("warn_h[warn_counted[2]]")),
+        Ok(read("warn_h[warn_counted[2]]"))
+    );
+    assert_eq!(
+        report(&ctx, "warn_h[warn_counted[2]]").warnings,
+        [Warning::NoDefinitionMatches(read("warn_counted[2]"))]
+    );
+    assert_eq!(calls(), 4);
+    // A form met again in the memo gives its warnings to what holds it:
+    // `warn_g[…]` takes `warn_k[warn_counted[Plus[1, 2]]]` from the memo,
+    // and warns on its own in a later call.
+    let three = [Warning::NoDefinitionMatches(read("warn_counted[3]"))];
+    let list = "List[warn_k[warn_counted[Plus[1, 2]]], warn_g[warn_k[warn_counted[Plus[1, 2]]]]]";
+    assert_eq!(report(&ctx, list).warnings, three);
+    assert_eq!(calls(), 5);
+    assert_eq!(
+        report(&ctx, "warn_g[warn_k[warn_counted[3]]]").warnings,
+        three
+    );
+    assert_eq!(calls(), 5);
+    // Another state: the stamps miss, and the parts are evaluated again.
+    ctx.set(sym("warn_x"), read("1")).unwrap();
+    assert_eq!(report(&ctx, e).warnings, warned);
+    assert_eq!(calls(), 8);
+}
+
+/// A rule that calls its head twice, over a part that warns: the memo of
+/// the forms passed by evaluations that warned evaluates each level once,
+/// where evaluating them again would take 2^n (CAS-149).
+#[test]
+fn a_doubling_rule_over_a_warned_part_takes_linear_time() {
+    static CALLS: AtomicUsize = AtomicUsize::new(0);
+    define_native("dbl_bottom", |ev, e| {
+        ev.warn(Warning::NoDefinitionMatches(e.clone()));
+        Ok(None)
+    });
+    define_native("dbl_g", |_, _| {
+        CALLS.fetch_add(1, Ordering::Relaxed);
+        Ok(None)
+    });
+    let mut ctx = Context::new();
+    ctx.define_delayed(&read("dbl[0]"), &read("dbl_bottom[0]"))
+        .unwrap();
+    ctx.define_delayed(
+        &read("dbl[Pattern[n, Blank[]]]"),
+        &read("dbl_g[dbl[Plus[n, -1]], dbl[Plus[n, -1]]]"),
+    )
+    .unwrap();
+    assert!(ctx.eval(&read("dbl[20]")).is_ok());
+    assert_eq!(CALLS.load(Ordering::Relaxed), 20);
+}
+
+/// A part whose parts warned, first met shallow and then deeper down, comes
+/// from the memo there, which keeps the call within the recursion limit. A
+/// rule drops the shallow one, so the result holds only the deep one: its
+/// stamp keeps it a hit when the result is evaluated again in a new call.
+/// The `eval` fuzz target found a result that went past the limit when
+/// only the memo kept such parts (CAS-149).
+#[test]
+fn a_result_with_warned_parts_evaluates_to_itself() {
+    let context = || {
+        let mut ctx = Context::new();
+        ctx.define(&read("idem_f[0]"), &read("1")).unwrap();
+        ctx.define_delayed(
+            &read("idem_k[Pattern[x, Blank[]], Pattern[y, Blank[]]]"),
+            &read("y"),
+        )
+        .unwrap();
+        let mut limits = ctx.limits();
+        limits.recursion = 40;
+        ctx.set_limits(limits);
+        ctx
+    };
+    let part = read("idem_g[idem_f[1]]");
+    let input = |n| {
+        let deep = nested(sym("idem_h"), part.clone(), n);
+        Expr::apply(&sym("idem_k").into(), &[part.clone(), deep])
+    };
+    // The deepest nesting a first evaluation takes.
+    let n = (1..80)
+        .take_while(|&n| context().eval(&input(n)).is_ok())
+        .last()
+        .expect("a nesting that evaluates");
+    let ctx = context();
+    let r = ctx.eval(&input(n)).unwrap();
+    assert_eq!(r, nested(sym("idem_h"), part.clone(), n));
+    assert_eq!(ctx.eval(&r), Ok(r));
+}
+
+/// What the `eval` fuzz target found (CAS-149): each rewrite nests one more
+/// comparison, whose difference evaluates the comparison below again, and
+/// the part at the bottom warns. Without the memo, each level evaluated the
+/// one below three times, so 121 levels never ended.
+#[test]
+fn nested_comparisons_of_a_warned_part_take_linear_time() {
+    static CALLS: AtomicUsize = AtomicUsize::new(0);
+    define_native("nest_bottom", |ev, e| {
+        CALLS.fetch_add(1, Ordering::Relaxed);
+        ev.warn(Warning::NoDefinitionMatches(e.clone()));
+        Ok(None)
+    });
+    let mut ctx = Context::new();
+    ctx.set_attributes(sym("nest_k"), Attributes::FLAT).unwrap();
+    ctx.define(
+        &read("nest_k[Optional[Pattern[n, Blank[]]], Optional[Pattern[m, Blank[]]], Optional[Pattern[s, Blank[]]]]"),
+        &read("List[nest_k[Less[n, c, -3], -3, -3], s, b]"),
+    )
+    .unwrap();
+    // The bottom is evaluated where it is met, the same few times at any
+    // depth: the comparisons above it come from their stamps.
+    let mut before = 0;
+    for recursion in [24, 121] {
+        let mut limits = ctx.limits();
+        limits.recursion = recursion;
+        ctx.set_limits(limits);
+        assert_eq!(
+            ctx.eval(&read("nest_k[nest_bottom[-3], -3, -3]")),
+            Err(EvalError::RecursionLimit)
+        );
+        let calls = CALLS.load(Ordering::Relaxed) - before;
+        before += calls;
+        assert!(
+            calls <= 8,
+            "{calls} evaluations of the bottom at {recursion} levels"
+        );
+    }
 }
 
 #[test]

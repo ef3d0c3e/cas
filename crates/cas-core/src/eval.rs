@@ -32,11 +32,21 @@
 //! taken (§9, `trace`). The loop comes in two instances, with a tracer and
 //! without one, which has no branch for it; the sources of rewrites test for
 //! one once each. Recording returns before evaluation goes deeper, so a
-//! level takes no more stack. A part whose evaluation warned is neither
-//! stamped nor memoised: evaluating it again warns again.
+//! level takes no more stack.
+//!
+//! A part whose parts warned is stamped and memoised with their warnings,
+//! which a hit gives again: it warns in every call, as an evaluation would,
+//! at the cost of a hit (CAS-149). Leaving it uncached would leave every
+//! evaluation above it uncached too, and a native that evaluates its
+//! arguments again, as a comparison evaluating `a - b` does, would take time
+//! exponential in the depth. A part that warned only in its own rewrites
+//! stays uncached, as before: evaluated again where it is met, it takes one
+//! level.
 
 use std::borrow::Cow;
 use std::fmt;
+use std::mem::ManuallyDrop;
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
 use foldhash::fast::FixedState;
@@ -44,7 +54,7 @@ use hashbrown::{HashMap, HashSet};
 
 use crate::attributes::Attributes;
 use crate::build::flatten;
-use crate::context::{Context, EvalError, Limits};
+use crate::context::{Context, EvalError, Limits, WARNED, stamp};
 use crate::expr::{Expr, View};
 use crate::rules;
 use crate::symbol::Symbol;
@@ -77,8 +87,7 @@ pub type NativeFn = fn(&mut Eval<'_>, &Expr) -> Result<Option<Expr>, EvalError>;
 /// It holds the call's memo, which maps each node evaluated so far to its
 /// result, so a repeated subexpression is evaluated once per call, the
 /// recursion depth, and what [`Context::eval_with`] records: the warnings
-/// and the trace (§9). The local frames of procedures (the Language module)
-/// will live here too.
+/// and the trace (§9).
 pub struct Eval<'c> {
     context: &'c Context,
     recursion: u32,
@@ -93,6 +102,49 @@ pub struct Eval<'c> {
     recording: Option<&'c mut Recording>,
     /// How many warnings were given, kept or not.
     warned: u32,
+    /// The least stamp that takes a node past the memo to
+    /// [`Eval::warned_hit`]: [`WARNED`], the bit of fixpoints that warned,
+    /// until this call memoises a part that warned, and 0 from then on.
+    warned_bound: u64,
+    /// What they were, from the first one on.
+    warnings: WarnedSlot,
+}
+
+/// The most warnings a part keeps with its stamp or memo entries. A part
+/// whose evaluation gave more is not cached, as before CAS-149: its parts
+/// are, so evaluating it again takes one level, while keeping the warnings
+/// of every part with every part above it would take time quadratic in
+/// their number.
+const MAX_KEPT: usize = 64;
+
+/// [`Warned`] once a call warns. It drops what it holds out of line, so a
+/// call that does not warn pays only a test for it.
+#[derive(Default)]
+struct WarnedSlot(ManuallyDrop<Option<Box<Warned>>>);
+
+impl Drop for WarnedSlot {
+    #[inline]
+    fn drop(&mut self) {
+        #[cold]
+        #[inline(never)]
+        fn drop_warned(w: Option<Box<Warned>>) {
+            drop(w);
+        }
+        if self.0.is_some() {
+            drop_warned(std::mem::take(&mut *self.0));
+        }
+    }
+}
+
+/// The warnings of a call (CAS-149).
+#[derive(Default)]
+struct Warned {
+    /// The warnings given so far, kept or not, with the depth of the
+    /// evaluation that gave them: those given while a part is evaluated go
+    /// with its stamp or its memo entries.
+    given: Vec<(u32, Warning)>,
+    /// The memo of the parts whose evaluation warned, with their warnings.
+    memo: HashMap<Expr, (Expr, Arc<[Warning]>), FixedState>,
 }
 
 /// The warnings so far, each once, and the trace being recorded.
@@ -151,6 +203,8 @@ impl<'c> Eval<'c> {
             caches: true,
             recording: None,
             warned: 0,
+            warned_bound: WARNED,
+            warnings: WarnedSlot::default(),
         }
     }
 
@@ -240,15 +294,22 @@ impl<'c> Eval<'c> {
     }
 
     /// Gives `warning`, which the report of [`Context::eval_with`] lists
-    /// once; [`Context::eval`] drops it. The part being evaluated is not
-    /// stamped, so evaluating it again warns again.
+    /// once; [`Context::eval`] drops it. The part being evaluated keeps it
+    /// with its stamp or its memo entries, so that evaluating it again, in
+    /// this call or another, warns again.
     pub fn warn(&mut self, warning: Warning) {
-        self.warned = self.warned.wrapping_add(1);
         if let Some(r) = &mut self.recording {
             if r.seen.insert(warning.clone()) {
-                r.warnings.push(warning);
+                r.warnings.push(warning.clone());
             }
         }
+        let depth = self.depth;
+        self.warnings
+            .0
+            .get_or_insert_default()
+            .given
+            .push((depth, warning));
+        self.warned = self.warned.wrapping_add(1);
     }
 
     /// What rewrote the subject of the attempt in progress, for the trace.
@@ -401,7 +462,8 @@ impl<'c> Eval<'c> {
                 _ => break e,
             }
             if self.caches {
-                if self.context.is_fixpoint(&e) {
+                let stamp = stamp(&e);
+                if stamp == self.context.stamp_id() {
                     break e;
                 }
                 if let Some(result) = self.memo.get(&e) {
@@ -410,6 +472,11 @@ impl<'c> Eval<'c> {
                         self.trace_memo(&e, &result);
                     }
                     break result;
+                }
+                if stamp >= self.warned_bound {
+                    if let Some(result) = self.warned_hit::<TRACED>(&e, stamp) {
+                        break result;
+                    }
                 }
             }
             passed.push(e.clone());
@@ -425,20 +492,116 @@ impl<'c> Eval<'c> {
                 }
             }
         };
-        if self.caches && self.warned == warned {
-            if fixpoint {
-                self.context.mark_fixpoint(&result);
-            }
-            if TRACED {
-                self.trace_memoised(&passed, &result, first);
-            }
-            for p in passed {
-                if p != result {
-                    self.memo.insert(p, result.clone());
+        if self.caches {
+            if self.warned == warned {
+                if fixpoint {
+                    self.context.mark_fixpoint(&result);
                 }
+                if TRACED {
+                    self.trace_memoised(&passed, &result, first);
+                }
+                for p in passed {
+                    if p != result {
+                        self.memo.insert(p, result.clone());
+                    }
+                }
+            } else {
+                self.memoise_warned::<TRACED>(passed, &result, first, fixpoint, warned);
             }
         }
         Ok(result)
+    }
+
+    /// A hit on `e` as a fixpoint whose evaluation warned, by its `stamp`,
+    /// or in the memo of the parts whose evaluation warned: their warnings
+    /// are given again.
+    #[cold]
+    #[inline(never)]
+    fn warned_hit<const TRACED: bool>(&mut self, e: &Expr, stamp: u64) -> Option<Expr> {
+        if stamp == self.context.stamp_id() | WARNED {
+            if let Some(warnings) = self.context.fixpoint_warnings(e) {
+                for w in warnings.iter() {
+                    self.warn(w.clone());
+                }
+                return Some(e.clone());
+            }
+        }
+        let (result, warnings) = self.warnings.0.as_ref()?.memo.get(e)?.clone();
+        for w in warnings.iter() {
+            self.warn(w.clone());
+        }
+        if TRACED {
+            self.trace_memo(e, &result);
+        }
+        Some(result)
+    }
+
+    /// Stamps and memoises what an evaluation that warned passed on the way
+    /// to `result`, with the warnings given after the first `warned`, when
+    /// some came from its parts. A fixpoint is stamped with them, or
+    /// memoised as itself when the context holds too many already.
+    ///
+    /// A part that warned only in its own rewrites, its arguments warning
+    /// nothing, is left as before CAS-149: evaluated again where it is met,
+    /// it takes one level. That keeps the cost of a warning that many leaves
+    /// give, as `f(1) + f(2) + …` with no definition matching, at what it
+    /// was.
+    #[cold]
+    #[inline(never)]
+    fn memoise_warned<const TRACED: bool>(
+        &mut self,
+        passed: Vec<Expr>,
+        result: &Expr,
+        first: usize,
+        fixpoint: bool,
+        warned: u32,
+    ) {
+        let Some(cold) = self.warnings.0.as_deref() else {
+            return;
+        };
+        // The count wraps; the list does not.
+        let since = cold.given.len() - self.warned.wrapping_sub(warned) as usize;
+        let window = &cold.given[since..];
+        // Parts are evaluated deeper than the part itself.
+        if window.iter().all(|(depth, _)| *depth <= self.depth) {
+            return;
+        }
+        let warnings: Arc<[Warning]> = match window {
+            [(_, w)] => Arc::from([w.clone()]),
+            _ if window.len() <= 16 => {
+                let mut kept: Vec<Warning> = Vec::new();
+                for (_, w) in window {
+                    if !kept.contains(w) {
+                        kept.push(w.clone());
+                    }
+                }
+                kept.into()
+            }
+            _ => {
+                let mut kept = Vec::new();
+                let mut seen = HashSet::with_hasher(FixedState::default());
+                for (_, w) in window {
+                    if seen.insert(w) {
+                        if kept.len() == MAX_KEPT {
+                            return;
+                        }
+                        kept.push(w.clone());
+                    }
+                }
+                kept.into()
+            }
+        };
+        let stamped = fixpoint && self.context.mark_warned_fixpoint(result, &warnings);
+        if TRACED {
+            self.trace_memoised(&passed, result, first);
+        }
+        let memo = &mut self.warnings.0.get_or_insert_default().memo;
+        for p in passed {
+            if p != *result || !stamped {
+                memo.insert(p, (result.clone(), Arc::clone(&warnings)));
+                self.warned_bound = 0;
+            }
+        }
     }
 
     /// Counts a rewrite against [`Limits::iterations`]. An evaluation that
