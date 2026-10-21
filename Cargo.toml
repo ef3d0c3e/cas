@@ -13,6 +13,7 @@ publish = false
 [workspace.dependencies]
 cas-num = { path = "crates/cas-num" }
 cas-core = { path = "crates/cas-core" }
+cas-lang = { path = "crates/cas-lang" }
 cas-poly = { path = "crates/cas-poly" }
 foldhash = { version = "0.2.0", default-features = false }
 hashbrown = { version = "0.16.1", default-features = false }

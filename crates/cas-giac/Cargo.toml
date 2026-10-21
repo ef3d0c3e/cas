@@ -1,0 +1,18 @@
+[package]
+name = "cas-giac"
+description = "libgiac, Xcas's engine, as a test oracle: loaded at run time, its answers read back through the language"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish.workspace = true
+readme = "README.md"
+
+[dependencies]
+cas-core.workspace = true
+cas-lang.workspace = true
+libc = "0.2.191"
+
+[lints]
+workspace = true

@@ -70,6 +70,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "cas-giac"
+version = "0.1.0"
+dependencies = [
+ "cas-core",
+ "cas-lang",
+ "libc",
+]
+
+[[package]]
 name = "cas-lang"
 version = "0.1.0"
 dependencies = [

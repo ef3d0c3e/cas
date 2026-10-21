@@ -1,3 +1,6 @@
 # `Expr` holds an atomic fixpoint stamp, but its `Hash` and `Eq` never read
 # it, so it is a sound hash key.
 ignore-interior-mutability = ["cas_core::expr::Expr"]
+
+# Names of products, not code: `..` keeps clippy's own list.
+doc-valid-idents = ["NumWorks", ".."]
