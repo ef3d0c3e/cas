@@ -93,6 +93,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "cas-poly"
+version = "0.1.0"
+dependencies = [
+ "cas-num",
+ "proptest",
+]
+
+[[package]]
 name = "cas-tune"
 version = "0.1.0"
 dependencies = [
