@@ -246,3 +246,70 @@ fn division_by_zero_panics() {
 fn zero_to_negative_power_panics() {
     let _ = Rational::ZERO.pow(-1);
 }
+
+#[test]
+fn simplest_between() {
+    let q = |n: i64, d: i64| Rational::new(n.into(), d.into());
+    for (lo, hi, simplest) in [
+        (q(3, 10), q(4, 10), q(1, 3)),
+        (q(1, 3), q(1, 3), q(1, 3)),
+        (q(-1, 2), q(1, 3), q(0, 1)),
+        (q(5, 2), q(7, 2), q(3, 1)),
+        (q(3, 1), q(7, 2), q(3, 1)),
+        (q(-7, 2), q(-5, 2), q(-3, 1)),
+        // Numbers that round to 0.333333333333 at 12 digits.
+        (
+            q(3_333_333_333_325, 10_000_000_000_000),
+            q(3_333_333_333_335, 10_000_000_000_000),
+            q(1, 3),
+        ),
+        // ... and to 0.7 at 12 digits: no fraction simpler than itself.
+        (
+            q(6_999_999_999_995, 10_000_000_000_000),
+            q(7_000_000_000_005, 10_000_000_000_000),
+            q(7, 10),
+        ),
+    ] {
+        assert_eq!(
+            Rational::simplest_between(&lo, &hi),
+            Some(simplest),
+            "[{lo}, {hi}]"
+        );
+    }
+    assert_eq!(Rational::simplest_between(&q(1, 2), &q(1, 3)), None);
+}
+
+proptest! {
+    /// Against a search of the denominators in order: the interval holds
+    /// the result, no smaller denominator has a fraction in it, and none
+    /// of the same denominator is smaller in magnitude.
+    #[test]
+    fn simplest_between_has_the_least_denominator(
+        (a, b, c, d) in (-60i64..60, 1i64..40, -60i64..60, 1i64..40)
+    ) {
+        let (x, y) = (Rational::new(a.into(), b.into()), Rational::new(c.into(), d.into()));
+        let (lo, hi) = if x <= y { (x, y) } else { (y, x) };
+        let s = Rational::simplest_between(&lo, &hi).expect("not empty");
+        prop_assert!(lo <= s && s <= hi);
+        let found = (1i64..)
+            .find_map(|den| {
+                let den_q = Rational::from(Integer::from(den));
+                let first = (&lo * &den_q).ceil();
+                let last = (&hi * &den_q).floor();
+                (first <= last).then(|| {
+                    // The least magnitude: 0 if it is there, else the end nearest 0.
+                    let zero = Integer::from(0);
+                    let num = if first <= zero && zero <= last {
+                        zero
+                    } else if first.is_positive() {
+                        first
+                    } else {
+                        last
+                    };
+                    Rational::new(num, den.into())
+                })
+            })
+            .expect("a denominator");
+        prop_assert_eq!(s, found);
+    }
+}

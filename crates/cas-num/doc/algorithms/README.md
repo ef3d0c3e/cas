@@ -23,8 +23,8 @@ It covers the code of the Balls module (CAS-71 … CAS-104):
   and `kernel/div/approx.rs`);
 - everything under `ball/`;
 - the Gaussian rationals of `complex/` (CAS-50);
-- the exact integer functions of [integers.md](integers.md): the factorial
-  (CAS-123).
+- the exact functions of [integers.md](integers.md): the factorial
+  (CAS-123), and the simplest rational in an interval (CAS-148).
 
 The exact integer arithmetic it builds on (the `kernel` multiplication and
 division algorithms, `Natural`, `Integer`) is otherwise outside this

@@ -1,55 +1,61 @@
 use std::borrow::Cow;
 use std::fmt::Write as _;
 
-use cas_num::{Integer, Natural, Rational};
+use cas_num::{Integer, Rational};
 use proptest::prelude::*;
 
 use super::{
-    MAX_DECIMAL_EXPONENT, NumberError, name, number_value, string_value, superscript_value,
+    MAX_DECIMAL_EXPONENT, Number, NumberError, decimal_balls, name, number_value, string_value,
+    superscript_value,
 };
 
 fn q(n: i64, d: i64) -> Rational {
     Rational::new(n.into(), d.into())
 }
 
-fn ten_pow(e: u64) -> Integer {
-    Integer::from(Natural::from(10u32).pow(e))
+fn integer(n: impl Into<Integer>) -> Number {
+    Number::Integer(n.into())
+}
+
+fn decimal(digits: impl Into<Integer>, exponent: i64) -> Number {
+    Number::Decimal {
+        digits: digits.into(),
+        exponent,
+    }
 }
 
 #[test]
 fn numbers() {
     let cases = [
-        ("0", q(0, 1)),
-        ("42", q(42, 1)),
-        ("007", q(7, 1)),
-        ("1_000_000", q(1_000_000, 1)),
-        ("0x1f", q(31, 1)),
-        ("0xFF", q(255, 1)),
-        ("0x1e5", q(485, 1)),
-        ("0o17", q(15, 1)),
-        ("0b101", q(5, 1)),
-        ("0b1_0000", q(16, 1)),
-        ("0.1", q(1, 10)),
-        ("0.50", q(1, 2)),
-        ("00.0", q(0, 1)),
-        ("1.5e-3", q(3, 2000)),
-        ("1.5E3", q(1500, 1)),
-        ("2E10", q(20_000_000_000, 1)),
-        ("1e+5", q(100_000, 1)),
-        ("1e-0", q(1, 1)),
-        ("12.5e-1", q(5, 4)),
-        ("1_0.0_1e1", q(1001, 10)),
+        ("0", integer(0)),
+        ("42", integer(42)),
+        ("007", integer(7)),
+        ("1_000_000", integer(1_000_000)),
+        ("0x1f", integer(31)),
+        ("0xFF", integer(255)),
+        ("0x1e5", integer(485)),
+        ("0o17", integer(15)),
+        ("0b101", integer(5)),
+        ("0b1_0000", integer(16)),
+        // Decimals keep their digits as written, trailing zeros too.
+        ("0.1", decimal(1, -1)),
+        ("0.50", decimal(50, -2)),
+        ("00.0", decimal(0, -1)),
+        ("1.5e-3", decimal(15, -4)),
+        ("1.5E3", decimal(15, 2)),
+        ("2E10", decimal(2, 10)),
+        ("1e+5", decimal(1, 5)),
+        ("1e-0", decimal(1, 0)),
+        ("12.5e-1", decimal(125, -2)),
+        ("1_0.0_1e1", decimal(1001, -1)),
+        ("6.02e23", decimal(602, 21)),
     ];
     for (text, value) in cases {
         assert_eq!(number_value(text), Ok(value), "{text}");
     }
     assert_eq!(
-        number_value("6.02e23"),
-        Ok(Rational::from(Integer::from(602) * ten_pow(21)))
-    );
-    assert_eq!(
         number_value("18446744073709551616"),
-        Ok(Rational::from(Integer::from(u64::MAX) + Integer::from(1)))
+        Ok(integer(Integer::from(u64::MAX) + Integer::from(1)))
     );
 }
 
@@ -61,8 +67,8 @@ fn number_errors() {
         assert_eq!(number_value(text), Err(NumberError::Malformed), "{text:?}");
     }
     for text in [
-        "1e1000001",
-        "1e-1000001",
+        "1e10001",
+        "1e-10001",
         "1e99999999999999999999",
         "5.5e-99999999",
     ] {
@@ -73,16 +79,14 @@ fn number_errors() {
         );
     }
     // The bound itself is accepted.
+    let bound = i64::try_from(MAX_DECIMAL_EXPONENT).unwrap();
     assert_eq!(
         number_value(&format!("1e{MAX_DECIMAL_EXPONENT}")),
-        Ok(Rational::from(ten_pow(MAX_DECIMAL_EXPONENT)))
+        Ok(decimal(1, bound))
     );
     assert_eq!(
         number_value(&format!("1e-{MAX_DECIMAL_EXPONENT}")),
-        Ok(Rational::new(
-            Integer::from(1),
-            ten_pow(MAX_DECIMAL_EXPONENT)
-        ))
+        Ok(decimal(1, -bound))
     );
     assert!(NumberError::ExponentTooLarge.to_string().contains("10^n"));
 }
@@ -176,7 +180,7 @@ fn naive_digits(digits: &str) -> Rational {
 
 proptest! {
     #[test]
-    fn decimals_are_exact(
+    fn decimals_keep_their_digits(
         int in "[0-9]{1,24}",
         frac in proptest::option::of("[0-9]{1,24}"),
         exponent in proptest::option::of((-60i64..60, any::<bool>(), any::<bool>())),
@@ -198,16 +202,17 @@ proptest! {
             text.push_str(&e.to_string());
             shift += e;
         }
-        let mut expected = naive_digits(&digits);
-        for _ in 0..shift.unsigned_abs() {
-            expected = if shift > 0 { expected * q(10, 1) } else { expected / q(10, 1) };
-        }
+        let expected = if frac.is_none() && exponent.is_none() {
+            Number::Integer(naive_digits(&digits).numer().clone())
+        } else {
+            decimal(naive_digits(&digits).numer().clone(), shift)
+        };
         prop_assert_eq!(number_value(&text), Ok(expected), "{}", text);
     }
 
     #[test]
     fn prefixed_numbers(n in any::<u64>()) {
-        let value = Ok(Rational::from(Integer::from(n)));
+        let value = Ok(Number::Integer(Integer::from(n)));
         prop_assert_eq!(number_value(&format!("0x{n:x}")), value.clone());
         prop_assert_eq!(number_value(&format!("0x{n:X}")), value.clone());
         prop_assert_eq!(number_value(&format!("0o{n:o}")), value.clone());
@@ -248,4 +253,37 @@ proptest! {
         }
         prop_assert_eq!(superscript_value(&text), Some(Integer::from(n)));
     }
+}
+
+/// The session makes each `Decimal[digits, exponent]` a ball, held parts
+/// included, and leaves the rest (CAS-148).
+#[test]
+fn decimals_become_balls() {
+    use cas_core::{Expr, Symbol};
+    use cas_num::ball::Ball;
+
+    let lit = |digits: i64, exponent: i64| {
+        Expr::apply(
+            &Symbol::DECIMAL.into(),
+            &[Expr::from(digits), Expr::from(exponent)],
+        )
+    };
+    let held = Expr::apply(&Symbol::HOLD.into(), &[lit(1, -1)]);
+    let e = Expr::apply(&Symbol::LIST.into(), &[lit(5, -1), held, Expr::symbol("x")]);
+    let made = decimal_balls(&e, 53);
+    let ball = |s: &str| Expr::from(Ball::from_decimal(s, 53).unwrap());
+    let expected = Expr::apply(
+        &Symbol::LIST.into(),
+        &[
+            ball("0.5"),
+            Expr::apply(&Symbol::HOLD.into(), &[ball("0.1")]),
+            Expr::symbol("x"),
+        ],
+    );
+    assert_eq!(made, expected);
+    // At another precision, another ball.
+    assert_eq!(
+        decimal_balls(&lit(1, -1), 200),
+        Expr::from(Ball::from_decimal("0.1", 200).unwrap())
+    );
 }

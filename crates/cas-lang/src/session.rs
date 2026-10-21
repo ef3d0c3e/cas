@@ -30,10 +30,11 @@ use cas_core::{
     Attributes, Context, DefineError, EvalError, EvalOptions, Expr, Interrupt, Limits, Symbol, View,
 };
 
+use crate::literal::decimal_balls;
 use crate::lower::{Fix, Severity, Statement, lower};
 use crate::names::{Names, unescape_name};
 use crate::parser::parse;
-use crate::print::print;
+use crate::print::{Balls, print_with};
 
 /// Messages write out an expression of at most this many parts, as
 /// cas-core's do: a larger one could take long, sharing parts that its text
@@ -145,6 +146,18 @@ impl Session {
         self.context.set_limits(limits);
     }
 
+    /// The bits balls are made with, 53 in a new session (CAS-DOC-5 §6.4):
+    /// decimal literals are read at it, and balls shown and compared at it.
+    #[must_use]
+    pub fn working_precision(&self) -> u64 {
+        self.context.working_precision()
+    }
+
+    /// Sets the working precision, for the statements run after it.
+    pub fn set_working_precision(&mut self, bits: u64) {
+        self.context.set_working_precision(bits);
+    }
+
     /// The names of the language in this session.
     #[must_use]
     pub fn names(&self) -> &Names {
@@ -156,6 +169,14 @@ impl Session {
     #[must_use]
     pub fn interrupt(&self) -> Interrupt {
         self.interrupt.clone()
+    }
+
+    /// How balls are shown: as the decimals they show at the working
+    /// precision (D2).
+    fn shown(&self) -> Balls {
+        Balls::Shown {
+            working_precision: self.context.working_precision(),
+        }
     }
 
     /// Runs the statements of `text` in order, and says what each gave.
@@ -219,7 +240,14 @@ impl Session {
             if let Some(statement) = statements.next_if(|s| {
                 range.start <= s.spans.range().start && s.spans.range().end <= range.end
             }) {
-                self.execute(statement, &mut output);
+                // Its decimals are made balls now, at the precision in force
+                // (CAS-148).
+                let statement = Statement {
+                    expr: decimal_balls(&statement.expr, self.context.working_precision()),
+                    quiet: statement.quiet,
+                    spans: statement.spans.clone(),
+                };
+                self.execute(&statement, &mut output);
             }
             outputs.push(output);
         }
@@ -413,7 +441,7 @@ impl Session {
                 _ => "…".to_owned(),
             };
         }
-        print(e, &self.names).unwrap_or_else(|_| e.to_string())
+        print_with(e, &self.names, self.shown()).unwrap_or_else(|_| e.to_string())
     }
 
     /// The result of a statement in input form; nothing for `Null`, and the
@@ -423,7 +451,7 @@ impl Session {
         if value.as_symbol() == Some(Symbol::NULL) {
             return;
         }
-        match print(value, &self.names) {
+        match print_with(value, &self.names, self.shown()) {
             Ok(text) => out.result = Some(Shown::Input(text)),
             Err(e) => {
                 out.result = Some(Shown::Evaluator(value.to_string()));

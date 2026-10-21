@@ -408,3 +408,116 @@ fn identities_leave_balls_alone() {
         }
     }
 }
+
+/// `Decimal[n, e]` is the ball of the literal at the working precision, or
+/// at more bits for more digits than that reads back (CAS-148).
+#[test]
+fn decimals_make_balls() {
+    assert_eq!(ball_of(&eval("Decimal[1, -1]")), decimal("0.1"));
+    assert!(ball_of(&eval("Decimal[5, -1]")).is_exact());
+    assert!(ball_of(&eval("Decimal[2, 10]")).is_exact());
+    assert_eq!(eval("Decimal[0, 0]"), Expr::from(Ball::ZERO));
+    // 28 digits are read at 95 bits, so they all show.
+    let long = ball_of(&eval("Decimal[1000000000000000000000000001, -28]"));
+    assert_eq!(
+        long.to_shortest_decimal(28).as_deref(),
+        Some("0.1000000000000000000000000001")
+    );
+    // The working precision is read when the literal is made.
+    let mut ctx = Context::new();
+    ctx.set_working_precision(200);
+    let b = ball_of(&ctx.eval(&read("Decimal[1, -1]")).unwrap());
+    assert_eq!(b, Ball::from_decimal("0.1", 200).unwrap());
+    // What is not a literal stays.
+    for input in ["Decimal[x, 1]", "Decimal[1/2, 1]", "Decimal[1]"] {
+        assert_eq!(eval(input), read(input), "{input}");
+    }
+}
+
+/// `exact` gives the simplest fraction that matches the digits a ball shows
+/// (D4, CAS-148), and giac's answers where it has the same rule.
+#[test]
+fn exact_gives_the_simplest_fraction_shown() {
+    let cases = [
+        ("Exact[Decimal[1, -1]]", "1/10"),
+        ("Exact[Decimal[333333333333, -12]]", "1/3"),
+        ("Exact[Decimal[3333, -4]]", "3333/10000"),
+        ("Exact[Decimal[7, -1]]", "7/10"),
+        ("Exact[Decimal[14, -2]]", "7/50"),
+        ("Exact[Decimal[314159, -5]]", "314159/100000"),
+        ("Exact[Decimal[142857, -6]]", "142857/1000000"),
+        ("Exact[Decimal[1428571428571, -13]]", "1/7"),
+        ("Exact[Decimal[15, -6]]", "3/200000"),
+        (
+            "Exact[Decimal[25, -31]]",
+            "1/400000000000000000000000000000",
+        ),
+        ("Exact[Decimal[123456, -3]]", "15432/125"),
+        ("Exact[Decimal[-25, -1]]", "-5/2"),
+        // Exact balls are their value, however many digits it has.
+        ("Exact[Decimal[5, -1]]", "1/2"),
+        ("Exact[Ball[0x1p-60, 0x0p+0]]", "1/1152921504606846976"),
+        ("Exact[Decimal[3, 0]]", "3"),
+        // Results of arithmetic, by what they show.
+        ("Exact[Plus[Decimal[1, -1], Decimal[2, -1]]]", "3/10"),
+        ("Exact[Power[Decimal[3, 0], -1]]", "1/3"),
+        // A ball that shows no digit holds 0 here.
+        (
+            "Exact[Plus[Decimal[1, -1], Decimal[2, -1], Times[-1, Decimal[3, -1]]]]",
+            "0",
+        ),
+        // Inside expressions; exact parts stay.
+        ("Exact[Times[Decimal[5, -1], x]]", "Times[1/2, x]"),
+        ("Exact[List[Decimal[25, -2], 3, x]]", "List[1/4, 3, x]"),
+        ("Exact[x]", "x"),
+        (
+            "Exact[Plus[Decimal[1, -1], Times[Decimal[2, -1], I]]]",
+            "Complex[1/10, 1/5]",
+        ),
+    ];
+    let mut wrong = Vec::new();
+    for (input, expected) in cases {
+        let found = format!("{:?}", eval(input));
+        if found != expected {
+            wrong.push(format!("{input}: {found}, expected {expected}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+proptest! {
+    /// A decimal of at most 6 digits is its own exact value, at any
+    /// magnitude: no simpler fraction matches it to 12 digits.
+    #[test]
+    fn exact_keeps_short_decimals(n in -999_999i64..=999_999, e in -40i64..40) {
+        let input = Expr::apply(&Symbol::EXACT.into(), &[Expr::apply(&Symbol::DECIMAL.into(), &[Expr::from(n), Expr::from(e)])]);
+        let ten = Integer::from(10u64).pow(e.unsigned_abs());
+        let value = if e >= 0 {
+            Rational::from(Integer::from(n) * ten)
+        } else {
+            Rational::new(Integer::from(n), ten)
+        };
+        prop_assert_eq!(Context::new().eval(&input), Ok(Expr::from(value)));
+    }
+
+    /// For up to 15 digits, the fraction matches the decimal at the digits
+    /// it shows, without the zeros that end it, and at least 12; and it is
+    /// no more complex than the decimal.
+    #[test]
+    fn exact_matches_long_decimals(n in 1i64..999_999_999_999_999, e in -30i64..10) {
+        let input = Expr::apply(&Symbol::EXACT.into(), &[Expr::apply(&Symbol::DECIMAL.into(), &[Expr::from(n), Expr::from(e)])]);
+        let ten = |k: u64| Integer::from(10u64).pow(k);
+        let value = if e >= 0 { Rational::from(Integer::from(n) * ten(e.unsigned_abs())) } else { Rational::new(Integer::from(n), ten(e.unsigned_abs())) };
+        let found = Context::new().eval(&input).unwrap().to_rational().expect("a fraction");
+        // Within half a unit of its last digit shown, or of the 12th.
+        let digits = i64::try_from(n.to_string().len()).unwrap();
+        let shown = i64::try_from(n.to_string().trim_end_matches('0').len()).unwrap();
+        let unit = {
+            let k = digits - 1 + e - shown.max(12) + 1;
+            if k >= 0 { Rational::from(ten(k.unsigned_abs())) } else { Rational::new(Integer::from(1), ten(k.unsigned_abs())) }
+        };
+        let gap = if found >= value { &found - &value } else { &value - &found };
+        prop_assert!(gap * Rational::from(2) <= unit, "{} gave {}", value, found);
+        prop_assert!(found.denom() <= value.denom());
+    }
+}

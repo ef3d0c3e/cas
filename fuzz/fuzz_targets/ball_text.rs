@@ -1,7 +1,8 @@
 //! Ball and float text forms (CAS-DOC-5 §6): arbitrary strings never make
 //! the parsers or printers panic; an accepted decimal gives a ball containing
 //! its exact value, which prints with every digit within one unit of every
-//! point; an accepted hexadecimal float prints and parses back exactly.
+//! point, and whose literal reads back to its midpoint (CAS-148); an
+//! accepted hexadecimal float prints and parses back exactly.
 #![no_main]
 
 use cas_num::ball::{Ball, DecimalStyle, Float, Mag};
@@ -29,6 +30,18 @@ fn exact(s: &str) -> Option<Rational> {
     })
 }
 
+/// The digits and the power of 10 of a decimal literal as
+/// [`Ball::to_literal`] writes it: `2.50e-3` is `(250, -5)`.
+fn literal_parts(s: &str) -> Option<(Integer, i64)> {
+    let (mant, exp) = match s.find(['e', 'E']) {
+        Some(i) => (&s[..i], s[i + 1..].strip_prefix('+').unwrap_or(&s[i + 1..]).parse::<i64>().ok()?),
+        None => (s, 0),
+    };
+    let (int, frac) = mant.split_once('.').unwrap_or((mant, ""));
+    let n = Integer::from_str_radix(&format!("{int}{frac}"), 10).ok()?;
+    Some((n, exp.checked_sub(i64::try_from(frac.len()).ok()?)?))
+}
+
 fuzz_target!(|data: &[u8]| {
     let Some((&k, rest)) = data.split_first() else {
         return;
@@ -45,6 +58,13 @@ fuzz_target!(|data: &[u8]| {
             for n in [1, 5, 40] {
                 let _ = b.to_decimal(n, DecimalStyle::Digits);
                 let _ = b.to_decimal(n, DecimalStyle::Radius);
+            }
+            let _ = b.rad().to_decimal();
+            if exact(s).is_some() {
+                let literal = b.to_literal(prec).expect("finite");
+                let (n, e) = literal_parts(&literal).expect("a literal");
+                let back = Ball::from_literal(&n, e, prec);
+                assert_eq!(back.mid(), b.mid(), "{s:?} at {prec}: {literal}");
             }
         }
     }

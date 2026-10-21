@@ -21,7 +21,7 @@ use std::collections::BTreeMap;
 
 use cas_num::{Integer, Natural, Rational};
 
-use super::number::Num;
+use super::number::{EXACT_ONLY, Num};
 use crate::expr::Expr;
 use crate::symbol::Symbol;
 
@@ -47,7 +47,7 @@ pub(super) fn power(b: &Rational, r: &Rational, real_domain: bool, max_bits: u64
     if b.is_negative() {
         if denom == 2 {
             let i = Num::of(&crate::build::i()).expect("a number");
-            coefficient = i.pow(i64::try_from(numer % 4).expect("small"))?;
+            coefficient = i.pow(i64::try_from(numer % 4).expect("small"), EXACT_ONLY)?;
         } else if real_domain && denom % 2 == 1 {
             if numer % 2 == 1 {
                 coefficient = Num::Real(Rational::from(-1));
@@ -62,7 +62,7 @@ pub(super) fn power(b: &Rational, r: &Rational, real_domain: bool, max_bits: u64
     if whole_power.power_bits(whole) > max_bits {
         return None;
     }
-    coefficient = coefficient.mul(&whole_power.pow(whole)?);
+    coefficient = coefficient.mul(&whole_power.pow(whole, EXACT_ONLY)?, EXACT_ONLY);
     // The numerator to the power `numer/denom`, and the denominator `D` as
     // `D^((denom - numer)/denom) / D`.
     let mut roots = Roots::default();
@@ -72,10 +72,13 @@ pub(super) fn power(b: &Rational, r: &Rational, real_domain: bool, max_bits: u64
     );
     let out_n = roots.extract(&n, numer, denom);
     let out_d = roots.extract(&d, denom - numer, denom);
-    coefficient = coefficient.mul(&Num::Real(Rational::new(
-        Integer::from(out_n) * Integer::from(out_d),
-        Integer::from(d),
-    )));
+    coefficient = coefficient.mul(
+        &Num::Real(Rational::new(
+            Integer::from(out_n) * Integer::from(out_d),
+            Integer::from(d),
+        )),
+        EXACT_ONLY,
+    );
     let mut factors = Vec::new();
     if !coefficient.is_one() {
         factors.push(coefficient.to_expr());

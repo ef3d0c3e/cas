@@ -1185,3 +1185,149 @@ proptest! {
         prop_assert_eq!(printed(&read_with(&again, Names::english())), again);
     }
 }
+
+/// Decimal literals, as lowering makes them (CAS-148), print back as
+/// themselves.
+#[test]
+fn decimal_literals_print_back() {
+    check_text(&[
+        "0.1",
+        "1.5",
+        "0.0015",
+        "2.50",
+        "2e10",
+        "5e0",
+        "1.5e-30",
+        "-0.5",
+        "x - 0.5",
+        "-0.5*x",
+        "x - 0.5*y",
+        "2*(-0.5)",
+        "1.5 + 2.5*i",
+        "[0.25, 1e-7]",
+    ]);
+}
+
+/// A product led by a negative decimal, subtracted in a sum, reads back as
+/// `-1` times the product: the same up to arithmetic (the `lang_print` fuzz
+/// target, CAS-148).
+#[test]
+fn a_subtracted_decimal_product_reads_back() {
+    let decimal = |digits: i64, exponent: i64| app(Symbol::DECIMAL, [int(digits), int(exponent)]);
+    let e = plus([decimal(-9, 4), times([decimal(-9, 3), sym("y")])]);
+    assert_eq!(round_trip(&e), "-9e4 - 9e3*y");
+    assert_eq!(round_trip(&times([sym("y"), decimal(-5, -1)])), "y*(-0.5)");
+}
+
+fn ball_expr(b: cas_num::ball::Ball) -> Expr {
+    Expr::from(b)
+}
+
+fn decimal_ball(s: &str) -> cas_num::ball::Ball {
+    cas_num::ball::Ball::from_decimal(s, 53).unwrap()
+}
+
+/// In the input form proper, a ball is the literal that reads back to its
+/// midpoint, or `ball(c, r)` when it is wider than that literal (CAS-148).
+#[test]
+fn balls_print_as_literals() {
+    use cas_num::ball::{Ball, ComplexBall, Float};
+
+    let third = Ball::from_rational(&ratio(1, 3), 53);
+    let sum = decimal_ball("0.1").add(&decimal_ball("0.2"), 53);
+    let tiny = Ball::exact(Float::from(&Integer::from(1)).mul_2exp(&Integer::from(-60)));
+    let cases = [
+        (ball_expr(decimal_ball("0.1")), "0.1"),
+        (ball_expr(decimal_ball("-2.5")), "-2.5"),
+        (ball_expr(third), "0.3333333333333333"),
+        (ball_expr(tiny), "8.673617379884035e-19"),
+        (ball_expr(decimal_ball("6.02e23")), "6.02e+23"),
+        (ball_expr(decimal_ball("2.0")), "2.0"),
+        (ball_expr(sum), "ball(0.3, 7.64e-17)"),
+        (
+            Expr::from(ComplexBall::new(decimal_ball("1.5"), decimal_ball("-2.5"))),
+            "1.5 - 2.5*i",
+        ),
+        (times([ball_expr(decimal_ball("-0.5")), sym("x")]), "-0.5*x"),
+        (plus([sym("x"), ball_expr(decimal_ball("-0.5"))]), "x - 0.5"),
+    ];
+    let mut wrong = Vec::new();
+    for (e, expected) in cases {
+        let found = printed(&e);
+        if found != expected {
+            wrong.push(format!("{e:?}: found {found}, expected {expected}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Shown for people, a ball is the decimal it shows (D2).
+#[test]
+fn balls_print_as_shown() {
+    use super::{Balls, print_with};
+
+    let shown = |e: &Expr| {
+        print_with(
+            e,
+            Names::english(),
+            Balls::Shown {
+                working_precision: 53,
+            },
+        )
+        .unwrap()
+    };
+    let sum = decimal_ball("0.1").add(&decimal_ball("0.2"), 53);
+    assert_eq!(shown(&ball_expr(sum.clone())), "0.3");
+    let zero = sum.sub(&decimal_ball("0.3"), 53);
+    assert!(shown(&ball_expr(zero)).starts_with("ball(0.0, "));
+    assert_eq!(
+        shown(&ball_expr(cas_num::ball::Ball::from_rational(
+            &ratio(1, 3),
+            53
+        ))),
+        "0.333333333333333"
+    );
+}
+
+/// A ball, its midpoint dyadic, its radius 0 or below its midpoint.
+fn ball_strategy() -> impl Strategy<Value = cas_num::ball::Ball> {
+    use cas_num::ball::{Ball, Float, Mag};
+
+    (
+        any::<i64>(),
+        -300i64..300,
+        prop_oneof![Just(None), (1i64..120).prop_map(Some)],
+    )
+        .prop_map(|(m, e, j)| {
+            let mid = Float::from(&Integer::from(m)).mul_2exp(&Integer::from(e));
+            let rad = match j {
+                Some(j) if !mid.is_zero() => {
+                    Mag::power_of_two(&(mid.exponent() - &Integer::from(j)))
+                }
+                _ => Mag::ZERO,
+            };
+            Ball::new(mid, rad)
+        })
+}
+
+proptest! {
+    /// A ball printed in the input form reads back, through the session's
+    /// literals, as a ball of the same midpoint containing it.
+    #[test]
+    fn balls_read_back(b in ball_strategy(), working in prop::sample::select(vec![24u64, 53, 100, 200])) {
+        use super::{Balls, print_with};
+        use cas_core::{Context, View};
+
+        let text = print_with(&ball_expr(b.clone()), Names::english(), Balls::Exact { working_precision: working })
+            .unwrap_or_else(|e| panic!("{b}: {e}"));
+        let mut ctx = Context::new();
+        ctx.set_working_precision(working);
+        let lowered = crate::literal::decimal_balls(&read_with(&text, Names::english()), working);
+        let back = ctx.eval(&lowered).unwrap();
+        let View::Ball(back) = back.view() else {
+            panic!("{b} printed as {text}, reads back as {back:?}");
+        };
+        prop_assert_eq!(back.mid(), b.mid(), "{} printed as {}", b, text);
+        prop_assert!(b.rad() <= back.rad(), "{} printed as {}", b, text);
+    }
+}

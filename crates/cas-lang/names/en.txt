@@ -54,8 +54,10 @@ EvenQ: even
 OddQ: odd
 # Calculus (CAS-DOC-4 §8, CAS-59).
 D: diff
-# A ball, `ball(c, r)` (CAS-DOC-5 §6.5, CAS-83).
+# A ball, `ball(c, r)` (CAS-DOC-5 §6.5, CAS-83), and back to fractions
+# (D4, CAS-148).
 Ball: ball
+Exact: exact
 
 [planned]
 # Calculus, algebra and numerics (CAS-DOC-1, CAS-DOC-4 §1 and §8, CAS-DOC-5).
@@ -118,3 +120,5 @@ HoldPattern
 # The derivative of an unknown function, which `diff` gives: without a
 # surface name, as there is no prime notation (CAS-DOC-7 L13).
 Derivative
+# A decimal literal, a ball once its statement runs (CAS-148).
+Decimal

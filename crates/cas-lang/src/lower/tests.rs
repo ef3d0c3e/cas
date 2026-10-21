@@ -46,8 +46,11 @@ fn errors(text: &str) -> Vec<(&str, E)> {
 fn literals_and_names() {
     check(&[
         ("42", "42"),
-        ("0.1", "1/10"),
-        ("1.5e-3", "3/2000"),
+        // Decimals, balls when their statement runs (CAS-148).
+        ("0.1", "Decimal[1, -1]"),
+        ("1.5e-3", "Decimal[15, -4]"),
+        ("-2.50", "Decimal[-250, -2]"),
+        ("2E10", "Decimal[2, 10]"),
         (r#""s\n""#, r#""s\n""#),
         ("x", "x"),
         ("θ", "θ"),

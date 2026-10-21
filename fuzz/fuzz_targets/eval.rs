@@ -34,7 +34,7 @@ const ATOMS: [&str; 11] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 34] = [
+const BUILTINS: [&str; 36] = [
     "Plus",
     "Times",
     "Power",
@@ -69,8 +69,10 @@ const BUILTINS: [&str; 34] = [
     "Equation",
     "ElementwiseDivide",
     "ElementwisePower",
-    // Balls (CAS-83).
+    // Balls (CAS-83), decimal literals and `exact` (CAS-148).
     "Ball",
+    "Decimal",
+    "Exact",
 ];
 
 /// Builtins that apply something to parts, only in the expression

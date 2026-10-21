@@ -37,7 +37,8 @@ mod syntax;
 
 pub use lexer::{LexError, LexErrorKind, Lexed, lex};
 pub use literal::{
-    MAX_DECIMAL_EXPONENT, NumberError, name, number_value, string_value, superscript_value,
+    MAX_DECIMAL_EXPONENT, Number, NumberError, decimal_balls, name, number_value, string_value,
+    superscript_value,
 };
 pub use lower::{Diagnostic, Fix, LowerErrorKind, Lowered, Severity, Spans, Statement, lower};
 pub use names::{
@@ -46,6 +47,6 @@ pub use names::{
 pub use parser::{MAX_DEPTH, Parse, ParseErrorKind, SyntaxError, SyntaxErrorKind, parse};
 #[doc(hidden)]
 pub use print::fold_arithmetic;
-pub use print::{MAX_PRINT_DEPTH, PrintError, PrintErrorKind, print};
+pub use print::{Balls, MAX_PRINT_DEPTH, PrintError, PrintErrorKind, print, print_with};
 pub use session::{Level, Message, Output, Session, Shown};
 pub use syntax::{CasLanguage, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};

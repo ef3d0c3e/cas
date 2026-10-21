@@ -75,6 +75,14 @@ builtins! {
     // A ball `Ball[c, r]` (CAS-DOC-5 §6.5), also the head of a ball in full
     // form. It threads over lists itself, a scalar radius spread over them.
     BALL = "Ball" [PROTECTED];
+    // A decimal literal of the language, `Decimal[digits, exponent]` for
+    // `digits · 10^exponent` with its digits as written (CAS-148): the ball
+    // of it at the working precision. The session makes the balls of a
+    // statement's literals when it runs the statement.
+    DECIMAL = "Decimal" [PROTECTED];
+    // `Exact[e]`: each ball of `e` as the simplest fraction that matches the
+    // digits it shows (CAS-DOC-5 §6.4, D4).
+    EXACT = "Exact" [PROTECTED];
     // Logical values, infinities and nothing (CAS-DOC-4 §6.1, R14).
     TRUE = "True" [PROTECTED];
     FALSE = "False" [PROTECTED];

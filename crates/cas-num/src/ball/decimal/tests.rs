@@ -381,3 +381,110 @@ fn shortest_decimals() {
     }
     assert_eq!(Ball::INDETERMINATE.to_shortest_decimal(15), None);
 }
+
+/// The digits and the exponent of a decimal as written: `2.50e-3` is
+/// `(250, -5)`.
+fn literal_parts(s: &str) -> (Integer, i64) {
+    let (mant, exp) = s
+        .split_once(['e', 'E'])
+        .map_or((s, 0), |(m, e)| (m, e.parse::<i64>().expect("an exponent")));
+    let (neg, mant) = mant.strip_prefix('-').map_or((false, mant), |m| (true, m));
+    let (int, frac) = mant.split_once('.').unwrap_or((mant, ""));
+    let digits = crate::Natural::from_str_radix(&format!("{int}{frac}"), 10).expect("digits");
+    let shift = i64::try_from(frac.len()).expect("short");
+    (Integer::from_parts(neg, digits), exp - shift)
+}
+
+#[test]
+fn literal_bits_keep_the_working_precision_to_the_round_trip() {
+    for (digits, working, bits) in [
+        (1, 53, 53),
+        (17, 53, 53),
+        // ⌈18 log2 10⌉ + 1 = 60 + 1.
+        (18, 53, 61),
+        (28, 53, 95),
+        (32, 100, 100),
+        (33, 100, 111),
+        (1, 1, 1),
+        (2, 1, 1),
+        (3, 1, 11),
+    ] {
+        assert_eq!(
+            Ball::literal_bits(digits, working),
+            bits,
+            "{digits} digits at {working}"
+        );
+    }
+}
+
+#[test]
+fn literals() {
+    let read = |s: &str, working: u64| {
+        let (n, e) = literal_parts(s);
+        Ball::from_literal(&n, e, working)
+    };
+    assert_eq!(read("0.1", 53), Ball::from_decimal("0.1", 53).unwrap());
+    assert!(read("0.5", 53).is_exact() && read("2.0", 53).is_exact());
+    assert!(read("2E10", 53).is_exact());
+    // A long literal keeps its digits.
+    let long = "0.1000000000000000000000000001";
+    assert_eq!(
+        read(long, 53).to_shortest_decimal(28).as_deref(),
+        Some(long)
+    );
+    // The forms that read back, as an f64's shortest form would be.
+    for (b, literal) in [
+        (Ball::from_decimal("0.1", 53).unwrap(), "0.1"),
+        // Ball sums truncate their midpoint: this one is the f64 nearest 0.3.
+        (read("0.1", 53).add(&read("0.2", 53), 53), "0.3"),
+        (read("0.30000000000000004", 53), "0.30000000000000004"),
+        (
+            Ball::from_rational(&Rational::new(1.into(), 3.into()), 53),
+            "0.3333333333333333",
+        ),
+        (
+            Ball::from_rational(&Rational::new(2.into(), 3.into()), 53),
+            "0.6666666666666666",
+        ),
+        (
+            Ball::exact(Float::from(&Integer::from(1)).mul_2exp(&Integer::from(-60))),
+            "8.673617379884035e-19",
+        ),
+        (read("1e23", 53), "1.0e+23"),
+        (read("-2.5", 53), "-2.5"),
+        (Ball::ZERO, "0.0"),
+        (read(long, 53), long),
+    ] {
+        assert_eq!(b.to_literal(53).as_deref(), Some(literal), "{b}");
+    }
+}
+
+proptest! {
+    /// A ball's literal reads back to its midpoint, and has no more digits
+    /// than a float of the working precision needs when the midpoint fits
+    /// it.
+    #[test]
+    fn literals_read_back(b in ball(), working in 1u64..300) {
+        let s = b.to_literal(working).expect("finite");
+        let (n, e) = literal_parts(&s);
+        prop_assert!(s.contains('.'), "{s}");
+        let back = Ball::from_literal(&n, e, working);
+        prop_assert_eq!(back.mid(), b.mid(), "{}", s);
+        if b.mid().bit_length() <= working {
+            let round_trip = working * 30_103 / 100_000 + 2;
+            prop_assert!(significant(&s) as u64 <= round_trip, "{} at {}", s, working);
+        }
+    }
+}
+
+/// Past `2^16` bits of exponent, the exact digits are not looked for: the
+/// powers of 10 would take seconds. `to_decimal` still prints (CAS-148).
+#[test]
+fn exact_digits_stop_at_huge_exponents() {
+    let near = Ball::from_literal(&Integer::from(499), 10_000, 53);
+    assert_eq!(near.to_literal(53).as_deref(), Some("4.99e+10002"));
+    let far = Ball::from_literal(&Integer::from(499), 100_000, 53);
+    assert_eq!(far.to_literal(53), None);
+    assert_eq!(far.to_shortest_decimal(15), None);
+    assert!(far.to_decimal(15, DecimalStyle::Digits).starts_with("4.99"));
+}

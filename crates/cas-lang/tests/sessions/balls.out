@@ -1,19 +1,21 @@
 > x := ball(1/10, 0)
 > x + ball(2/10, 0)
-note at 4:1 `x + ball(2/10, 0)`: shown in the evaluator's notation: a ball has no input form yet
 = 0.3
 > x + ball(2/10, 0) == ball(3/10, 0)
 = true
 > x + ball(2/10, 0) == ball(4/10, 0)
 = false
 > 1/ball(3, 0)
-note at 7:1 `1/ball(3, 0)`: shown in the evaluator's notation: a ball has no input form yet
 = 0.333333333333333
 > ball([1, 2], 1/1000)
-note at 8:1 `ball([1, 2], 1/1000)`: shown in the evaluator's notation: a ball has no input form yet
-= {1.0, 2.0}
+= [1.0, 2.0]
 > ball([1, 2], [1, 2, 3])
-error at 9:1 `ball([1, 2], [1, 2, 3])`: lists of different shapes
+error at 8:1 `ball([1, 2], [1, 2, 3])`: lists of different shapes
 > ball(2, 0)^(1/2)
-note at 10:1 `ball(2, 0)^(1/2)`: shown in the evaluator's notation: a ball has no input form yet
 = 1.41421356237310
+> ball(0.1, 0.01)
+= 0.1
+> ball(2.5, 0) == 2.5
+= true
+> 0.1 + 0.2 - 0.3
+= ball(0.0, 7.64e-17)

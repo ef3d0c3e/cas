@@ -210,6 +210,62 @@ impl Rational {
         if up { q + Integer::ONE } else { q }
     }
 
+    /// The simplest rational in the closed interval `[lo, hi]`: the one
+    /// with the least denominator, and of those the least in magnitude, so 0
+    /// when the interval holds it. `None` when `lo > hi`.
+    ///
+    /// By continued fractions \[HW08\] (chapter X): the least integer of the
+    /// interval if it has one, and otherwise `a + 1/y`, with `a` the integer
+    /// part of both ends and `y` the simplest rational between the
+    /// reciprocals of their fractional parts, the ends swapped. Each term
+    /// shrinks the denominators of the ends, so there are `O(log)` of them.
+    ///
+    /// ```
+    /// use cas_num::Rational;
+    ///
+    /// let q = |n: i64, d: i64| Rational::new(n.into(), d.into());
+    /// assert_eq!(Rational::simplest_between(&q(3, 10), &q(4, 10)), Some(q(1, 3)));
+    /// assert_eq!(Rational::simplest_between(&q(-1, 2), &q(1, 3)), Some(q(0, 1)));
+    /// assert_eq!(Rational::simplest_between(&q(5, 2), &q(7, 2)), Some(q(3, 1)));
+    /// assert_eq!(Rational::simplest_between(&q(1, 2), &q(1, 3)), None);
+    /// ```
+    #[must_use]
+    pub fn simplest_between(lo: &Rational, hi: &Rational) -> Option<Rational> {
+        if lo > hi {
+            return None;
+        }
+        if !lo.is_positive() && !hi.is_negative() {
+            return Some(Rational::ZERO);
+        }
+        if hi.is_negative() {
+            return Some(-Rational::simplest_between(&-hi, &-lo)?);
+        }
+        // 0 < lo <= hi: the terms of the answer's continued fraction.
+        let mut terms = Vec::new();
+        let (mut lo, mut hi) = (lo.clone(), hi.clone());
+        loop {
+            let a = lo.floor();
+            if lo.is_integer() {
+                terms.push(a);
+                break;
+            }
+            let next = &a + &Integer::ONE;
+            if Rational::from(next.clone()) <= hi {
+                terms.push(next);
+                break;
+            }
+            let whole = Rational::from(a.clone());
+            terms.push(a);
+            // Both fractional parts are in (0, 1).
+            (lo, hi) = ((&hi - &whole).recip(), (&lo - &whole).recip());
+        }
+        let mut x = Rational::from(terms.pop()?);
+        while let Some(t) = terms.pop() {
+            x = &Rational::from(t) + &x.recip();
+        }
+        Some(x)
+    }
+
     /// Whether the representation is canonical (checked by the tests on every
     /// result, and in debug builds on every construction).
     pub(crate) fn is_canonical(&self) -> bool {

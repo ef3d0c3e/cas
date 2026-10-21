@@ -20,7 +20,7 @@ use std::ops::Range;
 use cas_core::{Attributes, Expr, Symbol, View, build};
 use rowan::NodeOrToken;
 
-use crate::literal::{NumberError, name, number_value, string_value, superscript_value};
+use crate::literal::{Number, NumberError, name, number_value, string_value, superscript_value};
 use crate::names::{Names, SyntaxForm, Target, TypeName, escape_name};
 use crate::parser::Parse;
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
@@ -709,7 +709,15 @@ impl Lowerer<'_> {
         };
         match token.kind() {
             K::Number => match number_value(token.text()) {
-                Ok(q) => (Expr::from(q), Spans::leaf(range)),
+                Ok(Number::Integer(n)) => (Expr::from(n), Spans::leaf(range)),
+                // A ball when its statement runs (CAS-148).
+                Ok(Number::Decimal { digits, exponent }) => {
+                    let args = [Expr::from(digits), Expr::from(exponent)];
+                    (
+                        Expr::apply(&Symbol::DECIMAL.into(), &args),
+                        Spans::leaf(range),
+                    )
+                }
                 Err(e) => self.fail(range, LowerErrorKind::Number(e)),
             },
             K::String => match string_value(token.text()) {
@@ -1708,10 +1716,19 @@ fn apply_to(head: Lowering, args: Vec<Lowering>, range: Range<usize>) -> Lowerin
     )
 }
 
-/// `-value`: the negated number for a number, `Times[-1, value]` otherwise.
+/// `-value`: the negated number for a number or a decimal literal,
+/// `Times[-1, value]` otherwise.
 fn negate((expr, spans): Lowering) -> Lowering {
     if expr.is_number() {
         return (-&expr, spans);
+    }
+    if let (Some(Symbol::DECIMAL), [digits, exponent]) =
+        (expr.head().and_then(Expr::as_symbol), expr.args())
+    {
+        if let Some(digits) = digits.to_integer() {
+            let args = [Expr::from(-digits), exponent.clone()];
+            return (Expr::apply(&Symbol::DECIMAL.into(), &args), spans);
+        }
     }
     let range = spans.range.clone();
     apply(

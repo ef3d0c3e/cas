@@ -1,5 +1,4 @@
-// Balls (CAS-DOC-5 §6.5, §9.1). Until CAS-148 they show in the evaluator's
-// notation, with a note.
+// Balls (CAS-DOC-5 §6.5, §9.1), shown as the decimals they show (D2).
 x := ball(1/10, 0);
 x + ball(2/10, 0)
 x + ball(2/10, 0) == ball(3/10, 0)
@@ -8,3 +7,8 @@ x + ball(2/10, 0) == ball(4/10, 0)
 ball([1, 2], 1/1000)
 ball([1, 2], [1, 2, 3])
 ball(2, 0)^(1/2)
+// A decimal is a ball (CAS-148), and so is its radius.
+ball(0.1, 0.01)
+ball(2.5, 0) == 2.5
+// A ball that shows no digit.
+0.1 + 0.2 - 0.3

@@ -136,3 +136,35 @@ fn an_endless_loop_is_interrupted() {
     assert_eq!(results(&outputs), [None, Some("2")]);
     assert_eq!(outputs[0].messages[0].text, "interrupted");
 }
+
+/// Decimals are balls made when their statement runs, at the session's
+/// working precision then (CAS-148).
+#[test]
+fn decimals_take_the_precision_of_their_statement() {
+    let mut session = Session::new();
+    assert_eq!(session.working_precision(), 53);
+    let shown = |session: &mut Session, text: &str| -> Vec<String> {
+        session
+            .run(text)
+            .iter()
+            .filter_map(|o| o.result.as_ref().map(|r| r.text().to_owned()))
+            .collect()
+    };
+    assert_eq!(shown(&mut session, "1/3.0"), ["0.333333333333333"]);
+    assert_eq!(shown(&mut session, "g(t) := t + 0.1"), Vec::<String>::new());
+    session.set_working_precision(100);
+    assert_eq!(
+        shown(&mut session, "1/3.0"),
+        ["0.333333333333333333333333333333"]
+    );
+    // An inexact literal is read at 100 bits too.
+    assert_eq!(
+        shown(&mut session, "1/3.1"),
+        ["0.322580645161290322580645161290"]
+    );
+    // A literal made before keeps its precision: `g` read 0.1 at 53 bits.
+    assert_eq!(shown(&mut session, "g(1)"), ["1.1"]);
+    // The 53-bit 0.1 of `g` against a 100-bit 1.1: no digit in common.
+    let [difference] = shown(&mut session, "g(1) - 1.1").try_into().unwrap();
+    assert!(difference.starts_with("ball(0.0, "), "{difference}");
+}

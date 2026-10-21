@@ -106,6 +106,9 @@ or is checked against, are listed.
   *Nederl. Akad. Wetensch. Proc. Ser. A* 56 = *Indagationes Mathematicae* 15
   (1953), 30–42. π has a finite irrationality measure, which bounds how close a
   dyadic number comes to a multiple of π/2.
+- <a id="mat68"></a>**[Mat68]** David W. Matula, "In-and-out conversions",
+  *Communications of the ACM* 11 (1) (1968), 47–50. Decimals of
+  `⌈p log10 2⌉ + 1` digits read every float of `p` bits back.
 - <a id="mg11"></a>**[MG11]** Niels Möller and Torbjörn Granlund, "Improved
   division by invariant integers", *IEEE Transactions on Computers* 60 (2)
   (2011), 165–175, doi:10.1109/TC.2010.143. The 3-by-2 quotient step of the

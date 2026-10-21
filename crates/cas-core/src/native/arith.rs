@@ -9,7 +9,7 @@
 use cas_num::Rational;
 
 use super::linear;
-use super::number::{Infinity, Num};
+use super::number::{EXACT_ONLY, Infinity, Num};
 use super::radical;
 use crate::assume::{self, Domain, Set, Sign, Truth};
 use crate::context::EvalError;
@@ -39,11 +39,16 @@ fn changed(e: &Expr, result: Expr) -> Option<Expr> {
 /// opposite directions, `ComplexInfinity` with another infinity, and
 /// `Indeterminate` give `Indeterminate`.
 pub(super) fn plus(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let working = ev.context().working_precision();
     if is_normal_sum(e.args()) {
-        debug_assert_eq!(sum(e), None, "the shortcut of `Plus` misses a change");
+        debug_assert_eq!(
+            sum(e, working),
+            None,
+            "the shortcut of `Plus` misses a change"
+        );
         return Ok(None);
     }
-    let result = sum(e);
+    let result = sum(e, working);
     warn_indeterminate(ev, e, result.as_ref());
     Ok(result)
 }
@@ -57,15 +62,16 @@ fn warn_indeterminate(ev: &mut Eval<'_>, e: &Expr, result: Option<&Expr>) {
     }
 }
 
-/// What `Plus` makes of `e`, if anything.
-fn sum(e: &Expr) -> Option<Expr> {
+/// What `Plus` makes of `e`, if anything; balls at the `working`
+/// precision.
+fn sum(e: &Expr, working: u64) -> Option<Expr> {
     let mut number = Num::zero();
     let mut infinity: Option<Infinity> = None;
     // `(c, m)` for the term `c·m`; like terms are adjacent.
     let mut terms: Vec<(Num, Expr)> = Vec::new();
     for a in e.args() {
         if let Some(n) = Num::of(a) {
-            number = number.add(&n);
+            number = number.add(&n, working);
         } else if let Some(i) = Infinity::of(a) {
             infinity = Some(match infinity {
                 Some(j) => j.add(i),
@@ -74,7 +80,7 @@ fn sum(e: &Expr) -> Option<Expr> {
         } else {
             let (c, m) = coefficient(a);
             match terms.last_mut() {
-                Some((sum, last)) if *last == m => *sum = sum.add(&c),
+                Some((sum, last)) if *last == m => *sum = sum.add(&c, working),
                 _ => terms.push((c, m)),
             }
         }
@@ -86,7 +92,7 @@ fn sum(e: &Expr) -> Option<Expr> {
     // mark of a ball in the number.
     for (c, _) in &terms {
         if c.is_ball() && c.is_zero() {
-            number = number.add(c);
+            number = number.add(c, working);
         }
     }
     let mut out = Vec::new();
@@ -193,15 +199,16 @@ fn with_coefficient(c: &Num, m: Expr) -> Expr {
 /// the other factors. The other factors of a directed infinity turn it when
 /// the assumptions tell their sign: `x Infinity` is `Infinity` for `x > 0`.
 pub(super) fn times(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let working = ev.context().working_precision();
     let result = if is_normal_product(e.args()) {
         debug_assert_eq!(
-            product(e),
+            product(e, working),
             Ok(None),
             "the shortcut of `Times` misses a change"
         );
         None
     } else {
-        product(e)?
+        product(e, working)?
     };
     // Most products have no infinity, which their symbols tell in O(1).
     let current = result.as_ref().unwrap_or(e);
@@ -238,7 +245,7 @@ fn signed_infinity(ev: &Eval<'_>, e: &Expr) -> Option<Expr> {
     };
     let turned = match assume::sign_of(ev.context(), &rest) {
         Sign::Positive => direction,
-        Sign::Negative => direction.mul(&Num::Real(Rational::from(-1))),
+        Sign::Negative => direction.mul(&Num::Real(Rational::from(-1)), EXACT_ONLY),
         _ => return None,
     };
     Some(Infinity::Directed(turned).to_expr())
@@ -249,7 +256,7 @@ fn signed_infinity(ev: &Eval<'_>, e: &Expr) -> Option<Expr> {
 /// # Errors
 ///
 /// [`EvalError::Shape`] for lists whose dimensions do not fit.
-fn product(e: &Expr) -> Result<Option<Expr>, EvalError> {
+fn product(e: &Expr, working: u64) -> Result<Option<Expr>, EvalError> {
     let mut coefficient = Num::one();
     let mut infinity: Option<Infinity> = None;
     // `(base, exponents, the factor itself)`; equal bases are adjacent.
@@ -257,7 +264,7 @@ fn product(e: &Expr) -> Result<Option<Expr>, EvalError> {
     let mut lists = Vec::new();
     for a in e.args() {
         if let Some(n) = Num::of(a) {
-            coefficient = coefficient.mul(&n);
+            coefficient = coefficient.mul(&n, working);
         } else if let Some(i) = Infinity::of(a) {
             infinity = Some(match infinity {
                 Some(j) => j.mul(i),
@@ -387,7 +394,7 @@ fn times_infinity(e: &Expr, i: Infinity, coefficient: &Num, finite_only: bool) -
             // exact; otherwise it stays, as one number before the infinity.
             // Symbolic factors are kept, their sign being unknown.
             let (number, infinity) = match coefficient.unit() {
-                Some(unit) => (None, Infinity::Directed(d.mul(&unit))),
+                Some(unit) => (None, Infinity::Directed(d.mul(&unit, EXACT_ONLY))),
                 None => (Some(coefficient.to_expr()), Infinity::Directed(d)),
             };
             if finite_only && number.is_none() {
@@ -489,6 +496,7 @@ fn scalar_power(ev: &mut Eval<'_>, b: &Expr, n: &Expr) -> Native {
             &exponent,
             real_domain,
             ev.context().limits().number_bits,
+            ev.context().working_precision(),
         );
         // `1/0` and `0^0`.
         if base.is_zero() {
@@ -532,7 +540,7 @@ fn scalar_power(ev: &mut Eval<'_>, b: &Expr, n: &Expr) -> Native {
             match (i, n.is_integer()) {
                 (Infinity::Directed(d), true) => {
                     let k = n.numer().to_i64();
-                    k.and_then(|k| d.pow(k))
+                    k.and_then(|k| d.pow(k, EXACT_ONLY))
                         .map(|d| Infinity::Directed(d).to_expr())
                 }
                 (Infinity::Directed(d), false) if d.is_one() => Some(Symbol::INFINITY.into()),
@@ -633,7 +641,7 @@ pub(super) fn abs(ev: &mut Eval<'_>, e: &Expr) -> Native {
             }
             Num::Ball(b) => Expr::from(b.abs()),
             Num::ComplexBall(z) => {
-                let bits = Num::ComplexBall(z.clone()).precision();
+                let bits = Num::ComplexBall(z.clone()).precision(ev.context().working_precision());
                 Num::Ball(Box::new(z.abs(bits))).to_expr()
             }
         }));
@@ -671,9 +679,15 @@ pub(super) fn abs(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// `base^exponent` for two numbers, or `None` to leave it, as when it would
 /// have more than `max_bits` bits by estimate (`Limits::number_bits`). In
 /// the Real domain, an odd root of a negative is the real root (O7).
-fn number_power(base: &Num, exponent: &Num, real_domain: bool, max_bits: u64) -> Option<Expr> {
+fn number_power(
+    base: &Num,
+    exponent: &Num,
+    real_domain: bool,
+    max_bits: u64,
+    working: u64,
+) -> Option<Expr> {
     if base.is_ball() || exponent.is_ball() {
-        return Some(match base.ball_power(exponent, real_domain) {
+        return Some(match base.ball_power(exponent, real_domain, working) {
             Some(power) => power.to_expr(),
             // `0.0` to a power that is not positive, as `1/0` and `0^0`.
             None if exponent.is_negative() => Infinity::Complex.to_expr(),
@@ -695,7 +709,7 @@ fn number_power(base: &Num, exponent: &Num, real_domain: bool, max_bits: u64) ->
         if base.power_bits(n) > max_bits {
             return None;
         }
-        return base.pow(n).map(|v| v.to_expr());
+        return base.pow(n, working).map(|v| v.to_expr());
     }
     let result = radical::power(base.real()?, r, real_domain, max_bits)?;
     let original = Expr::apply(&Symbol::POWER.into(), &[base.to_expr(), exponent.to_expr()]);

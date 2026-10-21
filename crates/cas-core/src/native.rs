@@ -85,6 +85,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::REPLACE_AT, index::replace_at),
         (Symbol::BLOCK, procedure::block),
         (Symbol::BALL, ball::ball),
+        (Symbol::DECIMAL, ball::decimal),
+        (Symbol::EXACT, ball::exact),
         (Symbol::REPLACE_ALL, replace::replace_all),
         (Symbol::REPLACE, replace::replace),
         (Symbol::REPLACE_REPEATED, replace::replace_repeated),

@@ -178,6 +178,12 @@ at 53 bits shows as `0.1`, and the sum of the balls of `0.1` and `0.2` as
 It is the interval form of shortest round-trip printing, where the interval
 is the ball itself rather than a float's rounding interval.
 
+**Bound (CAS-148).** The exact rationals of a ball of exponent `e` hold
+powers of 10 of about `e` bits: printing takes 5 ms at `10^10000` and 3 s at
+`10^1000000`. So past `2^16` bits of exponent, about `10^±19728`, neither
+the shortest decimal nor the literal below is looked for, and the display
+shows the known digits of `to_decimal`, which powers balls.
+
 **Tests.** `ball/decimal/tests.rs`:
 - the result lies in the ball; neither of its neighbours on the grid one
   digit coarser does, and a farther shorter decimal would put one of them in
@@ -199,6 +205,52 @@ takes the exact decimal value it spells:
 - **Huge exponents.** An exponent whose exact power of 10 would exceed
   `max(2^20, 4 prec)` bits is applied by ball arithmetic instead, with a
   radius a little above half an ulp.
+
+`Ball::from_scaled(n, e, prec)` is the same from the digits `n` and the
+exponent `e` of `n · 10^e`.
+
+### Literals (CAS-148, ours)
+
+The CAS reads a decimal literal as a ball (CAS-DOC-5 §6.4, D1), and writes a
+ball back as one (§6.5).
+
+**Precision.** `Ball::literal_bits(d, w)` is the precision a literal of `d`
+significant digits is read at, with a working precision of `w` bits:
+- `w`, while `d <= ⌈w log10 2⌉ + 1` (17 at 53 bits): the digits that read
+  every float of `w` bits back [[Mat68]](references.md#mat68);
+- beyond, `⌈d log2 10⌉ + 1`, enough for all of them, so that a long literal
+  keeps its digits, as giac and Mathematica keep them.
+
+At those bits the literal's radius, half an ulp, is under one unit of its
+last digit, and a guard bit covers the radius of huge exponents. So the
+shortest decimal in the ball is the literal, unless the literal ends in
+zeros. `Ball::from_literal(n, e, w)` reads `n · 10^e` at that precision.
+
+**Writing.** `Ball::to_literal(w)` is the shortest literal that
+`from_literal` reads back to the ball's midpoint. For `d = 1, 2, …` digits,
+it tries the two decimals of `d` digits around the midpoint, the nearer one
+first, and takes the first that reads back. Both have to be tried: next to
+a power of two, the rounding interval is narrower on one side.
+- **Termination.** The exact expansion of the midpoint, a dyadic, reads back
+  at any precision that holds it. One more digit, a trailing zero, raises
+  the precision past the round-trip bound when the expansion alone does not.
+- **Length.** A midpoint of at most `w` bits gets at most
+  `⌈w log10 2⌉ + 1` digits. Up to that many digits, decimals are read at
+  `w` bits, and decimals of that many digits are closer together than the
+  floats of `w` bits [[Mat68]](references.md#mat68). That is why
+  `literal_bits` keeps `w` up to the round-trip bound: with a precision that
+  grew with every digit, each extra digit would also narrow the interval it
+  must fall in, and nothing would bound the search.
+
+At 53 bits, the literal of a midpoint that is an `f64` is that `f64`'s
+shortest round-trip form, such as `0.30000000000000004`.
+
+**Tests.** `ball/decimal/tests.rs`:
+- the precision at the bound and past it, and no exact digits past
+  `2^16` bits of exponent;
+- tables, against the shortest forms of `f64`s;
+- properties: a ball's literal reads back to its midpoint, at every
+  precision, and within the bound when the midpoint fits it.
 
 ## Hexadecimal floats
 

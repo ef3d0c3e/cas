@@ -3,10 +3,13 @@
 
 use std::fmt::{self, Write as _};
 
-use cas_core::{Complex, Expr, Integer, Rational, Symbol, View};
+use cas_core::{
+    Complex, DEFAULT_WORKING_PRECISION, Expr, Integer, Rational, Symbol, View, ball_decimal,
+};
+use cas_num::ball::{Ball, ComplexBall};
 
 use crate::lexer::lex;
-use crate::literal::name;
+use crate::literal::{Number, name, number_value};
 use crate::lower::is_value;
 use crate::names::{Names, SyntaxForm, Target, escape_name, unescape_name};
 use crate::parser::MAX_DEPTH;
@@ -46,8 +49,8 @@ pub enum PrintErrorKind {
     Parameter,
     /// Nested deeper than [`MAX_PRINT_DEPTH`].
     TooDeep,
-    /// A ball, which has no input form yet: decimals read as exact numbers
-    /// until they are balls (CAS-DOC-5 §6.4).
+    /// A ball whose decimal exponent is beyond the literals of the
+    /// language ([`MAX_DECIMAL_EXPONENT`](crate::MAX_DECIMAL_EXPONENT)).
     Ball,
 }
 
@@ -70,7 +73,9 @@ impl fmt::Display for PrintError {
                 write!(f, "{:?} cannot be the parameter of a lambda", self.part)
             }
             PrintErrorKind::TooDeep => write!(f, "nested more than {MAX_PRINT_DEPTH} deep"),
-            PrintErrorKind::Ball => f.write_str("a ball has no input form yet"),
+            PrintErrorKind::Ball => {
+                f.write_str("the exponent of this ball is beyond decimal literals")
+            }
         }
     }
 }
@@ -143,6 +148,44 @@ impl std::error::Error for PrintError {}
 ///
 /// A [`PrintError`] for a part the language cannot write.
 pub fn print(e: &Expr, names: &Names) -> Result<String, PrintError> {
+    print_with(
+        e,
+        names,
+        Balls::Exact {
+            working_precision: DEFAULT_WORKING_PRECISION,
+        },
+    )
+}
+
+/// How [`print_with`] writes balls (CAS-148).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Balls {
+    /// The input form proper, for copying: the literal that reads back to
+    /// the ball's midpoint with `working_precision` bits (`0.1`,
+    /// `0.30000000000000004`), and `ball(c, r)` for a ball wider than that
+    /// literal, which reads back as a ball containing it.
+    Exact {
+        /// The bits the literals will be read at.
+        working_precision: u64,
+    },
+    /// For people: the decimal a ball shows at `working_precision` bits
+    /// (CAS-DOC-5 §6.1, D2), `0.3` for the sum of `0.1` and `0.2`. It reads
+    /// back as a ball that matches those digits. A ball that shows no digit
+    /// is `ball(0.0, r)`.
+    Shown {
+        /// The bits the balls are shown at.
+        working_precision: u64,
+    },
+}
+
+/// [`print()`], with balls written as `balls` says: [`print()`] writes them
+/// in [`Balls::Exact`] at 53 bits.
+///
+/// # Errors
+///
+/// A [`PrintError`] for a part the language cannot write.
+pub fn print_with(e: &Expr, names: &Names, balls: Balls) -> Result<String, PrintError> {
     if usize::from(e.depth()) > MAX_PRINT_DEPTH {
         return Err(PrintError {
             part: e.clone(),
@@ -151,6 +194,7 @@ pub fn print(e: &Expr, names: &Names) -> Result<String, PrintError> {
     }
     let mut printer = Printer {
         names,
+        balls,
         out: String::new(),
     };
     printer.expr(e)?;
@@ -213,6 +257,8 @@ enum Form<'a> {
     Lambda(&'a [Expr], &'a Expr),
     If(&'a [Expr]),
     MinusInfinity,
+    /// A decimal literal, `Decimal[digits, exponent]` (CAS-148).
+    Decimal(Integer, i64),
     /// Anything else: `head(args…)` or `call(head, args…)`.
     Call(&'a Expr, &'a [Expr]),
 }
@@ -247,6 +293,12 @@ fn form(e: &Expr) -> Form<'_> {
         }
         (Symbol::IF, [_, _] | [_, _, _]) => Form::If(args),
         (Symbol::DIRECTED_INFINITY, [d]) if d.as_i64() == Some(-1) => Form::MinusInfinity,
+        (Symbol::DECIMAL, [n, exponent]) => match (n.to_integer(), exponent.as_i64()) {
+            (Some(n), Some(exponent)) if decimal_text(&n, exponent).is_some() => {
+                Form::Decimal(n, exponent)
+            }
+            _ => Form::Call(head, args),
+        },
         (_, [a, b]) => match relation(symbol) {
             Some(op) => Form::Relation(a, op, b),
             None => Form::Call(head, args),
@@ -303,7 +355,10 @@ fn shape(e: &Expr) -> Shape {
         View::Integer(n) if n.is_negative() => (Prec::Prefix, true),
         View::Rational(q) => (Prec::Product, q.is_negative()),
         View::Complex(z) => complex_shape(z),
+        View::Ball(b) if b.mid().is_negative() => (Prec::Prefix, true),
+        View::ComplexBall(z) => complex_ball_shape(z),
         View::Apply { .. } => match form(e) {
+            Form::Decimal(n, _) if n.is_negative() => (Prec::Prefix, true),
             Form::Sum(_) => (Prec::Sum, false),
             Form::Product(factors) => {
                 let p = product(factors);
@@ -323,13 +378,82 @@ fn shape(e: &Expr) -> Shape {
             Form::Logical(_, _, prec, _) => (prec, false),
             Form::Lambda(..) | Form::If(_) => (Prec::Lowest, false),
             Form::MinusInfinity => (Prec::Prefix, true),
-            Form::Factorial(_) | Form::Bracketed(..) | Form::Index(..) | Form::Call(..) => {
-                (Prec::Postfix, false)
-            }
+            Form::Factorial(_)
+            | Form::Bracketed(..)
+            | Form::Index(..)
+            | Form::Decimal(..)
+            | Form::Call(..) => (Prec::Postfix, false),
         },
         _ => (Prec::Postfix, false),
     };
     Shape { prec, sign }
+}
+
+/// `2.5*i`, `-2.5*i`, `1.5 + 2.5*i`: a complex ball, as [`complex_shape`].
+fn complex_ball_shape(z: &ComplexBall) -> (Prec, bool) {
+    if !is_zero_ball(z.re()) {
+        return (Prec::Sum, z.re().mid().is_negative());
+    }
+    (Prec::Product, z.im().mid().is_negative())
+}
+
+/// Whether `b` is exactly 0.
+fn is_zero_ball(b: &Ball) -> bool {
+    b.is_exact() && b.mid().is_zero()
+}
+
+/// The text of the decimal literal `digits · 10^exponent`, the inverse of
+/// lowering's: `1.5`, `0.0015`, `2.50`, `2e10`, `5e0`, `1.5e-30`. `None`
+/// for an exponent beyond the literals of the language.
+fn decimal_text(digits: &Integer, exponent: i64) -> Option<String> {
+    let sign = if digits.is_negative() { "-" } else { "" };
+    let ds = digits.unsigned_abs().to_string();
+    let len = i64::try_from(ds.len()).ok()?;
+    let text = if exponent >= 0 {
+        format!("{sign}{ds}e{exponent}")
+    } else if -exponent < len {
+        let int = usize::try_from(len + exponent).ok()?;
+        format!("{sign}{}.{}", &ds[..int], &ds[int..])
+    } else if -exponent - len <= 4 {
+        let zeros = usize::try_from(-exponent - len).ok()?;
+        format!("{sign}0.{}{ds}", "0".repeat(zeros))
+    } else {
+        // The point after the first digit, if there are others.
+        let (first, rest) = ds.split_at(1);
+        let point = if rest.is_empty() { "" } else { "." };
+        format!("{sign}{first}{point}{rest}e{}", exponent + len - 1)
+    };
+    // Read back by the lexer's rules, which bound the exponent.
+    number_value(text.strip_prefix('-').unwrap_or(&text))
+        .ok()
+        .map(|_| text)
+}
+
+/// A ball of no sign in [`Balls::Exact`]: its literal, or `name(literal,
+/// r)` when it is wider than the literal, `r` its radius rounded up.
+fn exact_ball(b: &Ball, working: u64, name: &str) -> Option<String> {
+    let literal = b.to_literal(working)?;
+    let Ok(Number::Decimal { digits, exponent }) = number_value(&literal) else {
+        return None;
+    };
+    if b.rad() <= Ball::from_literal(&digits, exponent, working).rad() {
+        return Some(literal);
+    }
+    let r = b.rad().to_decimal();
+    number_value(&r).ok()?;
+    Some(format!("{name}({literal}, {r})"))
+}
+
+/// A ball of no sign in [`Balls::Shown`]: the decimal it shows, or
+/// `name(0.0, r)` with `r` bounding it when it shows no digit.
+fn shown_ball(b: &Ball, working: u64, name: &str) -> Option<String> {
+    let shown = ball_decimal(b, working);
+    if let Some(bound) = shown.strip_prefix("[± ").and_then(|r| r.strip_suffix(']')) {
+        number_value(bound).ok()?;
+        return Some(format!("{name}(0.0, {bound})"));
+    }
+    number_value(&shown).ok()?;
+    Some(shown)
 }
 
 /// `i`, `-i`, `3*i`, `i/2`, `2 + 3*i`.
@@ -359,9 +483,9 @@ impl Product<'_> {
     /// that number rather than as the product `Times[-1, 3]`.
     fn writes_one(&self) -> bool {
         let absorbs_sign = |e: &Expr| match e.view() {
-            View::Int(_) | View::Integer(_) => true,
+            View::Int(_) | View::Integer(_) | View::Ball(_) => true,
             View::Complex(z) => z.re().is_zero() && z.im().abs().is_one(),
-            _ => false,
+            _ => has_head(e, Symbol::DECIMAL),
         };
         self.negative && matches!(self.numerator.first(), Some(Item::Factor(f)) if absorbs_sign(f))
     }
@@ -387,6 +511,9 @@ enum Item<'a> {
     /// The imaginary unit, from the coefficient.
     Imaginary,
     Factor(&'a Expr),
+    /// A negative ball or decimal coefficient without its sign, which went
+    /// in front.
+    Negated(Expr),
     /// `b^n` for `n >= 2`, in a denominator.
     Power(&'a Expr, Integer),
 }
@@ -408,7 +535,11 @@ fn product(factors: &[Expr]) -> Product<'_> {
             View::Complex(z) if z.re().is_zero() => Some((z.im().clone(), true)),
             _ => first.to_rational().map(|q| (q, false)),
         };
-        if let Some((q, imaginary)) = coefficient {
+        if let Some(magnitude) = coefficient.is_none().then(|| negated(first)).flatten() {
+            rest = tail;
+            p.negative = true;
+            p.numerator.push(Item::Negated(magnitude));
+        } else if let Some((q, imaginary)) = coefficient {
             rest = tail;
             p.negative = q.is_negative();
             let (numerator, denominator) = q.into_parts();
@@ -459,6 +590,8 @@ enum Magnitude<'a> {
     Imaginary(Rational),
     /// A product, without its sign.
     Product(Product<'a>),
+    /// A ball or a decimal, without its sign.
+    Negated(Expr),
 }
 
 /// The magnitude of a term that is written subtracted: a negative number, a
@@ -477,12 +610,30 @@ fn negation(term: &Expr) -> Option<Magnitude<'_>> {
                     Magnitude::Product(p)
                 })
             }
+            Form::Decimal(..) => negated(term).map(Magnitude::Negated),
             _ => None,
         },
+        View::Ball(_) => negated(term).map(Magnitude::Negated),
         _ => {
             let q = term.to_rational()?;
             q.is_negative().then(|| Magnitude::Number(-q))
         }
+    }
+}
+
+/// `-x` for a negative ball or decimal literal `x`.
+fn negated(x: &Expr) -> Option<Expr> {
+    match x.view() {
+        View::Ball(b) if b.mid().is_negative() => Some(Expr::from(b.neg())),
+        _ if has_head(x, Symbol::DECIMAL) => {
+            let [digits, exponent] = x.args() else {
+                return None;
+            };
+            let digits = digits.to_integer().filter(Integer::is_negative)?;
+            let args = [Expr::from(-digits), exponent.clone()];
+            Some(Expr::apply(&Symbol::DECIMAL.into(), &args))
+        }
+        _ => None,
     }
 }
 
@@ -529,6 +680,7 @@ fn spelled<'n>(names: &'n Names, target: &Target) -> &'n str {
 
 struct Printer<'a> {
     names: &'a Names,
+    balls: Balls,
     out: String,
 }
 
@@ -587,8 +739,14 @@ impl<'a> Printer<'a> {
             View::Rational(q) => self.write(q),
             View::Complex(z) => self.complex(z),
             View::String(s) => self.string(s),
-            View::Ball(_) | View::ComplexBall(_) => {
-                return Err(PrintError {
+            View::Ball(b) => {
+                return self.ball(b).ok_or_else(|| PrintError {
+                    part: e.clone(),
+                    kind: PrintErrorKind::Ball,
+                });
+            }
+            View::ComplexBall(z) => {
+                return self.complex_ball(z).ok_or_else(|| PrintError {
                     part: e.clone(),
                     kind: PrintErrorKind::Ball,
                 });
@@ -617,6 +775,45 @@ impl<'a> Printer<'a> {
                 .push_str(if im.is_negative() { " - " } else { " + " });
         }
         self.imaginary(&im.abs());
+    }
+
+    /// A ball as [`Balls`] says, its sign in front: `0.1`, `-2.5`,
+    /// `ball(0.30000000000000004, 5.56e-17)`. `None` for an exponent beyond
+    /// decimal literals.
+    fn ball(&mut self, b: &Ball) -> Option<()> {
+        let magnitude = if b.mid().is_negative() {
+            self.out.push('-');
+            b.neg()
+        } else {
+            b.clone()
+        };
+        let name = spelled(self.names, &Target::Builtin(Symbol::BALL));
+        let text = match self.balls {
+            Balls::Exact { working_precision } => exact_ball(&magnitude, working_precision, name),
+            Balls::Shown { working_precision } => shown_ball(&magnitude, working_precision, name),
+        }?;
+        self.out.push_str(&text);
+        Some(())
+    }
+
+    /// `2.5*i`, `-2.5*i`, `1.5 + 2.5*i`, `1.5 - 2.5*i`.
+    fn complex_ball(&mut self, z: &ComplexBall) -> Option<()> {
+        let (re, im) = (z.re(), z.im());
+        if is_zero_ball(re) {
+            self.ball(im)?;
+        } else {
+            self.ball(re)?;
+            if im.mid().is_negative() {
+                self.out.push_str(" - ");
+                self.ball(&im.neg())?;
+            } else {
+                self.out.push_str(" + ");
+                self.ball(im)?;
+            }
+        }
+        self.out.push('*');
+        self.out.push_str(spelled(self.names, &Target::Imaginary));
+        Some(())
     }
 
     /// `m*i` for a positive rational `m`: `i`, `3*i`, `i/2`, `3*i/4`.
@@ -727,6 +924,11 @@ impl<'a> Printer<'a> {
                 self.out.push_str(spelled(self.names, &infinity));
                 Ok(())
             }
+            Form::Decimal(n, exponent) => {
+                self.out
+                    .push_str(&decimal_text(&n, exponent).expect("checked by form"));
+                Ok(())
+            }
             Form::Call(head, args) => self.call(e, head, args),
         }
     }
@@ -769,6 +971,7 @@ impl<'a> Printer<'a> {
         match m {
             Magnitude::Number(q) => self.write(q),
             Magnitude::Imaginary(q) => self.imaginary(q),
+            Magnitude::Negated(x) => return self.operand(x, Prec::Product, true),
             Magnitude::Product(p) => {
                 return match (p.numerator.as_slice(), p.denominator.as_slice()) {
                     // The right operand of a binary `-` binds at least like a
@@ -845,6 +1048,7 @@ impl<'a> Printer<'a> {
             Item::Number(n) => self.write(n),
             Item::Imaginary => self.out.push_str(spelled(self.names, &Target::Imaginary)),
             Item::Factor(f) => return self.operand(f, min, true),
+            Item::Negated(x) => return self.operand(x, min, true),
             Item::Power(b, n) => {
                 self.base(b)?;
                 self.out.push('^');
@@ -1022,6 +1226,12 @@ pub fn fold_arithmetic(e: &Expr) -> Expr {
     let View::Apply { head, args } = e.view() else {
         return e.clone();
     };
+    // A negative decimal is `-1` times the positive one, which evaluates
+    // alike (CAS-148): `x - 0.5*y` reads as `-1*(0.5*y)`, a written
+    // `(-0.5)*y` as `Decimal[-5, -1]*y`.
+    if let Some(positive) = negated(e).filter(|_| has_head(e, Symbol::DECIMAL)) {
+        return fold_times(vec![Expr::from(-1), positive]);
+    }
     if let (Some(Symbol::POWER), [b, n]) = (head.as_symbol(), args) {
         if fold_arithmetic(n).as_i64() == Some(-1) {
             return reciprocal(b);

@@ -46,6 +46,24 @@ pub enum DecimalStyle {
 /// `floor(log10(2) · 2^64)`.
 const LOG10_2_FIXED: i128 = 0x4d10_4d42_7de7_fbcc;
 
+/// `floor(log2(10) · 2^56)`.
+const LOG2_10_FIXED: u128 = 0x0352_69e1_2f34_6e2b;
+
+/// The largest exponent, in bits, of a ball whose exact decimal digits
+/// [`Ball::to_shortest_decimal`] and [`Ball::to_literal`] find: about
+/// `10^±19728`. Their exact powers of 10 grow with the exponent, and past
+/// this they would take seconds; [`Ball::to_decimal`], which powers balls,
+/// still prints such balls.
+const EXACT_DIGITS_BITS: u64 = 1 << 16;
+
+/// Whether `b`'s midpoint is within [`EXACT_DIGITS_BITS`].
+fn has_exact_digits(b: &Ball) -> bool {
+    b.mid()
+        .exponent()
+        .to_i64()
+        .is_some_and(|e| e.unsigned_abs() <= EXACT_DIGITS_BITS)
+}
+
 /// Significant digits of a printed radius, rounded up.
 const RADIUS_DIGITS: u64 = 3;
 
@@ -240,6 +258,17 @@ fn format_upper(m: &Mag) -> String {
     }
 }
 
+impl Mag {
+    /// The bound in decimal, rounded up to 3 significant digits, as the radii
+    /// of [`DecimalStyle::Radius`] print: `1.12e-17`, `0.0028`, `100`; `0`,
+    /// and `inf` for `+∞`. A bound beyond `i64` decimal exponents prints as a
+    /// hexadecimal float.
+    #[must_use]
+    pub fn to_decimal(&self) -> String {
+        format_upper(self)
+    }
+}
+
 impl Ball {
     /// The ball in decimal with at most `n` significant digits, each correct
     /// to within one unit in the last place for every point of the ball (Arb
@@ -304,8 +333,8 @@ impl Ball {
     ///
     /// The text always has a point, so it reads back as a decimal: `2.0`,
     /// `0.001`, `1.5e+20`; fixed notation from `1e-4` to `max` digits before
-    /// the point, scientific otherwise. `None` for a ball that is not finite
-    /// or too large or small for an exact rational.
+    /// the point, scientific otherwise. `None` for a ball that is not finite,
+    /// or whose exponent is beyond `2^16` bits, about `10^±19728`.
     ///
     /// The ends of the ball are exact rationals, and having a decimal of `k`
     /// significant digits inside is monotone in `k` (one of `k` digits is
@@ -313,7 +342,7 @@ impl Ball {
     /// fewest with `O(log max)` scalings of the ends.
     #[must_use]
     pub fn to_shortest_decimal(&self, max: u64) -> Option<String> {
-        if !self.is_finite() || max == 0 {
+        if !self.is_finite() || max == 0 || !has_exact_digits(self) {
             return None;
         }
         let mid = self.mid().checked_to_rational()?;
@@ -402,24 +431,161 @@ impl Ball {
             .ok()
             .and_then(|f| e.checked_sub(f))
             .ok_or_else(|| ParseNumberError::new(ParseErrorKind::ExponentRange))?;
+        Ok(Ball::from_scaled(&n, e, prec))
+    }
+
+    /// The ball of `n · 10^e` at `prec` bits, as [`Ball::from_decimal`]
+    /// makes it: rounded to nearest with a radius of half an ulp, or exact.
+    ///
+    /// # Panics
+    ///
+    /// If `prec` is 0.
+    #[must_use]
+    pub fn from_scaled(n: &Integer, e: i64, prec: u64) -> Ball {
+        assert!(prec >= 1, "Ball::from_scaled: precision 0");
         if n.is_zero() {
-            return Ok(Ball::ZERO);
+            return Ball::ZERO;
         }
         // value = n · 10^e.
         let cap = prec.saturating_mul(4).max(1 << 20);
         let fits = e.unsigned_abs().saturating_mul(3322) / 1000 <= cap;
         if !fits {
             let w = prec + 64;
-            let x = Ball::from_integer(&n).round_to_accuracy(w);
-            return Ok(scale(&x, e, w).round_to_accuracy(prec));
+            let x = Ball::from_integer(n).round_to_accuracy(w);
+            return scale(&x, e, w).round_to_accuracy(prec);
         }
         let (m, o) = if e >= 0 {
-            Float::from(&(&n * &pow10(e.unsigned_abs()))).round(prec, Round::Nearest)
+            Float::from(&(n * &pow10(e.unsigned_abs()))).round(prec, Round::Nearest)
         } else {
-            Float::from(&n).div_round(&Float::from(&pow10(e.unsigned_abs())), prec, Round::Nearest)
+            Float::from(n).div_round(&Float::from(&pow10(e.unsigned_abs())), prec, Round::Nearest)
         };
-        Ok(Ball::from_nearest(m, o, prec))
+        Ball::from_nearest(m, o, prec)
     }
+
+    /// The bits a decimal literal of `digits` significant digits is read at
+    /// with a working precision of `working` bits (CAS-DOC-5 §6.4, D1;
+    /// CAS-148, ours): `working`, while the literal has no more digits than
+    /// `working` bits need to read every float of theirs back,
+    /// `⌈working · log10 2⌉ + 1` (17 at 53 bits); beyond, enough for all of
+    /// them, `⌈digits · log2 10⌉ + 1`. Keeping `working` up to the round
+    /// trip is what gives every ball of `working` bits a literal of at most
+    /// that many digits ([`Ball::to_literal`]); a guard bit beyond keeps the
+    /// literal's radius under a unit of its last digit.
+    #[must_use]
+    pub fn literal_bits(digits: u64, working: u64) -> u64 {
+        let round_trip = u64::try_from((i128::from(working) * LOG10_2_FIXED) >> 64)
+            .map_or(u64::MAX, |d| d.saturating_add(2));
+        if digits <= round_trip {
+            return working;
+        }
+        let bits = (u128::from(digits) * LOG2_10_FIXED) >> 56;
+        u64::try_from(bits)
+            .map_or(u64::MAX, |b| b.saturating_add(2))
+            .max(working)
+    }
+
+    /// The ball of the decimal literal `n · 10^e` (its digits as written in
+    /// `n`, trailing zeros counted) with `working` bits: at
+    /// [`Ball::literal_bits`] of its digits.
+    #[must_use]
+    pub fn from_literal(n: &Integer, e: i64, working: u64) -> Ball {
+        Ball::from_scaled(n, e, Ball::literal_bits(decimal_digits(n), working))
+    }
+
+    /// The shortest decimal literal that [`Ball::from_literal`] reads back,
+    /// with `working` bits, to this ball's midpoint: the copy-pasteable form
+    /// of CAS-DOC-5 §6.5, CAS-148 (ours), whose radius may be smaller than
+    /// the literal's. Written as [`Ball::to_shortest_decimal`] writes, with
+    /// at least a point; fixed up to the digits `working` bits show. `None`
+    /// for a ball that is not finite, or whose exponent is beyond `2^16`
+    /// bits, about `10^±19728`.
+    ///
+    /// A ball of at most `working` bits gets at most
+    /// `⌈working · log10 2⌉ + 1` digits (17 at 53 bits): the decimals of
+    /// that many digits are read at `working` bits, closer together than its
+    /// floats. A longer midpoint takes the digits of the precision a literal
+    /// needs for it; the exact expansion, or one more digit than it, always
+    /// reads back.
+    #[must_use]
+    pub fn to_literal(&self, working: u64) -> Option<String> {
+        if !self.is_finite() || !has_exact_digits(self) {
+            return None;
+        }
+        let m = self.mid();
+        if m.is_zero() {
+            return Some("0.0".to_owned());
+        }
+        let q = m.checked_to_rational()?;
+        let e10 = floor_log10(&q.abs());
+        // `t = q · 10^s` has `d` digits before its point.
+        let mut t = scaled(&q, -e10);
+        let ten = Rational::from(10);
+        for (s, d) in (-e10..).zip(1u64..) {
+            let prec = Ball::literal_bits(d, working);
+            let (lo, hi) = (t.floor(), t.ceil());
+            // Nearest first: both are decimals of `d` digits.
+            let candidates =
+                if (&t - &Rational::from(lo.clone())) <= (&Rational::from(hi.clone()) - &t) {
+                    [lo, hi]
+                } else {
+                    [hi, lo]
+                };
+            for n in candidates {
+                if Ball::from_scaled(&n, -s, prec).mid() == m {
+                    let spare = Ball::literal_bits(d + 1, working) == prec;
+                    return Some(format_literal(&n, s, d, spare));
+                }
+            }
+            t = &t * &ten;
+        }
+        unreachable!("the exact expansion reads back")
+    }
+}
+
+/// `n · 10^-s` as a literal of exactly `d` significant digits, so that it
+/// reads back at the bits of `d` digits ([`Ball::literal_bits`]); `n` has
+/// `d` digits, or is `10^d`. Fixed notation where the point falls among the
+/// digits or before them (from `1e-4`), and for an integer when one more
+/// digit, its `.0`, reads at the same bits (`spare`); scientific otherwise,
+/// with `.0` after a single digit on the same condition (`2.0e+5`, else
+/// `2e+5`).
+fn format_literal(n: &Integer, s: i64, d: u64, spare: bool) -> String {
+    let sign = if n.is_negative() { "-" } else { "" };
+    let mut ds = n.unsigned_abs().to_string();
+    let mut s = s;
+    let want = usize::try_from(d).expect("digits");
+    if ds.len() > want {
+        // `10^d`: the same value with `d` digits, one place up.
+        ds.truncate(want);
+        s -= 1;
+    }
+    let len = i64::try_from(ds.len()).expect("fits");
+    // The decimal exponent of the first digit.
+    let e10 = len - 1 - s;
+    if (0..len - 1).contains(&e10) {
+        let int = usize::try_from(e10 + 1).expect("small");
+        return format!("{sign}{}.{}", &ds[..int], &ds[int..]);
+    }
+    if (-4..0).contains(&e10) {
+        let zeros = usize::try_from(-e10 - 1).expect("small");
+        return format!("{sign}0.{}{ds}", "0".repeat(zeros));
+    }
+    if e10 == len - 1 && spare {
+        return format!("{sign}{ds}.0");
+    }
+    let (first, rest) = ds.split_at(1);
+    let fraction = match (rest.is_empty(), spare) {
+        (false, _) => format!(".{rest}"),
+        (true, true) => ".0".to_owned(),
+        (true, false) => String::new(),
+    };
+    let esign = if e10 < 0 { '-' } else { '+' };
+    format!("{sign}{first}{fraction}e{esign}{}", e10.unsigned_abs())
+}
+
+/// The number of decimal digits of `|n|`, 1 for 0.
+fn decimal_digits(n: &Integer) -> u64 {
+    u64::try_from(n.unsigned_abs().to_string().len()).unwrap_or(u64::MAX)
 }
 
 /// `{}` prints with [`Ball::to_decimal`] in [`DecimalStyle::Digits`], `{:#}`

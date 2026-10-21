@@ -7,17 +7,40 @@
 use std::borrow::Cow;
 use std::fmt;
 
-use cas_num::{Integer, Natural, Rational};
+use cas_core::{Expr, Symbol, View};
+use cas_num::ball::Ball;
+use cas_num::{Integer, Natural};
 use unicode_normalization::{UnicodeNormalization, is_nfc};
 
 use crate::lexer::{lex, superscript_digit};
 use crate::syntax::SyntaxKind;
 
-/// The largest magnitude of a number's exponent: `1e1000000` is accepted.
+/// The largest magnitude of a number's exponent: `1e10000` is accepted.
 ///
-/// The bound keeps a short literal from becoming a number of gigabytes;
-/// larger powers are written `10^n`.
-pub const MAX_DECIMAL_EXPONENT: u64 = 1_000_000;
+/// A decimal is a ball (CAS-148), whose exponent could be any size, but the
+/// bound keeps printing it cheap: its exact digits are found with powers of
+/// 10 of the size of the exponent, a few milliseconds at this bound and
+/// seconds at `10^6`, CAS-117's bound for exact decimals. Larger powers are
+/// written `10^n`.
+pub const MAX_DECIMAL_EXPONENT: u64 = 10_000;
+
+/// The value of a number token: an integer, exact, or a decimal, which is
+/// approximate (CAS-DOC-5 §6.4, D1): a ball once its statement runs.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Number {
+    /// `42`, `1_000_000`, `0x1f`.
+    Integer(Integer),
+    /// A decimal or scientific literal, `digits · 10^exponent`, with the
+    /// digits as written: `2.50e-3` is `250 · 10^-5`, its trailing zero
+    /// counted, since the digits typed set its precision.
+    Decimal {
+        /// The digits, without the point.
+        digits: Integer,
+        /// The power of 10 they are scaled by.
+        exponent: i64,
+    },
+}
 
 /// Why [`number_value`] gives no value.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,18 +67,19 @@ impl fmt::Display for NumberError {
 
 impl std::error::Error for NumberError {}
 
-/// The exact value of a number token. Decimals are exact (CAS-DOC-5 §6.4):
-/// `0.1` is `1/10`.
+/// The value of a number token: an integer, or a decimal with its digits
+/// as written (CAS-DOC-5 §6.4).
 ///
 /// ```
-/// use cas_lang::number_value;
-/// use cas_num::{Integer, Rational};
+/// use cas_lang::{Number, number_value};
+/// use cas_num::Integer;
 ///
-/// let q = |n: i64, d: i64| Rational::new(n.into(), d.into());
-/// assert_eq!(number_value("0.1"), Ok(q(1, 10)));
-/// assert_eq!(number_value("1.5e-3"), Ok(q(3, 2000)));
-/// assert_eq!(number_value("1_000"), Ok(q(1000, 1)));
-/// assert_eq!(number_value("0x1f"), Ok(Rational::from(Integer::from(31))));
+/// let decimal = |digits: i64, exponent| Ok(Number::Decimal { digits: digits.into(), exponent });
+/// assert_eq!(number_value("0.1"), decimal(1, -1));
+/// assert_eq!(number_value("1.50e-3"), decimal(150, -5));
+/// assert_eq!(number_value("2E10"), decimal(2, 10));
+/// assert_eq!(number_value("1_000"), Ok(Number::Integer(Integer::from(1000))));
+/// assert_eq!(number_value("0x1f"), Ok(Number::Integer(Integer::from(31))));
 /// ```
 ///
 /// # Errors
@@ -63,7 +87,7 @@ impl std::error::Error for NumberError {}
 /// [`NumberError::Malformed`] unless `text` lexes as exactly one error-free
 /// number token, and [`NumberError::ExponentTooLarge`] for an exponent beyond
 /// [`MAX_DECIMAL_EXPONENT`].
-pub fn number_value(text: &str) -> Result<Rational, NumberError> {
+pub fn number_value(text: &str) -> Result<Number, NumberError> {
     if !is_token(text, SyntaxKind::Number) {
         return Err(NumberError::Malformed);
     }
@@ -75,20 +99,55 @@ pub fn number_value(text: &str) -> Result<Rational, NumberError> {
         _ => 10,
     };
     if radix != 10 {
-        return natural(&digits[2..], radix).map(|n| Rational::from(Integer::from(n)));
+        return natural(&digits[2..], radix).map(|n| Number::Integer(Integer::from(n)));
     }
     let (mantissa, exponent) = match digits.split_once(['e', 'E']) {
-        Some((mantissa, exponent)) => (mantissa, decimal_exponent(exponent)?),
-        None => (digits.as_str(), 0),
+        Some((mantissa, exponent)) => (mantissa, Some(decimal_exponent(exponent)?)),
+        None => (digits.as_str(), None),
     };
-    let (int, frac) = mantissa.split_once('.').unwrap_or((mantissa, ""));
-    let n = Integer::from(natural(&[int, frac].concat(), 10)?);
-    let shift = exponent.saturating_sub_unsigned(u64::try_from(frac.len()).unwrap_or(u64::MAX));
-    let scale = Integer::from(Natural::from(10u32).pow(shift.unsigned_abs()));
-    Ok(if shift >= 0 {
-        Rational::from(n * scale)
-    } else {
-        Rational::new(n, scale)
+    let point = mantissa.split_once('.');
+    let n = Integer::from(natural(
+        &point.map_or(Cow::Borrowed(mantissa), |(int, frac)| {
+            Cow::Owned([int, frac].concat())
+        }),
+        10,
+    )?);
+    if point.is_none() && exponent.is_none() {
+        return Ok(Number::Integer(n));
+    }
+    let frac = point.map_or(0, |(_, frac)| frac.len());
+    let shift = exponent
+        .unwrap_or(0)
+        .saturating_sub_unsigned(u64::try_from(frac).unwrap_or(u64::MAX));
+    Ok(Number::Decimal {
+        digits: n,
+        exponent: shift,
+    })
+}
+
+/// `e` with each decimal literal of the language, `Decimal[digits,
+/// exponent]`, made its ball at `working_precision` bits, or more for a
+/// literal with more digits than that precision reads back
+/// ([`Ball::from_literal`]). The session does this when it runs a
+/// statement, held parts included, so a precision set by a statement
+/// applies to the literals of the statements after it (CAS-148).
+#[must_use]
+pub fn decimal_balls(e: &Expr, working_precision: u64) -> Expr {
+    e.replace(|part| {
+        let (Some(Symbol::DECIMAL), [digits, exponent]) =
+            (part.head().and_then(Expr::as_symbol), part.args())
+        else {
+            return None;
+        };
+        let View::Int(exponent) = exponent.view() else {
+            return None;
+        };
+        let digits = digits.to_integer()?;
+        Some(Expr::from(Ball::from_literal(
+            &digits,
+            exponent,
+            working_precision,
+        )))
     })
 }
 
