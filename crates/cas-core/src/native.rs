@@ -27,6 +27,7 @@ mod structure;
 
 use crate::build;
 use crate::builtin;
+use crate::context::Context;
 use crate::eval::NativeFn;
 use crate::expr::Expr;
 use crate::symbol::Symbol;
@@ -107,8 +108,16 @@ pub(crate) fn get(s: Symbol) -> Option<NativeFn> {
 }
 
 /// The value of a builtin symbol: `I` is the complex number `i` (CAS-51).
-pub(crate) fn value(s: Symbol) -> Option<Expr> {
-    (s == Symbol::I).then(build::i)
+pub(crate) fn value(context: &Context, s: Symbol) -> Option<Expr> {
+    match s {
+        Symbol::I => Some(build::i()),
+        // CAS-151.
+        Symbol::DIGITS => {
+            let digits = crate::print::shown_digits(context.working_precision());
+            Some(Expr::from(i64::try_from(digits).unwrap_or(i64::MAX)))
+        }
+        _ => None,
+    }
 }
 
 #[cfg(test)]

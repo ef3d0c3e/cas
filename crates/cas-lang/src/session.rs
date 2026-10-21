@@ -304,12 +304,40 @@ impl Session {
         }
     }
 
+    /// `Digits := n` (CAS-151): the working precision set to the most bits
+    /// that show `n` digits, for the statements after it.
+    fn set_digits(&mut self, statement: &Statement, value: &Expr, out: &mut Output) {
+        let bits = value
+            .as_i64()
+            .and_then(|n| u64::try_from(n).ok())
+            .filter(|&n| n >= 1)
+            .map(cas_core::digits_bits)
+            .filter(|&bits| bits <= self.context.limits().number_bits);
+        let Some(bits) = bits else {
+            let message = format!(
+                "Digits takes a positive integer, up to {}: the decimal digits balls are made and shown with",
+                cas_core::shown_digits(self.context.limits().number_bits)
+            );
+            out.messages
+                .push(error(statement.spans.find(&[2]), message));
+            return;
+        };
+        self.context.set_working_precision(bits);
+        if !statement.quiet {
+            self.show(value, statement.spans.range(), out);
+        }
+    }
+
     /// `Set[target, value]`: the value evaluated once, then assigned to a
     /// name, or element by element to a list of names.
     fn assign(&mut self, statement: &Statement, target: &Expr, out: &mut Output) {
         let Some(value) = self.evaluate(statement, &[2], out) else {
             return;
         };
+        if target.as_symbol() == Some(Symbol::DIGITS) {
+            self.set_digits(statement, &value, out);
+            return;
+        }
         let spans = &statement.spans;
         if let View::Symbol(s) = target.view() {
             if has_head(&statement.expr.args()[1], Symbol::REPLACE_AT)

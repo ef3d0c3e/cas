@@ -109,7 +109,7 @@ pub fn ball_decimal(b: &Ball, prec: u64) -> String {
     } else {
         prec.max(accuracy)
     };
-    let digits = (bits.saturating_mul(30_103) / 100_000).max(1);
+    let digits = shown_digits(bits).max(1);
     let known = b.to_decimal(digits, DecimalStyle::Digits);
     let count = significant_digits(&known);
     if count > 0 {
@@ -118,6 +118,20 @@ pub fn ball_decimal(b: &Ball, prec: u64) -> String {
         }
     }
     with_point(known)
+}
+
+/// The decimal digits a precision of `bits` shows, `⌊bits · log10 2⌋` with
+/// `log10 2` as `0.30103`: 15 at 53 bits. Xcas's `Digits` (CAS-151).
+#[must_use]
+pub fn shown_digits(bits: u64) -> u64 {
+    bits.saturating_mul(30_103) / 100_000
+}
+
+/// The most bits that show `digits` decimal digits ([`shown_digits`]): 53
+/// for 15, 102 for 30. What `Digits := n` sets the working precision to.
+#[must_use]
+pub fn digits_bits(digits: u64) -> u64 {
+    (digits.saturating_add(1).saturating_mul(100_000) - 1) / 30_103
 }
 
 /// The significant digits of a decimal `to_decimal` printed: leading zeros

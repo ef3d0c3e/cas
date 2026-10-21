@@ -521,3 +521,24 @@ proptest! {
         prop_assert!(found.denom() <= value.denom());
     }
 }
+
+/// `Digits` is the decimal digits the working precision shows (CAS-151).
+#[test]
+fn digits_reads_the_working_precision() {
+    let mut ctx = Context::new();
+    assert_eq!(ctx.eval(&read("Digits")), Ok(Expr::from(15)));
+    ctx.set_working_precision(crate::digits_bits(30));
+    assert_eq!(ctx.eval(&read("Digits")), Ok(Expr::from(30)));
+    assert_eq!(crate::digits_bits(15), 53);
+    assert_eq!(crate::digits_bits(30), 102);
+}
+
+proptest! {
+    /// `digits_bits(n)` is the most bits that show `n` digits.
+    #[test]
+    fn digits_bits_is_the_most_bits_for_the_digits(n in 1u64..10_000_000) {
+        let bits = crate::digits_bits(n);
+        prop_assert_eq!(crate::shown_digits(bits), n);
+        prop_assert_eq!(crate::shown_digits(bits + 1), n + 1);
+    }
+}

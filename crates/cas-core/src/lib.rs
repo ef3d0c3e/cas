@@ -62,7 +62,7 @@ pub use eval::{Eval, NativeFn, STACK_PER_LEVEL};
 pub use expr::{Expr, View};
 pub use intern::{InternerStats, interner_stats};
 pub use pattern::{Pattern, PatternError, PatternErrorKind, Rule};
-pub use print::{FullForm, ball_decimal};
+pub use print::{FullForm, ball_decimal, digits_bits, shown_digits};
 pub use read::{FullFormError, FullFormErrorKind};
 pub use rules::{DefineError, UserNative};
 pub use symbol::Symbol;

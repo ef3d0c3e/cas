@@ -469,6 +469,16 @@ impl Lowerer<'_> {
             }
         }
         match lhs.kind() {
+            // `Digits := n`, the working precision, which only the session
+            // sets (CAS-151).
+            K::Name if self.target(&lhs) == Some(&Target::Builtin(Symbol::DIGITS)) => {
+                if self.scope.is_some() {
+                    return self.fail(range, LowerErrorKind::DefinitionInBlock);
+                }
+                let target = (Expr::from(Symbol::DIGITS), Spans::leaf(self::range(&lhs)));
+                let value = self.expr(&rhs);
+                apply(Symbol::SET, vec![target, value], range)
+            }
             K::Name => {
                 let target = self.assignable(&lhs);
                 let value = self.expr(&rhs);

@@ -171,6 +171,9 @@ fn calls_and_products() {
 fn assignments_and_definitions() {
     check(&[
         ("x := 1", "Set[x, 1]"),
+        // The working precision, the one builtin an assignment sets (CAS-151).
+        ("Digits := 30", "Set[Digits, 30]"),
+        ("Digits", "Digits"),
         ("[a, b] := [1, 2]", "Set[List[a, b], List[1, 2]]"),
         ("v[0] := 1", "Set[v, ReplaceAt[v, 0, 1]]"),
         (
@@ -342,6 +345,11 @@ fn errors_leave_statements_out() {
         (
             "g() := begin h(y) := y end",
             &[("h(y) := y", E::DefinitionInBlock)],
+        ),
+        // Nor the working precision, which changes the context (CAS-151).
+        (
+            "g() := begin Digits := 20 end",
+            &[("Digits := 20", E::DefinitionInBlock)],
         ),
         (
             "p() := begin t := t + 1 end",

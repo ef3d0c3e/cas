@@ -83,6 +83,9 @@ builtins! {
     // `Exact[e]`: each ball of `e` as the simplest fraction that matches the
     // digits it shows (CAS-DOC-5 §6.4, D4).
     EXACT = "Exact" [PROTECTED];
+    // The decimal digits the working precision shows, Xcas's `Digits`: its
+    // value is read from the context; the session sets it (CAS-151).
+    DIGITS = "Digits" [PROTECTED];
     // Logical values, infinities and nothing (CAS-DOC-4 §6.1, R14).
     TRUE = "True" [PROTECTED];
     FALSE = "False" [PROTECTED];

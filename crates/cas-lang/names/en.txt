@@ -58,6 +58,9 @@ D: diff
 # (D4, CAS-148).
 Ball: ball
 Exact: exact
+# The working precision in decimal digits, Xcas's `Digits` (CAS-151): the
+# one builtin name an assignment sets.
+Digits: Digits
 
 [planned]
 # Calculus, algebra and numerics (CAS-DOC-1, CAS-DOC-4 §1 and §8, CAS-DOC-5).

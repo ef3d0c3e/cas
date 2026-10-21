@@ -1,0 +1,28 @@
+> Digits
+= 15
+> 1/3.0
+= 0.333333333333333
+> Digits := 30
+= 30
+> 1/3.0
+= 0.333333333333333333333333333333
+> 1/3.1
+= 0.322580645161290322580645161290
+> Digits
+= 30
+> 0.1 + 0.2 == 0.3
+= true
+> Digits := 15
+= 15
+> 1/3.0
+= 0.333333333333333
+> Digits := 0
+error at 13:11 `0`: Digits takes a positive integer, up to 5050445: the decimal digits balls are made and shown with
+> Digits := 1/2
+error at 14:11 `1/2`: Digits takes a positive integer, up to 5050445: the decimal digits balls are made and shown with
+> Digits := x
+error at 15:11 `x`: Digits takes a positive integer, up to 5050445: the decimal digits balls are made and shown with
+> begin Digits := 20 end
+error at 16:7 `Digits := 20`: definitions belong at the top level, not in a block
+> Digits
+= 15

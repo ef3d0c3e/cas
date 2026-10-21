@@ -445,7 +445,7 @@ impl<'c> Eval<'c> {
                         .context
                         .value(s)
                         .cloned()
-                        .or_else(|| crate::native::value(s))
+                        .or_else(|| crate::native::value(self.context, s))
                     {
                         Some(value) => {
                             if TRACED {
