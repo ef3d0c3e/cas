@@ -240,7 +240,8 @@ pub struct Limits {
     pub stack: usize,
     /// The bits a power of numbers may have, by estimate: a larger one is
     /// left unevaluated, as `2^(10^9)` is. Verification lowers it for its
-    /// sample points, a fuzz target to keep each input fast.
+    /// sample points, a fuzz target to keep each input fast. The polynomial
+    /// builtins bound the coefficients of their powers by it (CAS-156).
     pub number_bits: u64,
     /// The terms a product may make in a polynomial builtin (CAS-DOC-8 §15
     /// detail 3), bounded before it is taken by the least of the factors'

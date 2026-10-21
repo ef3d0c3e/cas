@@ -10,7 +10,7 @@ use cas_num::{Integer, Rational};
 use cas_poly::{Never, Sparse, SparseRing};
 use proptest::prelude::*;
 
-use crate::poly::{Fraction, Polynomials};
+use crate::poly::{Bounds, Fraction, Polynomials};
 use crate::trace::{EvalOptions, Step, StepKind, TraceLevel};
 use crate::{Attributes, Context, EvalError, Expr, Interrupt, Symbol, Warning};
 
@@ -360,6 +360,38 @@ fn gcd_and_lcm() {
     ]);
 }
 
+/// A high degree where no algorithm goes dense (CAS-156): a constant's
+/// gcd, a polynomial's normal form, a division by a constant in the
+/// variable, a content in that variable.
+#[test]
+fn high_degrees_without_dense_forms() {
+    check(&[
+        (
+            "Together[Plus[Power[x, 10000000], 1]]",
+            "Plus[1, Power[x, 10000000]]",
+        ),
+        ("GCD[Plus[Power[x, 10000000], 1], 6]", "1"),
+        ("GCD[Plus[Times[2, Power[x, 10000000]], 4], 6]", "2"),
+        (
+            "PolynomialQuotient[Power[x, 10000000], 3]",
+            "Times[1/3, Power[x, 10000000]]",
+        ),
+        ("PolynomialRemainder[Power[x, 10000000], 3]", "0"),
+        // quo(x^2+1, y, x) = 1/y*x^2+1/y; rem = 0.
+        (
+            "PolynomialQuotient[Plus[Power[x, 2], 1], y, x]",
+            "Plus[Power[y, -1], Times[Power[x, 2], Power[y, -1]]]",
+        ),
+        ("PolynomialRemainder[Plus[Power[x, 2], 1], y, x]", "0"),
+        ("Content[Plus[Times[6, Power[x, 10000000]], 4], x]", "2"),
+        ("Exponent[Plus[Power[x, 10000000], 1], x]", "10000000"),
+        (
+            "LeadingCoefficient[Plus[Times[y, Power[x, 10000000]], 1], x]",
+            "y",
+        ),
+    ]);
+}
+
 /// giac's `quo`, `rem`, `quorem`, over the fractions of the other
 /// generators.
 #[test]
@@ -604,6 +636,54 @@ fn refusals() {
         ("GCD[Power[x, -1], x]", "must be polynomials"),
         // A discriminant needs a degree.
         ("Discriminant[5, x]", "a degree of at least 1"),
+        // Dense forms past `Limits::terms` (CAS-156): a quotient, a list
+        // of coefficients, gcds, resultants, a content.
+        (
+            "PolynomialQuotient[Power[x, 10000000], Plus[x, 1]]",
+            "could pass 1000000 terms",
+        ),
+        (
+            "Coefficient[Power[x, 10000000], x]",
+            "could pass 1000000 terms",
+        ),
+        (
+            "GCD[Plus[Power[x, 10000000], -1], Plus[Power[x, 1000000], -1]]",
+            "could pass 1000000 terms",
+        ),
+        (
+            "Together[Times[Plus[Power[x, 10000000], -1], Power[Plus[x, -1], -1]]]",
+            "could pass 1000000 terms",
+        ),
+        (
+            "Numerator[Times[Plus[Power[x, 10000000], -1], Power[Plus[x, -1], -1]]]",
+            "could pass 1000000 terms",
+        ),
+        (
+            "Resultant[Plus[Power[x, 10000000], 1], Plus[x, -2], x]",
+            "could pass 1000000 terms",
+        ),
+        (
+            "Discriminant[Plus[Power[x, 10000000], 1], x]",
+            "could pass 1000000 terms",
+        ),
+        (
+            "Content[Plus[Times[x, Plus[Power[y, 10000000], -1]], Power[y, 1000000], -1], x]",
+            "could pass 1000000 terms",
+        ),
+        // A gcd of two polynomials goes dense in either's variables, even
+        // one the other lacks; so does the lcm of two denominators.
+        (
+            "GCD[Plus[Power[x, 10000000], -1], Plus[y, 1]]",
+            "could pass 1000000 terms",
+        ),
+        (
+            "Together[Plus[Power[Plus[Power[x, 10000000], -1], -1], Power[Plus[y, 1], -1]]]",
+            "could pass 1000000 terms",
+        ),
+        (
+            "Together[Plus[Power[Plus[Power[x, 10000000], -1], -1], Power[Plus[Power[x, 1000000], -1], -1]]]",
+            "could pass 1000000 terms",
+        ),
         // Infinities, even inside a generator (CAS-139).
         ("Expand[f[Infinity]]", "not polynomials"),
         ("GCD[Plus[x, 1], f[Indeterminate]]", "not polynomials"),
@@ -657,6 +737,30 @@ fn the_limit_on_terms() {
         "Expand[Times[Power[Plus[1, x, y, z, t], 10], Plus[Power[Plus[1, x, y, z, t], 10], 1]]]",
     );
     assert_eq!(found.args().len(), 10626);
+    assert_eq!(warnings, Vec::<String>::new());
+}
+
+/// Past `Limits::number_bits`, a power's coefficients are not computed:
+/// the call stays, with a warning that gives the limit (CAS-156).
+#[test]
+fn the_limit_on_bits() {
+    let mut ctx = Context::new();
+    let mut limits = ctx.limits();
+    limits.number_bits = 64;
+    ctx.set_limits(limits);
+    // C(100, 50) has 97 bits, C(50, 25) 47.
+    let (found, warnings) = eval(&ctx, "Expand[Power[Plus[x, 1], 100]]");
+    assert_eq!(found.head(), Some(&Expr::from(Symbol::EXPAND)), "{found:?}");
+    assert!(
+        warnings.iter().any(|w| w.contains("could pass 64 bits")),
+        "{warnings:?}"
+    );
+    let (found, warnings) = eval(&ctx, "Expand[Power[Plus[x, 1], 50]]");
+    assert_eq!(found.args().len(), 51);
+    assert_eq!(warnings, Vec::<String>::new());
+    // A number evaluation left as a power stays one.
+    let (found, warnings) = eval(&ctx, "Expand[Power[Times[2, x], 100]]");
+    assert_eq!(format!("{found:?}"), "Times[Power[2, 100], Power[x, 100]]");
     assert_eq!(warnings, Vec::<String>::new());
 }
 
@@ -849,7 +953,7 @@ proptest! {
         let ctx = Context::new();
         let product = Expr::call(Symbol::EXPAND, [poly_expr(&a) * poly_expr(&b)]);
         let expanded = ctx.eval(&product).unwrap();
-        let p = Polynomials::new(std::slice::from_ref(&expanded), usize::MAX, &Never).unwrap();
+        let p = Polynomials::new(std::slice::from_ref(&expanded), Bounds::NONE, &Never).unwrap();
         // The generators of the expansion are among x, y, z: reorder its
         // terms into x, y, z.
         let (num, den) = match &p.fractions()[0] {
@@ -906,7 +1010,7 @@ proptest! {
         }
         prop_assert!(together_form(&together), "{} is {}", sum, together);
         // Cancelled: the numerator and denominator are coprime.
-        let p = Polynomials::new(std::slice::from_ref(&together), usize::MAX, &Never).unwrap();
+        let p = Polynomials::new(std::slice::from_ref(&together), Bounds::NONE, &Never).unwrap();
         let Fraction::Integers { num, den } = &p.fractions()[0] else {
             panic!("integer coefficients");
         };

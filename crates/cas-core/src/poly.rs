@@ -103,6 +103,8 @@ pub enum PolyError {
     /// A result past the limit on terms, an exponent past `2^62`, or
     /// expressions nested past [`MAX_DEPTH`] polynomial operations.
     TooLarge,
+    /// A power whose coefficients would pass the limit on bits (CAS-156).
+    Bits,
     /// A denominator that is the zero polynomial, which evaluation did not
     /// see: it never expands.
     DivisionByZero,
@@ -116,6 +118,7 @@ impl fmt::Display for PolyError {
             PolyError::Ball(e) => write!(f, "{e} is not exact"),
             PolyError::Infinite(e) => write!(f, "{e} is not finite"),
             PolyError::TooLarge => f.write_str("too large a polynomial"),
+            PolyError::Bits => f.write_str("too large a coefficient"),
             PolyError::DivisionByZero => f.write_str("a division by zero"),
             PolyError::Interrupted => f.write_str("interrupted"),
         }
@@ -146,6 +149,35 @@ pub struct Polynomials {
     fractions: Vec<Fraction>,
 }
 
+/// What a conversion may make (CAS-DOC-8 §15 detail 3): the terms of each
+/// product, estimated before it is taken, and the bits of the coefficients
+/// of each power, as `Limits::terms` and `Limits::number_bits` bound them
+/// in the builtins (CAS-156).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub struct Bounds {
+    /// The terms of a product, bounded before it is taken.
+    pub terms: usize,
+    /// The bits of a power's coefficients, estimated before it is taken.
+    pub bits: u64,
+}
+
+impl Bounds {
+    /// No bounds.
+    pub const NONE: Bounds = Bounds {
+        terms: usize::MAX,
+        bits: u64::MAX,
+    };
+
+    /// At most `terms` terms a product, and no bound on bits.
+    #[must_use]
+    pub const fn terms(terms: usize) -> Bounds {
+        Bounds {
+            terms,
+            bits: u64::MAX,
+        }
+    }
+}
+
 /// What a conversion takes as a generator, beyond the kernels of §2.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum Reading {
@@ -160,22 +192,23 @@ enum Reading {
 
 impl Polynomials {
     /// The rational functions of evaluated expressions, over their common
-    /// generators. `max_terms` bounds the terms of each product, estimated
-    /// before it is taken; `cancel` is polled in the long products.
+    /// generators, within `bounds`; `cancel` is polled in the long
+    /// products.
     ///
     /// # Errors
     ///
     /// [`PolyError::Ball`] for a ball coefficient, [`PolyError::Infinite`]
-    /// for an infinity or `Indeterminate`, [`PolyError::TooLarge`]
-    /// past `max_terms`, an exponent of `2^62` or [`MAX_DEPTH`],
+    /// for an infinity or `Indeterminate`, [`PolyError::TooLarge`] past
+    /// the bound on terms, an exponent of `2^62` or [`MAX_DEPTH`],
+    /// [`PolyError::Bits`] past the bound on bits,
     /// [`PolyError::DivisionByZero`] for a zero denominator,
     /// [`PolyError::Interrupted`] when `cancel` says so.
     pub fn new(
         exprs: &[Expr],
-        max_terms: usize,
+        bounds: Bounds,
         cancel: &dyn Cancel,
     ) -> Result<Polynomials, PolyError> {
-        Polynomials::convert(exprs, max_terms, Reading::Exact, cancel)
+        Polynomials::convert(exprs, bounds, Reading::Exact, cancel)
     }
 
     /// As [`Polynomials::new`], each ball a generator of its own instead of
@@ -188,15 +221,15 @@ impl Polynomials {
     /// As [`Polynomials::new`], but for balls.
     pub fn with_balls(
         exprs: &[Expr],
-        max_terms: usize,
+        bounds: Bounds,
         cancel: &dyn Cancel,
     ) -> Result<Polynomials, PolyError> {
-        Polynomials::convert(exprs, max_terms, Reading::Balls, cancel)
+        Polynomials::convert(exprs, bounds, Reading::Balls, cancel)
     }
 
     fn convert(
         exprs: &[Expr],
-        max_terms: usize,
+        bounds: Bounds,
         reading: Reading,
         cancel: &dyn Cancel,
     ) -> Result<Polynomials, PolyError> {
@@ -209,12 +242,12 @@ impl Polynomials {
         let generators = kernels.generators();
         let domain = kernels.domain();
         let fractions = if domain.is_complex() {
-            convert::<GaussianIntegers>(exprs, &generators, reading, max_terms, cancel)?
+            convert::<GaussianIntegers>(exprs, &generators, reading, bounds, cancel)?
                 .into_iter()
                 .map(|(num, den)| Fraction::GaussianIntegers { num, den })
                 .collect()
         } else {
-            convert::<Integers>(exprs, &generators, reading, max_terms, cancel)?
+            convert::<Integers>(exprs, &generators, reading, bounds, cancel)?
                 .into_iter()
                 .map(|(num, den)| Fraction::Integers { num, den })
                 .collect()
@@ -375,11 +408,11 @@ fn product(mut factors: Vec<Expr>) -> Expr {
 /// # Errors
 ///
 /// As [`Polynomials::with_balls`].
-pub fn expand(e: &Expr, max_terms: usize, cancel: &dyn Cancel) -> Result<Expr, PolyError> {
-    let p = Polynomials::convert(std::slice::from_ref(e), max_terms, Reading::Terms, cancel)?;
+pub fn expand(e: &Expr, bounds: Bounds, cancel: &dyn Cancel) -> Result<Expr, PolyError> {
+    let p = Polynomials::convert(std::slice::from_ref(e), bounds, Reading::Terms, cancel)?;
     match &p.fractions[0] {
-        Fraction::Integers { num, den } => p.expansion(num, den, max_terms, cancel),
-        Fraction::GaussianIntegers { num, den } => p.expansion(num, den, max_terms, cancel),
+        Fraction::Integers { num, den } => p.expansion(num, den, bounds, cancel),
+        Fraction::GaussianIntegers { num, den } => p.expansion(num, den, bounds, cancel),
     }
 }
 
@@ -404,7 +437,7 @@ impl Polynomials {
         &self,
         num: &Sparse<E>,
         den: &Sparse<E>,
-        max_terms: usize,
+        bounds: Bounds,
         cancel: &dyn Cancel,
     ) -> Result<Expr, PolyError> {
         debug_assert!(is_constant(den), "only numbers have denominators");
@@ -444,7 +477,7 @@ impl Polynomials {
                     }
                 })
                 .collect();
-            let over = expand(&product(factors), max_terms, cancel)?.pow(-1);
+            let over = expand(&product(factors), bounds, cancel)?.pow(-1);
             terms.extend(group.into_iter().map(|t| {
                 if t == Expr::from(1) {
                     over.clone()
@@ -674,6 +707,16 @@ fn linear_terms(e: &Expr) -> (Complex, Vec<(Rational, Expr)>) {
 /// (ours, CAS-139). `Exp` is not split: evaluation keeps `Exp[a] Exp[b]`
 /// apart, and `expand` leaves `exp(a + b)` (CAS-DOC-8 P6).
 fn powers(b: &Expr, e: &Expr) -> Vec<Power> {
+    // A number to an integer power, or to a rational one past 1, is what
+    // evaluation leaves only past `Limits::number_bits`: a generator, not a
+    // number to compute (CAS-156), as `3^4782969` at a point `Trace::verify`
+    // draws for `(3 3^(1/3))^(x^7)` took a minute.
+    if b.is_number()
+        && e.to_rational()
+            .is_some_and(|r| r.is_integer() || r.abs() > Rational::from(1))
+    {
+        return vec![Power::Plain(b.pow(e.clone()))];
+    }
     let (constant, terms) = match e.to_complex() {
         Some(z) => (z, Vec::new()),
         // A ball.
@@ -926,6 +969,10 @@ type Frac<E> = (Sparse<E>, Sparse<E>);
 trait Numbers: Numerators {
     /// `(n, d)` with `z = n / d`, `d` a positive natural; `z` is real over ℤ.
     fn split_number(z: &Complex) -> (Self::Elem, Natural);
+
+    /// Bits enough for `log2 |c|`, 0 for a unit: what a power of `c`
+    /// grows by, each factor.
+    fn bits(c: &Self::Elem) -> u64;
 }
 
 impl Numbers for Integers {
@@ -933,11 +980,27 @@ impl Numbers for Integers {
         debug_assert!(z.is_real(), "complex numbers make the domain ℤ[i]");
         Integers::split(z.re())
     }
+
+    fn bits(c: &Integer) -> u64 {
+        match c.bit_length() {
+            ..=1 => 0,
+            n => n,
+        }
+    }
 }
 
 impl Numbers for GaussianIntegers {
     fn split_number(z: &Complex) -> (Complex, Natural) {
         GaussianIntegers::split(z)
+    }
+
+    fn bits(c: &Complex) -> u64 {
+        // |a + b i| < 2 max(|a|, |b|); the units are ±1 and ±i.
+        let bits = |r: &Rational| r.numer().bit_length();
+        match bits(c.re()).max(bits(c.im())) {
+            ..=1 if c.re().is_zero() || c.im().is_zero() => 0,
+            n => n + 1,
+        }
     }
 }
 
@@ -946,14 +1009,15 @@ fn convert<N: Numbers>(
     exprs: &[Expr],
     generators: &Generators,
     reading: Reading,
-    max_terms: usize,
+    bounds: Bounds,
     cancel: &dyn Cancel,
 ) -> Result<Vec<Frac<N::Elem>>, PolyError> {
     let mut converter = Converter::<N> {
         ring: SparseRing::new(N::default(), generators.list.len()),
         generators,
         reading,
-        max_terms,
+        max_terms: bounds.terms,
+        max_bits: bounds.bits,
         cancel,
         memo: HashMap::default(),
         depth: 0,
@@ -968,6 +1032,7 @@ struct Converter<'a, N: Numbers> {
     generators: &'a Generators,
     reading: Reading,
     max_terms: usize,
+    max_bits: u64,
     cancel: &'a dyn Cancel,
     memo: HashMap<Expr, Frac<N::Elem>>,
     depth: usize,
@@ -1141,7 +1206,21 @@ impl<N: Numbers> Converter<'_, N> {
         if a.1 == b.1 {
             return Ok((self.ring.add(&a.0, &b.0), a.1.clone()));
         }
-        // Over the lcm of the denominators.
+        // Over the lcm of the denominators. The gcd of two that are not
+        // constants goes dense in their variables: past `max_terms` in
+        // degree, too large (CAS-156), as `1/(x^(10^8) - 1) + 1/(y + 1)`
+        // ran out of memory.
+        let (ea, eb) = (a.1.degrees(), b.1.degrees());
+        let constant = |d: &[u64]| d.iter().all(|&e| e == 0);
+        if !constant(&ea)
+            && !constant(&eb)
+            && ea
+                .iter()
+                .chain(&eb)
+                .any(|&e| usize::try_from(e).map_or(true, |d| d >= self.max_terms))
+        {
+            return Err(PolyError::TooLarge);
+        }
         let (_, da, db) = self.ring.gcd_cofactors_with(&a.1, &b.1, self.cancel)?;
         let num = self
             .ring
@@ -1166,6 +1245,20 @@ impl<N: Numbers> Converter<'_, N> {
                 .any(|&d| d.saturating_mul(e) > MAX_EXPONENT)
             {
                 return Err(PolyError::TooLarge);
+            }
+            // The coefficients of p^e have about e times the bits of p's
+            // and of its count of terms: past the bound, too large, before
+            // any product (CAS-156), as `(3 3^(1/3))^4782969` at a point
+            // of `Trace::verify` took a minute where evaluation left it.
+            if e > 1 {
+                let largest = p.coeffs().iter().map(N::bits).max().unwrap_or(0);
+                // log2 of the count of terms, rounded up: what the
+                // multinomial coefficients add, each factor.
+                let spread =
+                    u64::from(usize::BITS - p.term_count().saturating_sub(1).leading_zeros());
+                if largest.saturating_add(spread).saturating_mul(e) > self.max_bits {
+                    return Err(PolyError::Bits);
+                }
             }
             let mut result = self.ring.one();
             for i in (0..u64::BITS - e.leading_zeros()).rev() {

@@ -414,6 +414,42 @@ proptest! {
     }
 }
 
+/// A constant's gcd with a polynomial is its gcd with the content,
+/// normalised, at once whatever the degree (CAS-156): the contents reduce
+/// the constant to a unit before any evaluation.
+#[test]
+fn gcds_with_constants() {
+    let ring = SparseRing::new(Integers, 2);
+    let int = |n: i64| ring.constant(Integer::from(n));
+    let high = ring.monomial(Integer::from(4), &[1_000_000_000, 3]);
+    let p = ring.add(&high, &int(2));
+    let (g, qa, qb) = ring.gcd_cofactors(&int(-6), &p);
+    assert_eq!(g, int(2));
+    assert_eq!(qa, int(-3));
+    assert_eq!(ring.mul(&qb, &g), p);
+    let (g, qa, qb) = ring.gcd_cofactors(&p, &int(5));
+    assert_eq!((g, qa, qb), (int(1), p.clone(), int(5)));
+    // Over a field the gcd with a constant is 1.
+    let q = SparseRing::new(Rationals, 1);
+    let x = q.monomial(Rational::from(3), &[1_000_000_000]);
+    let three = q.constant(Rational::from(3));
+    assert_eq!(
+        q.gcd_cofactors(&three, &x),
+        (q.one(), three.clone(), x.clone())
+    );
+    // The methods agree on constants.
+    for method in [
+        GcdMethod::Heuristic,
+        GcdMethod::Modular,
+        GcdMethod::Subresultant,
+    ] {
+        let small = ring.add(&ring.mul(&int(4), &ring.var(0)), &int(2));
+        if let Some(parts) = ring.gcd_by(&int(-6), &small, method, &Never).unwrap() {
+            assert_eq!(parts, ring.gcd_cofactors(&int(-6), &small), "{method:?}");
+        }
+    }
+}
+
 /// `b² - 4ac` and `-4p³ - 27q²`, and the edge cases of degree 0 and 1.
 #[test]
 fn discriminants() {

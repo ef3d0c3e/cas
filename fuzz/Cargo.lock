@@ -19,6 +19,7 @@ name = "cas-core"
 version = "0.1.0"
 dependencies = [
  "cas-num",
+ "cas-poly",
  "foldhash",
  "hashbrown 0.16.1",
  "unicode-ident",
@@ -49,6 +50,13 @@ dependencies = [
  "cas-num",
  "libfuzzer-sys",
  "rug",
+]
+
+[[package]]
+name = "cas-poly"
+version = "0.1.0"
+dependencies = [
+ "cas-num",
 ]
 
 [[package]]

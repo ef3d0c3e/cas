@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 43] = [
+const BUILTINS: [&str; 59] = [
     "Plus",
     "Times",
     "Power",
@@ -82,6 +82,24 @@ const BUILTINS: [&str; 43] = [
     "Cos",
     "ArcSin",
     "ArcTan",
+    // The polynomial builtins (CAS-140, CAS-156), within a small limit on
+    // terms.
+    "Expand",
+    "Together",
+    "GCD",
+    "LCM",
+    "PolynomialQuotient",
+    "PolynomialRemainder",
+    "PolynomialQuotientRemainder",
+    "Exponent",
+    "Coefficient",
+    "LeadingCoefficient",
+    "Numerator",
+    "Denominator",
+    "Content",
+    "PrimitivePart",
+    "Resultant",
+    "Discriminant",
 ];
 
 /// Builtins that apply something to parts, only in the expression
@@ -228,7 +246,9 @@ fn pattern(u: &mut Unstructured<'_>, depth: u8, tests: bool) -> Result<Expr> {
         let kind = *u.choose(&["Blank", "BlankSequence", "BlankNullSequence"])?;
         Ok(if u.ratio(1, 3)? {
             // Heads of applications, and of kinds of atoms (CAS-150).
-            let heads = ["List", "f", "Plus", "Integer", "Rational", "Real", "Complex", "Symbol"];
+            let heads = [
+                "List", "f", "Plus", "Integer", "Rational", "Real", "Complex", "Symbol",
+            ];
             apply(kind, &[sym(u.choose(&heads)?)])
         } else {
             apply(kind, &[])
@@ -281,6 +301,7 @@ fn context(u: &mut Unstructured<'_>, recursion: u32) -> Result<Context> {
     limits.iterations = u.int_in_range(16..=128)?;
     limits.match_steps = u.int_in_range(1_000..=10_000)?;
     limits.number_bits = 1 << u.int_in_range(6u32..=14)?;
+    limits.terms = 1 << u.int_in_range(4u32..=12)?;
     limits.stack = 0;
     ctx.set_limits(limits);
     let mut attributes = [Attributes::NONE; HEADS.len()];

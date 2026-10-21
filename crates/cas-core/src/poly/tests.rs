@@ -11,7 +11,7 @@ use cas_num::{Complex, Integer, Rational};
 use cas_poly::{Never, Sparse, SparseRing};
 use proptest::prelude::*;
 
-use super::{CoefficientDomain, Fraction, PolyError, Polynomials, product_terms};
+use super::{Bounds, CoefficientDomain, Fraction, PolyError, Polynomials, product_terms};
 use crate::build::{exp, sin};
 use crate::{Context, Expr, Symbol};
 
@@ -28,7 +28,7 @@ fn eval(text: &str) -> Expr {
 
 fn polys(texts: &[&str]) -> Polynomials {
     let exprs: Vec<Expr> = texts.iter().map(|t| eval(t)).collect();
-    Polynomials::new(&exprs, usize::MAX, &Never).unwrap_or_else(|e| panic!("{texts:?}: {e}"))
+    Polynomials::new(&exprs, Bounds::NONE, &Never).unwrap_or_else(|e| panic!("{texts:?}: {e}"))
 }
 
 /// The generators, in full form.
@@ -278,7 +278,7 @@ fn long_sums_convert_fast() {
         .collect();
     let sum = Expr::call(Symbol::PLUS, terms);
     let start = Instant::now();
-    let p = Polynomials::new(&[sum], usize::MAX, &Never).unwrap();
+    let p = Polynomials::new(&[sum], Bounds::NONE, &Never).unwrap();
     let elapsed = start.elapsed();
     let (num, _) = integer_fraction(&p, 0);
     assert_eq!(num.term_count(), 174 * 174);
@@ -291,7 +291,7 @@ fn errors() {
     // A ball coefficient.
     let e = exprs(&["Times[x, N[3/2]]"]);
     assert!(matches!(
-        Polynomials::new(&e, usize::MAX, &Never),
+        Polynomials::new(&e, Bounds::NONE, &Never),
         Err(PolyError::Ball(_))
     ));
     // Infinities, even inside a generator.
@@ -303,23 +303,63 @@ fn errors() {
         let e = exprs(&[text]);
         assert!(
             matches!(
-                Polynomials::new(&e, usize::MAX, &Never),
+                Polynomials::new(&e, Bounds::NONE, &Never),
                 Err(PolyError::Infinite(_))
             ),
             "{text}"
         );
     }
+    // The lcm of two denominators that are not constants takes a gcd that
+    // goes dense in their variables (CAS-156): past the terms limit in
+    // degree, too large, before any work.
+    for text in [
+        "Plus[Power[Plus[Power[x, 10000000], -1], -1], Power[Plus[y, 1], -1]]",
+        "Plus[Power[Plus[Power[x, 10000000], -1], -1], Power[Plus[Power[x, 1000000], -1], -1]]",
+    ] {
+        let e = exprs(&[text]);
+        assert_eq!(
+            Polynomials::new(&e, Bounds::terms(1_000_000), &Never).err(),
+            Some(PolyError::TooLarge),
+            "{text}"
+        );
+    }
+    // A power whose coefficients would pass the bound on bits (CAS-156),
+    // before any product; a number to a power that evaluation left is a
+    // generator, not a number to compute.
+    let big = [read("Power[Times[3, Power[3, 1/3]], 100000]")];
+    let bits = Bounds {
+        terms: usize::MAX,
+        bits: 4096,
+    };
+    assert_eq!(
+        Polynomials::new(&big, bits, &Never).err(),
+        Some(PolyError::Bits)
+    );
+    assert!(Polynomials::new(&big, Bounds::NONE, &Never).is_ok());
+    let left = [read("Plus[x, Power[3, 1000000], Power[2, 3000001/3]]")];
+    let p = Polynomials::new(&left, bits, &Never).unwrap();
+    assert_eq!(
+        p.generators(),
+        [
+            read("x"),
+            read("Power[3, 1000000]"),
+            read("Power[2, 3000001/3]")
+        ]
+    );
+    // A constant denominator needs no gcd of polynomials.
+    let e = exprs(&["Plus[Power[x, 10000000], Times[1/2, y]]"]);
+    assert!(Polynomials::new(&e, Bounds::terms(1_000_000), &Never).is_ok());
     // Past the terms limit: (1 + x + y)^10 has 66 terms.
     let e = exprs(&["Power[Plus[1, x, y], 10]"]);
     assert_eq!(
-        Polynomials::new(&e, 30, &Never).err(),
+        Polynomials::new(&e, Bounds::terms(30), &Never).err(),
         Some(PolyError::TooLarge)
     );
-    assert!(Polynomials::new(&e, 1000, &Never).is_ok());
+    assert!(Polynomials::new(&e, Bounds::terms(1000), &Never).is_ok());
     // Exponents past 2^62.
     let e = exprs(&["Power[Plus[1, x], 4611686018427387905]"]);
     assert_eq!(
-        Polynomials::new(&e, usize::MAX, &Never).err(),
+        Polynomials::new(&e, Bounds::NONE, &Never).err(),
         Some(PolyError::TooLarge)
     );
     // A zero denominator that evaluation leaves: it never expands.
@@ -327,14 +367,14 @@ fn errors() {
         "Power[Plus[Power[Plus[1, x], 2], Times[-1, Plus[1, Times[2, x], Power[x, 2]]]], -1]",
     ]);
     assert_eq!(
-        Polynomials::new(&e, usize::MAX, &Never).err(),
+        Polynomials::new(&e, Bounds::NONE, &Never).err(),
         Some(PolyError::DivisionByZero)
     );
     // The interrupt.
     let stop = AtomicBool::new(true);
     let e = exprs(&["Plus[x, 1]"]);
     assert_eq!(
-        Polynomials::new(&e, usize::MAX, &stop).err(),
+        Polynomials::new(&e, Bounds::NONE, &stop).err(),
         Some(PolyError::Interrupted)
     );
 }
@@ -397,9 +437,9 @@ fn exponent_algebra() {
     ];
     for text in cases {
         let e = eval(text);
-        let p = Polynomials::new(std::slice::from_ref(&e), usize::MAX, &Never).unwrap();
+        let p = Polynomials::new(std::slice::from_ref(&e), Bounds::NONE, &Never).unwrap();
         let back = ctx.eval(&p.fraction_expr(&p.fractions()[0])).unwrap();
-        let both = Polynomials::new(&[e.clone(), back.clone()], usize::MAX, &Never).unwrap();
+        let both = Polynomials::new(&[e.clone(), back.clone()], Bounds::NONE, &Never).unwrap();
         assert!(
             same(&both.fractions()[0], &both.fractions()[1]),
             "{text}: {e} and {back}"
@@ -533,7 +573,7 @@ fn same(a: &Fraction, b: &Fraction) -> bool {
 /// The rational functions of `e` and of its way back, evaluated, over one
 /// set of generators; `None` where the conversion refuses `e`.
 fn there_and_back(ctx: &Context, e: &Expr) -> Result<Option<(Expr, Polynomials)>, TestCaseError> {
-    let p = match Polynomials::new(std::slice::from_ref(e), 100_000, &Never) {
+    let p = match Polynomials::new(std::slice::from_ref(e), Bounds::terms(100_000), &Never) {
         Ok(p) => p,
         // 0^-1 and the like, which evaluation leaves unexpanded, and the
         // infinities of 1/0.
@@ -543,7 +583,7 @@ fn there_and_back(ctx: &Context, e: &Expr) -> Result<Option<(Expr, Polynomials)>
         Err(error) => return Err(TestCaseError::fail(format!("{e}: {error}"))),
     };
     let back = ctx.eval(&p.fraction_expr(&p.fractions()[0])).unwrap();
-    let both = Polynomials::new(&[e.clone(), back.clone()], 100_000, &Never)
+    let both = Polynomials::new(&[e.clone(), back.clone()], Bounds::terms(100_000), &Never)
         .map_err(|error| TestCaseError::fail(format!("{back}: {error}")))?;
     Ok(Some((back, both)))
 }
@@ -659,7 +699,7 @@ proptest! {
     fn values_agree(g in gen_strategy(Kinds { roots: false, odd_roots: false, transcendental: false }), point in prop::collection::vec((-4i64..5, 1i64..4), 3)) {
         let ctx = Context::new();
         let Ok(e) = ctx.eval(&build(&g)) else { return Ok(()); };
-        let Ok(p) = Polynomials::new(std::slice::from_ref(&e), 100_000, &Never) else {
+        let Ok(p) = Polynomials::new(std::slice::from_ref(&e), Bounds::terms(100_000), &Never) else {
             return Ok(());
         };
         let back = ctx.eval(&p.fraction_expr(&p.fractions()[0])).unwrap();

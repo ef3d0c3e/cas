@@ -30,7 +30,7 @@ use crate::attributes::Attributes;
 use crate::context::{Context, EvalError};
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
-use crate::poly::{self, Coefficient, Fraction, PolyError, Polynomials};
+use crate::poly::{self, Bounds, Coefficient, Fraction, PolyError, Polynomials};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
 
@@ -111,14 +111,23 @@ fn convert(
     balls: bool,
 ) -> Result<Option<Polynomials>, EvalError> {
     let ctx = ev.context();
-    let terms = ctx.limits().terms;
     let cancel: &dyn Cancel = ctx.interrupt_flag();
     let result = if balls {
-        Polynomials::with_balls(args, terms, cancel)
+        Polynomials::with_balls(args, bounds(ctx), cancel)
     } else {
-        Polynomials::new(args, terms, cancel)
+        Polynomials::new(args, bounds(ctx), cancel)
     };
     refused(ev, e, result)
+}
+
+/// The bounds of a conversion in `ctx`: `Limits::terms` and
+/// `Limits::number_bits` (CAS-156).
+fn bounds(ctx: &Context) -> Bounds {
+    let limits = ctx.limits();
+    Bounds {
+        terms: limits.terms,
+        bits: limits.number_bits,
+    }
 }
 
 /// The value of a conversion, or `None` after a warning on `e` that says
@@ -142,6 +151,11 @@ fn refused<T>(
         Err(PolyError::TooLarge) => {
             let terms = ev.context().limits().terms;
             warn(ev, format!("a polynomial could pass {terms} terms"), e);
+            Ok(None)
+        }
+        Err(PolyError::Bits) => {
+            let bits = ev.context().limits().number_bits;
+            warn(ev, format!("a coefficient could pass {bits} bits"), e);
             Ok(None)
         }
         Err(PolyError::DivisionByZero) => {
@@ -229,7 +243,7 @@ pub(super) fn expand(ev: &mut Eval<'_>, e: &Expr) -> Native {
     }
     let arg = reach_inside(ev, arg, Symbol::EXPAND)?;
     let ctx = ev.context();
-    let expanded = poly::expand(&arg, ctx.limits().terms, ctx.interrupt_flag());
+    let expanded = poly::expand(&arg, bounds(ctx), ctx.interrupt_flag());
     let Some(result) = refused(ev, e, expanded)? else {
         return Ok(None);
     };
@@ -288,6 +302,9 @@ pub(super) fn together(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some(p) = convert(ev, e, std::slice::from_ref(&arg), false)? else {
         return Ok(None);
     };
+    if within_dense(ev, e, &p, Dense::Pair).is_none() {
+        return Ok(None);
+    }
     let cancel = ev.context().interrupt_flag();
     let result = with_fraction!(&p.fractions()[0], p.generators().len(), |ring, num, den| {
         let (n, d) = cancelled(&ring, num, den, cancel)?;
@@ -333,6 +350,57 @@ fn is_constant<E>(p: &Sparse<E>) -> bool {
     p.degrees().iter().all(|&d| d == 0)
 }
 
+/// The variables whose degrees bound the dense forms of an exact
+/// algorithm (CAS-156).
+#[derive(Clone, Copy)]
+enum Dense {
+    /// Every variable once two of the polynomials are not constants: a gcd
+    /// of two goes dense in any variable either has, even one the other
+    /// lacks (`gcd(x^(10^8) - 1, y + 1)`), where a constant's gcd is its
+    /// gcd with the content.
+    Pair,
+    /// Every variable: a resultant grows with a degree alone, as
+    /// `resultant(c, b) = c^(deg b)`.
+    All,
+    /// Every variable but `x_k`: a content in `x_k` takes the gcds of the
+    /// coefficients.
+    Except(usize),
+}
+
+/// Whether the dense forms of an exact algorithm on `p` stay within
+/// `Limits::terms`: no variable `rule` names may have a degree of the
+/// limit or more, as gcds, resultants and divisions make arrays of a
+/// degree's coefficients (CAS-156): `gcd(x^(10^8) - 1, x^(10^6) - 1)` went
+/// past any memory. `None` after the warning of the limit.
+fn within_dense(ev: &mut Eval<'_>, e: &Expr, p: &Polynomials, rule: Dense) -> Option<()> {
+    let terms = u64::try_from(ev.context().limits().terms).unwrap_or(u64::MAX);
+    let degrees: Vec<Vec<u64>> = p
+        .fractions()
+        .iter()
+        .flat_map(|f| match f {
+            Fraction::Integers { num, den } => [num.degrees(), den.degrees()],
+            Fraction::GaussianIntegers { num, den } => [num.degrees(), den.degrees()],
+        })
+        .collect();
+    let polynomials = degrees.iter().filter(|d| d.iter().any(|&e| e > 0)).count();
+    let past = (0..p.generators().len()).any(|v| {
+        let largest = degrees.iter().map(|d| d[v]).max().unwrap_or(0);
+        largest >= terms
+            && match rule {
+                Dense::Pair => polynomials >= 2,
+                Dense::All => true,
+                Dense::Except(k) => v != k,
+            }
+    });
+    if past {
+        let terms = ev.context().limits().terms;
+        warn(ev, format!("a polynomial could pass {terms} terms"), e);
+        None
+    } else {
+        Some(())
+    }
+}
+
 /// `GCD[a, b, …]` (§15 detail 5): of numbers, as numbers (gcd of the
 /// numerators over the lcm of the denominators); of polynomials, the gcd of
 /// their numerators over ℤ or ℤ\[i\], so the gcd of the contents times
@@ -347,7 +415,7 @@ pub(super) fn gcd(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some(p) = convert(ev, e, args, false)? else {
         return Ok(None);
     };
-    if polynomials(ev, e, &p).is_none() {
+    if polynomials(ev, e, &p).is_none() || within_dense(ev, e, &p, Dense::Pair).is_none() {
         return Ok(None);
     }
     let cancel = ev.context().interrupt_flag();
@@ -451,7 +519,7 @@ pub(super) fn lcm(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some(p) = convert(ev, e, args, false)? else {
         return Ok(None);
     };
-    if polynomials(ev, e, &p).is_none() {
+    if polynomials(ev, e, &p).is_none() || within_dense(ev, e, &p, Dense::Pair).is_none() {
         return Ok(None);
     }
     let cancel = ev.context().interrupt_flag();
@@ -673,6 +741,18 @@ pub(super) fn coefficient(ev: &mut Eval<'_>, e: &Expr) -> Native {
     {
         return Ok(None);
     }
+    // The list of coefficients has the degree's length (CAS-156).
+    if let (Variable::Index(k), None) = (var, power) {
+        let degree = match &polys.fractions()[0] {
+            Fraction::Integers { num, .. } => num.degrees()[k],
+            Fraction::GaussianIntegers { num, .. } => num.degrees()[k],
+        };
+        let terms = ev.context().limits().terms;
+        if degree >= u64::try_from(terms).unwrap_or(u64::MAX) {
+            warn(ev, format!("a polynomial could pass {terms} terms"), e);
+            return Ok(None);
+        }
+    }
     let result = with_fraction!(
         &polys.fractions()[0],
         polys.generators().len(),
@@ -734,6 +814,9 @@ fn numerator_or_denominator(ev: &mut Eval<'_>, e: &Expr, numerator: bool) -> Nat
     let Some(p) = convert(ev, e, std::slice::from_ref(arg), false)? else {
         return Ok(None);
     };
+    if within_dense(ev, e, &p, Dense::Pair).is_none() {
+        return Ok(None);
+    }
     let cancel = ev.context().interrupt_flag();
     let result = with_fraction!(&p.fractions()[0], p.generators().len(), |ring, num, den| {
         let (n, d) = cancelled(&ring, num, den, cancel)?;
@@ -760,6 +843,11 @@ fn content_or_part(ev: &mut Eval<'_>, e: &Expr, content: bool) -> Native {
     let Some((p, var)) = one_polynomial(ev, e, false)? else {
         return Ok(None);
     };
+    if let Variable::Index(k) = var
+        && within_dense(ev, e, &p, Dense::Except(k)).is_none()
+    {
+        return Ok(None);
+    }
     let cancel = ev.context().interrupt_flag();
     let result = with_fraction!(&p.fractions()[0], p.generators().len(), |ring, num, den| {
         let c = match var {
@@ -855,6 +943,9 @@ fn divide(ev: &mut Eval<'_>, e: &Expr, what: Division) -> Native {
     let Some((p, var)) = two_polynomials(ev, e)? else {
         return Ok(None);
     };
+    if within_dense(ev, e, &p, Dense::Pair).is_none() {
+        return Ok(None);
+    }
     let cancel = ev.context().interrupt_flag();
     let n = p.generators().len();
     let parts = with_fractions!(
@@ -910,6 +1001,12 @@ fn divided<R: Numbers>(
         let (n, d) = cancelled(ring, &num, &den, cancel)?;
         return Ok((p.ratio_expr(&n, &d), Expr::from(0)));
     };
+    if nb.degrees()[k] == 0 {
+        // A divisor constant in x_k: a / b, remainder 0, with no dense form
+        // of `a` (CAS-156).
+        let (n, d) = cancelled(ring, &ring.mul(na, db), &ring.mul(da, nb), cancel)?;
+        return Ok((p.expanded_expr(&n, &d), Expr::from(0)));
+    }
     let dense = DenseRing::new(ring.clone());
     let recursive = |x: &Sparse<R::Elem>| -> cas_poly::Dense<Sparse<R::Elem>> {
         let parts = ring.to_recursive(x, k);
@@ -970,6 +1067,9 @@ pub(super) fn resultant(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some((p, var)) = two_polynomials(ev, e)? else {
         return Ok(None);
     };
+    if within_dense(ev, e, &p, Dense::All).is_none() {
+        return Ok(None);
+    }
     let cancel = ev.context().interrupt_flag();
     let n = p.generators().len();
     let result = with_fractions!(
@@ -1008,6 +1108,9 @@ pub(super) fn discriminant(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some((p, var)) = one_polynomial(ev, e, false)? else {
         return Ok(None);
     };
+    if within_dense(ev, e, &p, Dense::All).is_none() {
+        return Ok(None);
+    }
     let cancel = ev.context().interrupt_flag();
     let result = with_fraction!(&p.fractions()[0], p.generators().len(), |ring, num, den| {
         match var {
