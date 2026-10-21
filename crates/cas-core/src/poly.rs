@@ -1000,22 +1000,8 @@ impl<N: Numbers> Converter<'_, N> {
             return Ok(self.generator(e));
         };
         match (head.as_symbol(), args) {
-            (Some(Symbol::PLUS), _) => {
-                let mut sum = self.constant(0);
-                for a in args {
-                    let f = self.fraction(a)?;
-                    sum = self.add(&sum, &f)?;
-                }
-                Ok(sum)
-            }
-            (Some(Symbol::TIMES), _) => {
-                let mut product = self.constant(1);
-                for a in args {
-                    let f = self.fraction(a)?;
-                    product = self.mul(&product, &f)?;
-                }
-                Ok(product)
-            }
+            (Some(Symbol::PLUS), _) => self.balanced(args, false),
+            (Some(Symbol::TIMES), _) => self.balanced(args, true),
             (Some(Symbol::POWER), [_, exponent])
                 if self.reading == Reading::Terms && !positive(exponent) =>
             {
@@ -1035,6 +1021,33 @@ impl<N: Numbers> Converter<'_, N> {
             }
             _ => Ok(self.generator(e)),
         }
+    }
+
+    /// The sum of the fractions of `args`, or their product, in a balanced
+    /// tree: a sum of `n` terms takes `O(n log n)` operations on terms,
+    /// where adding each to the sum so far took `O(n²)` (CAS-157). The
+    /// order changes no result: a sum's denominator is the lcm of the
+    /// denominators, a product's their product, normalised either way.
+    fn balanced(&mut self, args: &[Expr], product: bool) -> Result<Frac<N::Elem>, PolyError> {
+        let mut parts = args
+            .iter()
+            .map(|a| self.fraction(a))
+            .collect::<Result<Vec<_>, _>>()?;
+        while parts.len() > 1 {
+            let mut next = Vec::with_capacity(parts.len().div_ceil(2));
+            let mut pairs = parts.into_iter();
+            while let Some(a) = pairs.next() {
+                next.push(match pairs.next() {
+                    Some(b) if product => self.mul(&a, &b)?,
+                    Some(b) => self.add(&a, &b)?,
+                    None => a,
+                });
+            }
+            parts = next;
+        }
+        Ok(parts
+            .pop()
+            .unwrap_or_else(|| self.constant(i64::from(product))))
     }
 
     /// One factor of a power of `b`.

@@ -3,6 +3,7 @@
 //! errors, and the round trip.
 
 use std::sync::atomic::AtomicBool;
+use std::time::{Duration, Instant};
 
 use cas_num::algebra::{Integers, Ring};
 use cas_num::ball::{Ball, ComplexBall};
@@ -252,6 +253,36 @@ fn fractions() {
         }
         Fraction::Integers { .. } => panic!("a complex number"),
     }
+}
+
+/// A long sum converts in near-linear work (CAS-157): 30276 monomials,
+/// which adding each to the sum so far took minutes for here. The bound is
+/// loose, for a debug build on a loaded machine.
+#[test]
+fn long_sums_convert_fast() {
+    let (x, y) = (Expr::symbol("x"), Expr::symbol("y"));
+    let terms: Vec<Expr> = (0..174u64)
+        .flat_map(|i| {
+            let (x, y) = (x.clone(), y.clone());
+            (0..174u64).map(move |j| {
+                Expr::call(
+                    Symbol::TIMES,
+                    [
+                        Expr::from(Integer::from(i + j + 1)),
+                        x.pow(Expr::from(Integer::from(i))),
+                        y.pow(Expr::from(Integer::from(j))),
+                    ],
+                )
+            })
+        })
+        .collect();
+    let sum = Expr::call(Symbol::PLUS, terms);
+    let start = Instant::now();
+    let p = Polynomials::new(&[sum], usize::MAX, &Never).unwrap();
+    let elapsed = start.elapsed();
+    let (num, _) = integer_fraction(&p, 0);
+    assert_eq!(num.term_count(), 174 * 174);
+    assert!(elapsed < Duration::from_secs(20), "{elapsed:?}");
 }
 
 #[test]
