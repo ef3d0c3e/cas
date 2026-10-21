@@ -208,6 +208,28 @@ product itself does not stop), and at each quotient coefficient of a
 division. The `_with` methods return `Cancelled`; the `Ring` methods use
 `Never`.
 
+## Benchmarks (CAS-DOC-8 §13)
+
+The products `DenseRing` chooses, Kronecker substitution at these sizes,
+counted with `products_workload` (`mul:LENGTH:BITS`) under `perf stat`, the
+factors' construction subtracted. The same products are the `dense_mul`
+benchmarks of `benches/poly.rs`, whose medians are the times. With
+coefficients of 100 and 200 bits they are CAS-70's workload. giac 1.9's
+`time(expand(p*q))` on random polynomials of the same shape gives a coarse
+comparison, its conversion from and back to expressions included, which is
+most of its time below a thousand coefficients.
+
+| Length | Bits | Instructions | Time | giac |
+|---|---|---|---|---|
+| 16 | 100 | 0.06 M | 2.2 µs | 1.3 ms |
+| 128 | 100 | 0.88 M | 34 µs | 4.7 ms |
+| 1024 | 100 | 13.7 M | 0.59 ms | 19 ms |
+| 8192 | 100 | 156.5 M | 5.8 ms | 180 ms |
+| 16 | 200 | 0.12 M | 4.2 µs | 1.3 ms |
+| 128 | 200 | 1.89 M | 75 µs | 2.2 ms |
+| 1024 | 200 | 30.0 M | 1.1 ms | 20 ms |
+| 8192 | 200 | 287.1 M | 10.7 ms | 170 ms |
+
 ## Tests
 
 `src/dense/tests.rs` and `src/shared/tests.rs`:

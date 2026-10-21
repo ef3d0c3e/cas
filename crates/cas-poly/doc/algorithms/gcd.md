@@ -231,7 +231,12 @@ comparison.
   `N = 8` and `N = 12` this is 3 and 20 times slower: the heuristic gives up
   at `N = 12`, and Brown's evaluation is dense in every variable. Zippel's
   sparse interpolation (CAS-152) and coefficients accumulated in place
-  (CAS-141) are for later tickets.
+  (CAS-155) are for later tickets.
+- **Since CAS-141** the heap's methods are inlined: the sparse gcds take
+  9.3 M, 113.9 M and 1.94 G instructions, in the same times. The criterion
+  benchmarks of `benches/poly.rs`, `gcd_dense` at degrees 100 and 400 and
+  `gcd_sparse` at `N = 5` and `8`, take 1.27 ms, 16.8 ms, 0.39 ms and 5.7
+  ms.
 
 ## Tests
 

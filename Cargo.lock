@@ -108,6 +108,7 @@ name = "cas-poly"
 version = "0.1.0"
 dependencies = [
  "cas-num",
+ "criterion",
  "proptest",
 ]
 

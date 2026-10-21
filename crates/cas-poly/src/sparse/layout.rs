@@ -73,6 +73,7 @@ impl Layout {
     }
 
     /// The words of a packed vector.
+    #[inline]
     pub(crate) fn words(&self) -> usize {
         self.words
     }
@@ -144,6 +145,7 @@ impl Layout {
 
     /// `out = a + b`: the product of the monomials. Whether a field
     /// overflowed, which sets its guard.
+    #[inline]
     pub(crate) fn add(&self, a: &[u64], b: &[u64], out: &mut [u64]) -> bool {
         let mut overflow = false;
         for (w, ((o, x), y)) in out.iter_mut().zip(a).zip(b).enumerate() {
@@ -157,6 +159,7 @@ impl Layout {
     /// `out = b - a` when `a` divides `b`, every field of `a` at most `b`'s:
     /// with the guards of `b` set, a field of `a` above `b`'s clears its
     /// guard and borrows from nothing else \[MP07\].
+    #[inline]
     pub(crate) fn divides(&self, a: &[u64], b: &[u64], out: &mut [u64]) -> bool {
         for (w, ((o, x), y)) in out.iter_mut().zip(a).zip(b).enumerate() {
             let g = self.guards_of(w);

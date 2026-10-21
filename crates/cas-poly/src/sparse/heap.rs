@@ -38,26 +38,31 @@ impl Heap {
         }
     }
 
+    #[inline]
     fn mono(&self, slot: usize) -> &[u64] {
         &self.monos[slot * self.words..(slot + 1) * self.words]
     }
 
+    #[inline]
     fn mono_mut(&mut self, slot: usize) -> &mut [u64] {
         &mut self.monos[slot * self.words..(slot + 1) * self.words]
     }
 
     /// A new slot for `(i, j)`; its monomial is written by the caller.
+    #[inline]
     fn slot(&mut self, i: usize, j: usize) -> usize {
         self.pairs.push((i, j));
         self.monos.extend(std::iter::repeat_n(0, self.words));
         self.pairs.len() - 1
     }
 
+    #[inline]
     fn greater(&self, a: usize, b: usize) -> bool {
         self.mono(self.order[a]) > self.mono(self.order[b])
     }
 
     /// Puts `slot`, its monomial written, into the heap.
+    #[inline]
     fn insert(&mut self, slot: usize) {
         self.order.push(slot);
         let mut k = self.order.len() - 1;
@@ -72,11 +77,13 @@ impl Heap {
     }
 
     /// The largest monomial in the heap.
+    #[inline]
     fn top(&self) -> Option<&[u64]> {
         self.order.first().map(|&s| self.mono(s))
     }
 
     /// Takes the slot of the largest monomial out of the heap.
+    #[inline]
     fn pop(&mut self) -> usize {
         let top = self.order.swap_remove(0);
         let n = self.order.len();

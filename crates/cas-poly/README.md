@@ -53,3 +53,16 @@ cargo test --release -p cas-poly --lib --no-run
 CAS_POLY_WORK=kronecker:256:200:78 perf stat -e instructions:u \
     target/release/deps/cas_poly-* dense::tests::products_workload --ignored --exact
 ```
+
+## Benchmarks
+
+`benches/poly.rs` (CAS-141, CAS-DOC-8 §13) times, by criterion, at sizes that
+run in seconds: dense products over ℤ with 100- and 200-bit coefficients of
+16 to 8192 coefficients (CAS-70's workload), Fateman's and Monagan–Pearce's
+sparse products, and gcds of products with a common factor, dense and
+sparse. The full sizes are the workloads above; the numbers, with giac's, are
+in [`doc/algorithms`](doc/algorithms/README.md).
+
+```sh
+cargo bench -p cas-poly --bench poly -- '^dense_mul/200/'
+```

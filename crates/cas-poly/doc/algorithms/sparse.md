@@ -122,16 +122,31 @@ The result comes out in order, and needs no sort.
 
 `sparse_workload`, an ignored test of `src/sparse/tests.rs`, measured with
 `perf stat -e instructions:u`. The factors' own construction is subtracted.
+giac 1.9's `time(expand(f*g))`, on the same factors expanded first, gives a
+coarse comparison.
 
-| Product | Terms | Products of terms | Instructions | Wall time |
-|---|---|---|---|---|
-| Fateman [Fat03]: `f = (1 + x + y + z + t)^20`, `f (f + 1)` | 10626 × 10626 → 135751 | 113 M | 167.0 G | 9.8 s |
-| Monagan–Pearce: `(1 + x + y + 2z² + 3t³ + 5u⁵)^12 (1 + u + t + 2z² + 3y³ + 5x⁵)^12` | 6188 × 6188 → 5821335 | 38.3 M | 50.3 G | 2.9 s |
+| Product | Terms | Products of terms | Instructions | Wall time | giac |
+|---|---|---|---|---|---|
+| Fateman [Fat03]: `f = (1 + x + y + z + t)^20`, `f (f + 1)` | 10626 × 10626 → 135751 | 113 M | 148.9 G | 9.8 s | 0.43 s |
+| Monagan–Pearce: `(1 + x + y + 2z² + 3t³ + 5u⁵)^12 (1 + u + t + 2z² + 3y³ + 5x⁵)^12` | 6188 × 6188 → 5821335 | 38.3 M | 45.3 G | 2.9 s | 0.26 s |
 
-That is about 1,400 instructions per product of terms. Most go to cas-num's
-general integers, which allocate once a coefficient passes a word, and to
-the heap. Accumulating coefficients in a few fixed words, and chaining the
-heap's equal monomials [MP07], would cut both (CAS-141).
+That is about 1,300 instructions per product of terms, 23 and 11 times
+giac's time.
+- **The heap** takes three quarters of it (`Heap::greater` and `pop`, by
+  perf), and it is bound by its unpredictable comparisons. Marking its
+  methods `#[inline]` (CAS-141), so that the products cas-core instantiates
+  inline them too, cut 11% of the instructions here and 26% through
+  cas-core's `expand`, but none of the time.
+- **cas-num's integers** take a fifth: they allocate once a coefficient
+  passes a word.
+- **The way out** is array accumulation for products whose degree box is
+  small next to their products of terms (Fateman's: 41⁴ slots for 113 M
+  products), coefficients accumulated in a few fixed words, and chaining
+  the heap's equal monomials [MP07]: CAS-155.
+
+The criterion benchmarks of `benches/poly.rs` run smaller sizes: `fateman`
+at `K = 5` and `10` (0.76 ms and 58 ms), `pearce` at `K = 4` and `8` (0.90
+ms and 109 ms).
 
 ## Tests
 

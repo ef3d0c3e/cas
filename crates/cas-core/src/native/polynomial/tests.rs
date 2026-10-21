@@ -925,3 +925,46 @@ proptest! {
         }
     }
 }
+
+/// A workload for instruction counts (CAS-141), as cas-poly's: run by
+/// `perf stat` on the test binary with `--ignored --exact`.
+/// `CAS_CORE_POLY` is `expand-power:K` (`Expand[(1 + x + y + z)^K]`),
+/// `expand-fateman:K` (`Expand[f (f + 1)]`, `f = (1 + x + y + z + t)^K`),
+/// `together:N` (`Together` of `1/(x + 1) + … + 1/(x + N)`) or
+/// `together-cancel:N` (of the sum of `(x^2 - k^2 y^2)/(x + k y)`). Without
+/// it, nothing: the cost of the harness alone.
+#[test]
+#[ignore = "a workload for instruction counts"]
+fn poly_workload() {
+    let Ok(spec) = std::env::var("CAS_CORE_POLY") else {
+        return;
+    };
+    let (name, size) = spec.split_once(':').expect("CAS_CORE_POLY=name:size");
+    let n: usize = size.parse().unwrap();
+    let text = match name {
+        "expand-power" => format!("Expand[Power[Plus[1, x, y, z], {n}]]"),
+        "expand-fateman" => format!(
+            "Expand[Times[Power[Plus[1, x, y, z, t], {n}], Plus[Power[Plus[1, x, y, z, t], {n}], 1]]]"
+        ),
+        "together" => {
+            let terms: Vec<String> = (1..=n)
+                .map(|k| format!("Power[Plus[x, {k}], -1]"))
+                .collect();
+            format!("Together[Plus[{}]]", terms.join(", "))
+        }
+        "together-cancel" => {
+            let terms: Vec<String> = (1..=n)
+                .map(|k| {
+                    format!(
+                        "Times[Plus[Power[x, 2], Times[-{}, Power[y, 2]]], Power[Plus[x, Times[{k}, y]], -1]]",
+                        k * k
+                    )
+                })
+                .collect();
+            format!("Together[Plus[{}]]", terms.join(", "))
+        }
+        _ => panic!("unknown workload {name}"),
+    };
+    let result = Context::new().eval(&read(&text)).unwrap();
+    eprintln!("{spec}: {} terms", result.args().len());
+}
