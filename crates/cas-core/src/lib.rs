@@ -30,6 +30,9 @@
 //!   [`Context::eval_with`] also reports [`Warning`]s and, as [`EvalOptions`]
 //!   ask, a [`Trace`] of the steps taken, which [`Trace::verify`] checks at
 //!   exact sample points.
+//! - [`poly`]: expressions as polynomials and rational functions over
+//!   cas-poly (CAS-DOC-8 §2): their generators, numerators and
+//!   denominators, and the way back.
 
 mod assume;
 mod attributes;
@@ -44,6 +47,7 @@ mod native;
 mod node;
 mod order;
 mod pattern;
+pub mod poly;
 mod print;
 mod read;
 mod rules;

@@ -11,6 +11,7 @@ readme = "README.md"
 
 [dependencies]
 cas-num.workspace = true
+cas-poly.workspace = true
 foldhash.workspace = true
 hashbrown.workspace = true
 unicode-ident.workspace = true
