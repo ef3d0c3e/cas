@@ -1,0 +1,68 @@
+# Tests run here, never on the development machine (CAS-158).
+#
+# The gmp-mpfr-sys build (GMP, MPFR, MPC for the `rug` oracle) dominates a cold
+# run; Swatinem/rust-cache keeps it warm between runs. libgiac is installed so
+# the cas-giac oracle tests run instead of skipping; if the package ever
+# disappears from the runner image, those tests skip with a note and the job
+# still passes.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  clippy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y m4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y m4
+      - name: Install libgiac (cas-giac oracle; its tests skip if missing)
+        run: sudo apt-get install -y giac || echo "giac unavailable; oracle tests will skip"
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --workspace
+
+  # The fuzz crate sits outside the workspace and rots silently otherwise.
+  # A type check on nightly (what cargo-fuzz uses) catches API drift on every
+  # push; the real sanitizer builds happen in fuzz.yml.
+  fuzz-check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fuzz
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build dependencies
+        run: sudo apt-get update && sudo apt-get install -y m4
+      - uses: dtolnay/rust-toolchain@nightly
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: fuzz
+      - run: cargo check --all-targets

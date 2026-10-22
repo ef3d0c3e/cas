@@ -32,32 +32,25 @@ thresholds (Karatsuba, Toom-3, divide-and-conquer division, REDC).
 
 ## Running
 
-```sh
-cargo install cargo-fuzz          # once
-cd fuzz
-cargo fuzz run -O natural          # until stopped or a finding
-cargo fuzz run -O natural -- -max_total_time=600 -rss_limit_mb=2048
-cargo fuzz build -O                # all targets
-```
-
-Long runs share the machine, so run them through the memory-capped wrapper, with libFuzzer's own
-limits below the cap:
+Fuzzing runs on GitHub Actions only (`.github/workflows/fuzz.yml`), twice a week and on
+manual dispatch — never on the development machine (CAS-158). The workflow builds each
+group once and runs its targets in sequence:
 
 ```sh
-CAP_MEM=3G CAP_TIME=700 ../scripts/capped.sh cargo fuzz run -O ball -- \
-    -max_total_time=600 -rss_limit_mb=2048 -malloc_limit_mb=1024
+cargo fuzz run -O <target> corpus/<target> -- \
+    -max_total_time=$FUZZ_TIME -rss_limit_mb=2048 -malloc_limit_mb=1024
 ```
+
+The corpus is carried between runs with the actions cache, a crashed target is reported
+and the loop moves on, and crash artifacts are uploaded with the failed run. Dispatch a
+run with `gh workflow run fuzz.yml -f time_per_target=<seconds> [-f targets="<names>"]`.
 
 The ball function targets (`ball_fns`, `complex_fns`, `machine_fns`, `ball_consts`, CAS-113) and
-`eval` (CAS-60) run best with debug assertions and without AddressSanitizer: cas-num and cas-core
-have no `unsafe` code, ASan's quarantine more than doubles the resident memory, and the debug
-assertions check the `Float` invariants of every value, and the natives' shortcuts against their
-full computation:
-
-```sh
-CAP_MEM=3G CAP_TIME=3700 ../scripts/capped.sh cargo fuzz run -O -a -s none ball_fns -- \
-    -max_total_time=3600 -rss_limit_mb=2048 -timeout=60
-```
+`eval` (CAS-60) run with debug assertions and without AddressSanitizer (the workflow's
+`assertions` job, `-O -a -s none`, with `-timeout=60`): cas-num and cas-core have no `unsafe`
+code, ASan's quarantine more than doubles the resident memory, and the debug assertions check
+the `Float` invariants of every value, and the natives' shortcuts against their full
+computation. The other targets are the `asan` job, built `-O` with AddressSanitizer.
 
 They fill the constant cache and the function tables once (`warm_up` in `src/ball.rs`), beyond
 every precision an input asks for, so that a result never depends on earlier inputs;
@@ -70,7 +63,9 @@ libFuzzer's handler having no stack to run on; replay the corpus in batches
 (`…/release/eval -runs=1 corpus/eval/<files>`), and the last `Running:` line before the crash
 names the input.
 
-A finding is saved under `artifacts/<target>/`; replay it with
-`cargo fuzz run -O <target> artifacts/<target>/crash-…` and minimise with `cargo fuzz tmin`.
-Turn a fixed finding into a regression test in cas-num's own test suite. The `corpus/`,
+A finding is saved under `artifacts/<target>/` and uploaded with the failed run; fetch it
+with `gh run download`. Replaying that one input
+(`cargo fuzz run -O <target> artifacts/<target>/crash-…`) is a debug run of a single case,
+not a fuzz run, and is the one exception allowed locally. Turn a fixed finding into a
+regression test in the owning crate's test suite, which CI then runs. The `corpus/`,
 `artifacts/` and `target/` directories are not committed.
