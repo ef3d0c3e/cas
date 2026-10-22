@@ -32,18 +32,18 @@ thresholds (Karatsuba, Toom-3, divide-and-conquer division, REDC).
 
 ## Running
 
-Fuzzing runs on GitHub Actions only (`.github/workflows/fuzz.yml`), twice a week and on
-manual dispatch — never on the development machine (CAS-158). The workflow builds each
-group once and runs its targets in sequence:
+Fuzzing runs on GitHub Actions only (`.github/workflows/fuzz.yml`) — never on the
+development machine (CAS-158). Every push fuzzes every target, one job per target in
+parallel, ten minutes each (CAS-159); a new push to the same ref cancels the previous run:
 
 ```sh
 cargo fuzz run -O <target> corpus/<target> -- \
     -max_total_time=$FUZZ_TIME -rss_limit_mb=2048 -malloc_limit_mb=1024
 ```
 
-The corpus is carried between runs with the actions cache, a crashed target is reported
-and the loop moves on, and crash artifacts are uploaded with the failed run. Dispatch a
-run with `gh workflow run fuzz.yml -f time_per_target=<seconds> [-f targets="<names>"]`.
+The corpus is carried between runs with the actions cache, one cache per target, and
+crash artifacts are uploaded with the failed run. A longer or narrower run is
+`gh workflow run fuzz.yml -f time_per_target=<seconds> [-f targets="<names>"]`.
 
 The ball function targets (`ball_fns`, `complex_fns`, `machine_fns`, `ball_consts`, CAS-113) and
 `eval` (CAS-60) run with debug assertions and without AddressSanitizer (the workflow's

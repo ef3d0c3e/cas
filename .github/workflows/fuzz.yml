@@ -1,6 +1,10 @@
-# Fuzzing runs here, never on the development machine (CAS-158).
+# Fuzzing runs here, never on the development machine (CAS-158, CAS-159).
 #
-# Two jobs mirror the build configurations in fuzz/README.md:
+# Every push fuzzes every target, one job per target in parallel, ten minutes
+# each by default (`time_per_target` on a manual dispatch overrides it). A new
+# push to the same ref cancels the previous run.
+#
+# Two build configurations, from fuzz/README.md:
 #   - asan:       `cargo fuzz run -O` with AddressSanitizer, for the targets
 #                 that cross-check cas-num against GMP and exercise the
 #                 readers, parsers and printers.
@@ -10,11 +14,11 @@
 #                 and the debug assertions check the Float invariants and the
 #                 natives' shortcuts against their full computation.
 #
-# Each job builds once and runs its targets in sequence, `time_per_target`
-# seconds each (a dispatch input; the schedule uses the default). A crashed
-# target is reported and the loop moves on, so one finding does not hide
-# another. The corpus is carried between runs with the actions cache (the save
-# key always misses, restore-keys picks up the newest), and crash artifacts
+# The corpus is carried between runs with the actions cache, one cache per
+# target (the save key always misses, restore-keys picks up the newest).
+# Seeded targets (fuzz/README.md: lowering and printing start from what the
+# parser found, the session from what lowering found) also restore the
+# parent's newest corpus and pass it as a second corpus dir. Crash artifacts
 # are uploaded when a target fails.
 #
 # Caveat from fuzz/README.md: a stack overflow on eval's evaluation thread
@@ -23,97 +27,134 @@
 name: Fuzz
 
 on:
-  schedule:
-    - cron: '14 2 * * 1,4' # 02:14 UTC Monday and Thursday
+  push:
   workflow_dispatch:
     inputs:
       time_per_target:
         description: Seconds of fuzzing per target
-        default: '300'
+        default: '600'
       targets:
         description: Space-separated targets to run (empty = all)
         default: ''
 
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   CARGO_TERM_COLOR: always
-  FUZZ_TIME: ${{ inputs.time_per_target || '300' }}
-  ONLY_TARGETS: ${{ inputs.targets || '' }}
+  FUZZ_TIME: ${{ inputs.time_per_target || '600' }}
 
 jobs:
   fuzz:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - group: asan
-            flags: -O
-            libfuzzer: -rss_limit_mb=2048 -malloc_limit_mb=1024
-            targets: >-
-              natural integer rational radix number_theory ball ball_text
-              full_form lang_lex lang_parse lang_lower lang_session lang_print
-          - group: assertions
-            flags: -O -a -s none
-            libfuzzer: -rss_limit_mb=2048 -malloc_limit_mb=1024 -timeout=60
-            targets: ball_fns complex_fns machine_fns ball_consts eval
+        target:
+          - natural
+          - integer
+          - rational
+          - radix
+          - number_theory
+          - ball
+          - ball_text
+          - full_form
+          - lang_lex
+          - lang_parse
+          - lang_lower
+          - lang_session
+          - lang_print
+          - ball_fns
+          - complex_fns
+          - machine_fns
+          - ball_consts
+          - eval
     runs-on: ubuntu-latest
-    # Build plus 13 targets at the default budget; raise time_per_target past
-    # ~20 minutes and the asan job will need this raised too (360 is the max).
-    timeout-minutes: 350
+    timeout-minutes: 60
     defaults:
       run:
         working-directory: fuzz
     steps:
       - uses: actions/checkout@v4
+      # On a dispatch that names targets, the other jobs skip every later step.
+      - name: Check whether this target was asked for
+        id: want
+        run: |
+          want='${{ inputs.targets }}'
+          if [ -n "$want" ] && ! grep -qw '${{ matrix.target }}' <<<"$want"; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Pick the target's build configuration
+        id: cfg
+        if: steps.want.outputs.run == 'true'
+        run: |
+          case '${{ matrix.target }}' in
+            ball_fns|complex_fns|machine_fns|ball_consts|eval)
+              echo "group=assertions" >> "$GITHUB_OUTPUT"
+              echo "flags=-O -a -s none" >> "$GITHUB_OUTPUT"
+              echo "libfuzzer=-rss_limit_mb=2048 -malloc_limit_mb=1024 -timeout=60" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "group=asan" >> "$GITHUB_OUTPUT"
+              echo "flags=-O" >> "$GITHUB_OUTPUT"
+              echo "libfuzzer=-rss_limit_mb=2048 -malloc_limit_mb=1024" >> "$GITHUB_OUTPUT"
+              ;;
+          esac
+          case '${{ matrix.target }}' in
+            lang_lower|lang_print) echo "seed=lang_parse" >> "$GITHUB_OUTPUT" ;;
+            lang_session) echo "seed=lang_lower" >> "$GITHUB_OUTPUT" ;;
+            *) echo "seed=" >> "$GITHUB_OUTPUT" ;;
+          esac
       - name: Install build dependencies
+        if: steps.want.outputs.run == 'true'
         run: sudo apt-get update && sudo apt-get install -y m4
       - uses: dtolnay/rust-toolchain@nightly
+        if: steps.want.outputs.run == 'true'
       - uses: taiki-e/install-action@v2
+        if: steps.want.outputs.run == 'true'
         with:
           tool: cargo-fuzz
+      # One build cache per configuration, shared by its targets; rust-cache
+      # skips the save when another job got there first.
       - uses: Swatinem/rust-cache@v2
+        if: steps.want.outputs.run == 'true'
         with:
           workspaces: fuzz
-          key: ${{ matrix.group }}
+          key: ${{ steps.cfg.outputs.group }}
       - name: Restore corpus
+        if: steps.want.outputs.run == 'true'
         uses: actions/cache/restore@v4
         with:
-          path: fuzz/corpus
-          key: corpus-${{ matrix.group }}-${{ github.run_id }}
-          restore-keys: corpus-${{ matrix.group }}-
-      - name: Build
-        run: cargo fuzz build ${{ matrix.flags }}
+          path: fuzz/corpus/${{ matrix.target }}
+          key: corpus-${{ matrix.target }}-${{ github.run_id }}
+          restore-keys: corpus-${{ matrix.target }}-
+      - name: Restore seed corpus
+        if: steps.want.outputs.run == 'true' && steps.cfg.outputs.seed != ''
+        uses: actions/cache/restore@v4
+        with:
+          path: fuzz/corpus/${{ steps.cfg.outputs.seed }}
+          key: corpus-${{ steps.cfg.outputs.seed }}-${{ github.run_id }}
+          restore-keys: corpus-${{ steps.cfg.outputs.seed }}-
       - name: Fuzz
+        if: steps.want.outputs.run == 'true'
         run: |
-          status=0
-          for t in ${{ matrix.targets }}; do
-            if [ -n "$ONLY_TARGETS" ] && ! grep -qw "$t" <<<"$ONLY_TARGETS"; then
-              continue
-            fi
-            # Seeding from fuzz/README.md: lowering and printing start from
-            # what the parser found, the session from what lowering found.
-            extra=""
-            case "$t" in
-              lang_lower|lang_print) extra="corpus/lang_parse" ;;
-              lang_session) extra="corpus/lang_lower" ;;
-            esac
-            mkdir -p "corpus/$t"
-            echo "::group::$t"
-            cargo fuzz run ${{ matrix.flags }} "$t" "corpus/$t" $extra -- \
-                -max_total_time="$FUZZ_TIME" ${{ matrix.libfuzzer }} \
-                || { echo "::error title=fuzz $t::target $t failed"; status=1; }
-            echo "::endgroup::"
-          done
-          exit "$status"
+          seed='${{ steps.cfg.outputs.seed }}'
+          mkdir -p 'corpus/${{ matrix.target }}' ${seed:+"corpus/$seed"}
+          cargo fuzz run ${{ steps.cfg.outputs.flags }} '${{ matrix.target }}' \
+              'corpus/${{ matrix.target }}' ${seed:+"corpus/$seed"} -- \
+              -max_total_time="$FUZZ_TIME" ${{ steps.cfg.outputs.libfuzzer }}
       - name: Save corpus
-        if: always()
+        if: always() && steps.want.outputs.run == 'true'
         uses: actions/cache/save@v4
         with:
-          path: fuzz/corpus
-          key: corpus-${{ matrix.group }}-${{ github.run_id }}
+          path: fuzz/corpus/${{ matrix.target }}
+          key: corpus-${{ matrix.target }}-${{ github.run_id }}
       - name: Upload crash artifacts
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: fuzz-artifacts-${{ matrix.group }}-${{ github.run_id }}
+          name: fuzz-artifacts-${{ matrix.target }}-${{ github.run_id }}
           path: fuzz/artifacts
           if-no-files-found: ignore

@@ -18,9 +18,11 @@ Actions only — never on the development machine (CAS-158):
 
 - `.github/workflows/ci.yml` — format, clippy, the test suite and a nightly check
   of the fuzz crate, on every push and pull request.
-- `.github/workflows/fuzz.yml` — every libFuzzer target, twice a week and on
-  manual dispatch (`gh workflow run fuzz.yml -f time_per_target=600`), with the
-  corpus carried between runs and crash artifacts uploaded on a finding.
+- `.github/workflows/fuzz.yml` — every libFuzzer target on every push, one job
+  per target in parallel, ten minutes each; a manual dispatch
+  (`gh workflow run fuzz.yml -f time_per_target=3600 -f targets="ball eval"`)
+  overrides the budget and the target set. The corpus is carried between runs
+  and crash artifacts are uploaded on a finding.
 
 Work is tracked in Lific (project `CAS`); see `AGENTS.md`. Commits reference their
 ticket: subject `CAS-N: …`, footer `Closes: CAS-N`.

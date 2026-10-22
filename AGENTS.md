@@ -25,9 +25,10 @@ Rules:
 
 Never run `cargo test`, `cargo fuzz` or the benchmarks on this machine. They run
 on GitHub Actions: `.github/workflows/ci.yml` (format, clippy, tests, a nightly
-check of the fuzz crate — on every push) and `.github/workflows/fuzz.yml` (every
-libFuzzer target — twice a week, or on demand with
-`gh workflow run fuzz.yml -f time_per_target=<seconds> [-f targets="<names>"]`).
+check of the fuzz crate) and `.github/workflows/fuzz.yml` (every libFuzzer
+target, one job per target, ten minutes each), both on every push; a longer or
+narrower fuzz run is
+`gh workflow run fuzz.yml -f time_per_target=<seconds> [-f targets="<names>"]`.
 Local `cargo check` and `cargo build` are fine. A fuzz finding's crash artifact
 is in the failed run's uploaded artifacts; fix it and add a regression test to
 the owning crate's test suite, which CI then runs.
