@@ -861,6 +861,27 @@ fn depth() {
     }
 }
 
+/// What a text reads back as may nest deeper than what printed it: two
+/// divisors, one of them a product, read back as one parenthesised product
+/// of products, `j/((z*w)*z)` (the `lang_print` fuzz target, CAS-165). At
+/// the limit the expression prints and reads back, and what it reads back
+/// as is one level too deep to print.
+#[test]
+fn reading_back_may_nest_deeper() {
+    let [j, z, w] = ["j", "z", "w"].map(sym);
+    let quotient = times([j, pow(&times([z.clone(), w]), &int(-1)), pow(&z, &int(-1))]);
+    let mut e = quotient;
+    while usize::from(app(Symbol::LIST, [e.clone()]).depth()) <= MAX_PRINT_DEPTH {
+        e = app(Symbol::LIST, [e]);
+    }
+    let text = round_trip(&e);
+    assert!(text.contains("[j/((z*w)*z)]"), "{text}");
+    let back = read_with(&text, Names::english());
+    assert_eq!(back.depth(), e.depth() + 1);
+    let error = print(&back, Names::english()).unwrap_err();
+    assert_eq!(error.kind, K::TooDeep);
+}
+
 /// Every form in every operand position of every other: the precedence
 /// pairs, with the signs, numbers and heads that need parentheses.
 #[test]

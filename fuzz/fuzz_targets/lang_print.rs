@@ -3,7 +3,7 @@
 //! out, and printing what it reads back is stable.
 #![no_main]
 
-use cas_lang::{Names, fold_arithmetic, lower, parse, print};
+use cas_lang::{MAX_PRINT_DEPTH, Names, fold_arithmetic, lower, parse, print};
 use libfuzzer_sys::fuzz_target;
 
 /// The expression `text` lowers to: one statement, without errors or notes.
@@ -27,6 +27,12 @@ fuzz_target!(|data: &[u8]| {
         };
         let back = read(&printed, names).expr;
         assert_eq!(fold_arithmetic(&back), fold_arithmetic(&s.expr), "{printed:?}");
+        // What the text reads back as may nest deeper than what printed it,
+        // the arithmetic written out (`j/((z*w)*z)`, `3/4`); past the limit,
+        // the printer refuses it (CAS-165).
+        if usize::from(back.depth()) > MAX_PRINT_DEPTH {
+            continue;
+        }
         let again = print(&back, names).expect("what the input form reads back as prints");
         let back_again = read(&again, names).expr;
         assert_eq!(print(&back_again, names).as_ref(), Ok(&again), "{printed:?}");
