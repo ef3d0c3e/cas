@@ -29,3 +29,5 @@ unreachable_pub = "warn"
 
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
+# Its rewrite, `assert_ne!(v, [] as [T; 0])`, reads worse than the assert.
+assert_is_empty = "allow"
