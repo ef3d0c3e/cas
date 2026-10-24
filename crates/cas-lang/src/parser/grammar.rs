@@ -308,12 +308,19 @@ impl Parser<'_> {
     }
 
     /// An expression whose operators bind at least as tightly as `min`.
+    ///
+    /// The forms other than binary operators each wrap what came before
+    /// them, so each after the first is a level of nesting: `x² ² ²`,
+    /// `a = b = c` (CAS-168). The first is free, so that `x^2 = 1` takes
+    /// no more levels than `x^2`.
     fn expr_bp(&mut self, min: u8) {
         if !self.enter() {
             return;
         }
         let checkpoint = self.checkpoint();
         self.operand();
+        let mut wrapped = false;
+        let mut levels = 0;
         loop {
             let kind = self.peek_continuing();
             if let Some((left, right)) = binary(kind) {
@@ -336,6 +343,13 @@ impl Parser<'_> {
             if left < min {
                 break;
             }
+            if wrapped {
+                if !self.enter() {
+                    break;
+                }
+                levels += 1;
+            }
+            wrapped = true;
             match kind {
                 K::Caret | K::DotCaret => {
                     self.start_at(checkpoint, K::PowerExpr);
@@ -353,6 +367,9 @@ impl Parser<'_> {
                 kind if is_comparison(kind) => self.comparison(checkpoint),
                 _ => self.implicit(checkpoint),
             }
+        }
+        for _ in 0..levels {
+            self.leave();
         }
         self.leave();
     }

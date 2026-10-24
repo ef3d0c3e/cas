@@ -565,6 +565,8 @@ fn nesting_up_to_the_limit() {
         "a".to_owned() + &"[1]".repeat(MAX_DEPTH + 10),
         "x".to_owned() + &"...".repeat(MAX_DEPTH + 10),
         "x".to_owned() + &"::t".repeat(MAX_DEPTH + 10),
+        // So do superscripts after the first (CAS-168).
+        "x".to_owned() + &"² ".repeat(MAX_DEPTH + 10),
     ] {
         let parse = parse(&text);
         assert_eq!(parse.syntax().text().to_string(), text);
@@ -573,9 +575,29 @@ fn nesting_up_to_the_limit() {
             errors,
             [SyntaxErrorKind::Parse(E::TooDeep)],
             "{}",
+            text.chars().take(20).collect::<String>()
+        );
+    }
+    // Chained equations, ranges, and comparisons alternating with `=`: each
+    // link after the first wraps the ones before it (CAS-168).
+    for text in [
+        "a".to_owned() + &" = a".repeat(MAX_DEPTH + 10),
+        "a".to_owned() + &"..a".repeat(MAX_DEPTH + 10),
+        "a".to_owned() + &" < a = a".repeat(MAX_DEPTH + 10),
+    ] {
+        let parse = parse(&text);
+        assert_eq!(parse.syntax().text().to_string(), text);
+        let too_deep = SyntaxErrorKind::Parse(E::TooDeep);
+        assert!(
+            parse.errors().iter().any(|e| e.kind == too_deep),
+            "{}",
             &text[..20]
         );
     }
+    // The first such form is free: a power in an equation in an `if`, at
+    // the deepest an `if` nests, still parses.
+    let ok = "if x^2 = 1 then ".repeat(MAX_DEPTH / 2 - 1) + "x" + &" end".repeat(MAX_DEPTH / 2 - 1);
+    assert!(parse(&ok).errors().is_empty(), "{:?}", parse(&ok).errors());
 }
 
 /// Pieces of the language, so that random concatenations exercise the

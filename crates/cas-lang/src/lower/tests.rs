@@ -521,3 +521,27 @@ fn long_postfix_chains_stay_within_the_depth_limit() {
         let _ = lower(&parse, Names::english());
     }
 }
+
+/// Superscripts, `=` and `..` wrap what came before them too: past the depth
+/// limit, the text does not parse, and lowering what did stays within the
+/// stack (CAS-168).
+#[test]
+fn long_chains_of_other_forms_stay_within_the_depth_limit() {
+    for text in [
+        "x".to_owned() + &"² ".repeat(2000),
+        "a".to_owned() + &" = a".repeat(2000),
+        "a".to_owned() + &"..a".repeat(2000),
+        "a".to_owned() + &" < a = a".repeat(1000),
+    ] {
+        let parse = parse(&text);
+        assert!(
+            parse
+                .errors()
+                .iter()
+                .any(|e| e.kind == SyntaxErrorKind::Parse(ParseErrorKind::TooDeep)),
+            "{}",
+            text.chars().take(20).collect::<String>()
+        );
+        let _ = lower(&parse, Names::english());
+    }
+}
