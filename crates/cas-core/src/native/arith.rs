@@ -12,7 +12,7 @@ use super::linear;
 use super::number::{EXACT_ONLY, Infinity, Num};
 use super::radical;
 use crate::assume::{self, Domain, Set, Sign, Truth};
-use crate::context::EvalError;
+use crate::context::{Context, EvalError};
 use crate::eval::{Eval, is_list_like, sort_arguments};
 use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
@@ -189,8 +189,10 @@ fn with_coefficient(c: &Num, m: Expr) -> Expr {
 }
 
 /// `Times`: numbers multiplied into one coefficient, equal bases combined
-/// (`x^p x^q` is `x^(p + q)`, so `x x^(-1)` is 1, an accepted unsoundness
-/// like O3), powers of numbers with the same exponent multiplied
+/// as far as the value is kept (`x^p x^q` is `x^(p + q)`, so `x x^(-1)` is
+/// 1, an accepted unsoundness like O3; what O7 reads as a real odd root
+/// merges apart from the principal branch, CAS-154), powers of numbers with
+/// the same exponent multiplied
 /// (`2^(1/2) 3^(1/2)` is `6^(1/2)`), `0 x` is 0 (O3), `1 x` is `x`.
 /// Lists, in their order, are multiplied as in linear algebra and scaled by
 /// the rest (`linear`, CAS-62). Infinite
@@ -199,16 +201,15 @@ fn with_coefficient(c: &Num, m: Expr) -> Expr {
 /// the other factors. The other factors of a directed infinity turn it when
 /// the assumptions tell their sign: `x Infinity` is `Infinity` for `x > 0`.
 pub(super) fn times(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    let working = ev.context().working_precision();
     let result = if is_normal_product(e.args()) {
         debug_assert_eq!(
-            product(e, working),
+            product(ev.context(), e),
             Ok(None),
             "the shortcut of `Times` misses a change"
         );
         None
     } else {
-        product(e, working)?
+        product(ev.context(), e)?
     };
     // Most products have no infinity, which their symbols tell in O(1).
     let current = result.as_ref().unwrap_or(e);
@@ -256,7 +257,8 @@ fn signed_infinity(ev: &Eval<'_>, e: &Expr) -> Option<Expr> {
 /// # Errors
 ///
 /// [`EvalError::Shape`] for lists whose dimensions do not fit.
-fn product(e: &Expr, working: u64) -> Result<Option<Expr>, EvalError> {
+fn product(ctx: &Context, e: &Expr) -> Result<Option<Expr>, EvalError> {
+    let working = ctx.working_precision();
     let mut coefficient = Num::one();
     let mut infinity: Option<Infinity> = None;
     // `(base, exponents, the factor itself)`; equal bases are adjacent.
@@ -295,10 +297,10 @@ fn product(e: &Expr, working: u64) -> Result<Option<Expr>, EvalError> {
     }
     let mut factors = Vec::new();
     for (base, exponents, factor) in powers {
-        factors.push(match exponents.as_slice() {
-            [_] => factor,
-            _ => apply(Symbol::POWER, &[base, apply(Symbol::PLUS, &exponents)]),
-        });
+        match exponents.as_slice() {
+            [_] => factors.push(factor),
+            _ => merge_powers(ctx, &base, &exponents, &mut factors),
+        }
     }
     let factors = merge_number_powers(factors);
     let mut out = Vec::with_capacity(factors.len() + lists.len() + 1);
@@ -332,9 +334,120 @@ fn product(e: &Expr, working: u64) -> Result<Option<Expr>, EvalError> {
     ))
 }
 
+/// How an exponent reads on a negative base in the Real domain: a literal
+/// non-integer rational with an odd denominator is the real odd root (O7),
+/// anything else takes the principal branch, and an integer power is both.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Branch {
+    Integer,
+    OddRoot,
+    Principal,
+}
+
+impl Branch {
+    fn of(exponent: &Expr) -> Branch {
+        match exponent.to_rational() {
+            Some(q) if q.is_integer() => Branch::Integer,
+            Some(q) if q.denom().unsigned_abs().bit(0) => Branch::OddRoot,
+            _ => Branch::Principal,
+        }
+    }
+}
+
+/// The powers of one base with these `exponents`, in their order, merged as
+/// far as the value is kept (CAS-154). On the principal branch exponents add
+/// outright (`z^p z^q` is `e^(p Log z) e^(q Log z)`), so everything merges
+/// in the Complex domain and for a base that is not negative or not real.
+/// For a possibly negative real base, O7 reads a literal odd-denominator
+/// exponent as the real odd root instead: those merge among themselves,
+/// integer exponents joining them, since odd real roots are multiplicative
+/// (O7); the principal rest merges apart (P1), and only when its sum does
+/// not read as a new odd root ([`principal_stays`]).
+fn merge_powers(ctx: &Context, base: &Expr, exponents: &[Expr], out: &mut Vec<Expr>) {
+    let free = ctx.domain() == Domain::Complex
+        || matches!(
+            assume::sign_of(ctx, base),
+            Sign::Positive | Sign::NonNegative | Sign::Zero
+        )
+        || assume::element(ctx, base, Set::Reals) == Truth::False;
+    if free {
+        out.push(merged_power(base, exponents));
+        return;
+    }
+    let branches: Vec<Branch> = exponents.iter().map(Branch::of).collect();
+    // Without an odd root the integers join the principal group.
+    let has_roots = branches.contains(&Branch::OddRoot);
+    let rooted = |b: Branch| b == Branch::OddRoot || has_roots && b == Branch::Integer;
+    let group = |wanted: bool| -> Vec<Expr> {
+        exponents
+            .iter()
+            .zip(&branches)
+            .filter(|&(_, &b)| rooted(b) == wanted)
+            .map(|(r, _)| r.clone())
+            .collect()
+    };
+    let (roots, principal) = (group(true), group(false));
+    let merge_roots = roots.len() > 1;
+    let merge_principal = principal.len() > 1 && principal_stays(ctx, &principal);
+    // A merged group comes out where its first member was; refused factors
+    // keep their place and form, so an unchanged product is recognised.
+    let (mut roots_out, mut principal_out) = (false, false);
+    for (r, &b) in exponents.iter().zip(&branches) {
+        let (merge, done, members) = if rooted(b) {
+            (merge_roots, &mut roots_out, &roots)
+        } else {
+            (merge_principal, &mut principal_out, &principal)
+        };
+        if merge {
+            if !*done {
+                out.push(merged_power(base, members));
+                *done = true;
+            }
+        } else if *r == Expr::from(1) {
+            out.push(base.clone());
+        } else {
+            out.push(apply(Symbol::POWER, &[base.clone(), r.clone()]));
+        }
+    }
+}
+
+/// `base` to the sum of the `exponents`, unevaluated.
+fn merged_power(base: &Expr, exponents: &[Expr]) -> Expr {
+    apply(
+        Symbol::POWER,
+        &[base.clone(), apply(Symbol::PLUS, exponents)],
+    )
+}
+
+/// Whether the principal group's merged exponent stays on the principal
+/// branch: the sum must not be what O7 reads as a real odd root, a literal
+/// non-integer rational with an odd denominator (`y^(1/6) y^(1/6)` is not
+/// `y^(1/3)`). Exact numbers are summed directly; otherwise the sum is
+/// evaluated, since symbolic terms may cancel (`y^s y^(1/6 - s) y^(1/6)`
+/// would make `y^(1/3)`).
+fn principal_stays(ctx: &Context, exponents: &[Expr]) -> bool {
+    let working = ctx.working_precision();
+    let mut sum = Some(Num::zero());
+    for r in exponents {
+        sum = match (sum, Num::of(r)) {
+            (Some(s), Some(n)) if !n.is_ball() => Some(s.add(&n, working)),
+            _ => None,
+        };
+    }
+    let odd_root = |q: &Rational| !q.is_integer() && q.denom().unsigned_abs().bit(0);
+    match sum {
+        Some(s) => s.real().is_none_or(|q| !odd_root(q)),
+        None => match ctx.eval(&apply(Symbol::PLUS, exponents)) {
+            Ok(s) => s.to_rational().is_none_or(|q| !odd_root(&q)),
+            Err(_) => false,
+        },
+    }
+}
+
 /// Whether `Times` leaves these arguments as they are: one number at most,
 /// first, neither 0 nor 1, no infinity, no equal bases, and no two powers of
-/// numbers with one exponent.
+/// numbers with one exponent. Equal adjacent bases that [`merge_powers`]
+/// leaves apart (CAS-154) take the slow path and come out unchanged.
 fn is_normal_product(args: &[Expr]) -> bool {
     if args.len() < 2
         || args

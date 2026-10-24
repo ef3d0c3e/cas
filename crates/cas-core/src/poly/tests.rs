@@ -668,12 +668,12 @@ proptest! {
     }
 
     /// Every kind of kernel: the values at points agree, to 20 digits, the
-    /// balls of `N` overlapping. Roots of even order only: evaluation merges
-    /// `y^(1/2) y^(1/3)` into `y^(5/6)`, which changes the value for a
-    /// negative `y` under O7's real odd roots (CAS-154).
+    /// balls of `N` overlapping. Odd roots included: evaluation keeps what
+    /// O7 reads as a real odd root apart from the principal branch
+    /// (CAS-154).
     #[test]
     fn values_agree_numerically(
-        g in gen_strategy(Kinds { roots: true, odd_roots: false, transcendental: true }),
+        g in gen_strategy(Kinds { roots: true, odd_roots: true, transcendental: true }),
         point in prop::collection::vec((-4i64..5, 1i64..4), 3),
     ) {
         let ctx = Context::new();

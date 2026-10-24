@@ -82,11 +82,52 @@ fn products() {
         ),
         ("Times[2, Power[2, 1/2]]", "Times[2, Power[2, 1/2]]"),
         ("Times[Power[6, 1/2], Power[2, -1/2]]", "Power[3, 1/2]"),
+        // Equal bases merge only as far as the value is kept (CAS-154): what
+        // O7 reads as a real odd root of a possibly negative base stays
+        // apart from the principal branch.
+        (
+            "Times[Power[y, 1/2], Power[y, 1/3]]",
+            "Times[Power[y, 1/3], Power[y, 1/2]]",
+        ),
+        ("Times[Power[y, 1/3], Power[y, 1/3]]", "Power[y, 2/3]"),
+        ("Times[y, Power[y, 1/3]]", "Power[y, 4/3]"),
+        ("Times[Power[y, 1/2], Power[y, 1/2]]", "y"),
+        ("Times[Power[y, 1/2], Power[y, 3/2]]", "Power[y, 2]"),
+        ("Times[Power[y, -1/2], Power[y, 1/2]]", "1"),
+        // A principal merge must not make a new odd root.
+        (
+            "Times[Power[y, 1/6], Power[y, 1/6]]",
+            "Times[Power[y, 1/6], Power[y, 1/6]]",
+        ),
+        // Symbolic exponents may cancel into one: the sum is evaluated.
+        (
+            "Times[Power[y, 1/6], Power[y, s], Power[y, Plus[1/6, Times[-1, s]]]]",
+            "Times[Power[y, 1/6], Power[y, s], Power[y, Plus[1/6, Times[-1, s]]]]",
+        ),
         // Lists are left to the products of linear algebra (R-10).
         // A scalar scales a list (CAS-62).
         ("Times[2, 3, List[1, 2]]", "List[6, 12]"),
         ("Times[0, List[1, 2]]", "List[0, 0]"),
     ]);
+}
+
+/// Equal bases merge outright when every reading is the principal branch,
+/// where exponents add (CAS-154): in the Complex domain, and for a base
+/// that is not negative.
+#[test]
+fn merged_powers_keep_the_value() {
+    let merged = read("Power[y, 5/6]");
+    let mut complex = Context::new();
+    complex.set_domain(crate::Domain::Complex);
+    assert_eq!(
+        complex.eval(&read("Times[Power[y, 1/2], Power[y, 1/3]]")),
+        Ok(merged.clone())
+    );
+    let positive = Context::new().assuming(read("GreaterEqual[y, 0]"));
+    assert_eq!(
+        positive.eval(&read("Times[Power[y, 1/2], Power[y, 1/3]]")),
+        Ok(merged)
+    );
 }
 
 #[test]
