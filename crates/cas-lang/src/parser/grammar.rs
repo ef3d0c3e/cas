@@ -425,12 +425,21 @@ impl Parser<'_> {
     }
 
     /// A primary and its postfix forms: applications, indexes, `!`, `...` and
-    /// `::`.
+    /// `::`. Each form nests the ones before it, so each is a level of
+    /// nesting (`x!!…!` is as deep as it is long).
     fn postfix_expr(&mut self) {
         let checkpoint = self.checkpoint();
         let mut callable = self.primary();
+        let mut levels = 0;
         loop {
-            match self.peek_continuing() {
+            let kind = self.peek_continuing();
+            let postfix = matches!(kind, K::LBracket | K::Bang | K::Ellipsis | K::ColonColon)
+                || (kind == K::LParen && callable);
+            if !postfix || !self.enter() {
+                break;
+            }
+            levels += 1;
+            match kind {
                 K::LParen if callable => {
                     self.start_at(checkpoint, K::Application);
                     self.args(K::RParen);
@@ -460,8 +469,11 @@ impl Parser<'_> {
                     self.finish_node();
                     callable = false;
                 }
-                _ => break,
+                _ => unreachable!("not a postfix form"),
             }
+        }
+        for _ in 0..levels {
+            self.leave();
         }
     }
 

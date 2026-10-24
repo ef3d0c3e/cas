@@ -2,7 +2,7 @@ use proptest::prelude::*;
 
 use super::{LowerErrorKind as E, Lowered, Severity, lower};
 use crate::names::Names;
-use crate::parser::parse;
+use crate::parser::{ParseErrorKind, SyntaxErrorKind, parse};
 
 fn lowered(text: &str) -> Lowered {
     lower(&parse(text), Names::english())
@@ -495,5 +495,29 @@ proptest! {
         for s in &lowered.statements {
             prop_assert!(s.spans.range().end <= text.len());
         }
+    }
+}
+
+/// A fuzz finding (CAS-163): thousands of `!` after a name nested as deep as
+/// the text was long, past the parser's depth limit, and lowering's recursion
+/// overflowed the stack. The text now nests too deeply to parse, and lowers
+/// what parsed.
+#[test]
+fn long_postfix_chains_stay_within_the_depth_limit() {
+    for text in [
+        "h0h".to_owned() + &"!".repeat(4000),
+        "f".to_owned() + &"(1)".repeat(2000),
+        "a".to_owned() + &"[1]".repeat(2000),
+    ] {
+        let parse = parse(&text);
+        assert!(
+            parse
+                .errors()
+                .iter()
+                .any(|e| e.kind == SyntaxErrorKind::Parse(ParseErrorKind::TooDeep)),
+            "{}",
+            &text[..20]
+        );
+        let _ = lower(&parse, Names::english());
     }
 }

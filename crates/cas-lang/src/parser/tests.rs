@@ -559,6 +559,12 @@ fn nesting_up_to_the_limit() {
         "x -> ".repeat(MAX_DEPTH + 10) + "x",
         "begin ".repeat(MAX_DEPTH + 10) + &"end ".repeat(MAX_DEPTH + 10),
         "[".repeat(MAX_DEPTH + 10),
+        // Postfix forms nest what comes before them (CAS-163).
+        "x".to_owned() + &"!".repeat(MAX_DEPTH + 10),
+        "f".to_owned() + &"(1)".repeat(MAX_DEPTH + 10),
+        "a".to_owned() + &"[1]".repeat(MAX_DEPTH + 10),
+        "x".to_owned() + &"...".repeat(MAX_DEPTH + 10),
+        "x".to_owned() + &"::t".repeat(MAX_DEPTH + 10),
     ] {
         let parse = parse(&text);
         assert_eq!(parse.syntax().text().to_string(), text);
