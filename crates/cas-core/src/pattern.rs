@@ -560,6 +560,9 @@ struct Mode {
     /// take, and the most (`None`: any number).
     least: Vec<usize>,
     most: Vec<Option<usize>>,
+    /// Under `Orderless`, from each position of `order` on: per head, the
+    /// fewest subjects of that head the arguments take ([`need`]).
+    needs: Vec<Vec<(Expr, usize)>>,
 }
 
 impl Mode {
@@ -583,11 +586,22 @@ impl Mode {
         }
         let mut least = vec![0; args.len() + 1];
         let mut most = vec![Some(0); args.len() + 1];
+        let mut needs = vec![Vec::new(); args.len() + 1];
         for k in (0..args.len()).rev() {
             let i = order[k];
             let (fewest, max) = takes(&args[i], groups[i]);
             least[k] = least[k + 1] + fewest;
             most[k] = most[k + 1].zip(max).map(|(a, b)| a + b);
+            if attributes.contains(Attributes::ORDERLESS) {
+                let mut here: Vec<(Expr, usize)> = needs[k + 1].clone();
+                if let Some((h, n)) = need(&args[i], groups[i]) {
+                    match here.iter_mut().find(|(g, _)| g == h) {
+                        Some((_, total)) => *total += n,
+                        None => here.push((h.clone(), n)),
+                    }
+                }
+                needs[k] = here;
+            }
         }
         Mode {
             lone: attributes.contains(Attributes::ONE_IDENTITY)
@@ -600,6 +614,7 @@ impl Mode {
             groups,
             least,
             most,
+            needs,
         }
     }
 
@@ -631,6 +646,27 @@ fn takes(node: &Node, group: bool) -> (usize, Option<usize>) {
             default: Some(_), ..
         } => (0, most),
         _ => (1, most),
+    }
+}
+
+/// The head every subject an argument node takes in a multiset match has,
+/// and how many it takes at least, when it fixes one: a sequence with a
+/// head, or a node with a fixed head that takes one subject (CAS-167). A
+/// node that may be missing, or may take a group of any subjects under
+/// `Flat`, fixes none. Every subject has one such head, its own or that of
+/// its kind ([`has_typed_head`]), so the nodes of different heads compete
+/// for different subjects.
+fn need(node: &Node, group: bool) -> Option<(&Expr, usize)> {
+    if let Some((_, min, head)) = sequence(node) {
+        return head.filter(|_| min > 0).map(|h| (h, min));
+    }
+    match node {
+        Node::Optional {
+            default: Some(_), ..
+        } => None,
+        Node::Optional { inner, .. } => need(inner, group),
+        _ if group => None,
+        _ => fixed_head(node).map(|h| (h, 1)),
     }
 }
 

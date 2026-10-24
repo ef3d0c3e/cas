@@ -11,6 +11,12 @@
 //! linear; several sequences enumerate the ways of splitting what is left,
 //! which the step budget bounds.
 //!
+//! Before a node chooses, the nodes from it on must still be able to get
+//! what they must have from the free subjects: as many of each fixed head as
+//! they take at least, and for each whose value is known, an equal subject.
+//! Otherwise the search backs up at once, rather than after every way of
+//! giving out the subjects in between (CAS-167).
+//!
 //! Equal subjects are interchangeable: among equal free subjects a choice
 //! takes the first ones, so no two choices give the same bindings. The
 //! choices of a node come in a fixed order, which defines the first match:
@@ -203,7 +209,10 @@ impl Matcher<'_, '_, '_> {
     /// Gives subjects to the node at position `k` of the order, then to
     /// those after it, then calls the rest.
     fn take(&mut self, ms: &mut Multiset<'_>, k: usize, rest: Rest<'_>) -> Result<bool, EvalError> {
-        if ms.free < ms.mode.least[k] || ms.mode.most[k].is_some_and(|most| ms.free > most) {
+        if ms.free < ms.mode.least[k]
+            || ms.mode.most[k].is_some_and(|most| ms.free > most)
+            || !self.within_reach(ms, k)
+        {
             return Ok(false);
         }
         let Some(&i) = ms.mode.order.get(k) else {
@@ -292,6 +301,35 @@ impl Matcher<'_, '_, '_> {
             Some(default) => self.missing(inner, default, &mut |m| m.take(ms, k + 1, rest)),
             None => Ok(false),
         }
+    }
+
+    /// Whether the nodes from position `k` of the order on can still get what
+    /// they must have from the free subjects: as many of each fixed head as
+    /// they take at least, and for each node whose value is known, the equal
+    /// subject or group that is its only choice ([`Multiset::find`]).
+    fn within_reach(&self, ms: &Multiset<'_>, k: usize) -> bool {
+        let free_with = |h: &Expr| {
+            ms.subjects
+                .iter()
+                .zip(&ms.taker)
+                .filter(|(s, taker)| taker.is_none() && has_typed_head(s, h))
+                .count()
+        };
+        ms.mode.needs[k].iter().all(|(h, n)| free_with(h) >= *n)
+            && ms.mode.order[k..].iter().all(|&i| {
+                let inner = match &ms.nodes[i] {
+                    // A sequence chooses among runs, and a missing optional
+                    // argument takes its default.
+                    node if sequence(node).is_some() => return true,
+                    Node::Optional {
+                        default: Some(_), ..
+                    } => return true,
+                    Node::Optional { inner, .. } => inner.as_ref(),
+                    node => node,
+                };
+                self.known(inner)
+                    .is_none_or(|value| ms.find(&value, ms.mode.groups[i]).is_some())
+            })
     }
 
     /// The value `node` must have, when it is known before matching: a

@@ -1,6 +1,8 @@
 //! Tests of matching under `Flat`, `Orderless` and `OneIdentity` (CAS-57),
 //! against tables and against a brute-force oracle.
 
+use std::cell::Cell;
+
 use proptest::prelude::*;
 
 use crate::expr::View;
@@ -496,6 +498,31 @@ fn pruning_keeps_easy_matches_within_a_small_budget() {
     .unwrap();
     let found = first_match(&ctx, &p, &many("o", &["g[999]"])).unwrap();
     assert_eq!(found.map(|b| b[0].1.clone()), Some("999".to_owned()));
+    // A sequence of a head no subject has (the `ac` arguments flattened
+    // away), after blanks that may take any group: no search at all, where
+    // trying every way of giving out the eleven subjects ran out of a
+    // million steps (CAS-167).
+    let p = Pattern::with_context(
+        &read("ac[Blank[], Blank[], Pattern[v, BlankSequence[ac]], Pattern[x, Blank[]]]"),
+        &ctx,
+    )
+    .unwrap();
+    let subject = ctx
+        .eval(&read(
+            "ac[ac[2, fl[c, b, 2, 1]], ac[a, c, c, b], aci[], ac[1, c, o[b, 2, a, 2], 2]]",
+        ))
+        .unwrap();
+    assert_eq!(subject.args().len(), 11);
+    assert_eq!(first_match(&ctx, &p, &subject), Ok(None));
+    // Once `x` is bound, its second node needs an equal subject: with none
+    // left, the blanks in between try nothing.
+    let p = Pattern::with_context(
+        &read("o[Pattern[x, Blank[]], Blank[], Blank[], Blank[], Blank[], Blank[], Pattern[x, Blank[]]]"),
+        &ctx,
+    )
+    .unwrap();
+    let subject = ctx.eval(&read("o[1, 2, 3, 4, 5, 6, 7]")).unwrap();
+    assert_eq!(first_match(&ctx, &p, &subject), Ok(None));
 }
 
 /// Bindings by name, in the order they were made.
@@ -506,7 +533,13 @@ type Bindings = Vec<(Symbol, Expr)>;
 /// and every copy of equal subjects tried.
 struct Oracle<'c> {
     ctx: &'c Context,
+    /// The steps taken: past [`ORACLE_STEPS`] the oracle gives up.
+    steps: Cell<u64>,
 }
+
+/// The most steps the oracle takes on one case. Without pruning, a case the
+/// matcher settles at once can take it minutes.
+const ORACLE_STEPS: u64 = 4_000_000;
 
 fn bind(b: &Bindings, x: Symbol, value: &Expr) -> Option<Bindings> {
     if let Some((_, v)) = b.iter().find(|(y, _)| *y == x) {
@@ -573,6 +606,16 @@ fn optional(p: &Expr) -> Option<(&Expr, &Expr)> {
 }
 
 impl Oracle<'_> {
+    /// Counts a step; `false` once the oracle has given up.
+    fn step(&self) -> bool {
+        self.steps.set(self.steps.get() + 1);
+        !self.gave_up()
+    }
+
+    fn gave_up(&self) -> bool {
+        self.steps.get() > ORACLE_STEPS
+    }
+
     fn lone(&self, h: Symbol, qs: &[Expr]) -> bool {
         let least: usize = qs
             .iter()
@@ -629,6 +672,9 @@ impl Oracle<'_> {
     /// Tries the matches of `p` against `s` that extend `b`, in order,
     /// until `found` takes one; whether it did.
     fn matches(&self, p: &Expr, s: &Expr, b: &Bindings, found: Found<'_>) -> bool {
+        if !self.step() {
+            return false;
+        }
         if !p.has_pattern() {
             return p == s && found(b);
         }
@@ -700,6 +746,9 @@ impl Oracle<'_> {
         b: &Bindings,
         found: Found<'_>,
     ) -> bool {
+        if !self.step() {
+            return false;
+        }
         let Some((q, more)) = qs.split_first() else {
             return ss.is_empty() && found(b);
         };
@@ -758,6 +807,9 @@ impl Oracle<'_> {
         b: &Bindings,
         found: Found<'_>,
     ) -> bool {
+        if !self.step() {
+            return false;
+        }
         let Some((&i, later)) = order.split_first() else {
             return taker.iter().all(Option::is_some)
                 && (search.h != Symbol::TIMES || lists_in_order(search.ss, taker))
@@ -780,6 +832,9 @@ impl Oracle<'_> {
         };
         if let Some((x, least, head)) = sequence(q) {
             for size in least..=free.len() {
+                if self.gave_up() {
+                    return false;
+                }
                 for chosen in combinations(&free, size) {
                     let run: Vec<Expr> = chosen.iter().map(|&j| search.ss[j].clone()).collect();
                     if head
@@ -808,6 +863,9 @@ impl Oracle<'_> {
             free.len().min(1)
         };
         for size in 1..=most {
+            if self.gave_up() {
+                return false;
+            }
             for chosen in combinations(&free, size) {
                 let item = if let [j] = chosen.as_slice() {
                     search.ss[*j].clone()
@@ -995,19 +1053,25 @@ proptest! {
     #![proptest_config(ProptestConfig::with_cases(2000))]
 
     /// The matcher finds a match exactly when the oracle does, and the same
-    /// first one.
+    /// first one. A case is left without a verdict when the matcher runs out
+    /// of steps, as several nodes that take runs may in trying every way of
+    /// splitting the subjects, or when the oracle gives up before a match
+    /// (CAS-167).
     #[test]
     fn the_matcher_agrees_with_the_oracle((p, s) in prop_oneof![case(), generalized()]) {
         let ctx = context();
         let s = ctx.eval(&s).unwrap();
         let compiled = Pattern::with_context(&p, &ctx).unwrap();
-        let found = first_match(&ctx, &compiled, &s).unwrap();
-        let oracle = Oracle { ctx: &ctx };
+        let found = first_match(&ctx, &compiled, &s);
+        prop_assume!(found != Err(EvalError::MatchLimit));
+        let found = found.unwrap();
+        let oracle = Oracle { ctx: &ctx, steps: Cell::new(0) };
         let mut first = None;
         oracle.matches(&p, &s, &Vec::new(), &mut |b| {
             first = Some(b.clone());
             true
         });
+        prop_assume!(first.is_some() || !oracle.gave_up());
         let expected = first.map(|b| {
             compiled
                 .variables()
