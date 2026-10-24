@@ -362,7 +362,8 @@ fn gcd_and_lcm() {
 
 /// A high degree where no algorithm goes dense (CAS-156): a constant's
 /// gcd, a polynomial's normal form, a division by a constant in the
-/// variable, a content in that variable.
+/// variable, a content in that variable. Over ℤ\[i\] too, whose gcd goes
+/// by subresultants (CAS-166).
 #[test]
 fn high_degrees_without_dense_forms() {
     check(&[
@@ -371,6 +372,11 @@ fn high_degrees_without_dense_forms() {
             "Plus[1, Power[x, 10000000]]",
         ),
         ("GCD[Plus[Power[x, 10000000], 1], 6]", "1"),
+        (
+            "Together[Plus[Power[x, 10000000], Complex[0, 1]]]",
+            "Plus[Complex[0, 1], Power[x, 10000000]]",
+        ),
+        ("GCD[Plus[Power[x, 10000000], Complex[0, 1]], 6]", "1"),
         ("GCD[Plus[Times[2, Power[x, 10000000]], 4], 6]", "2"),
         (
             "PolynomialQuotient[Power[x, 10000000], 3]",

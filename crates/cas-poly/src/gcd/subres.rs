@@ -130,6 +130,12 @@ fn gcd_over<C: Exact>(
     } else {
         (pb, pa)
     };
+    // A primitive constant is a unit, so the gcd is the contents': the
+    // remainder sequence would pseudo-divide `big` by it in as many rounds
+    // as its degree, each through all its coefficients (CAS-166).
+    if small.degree() == Some(0) {
+        return Ok(ring.constant(d));
+    }
     Ok(match last_remainder(ring, big, small, cancel)? {
         None => ring.constant(d),
         Some(last) => {
@@ -170,10 +176,24 @@ pub(crate) fn sparse_gcd_alone<R: EuclideanDomain + Clone>(
         return Ok(normalized_sparse(ring, a));
     }
     let (da, db) = (a.degrees(), b.degrees());
-    let Some(var) = (0..ring.nvars()).find(|&v| da[v] > 0 || db[v] > 0) else {
-        let g = ring.base().gcd(&a.coeffs()[0], &b.coeffs()[0]);
+    // A constant's gcd is that of the coefficients of both, at once
+    // whatever the other's degree: its dense form in a variable has that
+    // many coefficients (CAS-166).
+    let constant = |d: &[u64]| d.iter().all(|&e| e == 0);
+    if constant(&da) || constant(&db) {
+        let base = ring.base();
+        let mut g = base.zero();
+        for c in a.coeffs().iter().chain(b.coeffs()) {
+            g = base.gcd(&g, c);
+            if base.is_one(&g) {
+                break;
+            }
+        }
         return Ok(ring.constant(g));
-    };
+    }
+    let var = (0..ring.nvars())
+        .find(|&v| da[v] > 0 || db[v] > 0)
+        .expect("a variable of a polynomial that is not constant");
     let dense = DenseRing::new(ring.clone());
     let gcd = |x: &Sparse<R::Elem>, y: &Sparse<R::Elem>| sparse_gcd_alone(ring, x, y, cancel);
     let g = gcd_over(

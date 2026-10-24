@@ -450,6 +450,38 @@ fn gcds_with_constants() {
     }
 }
 
+/// Over ℤ\[i\], where the heuristic gives up on a high degree for
+/// subresultants, and by subresultants over ℤ, a constant's gcd is its gcd
+/// with the content at once too, and so is a gcd whose primitive part in
+/// the main variable is constant (CAS-166): the remainder sequence
+/// pseudo-divided by that unit in as many rounds as the other's degree,
+/// each through every coefficient, and a constant's gcd made the dense
+/// form of the other.
+#[test]
+fn subresultant_gcds_with_constants() {
+    let zi = SparseRing::new(GaussianIntegers, 2);
+    let gauss = |re: i64, im: i64| Complex::new(Rational::from(re), Rational::from(im));
+    let c = |re: i64, im: i64| zi.constant(gauss(re, im));
+    let p = zi.add(&zi.monomial(gauss(4, 0), &[1_000_000_000, 3]), &c(0, 2));
+    let (g, qa, qb) = zi.gcd_cofactors(&c(6, 0), &p);
+    assert_eq!(g, c(2, 0));
+    assert_eq!(qa, c(3, 0));
+    assert_eq!(zi.mul(&qb, &g), p);
+    let ring = SparseRing::new(Integers, 2);
+    let int = |n: i64| ring.constant(Integer::from(n));
+    let p = ring.add(
+        &ring.monomial(Integer::from(4), &[1_000_000_000, 3]),
+        &int(2),
+    );
+    let parts = ring.gcd_by(&int(-6), &p, GcdMethod::Subresultant, &Never);
+    assert_eq!(parts.unwrap().map(|(g, _, _)| g), Some(int(2)));
+    // x^N y and y + 1: contents y and y + 1 in x, and the primitive part 1.
+    let a = zi.monomial(gauss(1, 0), &[100_000, 1]);
+    let b = zi.add(&zi.var(1), &zi.one());
+    let parts = zi.gcd_by(&a, &b, GcdMethod::Subresultant, &Never).unwrap();
+    assert_eq!(parts, Some((zi.one(), a, b)));
+}
+
 /// `b² - 4ac` and `-4p³ - 27q²`, and the edge cases of degree 0 and 1.
 #[test]
 fn discriminants() {
