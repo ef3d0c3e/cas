@@ -137,12 +137,15 @@ jobs:
           path: fuzz/corpus/${{ steps.cfg.outputs.seed }}
           key: corpus-${{ steps.cfg.outputs.seed }}-${{ github.run_id }}
           restore-keys: corpus-${{ steps.cfg.outputs.seed }}-
+      # The prebuilt cargo-fuzz is a musl build and defaults `--target` to
+      # its own triple, for which the toolchain has no std (CAS-160).
       - name: Fuzz
         if: steps.want.outputs.run == 'true'
         run: |
           seed='${{ steps.cfg.outputs.seed }}'
           mkdir -p 'corpus/${{ matrix.target }}' ${seed:+"corpus/$seed"}
-          cargo fuzz run ${{ steps.cfg.outputs.flags }} '${{ matrix.target }}' \
+          cargo fuzz run --target x86_64-unknown-linux-gnu \
+              ${{ steps.cfg.outputs.flags }} '${{ matrix.target }}' \
               'corpus/${{ matrix.target }}' ${seed:+"corpus/$seed"} -- \
               -max_total_time="$FUZZ_TIME" ${{ steps.cfg.outputs.libfuzzer }}
       - name: Save corpus
