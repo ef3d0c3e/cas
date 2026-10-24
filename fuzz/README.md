@@ -41,6 +41,13 @@ cargo fuzz run -O <target> corpus/<target> -- \
     -max_total_time=$FUZZ_TIME -rss_limit_mb=2048 -malloc_limit_mb=1024
 ```
 
+The `asan` targets run with
+`ASAN_OPTIONS=malloc_context_size=5:quarantine_size_mb=32:allocator_release_to_os_interval_ms=500`
+(CAS-162): ASan keeps every distinct allocation stack for the life of the process, and the
+language targets' recursion makes new ones without end; with the default 30 frames,
+`lang_print`'s corpus alone took 1 GB (36 MB without ASan) and fuzzing it reached the RSS limit
+within minutes.
+
 The corpus is carried between runs with the actions cache, one cache per target, and
 crash artifacts are uploaded with the failed run. A longer or narrower run is
 `gh workflow run fuzz.yml -f time_per_target=<seconds> [-f targets="<names>"]`.

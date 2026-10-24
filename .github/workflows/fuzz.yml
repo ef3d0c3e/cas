@@ -139,8 +139,17 @@ jobs:
           restore-keys: corpus-${{ steps.cfg.outputs.seed }}-
       # The prebuilt cargo-fuzz is a musl build and defaults `--target` to
       # its own triple, for which the toolchain has no std (CAS-160).
+      #
+      # ASan keeps every distinct allocation stack for good, and the deep
+      # recursion of the language targets makes a new one per input: with
+      # the default 30 frames, lang_print's corpus alone took 1 GB and its
+      # runs hit the RSS limit, with 5 frames 150 MB (CAS-162). A smaller
+      # quarantine and returning freed pages keep the rest down; the crates
+      # have no `unsafe`, so the shorter use-after-free window costs little.
       - name: Fuzz
         if: steps.want.outputs.run == 'true'
+        env:
+          ASAN_OPTIONS: malloc_context_size=5:quarantine_size_mb=32:allocator_release_to_os_interval_ms=500
         run: |
           seed='${{ steps.cfg.outputs.seed }}'
           mkdir -p 'corpus/${{ matrix.target }}' ${seed:+"corpus/$seed"}
