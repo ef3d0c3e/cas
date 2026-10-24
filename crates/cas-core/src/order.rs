@@ -156,23 +156,34 @@ fn cmp_reals(a: &Real<'_>, b: &Real<'_>) -> Ordering {
     }
 }
 
-/// `q` against the float `m`, exactly. A float too large or small for an
-/// exact rational is beyond every rational there is memory for, so its sign
-/// and exponent decide.
+/// `q` against the float `m`, exactly: by their signs, then by their
+/// exponents, `2^(k - 1) < |q| < 2^(k + 1)` for `k` the bits of the
+/// numerator less those of the denominator against `2^(e - 1) <= |m| <
+/// 2^e`. Only within a factor of 4 is `m` made a rational, which then has
+/// about the bits of `q` and of `m`'s mantissa: a midpoint near
+/// `2^(10^9)`, as a power of a ball at a point `Trace::verify` draws, took
+/// a second to make one (CAS-169).
 fn cmp_exact(q: &Rational, m: &Float) -> Ordering {
-    if let Some(m) = m.checked_to_rational() {
-        return q.cmp(&m);
+    let sign = q.numer().cmp(&Integer::ZERO);
+    if sign != m.sign() || sign == Ordering::Equal {
+        return sign.cmp(&m.sign());
     }
-    let huge = !m.exponent().is_negative();
-    match (m.is_negative(), huge) {
-        (false, true) => Ordering::Less,
-        (true, true) => Ordering::Greater,
-        // |m| is below every nonzero |q|.
-        (_, false) => q.cmp(&Rational::from(0)).then(if m.is_negative() {
-            Ordering::Greater
-        } else {
-            Ordering::Less
-        }),
+    let k = &Integer::from(q.numer().bit_length()) - &Integer::from(q.denom().bit_length());
+    let e = m.exponent();
+    let magnitude = if *e < k {
+        Ordering::Greater
+    } else if *e > &k + &Integer::ONE {
+        Ordering::Less
+    } else if let Some(m) = m.checked_to_rational() {
+        return q.cmp(&m);
+    } else {
+        // Past `EXACT_BITS_MAX`, which takes a `q` of as many bits.
+        k.cmp(e)
+    };
+    if sign == Ordering::Less {
+        magnitude.reverse()
+    } else {
+        magnitude
     }
 }
 

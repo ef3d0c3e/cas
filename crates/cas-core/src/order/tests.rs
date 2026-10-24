@@ -1,6 +1,7 @@
 #![allow(clippy::many_single_char_names, reason = "x, y, f mirror the notation")]
 
 use std::cmp::Ordering;
+use std::time::{Duration, Instant};
 
 use proptest::prelude::*;
 
@@ -224,6 +225,34 @@ fn independent_of_creation_order() {
     let alpha = sym("order_creation_alpha");
     assert!(alpha < zeta);
     assert!(apply(&alpha, &[]) < apply(&zeta, &[]));
+}
+
+/// A ball far from an exact number orders by the exponents, at once: the
+/// midpoints near `2^(±10^9)` that a power of a ball makes at a point of
+/// `Trace::verify` took a second each to make rationals (CAS-169). Near
+/// one, by value, an exact number before a ball of its value.
+#[test]
+fn far_balls_order_by_exponents() {
+    let ball = |n: i64, e: i64| {
+        let mid = Float::from(n).mul_2exp(&Integer::from(e));
+        Expr::from(Ball::new(mid, Mag::ZERO))
+    };
+    let start = Instant::now();
+    assert_increasing(&[
+        ball(-3, 1_000_000_000),
+        int(-5),
+        q(-1, 3),
+        ball(-3, -1_000_000_000),
+        int(0),
+        ball(3, -1_000_000_000),
+        q(1, 1_000_000),
+        int(7),
+        big(3 << 70),
+        ball(3, 70),
+        ball(3, 1_000_000_000),
+    ]);
+    let took = start.elapsed();
+    assert!(took < Duration::from_secs(5), "{took:?}");
 }
 
 /// Balls of small dyadic midpoints, so that they meet the exact numbers
