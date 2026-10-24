@@ -256,6 +256,15 @@ fn huge_and_tiny_arguments() {
     let e = neg.exp(64);
     assert!(e.mid().is_zero() && e.is_finite() && e.contains(&Float::ZERO));
     assert_eq!(neg.neg().exp(64), Ball::INDETERMINATE);
+    // Below -2^(2^40) too, with the bound's exponent an i64: it had 2^30
+    // bits, which each operation on the radius copied (CAS-173).
+    let far = Ball::exact(Float::from(-1i64).mul_2exp(&Integer::from(1i64 << 40)));
+    let e = far.exp(64);
+    assert!(e.mid().is_zero() && e.is_finite() && e.contains(&Float::ZERO));
+    assert!(
+        e.rad().exponent().to_i64().is_some(),
+        "the bound's exponent fits an i64"
+    );
     // Tiny arguments keep relative accuracy.
     let t = Ball::exact(Float::from(3i64).mul_2exp(&Integer::from(-5000i64)));
     for f in [Ball::expm1, Ball::log1p] {

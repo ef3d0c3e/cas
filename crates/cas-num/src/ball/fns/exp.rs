@@ -11,7 +11,8 @@
 //!
 //! Arguments of exponent above `HUGE_EXP` (`|m| >= 2^65536`) would need `log
 //! 2` to that many bits: a positive one gives the indeterminate ball, a
-//! negative one `[0 ± 2^(-2^(e - 2))]`, a bound on `exp` of every point.
+//! negative one `[0 ± 2^(-2^k)]` for `k = min(e - 2, 62)`, a bound on `exp`
+//! of every point.
 
 use super::fixed::{exp_sum, shr};
 use super::{
@@ -24,6 +25,10 @@ use crate::{Integer, Natural};
 
 /// Exponents of arguments that `exp` reduces; see the module comment.
 pub(super) const HUGE_EXP: i64 = 1 << 16;
+
+/// The largest `k` of the bound `2^(-2^k)` on `exp` of a hugely negative
+/// argument: its exponent `-2^k` fits an `i64`.
+const MAX_BOUND_LOG: i64 = 62;
 
 /// `x` truncated to a fixed-point integer `trunc(x 2^w)`.
 pub(super) fn to_fixed(x: &Float, w: u64) -> Integer {
@@ -151,11 +156,13 @@ fn exp_huge(b: &Ball, e: &Integer) -> Ball {
     if !m.is_negative() || Mag::from_float(m).mul_2exp(&-Integer::ONE) <= *b.rad() {
         return Ball::INDETERMINATE;
     }
-    // exp(x) <= 2^x for x <= 0. The bound's exponent is capped so that it
-    // stays small; any bound below the true one would do.
+    // exp(x) <= 2^x for x <= 0, so 2^(-2^k) bounds it for any k <= e - 2.
+    // k stays below 63, so that the exponent -2^k fits an i64: with k up to
+    // 2^30 it had 2^30 bits, which each operation on the radius copied
+    // (CAS-173).
     let k = (e - &Integer::from(2i64))
         .to_i64()
-        .map_or(1 << 30, |k| k.min(1 << 30));
+        .map_or(MAX_BOUND_LOG, |k| k.min(MAX_BOUND_LOG));
     let bound = Integer::from_parts(true, Natural::from(1u64) << k.unsigned_abs());
     Ball::new(Float::ZERO, Mag::power_of_two(&bound))
 }
