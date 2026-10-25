@@ -21,7 +21,9 @@ algorithm here is taken from, or is compared with, are listed.
   Gerhard, *Modern Computer Algebra*, 3rd edition, Cambridge University
   Press, 2013. Chapter 14, "Factoring polynomials over finite fields": §14.2,
   distinct-degree factorisation; §14.3, equal-degree factorisation by Cantor
-  and Zassenhaus's method.
+  and Zassenhaus's method. Chapter 15, "Hensel lifting and factoring
+  polynomials": Algorithm 15.10, the Hensel step from `m` to `m²`, and
+  §15.5, multifactor Hensel lifting through a factor tree.
 
 ## Papers
 

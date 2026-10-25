@@ -91,6 +91,40 @@ The random coefficients come from `SplitMix64` [SLF14] with a fixed seed.
 The factors are sorted by degree, then by coefficients, so the result does not
 depend on the random choices anyway.
 
+## Hensel lifting (CAS-181)
+
+`factor::hensel::lift`, crate-internal. It starts from `f ≡ lc(f) g₁ ⋯ gᵣ
+(mod p)`, where `p` does not divide `lc(f)` and the `gᵢ` are monic and
+pairwise coprime modulo `p`. It returns the monic `Gᵢ ≡ gᵢ (mod p)` with
+`f ≡ lc(f) G₁ ⋯ Gᵣ (mod pᵏ)`. Since the `gᵢ` are coprime, these lifts are
+unique. Their coefficients are the representatives in `[0, pᵏ)`.
+
+**The target.** Every factor is monic, so what lifts is the monic
+`lc(f)⁻¹ f` modulo each power. The leading coefficient comes back when the
+factors are recombined.
+
+**The tree [vzGG13 §15.5].** The factors are the leaves of a binary tree,
+split in halves. Each inner node holds:
+- the product of its leaves;
+- Bézout coefficients `s` and `t` of its two children `g` and `h`, with
+  `s g + t h ≡ 1`, `deg s < deg h` and `deg t < deg g`. They start from the
+  extended Euclidean algorithm modulo `p`.
+
+**The Hensel step [vzGG13 Algorithm 15.10].** A node's product `f` must
+become a given target. From `f ≡ g h` and `s g + t h ≡ 1` modulo `m`, it
+computes the same modulo `m′`, for `m | m′ | m²`:
+- `e = f − g h`; `s e = q h + r`; `g* = g + t e + q g`; `h* = h + r`;
+- `b = s g* + t h* − 1`; `s b = c h* + d`; `s* = s − d`;
+  `t* = t − t b − c g*`.
+
+`h` is monic, so the divisions need no inverse. Then the children lift to
+`g*` and `h*`, down to the leaves.
+
+**The exponents.** A step at most squares the modulus. The exponents run up
+`⌈k/2ʲ⌉, …, ⌈k/2⌉, k`, so the last step lands on `pᵏ` and does not overshoot
+it, as FLINT does. Each step computes in `ℤ/pᵉℤ` (cas-num's `ModRing`, in
+Montgomery form). Products there use Karatsuba's method.
+
 ## Tests
 
 `src/factor/tests/` has one module a step.
@@ -128,3 +162,15 @@ Over prime fields (`finite.rs`):
 - **Examples.** `x^p − x` splits into the `p` linear factors.
   `x⁹ − x` over `𝔽₃` is the product of the irreducibles of degrees 1 and 2.
   Also the generator's known outputs, and cancellation.
+
+Hensel lifting (`hensel.rs`):
+
+- **Random products.** Products of random polynomials, square-free modulo
+  3, 11, 101 or 65537 with a leading coefficient the prime does not divide.
+  Their local factors lift to exponents 1 to 11. Each lift is monic, has
+  coefficients below `pᵏ`, and reduces to its factor modulo `p`. `lc(f)` times
+  the product of the lifts is `f` modulo `pᵏ`. Each lift to `pᵏ` reduces to
+  the lift to `pʲ` for every `j < k`, which checks uniqueness. Two groups of
+  the local factors, multiplied together, lift as well.
+- **An example.** `x² + 1 ≡ (x − 2)(x + 2) (mod 5)` lifts to `(x − a)(x + a)`
+  with `a² ≡ −1` and `a ≡ 2`: a 5-adic square root of −1, up to `5²⁰`.
