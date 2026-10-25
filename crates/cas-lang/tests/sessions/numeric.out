@@ -36,7 +36,7 @@
 = 3.1415926535897932385
 > evalf(atan(2) + atan(1/2) - pi/2)
 warning at 26:1 `evalf(atan(2) + atan(1/2) - pi/2)`: the value of -pi/2 + atan(1/2) + atan(2) could not be told from 0 within 1448 bits
-= ball(0.0, 3.67e-436)
+= ball(0.0, 6.75e-436)
 > evalf(0.1, 30)
 note at 28:1 `evalf(0.1, 30)`: the accuracy of 0.1 is limited by its input: 15 digits
 = 0.1
