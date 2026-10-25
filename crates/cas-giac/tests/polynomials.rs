@@ -145,8 +145,9 @@ fn agreement() {
         ("discriminant(x^4+1, x)", "256"),
         ("discriminant(2*x^2+3*x+1, x)", "1"),
         ("discriminant(x^2/2+1, x)", "-2"),
-        // factor and collect over ℚ (CAS-185), each factor with a positive
-        // leading coefficient in the first variable, as giac's.
+        // factor over ℚ (CAS-185), each factor with a positive leading
+        // coefficient in the first variable, as giac's; quadratics in one
+        // generator over square roots (CAS-187); collect over ℚ alone.
         ("factor(2*x^2-2)", "2*(x-1)*(x+1)"),
         ("factor(-x^2+1)", "-(x-1)*(x+1)"),
         ("factor(6*x+12)", "6*(x+2)"),
@@ -164,6 +165,30 @@ fn agreement() {
         ("factor(1/(x^2-1))", "1/((x-1)*(x+1))"),
         ("factor(2/(x^2-1))", "2/((x-1)*(x+1))"),
         ("factor(x^2+1)", "x^2+1"),
+        ("factor(x^2-2)", "(x-sqrt(2))*(x+sqrt(2))"),
+        ("factor(x^2-3*x+1)", "(x+(-sqrt(5)-3)/2)*(x+(sqrt(5)-3)/2)"),
+        ("factor(x^2-2*x-1)", "(x-sqrt(2)-1)*(x+sqrt(2)-1)"),
+        ("factor(3*x^2-6)", "3*(x-sqrt(2))*(x+sqrt(2))"),
+        ("factor(x^2-8)", "(x-2*sqrt(2))*(x+2*sqrt(2))"),
+        ("factor(x^2-12)", "(x-2*sqrt(3))*(x+2*sqrt(3))"),
+        ("factor((x^2-2)*(x+1))", "(x-sqrt(2))*(x+1)*(x+sqrt(2))"),
+        ("factor((x^2-2)^2)", "(x-sqrt(2))^2*(x+sqrt(2))^2"),
+        ("factor(2*x^2-4)", "2*(x-sqrt(2))*(x+sqrt(2))"),
+        ("factor(x^2/2-1)", "(x-sqrt(2))*(x+sqrt(2))/2"),
+        ("factor(-x^2+2)", "-(x-sqrt(2))*(x+sqrt(2))"),
+        ("factor(x^2-x-1)", "(x+(-sqrt(5)-1)/2)*(x+(sqrt(5)-1)/2)"),
+        (
+            "factor((x^2-2)/(x^2-3))",
+            "(x-sqrt(2))*(x+sqrt(2))/((x-sqrt(3))*(x+sqrt(3)))",
+        ),
+        ("factor(sin(x)^2-2)", "(sin(x)-sqrt(2))*(sin(x)+sqrt(2))"),
+        ("factor(x^2*y-2*y)", "(x-sqrt(2))*(x+sqrt(2))*y"),
+        (
+            "factor(x^4-5*x^2+6)",
+            "(x-sqrt(3))*(x-sqrt(2))*(x+sqrt(2))*(x+sqrt(3))",
+        ),
+        ("factor(y^2-2)", "(y-sqrt(2))*(y+sqrt(2))"),
+        ("factor(x^4-4*x^2+1)", "x^4-4*x^2+1"),
         ("factor(x^3-2)", "x^3-2"),
         ("factor(x^4-10*x^2+1)", "x^4-10*x^2+1"),
         ("factor(exp(2*x)-1)", "exp(2*x)-1"),
@@ -193,6 +218,14 @@ fn agreement() {
         ("factor(x^2+2*x+1+i*(x+1))", "(x+1)*(x+1+i)"),
         ("factor(i*x^2-i)", "i*(x-1)*(x+1)"),
         ("factor(x^4+4*i)", "x^4+4*i"),
+        (
+            "factor(x^2+i*x+1)",
+            "(x+((-i)*sqrt(5)+i)/2)*(x+(i*sqrt(5)+i)/2)",
+        ),
+        (
+            "factor(x^3-i)",
+            "(x+i)*(x+(-sqrt(3)-i)/2)*(x+(sqrt(3)-i)/2)",
+        ),
         ("collect(x^2+(1+2*i)*x+2*i)", "(x+1)*(x+2*i)"),
         ("collect(i*x^2+i)", "i*(x+i)*(x-i)"),
         // factors.
@@ -277,33 +310,42 @@ fn departures() {
             "1/((1-i)*x+2-2*i)",
             "i/((1+i)*x+2+2*i)",
         ),
-        // factor over ℚ, as collect, until CAS-187 decides about giac's
-        // square roots (CAS-185).
-        ("factor(x^2-2)", "(x-sqrt(2))*(x+sqrt(2))", "x^2-2"),
+        // Quadratics split over square roots, but a non-monic one keeps
+        // its leading coefficient apart, and neither quartics nor
+        // quadratics in two variables split (CAS-187).
+        (
+            "factor(2*x^2-1)",
+            "(x+sqrt(2)/2)*(2*x-sqrt(2))",
+            "2*(x-sqrt(2)/2)*(x+sqrt(2)/2)",
+        ),
+        (
+            "factor(4*x^2-8*x+1)",
+            "(x+(sqrt(3)-2)/2)*(4*x-2*sqrt(3)-4)",
+            "4*(x+(-sqrt(3)-2)/2)*(x+(sqrt(3)-2)/2)",
+        ),
         (
             "factor(x^4+1)",
             "(x^2+(-sqrt(2))*x+1)*(x^2+sqrt(2)*x+1)",
             "x^4+1",
         ),
-        ("factor(2*x^2-1)", "(x+sqrt(2)/2)*(2*x-sqrt(2))", "2*x^2-1"),
+        ("factor(x^4-2)", "(x^2-sqrt(2))*(x^2+sqrt(2))", "x^4-2"),
+        (
+            "factor(x^2-2*y^2)",
+            "(x+(-sqrt(2))*y)*(x+sqrt(2)*y)",
+            "x^2-2*y^2",
+        ),
         // The constant first, where giac lists -1 last.
         (
             "factors(-x^2+1)",
             "[x-1,1,x+1,1,-1,1]",
             "[-1,1,x-1,1,x+1,1]",
         ),
-        // Over ℚ(i): factors in the order of their parts, and the quadratic
-        // that giac splits over sqrt(3) (CAS-186).
+        // Over ℚ(i): factors in the order of their parts (CAS-186).
         ("factors(i*x^2+i)", "[i,1,x+i,1,x-i,1]", "[i,1,x-i,1,x+i,1]"),
         (
             "factors(x^2+(1+2*i)*x+2*i)",
             "[x+1,1,x+2*i,1]",
             "[x+2*i,1,x+1,1]",
-        ),
-        (
-            "factor(x^3-i)",
-            "(x+i)*(x+(-sqrt(3)-i)/2)*(x+(sqrt(3)-i)/2)",
-            "(x+i)*(x^2-i*x-1)",
         ),
         // Signs as factor's, where giac keeps -x+1.
         ("sqrfree(-2*x^2+4*x-2)", "-2*(-x+1)^2", "-2*(x-1)^2"),

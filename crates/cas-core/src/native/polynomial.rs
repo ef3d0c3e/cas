@@ -24,7 +24,7 @@
 use std::borrow::Cow;
 
 use cas_num::algebra::{EuclideanDomain, GaussianIntegers, Integers, Ring};
-use cas_num::{Complex, Integer, Rational};
+use cas_num::{Complex, Integer, Natural, Rational};
 use cas_poly::{
     Cancel, Cancelled, CharacteristicZero, DenseRing, FactorError, Factors, GcdDomain, Sparse,
     SparseRing,
@@ -1166,6 +1166,15 @@ trait Factoring: Numbers + CharacteristicZero {
 
     /// The real and imaginary parts, the order of `factors`' lists.
     fn parts(c: &Self::Elem) -> (Rational, Rational);
+
+    /// Whether the coefficients are real: then `factor` splits only
+    /// quadratics of a positive discriminant, as giac does without `i`.
+    const REAL: bool;
+
+    fn complex(c: &Self::Elem) -> Complex {
+        let (re, im) = Self::parts(c);
+        Complex::new(re, im)
+    }
 }
 
 impl Factoring for Integers {
@@ -1181,6 +1190,8 @@ impl Factoring for Integers {
     fn parts(c: &Integer) -> (Rational, Rational) {
         (Rational::from(c.clone()), Rational::ZERO)
     }
+
+    const REAL: bool = true;
 }
 
 impl Factoring for GaussianIntegers {
@@ -1196,6 +1207,8 @@ impl Factoring for GaussianIntegers {
     fn parts(c: &Complex) -> (Rational, Rational) {
         (c.re().clone(), c.im().clone())
     }
+
+    const REAL: bool = false;
 }
 
 /// `p` times the unit that puts its leading coefficient in normal form in
@@ -1288,6 +1301,143 @@ impl<E: Coefficient + PartialEq> Powers<E> {
     }
 }
 
+/// `s` and the square-free `d` with `n = s² d`, from the factorisation of
+/// `n`; a composite that resists it counts as square-free.
+fn root_part(n: &Natural) -> (Natural, Natural) {
+    let (mut s, mut d) = (Natural::one(), Natural::one());
+    for f in n.factor().factors() {
+        let e = f.exponent();
+        s = &s * &f.base().pow(e / 2);
+        if e % 2 == 1 {
+            d = &d * f.base();
+        }
+    }
+    (s, d)
+}
+
+/// The linear factors of an irreducible quadratic `a x² + b x + c` over
+/// square roots, when giac's `factor` splits it: a real discriminant
+/// `D = b² − 4ac`, positive when the coefficients are real (CAS-187). With
+/// `|D| = s² d`, `d` square-free, and `ι` the square root of the sign of
+/// `D`, they are `x + (b ∓ ι s √d)/(2a)`, the fractions reduced by
+/// `gcd(b, s, 2a)` over ℤ, so that `a` times them is the quadratic, written
+/// as giac writes them: `factor(x^2-x-1)` is
+/// `(x+(-sqrt(5)-1)/2)*(x+(sqrt(5)-1)/2)`.
+#[allow(
+    clippy::many_single_char_names,
+    reason = "a x² + b x + c, D = s² d, as written in mathematics"
+)]
+fn split_quadratic(
+    x: &Expr,
+    a: &Complex,
+    b: &Complex,
+    c: &Complex,
+    real: bool,
+) -> Option<[Expr; 2]> {
+    let four = Complex::from(4);
+    let disc = &(b * b) - &(&(&four * a) * c);
+    if !disc.im().is_zero() || disc.re().is_zero() || real && disc.re().is_negative() {
+        return None;
+    }
+    let (s, d) = root_part(&disc.re().numer().unsigned_abs());
+    if d.is_one() {
+        return None;
+    }
+    let unit = if disc.re().is_negative() {
+        Complex::I
+    } else {
+        Complex::ONE
+    };
+    let two_a = &Complex::from(2) * a;
+    let (b, s, m) = if a.is_real() && b.is_real() {
+        let (b, two_a) = (b.re().numer(), two_a.re().numer());
+        let g = b.gcd(&Integer::from(&s)).gcd(two_a);
+        (
+            Complex::from(b.div_exact(&g)),
+            Integer::from(&s).div_exact(&g),
+            Complex::from(two_a.div_exact(&g)),
+        )
+    } else {
+        (b.clone(), Integer::from(&s), two_a)
+    };
+    let root =
+        Expr::from(Integer::from(d)).pow(Expr::from(Rational::new(Integer::ONE, Integer::from(2))));
+    Some([1i64, -1].map(|sign| {
+        let coefficient = &unit * &Complex::from(Integer::from(sign) * &s);
+        let surd = if coefficient.is_one() {
+            root.clone()
+        } else {
+            Expr::call(Symbol::TIMES, [Expr::from(&coefficient), root.clone()])
+        };
+        let term = if b.is_zero() {
+            surd
+        } else {
+            Expr::call(Symbol::PLUS, [Expr::from(&b), surd])
+        };
+        let shift = if m.is_one() {
+            term
+        } else {
+            Expr::call(Symbol::TIMES, [Expr::from(m.recip()), term])
+        };
+        Expr::call(Symbol::PLUS, [x.clone(), shift])
+    }))
+}
+
+/// The coefficients `[c, b, a]` of `f` when it is a quadratic in one
+/// generator, with that generator's index.
+fn quadratic<E: Clone>(f: &Sparse<E>) -> Option<(usize, [Option<E>; 3])> {
+    let degrees = f.degrees();
+    let mut vars = degrees.iter().enumerate().filter(|&(_, &d)| d > 0);
+    let (g, &degree) = vars.next()?;
+    if degree != 2 || vars.next().is_some() {
+        return None;
+    }
+    let mut coeffs = [None, None, None];
+    for (e, c) in f.terms() {
+        coeffs[usize::try_from(e[g]).ok()?] = Some(c.clone());
+    }
+    Some((g, coeffs))
+}
+
+/// [`Powers::expr`] with each quadratic factor in one generator split over
+/// square roots where giac's `factor` splits it ([`split_quadratic`]), its
+/// leading coefficient going to the constant.
+fn split_expr<R: Factoring>(p: &Polynomials, powers: &Powers<R::Elem>) -> Expr {
+    let mut constant = &R::complex(&powers.numerator) / &R::complex(&powers.denominator);
+    let mut parts = Vec::with_capacity(powers.factors.len() + 1);
+    let power = |base: Expr, k: i64| {
+        if k == 1 {
+            base
+        } else {
+            base.pow(Expr::from(k))
+        }
+    };
+    for (f, k) in &powers.factors {
+        let split = quadratic(f).and_then(|(g, [c, b, a])| {
+            let zero = Complex::from(0);
+            let value = |x: Option<R::Elem>| x.map_or_else(|| zero.clone(), |x| R::complex(&x));
+            let a = value(a);
+            let factors = split_quadratic(&p.generators()[g], &a, &value(b), &value(c), R::REAL)?;
+            Some((a, factors))
+        });
+        match split {
+            Some((a, [first, second])) => {
+                constant = &constant * &a.pow(*k);
+                parts.extend([power(first, *k), power(second, *k)]);
+            }
+            None => parts.push(power(p.polynomial_expr(f), *k)),
+        }
+    }
+    if !constant.is_one() {
+        parts.insert(0, Expr::from(constant));
+    }
+    match parts.len() {
+        0 => Expr::from(1),
+        1 => parts.pop().expect("one factor"),
+        _ => Expr::call(Symbol::TIMES, parts),
+    }
+}
+
 /// The factorisation of `num / den` over ℚ or ℚ(i), irreducible factors, the
 /// searches of each within `Limits::terms` steps; `None` after a warning
 /// past them.
@@ -1317,7 +1467,7 @@ fn factored<R: Factoring>(
     }
 }
 
-/// `Factor[e]`, Xcas's `factor` and `collect` (CAS-DOC-8 §4, CAS-185): the
+/// `Factor[e]`, Xcas's `factor` (CAS-DOC-8 §4, CAS-185, CAS-187): the
 /// numerator and the denominator factored over ℚ, or over ℚ(i) when a
 /// coefficient is complex (CAS-186), the generators as variables, their
 /// common factors cancelled. The result is a constant times powers of
@@ -1325,10 +1475,22 @@ fn factored<R: Factoring>(
 /// normal form in the first generator of canonical order, as giac writes
 /// them: `factor(x^4-y^4)` is `(x-y)*(x+y)*(x^2+y^2)`, `factor(sin(x)^2-1)`
 /// is `(sin(x)-1)*(sin(x)+1)`, and `factor(x^2+(1+2*i)*x+2*i)` is
-/// `(x+1)*(x+2*i)`. giac's `factor` also splits quadratic factors over
-/// square roots, which `collect` does not; both factor over ℚ here until
-/// CAS-187 decides. An infinity is given back.
+/// `(x+1)*(x+2*i)`. As giac's default, a quadratic factor in one generator
+/// then splits over square roots ([`split_quadratic`]): `factor(x^2-2)` is
+/// `(x-sqrt(2))*(x+sqrt(2))`. An infinity is given back.
 pub(super) fn factor(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    factoring(ev, e, true)
+}
+
+/// `FactorRational[e]`, Xcas's `collect` (CAS-187): [`factor`] without the
+/// square roots, over ℚ, or ℚ(i) with a complex coefficient: `collect(x^2-2)`
+/// is `x^2-2`.
+pub(super) fn factor_rational(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    factoring(ev, e, false)
+}
+
+/// [`factor`], with the square roots when `roots`.
+fn factoring(ev: &mut Eval<'_>, e: &Expr, roots: bool) -> Native {
     let [arg] = e.args() else {
         return Ok(None);
     };
@@ -1341,16 +1503,28 @@ pub(super) fn factor(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let n = p.generators().len();
     let result = match &p.fractions()[0] {
         Fraction::Integers { num, den } => {
-            factored(ev, e, &SparseRing::new(Integers, n), num, den)?.map(|f| f.expr(&p))
+            factored(ev, e, &SparseRing::new(Integers, n), num, den)?.map(|f| {
+                if roots {
+                    split_expr::<Integers>(&p, &f)
+                } else {
+                    f.expr(&p)
+                }
+            })
         }
         Fraction::GaussianIntegers { num, den } => {
-            factored(ev, e, &SparseRing::new(GaussianIntegers, n), num, den)?.map(|f| f.expr(&p))
+            factored(ev, e, &SparseRing::new(GaussianIntegers, n), num, den)?.map(|f| {
+                if roots {
+                    split_expr::<GaussianIntegers>(&p, &f)
+                } else {
+                    f.expr(&p)
+                }
+            })
         }
     };
     let Some(result) = result else {
         return Ok(None);
     };
-    ev.step("factor", e, &result);
+    ev.step(if roots { "factor" } else { "collect" }, e, &result);
     Ok(Some(result))
 }
 

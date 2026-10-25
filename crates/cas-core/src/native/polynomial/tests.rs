@@ -619,8 +619,8 @@ fn check_evaluated(cases: &[(&str, &str)]) {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
-/// giac 1.9's `factor` and `collect` over ℚ (CAS-DOC-8 §4, CAS-185), each
-/// factor with a positive leading coefficient in the first variable.
+/// giac 1.9's `factor` over ℚ (CAS-DOC-8 §4, CAS-185), each factor with a
+/// positive leading coefficient in the first variable.
 #[test]
 fn factor() {
     check_evaluated(&[
@@ -696,12 +696,13 @@ fn factor() {
             "Factor[Times[Power[Plus[x, 1], 3], Power[Plus[x, -2], 2]]]",
             "Times[Power[Plus[x, -2], 2], Power[Plus[x, 1], 3]]",
         ),
-        // Irreducible over ℚ: they stay as they are.
-        ("Factor[Plus[Power[x, 2], -2]]", "Plus[Power[x, 2], -2]"),
+        // Irreducible over ℚ and not split: two variables, a negative
+        // discriminant.
         (
             "Factor[Plus[Power[x, 2], Times[-2, Power[y, 2]]]]",
             "Plus[Power[x, 2], Times[-2, Power[y, 2]]]",
         ),
+        ("Factor[Plus[Power[x, 2], 1]]", "Plus[Power[x, 2], 1]"),
         // Numbers, lists, and an infinity given back.
         ("Factor[6]", "6"),
         ("Factor[0]", "0"),
@@ -711,6 +712,120 @@ fn factor() {
             "List[Times[Plus[x, -1], Plus[x, 1]], Times[Plus[x, -1], Plus[Power[x, 2], x, 1]]]",
         ),
         ("Factor[Infinity]", "Infinity"),
+    ]);
+}
+
+/// Quadratic factors in one generator split over square roots, as giac's
+/// `factor` does by default (CAS-187), and `collect` (`FactorRational`)
+/// does not.
+#[test]
+fn factor_over_square_roots() {
+    let sqrt = |n: i64| format!("Power[{n}, 1/2]");
+    check_evaluated(&[
+        // factor(x^2-2) = (x-sqrt(2))*(x+sqrt(2)), factor(x^2-12) =
+        // (x-2*sqrt(3))*(x+2*sqrt(3)).
+        (
+            "Factor[Plus[Power[x, 2], -2]]",
+            &format!(
+                "Times[Plus[x, Times[-1, {}]], Plus[x, {}]]",
+                sqrt(2),
+                sqrt(2)
+            ),
+        ),
+        (
+            "Factor[Plus[Power[x, 2], -12]]",
+            &format!(
+                "Times[Plus[x, Times[-2, {}]], Plus[x, Times[2, {}]]]",
+                sqrt(3),
+                sqrt(3)
+            ),
+        ),
+        // factor(x^2-x-1) = (x+(-sqrt(5)-1)/2)*(x+(sqrt(5)-1)/2),
+        // factor(x^2-2*x-1) = (x-sqrt(2)-1)*(x+sqrt(2)-1).
+        (
+            "Factor[Plus[Power[x, 2], Times[-1, x], -1]]",
+            &format!(
+                "Times[Plus[x, Times[1/2, Plus[-1, Times[-1, {}]]]], Plus[x, Times[1/2, Plus[-1, {}]]]]",
+                sqrt(5),
+                sqrt(5)
+            ),
+        ),
+        (
+            "Factor[Plus[Power[x, 2], Times[-2, x], -1]]",
+            &format!(
+                "Times[Plus[x, -1, Times[-1, {}]], Plus[x, -1, {}]]",
+                sqrt(2),
+                sqrt(2)
+            ),
+        ),
+        // The leading coefficient and the content in the constant:
+        // factor(3*x^2-6) = 3*(x-sqrt(2))*(x+sqrt(2)), and 2 x^2 - 1 as
+        // 2 (x - sqrt(2)/2) (x + sqrt(2)/2).
+        (
+            "Factor[Plus[Times[3, Power[x, 2]], -6]]",
+            &format!(
+                "Times[3, Plus[x, Times[-1, {}]], Plus[x, {}]]",
+                sqrt(2),
+                sqrt(2)
+            ),
+        ),
+        (
+            "Factor[Plus[Times[2, Power[x, 2]], -1]]",
+            &format!(
+                "Times[2, Plus[x, Times[-1/2, {}]], Plus[x, Times[1/2, {}]]]",
+                sqrt(2),
+                sqrt(2)
+            ),
+        ),
+        // Powers, denominators, other generators.
+        (
+            "Factor[Power[Plus[Power[x, 2], -2], 2]]",
+            &format!(
+                "Times[Power[Plus[x, Times[-1, {}]], 2], Power[Plus[x, {}], 2]]",
+                sqrt(2),
+                sqrt(2)
+            ),
+        ),
+        (
+            "Factor[Times[Plus[Power[x, 2], -2], Power[Plus[Power[x, 2], -3], -1]]]",
+            &format!(
+                "Times[Plus[x, Times[-1, {}]], Plus[x, {}], Power[Plus[x, Times[-1, {}]], -1], Power[Plus[x, {}], -1]]",
+                sqrt(2),
+                sqrt(2),
+                sqrt(3),
+                sqrt(3)
+            ),
+        ),
+        (
+            "Factor[Plus[Power[Sin[x], 2], -2]]",
+            &format!(
+                "Times[Plus[Sin[x], Times[-1, {}]], Plus[Sin[x], {}]]",
+                sqrt(2),
+                sqrt(2)
+            ),
+        ),
+        // With i, a negative discriminant too: factor(x^2+i*x+1).
+        (
+            "Factor[Plus[Power[x, 2], Times[Complex[0, 1], x], 1]]",
+            &format!(
+                "Times[Plus[x, Times[1/2, Plus[Complex[0, 1], Times[Complex[0, -1], {}]]]], Plus[x, Times[1/2, Plus[Complex[0, 1], Times[Complex[0, 1], {}]]]]]",
+                sqrt(5),
+                sqrt(5)
+            ),
+        ),
+        // collect does not split.
+        (
+            "FactorRational[Plus[Power[x, 2], -2]]",
+            "Plus[Power[x, 2], -2]",
+        ),
+        (
+            "FactorRational[Plus[Times[3, Power[x, 2]], -6]]",
+            "Times[3, Plus[Power[x, 2], -2]]",
+        ),
+        (
+            "FactorRational[Plus[Power[x, 4], Times[-1, Power[y, 4]]]]",
+            "Times[Plus[x, Times[-1, y]], Plus[x, y], Plus[Power[x, 2], Power[y, 2]]]",
+        ),
     ]);
 }
 
@@ -742,9 +857,14 @@ fn factor_over_gaussian_rationals() {
             "Factor[Plus[Power[x, 4], Complex[0, 4]]]",
             "Plus[Power[x, 4], Complex[0, 4]]",
         ),
-        // x^3 - i, whose quadratic factor giac splits over sqrt(3).
+        // x^3 - i, whose quadratic factor splits over sqrt(3), and over ℚ(i)
+        // alone with collect.
         (
             "Factor[Plus[Power[x, 3], Complex[0, -1]]]",
+            "Times[Plus[x, Complex[0, 1]], Plus[x, Times[1/2, Plus[Complex[0, -1], Times[-1, Power[3, 1/2]]]]], Plus[x, Times[1/2, Plus[Complex[0, -1], Power[3, 1/2]]]]]",
+        ),
+        (
+            "FactorRational[Plus[Power[x, 3], Complex[0, -1]]]",
             "Times[Plus[x, Complex[0, 1]], Plus[Power[x, 2], Times[Complex[0, -1], x], -1]]",
         ),
     ]);
