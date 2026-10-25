@@ -1,12 +1,13 @@
-//! Tests of `Integrate` (CAS-194 to CAS-197): giac's antiderivatives,
-//! compared as values once evaluated; what stays; the trace and its
-//! verification; and a proptest that the derivative of a polynomial's
+//! Tests of `Integrate` (CAS-194 to CAS-198): giac's antiderivatives,
+//! compared as values once evaluated; definite integrals, by value, and the
+//! improper ones that stay with their warnings; what stays; the trace and
+//! its verification; and a proptest that the derivative of a polynomial's
 //! antiderivative is the polynomial.
 
 use proptest::prelude::*;
 
 use crate::trace::{EvalOptions, Step, StepKind, Trace, TraceLevel};
-use crate::{Context, Expr, Symbol};
+use crate::{Context, Expr, Symbol, Warning};
 
 fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
@@ -354,6 +355,171 @@ fn partial_rational_functions() {
     }
 }
 
+/// Whether `a` and `b` are the same, or numbers whose difference `N` takes
+/// for 0, as balls: `Cos[0] - Cos[Pi]` stays as it is, and is 2.
+fn same_value(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    if same(ctx, a, b) {
+        return true;
+    }
+    let difference = Expr::call(Symbol::N, [a.clone() - b.clone()]);
+    let zero = ctx
+        .eval(&difference)
+        .map(|d| Expr::call(Symbol::EQUAL, [d, Expr::from(0)]));
+    zero.and_then(|z| ctx.eval(&z))
+        .is_ok_and(|t| t.as_symbol() == Some(Symbol::TRUE))
+}
+
+/// `(input, value)` in `ctx`: a definite integral that integrates, to the
+/// same value, without a warning.
+fn check_values(ctx: &Context, cases: &[(&str, &str)]) {
+    let mut wrong = Vec::new();
+    for (input, expected) in cases {
+        let (found, report) = ctx.eval_with(&read(input), &EvalOptions::default());
+        let found = found.unwrap_or_else(|e| panic!("{input}: {e}"));
+        let expected = ctx.eval(&read(expected)).unwrap();
+        if found.contains(&Expr::from(Symbol::INTEGRATE))
+            || !same_value(ctx, &found, &expected)
+            || !report.warnings.is_empty()
+        {
+            wrong.push(format!(
+                "{input}: {found:?} {:?}, expected {expected:?}",
+                report.warnings
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// giac's definite integrals (CAS-198): `F(b) − F(a)` where the integrand
+/// is continuous between the bounds, rational or real numbers, symbols, or
+/// a complex bound for an integrand continuous on the plane.
+#[test]
+fn definite_integrals() {
+    let ctx = Context::new();
+    check_values(
+        &ctx,
+        &[
+            // ln(2), pi/4, pi/(3*sqrt(3)).
+            ("Integrate[Power[x, -1], x, 1, 2]", "Log[2]"),
+            (
+                "Integrate[Power[Plus[1, Power[x, 2]], -1], x, 0, 1]",
+                "Times[1/4, Pi]",
+            ),
+            (
+                "Integrate[Power[Plus[1, Power[x, 2]], -1], List[x, 0, 1]]",
+                "Times[1/4, Pi]",
+            ),
+            (
+                "Integrate[Power[Plus[1, x, Power[x, 2]], -1], x, 0, 1]",
+                "Times[1/9, Power[3, 1/2], Pi]",
+            ),
+            // 1/4*(-sqrt(2)*ln(sqrt(2)+1)+sqrt(2)*ln(sqrt(2)-1)): the pole
+            // at sqrt(2) is past the bound.
+            (
+                "Integrate[Power[Plus[-2, Power[x, 2]], -1], x, 0, 1]",
+                "Times[1/4, Power[2, 1/2], Plus[Log[Plus[-1, Power[2, 1/2]]], Times[-1, Log[Plus[1, Power[2, 1/2]]]]]]",
+            ),
+            // 1/18*sqrt(3)*pi+1/18*(sqrt(3)*pi+6*ln(2)).
+            (
+                "Integrate[Power[Plus[1, Power[x, 3]], -1], x, 0, 1]",
+                "Plus[Times[1/9, Power[3, 1/2], Pi], Times[1/3, Log[2]]]",
+            ),
+            // The bounds the other way: -ln(2).
+            ("Integrate[Power[x, -1], x, 2, 1]", "Times[-1, Log[2]]"),
+            // Real numbers as bounds, and the table.
+            ("Integrate[Sin[x], x, 0, Pi]", "2"),
+            ("Integrate[Cos[x], x, 0, Times[1/2, Pi]]", "1"),
+            ("Integrate[Exp[x], x, 0, 1]", "Plus[-1, E]"),
+            (
+                "Integrate[Power[x, 2], x, 0, Power[2, 1/2]]",
+                "Times[2/3, Power[2, 1/2]]",
+            ),
+            ("Integrate[Power[x, -1], x, 1, E]", "1"),
+            // sqrt(x) is continuous at 0, and so is its antiderivative.
+            ("Integrate[Power[x, 1/2], x, 0, 1]", "2/3"),
+            ("Integrate[Log[x], x, 1, 2]", "Plus[-1, Times[2, Log[2]]]"),
+            ("Integrate[Tan[x], x, 0, 1]", "Times[-1, Log[Cos[1]]]"),
+            (
+                "Integrate[Power[Plus[1, Times[-1, Power[x, 2]]], -1/2], x, 0, 1/2]",
+                "Times[1/6, Pi]",
+            ),
+            // A complex bound, for a polynomial.
+            ("Integrate[x, x, 0, I]", "-1/2"),
+            // Symbolic bounds, where the integrand is continuous on the line.
+            (
+                "Integrate[x, x, a, b]",
+                "Plus[Times[1/2, Power[b, 2]], Times[-1/2, Power[a, 2]]]",
+            ),
+            (
+                "Integrate[Times[x, Power[Plus[1, Power[x, 2]], -1]], x, a, b]",
+                "Plus[Times[1/2, Log[Plus[1, Power[b, 2]]]], Times[-1/2, Log[Plus[1, Power[a, 2]]]]]",
+            ),
+            (
+                "Integrate[Exp[Times[2, x]], x, a, b]",
+                "Plus[Times[1/2, Exp[Times[2, b]]], Times[-1/2, Exp[Times[2, a]]]]",
+            ),
+        ],
+    );
+    // An assumption bounds a symbolic bound: 1 - 1/a.
+    let assumed = ctx.assuming(read("Greater[a, 1]"));
+    check_values(
+        &assumed,
+        &[(
+            "Integrate[Power[x, -2], x, 1, a]",
+            "Plus[1, Times[-1, Power[a, -1]]]",
+        )],
+    );
+}
+
+/// Improper integrals and those not shown proper stay, each with its
+/// warning, where giac answers `+infinity`, a principal value or `undef`
+/// (CAS-198).
+#[test]
+fn improper_integrals_stay() {
+    let ctx = Context::new();
+    let unbounded = "an improper integral: the integrand is unbounded between the bounds";
+    let unknown = "the integrand is not shown continuous between the bounds";
+    for (input, message) in [
+        ("Integrate[Power[x, -2], x, -1, 1]", unbounded),
+        ("Integrate[Power[x, -1], x, -1, 1]", unbounded),
+        ("Integrate[Power[Plus[-1, x], -1], x, 0, 2]", unbounded),
+        (
+            "Integrate[Power[Plus[-2, Power[x, 2]], -1], x, 0, 2]",
+            unbounded,
+        ),
+        // Convergent, but at a singular point: for limits.
+        ("Integrate[Power[x, -1/2], x, 0, 1]", unbounded),
+        ("Integrate[Log[x], x, 0, 1]", unbounded),
+        // tan has a pole at pi/2.
+        ("Integrate[Tan[x], x, 0, 2]", unbounded),
+        // Where the bounds may lie on either side of the pole.
+        ("Integrate[Power[x, -1], x, a, b]", unknown),
+        ("Integrate[Power[x, -2], x, 1, a]", unknown),
+        // A complex bound and a pole.
+        ("Integrate[Power[x, -1], x, 1, I]", unknown),
+        // A pole at the bound sqrt(2), which balls cannot tell apart.
+        (
+            "Integrate[Power[Plus[-2, Power[x, 2]], -1], x, 0, Power[2, 1/2]]",
+            unknown,
+        ),
+        (
+            "Integrate[Exp[x], x, 0, Infinity]",
+            "an infinite bound, which waits for limits",
+        ),
+    ] {
+        let e = read(input);
+        let (found, report) = ctx.eval_with(&e, &EvalOptions::default());
+        let found = found.unwrap();
+        assert_eq!(found.head(), e.head(), "{input}: {found:?}");
+        assert_eq!(found.args().len(), e.args().len(), "{input}: {found:?}");
+        let messages: Vec<String> = report.warnings.iter().map(Warning::to_string).collect();
+        assert!(
+            messages.iter().any(|m| m.starts_with(message)),
+            "{input}: {messages:?}"
+        );
+    }
+}
+
 /// What the methods of CAS-194 to CAS-197 leave as it is.
 #[test]
 fn integrals_that_stay() {
@@ -373,9 +539,6 @@ fn integrals_that_stay() {
         // giac's integrate(2*f(x),x) stays whole.
         "Integrate[Times[2, f[x]], x]",
         "Integrate[Power[x, x], x]",
-        // A definite integral whose antiderivative is not a polynomial
-        // waits for CAS-198.
-        "Integrate[Power[x, -1], x, 1, 2]",
         // Not a symbol, or the wrong arguments.
         "Integrate[x, 2]",
         "Integrate[x, x, 1]",

@@ -101,14 +101,24 @@ form needs `√Δ` anyway. Bronstein's example,
 
 ## Real roots
 
-`real_roots` counts the real roots of a square-free polynomial by Sturm's
-sequence, `p`, `p′`, then the negated remainders: the sign changes of the
-leading coefficients at `−∞` (each signed by the parity of its degree) less
-those at `+∞`. A logarithm whose argument has a real root is written with an
-absolute value, `ln|x − 1|`; one without, which is positive, as it is,
-`ln(x² + 1)`, as giac writes them.
+`DenseRing<Rationals>::count_real_roots` (`src/sturm.rs`, CAS-198) counts
+the distinct real roots of a polynomial in a closed interval with rational
+or infinite ends, by Sturm's sequence of its square-free part: `p`, `p′`,
+then the negated remainders, each over the absolute value of its leading
+coefficient. With `V(a)` the sign changes at `a`, zeros left out, the roots
+in `(a, b]` are `V(a) − V(b)`: at a root `r`, `p′(r)` has the sign `p` takes
+just after `r`, so `V(r)` is `V` just after it, and a root at `a` is counted
+apart. At `±∞` the signs are those of the leading coefficients, times
+`(−1)^deg` at `−∞`. A logarithm whose argument has a real root is written
+with an absolute value, `ln|x − 1|`; one without, which is positive, as it
+is, `ln(x² + 1)`, as giac writes them; cas-core's definite integrals look
+for the poles of an integrand between the bounds.
 
 ## Tests
+
+`src/sturm/tests.rs` counts roots on the line and between bounds, at the
+bounds, repeated, and, in a proptest, those of products of linear factors
+with known roots, times `x² + 1` or not, between random bounds.
 
 `src/integrate/tests.rs` checks each result by its derivative at rational
 points, exactly, in the field of its residues (ℚ(√Δ) for a real pair,
@@ -124,7 +134,6 @@ points, exactly, in the field of its residues (ℚ(√Δ) for a real pair,
   `(x² + 1)/(x⁴ + x² + 1)`, whose arctangents of polynomials have no jump
   where giac's `atan((x² − 1)/(x √3))` has one; `1/(x³ − 2)`, whose cubic
   residues stay.
-- **Sturm's count** on polynomials with 0 to 3 real roots and constants.
 - **Properties**: any numerator over products of linear factors with
   multiplicities and at most one irreducible quadratic: the derivative of
   the result is the integrand, the rational part is in lowest terms over a

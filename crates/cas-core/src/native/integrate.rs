@@ -27,10 +27,10 @@
 //!   residues are of degree 3 or more stays under `Integrate`.
 //!
 //! `Integrate[f, x, a, b]`, and Mathematica's `Integrate[f, {x, a, b}]`, is
-//! `F(b) − F(a)` where the antiderivative `F` is a polynomial in `x`, which
-//! is continuous; other definite integrals wait for CAS-198. Each call that
-//! rewrites takes one step, `"Integrate"`, whose identity `D[F, x] = f`
-//! `Trace::verify` checks.
+//! `F(b) − F(a)` where the integrand is shown continuous between the bounds,
+//! and so the antiderivative `F` (CAS-198, `definite`); an improper integral
+//! stays, with a warning. Each call that rewrites takes one step,
+//! `"Integrate"`, whose identity `D[F, x] = f` `Trace::verify` checks.
 
 #![allow(
     clippy::many_single_char_names,
@@ -91,15 +91,10 @@ pub(super) fn integrate(ev: &mut Eval<'_>, e: &Expr) -> Native {
         };
         match bounds {
             None => antiderivative,
-            Some([a, b]) => {
-                // Evaluated, as the conversion reads it: x^(2 + 1) is x^3.
-                let antiderivative = ev.eval(&antiderivative)?;
-                if !polynomial_in(ev, &antiderivative, x)? {
-                    return Ok(None);
-                }
-                let at = |v: &Expr| antiderivative.substitute(&[(x.clone(), v.clone())]);
-                at(b) - at(a)
-            }
+            Some(bounds) => match definite::integral(ev, e, f, x, &antiderivative, bounds)? {
+                Some(value) => value,
+                None => return Ok(None),
+            },
         }
     };
     ev.step("Integrate", e, &result);
@@ -576,28 +571,6 @@ fn terms_integrated<R: Numbers>(
     Some(p.ratio_expr(&shifted, &den))
 }
 
-/// Whether `f` is a polynomial in `x`: no other generator, no denominator,
-/// contains it, nor does an unevaluated `Integrate`.
-fn polynomial_in(ev: &mut Eval<'_>, f: &Expr, x: &Expr) -> Result<bool, EvalError> {
-    if f.contains(&Expr::from(Symbol::INTEGRATE)) {
-        return Ok(false);
-    }
-    let Some((p, k)) = in_x(ev, f, f, x)? else {
-        return Ok(false);
-    };
-    let n = p.generators().len();
-    Ok(match &p.fractions()[0] {
-        Fraction::Integers { den, .. } => {
-            SparseRing::new(Integers, n).degree(den, k).unwrap_or(0) == 0
-        }
-        Fraction::GaussianIntegers { den, .. } => {
-            SparseRing::new(GaussianIntegers, n)
-                .degree(den, k)
-                .unwrap_or(0)
-                == 0
-        }
-    })
-}
-
+mod definite;
 #[cfg(test)]
 mod tests;

@@ -135,34 +135,6 @@ fn hermite(
     Ok(((gn, gd), (a, ds)))
 }
 
-/// The number of real roots of a square-free `p`, by Sturm's sequence: its
-/// sign changes at −∞ less those at +∞.
-pub(crate) fn real_roots(ring: &DenseRing<Rationals>, p: &Dense<Rational>) -> usize {
-    let mut sequence = vec![p.clone(), ring.derivative(p)];
-    loop {
-        let n = sequence.len();
-        if sequence[n - 1].is_zero() {
-            sequence.pop();
-            break;
-        }
-        let r = ring.div_rem(&sequence[n - 2], &sequence[n - 1]).1;
-        if r.is_zero() {
-            break;
-        }
-        sequence.push(ring.neg(&r));
-    }
-    let changes = |signs: Vec<bool>| signs.windows(2).filter(|w| w[0] != w[1]).count();
-    let negative = |q: &Dense<Rational>| q.lead().is_some_and(Rational::is_negative);
-    let at_plus = changes(sequence.iter().map(negative).collect());
-    let at_minus = changes(
-        sequence
-            .iter()
-            .map(|q| negative(q) != (q.degree().unwrap_or(0) % 2 == 1))
-            .collect(),
-    );
-    at_minus - at_plus
-}
-
 /// The logarithms of `∫ P / E`, `deg P < deg E` and `E` square-free, whose
 /// residues are rational, the pairs of quadratic ones, and the part left
 /// [Tra76]. With `E_c` the product of their arguments and norms and
@@ -210,7 +182,7 @@ fn logarithms(
         if c.is_zero() {
             continue;
         }
-        let real_root = real_roots(ring, &s) > 0;
+        let real_root = ring.count_real_roots(&s, None, None) > 0;
         logarithms.push(Logarithm {
             coefficient: c,
             argument: s,

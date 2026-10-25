@@ -16,7 +16,6 @@
 use cas_num::algebra::{EuclideanDomain, Field, Rationals, Ring};
 use cas_num::{Integer, Natural, Rational};
 
-use super::real_roots;
 use crate::dense::{Coefficients, Dense, DenseRing};
 
 /// A number `a + b √d` of ℚ(√d), `d` known from where it is.
@@ -173,7 +172,7 @@ pub(super) fn pair(
             .collect(),
     );
     if d.is_positive() {
-        let real_root = real_roots(ring, &norm) > 0;
+        let real_root = ring.count_real_roots(&norm, None, None) > 0;
         return Some(Pair::Real {
             d,
             u,

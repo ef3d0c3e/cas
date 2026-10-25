@@ -1,5 +1,5 @@
 //! Tests of the integration of rational functions (CAS-196, CAS-197):
-//! examples, Sturm's count of real roots, and properties. The derivative of
+//! examples and properties. The derivative of
 //! the result plus the part left is the integrand, checked by values at
 //! rational points, exactly, in the field of the residues (ℚ, or ℚ(√k) for
 //! a pair of quadratic residues); denominators that split over ℚ leave
@@ -9,8 +9,8 @@ use cas_num::algebra::{Field, Rationals, Ring};
 use cas_num::{Integer, Rational};
 use proptest::prelude::*;
 
+use super::RationalIntegral;
 use super::quadratic::{Pair, Quadratic, Surd, rational_sqrt};
-use super::{RationalIntegral, real_roots};
 use crate::dense::{Dense, DenseRing};
 
 fn qx() -> DenseRing<Rationals> {
@@ -168,14 +168,13 @@ fn check(a: &Dense<Rational>, d: &Dense<Rational>) -> Result<RationalIntegral, T
         prop_assert_eq!(log.argument.lead(), Some(&Rational::ONE));
         let s = &log.argument;
         prop_assert!(ring.is_one(&ring.gcd(s, &ring.derivative(s))));
-        prop_assert_eq!(log.real_root, real_roots(&ring, s) > 0);
+        prop_assert_eq!(log.real_root, ring.count_real_roots(s, None, None) > 0);
     }
     for pair in &r.pairs {
+        let roots = ring.count_real_roots(pair.norm(), None, None);
         match pair {
-            Pair::Real {
-                norm, real_root, ..
-            } => prop_assert_eq!(*real_root, real_roots(&ring, norm) > 0),
-            Pair::Complex { norm, .. } => prop_assert_eq!(real_roots(&ring, norm), 0),
+            Pair::Real { real_root, .. } => prop_assert_eq!(*real_root, roots > 0),
+            Pair::Complex { .. } => prop_assert_eq!(roots, 0),
         }
     }
     if let Some((p, e)) = &r.rest {
@@ -278,23 +277,6 @@ fn examples() {
     // irrationals, the part stays; the cube root's residue too.
     let r = check(&poly(&[1]), &poly(&[-2, 0, 0, 1])).unwrap();
     assert!(r.rest.is_some());
-}
-
-#[test]
-fn sturm_counts_real_roots() {
-    let ring = qx();
-    for (p, n) in [
-        (poly(&[1, 0, 1]), 0),
-        (poly(&[-1, 0, 1]), 2),
-        (poly(&[1, 0, -1, 1]), 1),
-        (poly(&[0, -1, 0, 1]), 3),
-        (poly(&[1, 0, 0, 0, 1]), 0),
-        (poly(&[-2, 0, 0, 0, 1]), 2),
-        (poly(&[5]), 0),
-        (poly(&[3, 1]), 1),
-    ] {
-        assert_eq!(real_roots(&ring, &p), n, "{p:?}");
-    }
 }
 
 /// A product of `(x − r)^e` times at most one quadratic `x² + b x + c` with

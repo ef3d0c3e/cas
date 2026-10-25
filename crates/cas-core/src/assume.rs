@@ -321,6 +321,17 @@ impl Range {
         }
     }
 
+    /// The closed interval that holds a value in this range, `None` at an
+    /// end it is not bounded at; `None` when the value need not be real.
+    pub(crate) fn interval(&self) -> Option<(Option<&Rational>, Option<&Rational>)> {
+        self.real.then(|| {
+            (
+                self.lower.as_ref().map(|b| &b.value),
+                self.upper.as_ref().map(|b| &b.value),
+            )
+        })
+    }
+
     /// Which of `a < b`, `a = b` and `a > b` are possible, for `a - b` in
     /// this range: `None` when the value need not be real.
     fn order(&self) -> Option<Signs> {

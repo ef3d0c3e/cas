@@ -130,6 +130,34 @@ fn definite_integrals_of_polynomials() {
     );
 }
 
+/// Definite integrals of CAS-198: continuous integrands between rational
+/// or real bounds, the same value as giac's.
+#[test]
+fn definite_integrals() {
+    check(
+        &[
+            "integrate(1/x,x,1,2)",
+            "integrate(1/x,x,2,1)",
+            "integrate(1/(1+x^2),x,0,1)",
+            "integrate(1/(x^2+x+1),x,0,1)",
+            "integrate(1/(x^2-2),x,0,1)",
+            "integrate(1/(x^2-1),x,2,3)",
+            "integrate(1/(x^3+1),x,0,1)",
+            "integrate(x/(x^2+1),x,0,2)",
+            "integrate(sin(x),x,0,pi)",
+            "integrate(cos(x),x,0,pi/2)",
+            "integrate(exp(x),x,0,1)",
+            "integrate(sqrt(x),x,0,1)",
+            "integrate(ln(x),x,1,2)",
+            "integrate(tan(x),x,0,1)",
+            "integrate(1/sqrt(1-x^2),x,0,1/2)",
+            "integrate(x^2,x,0,sqrt(2))",
+            "integrate(x/(x^2+1),x,a,b)",
+        ],
+        true,
+    );
+}
+
 /// The table at linear arguments of CAS-195 (CAS-DOC-9 §4).
 #[test]
 fn the_table_at_linear_arguments() {

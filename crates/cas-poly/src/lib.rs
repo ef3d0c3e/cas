@@ -64,6 +64,7 @@ mod integrate;
 mod random;
 mod shared;
 mod sparse;
+mod sturm;
 
 pub use cancel::{Cancel, Cancelled, Never};
 pub use dense::{Coefficients, Dense, DenseRing};

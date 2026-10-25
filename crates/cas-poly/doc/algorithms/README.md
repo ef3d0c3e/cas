@@ -44,7 +44,8 @@ the tickets. This documentation describes the code as it is.
   Hermite's reduction in Mack's linear form; the logarithms with rational
   residues from the factors of the residue resultant; pairs of quadratic
   residues over ℚ(√Δ), real ones joined in one logarithm, complex ones as
-  Rioboo's arctangents of polynomials; Sturm's count of real roots, for
-  the absolute values of the logarithms.
+  Rioboo's arctangents of polynomials; Sturm's count of real roots, on the
+  line or between bounds (`src/sturm.rs`), for the absolute values of the
+  logarithms and the poles of definite integrals.
 - [references.md](references.md): the bibliography. Chapters and doc
   comments cite it by key, as in "Kronecker substitution [Sch82]".
