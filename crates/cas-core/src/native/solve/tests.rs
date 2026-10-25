@@ -237,9 +237,15 @@ fn identities_and_contradictions() {
 #[test]
 fn what_stays() {
     check(&[
+        // x^3+a*x+1: parameters past degree 2, but for a binomial.
         (
-            "Solve[Plus[-1, Times[-1, x], Power[x, 5]], x]",
-            "Solve[Plus[-1, Times[-1, x], Power[x, 5]], x]",
+            "Solve[Plus[1, Times[a, x], Power[x, 3]], x]",
+            "Solve[Plus[1, Times[a, x], Power[x, 3]], x]",
+        ),
+        // Past the degree of numeric roots.
+        (
+            "Solve[Plus[-1, Times[-1, x], Power[x, 65]], x]",
+            "Solve[Plus[-1, Times[-1, x], Power[x, 65]], x]",
         ),
         (
             "Solve[Plus[-1/2, Sin[x]], x]",
@@ -254,8 +260,8 @@ fn what_stays() {
     ]);
 }
 
-/// giac's warnings: an expression is solved as `e = 0`, and a factor of a
-/// degree past 2 is not solved.
+/// giac's warnings: an expression is solved as `e = 0`; and why a factor
+/// of a degree past 2 is not solved.
 #[test]
 fn warnings_say_why() {
     let expression = warnings("Solve[Plus[-1, Power[x, 2]], x]");
@@ -266,9 +272,202 @@ fn warnings_say_why() {
         "{expression:?}"
     );
     assert!(warnings("Solve[Equation[Power[x, 2], 1], x]").is_empty());
-    let quintic = warnings("Solve[Equation[Power[x, 5], Plus[1, x]], x]");
+    let cubic = warnings("Solve[Equation[Power[x, 3], Plus[1, Times[a, x]]], x]");
     assert!(
-        quintic.iter().any(|m| m.contains("a factor of degree 5")),
-        "{quintic:?}"
+        cubic
+            .iter()
+            .any(|m| m.contains("a factor of degree 3 with parameters")),
+        "{cubic:?}"
+    );
+    let high = warnings("Solve[Equation[Power[x, 65], Plus[1, x]], x]");
+    assert!(
+        high.iter()
+            .any(|m| m.contains("not sought numerically past degree 64")),
+        "{high:?}"
+    );
+}
+
+/// The values of the solutions of `input`, approximated: real and
+/// imaginary parts.
+fn values(input: &str) -> Vec<(f64, f64)> {
+    let ctx = Context::new();
+    let found = ctx
+        .eval(&Expr::call(crate::Symbol::N, [read(input)]))
+        .unwrap();
+    assert_eq!(
+        found.head(),
+        Some(&Expr::from(crate::Symbol::LIST)),
+        "{input}: {found:?}"
+    );
+    found
+        .args()
+        .iter()
+        .map(|v| match v.view() {
+            crate::View::Ball(b) => (b.mid().to_f64(), 0.0),
+            crate::View::ComplexBall(z) => (z.re().mid().to_f64(), z.im().mid().to_f64()),
+            _ => panic!("{input}: {v:?} is no number"),
+        })
+        .collect()
+}
+
+/// `(input, values)`: the solutions, approximated, are the values, in
+/// order, within `10⁻¹²`.
+fn check_values(cases: &[(&str, &[(f64, f64)])]) {
+    let mut wrong = Vec::new();
+    for (input, expected) in cases {
+        let found = values(input);
+        let close = found.len() == expected.len()
+            && found
+                .iter()
+                .zip(expected.iter())
+                .all(|(f, e)| (f.0 - e.0).abs() < 1e-12 && (f.1 - e.1).abs() < 1e-12);
+        if !close {
+            wrong.push(format!("{input}: {found:?}, expected {expected:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Binomials and quadratics in a power, in radicals (CAS-211).
+#[test]
+fn binomials_and_powers() {
+    check(&[
+        // x^3-2, x^4-2, x^3-a, x^4-a: giac's radicals.
+        ("Solve[Plus[-2, Power[x, 3]], x]", "List[Power[2, 1/3]]"),
+        (
+            "CSolve[Plus[-2, Power[x, 3]], x]",
+            "List[Power[2, 1/3], \
+             Times[Power[2, 1/3], Plus[-1/2, Times[1/2, I, Power[3, 1/2]]]], \
+             Times[Power[2, 1/3], Plus[-1/2, Times[-1/2, I, Power[3, 1/2]]]]]",
+        ),
+        (
+            "Solve[Plus[-2, Power[x, 4]], x]",
+            "List[Times[-1, Power[2, 1/4]], Power[2, 1/4]]",
+        ),
+        ("Solve[Plus[2, Power[x, 4]], x]", "List[]"),
+        (
+            "Solve[Plus[2, Power[x, 3]], x]",
+            "List[Times[-1, Power[2, 1/3]]]",
+        ),
+        (
+            "Solve[Plus[Times[-1, a], Power[x, 3]], x]",
+            "List[Power[a, 1/3]]",
+        ),
+        (
+            "Solve[Plus[Times[-1, a], Power[x, 4]], x]",
+            "List[Power[a, 1/4], Times[-1, Power[a, 1/4]]]",
+        ),
+        // x^4+1: (±1 ± i)/√2.
+        (
+            "CSolve[Plus[1, Power[x, 4]], x]",
+            "List[Times[Plus[-1, I], Power[2, -1/2]], Times[Plus[-1, Times[-1, I]], Power[2, -1/2]], \
+             Times[Plus[1, I], Power[2, -1/2]], Times[Plus[1, Times[-1, I]], Power[2, -1/2]]]",
+        ),
+        // x^4-10x^2+1: ±√2 ± √3, denested, as giac.
+        (
+            "Solve[Plus[1, Times[-10, Power[x, 2]], Power[x, 4]], x]",
+            "List[Times[-1, Plus[Power[2, 1/2], Power[3, 1/2]]], \
+             Times[-1, Plus[Times[-1, Power[2, 1/2]], Power[3, 1/2]]], \
+             Plus[Times[-1, Power[2, 1/2]], Power[3, 1/2]], Plus[Power[2, 1/2], Power[3, 1/2]]]",
+        ),
+    ]);
+    // x^6-3x^3+1: the cube roots of (3 ± √5)/2.
+    check_values(&[(
+        "Solve[Plus[1, Times[-3, Power[x, 3]], Power[x, 6]], x]",
+        &[
+            (0.725_562_630_246_326_3, 0.0),
+            (1.378_240_772_489_210_2, 0.0),
+        ],
+    )]);
+}
+
+/// Cubics and quartics in radicals (CAS-211): Cardano's formula, the
+/// trigonometric form, Ferrari's method.
+#[test]
+fn cubics_and_quartics() {
+    let (re, im) = (0.341_163_901_914_009_66, 1.161_541_399_997_252);
+    check_values(&[
+        (
+            "Solve[Plus[1, x, Power[x, 3]], x]",
+            &[(-0.682_327_803_828_019_3, 0.0)],
+        ),
+        (
+            "CSolve[Plus[1, x, Power[x, 3]], x]",
+            &[(-0.682_327_803_828_019_3, 0.0), (re, im), (re, -im)],
+        ),
+        (
+            "Solve[Plus[1, Times[-3, x], Power[x, 3]], x]",
+            &[
+                (-1.879_385_241_571_816_8, 0.0),
+                (0.347_296_355_333_860_7, 0.0),
+                (1.532_088_886_237_956, 0.0),
+            ],
+        ),
+        // 2x^3-3x^2-1, shifted.
+        (
+            "Solve[Plus[-1, Times[-3, Power[x, 2]], Times[2, Power[x, 3]]], x]",
+            &[(1.677_650_698_804_06, 0.0)],
+        ),
+        // x^4+4x-1: the resolvent m^3+m-2 has the root 1.
+        (
+            "Solve[Plus[-1, Times[4, x], Power[x, 4]], x]",
+            &[
+                (-1.663_251_938_771_469_4, 0.0),
+                (0.249_038_376_398_374_33, 0.0),
+            ],
+        ),
+        (
+            "CSolve[Plus[-1, Times[4, x], Power[x, 4]], x]",
+            &[
+                (-1.663_251_938_771_469_4, 0.0),
+                (0.249_038_376_398_374_33, 0.0),
+                (0.707_106_781_186_547_5, 1.383_551_069_665_697_3),
+                (0.707_106_781_186_547_5, -1.383_551_069_665_697_3),
+            ],
+        ),
+    ]);
+    // Cardano's real root is in radicals, not a ball.
+    let found = Context::new()
+        .eval(&read("Solve[Plus[1, x, Power[x, 3]], x]"))
+        .unwrap();
+    assert!(!found.args()[0].is_number(), "{found:?}");
+}
+
+/// Numeric roots of higher degrees (CAS-211), balls at the working
+/// precision.
+#[test]
+fn numeric_roots() {
+    let (a, b) = (-0.764_884_433_600_584_7, 0.352_471_546_031_726_25);
+    let (c, d) = (0.181_232_444_469_875_38, 1.083_954_101_317_710_7);
+    check_values(&[
+        (
+            "Solve[Plus[-1, Times[-1, x], Power[x, 5]], x]",
+            &[(1.167_303_978_261_418_7, 0.0)],
+        ),
+        (
+            "CSolve[Plus[-1, Times[-1, x], Power[x, 5]], x]",
+            &[
+                (1.167_303_978_261_418_7, 0.0),
+                (a, b),
+                (a, -b),
+                (c, d),
+                (c, -d),
+            ],
+        ),
+        (
+            "Solve[Plus[1, Times[-5, x], Power[x, 5]], x]",
+            &[
+                (-1.541_651_684_104_525, 0.0),
+                (0.200_064_102_629_975_4, 0.0),
+                (1.440_500_397_341_56, 0.0),
+            ],
+        ),
+    ]);
+    let found = Context::new()
+        .eval(&read("Solve[Plus[-1, Times[-1, x], Power[x, 5]], x]"))
+        .unwrap();
+    assert!(
+        matches!(found.args()[0].view(), crate::View::Ball(_)),
+        "{found:?}"
     );
 }

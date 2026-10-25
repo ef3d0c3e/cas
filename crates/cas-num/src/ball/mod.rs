@@ -24,6 +24,8 @@
 //!   for `FullForm` ([`Float::to_hex`], [`Mag::to_hex`]) (§6).
 //! - [`MachineBall`]: `f64` midpoint and radius with proven bounds, the fast
 //!   path up to 53 bits; `None` sends the caller back to [`Ball`] (§5.4).
+//! - [`polynomial_roots`]: the roots of a square-free polynomial with exact
+//!   coefficients, each in a validated ball (CAS-211).
 //!
 //! The algorithms, the tricks on top of them and their sources are
 //! documented in this crate's `doc/algorithms/`, after GMP's "Algorithms"
@@ -42,6 +44,7 @@ mod huge_tests;
 mod machine;
 mod mag;
 mod real;
+mod roots;
 
 pub use complex::ComplexBall;
 pub use consts::clear_constant_cache;
@@ -50,3 +53,4 @@ pub use float::{APPROX_ULPS, EXACT_BITS_MAX, Float, Round};
 pub use machine::MachineBall;
 pub use mag::Mag;
 pub use real::{Ball, RealBalls};
+pub use roots::polynomial_roots;

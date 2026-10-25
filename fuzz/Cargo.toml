@@ -178,3 +178,10 @@ path = "fuzz_targets/poly_integrate.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "poly_roots"
+path = "fuzz_targets/poly_roots.rs"
+test = false
+doc = false
+bench = false

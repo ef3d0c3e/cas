@@ -14,8 +14,14 @@
 //! - Degree 1: `−c₀/c₁`. Degree 2: `−b/(2a) ± (s/(2a)) √(Δ/s²)` for
 //!   `Δ = b² − 4ac` and `s²` the square part of its content, so that
 //!   `x² + y² − 1` gives `±√(1 − y²)`; the square root of a complex number
-//!   is exact when its norm is a square (`√(−4i)` is `√2 − √2 i`). A higher
-//!   degree leaves the call, with a warning (CAS-211).
+//!   is exact when its norm is a square (`√(−4i)` is `√2 − √2 i`).
+//! - Higher degrees (CAS-211): binomials `a xⁿ + b` in radicals, parameters
+//!   allowed; over ℚ, quadratics in `xᵐ`, cubics and quartics in radicals
+//!   where `radicals` finds them; the rest numerically, each root a ball
+//!   validated to hold it alone (`cas_num`'s `polynomial_roots`), at the
+//!   working precision, as giac's `solve(x^5-x-1,x)` is `[1.16730397826]`.
+//!   A factor of a higher degree with parameters, or past
+//!   [`MAX_NUMERIC_DEGREE`], leaves the call, with a warning.
 //! - `Solve` in the Real domain keeps the real roots. With real
 //!   coefficients, a quadratic whose `Δ` the assumptions make negative or
 //!   not positive, or its ball negative, has none: giac's
@@ -41,9 +47,9 @@
 use std::cmp::Ordering;
 
 use cas_num::algebra::{GaussianIntegers, Integers, Ring};
-use cas_num::ball::Float;
+use cas_num::ball::{ComplexBall, Float, polynomial_roots};
 use cas_num::{Complex, Integer, Rational};
-use cas_poly::{Sparse, SparseRing};
+use cas_poly::{Cancel, Cancelled, Sparse, SparseRing};
 
 use super::approximation;
 use super::polynomial::{Dense, Factoring, convert, factored, root_part, within_dense};
@@ -59,6 +65,14 @@ type Native = Result<Option<Expr>, EvalError>;
 
 /// The bits of the balls that order numeric roots and tell signs.
 const BITS: u64 = 128;
+
+/// The highest degree whose roots are sought numerically: each round of
+/// the iteration takes the square of the degree in products.
+const MAX_NUMERIC_DEGREE: u64 = 64;
+
+/// The bits numeric roots are sought with at most, for the default working
+/// precision: 16 times the working precision for a higher one.
+const MAX_ROOT_BITS: u64 = 2048;
 
 /// `Solve[eqn, x]`, Xcas's `solve`: the real solutions in the Real domain.
 pub(super) fn solve(ev: &mut Eval<'_>, e: &Expr) -> Native {
@@ -181,7 +195,7 @@ fn roots(
 
 /// The roots of the factors of `num / den` that hold the unknown and are
 /// not the denominator's, evaluated, in the factors' order; `None` after a
-/// warning when one is of degree 3 or more, or factoring stopped.
+/// warning when one's are not found, or factoring stopped.
 fn factor_roots<R: Factoring>(
     ev: &mut Eval<'_>,
     e: &Expr,
@@ -208,17 +222,178 @@ fn factor_roots<R: Factoring>(
                 roots.push(ev.eval(&root)?);
             }
             2 => roots.extend(quadratic_roots(ev, u, ring, f)?),
-            d => {
-                let factor = ev.eval(&u.p.polynomial_expr(f))?;
-                ev.warn(Warning::Native {
-                    message: format!("the roots of a factor of degree {d} are not found").into(),
-                    expr: factor,
-                });
-                return Ok(None);
-            }
+            d => match higher_roots(ev, u, ring, f, d)? {
+                Some(found) => roots.extend(found),
+                None => return Ok(None),
+            },
         }
     }
     Ok(Some(roots))
+}
+
+/// Gives the warning that the roots of the factor `f` are not found, and
+/// why.
+fn not_found<R: Factoring>(
+    ev: &mut Eval<'_>,
+    u: &Unknown<'_>,
+    f: &Sparse<R::Elem>,
+    why: String,
+) -> Result<(), EvalError> {
+    let factor = ev.eval(&u.p.polynomial_expr(f))?;
+    ev.warn(Warning::Native {
+        message: why.into(),
+        expr: factor,
+    });
+    Ok(())
+}
+
+/// Each of `exprs`, evaluated.
+fn evaluated(ev: &mut Eval<'_>, exprs: Vec<Expr>) -> Result<Vec<Expr>, EvalError> {
+    exprs.into_iter().map(|e| ev.eval(&e)).collect()
+}
+
+/// The roots of the irreducible `f` of degree `d ≥ 3` in the unknown
+/// (CAS-DOC-11 §2.4, §3): a binomial in radicals; over ℚ a quadratic in
+/// `xᵐ`, a cubic, or a quartic with a rational resolvent root in radicals
+/// ([`radicals`]); otherwise numerically ([`numeric_roots`]). `None` after
+/// a warning for another factor with parameters, or numeric roots not
+/// found.
+fn higher_roots<R: Factoring>(
+    ev: &mut Eval<'_>,
+    u: &Unknown<'_>,
+    ring: &SparseRing<R>,
+    f: &Sparse<R::Elem>,
+    d: u64,
+) -> Result<Option<Vec<Expr>>, EvalError> {
+    let real = u.real && R::REAL;
+    if ring.to_recursive(f, u.k).len() == 2 {
+        // a xᵈ + b: xᵈ = −b/a.
+        let [b, a] = [0, d].map(|j| u.p.polynomial_expr(&ring.coeff(f, u.k, j)));
+        let c = ev.eval(&Expr::call(Symbol::TIMES, [Expr::from(-1), b, a.pow(-1)]))?;
+        let sign = if R::REAL { real_sign(ev, &c)? } else { None };
+        return evaluated(ev, radicals::binomial(&c, d, sign, real)).map(Some);
+    }
+    if f.degrees()
+        .iter()
+        .enumerate()
+        .any(|(j, &e)| j != u.k && e > 0)
+    {
+        not_found::<R>(
+            ev,
+            u,
+            f,
+            format!("the roots of a factor of degree {d} with parameters are not found"),
+        )?;
+        return Ok(None);
+    }
+    let dense = ring.to_dense(f, u.k).expect("a polynomial in the unknown");
+    let coeffs: Vec<Complex> = dense.coeffs().iter().map(R::complex).collect();
+    if R::REAL {
+        let rationals: Vec<Rational> = coeffs.iter().map(|c| c.re().clone()).collect();
+        let cancel: &dyn Cancel = ev.context().interrupt_flag();
+        let exact =
+            in_radicals(&rationals, real, cancel).map_err(|Cancelled| EvalError::Interrupted)?;
+        if let Some(exact) = exact {
+            return evaluated(ev, exact).map(Some);
+        }
+    }
+    let found = numeric_roots(ev, &coeffs, real);
+    if found.is_none() {
+        let why = if d > MAX_NUMERIC_DEGREE {
+            format!(
+                "the roots of a factor of degree {d} are not sought numerically past degree {MAX_NUMERIC_DEGREE}"
+            )
+        } else {
+            format!("the roots of a factor of degree {d} are not told apart")
+        };
+        not_found::<R>(ev, u, f, why)?;
+    }
+    Ok(found)
+}
+
+/// The sign of `c`, evaluated, when it is known real: by the assumptions,
+/// or by its ball for a number.
+fn real_sign(ev: &mut Eval<'_>, c: &Expr) -> Result<Option<Ordering>, EvalError> {
+    Ok(match sign_of(ev.context(), c) {
+        Sign::Positive => Some(Ordering::Greater),
+        Sign::Negative => Some(Ordering::Less),
+        Sign::Zero => Some(Ordering::Equal),
+        _ => match approximation(ev.context(), c, BITS)?.view() {
+            View::Ball(b) => b.sign(),
+            _ => None,
+        },
+    })
+}
+
+/// The roots in radicals of the irreducible `Σ cₖ xᵏ` over ℚ of degree 3
+/// or more, the real ones when `real`, where [`radicals`] has them: a
+/// quadratic in `xᵐ`, a cubic, or a quartic with a rational root of its
+/// resolvent.
+fn in_radicals(
+    c: &[Rational],
+    real: bool,
+    cancel: &dyn Cancel,
+) -> Result<Option<Vec<Expr>>, Cancelled> {
+    let d = c.len() - 1;
+    // The gcd of the exponents of the terms.
+    let m = (1..=d).filter(|&k| !c[k].is_zero()).fold(0, num_gcd);
+    if m >= 2 && d == 2 * m {
+        let power = u64::try_from(m).expect("a degree in memory");
+        return Ok(Some(radicals::quadratic_in_power(
+            [&c[0], &c[m], &c[d]],
+            power,
+            real,
+            &Rational::ZERO,
+        )));
+    }
+    match c {
+        [d0, d1, d2, d3] => Ok(Some(radicals::cubic([d0, d1, d2, d3], real))),
+        [e0, e1, e2, e3, e4] => radicals::quartic([e0, e1, e2, e3, e4], real, cancel),
+        _ => Ok(None),
+    }
+}
+
+/// The gcd of two exponents.
+fn num_gcd(a: usize, b: usize) -> usize {
+    if b == 0 { a } else { num_gcd(b, a % b) }
+}
+
+/// The roots of the square-free `Σ cₖ xᵏ`, numerically: balls at the
+/// working precision, each validated to hold one root; the real ones when
+/// `real`, with real coefficients. `None` past [`MAX_NUMERIC_DEGREE`], or
+/// when they are not validated within `Limits::number_bits`, or
+/// [`MAX_ROOT_BITS`] at the default working precision.
+fn numeric_roots(ev: &Eval<'_>, coeffs: &[Complex], real: bool) -> Option<Vec<Expr>> {
+    let degree = u64::try_from(coeffs.len() - 1).ok()?;
+    if degree > MAX_NUMERIC_DEGREE {
+        return None;
+    }
+    let ctx = ev.context();
+    let bits = ctx.working_precision();
+    // Clusters of roots need more bits; past a few thousand each round
+    // costs more than it is likely to tell.
+    let max_bits = ctx
+        .limits()
+        .number_bits
+        .min(bits.saturating_mul(16).max(MAX_ROOT_BITS))
+        .max(bits);
+    let roots = polynomial_roots(coeffs, bits, max_bits)?;
+    Some(
+        roots
+            .into_iter()
+            .filter(|z| !real || z.is_real())
+            .map(|z| {
+                if z.is_real() {
+                    Expr::from(z.re().round_to_accuracy(bits))
+                } else {
+                    Expr::from(ComplexBall::new(
+                        z.re().round_to_accuracy(bits),
+                        z.im().round_to_accuracy(bits),
+                    ))
+                }
+            })
+            .collect(),
+    )
 }
 
 /// `f` times the unit that puts the first coefficient of its leading
@@ -406,5 +581,6 @@ fn numeric_order((a_re, a_im): &(Float, Float), (b_re, b_im): &(Float, Float)) -
     }
 }
 
+mod radicals;
 #[cfg(test)]
 mod tests;

@@ -60,7 +60,13 @@ fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
 /// giac's answer to `input` and this CAS's: lists of the same solutions,
 /// in any order.
 fn agrees(giac: &Giac, input: &str) -> Result<(), String> {
-    let theirs = giac.value(input).map_err(|e| e.to_string())?;
+    agrees_with(giac, input, input)
+}
+
+/// giac's answer to `asked`, as `evalf(…)` where it writes `rootof`, and
+/// this CAS's to `input`: lists of the same solutions, in any order.
+fn agrees_with(giac: &Giac, asked: &str, input: &str) -> Result<(), String> {
+    let theirs = giac.value(asked).map_err(|e| e.to_string())?;
     let ours = ours(input).map_err(|e| e.to_string())?;
     let differs = || format!("{input}: ours {ours:?}, giac's {theirs:?}");
     let list = Expr::from(Symbol::LIST);
@@ -148,6 +154,43 @@ fn coefficients() {
         "csolve((x-2)*(x^2+1)*(x+3),x)",
         "solve(x^2-2.0,x)",
     ]);
+}
+
+/// Cubics, quartics and higher degrees (CAS-211): radicals where giac has
+/// them, its `rootof` by value, numeric roots against its numbers.
+#[test]
+fn higher_degrees() {
+    check(&[
+        "solve(x^3-2,x)",
+        "csolve(x^3-2,x)",
+        "solve(x^4-2,x)",
+        "csolve(x^4-2,x)",
+        "csolve(x^4+1,x)",
+        "solve(x^4-10*x^2+1,x)",
+        "solve(x^6-3*x^3+1,x)",
+        "csolve(x^6+x^3+1,x)",
+        "solve(x^3-a,x)",
+        "solve(x^4-a,x)",
+        "solve(x^4+4*x-1,x)",
+        "csolve(x^4+4*x-1,x)",
+        "solve(x^5-x-1,x)",
+        "csolve(x^5-x-1,x)",
+        "solve(x^5-5*x+1,x)",
+    ]);
+    let Some(giac) = giac() else {
+        return;
+    };
+    let wrong: Vec<String> = [
+        "solve(x^3+x+1,x)",
+        "csolve(x^3+x+1,x)",
+        "solve(x^3-3*x+1,x)",
+        "csolve(x^3-3*x+1,x)",
+        "solve(2*x^3-3*x^2-1,x)",
+    ]
+    .iter()
+    .filter_map(|input| agrees_with(giac, &format!("evalf({input})"), input).err())
+    .collect();
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
 /// Identities and contradictions.
