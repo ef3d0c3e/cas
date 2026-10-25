@@ -6,13 +6,16 @@
 //!
 //! - what is free of `x` has derivative 0, which the Bloom filter of `f`'s
 //!   symbols tells at once (`FreeQ`), and `x` has 1;
+//! - `Integrate[f, x]`, an antiderivative that stays, has `f` (CAS-DOC-9);
 //! - lists thread, and sums are linear: `D` is mapped over all the terms
 //!   at once, not split off one at a time, which would rebuild the rest of
 //!   the sum at each;
 //! - the product rule, `D[a_ b__, x_]`, through AC matching;
 //! - powers: `f^n` with `n` free of `x`, `E^g`, and `f^g` in general;
 //! - the chain rule for `Sin`, `Cos`, `Tan`, `ArcSin`, `ArcCos`, `ArcTan`,
-//!   `Exp` and `Log`, from a table;
+//!   `Exp` and `Log`, from a table, and `Abs`, whose derivative is
+//!   `Abs[f] / f` times `f′`, giac's `abs(x)/x`, so that the logarithms of
+//!   absolute values integrals give differentiate back (CAS-DOC-9);
 //! - a function the table does not know: `Derivative[1][g][u] D[u, x]`, and
 //!   `Derivative[n + 1][g][u]` for the derivative of `Derivative[n][g][u]`;
 //! - higher derivatives, `D[f, {x, n}]` for an integer `n >= 0`, and partial
@@ -44,6 +47,12 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "Condition[0, FreeQ[c, x]]",
         ),
         d("D/variable", "Pattern[x, Blank[]]", "1"),
+        // The derivative of an antiderivative that stays (CAS-DOC-9).
+        d(
+            "D/Integrate",
+            "Integrate[Pattern[f, Blank[]], Pattern[x, Blank[]]]",
+            "f",
+        ),
         d(
             "D/list",
             "Pattern[l, Blank[List]]",
@@ -113,6 +122,12 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "D/Log",
             "Log[Pattern[f, Blank[]]]",
             "Times[Power[f, -1], D[f, x]]",
+        ),
+        // abs(f)/f times f', as giac writes it (CAS-DOC-9).
+        d(
+            "D/Abs",
+            "Abs[Pattern[f, Blank[]]]",
+            "Times[Abs[f], Power[f, -1], D[f, x]]",
         ),
         d(
             "D/derivative",

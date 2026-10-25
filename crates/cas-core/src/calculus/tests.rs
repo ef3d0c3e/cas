@@ -77,7 +77,15 @@ fn derivatives() {
             "Times[2, x, Derivative[1][f][Power[x, 2]]]",
         ),
         ("D[Derivative[1][f][x], x]", "Derivative[2][f][x]"),
-        ("D[Abs[x], x]", "Derivative[1][Abs][x]"),
+        // abs(x)/x and 2*x*abs(x^2-1)/(x^2-1), as giac's.
+        ("D[Abs[x], x]", "Times[Abs[x], Power[x, -1]]"),
+        (
+            "D[Abs[Plus[Power[x, 2], -1]], x]",
+            "Times[2, x, Abs[Plus[-1, Power[x, 2]]], Power[Plus[-1, Power[x, 2]], -1]]",
+        ),
+        ("D[Log[Abs[x]], x]", "Power[x, -1]"),
+        // An antiderivative that stays (CAS-DOC-9).
+        ("D[Integrate[f[x], x], x]", "f[x]"),
         // Higher and partial derivatives, lists.
         ("D[Power[x, 3], List[x, 0]]", "Power[x, 3]"),
         ("D[Power[x, 3], List[x, 2]]", "Times[6, x]"),
@@ -91,9 +99,12 @@ fn derivatives() {
         ("D[Power[x, 2], 2]", "D[Power[x, 2], 2]"),
         ("D[Power[x, 3], List[x, -1]]", "D[Power[x, 3], List[x, -1]]"),
     ] {
+        // The expected forms are evaluated ones; evaluating them again
+        // settles the order of the factors.
+        let expected = ctx.eval(&read(expected)).unwrap();
         match ctx.eval(&read(input)) {
-            Ok(found) if found == read(expected) => {}
-            found => wrong.push(format!("{input}: {found:?}, expected {expected}")),
+            Ok(found) if found == expected => {}
+            found => wrong.push(format!("{input}: {found:?}, expected {expected:?}")),
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));

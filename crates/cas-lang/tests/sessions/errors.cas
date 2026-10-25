@@ -11,7 +11,7 @@ w[0] := 7
 two := 2
 two(x + 1)
 sin x
-integrate(x, x)
+sum(x, x)
 f(x) := x
 f(1, 2)
 2 * * 3

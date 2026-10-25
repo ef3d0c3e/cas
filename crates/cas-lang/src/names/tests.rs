@@ -31,8 +31,9 @@ fn english_names() {
         ("assume", Target::Syntax(SyntaxForm::Assume)),
         ("purge", Target::Syntax(SyntaxForm::Purge)),
         ("diff", Target::Builtin(Symbol::D)),
-        ("int", planned("Integrate")),
-        ("integrate", planned("Integrate")),
+        ("int", Target::Builtin(Symbol::INTEGRATE)),
+        ("integrate", Target::Builtin(Symbol::INTEGRATE)),
+        ("sum", planned("Sum")),
         ("evalf", Target::Builtin(Symbol::N)),
         ("approx", Target::Builtin(Symbol::N)),
         ("asin", Target::Builtin(Symbol::ARC_SIN)),
@@ -52,7 +53,11 @@ fn english_names() {
         assert!(names.is_reserved(name));
     }
     assert_eq!(names.spelling(&Target::Builtin(Symbol::LOG)), Some("ln"));
-    assert_eq!(names.spelling(&planned("Integrate")), Some("integrate"));
+    assert_eq!(names.spelling(&planned("Sum")), Some("sum"));
+    assert_eq!(
+        names.spelling(&Target::Builtin(Symbol::INTEGRATE)),
+        Some("integrate")
+    );
     assert_eq!(
         names.spelling(&Target::Builtin(Symbol::LENGTH)),
         Some("size")

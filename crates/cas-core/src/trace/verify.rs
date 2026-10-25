@@ -24,6 +24,9 @@
 //! rational expressions are checked, and those with balls or transcendental
 //! functions, `Sin[x]^2 + Cos[x]^2` against `1`.
 //!
+//! An antiderivative, a step from `Integrate[f, x]` to `F`, claims
+//! `f = D[F, x]` instead (CAS-DOC-9 §1).
+//!
 //! A step with a [`FORMAL`] head is unchecked: such a head reads the form
 //! of its arguments, not their values, so its value at a point is not its
 //! value there (`GCD[x^2 - 1, x - 1]` is `x - 1`, `GCD[5/4, 1/2]` is
@@ -194,11 +197,29 @@ enum Range {
     Complexes,
 }
 
+/// What a step claims, as two sides that must agree: `before = after`; for
+/// an antiderivative, a step from `Integrate[f, x]` to `F`, that
+/// `f = D[F, x]`, the derivative evaluated before the points are put in
+/// (CAS-DOC-9 §1). `None` when that evaluation fails.
+fn claim(ctx: &Context, step: &Step) -> Option<(Expr, Expr)> {
+    if step.before.head() == Some(&Expr::from(Symbol::INTEGRATE))
+        && let [f, x] = step.before.args()
+        && x.as_symbol().is_some()
+    {
+        let derivative = Expr::call(Symbol::D, [step.after.clone(), x.clone()]);
+        return Some((f.clone(), ctx.eval(&derivative).ok()?));
+    }
+    Some((step.before.clone(), step.after.clone()))
+}
+
 fn check(ctx: &Context, step: &Step) -> Outcome {
-    if formal(&step.before) || formal(&step.after) {
+    let Some((before, after)) = claim(ctx, step) else {
+        return Outcome::Unchecked;
+    };
+    if formal(&before) || formal(&after) {
         return Outcome::Unchecked;
     }
-    let Some(symbols) = free_symbols(ctx, &[&step.before, &step.after]) else {
+    let Some(symbols) = free_symbols(ctx, &[&before, &after]) else {
         return Outcome::Unchecked;
     };
     let (symbols, assumptions) = with_assumptions(ctx, symbols);
@@ -228,7 +249,7 @@ fn check(ctx: &Context, step: &Step) -> Outcome {
             continue;
         }
         let at = |side: &Expr| value(ctx.eval(&side.substitute(&rules)));
-        let sides = match (at(&step.before), at(&step.after)) {
+        let sides = match (at(&before), at(&after)) {
             (Value::Failed, _) | (_, Value::Failed) => return Outcome::Unchecked,
             (Value::Other(b), Value::Other(a)) if a == b => (Value::Other(b), Value::Other(a)),
             (b, a) => (approximate(ctx, b), approximate(ctx, a)),

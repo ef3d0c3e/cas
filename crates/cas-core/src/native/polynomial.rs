@@ -42,7 +42,7 @@ type Native = Result<Option<Expr>, EvalError>;
 
 /// A coefficient ring of the conversion, ℤ or ℤ\[i\], with what the
 /// builtins need of it.
-trait Numbers: GcdDomain<Elem: Coefficient> + Default {}
+pub(super) trait Numbers: GcdDomain<Elem: Coefficient> + Default {}
 
 impl Numbers for Integers {}
 impl Numbers for GaussianIntegers {}
@@ -108,7 +108,7 @@ fn interrupted(Cancelled: Cancelled) -> EvalError {
 
 /// `args` as rational functions of their generators, or `None` after a
 /// warning: balls are generators when `balls`, else refused.
-fn convert(
+pub(super) fn convert(
     ev: &mut Eval<'_>,
     e: &Expr,
     args: &[Expr],
