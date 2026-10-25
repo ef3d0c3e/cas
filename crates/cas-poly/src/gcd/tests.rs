@@ -248,12 +248,13 @@ proptest! {
             if let Some(x) = check_gcd(&fp, &f, &g, &h, GcdMethod::Modular)? {
                 prop_assert_eq!(Some(x), reference.clone());
             }
-            // Zippel's algorithm takes the fields of at least 2^31 elements.
+            // Zippel's algorithm takes the fields of at least 2^31 elements;
+            // gcds with 0 come before any method.
             let zippel = check_gcd(&fp, &f, &g, &h, GcdMethod::Zippel)?;
             if p > 1 << 31 {
                 prop_assert_eq!(zippel, reference.clone());
-            } else {
-                prop_assert_eq!(zippel, None);
+            } else if let Some(x) = zippel {
+                prop_assert_eq!(Some(x), reference.clone());
             }
             prop_assert_eq!(Some(fp.gcd(&fp.mul(&f, &g), &fp.mul(&f, &h))), reference);
         }
@@ -742,6 +743,16 @@ fn zippel_over_a_prime_field() {
         .unwrap()
         .unwrap();
     assert_eq!(d, f);
+    // A field below 2^31 elements is declined.
+    let small = SparseRing::new(WordPrimeField::new(65_537).unwrap(), 3);
+    let image = |p: &Sparse<u64>| {
+        ring.map_into(p, &small, |&c| small.base().elem_integer(&Integer::from(c)))
+    };
+    let (a, b) = (image(&a), image(&b));
+    assert_eq!(
+        small.gcd_by(&a, &b, GcdMethod::Zippel, &Never).unwrap(),
+        None
+    );
 }
 
 /// giac's answers where they follow from the normal forms (CAS-DOC-8 §15,
