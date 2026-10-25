@@ -14,7 +14,9 @@
 //!
 //! A leading coefficient that is a number `N` cannot tell from 0 stays the
 //! call, with a warning: a 0 that evaluation does not see would give a
-//! wrong limit (§6).
+//! wrong limit (§6). Where `f` has no series, as `exp(x)/x^10` at infinity,
+//! Gruntz's algorithm takes the limit at `+∞` of `f(a ± 1/x)` or `f(±x)`
+//! (CAS-206, `gruntz`).
 //!
 //! The forms: `Limit[f, x, a]`, `Limit[f, x, a, dir]` (giac's
 //! `limit(f, x, a, dir)`), `Limit[f, x == a]` and `Limit[f, x == a, dir]`
@@ -37,6 +39,7 @@ use crate::eval::Eval;
 use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
+use gruntz::Gruntz;
 
 type Native = Result<Option<Expr>, EvalError>;
 
@@ -119,7 +122,21 @@ pub(crate) fn limit(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let infinite = matches!(point, Point::Infinity { .. });
     let side = |ev: &mut Eval<'_>, left: bool| -> Result<Result<Value, Failure>, EvalError> {
         let local = ev.eval(&f.substitute(&[(x.clone(), point.variable(&t, left))]))?;
-        one_side(ev, &local, &t, 0)
+        match one_side(ev, &local, &t, 0)? {
+            // No series: Gruntz's algorithm at +∞, x = a ± 1/x or ±x.
+            Err(Failure::Unknown) => {
+                let far = match &point {
+                    Point::At(a) if left => a.clone() - x.pow(-1),
+                    Point::At(a) => a.clone() + x.pow(-1),
+                    Point::Infinity { negative: true } => -x.clone(),
+                    Point::Infinity { negative: false } => x.clone(),
+                };
+                let g = ev.eval(&f.substitute(&[(x.clone(), far)]))?;
+                let mut gruntz = Gruntz::new(ev, x.clone());
+                Ok(gruntz.limit(&g, 0)?.ok_or(Failure::Unknown))
+            }
+            other => Ok(other),
+        }
     };
     let value = if infinite || dir == 1 {
         side(ev, false)?
@@ -288,5 +305,6 @@ fn fresh_logarithm() -> Expr {
     Expr::from(Symbol::new("Limit$s"))
 }
 
+mod gruntz;
 #[cfg(test)]
 mod tests;

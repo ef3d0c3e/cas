@@ -50,3 +50,18 @@ fn limits_by_series() {
         "limit(ln(ln(x))/ln(x),x=inf)",
     ]);
 }
+
+/// The limits of CAS-206, by Gruntz's algorithm.
+#[test]
+fn limits_by_gruntz() {
+    check(&[
+        "limit(exp(x)/x^10,x=inf)",
+        "limit(x^10*exp(-x),x=inf)",
+        "limit(exp(x)*x,x=-inf)",
+        "limit(exp(x)/exp(2*x),x=inf)",
+        "limit(exp(1/x),x=0,1)",
+        "limit(exp(1/x),x=0,-1)",
+        "limit(x/exp(sqrt(x)),x=inf)",
+        "limit(exp(x+exp(-x))-exp(x),x=inf)",
+    ]);
+}

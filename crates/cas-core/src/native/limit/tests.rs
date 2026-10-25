@@ -88,13 +88,47 @@ fn limits_by_series() {
     ]);
 }
 
-/// What stays: an essential singularity (Gruntz's, CAS-206), giac's
-/// `bounded_function(1)`, sides that differ, a variable that is no symbol.
+/// Gruntz's algorithm where series have an essential singularity
+/// (CAS-206): giac's exp(x)/x^10, x*exp(x) at -inf, exp(x)/exp(2x), and
+/// the classic exp(x+exp(-x))-exp(x), whose class holds three
+/// exponentials, one inside another.
+#[test]
+fn limits_by_gruntz() {
+    check(&[
+        (
+            "Limit[Times[Exp[x], Power[x, -10]], x, Infinity]",
+            "Infinity",
+        ),
+        (
+            "Limit[Times[Power[x, 10], Exp[Times[-1, x]]], x, Infinity]",
+            "0",
+        ),
+        ("Limit[Times[x, Exp[x]], x, Times[-1, Infinity]]", "0"),
+        (
+            "Limit[Times[Exp[x], Power[Exp[Times[2, x]], -1]], x, Infinity]",
+            "0",
+        ),
+        ("Limit[Exp[Power[x, -1]], x, 0, 1]", "Infinity"),
+        ("Limit[Exp[Power[x, -1]], x, 0, -1]", "0"),
+        ("Limit[Exp[Times[-1, Power[x, -1]]], x, 0, 1]", "0"),
+        (
+            "Limit[Times[x, Power[Exp[Power[x, 1/2]], -1]], x, Infinity]",
+            "0",
+        ),
+        (
+            "Limit[Plus[Exp[Plus[x, Exp[Times[-1, x]]]], Times[-1, Exp[x]]], x, Infinity]",
+            "1",
+        ),
+    ]);
+}
+
+/// What stays: giac's `bounded_function(1)`, sides that differ, a variable
+/// that is no symbol.
 #[test]
 fn limits_that_stay() {
     let ctx = Context::new();
     for input in [
-        "Limit[Times[Exp[x], Power[x, -10]], x, Infinity]",
+        "Limit[Exp[Power[x, -1]], x, 0]",
         "Limit[Sin[Power[x, -1]], x, 0]",
         "Limit[Times[x, Power[Abs[x], -1]], x, 0]",
         "Limit[f[x], x, 0]",
