@@ -20,17 +20,6 @@ pub(crate) const DEFAULT_RHO_ITERATIONS: u64 = 1 << 22;
 /// Products of this many rho differences share one GCD (Brent).
 const RHO_BATCH: u64 = 128;
 
-/// Counts how often a batch overshoots and is replayed step by step, so
-/// tests can check that their inputs reach the replay.
-#[cfg(test)]
-pub(crate) mod hits {
-    use std::cell::Cell;
-
-    thread_local! {
-        pub(crate) static BACKTRACK: Cell<u64> = const { Cell::new(0) };
-    }
-}
-
 /// A factorisation `n = ∏ base_i^exponent_i`, sorted by increasing base.
 ///
 /// Every base is labelled: [`Primality::Prime`] (proven),
@@ -325,4 +314,18 @@ fn rho_in<R: RhoRing>(ring: &R, n: &Natural, effort: u64) -> Option<Natural> {
         }
     }
     unreachable!("the loop over c only ends by returning")
+}
+
+/// Counts how often a batch overshoots and is replayed step by step, so
+/// tests can check that their inputs reach the replay.
+///
+/// Last in the file: clippy's `items_after_test_module` takes an inline
+/// `#[cfg(test)]` module for the tests (CAS-174).
+#[cfg(test)]
+pub(crate) mod hits {
+    use std::cell::Cell;
+
+    thread_local! {
+        pub(crate) static BACKTRACK: Cell<u64> = const { Cell::new(0) };
+    }
 }
