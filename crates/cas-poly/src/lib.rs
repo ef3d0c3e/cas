@@ -22,6 +22,10 @@
 //!   discriminants (ℤ, ℚ, ℤ\[i\], ℚ(i), the prime fields), each choosing
 //!   among the heuristic gcd, Brown's modular algorithm and subresultants,
 //!   the [`GcdMethod`]s.
+//! - [`Factors`]: a polynomial as a constant times powers of polynomials,
+//!   the result of the square-free decomposition over the
+//!   [`CharacteristicZero`] domains ℤ, ℚ, ℤ\[i\] and ℚ(i), dense and sparse
+//!   (`squarefree`).
 //! - [`Cancel`]: what long computations poll to stop early, with the
 //!   never-cancelled default [`Never`].
 //!
@@ -52,12 +56,14 @@
 
 mod cancel;
 mod dense;
+mod factor;
 mod gcd;
 mod shared;
 mod sparse;
 
 pub use cancel::{Cancel, Cancelled, Never};
 pub use dense::{Coefficients, Dense, DenseRing};
+pub use factor::{CharacteristicZero, Factors};
 pub use gcd::{Cofactors, GcdDomain, GcdMethod};
 pub use shared::{
     GaussianRationalPoly, GaussianRationalPolys, Numerators, RationalPoly, RationalPolys, Shared,

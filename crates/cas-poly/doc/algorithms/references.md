@@ -83,6 +83,10 @@ algorithm here is taken from, or is compared with, are listed.
   3–15, doi:10.1007/3-540-11607-9_1. The reduction of products in ℤ\[x\] to
   products in ℤ, by evaluation at a power of 2 ("binary segmentation"), as
   [Har09] credits it.
+- <a id="yun76"></a>**[Yun76]** David Y. Y. Yun, "On square-free
+  decomposition algorithms", in *Proceedings of the Third ACM Symposium on
+  Symbolic and Algebraic Computation (SYMSAC '76)*, ACM, 1976, 26–35. The
+  decomposition from one gcd with cofactors a round: `gcd(bₖ, cₖ − bₖ′)`.
 
 ## Libraries
 
