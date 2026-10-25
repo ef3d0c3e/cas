@@ -54,6 +54,14 @@ algorithm here is taken from, or is compared with, are listed.
   algorithm for factoring polynomials over finite fields", *Mathematics of
   Computation* 36 (154) (1981), 587–592. Equal-degree splitting by
   `gcd(a^((qᵈ − 1)/2) − 1, g)` for a random `a`.
+- <a id="dkmw05"></a>**[DKMW05]** Jennifer de Kleine, Michael Monagan and
+  Allan Wittkopf, "Algorithms for the non-monic case of the sparse modular
+  GCD algorithm", in *Proceedings of the 2005 International Symposium on
+  Symbolic and Algebraic Computation (ISSAC '05)*, ACM, 2005, 124–131.
+  LINZIP: Zippel's algorithm with the scales of the univariate images as
+  unknowns when no coefficient of the gcd in the main variable is a
+  monomial ("multiple scaling"), the form of the gcd from a first image,
+  and the bad, unlucky and missing-term cases, unlucky contents among them.
 - <a id="fat03"></a>**[Fat03]** Richard Fateman, "Comparing the speed of
   programs for sparse polynomial multiplication", *ACM SIGSAM Bulletin* 37
   (1) (2003), 4–15, doi:10.1145/844076.844080. The benchmark `f (f + 1)` for
@@ -139,6 +147,15 @@ algorithm here is taken from, or is compared with, are listed.
 - <a id="zas69"></a>**[Zas69]** Hans Zassenhaus, "On Hensel factorization,
   I", *Journal of Number Theory* 1 (3) (1969), 291–311. Factoring over ℤ by
   lifting the factors modulo a prime and recombining them.
+- <a id="zip79"></a>**[Zip79]** Richard Zippel, "Probabilistic algorithms
+  for sparse polynomials", in *Symbolic and Algebraic Computation (EUROSAM
+  '79)*, Lecture Notes in Computer Science 72, Springer, 1979, 216–226. The
+  sparse modular gcd: the form of the gcd from one image, the next images
+  by solving for its coefficients.
+- <a id="zip90"></a>**[Zip90]** Richard Zippel, "Interpolating polynomials
+  from their values", *Journal of Symbolic Computation* 9 (1990), 375–403.
+  Sparse interpolation one variable at a time, at the powers of a point, so
+  that each system is a transposed Vandermonde system, solved in `O(t²)`.
 
 ## Libraries
 

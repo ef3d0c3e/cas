@@ -20,6 +20,7 @@ mod heuristic;
 mod modular;
 mod resultant;
 mod subres;
+mod vandermonde;
 
 #[cfg(test)]
 mod tests;
