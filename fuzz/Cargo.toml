@@ -14,6 +14,7 @@ arbitrary = "1.4.1"
 cas-core = { path = "../crates/cas-core" }
 cas-lang = { path = "../crates/cas-lang" }
 cas-num = { path = "../crates/cas-num" }
+cas-poly = { path = "../crates/cas-poly" }
 libfuzzer-sys = "0.4.13"
 rug = { version = "1.30.0", default-features = false, features = ["complex", "float", "integer", "rational", "std"] }
 
@@ -146,6 +147,13 @@ bench = false
 [[bin]]
 name = "eval"
 path = "fuzz_targets/eval.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "poly_factor"
+path = "fuzz_targets/poly_factor.rs"
 test = false
 doc = false
 bench = false

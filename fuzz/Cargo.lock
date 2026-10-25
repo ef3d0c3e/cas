@@ -48,6 +48,7 @@ dependencies = [
  "cas-core",
  "cas-lang",
  "cas-num",
+ "cas-poly",
  "libfuzzer-sys",
  "rug",
 ]

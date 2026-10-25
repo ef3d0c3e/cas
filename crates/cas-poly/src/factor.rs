@@ -1,11 +1,13 @@
 //! Factoring (CAS-DOC-8 §4, CAS-142, planned in CAS-PLAN-1): the
-//! square-free decomposition, the factors of square-free polynomials over
-//! word-size prime fields, and their Hensel lifts to prime powers.
+//! square-free decomposition; univariate factoring over ℤ and ℚ by
+//! Zassenhaus's algorithm, from the factors of square-free polynomials over
+//! word-size prime fields and their Hensel lifts to prime powers.
 //! `doc/algorithms/factor.md` describes the algorithms.
 
 mod finite;
 mod hensel;
 mod squarefree;
+mod zassenhaus;
 
 #[cfg(test)]
 mod tests;

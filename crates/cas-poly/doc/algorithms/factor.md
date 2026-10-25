@@ -125,6 +125,58 @@ computes the same modulo `m′`, for `m | m′ | m²`:
 it, as FLINT does. Each step computes in `ℤ/pᵉℤ` (cas-num's `ModRing`, in
 Montgomery form). Products there use Karatsuba's method.
 
+## Univariate factoring over ℤ and ℚ (CAS-182)
+
+`DenseRing<Integers>::factor` writes `p = c f₁^e₁ ⋯ fₖ^eₖ` with the `fᵢ`
+distinct and irreducible over ℤ, primitive, with positive leading
+coefficients. They are sorted by degree, then by coefficients from the
+constant term up, then by exponent: giac's `factor(x⁶ − 1)` comes out as
+`(x − 1)(x + 1)(x² − x + 1)(x² + x + 1)`. Over ℚ (`DenseRing<Rationals>`) the
+factors are those of the numerator over ℤ, made monic, and `c` is the
+leading coefficient.
+
+The square-free decomposition (CAS-179) gives the exponents. Each part is
+then factored by Zassenhaus's algorithm [Zas69; vzGG13 §15.6]:
+
+1. **`x` first.** A factor `x` occurs at most once in a square-free part. It
+   is split off, so that `f(0) ≠ 0` for the constant-term test below.
+2. **The prime.** Odd primes from 3 up are tried. A prime is good when it does
+   not divide `lc(f)` and keeps `f` square-free. For each of the first three
+   good primes, the distinct-degree factorisation (CAS-180) gives the number
+   of local factors and their degrees. The subset sums of those degrees are
+   the degrees a factor over ℤ can have, and the sets of all three primes are
+   intersected. One local factor, or no allowed degree strictly between 0 and
+   `deg f`, proves `f` irreducible on the spot. Otherwise the prime with the
+   fewest local factors is used, and its products by degree are split by
+   Cantor and Zassenhaus's method.
+3. **The bound.** Let `g` be a factor of `f` of degree below `n = deg f`. By
+   Mignotte's bound [Mig74] the coefficients of `lc(f)/lc(g) · g` are at most
+   `B = 2^(n−1) ‖f‖₂`. The local factors are lifted (CAS-181) to the least
+   `pᵏ > 2B`. `lc(f)/lc(g) · g` is then the symmetric residue of `lc(f) ∏ Gᵢ`
+   for the lifts `Gᵢ` of its local factors. After factors are divided out,
+   what is left has a leading coefficient dividing `lc(f)`, so the bound
+   still holds.
+4. **Recombination.** Subsets of the lifts are tried by increasing size `s`.
+   - Each subset's degree must be an allowed one.
+   - The constant-term test: `lc(f) ∏ Gᵢ(0)` modulo `pᵏ` must divide
+     `lc(f) f(0)`, since a true factor's constant term does. This test costs
+     `s` products of integers.
+   - A candidate that passes both is the primitive part of `lc(f) ∏ Gᵢ`,
+     reduced symmetrically modulo `pᵏ`. It is kept when it divides `f`. Then
+     `f` becomes the quotient, the subset's lifts are removed, and the search
+     goes on at the same size.
+   - At `s = r/2` a subset and its complement give the same split, so only
+     the subsets with the first lift are tried.
+   - Once no subset of at most half the lifts left gives a factor, none does,
+     and what is left of `f` is irreducible.
+
+The recombination is exponential in the number of local factors in the worst
+case. Swinnerton-Dyer polynomials are that case. For `n` square roots their
+Galois group is `(ℤ/2)ⁿ`, so modulo every prime they have at least `2ⁿ⁻¹`
+local factors, of degree 1 or 2, and only one true factor. The one of degree
+16, from √2, √3, √5 and √7, takes 127 subsets with 8 local factors. van
+Hoeij's method is CAS-188. `factor_with` polls `Cancel` before each subset.
+
 ## Tests
 
 `src/factor/tests/` has one module a step.
@@ -174,3 +226,21 @@ Hensel lifting (`hensel.rs`):
   the local factors, multiplied together, lift as well.
 - **An example.** `x² + 1 ≡ (x − 2)(x + 2) (mod 5)` lifts to `(x − a)(x + a)`
   with `a² ≡ −1` and `a ≡ 2`: a 5-adic square root of −1, up to `5²⁰`.
+
+Univariate factoring (`zassenhaus.rs`):
+
+- **Checks of every result.** The factorisation multiplies back. Its factors
+  are sorted, distinct, primitive and positive, and each factors as itself.
+- **Random products.** Products of powers of up to three random polynomials.
+  Their factorisation is the union of the parts': the factors with their
+  exponents summed, and the product of the constants. Over ℚ the factors are
+  the monic associates, and the constant is the leading coefficient.
+- **Known irreducibles.** Products of distinct Eisenstein polynomials factor
+  into exactly them. `xⁿ − 1` for `n ≤ 30` is the product of the cyclotomic
+  `Φ_d`, computed by division, for `d | n`. The Swinnerton-Dyer polynomials of
+  degrees 4, 8 and 16, `x⁴ + 1` and `x² − 2` are irreducible.
+- **Examples.** giac's answers, Sophie Germain's `x⁴ + 4`, coefficients of
+  hundreds of bits, twelve linear factors, and cancellation.
+
+The fuzz target `poly_factor` checks the same properties on products of
+random polynomials, with coefficients of up to three limbs.

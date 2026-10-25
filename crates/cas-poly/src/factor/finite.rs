@@ -7,13 +7,6 @@
     clippy::many_single_char_names,
     reason = "the names of the algorithms: f = ∏ g, h = x^(p^d), a and b for splitting"
 )]
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "Zassenhaus's algorithm (CAS-182) is the first caller"
-    )
-)]
 
 use cas_num::Natural;
 use cas_num::algebra::{Ring, WordPrimeField};
@@ -171,23 +164,23 @@ pub(crate) fn equal_degree(
 /// The seed of the splitting polynomials.
 const SEED: u64 = 0x4341_5331_3830;
 
-/// The monic irreducible factors of monic, square-free `f` over a word-size
-/// prime field of odd characteristic, in increasing order of degree, then
-/// of coefficients from the constant term up, so that the result does not
-/// depend on the random choices.
+/// The irreducible factors of the products of a distinct-degree
+/// factorisation, in increasing order of degree, then of coefficients from
+/// the constant term up, so that the result does not depend on the random
+/// choices.
 ///
 /// # Panics
 ///
 /// If the characteristic is 2.
-pub(crate) fn factor_squarefree(
+pub(crate) fn split_degrees(
     ring: &DenseRing<WordPrimeField>,
-    f: &Dense<u64>,
+    ddf: &[(Dense<u64>, usize)],
     cancel: &dyn Cancel,
 ) -> Result<Vec<Dense<u64>>, Cancelled> {
     let mut random = Random::new(SEED);
     let mut out = Vec::new();
-    for (g, d) in distinct_degree(ring, f, cancel)? {
-        out.extend(equal_degree(ring, &g, d, &mut random, cancel)?);
+    for (g, d) in ddf {
+        out.extend(equal_degree(ring, g, *d, &mut random, cancel)?);
     }
     out.sort_by(|a, b| {
         a.degree()
@@ -195,4 +188,19 @@ pub(crate) fn factor_squarefree(
             .then_with(|| a.coeffs().cmp(b.coeffs()))
     });
     Ok(out)
+}
+
+/// The monic irreducible factors of monic, square-free `f` over a word-size
+/// prime field of odd characteristic, in the order of [`split_degrees`].
+///
+/// # Panics
+///
+/// If the characteristic is 2.
+#[cfg(test)]
+pub(crate) fn factor_squarefree(
+    ring: &DenseRing<WordPrimeField>,
+    f: &Dense<u64>,
+    cancel: &dyn Cancel,
+) -> Result<Vec<Dense<u64>>, Cancelled> {
+    split_degrees(ring, &distinct_degree(ring, f, cancel)?, cancel)
 }

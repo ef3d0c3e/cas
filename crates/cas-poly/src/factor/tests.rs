@@ -3,3 +3,4 @@
 mod finite;
 mod hensel;
 mod squarefree;
+mod zassenhaus;

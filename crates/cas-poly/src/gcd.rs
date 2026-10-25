@@ -833,7 +833,7 @@ impl GcdDomain for GaussianIntegers {
 }
 
 /// Coefficients over one natural denominator: `(n, d)` with `p = n / d`.
-fn split<N: Numerators>(coeffs: &[Fraction<N>]) -> (Vec<N::Elem>, Natural) {
+pub(crate) fn split<N: Numerators>(coeffs: &[Fraction<N>]) -> (Vec<N::Elem>, Natural) {
     let parts: Vec<(N::Elem, Natural)> = coeffs.iter().map(N::split).collect();
     let den = parts.iter().fold(Natural::one(), |l, (_, d)| l.lcm(d));
     let nums = parts

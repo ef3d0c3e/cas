@@ -1,7 +1,7 @@
 # cas-num fuzz targets
 
 libFuzzer targets (via [cargo-fuzz](https://github.com/rust-fuzz/cargo-fuzz)) that cross-check
-cas-num against GMP (through `rug`), plus targets for the cas-core reader and evaluator and the cas-lang lexer, parser, lowering, printer and session. This crate is outside the
+cas-num against GMP (through `rug`), plus targets for the cas-core reader and evaluator, cas-poly's factoring, and the cas-lang lexer, parser, lowering, printer and session. This crate is outside the
 main workspace because cargo-fuzz needs a nightly toolchain and its own build profile; the
 libraries themselves stay on stable.
 
@@ -18,6 +18,7 @@ libraries themselves stay on stable.
 | `machine_fns` | The machine-ball functions and arithmetic against MPFR at 192 bits: `None` is always allowed; a `Some` meets the bracket at the midpoint, both ends and an interior point, and is `None` wherever MPFR has no finite value |
 | `ball_consts` | π, log 2, e, γ and G at sequences of fuzzer-chosen precisions from a cleared cache: each meets MPFR's bracket at `prec + 64` bits, knows `prec - 1` bits and has a midpoint of at most `prec` bits |
 | `number_theory` | `sqrt_rem`, `pow_mod` through every reduction, `ModRing` and `ModWord` operations and inverses, `crt`, `jacobi`, `primality`, `factor` (product and labels), `perfect_power` |
+| `poly_factor` | cas-poly's factoring over ℤ (CAS-182) on products of powers of up to four random polynomials of degree at most 8 (total degree at most 20, coefficients small or of up to three limbs): the factors multiply back, are sorted, distinct, primitive and positive, and each factors as itself; the factorisation is the union of the parts' factorisations, with the product of their constants |
 | `full_form` | The cas-core full-form reader on arbitrary text: it never panics, errors are within the text on character boundaries, and whatever reads prints in full form as text that reads back as the same expression |
 | `eval` | The cas-core evaluator (CAS-60) on random expressions, `D` among their builtins with its system rules (CAS-59), and indexing, slices, sets, factorials, `./`, `.^`, `Unapply` and numbers applied as functions (CAS-123), and balls, real and complex, with `Ball` (CAS-83), and decimal literals and `exact` (CAS-148), with typed blanks on the heads of atoms (CAS-150), and `N` with the elementary functions of balls (CAS-84), under random rules (exact and patterned, with conditions, up- and sub-rules), attributes set before or after them, defaults, the Complex domain and assumptions, with small limits; each input runs on a thread with just the stack its recursion limit allows (`STACK_PER_LEVEL` a level). No panic (with `-a`, the debug assertions check the natives' shortcuts against their full computation), no stack overflow, no time-budget overrun; a result evaluates to itself; a trace at the Verbose level changes no result, is a consistent tree, and replays to the result; verification and the warnings' messages never panic. The limits bound the time only of programs that do not grow their work at each level (the evaluator has no budget per call, CAS-DOC-4 R8), so a right-hand side calls a user head at most once, applies nothing to parts (`Map`, `ReplaceAll`, `Function`) and uses each pattern variable at most once (`k[n___] := k[n, n, n]` triples its arguments), and a rule on a `Flat` head has no tests or conditions (a test evaluates the new group a blank binds, which matches again with a budget of its own); there is no `ReplaceRepeated` (a rule that matches what it makes grows the expression at each round); the number bits are drawn from 2⁶ to 2¹⁴ |
 | `lang_lex` | The cas-lang lexer on arbitrary text (bytes read as lossy UTF-8): the tokens cover the text exactly, each lexes alone as one token of the same kind, every error token has its error, errors are ordered and on character boundaries; the values of number, string and superscript tokens and the names of identifiers never panic (number exponents are bounded) |
@@ -52,8 +53,8 @@ The corpus is carried between runs with the actions cache, one cache per target,
 crash artifacts are uploaded with the failed run. A longer or narrower run is
 `gh workflow run fuzz.yml -f time_per_target=<seconds> [-f targets="<names>"]`.
 
-The ball function targets (`ball_fns`, `complex_fns`, `machine_fns`, `ball_consts`, CAS-113) and
-`eval` (CAS-60) run with debug assertions and without AddressSanitizer (the workflow's
+The ball function targets (`ball_fns`, `complex_fns`, `machine_fns`, `ball_consts`, CAS-113),
+`eval` (CAS-60) and `poly_factor` (CAS-182) run with debug assertions and without AddressSanitizer (the workflow's
 `assertions` job, `-O -a -s none`, with `-timeout=60`): cas-num and cas-core have no `unsafe`
 code, ASan's quarantine more than doubles the resident memory, and the debug assertions check
 the `Float` invariants of every value, and the natives' shortcuts against their full

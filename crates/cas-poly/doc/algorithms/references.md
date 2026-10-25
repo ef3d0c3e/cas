@@ -68,6 +68,11 @@ algorithm here is taken from, or is compared with, are listed.
   und angewandte Mathematik* 92 (1882), 1–122. The substitution of powers of
   one variable for the others, which reduces multivariate problems to
   univariate ones.
+- <a id="mig74"></a>**[Mig74]** Maurice Mignotte, "An inequality about
+  factors of polynomials", *Mathematics of Computation* 28 (128) (1974),
+  1153–1157. For a factor `g` of degree `m` of `f` over ℤ,
+  `‖g‖₁ ≤ 2ᵐ |lc(g)/lc(f)| ‖f‖₂`: the bound that sets how far Hensel lifting
+  goes.
 - <a id="mp07"></a>**[MP07]** Michael Monagan and Roman Pearce, "Polynomial
   division using dynamic arrays, heaps, and packed exponent vectors", in
   *Computer Algebra in Scientific Computing (CASC 2007)*, Lecture Notes in
@@ -103,6 +108,9 @@ algorithm here is taken from, or is compared with, are listed.
   decomposition algorithms", in *Proceedings of the Third ACM Symposium on
   Symbolic and Algebraic Computation (SYMSAC '76)*, ACM, 1976, 26–35. The
   decomposition from one gcd with cofactors a round: `gcd(bₖ, cₖ − bₖ′)`.
+- <a id="zas69"></a>**[Zas69]** Hans Zassenhaus, "On Hensel factorization,
+  I", *Journal of Number Theory* 1 (3) (1969), 291–311. Factoring over ℤ by
+  lifting the factors modulo a prime and recombining them.
 
 ## Libraries
 

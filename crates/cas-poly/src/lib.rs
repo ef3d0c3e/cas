@@ -25,7 +25,8 @@
 //! - [`Factors`]: a polynomial as a constant times powers of polynomials,
 //!   the result of the square-free decomposition over the
 //!   [`CharacteristicZero`] domains ℤ, ℚ, ℤ\[i\] and ℚ(i), dense and sparse
-//!   (`squarefree`).
+//!   (`squarefree`), and of factoring univariate polynomials over ℤ and ℚ
+//!   (`factor`).
 //! - [`Cancel`]: what long computations poll to stop early, with the
 //!   never-cancelled default [`Never`].
 //!

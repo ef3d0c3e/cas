@@ -7,13 +7,6 @@
     clippy::many_single_char_names,
     reason = "the names of the Hensel step: f = g h, s g + t h = 1, e, q, r, c, d"
 )]
-#![cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "Zassenhaus's algorithm (CAS-182) is the first caller"
-    )
-)]
 
 use cas_num::Integer;
 use cas_num::algebra::{EuclideanDomain, Integers, Ring, WordPrimeField};

@@ -34,6 +34,7 @@ the tickets. This documentation describes the code as it is.
   constant-and-powers form of a factorisation; square-free decomposition by
   Yun's algorithm, in several variables through contents; factors of
   square-free polynomials over prime fields, by distinct degrees and Cantor
-  and Zassenhaus's equal-degree splitting; multifactor Hensel lifting.
+  and Zassenhaus's equal-degree splitting; multifactor Hensel lifting;
+  univariate factoring over ℤ and ℚ by Zassenhaus's algorithm.
 - [references.md](references.md): the bibliography. Chapters and doc
   comments cite it by key, as in "Kronecker substitution [Sch82]".
