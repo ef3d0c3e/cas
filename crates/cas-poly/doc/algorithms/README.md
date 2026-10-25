@@ -32,6 +32,8 @@ the tickets. This documentation describes the code as it is.
   bound; the domains and their choices; the benchmarks against giac.
 - [factor.md](factor.md): factoring (CAS-142, planned in CAS-PLAN-1). The
   constant-and-powers form of a factorisation; square-free decomposition by
-  Yun's algorithm, in several variables through contents.
+  Yun's algorithm, in several variables through contents; factors of
+  square-free polynomials over prime fields, by distinct degrees and Cantor
+  and Zassenhaus's equal-degree splitting.
 - [references.md](references.md): the bibliography. Chapters and doc
   comments cite it by key, as in "Kronecker substitution [Sch82]".

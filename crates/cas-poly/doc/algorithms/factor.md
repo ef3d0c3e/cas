@@ -57,9 +57,45 @@ Parts with the same exponent from different variables are then multiplied
 together, so the result is the unique decomposition. For example,
 `4x²y − 4y` is `4 · (x²y − y)`, where `y` and `x² − 1` share the exponent 1.
 
+## Factors over prime fields (CAS-180)
+
+`factor::finite` factors monic, square-free polynomials over a word-size
+prime field `𝔽ₚ` of odd characteristic into their monic irreducible factors.
+Factoring over ℚ needs only this: it reduces a square-free integer polynomial
+modulo primes that keep it square-free, and Hensel lifting starts from the
+factors there. The module is crate-internal. A public factorisation over
+`𝔽ₚ` would also need square-free decomposition in characteristic `p`.
+
+**Distinct degrees [vzGG13 §14.2].** For `d = 1, 2, …`:
+- `h = x^(pᵈ)` modulo what is left of `f`, as the `p`-th power of the last
+  `h` by square-and-multiply;
+- `gcd(h − x, f)` is the product of the irreducible factors of degree
+  dividing `d`. Smaller degrees are gone by then, so it is those of degree
+  exactly `d`;
+- the product is divided out, and `h` is reduced modulo what is left.
+
+When what is left has degree below `2(d + 1)`, it is 1 or irreducible. Each
+round costs `log₂ p` products modulo `f`, so small primes are cheap. This
+step also gives the number of factors and their degrees without splitting
+them.
+
+**Equal degrees [CZ81; vzGG13 §14.3].** A product `g` of `r` irreducibles of
+degree `d` splits by a random `a` of degree below `deg g`. If `a` is coprime
+to `g`, then `b = a^((pᵈ − 1)/2)` is `±1` modulo each factor, since each
+residue field has `pᵈ` elements. So `gcd(b − 1, g)` is a proper factor unless
+all signs agree, which happens with probability about `2^(1−r)`. The pieces
+split again, from a stack, until each has degree `d`. `gcd(a, g)` is tried
+first, and catches an `a` that is not coprime.
+
+The random coefficients come from `SplitMix64` [SLF14] with a fixed seed.
+The factors are sorted by degree, then by coefficients, so the result does not
+depend on the random choices anyway.
+
 ## Tests
 
-`src/factor/tests.rs`:
+`src/factor/tests/` has one module a step.
+
+Square-free decomposition (`squarefree.rs`):
 
 - **Checks of every result.** The decomposition multiplies back. Its exponents
   increase. Each factor has a positive degree, is primitive and normalised,
@@ -76,3 +112,19 @@ together, so the result is the unique decomposition. For example,
   - distinct linear forms in one to four variables, merged by exponent. Forms
     without the first variable come from contents.
 - **Examples.** giac's answers, signs and contents, and `(x + 1)^10`.
+
+Over prime fields (`finite.rs`):
+
+- **References.** The monic irreducibles of degrees 1 to 4 over `𝔽₃`, `𝔽₅`
+  and `𝔽₇`, found by trial division by every monic polynomial of at most half
+  their degree. Their counts match Gauss's formula.
+- **Products of known irreducibles.** Random products of distinct
+  irreducibles split back into them. The distinct-degree step gives their
+  products by degree, and the equal-degree step splits each.
+- **Large primes.** Random monic square-free polynomials over `𝔽ₚ` for
+  `p = 65537`, `2⁶¹ − 1` and `2⁶² − 57`. The factors multiply back and pass
+  Rabin's irreducibility test: `x^(pⁿ) ≡ x (mod f)` and
+  `gcd(x^(p^(n/r)) − x, f) = 1` for each prime `r | n`.
+- **Examples.** `x^p − x` splits into the `p` linear factors.
+  `x⁹ − x` over `𝔽₃` is the product of the irreducibles of degrees 1 and 2.
+  Also the generator's known outputs, and cancellation.

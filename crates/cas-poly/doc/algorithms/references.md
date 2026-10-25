@@ -17,6 +17,11 @@ algorithm here is taken from, or is compared with, are listed.
   (division of polynomials over a field) and Algorithm R (pseudo-division,
   `l(v)^(m−n+1) u(x) = q(x) v(x) + r(x)` with `deg r < n`, without
   division).
+- <a id="vzgg13"></a>**[vzGG13]** Joachim von zur Gathen and Jürgen
+  Gerhard, *Modern Computer Algebra*, 3rd edition, Cambridge University
+  Press, 2013. Chapter 14, "Factoring polynomials over finite fields": §14.2,
+  distinct-degree factorisation; §14.3, equal-degree factorisation by Cantor
+  and Zassenhaus's method.
 
 ## Papers
 
@@ -36,6 +41,10 @@ algorithm here is taken from, or is compared with, are listed.
   computation", *Journal of Symbolic Computation* 7 (1989), 31–48; first in
   *EUROSAM 84*, Lecture Notes in Computer Science 174, Springer, 1984. The
   heuristic gcd.
+- <a id="cz81"></a>**[CZ81]** David G. Cantor and Hans Zassenhaus, "A new
+  algorithm for factoring polynomials over finite fields", *Mathematics of
+  Computation* 36 (154) (1981), 587–592. Equal-degree splitting by
+  `gcd(a^((qᵈ − 1)/2) − 1, g)` for a random `a`.
 - <a id="fat03"></a>**[Fat03]** Richard Fateman, "Comparing the speed of
   programs for sparse polynomial multiplication", *ACM SIGSAM Bulletin* 37
   (1) (2003), 4–15, doi:10.1145/844076.844080. The benchmark `f (f + 1)` for
@@ -83,6 +92,11 @@ algorithm here is taken from, or is compared with, are listed.
   3–15, doi:10.1007/3-540-11607-9_1. The reduction of products in ℤ\[x\] to
   products in ℤ, by evaluation at a power of 2 ("binary segmentation"), as
   [Har09] credits it.
+- <a id="slf14"></a>**[SLF14]** Guy L. Steele Jr., Doug Lea and Christine
+  H. Flood, "Fast splittable pseudorandom number generators", in *Proceedings
+  of the 2014 ACM International Conference on Object Oriented Programming
+  Systems Languages & Applications (OOPSLA '14)*, ACM, 2014, 453–472. The
+  `SplitMix64` generator of the random splitting polynomials.
 - <a id="yun76"></a>**[Yun76]** David Y. Y. Yun, "On square-free
   decomposition algorithms", in *Proceedings of the Third ACM Symposium on
   Symbolic and Algebraic Computation (SYMSAC '76)*, ACM, 1976, 26–35. The

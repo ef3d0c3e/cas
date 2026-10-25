@@ -1,7 +1,9 @@
 //! Factoring (CAS-DOC-8 §4, CAS-142, planned in CAS-PLAN-1): the
-//! square-free decomposition so far. `doc/algorithms/factor.md` describes
-//! the algorithms.
+//! square-free decomposition, and the factors of square-free polynomials
+//! over word-size prime fields that Hensel lifting will start from.
+//! `doc/algorithms/factor.md` describes the algorithms.
 
+mod finite;
 mod squarefree;
 
 #[cfg(test)]
