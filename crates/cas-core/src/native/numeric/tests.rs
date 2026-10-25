@@ -202,10 +202,10 @@ fn discontinuities_are_separated_or_left() {
     // Exact input decides exactly, without balls.
     assert_eq!(eval_in(&ctx, "f[1]"), (read("1/2"), vec![]));
     assert_eq!(eval_in(&ctx, "N[f[1]]").0, eval("N[1/2]").0);
-    // A constant equal to 1 that the simplifier does not see: no precision
-    // tells it from 1, and `N` stays, saying which comparison it could not
-    // decide.
-    let one = "Times[2, Sin[Times[1/6, Pi]]]";
+    // A constant equal to 1 that the simplifier does not see,
+    // 4 sin(π/10) cos(π/5): no precision tells it from 1, and `N` stays,
+    // saying which comparison it could not decide.
+    let one = "Times[4, Sin[Times[1/10, Pi]], Cos[Times[1/5, Pi]]]";
     let (e, warnings) = eval_in(&ctx, &format!("N[f[{one}]]"));
     assert_eq!(e.head(), Some(&read("N")));
     assert!(
