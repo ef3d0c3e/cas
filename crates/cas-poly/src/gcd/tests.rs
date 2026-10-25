@@ -247,6 +247,13 @@ proptest! {
             if let Some(x) = check_gcd(&fp, &f, &g, &h, GcdMethod::Modular)? {
                 prop_assert_eq!(Some(x), reference.clone());
             }
+            // Zippel's algorithm takes the fields of at least 2^31 elements.
+            let zippel = check_gcd(&fp, &f, &g, &h, GcdMethod::Zippel)?;
+            if p > 1 << 31 {
+                prop_assert_eq!(zippel, reference.clone());
+            } else {
+                prop_assert_eq!(zippel, None);
+            }
             prop_assert_eq!(Some(fp.gcd(&fp.mul(&f, &g), &fp.mul(&f, &h))), reference);
         }
     }
@@ -680,6 +687,60 @@ fn a_field_too_small_for_its_points() {
         None
     );
     assert_eq!(ring.gcd(&a, &b), common);
+}
+
+/// Zippel's algorithm over 𝔽ₚ (CAS-191) in three variables, where the images
+/// in `x, y` at points of `z` come from the sparse interpolation: gcds not
+/// monic in `x` [DKMW05], one whose coefficient of `x⁰` is a monomial
+/// (single scaling) and one with none (multiple scaling); a gcd with a
+/// content in `x`, which comes out first; Fateman's gcd at the fourth power.
+#[test]
+fn zippel_over_a_prime_field() {
+    let ring = SparseRing::new(WordPrimeField::new((1 << 61) - 1).unwrap(), 3);
+    let (x, y, z) = (ring.var(0), ring.var(1), ring.var(2));
+    let int = |n: i64| ring.constant(ring.base().elem_integer(&Integer::from(n)));
+    let sum = |ps: &[Sparse<u64>]| ps.iter().fold(ring.zero(), |s, p| ring.add(&s, p));
+    let product = |ps: &[&Sparse<u64>]| ps.iter().fold(ring.one(), |s, p| ring.mul(&s, p));
+    let x3 = ring.pow(&x, 3);
+    // (y z + 50) x³ + 100 y z.
+    let yz = product(&[&y, &z]);
+    let single = sum(&[
+        product(&[&ring.add(&yz, &int(50)), &x3]),
+        product(&[&int(100), &yz]),
+    ]);
+    // (3 y² − 90 z) x³ + 12 y z + 100.
+    let lead = ring.sub(&product(&[&int(3), &y, &y]), &product(&[&int(90), &z]));
+    let multiple = sum(&[product(&[&lead, &x3]), product(&[&int(12), &yz]), int(100)]);
+    // (y + 2 z)(x³ + 12 y).
+    let content = product(&[
+        &ring.add(&y, &product(&[&int(2), &z])),
+        &ring.add(&x3, &product(&[&int(12), &y])),
+    ]);
+    let u = sum(&[x.clone(), ring.neg(&y), z.clone(), int(1)]);
+    let v = sum(&[x.clone(), y.clone(), ring.neg(&z), int(1)]);
+    for g in [&single, &multiple, &content] {
+        let (a, b) = (ring.mul(g, &u), ring.mul(g, &v));
+        let expected = ring
+            .gcd_by(&a, &b, GcdMethod::Subresultant, &Never)
+            .unwrap();
+        assert_eq!(
+            ring.gcd_by(&a, &b, GcdMethod::Zippel, &Never).unwrap(),
+            expected
+        );
+    }
+    // f = (1 + x + y + z)^4 + x, gcd(f g, f h) with g and h likewise in y and z.
+    let power = ring.pow(&sum(&[ring.one(), x.clone(), y.clone(), z.clone()]), 4);
+    let (f, g, h) = (
+        ring.add(&power, &x),
+        ring.add(&power, &y),
+        ring.add(&power, &z),
+    );
+    let (a, b) = (ring.mul(&f, &g), ring.mul(&f, &h));
+    let (d, _, _) = ring
+        .gcd_by(&a, &b, GcdMethod::Zippel, &Never)
+        .unwrap()
+        .unwrap();
+    assert_eq!(d, f);
 }
 
 /// giac's answers where they follow from the normal forms (CAS-DOC-8 §15,

@@ -58,6 +58,12 @@ pub enum GcdMethod {
     /// variable over the gcds of the coefficients in the others: every
     /// domain. The reference.
     Subresultant,
+    /// Zippel's sparse interpolation \[Zip79, Zip90\] in de Kleine, Monagan
+    /// and Wittkopf's form, LINZIP \[DKMW05\]: the form of the gcd from a
+    /// first image, the others by solving for its coefficients. Over prime
+    /// fields of at least `2^31` elements, for sparse polynomials in several
+    /// variables. It can give up.
+    Zippel,
 }
 
 mod sealed {
@@ -685,6 +691,34 @@ fn cofactors_of<R: GcdDomain>(
     Ok((g, a_cofactor, b_cofactor))
 }
 
+/// Points of Zippel's algorithm are drawn from fields of at least this many
+/// elements: fewer make its random points collide.
+const ZIPPEL_FIELD: u64 = 1 << 31;
+
+/// The gcd over a prime field by Zippel's algorithm, with its cofactors,
+/// which test it: `None` when the field is small, the algorithm gives up, or
+/// its gcd does not divide.
+fn zippel_cofactors<F: GcdDomain + Field>(
+    ring: &SparseRing<F>,
+    a: &Sparse<F::Elem>,
+    b: &Sparse<F::Elem>,
+    cancel: &dyn Cancel,
+) -> Result<Option<Cofactors<Sparse<F::Elem>>>, Cancelled> {
+    if u64::try_from(&ring.base().characteristic()).is_ok_and(|p| p < ZIPPEL_FIELD) {
+        return Ok(None);
+    }
+    let Some(g) = zippel::field_gcd(ring, a, b, cancel)? else {
+        return Ok(None);
+    };
+    let Some(a_cofactor) = ring.div_exact_with(a, &g, cancel)? else {
+        return Ok(None);
+    };
+    let Some(b_cofactor) = ring.div_exact_with(b, &g, cancel)? else {
+        return Ok(None);
+    };
+    Ok(Some((g, a_cofactor, b_cofactor)))
+}
+
 macro_rules! sealed {
     ($($t:ty),*) => {$(
         impl sealed::Sealed for $t {}
@@ -726,6 +760,7 @@ impl GcdDomain for Integers {
             GcdMethod::Heuristic => heuristic::dense(ring, a, b, cancel),
             GcdMethod::Modular => Ok(Some(modular::dense(ring, a, b, cancel)?)),
             GcdMethod::Subresultant => Ok(Some(subres::dense_gcd(ring, a, b, cancel)?)),
+            GcdMethod::Zippel => Ok(None),
         }
     }
 
@@ -752,6 +787,7 @@ impl GcdDomain for Integers {
             GcdMethod::Heuristic => heuristic::sparse(ring, a, b, cancel),
             GcdMethod::Modular => Ok(Some(modular::sparse(ring, a, b, cancel)?)),
             GcdMethod::Subresultant => Ok(Some(subres::sparse_gcd(ring, a, b, cancel)?)),
+            GcdMethod::Zippel => Ok(None),
         }
     }
 
@@ -802,7 +838,7 @@ impl GcdDomain for GaussianIntegers {
     ) -> Result<Option<Cofactors<Dense<Complex>>>, Cancelled> {
         match method {
             GcdMethod::Heuristic => heuristic::dense(ring, a, b, cancel),
-            GcdMethod::Modular => Ok(None),
+            GcdMethod::Modular | GcdMethod::Zippel => Ok(None),
             GcdMethod::Subresultant => Ok(Some(subres::dense_gcd(ring, a, b, cancel)?)),
         }
     }
@@ -828,7 +864,7 @@ impl GcdDomain for GaussianIntegers {
     ) -> Result<Option<Cofactors<Sparse<Complex>>>, Cancelled> {
         match method {
             GcdMethod::Heuristic => heuristic::sparse(ring, a, b, cancel),
-            GcdMethod::Modular => Ok(None),
+            GcdMethod::Modular | GcdMethod::Zippel => Ok(None),
             GcdMethod::Subresultant => Ok(Some(subres::sparse_gcd(ring, a, b, cancel)?)),
         }
     }
@@ -1061,7 +1097,7 @@ macro_rules! prime_field {
             ) -> Result<Option<Cofactors<Dense<Self::Elem>>>, Cancelled> {
                 match method {
                     GcdMethod::Subresultant => Ok(Some(subres::dense_gcd(ring, a, b, cancel)?)),
-                    GcdMethod::Heuristic | GcdMethod::Modular => Ok(None),
+                    GcdMethod::Heuristic | GcdMethod::Modular | GcdMethod::Zippel => Ok(None),
                 }
             }
 
@@ -1090,6 +1126,7 @@ macro_rules! prime_field {
                         None => Ok(None),
                     },
                     GcdMethod::Subresultant => Ok(Some(subres::sparse_gcd(ring, a, b, cancel)?)),
+                    GcdMethod::Zippel => zippel_cofactors(ring, a, b, cancel),
                     GcdMethod::Heuristic => Ok(None),
                 }
             }

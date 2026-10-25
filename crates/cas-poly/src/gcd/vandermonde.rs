@@ -8,8 +8,6 @@
 //! the other `vₗ`: row `j` of the inverse is `qⱼ` over `vⱼ Pⱼ(vⱼ)`, one
 //! synthetic division and one evaluation.
 
-#![cfg_attr(not(test), expect(dead_code, reason = "used by Zippel's gcd, CAS-191"))]
-
 use cas_num::algebra::Field;
 
 /// For each point `vⱼ` in turn, `row(qⱼ, 1 / (vⱼ Pⱼ(vⱼ)))`; `None` when two

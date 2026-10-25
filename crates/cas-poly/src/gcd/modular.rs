@@ -179,7 +179,7 @@ pub(crate) fn dense_from(
 }
 
 /// Whether `p` is a constant.
-fn is_constant<E>(p: &Sparse<E>) -> bool {
+pub(super) fn is_constant<E>(p: &Sparse<E>) -> bool {
     p.degrees().iter().all(|&d| d == 0)
 }
 
@@ -308,9 +308,9 @@ pub(crate) fn pgcd<F: Field + Coefficients + Clone>(
 /// The terms of `p` grouped by their exponents in the variables other than
 /// `x_y`, the last that occurs, which makes each group a run of terms: the
 /// exponents with `x_y`'s 0, and the polynomial in `x_y`.
-type Runs<E> = Vec<(Vec<u64>, Dense<E>)>;
+pub(super) type Runs<E> = Vec<(Vec<u64>, Dense<E>)>;
 
-fn runs<F: Field + Coefficients + Clone>(
+pub(super) fn runs<F: Field + Coefficients + Clone>(
     dense: &DenseRing<F>,
     p: &Sparse<F::Elem>,
     y: usize,
@@ -331,7 +331,7 @@ fn runs<F: Field + Coefficients + Clone>(
     out.into_iter().map(|(e, c)| (e, dense.poly(c))).collect()
 }
 
-fn from_runs<F: Field + Coefficients + Clone>(
+pub(super) fn from_runs<F: Field + Coefficients + Clone>(
     ring: &SparseRing<F>,
     runs: &Runs<F::Elem>,
     y: usize,
@@ -346,13 +346,16 @@ fn from_runs<F: Field + Coefficients + Clone>(
 }
 
 /// The gcd in `F[x_y]` of the polynomials of `runs`, monic.
-fn content<F: Field + Coefficients>(dense: &DenseRing<F>, runs: &Runs<F::Elem>) -> Dense<F::Elem> {
+pub(super) fn content<F: Field + Coefficients>(
+    dense: &DenseRing<F>,
+    runs: &Runs<F::Elem>,
+) -> Dense<F::Elem> {
     runs.iter()
         .fold(dense.zero(), |g, (_, q)| EuclideanDomain::gcd(dense, &g, q))
 }
 
 /// Each polynomial of `runs` over `c`, which divides them all.
-fn divide_runs<F: Field + Coefficients>(
+pub(super) fn divide_runs<F: Field + Coefficients>(
     dense: &DenseRing<F>,
     runs: Runs<F::Elem>,
     c: &Dense<F::Elem>,

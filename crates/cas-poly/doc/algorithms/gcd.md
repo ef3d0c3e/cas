@@ -43,6 +43,9 @@ benchmarks; it returns `None` where the method does not apply or gives up.
 | ℚ, ℚ(i) | the numerators over ℤ, ℤ\[i\] | the same |
 | 𝔽ₚ | Euclid | Brown's evaluation, then subresultants if the field runs out of points |
 
+`GcdMethod::Zippel` runs Zippel's sparse interpolation over prime fields of
+at least `2^31` elements (CAS-191); over ℤ it comes with CAS-192.
+
 Resultants:
 
 | Domain | Method |
@@ -175,6 +178,67 @@ In one variable, the gcd is Euclid's. A field with too few points (`𝔽₂` whe
   both are `x (x + 2)`. That point is dropped, and `y = 1, 3` interpolate
   `x + y`.
 
+## Zippel's sparse interpolation [Zip79, Zip90, DKMW05]
+
+`src/gcd/zippel.rs` (CAS-152), in de Kleine, Monagan and Wittkopf's form,
+LINZIP. Brown's algorithm needs `deg_y + 1` images for each variable `y`,
+whatever the gcd's terms. Zippel's needs, after a first image, as many as
+the gcd has terms in a coefficient of the main variable.
+
+**The form** of a gcd is its monomials, grouped by the power of the main
+variable `x`, the first that occurs: the coefficient of each power, a
+polynomial in the other variables, is a block.
+
+**An image from the form** (CAS-190), over `𝔽ₚ`, all variables but `x`
+evaluated:
+1. At the powers `α, α², …` of a random point `α` of the other variables,
+   the monic univariate gcds `gᵢ` of `a` and `b` in `x`. Each term of `a`
+   and `b` goes from one power to the next by one product, its monomial's
+   value at `α`.
+2. The gcd at `αⁱ` is `λᵢ gᵢ`, `λᵢ` its leading coefficient in `x` there;
+   for each block, the coefficient of its power in `gᵢ` gives `Σⱼ cⱼ vⱼⁱ =
+   λᵢ yᵢ`, `vⱼ` the values of its monomials at `α`.
+   - **Single scaling**: when a block is one monomial `μ`, the gcd scaled
+     so that `μ`'s coefficient is 1 has `λᵢ = μ(α)ⁱ / yᵢ` for that block,
+     and every block is a transposed Vandermonde system [Zip90], solved in
+     `O(t²)` (`src/gcd/vandermonde.rs`, CAS-189): with `P = ∏ (Z − vₗ)`
+     and `Pⱼ = P / (Z − vⱼ)`, `cⱼ vⱼ Pⱼ(vⱼ) = Σᵢ yᵢ [Zⁱ⁻¹] Pⱼ`.
+   - **Multiple scaling** [DKMW05], when no block is: the `λᵢ` are unknowns
+     too, `λ₁ = 1`. With `M` the inverse of a block's first `t` images'
+     system, its coefficients are `cⱼ = Σᵢ Mⱼᵢ yᵢ λᵢ`, and each further
+     image gives a linear equation for the scales, solved by Gaussian
+     elimination. That takes `N` images with `Σₑ (N − tₑ) ≥ N − 1`.
+3. One image more than the systems need checks them.
+- **Failures.** A point where `a` or `b` loses degree in `x` is bad, and
+  one whose gcd has a larger degree unlucky: both move to a new `α`. An
+  image of lower degree, a power outside the form, a missing scaling term
+  or inconsistent systems mean the form is wrong. Scales that stay free
+  after two more images mean a content of the gcd in `x`, which multiple
+  scaling cannot separate from the scales (DKMW's example 4,
+  `(y + 2) x³ + 12 y² + 24 y`).
+
+**The gcd over `𝔽ₚ`** (LINZIP P, CAS-191):
+1. In one variable, Euclid's algorithm.
+2. Otherwise `a` and `b` are taken in `F[y][X]`, `y` the last variable
+   that occurs, as Brown's algorithm takes them. Their contents in `F[y]`
+   come out, and `γ`, the gcd of their leading coefficients in `X`, is the
+   leading coefficient each image is scaled to.
+3. The first image, at a random point of `y`, comes from this algorithm in
+   one variable fewer, and gives the form. The others come from the form,
+   each scaled to `γ(v)`.
+4. Newton's interpolation in `y` combines them until it stops changing or
+   passes `deg γ + min(deg_y a, deg_y b)` points. Its primitive part in `y`
+   is then tested by division at a random point of all the variables but
+   `x`, univariate [DKMW05]: much cheaper than a division.
+5. A wrong form, unlucky points of `y` or a failed test restart from a new
+   first image, up to four times; then the algorithm gives up.
+- Before all that, the contents of `a` and `b` in `x` come out (by the
+  domain's gcd, in fewer variables), as LINZIP requires: a content of the
+  gcd in `x` would leave the scales free.
+- The points are random (`SplitMix64`, a fixed seed), from fields of at
+  least `2^31` elements, where they rarely collide. `GcdMethod::Zippel`
+  tests the result by division and returns `None` when it gives up.
+
 ## Resultants
 
 - **Over a field**, by Euclid's algorithm:
@@ -269,11 +333,22 @@ comparison.
     resultant 260708 is the last of its subresultants.
   - `b² − 4ac` and `−4p³ − 27q²`, and giac's resultants.
   - The normal forms of detail 5, zeros, and cancellation of every method.
+- **Zippel's algorithm** (CAS-189 to CAS-191).
+  - Transposed Vandermonde systems over word primes from 11 to `2^64 − 59`,
+    their solutions and inverses; repeated points and 0.
+  - Images from the forms of the gcds of random products, with single and
+    multiple scaling; a form missing a term, one with a term too many, one
+    without the top power; a content of the gcd; a main variable that is
+    not the first.
+  - Over `𝔽ₚ`, against subresultants wherever the field is large enough,
+    in the gcd properties; non-monic gcds in three variables with single
+    and multiple scaling, a content in `x`, and Fateman's gcd at the fourth
+    power.
 
 ## Not yet
 
-- Zippel's sparse interpolation, for sparse polynomials in many variables
-  (CAS-152).
+- Zippel's algorithm over ℤ, from the form of a first prime's image, and as
+  the default for several variables (CAS-192).
 - A modular gcd over ℤ\[i\].
 - Modular resultants in several variables.
 - The divisor heap of [MP07] for the trial divisions.

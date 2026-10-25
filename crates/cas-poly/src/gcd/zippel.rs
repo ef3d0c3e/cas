@@ -18,8 +18,6 @@
 //! One image more than the systems need checks them: a form with a term
 //! missing makes them inconsistent.
 
-#![cfg_attr(not(test), expect(dead_code, reason = "used by Zippel's gcd, CAS-191"))]
-
 #[cfg(test)]
 mod tests;
 
@@ -28,9 +26,10 @@ use std::cmp::Ordering;
 use cas_num::Integer;
 use cas_num::algebra::{EuclideanDomain, Field, Ring};
 
-use super::vandermonde;
+use super::modular::{Runs, content, divide_runs, from_runs, is_constant, runs};
+use super::{GcdDomain, normalized_sparse, vandermonde};
 use crate::cancel::{Cancel, Cancelled};
-use crate::dense::{Coefficients, DenseRing};
+use crate::dense::{Coefficients, Dense, DenseRing};
 use crate::random::Random;
 use crate::sparse::{Sparse, SparseRing};
 
@@ -75,8 +74,12 @@ impl Form {
     /// The images the systems need, and one more to check them: the
     /// largest block's terms; with multiple scaling, also enough equations
     /// for the scales, `N` with `Σₑ (N − tₑ) ≥ N − 1` over `s` blocks of
-    /// `tₑ` terms, `N ≥ (Σ tₑ − 1) / (s − 1)` \[DKMW05\].
+    /// `tₑ` terms, `N ≥ (Σ tₑ − 1) / (s − 1)` \[DKMW05\]. Without other
+    /// variables, the one image there is.
     fn images(&self) -> usize {
+        if self.vars.is_empty() {
+            return 1;
+        }
         let largest = self.blocks.iter().map(|(_, m)| m.len()).max().unwrap_or(0);
         let needed = if self.single().is_some() || self.blocks.len() < 2 {
             largest
@@ -136,7 +139,15 @@ struct Evaluation<E> {
 }
 
 impl<E: Clone> Evaluation<E> {
-    fn new<F: Ring<Elem = E>>(field: &F, p: &Sparse<E>, form: &Form, alpha: &[E]) -> Self {
+    /// For `p` in the variable `main` and those of `vars`, at the powers of
+    /// the point `x_vars[k] = alpha[k]`.
+    fn new<F: Ring<Elem = E>>(
+        field: &F,
+        p: &Sparse<E>,
+        main: usize,
+        vars: &[usize],
+        alpha: &[E],
+    ) -> Self {
         let mut degree = 0;
         let terms = p
             .terms()
@@ -144,12 +155,12 @@ impl<E: Clone> Evaluation<E> {
                 debug_assert!(
                     e.iter()
                         .enumerate()
-                        .all(|(v, &x)| x == 0 || v == form.main || form.vars.contains(&v)),
+                        .all(|(v, &x)| x == 0 || v == main || vars.contains(&v)),
                     "a variable outside the form"
                 );
-                let k = usize::try_from(e[form.main]).expect("a degree in memory");
+                let k = usize::try_from(e[main]).expect("a degree in memory");
                 degree = degree.max(k);
-                let m: Vec<u64> = form.vars.iter().map(|&v| e[v]).collect();
+                let m: Vec<u64> = vars.iter().map(|&v| e[v]).collect();
                 (k, c.clone(), monomial(field, alpha, &m))
             })
             .collect();
@@ -408,8 +419,8 @@ pub(super) fn image<F: Field + Coefficients + Clone>(
             .map(|(_, ms)| ms.iter().map(|m| monomial(field, &alpha, m)).collect())
             .collect();
         let (mut ea, mut eb) = (
-            Evaluation::new(field, a, form, &alpha),
-            Evaluation::new(field, b, form, &alpha),
+            Evaluation::new(field, a, form.main, &form.vars, &alpha),
+            Evaluation::new(field, b, form.main, &form.vars, &alpha),
         );
         let mut count = form.images();
         let mut ys: Vec<Vec<F::Elem>> = Vec::with_capacity(count);
@@ -460,4 +471,214 @@ pub(super) fn image<F: Field + Coefficients + Clone>(
         }
     }
     Ok(Err(Failure::Points))
+}
+
+/// Restarts from a new first image before Zippel's gcd gives up.
+const RESTARTS: usize = 4;
+
+/// The seed of the points of Zippel's gcd, so that its results repeat.
+const SEED: u64 = 0x5A49_5050_454C;
+
+/// `p` at the point `x_vars[k] = point[k]`, univariate in `main`.
+fn univariate<F: Field + Coefficients + Clone>(
+    dense: &DenseRing<F>,
+    p: &Sparse<F::Elem>,
+    main: usize,
+    vars: &[usize],
+    point: &[F::Elem],
+) -> Dense<F::Elem> {
+    let field = dense.base();
+    dense.poly(Evaluation::new(field, p, main, vars, point).next(field))
+}
+
+/// Whether `g` divides `a` and `b` at a random point of `vars`, univariate in
+/// `main`, where `g` keeps its degree \[DKMW05\]: a test that a wrong `g`
+/// fails with high probability, much cheaper than a division.
+fn divides_at_a_point<F: Field + Coefficients + Clone>(
+    ring: &SparseRing<F>,
+    [g, a, b]: [&Sparse<F::Elem>; 3],
+    main: usize,
+    vars: &[usize],
+    random: &mut Random,
+) -> bool {
+    let dense = DenseRing::new(ring.base().clone());
+    let degree = ring
+        .degree(g, main)
+        .map(|d| usize::try_from(d).expect("a degree in memory"));
+    for _ in 0..ATTEMPTS {
+        let point: Vec<F::Elem> = vars.iter().map(|_| nonzero(ring.base(), random)).collect();
+        let at = |p| univariate(&dense, p, main, vars, &point);
+        let g1 = at(g);
+        if g1.degree() == degree {
+            return dense.div_rem(&at(a), &g1).1.is_zero()
+                && dense.div_rem(&at(b), &g1).1.is_zero();
+        }
+    }
+    false
+}
+
+/// The monic gcd of non-zero `a` and `b` over a prime field by Zippel's
+/// algorithm in LINZIP's form \[Zip79, DKMW05\] (CAS-191); `None` when it
+/// gives up, after `RESTARTS` wrong forms or failed tests, or in a field with
+/// too few points. The first variable that occurs is the main one.
+///
+/// In one variable, Euclid's algorithm. Otherwise `a` and `b` are taken in
+/// `F[y][X]`, `y` the last variable that occurs, as Brown's algorithm takes
+/// them: their contents in `F[y]` come out, and `γ`, the gcd of their leading
+/// coefficients in `X`, is the leading coefficient each image is scaled to.
+/// The first image, at a random point of `y`, comes from this algorithm in
+/// one variable fewer and gives the form of the others, which the sparse
+/// interpolation computes. Newton's interpolation in `y` combines them until
+/// it stops changing or passes the degree bound; its primitive part in `y`
+/// is then tested by division at a random point of the other variables.
+pub(super) fn gcd<F: Field + Coefficients + Clone>(
+    ring: &SparseRing<F>,
+    a: &Sparse<F::Elem>,
+    b: &Sparse<F::Elem>,
+    random: &mut Random,
+    cancel: &dyn Cancel,
+) -> Result<Option<Sparse<F::Elem>>, Cancelled> {
+    let base = ring.base();
+    let (da, db) = (a.degrees(), b.degrees());
+    let occurring: Vec<usize> = (0..ring.nvars())
+        .filter(|&v| da[v] > 0 || db[v] > 0)
+        .collect();
+    let (Some(&main), Some(&y)) = (occurring.first(), occurring.last()) else {
+        return Ok(Some(ring.one()));
+    };
+    let dense = DenseRing::new(base.clone());
+    if main == y {
+        let to = |p: &Sparse<F::Elem>| ring.to_dense(p, y).expect("one variable");
+        let g = EuclideanDomain::gcd(&dense, &to(a), &to(b));
+        return Ok(Some(ring.from_dense(&g, y)));
+    }
+    let (ra, rb) = (runs(&dense, a, y), runs(&dense, b, y));
+    let (ca, cb) = (content(&dense, &ra), content(&dense, &rb));
+    let c = ring.from_dense(&EuclideanDomain::gcd(&dense, &ca, &cb), y);
+    let (ra, rb) = (divide_runs(&dense, ra, &ca), divide_runs(&dense, rb, &cb));
+    let gamma = EuclideanDomain::gcd(&dense, &ra[0].1, &rb[0].1);
+    let (pa, pb) = (from_runs(ring, &ra, y), from_runs(ring, &rb, y));
+    // The gcd scaled to the leading coefficient γ has at most this degree
+    // in y.
+    let degree = |r: &Runs<F::Elem>| r.iter().filter_map(|(_, q)| q.degree()).max().unwrap_or(0);
+    let bound = gamma.degree().unwrap_or(0) + degree(&ra).min(degree(&rb));
+    let others = &occurring[1..occurring.len() - 1];
+    // A point of y where neither γ nor `m`, the product of the y − v so
+    // far, vanishes, and γ there.
+    let point = |random: &mut Random, m: &Dense<F::Elem>| {
+        (0..ATTEMPTS).find_map(|_| {
+            let v = nonzero(base, random);
+            let at = dense.eval(&gamma, &v);
+            (!base.is_zero(&at) && !base.is_zero(&dense.eval(m, &v))).then_some((v, at))
+        })
+    };
+    let linear = |v: &F::Elem| dense.poly(vec![base.neg(v), base.one()]);
+    for _ in 0..RESTARTS {
+        let Some((v, at)) = point(random, &dense.one()) else {
+            return Ok(None);
+        };
+        let (av, bv) = (ring.eval_var(&pa, y, &v), ring.eval_var(&pb, y, &v));
+        let Some(first) = gcd(ring, &av, &bv, random, cancel)? else {
+            return Ok(None);
+        };
+        if is_constant(&first) {
+            return Ok(Some(normalized_sparse(ring, &c)));
+        }
+        let form = Form::of(&first, main, others);
+        let lead = first.exponents(0);
+        let mut h = ring.scale(&first, &at);
+        let mut m = linear(&v);
+        let mut count = 1;
+        let mut unlucky = 0;
+        let interpolated = loop {
+            if cancel.cancelled() {
+                return Err(Cancelled);
+            }
+            let Some((v, at)) = point(random, &m) else {
+                break None;
+            };
+            let (av, bv) = (ring.eval_var(&pa, y, &v), ring.eval_var(&pb, y, &v));
+            let g = match image(ring, &av, &bv, &form, random, cancel)? {
+                Ok(g) => g,
+                // An unlucky point of y, likely: another.
+                Err(Failure::Points) if unlucky < ATTEMPTS => {
+                    unlucky += 1;
+                    continue;
+                }
+                Err(_) => break None,
+            };
+            // Its leading term is the form's, γ(v) its coefficient.
+            if g.is_zero() || g.exponents(0) != lead {
+                break None;
+            }
+            let scale = base.mul(&at, &base.inv(&g.coeffs()[0]).expect("non-zero"));
+            let g = ring.scale(&g, &scale);
+            // Newton's step: h + (g − h(v)) m / m(v).
+            let diff = ring.sub(&g, &ring.eval_var(&h, y, &v));
+            let unchanged = diff.is_zero();
+            if !unchanged {
+                let scale = base.inv(&dense.eval(&m, &v)).expect("a new point");
+                h = ring.add(
+                    &h,
+                    &ring.mul(&ring.scale(&diff, &scale), &ring.from_dense(&m, y)),
+                );
+            }
+            m = dense.mul(&m, &linear(&v));
+            count += 1;
+            if unchanged || count > bound {
+                break Some(h);
+            }
+        };
+        let Some(h) = interpolated else {
+            continue;
+        };
+        let r = runs(&dense, &h, y);
+        let candidate = from_runs(
+            ring,
+            &divide_runs(&dense, r.clone(), &content(&dense, &r)),
+            y,
+        );
+        if divides_at_a_point(ring, [&candidate, &pa, &pb], main, &occurring[1..], random) {
+            return Ok(Some(normalized_sparse(ring, &ring.mul(&c, &candidate))));
+        }
+    }
+    Ok(None)
+}
+
+/// The gcd of non-zero `a` and `b` over a prime field by Zippel's algorithm,
+/// monic, their contents in the main variable taken out first, as LINZIP
+/// takes them \[DKMW05\]: a content of the gcd would leave the scales of
+/// multiple scaling free. `None` when the algorithm gives up.
+pub(super) fn field_gcd<F: GcdDomain + Field>(
+    ring: &SparseRing<F>,
+    a: &Sparse<F::Elem>,
+    b: &Sparse<F::Elem>,
+    cancel: &dyn Cancel,
+) -> Result<Option<Sparse<F::Elem>>, Cancelled> {
+    let (da, db) = (a.degrees(), b.degrees());
+    let Some(main) = (0..ring.nvars()).find(|&v| da[v] > 0 || db[v] > 0) else {
+        return Ok(Some(ring.one()));
+    };
+    let content_in = |p: &Sparse<F::Elem>| -> Result<Sparse<F::Elem>, Cancelled> {
+        let mut g = ring.zero();
+        for (_, c) in ring.to_recursive(p, main) {
+            g = ring.gcd_with(&g, &c, cancel)?;
+            if ring.is_one(&g) {
+                break;
+            }
+        }
+        Ok(g)
+    };
+    let (ca, cb) = (content_in(a)?, content_in(b)?);
+    let c = ring.gcd_with(&ca, &cb, cancel)?;
+    let quotient =
+        |p: &Sparse<F::Elem>, q: &Sparse<F::Elem>| -> Result<Sparse<F::Elem>, Cancelled> {
+            Ok(ring
+                .div_exact_with(p, q, cancel)?
+                .expect("a content divides"))
+        };
+    let (pa, pb) = (quotient(a, &ca)?, quotient(b, &cb)?);
+    let mut random = Random::new(SEED);
+    Ok(gcd(ring, &pa, &pb, &mut random, cancel)?
+        .map(|g| normalized_sparse(ring, &ring.mul(&c, &g))))
 }
