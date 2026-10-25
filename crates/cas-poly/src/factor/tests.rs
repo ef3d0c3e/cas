@@ -4,4 +4,5 @@ mod finite;
 mod hensel;
 mod lifting;
 mod squarefree;
+mod wang;
 mod zassenhaus;

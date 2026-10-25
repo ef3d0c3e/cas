@@ -36,6 +36,7 @@ the tickets. This documentation describes the code as it is.
   square-free polynomials over prime fields, by distinct degrees and Cantor
   and Zassenhaus's equal-degree splitting; multifactor Hensel lifting;
   univariate factoring over ℤ and ℚ by Zassenhaus's algorithm;
-  multivariate Hensel lifting for Wang's algorithm.
+  multivariate factoring over ℤ and ℚ by Wang's algorithm, with its
+  Hensel lifting.
 - [references.md](references.md): the bibliography. Chapters and doc
   comments cite it by key, as in "Kronecker substitution [Sch82]".

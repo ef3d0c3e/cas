@@ -844,7 +844,7 @@ pub(crate) fn split<N: Numerators>(coeffs: &[Fraction<N>]) -> (Vec<N::Elem>, Nat
 }
 
 /// `p = n / d` over ℚ or ℚ(i), `n` over ℤ or ℤ\[i\].
-fn split_sparse<N: Numerators>(
+pub(crate) fn split_sparse<N: Numerators>(
     ring: &SparseRing<N::Fractions>,
     numerators: &SparseRing<N>,
     p: &Sparse<Fraction<N>>,

@@ -1,5 +1,5 @@
 //! Multivariate Hensel lifting for Wang's algorithm (CAS-183) \[Wan78,
-//! GCL92 §6.6–6.8\]. A factorisation `f(x, a) = ∏ uᵢ(x)` at a point `a` of
+//! GCL92 §6.7–6.8\]. A factorisation `f(x, a) = ∏ uᵢ(x)` at a point `a` of
 //! the variables other than the main one lifts to `f = ∏ Uᵢ`, one variable
 //! at a time, with the leading coefficients of the `Uᵢ` in `x` imposed. The
 //! arithmetic is modulo a prime `P` above twice a bound on the coefficients
@@ -8,10 +8,6 @@
 #![allow(
     clippy::many_single_char_names,
     reason = "the names of the algorithms: f = ∏ u, σ b = c, e for errors, d for degrees"
-)]
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "Wang's algorithm (CAS-184) is the first caller")
 )]
 
 use cas_num::algebra::{BigPrimeField, EuclideanDomain, Field, Integers, Ring};

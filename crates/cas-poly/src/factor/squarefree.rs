@@ -108,6 +108,9 @@ impl<R: CharacteristicZero> DenseRing<R> {
     }
 }
 
+/// A content and a primitive part.
+pub(super) type Split<E> = (Sparse<E>, Sparse<E>);
+
 impl<R: CharacteristicZero> SparseRing<R> {
     /// The square-free decomposition `p = c f₁ f₂² ⋯ fₖᵏ`, as
     /// [`DenseRing::squarefree`]'s. The leading coefficients are the
@@ -169,20 +172,10 @@ impl<R: CharacteristicZero> SparseRing<R> {
         let Some(var) = q.degrees().iter().position(|&d| d > 0) else {
             return Ok(());
         };
-        let mut content = self.zero();
-        for (_, c) in self.to_recursive(q, var) {
-            content = self.gcd_with(&content, &c, cancel)?;
-            if self.is_one(&content) {
-                break;
-            }
-        }
-        let primitive = if self.is_one(&content) {
-            q.clone()
-        } else {
+        let (content, primitive) = self.content_split(q, var, cancel)?;
+        if !self.is_one(&content) {
             self.squarefree_parts(&content, out, cancel)?;
-            self.div_exact_with(q, &content, cancel)?
-                .expect("the content divides")
-        };
+        }
         let constant = |f: &Sparse<R::Elem>| self.degree(f, var).unwrap_or(0) == 0;
         yun(
             self,
@@ -192,5 +185,26 @@ impl<R: CharacteristicZero> SparseRing<R> {
             |a, b| self.gcd_cofactors_with(a, b, cancel),
             out,
         )
+    }
+
+    /// The content of `q` in `x_var`, normalised as a gcd, and the primitive
+    /// part, polling `cancel`.
+    pub(super) fn content_split(
+        &self,
+        q: &Sparse<R::Elem>,
+        var: usize,
+        cancel: &dyn Cancel,
+    ) -> Result<Split<R::Elem>, Cancelled> {
+        let mut content = self.zero();
+        for (_, c) in self.to_recursive(q, var) {
+            content = self.gcd_with(&content, &c, cancel)?;
+            if self.is_one(&content) {
+                return Ok((content, q.clone()));
+            }
+        }
+        match self.div_exact_with(q, &content, cancel)? {
+            Some(primitive) => Ok((content, primitive)),
+            None => unreachable!("the content divides"),
+        }
     }
 }

@@ -222,6 +222,57 @@ in them.
   `Σ σᵢ bᵢ = c` agree modulo every `uᵢ`, so modulo their product. Both have
   a smaller degree, since `deg c < deg ∏ uᵢ`.
 
+## Multivariate factoring over ℤ and ℚ (CAS-184)
+
+`SparseRing<Integers>::factor` writes `p = c f₁^e₁ ⋯ fₖ^eₖ` as the dense
+`factor` does. Leading coefficients are the lexicographic ones, so
+positive and primitive refer to them. The factors are sorted by total
+degree, then by terms from the leading one, then by exponent: giac's
+`factor(x⁴ − y⁴)` is `(x − y)(x + y)(x² + y²)`. Over ℚ
+(`SparseRing<Rationals>`) the factors are those of the numerator, made monic
+in the lexicographic order, and `c` is the leading coefficient.
+
+Each square-free part (CAS-179) is factored:
+- **One variable.** Zassenhaus's algorithm (CAS-182).
+- **Several.** The main variable `x` is one of least degree. The content in
+  `x` is factored the same way in the other variables. The primitive part
+  goes to Wang's algorithm [Wan78], arranged as in SymPy's `dmp_zz_wang`
+  [SymPy]:
+
+1. **The leading coefficient** `lc_x(f)` is factored first, recursively:
+   `Ω ∏ F_j^(e_j)`.
+2. **Points.** Values of the other variables are drawn from `[−r, r]`,
+   starting with `r = 1`. `r` grows by 2 after 20 points, and no point is
+   tried twice. A point is good when:
+   - `lc_x(f)` does not vanish there;
+   - the image `u = f(x, a)` is square-free;
+   - Wang's condition holds: each value `E_j = F_j(a)` has a prime factor
+     that divides no earlier `E_j`, nor `δ Ω`, `δ` the image's content.
+
+   The image's primitive part is factored by Zassenhaus's algorithm. An
+   irreducible image proves `f` irreducible: a factorisation of `f` would
+   give one of the image, since the degree in `x` does not drop. Three good
+   points are gathered, keeping only those whose images have the fewest
+   factors. Of those, the image with the smallest coefficients is chosen.
+3. **Leading coefficients.** Each factor `hᵢ` of the image takes the
+   `F_j^k` whose value divides `lc(hᵢ) δ`, as often as it does. A constant
+   then makes it `lc(hᵢ)` at the point. The content `δ` is spread over the
+   factors. What remains of it multiplies every factor and its leading
+   coefficient, and `f` takes its `(r − 1)`-th power. Wang's condition makes
+   the attribution unique. An `F_j` that goes nowhere, or an inexact
+   division, means extraneous factors: new points are tried.
+4. **Lifting** (CAS-183) is modulo a prime above twice `2^(Σ deg) ‖f‖₂`,
+   summing the degrees in every variable. That bound holds for any factor
+   `h` of `f`: by Mahler's and Landau's inequalities its coefficients are
+   within `2^(Σ deg h) M(h) ≤ 2^(Σ deg f) M(f) ≤ 2^(Σ deg f) ‖f‖₂`, where the
+   Mahler measure `M` is at least 1 for a non-zero integer polynomial. The
+   lifts' primitive parts are the factors. A lift that fails sends the
+   search back to new points with a wider range.
+
+Most points give images without extraneous factors (Hilbert's
+irreducibility theorem), so the search ends with probability 1. It polls
+`Cancel` at each point.
+
 ## Tests
 
 `src/factor/tests/` has one module a step.
@@ -301,3 +352,19 @@ Multivariate Hensel lifting (`lifting.rs`):
   variable other than the first.
 - **Wrong leading coefficients.** Leading coefficients that agree with the
   images but that no factorisation has: nothing comes back.
+
+Multivariate factoring (`wang.rs`):
+
+- **Random products.** Products of powers of up to three random
+  polynomials in one to three variables. The checks: the result multiplies
+  back, and its factors are sorted, distinct, primitive and positive, and
+  factor as themselves. The factorisation is the union of the parts'. In one
+  variable it matches the dense factorisation. Over ℚ the factors are the
+  monic associates.
+- **Examples.** giac's `x⁴ − y⁴` and `x²y + xy²`. `x² − 2y²` and
+  `x² + y² + 1` are irreducible. Three factors in three variables, leading
+  coefficients `y` and `y²`, a content `y + 1` in the main variable, powers,
+  a negative constant, and cancellation.
+
+The fuzz target `poly_factor` also checks products in two and three
+variables, of total degree at most 12.
