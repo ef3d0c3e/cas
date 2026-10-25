@@ -128,9 +128,15 @@ fn examples() {
     let r = check(&poly(&[1]), &poly(&[0, 1, 0, 1])).unwrap();
     assert_eq!(r.logarithms.len(), 2);
     assert!(r.rest.is_none());
-    // ∫ 1/((x − 1)(x² + 1)): ln|x − 1|/2 and the rest with x² + 1.
+    // ∫ 1/((x − 1)(x² + 1)): ln|x − 1|/2, and the rest with x² + 1, whose
+    // residues are −1/4 ∓ i/4.
     let r = check(&poly(&[1]), &poly(&[-1, 1, -1, 1])).unwrap();
-    assert_eq!(r.logarithms.len(), 2);
+    assert_eq!(r.logarithms.len(), 1);
+    assert_eq!(r.logarithms[0].coefficient, q(1, 2));
+    assert_eq!(
+        r.rest.as_ref().map(|(_, e)| e.clone()),
+        Some(poly(&[1, 0, 1]))
+    );
     let r = check(&poly(&[1]), &poly(&[-1, 2, -1, 0, 1])).unwrap();
     assert!(r.rest.is_some());
     // ∫ 1/(x² + 1)² = x/(2(x² + 1)) + ∫ 1/(2(x² + 1)).
