@@ -513,9 +513,10 @@ fn coefficients_expr(coeffs: &[Rational], x: &Expr) -> Expr {
         .iter()
         .enumerate()
         .filter(|(_, c)| !c.is_zero())
-        .map(|(k, c)| {
-            let k = i64::try_from(k).expect("a degree in memory");
-            Expr::from(c.clone()) * x.pow(k)
+        .map(|(k, c)| match k {
+            0 => Expr::from(c.clone()),
+            1 => Expr::from(c.clone()) * x.clone(),
+            _ => Expr::from(c.clone()) * x.pow(i64::try_from(k).expect("a degree in memory")),
         })
         .sum()
 }

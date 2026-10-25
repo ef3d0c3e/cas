@@ -42,12 +42,19 @@ fn equal(ctx: &Context, left: Expr, right: Expr) -> bool {
         == Some(Symbol::TRUE)
 }
 
-/// Whether `difference` is constant in `x`, at two points.
-fn constant(ctx: &Context, difference: &Expr) -> bool {
-    let first = at(ctx, difference, Some(Expr::from(3) / Expr::from(7)));
-    let second = at(ctx, difference, Some(Expr::from(5) / Expr::from(2)));
-    match (first, second) {
-        (Some(first), Some(second)) => equal(ctx, first, second),
+/// Whether `ours` and `theirs` differ by a constant in `x`: they change
+/// as much from `x = 3/7` to `x = 5/2`. Not their difference at the two
+/// points, a ball about 0 when they are the same function written apart,
+/// which `Equal` cannot tell from 0.
+fn constant(ctx: &Context, ours: &Expr, theirs: &Expr) -> bool {
+    let x = Expr::symbol("x");
+    let change = |e: &Expr| {
+        let point = |v: Expr| e.substitute(&[(x.clone(), v)]);
+        let change = point(Expr::from(5) / Expr::from(2)) - point(Expr::from(3) / Expr::from(7));
+        at(ctx, &change, None)
+    };
+    match (change(ours), change(theirs)) {
+        (Some(a), Some(b)) => equal(ctx, a, b),
         _ => false,
     }
 }
@@ -64,11 +71,15 @@ fn agrees(giac: &Giac, input: &str, definite: bool) -> Result<(), String> {
     let theirs = giac.value(input).map_err(|e| e.to_string())?;
     let ours = ours(input).map_err(|e| e.to_string())?;
     let ctx = Context::new();
-    let difference = ours.clone() - theirs.clone();
     let agree = if definite {
-        at(&ctx, &difference, None).is_some_and(|d| equal(&ctx, d, Expr::from(0)))
+        // The values, not their difference: a ball about 0 that `Equal`
+        // cannot tell from 0.
+        match (at(&ctx, &ours, None), at(&ctx, &theirs, None)) {
+            (Some(a), Some(b)) => equal(&ctx, a, b),
+            _ => false,
+        }
     } else {
-        constant(&ctx, &difference)
+        constant(&ctx, &ours, &theirs)
     };
     if agree {
         Ok(())

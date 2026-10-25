@@ -355,17 +355,18 @@ fn partial_rational_functions() {
     }
 }
 
-/// Whether `a` and `b` are the same, or numbers whose difference `N` takes
-/// for 0, as balls: `Cos[0] - Cos[Pi]` stays as it is, and is 2.
+/// Whether `a` and `b` are the same, or numbers that `N` makes equal
+/// balls: `Cos[0] - Cos[Pi]` stays as it is, and is 2. Not their
+/// difference, a ball about 0 that `Equal` cannot tell from 0.
 fn same_value(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     if same(ctx, a, b) {
         return true;
     }
-    let difference = Expr::call(Symbol::N, [a.clone() - b.clone()]);
-    let zero = ctx
-        .eval(&difference)
-        .map(|d| Expr::call(Symbol::EQUAL, [d, Expr::from(0)]));
-    zero.and_then(|z| ctx.eval(&z))
+    let n = |e: &Expr| ctx.eval(&Expr::call(Symbol::N, [e.clone()]));
+    let (Ok(a), Ok(b)) = (n(a), n(b)) else {
+        return false;
+    };
+    ctx.eval(&Expr::call(Symbol::EQUAL, [a, b]))
         .is_ok_and(|t| t.as_symbol() == Some(Symbol::TRUE))
 }
 

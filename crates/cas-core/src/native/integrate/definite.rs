@@ -131,6 +131,8 @@ pub(super) fn integral(
     let region = region(ev, a, b);
     match continuity(ev, e, f, x, &region)? {
         Continuity::Continuous => {
+            // Evaluated first, so that no `x^0` meets `x = 0`.
+            let antiderivative = ev.eval(antiderivative)?;
             let at = |v: &Expr| antiderivative.substitute(&[(x.clone(), v.clone())]);
             Ok(Some(at(b) - at(a)))
         }
