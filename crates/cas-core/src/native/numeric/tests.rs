@@ -323,6 +323,32 @@ fn n_approximates_values_only() {
     }
 }
 
+/// A number's rational exponent stays exact in `N`, so that the odd root of
+/// a negative is the real one in the Real domain (O7), as exact evaluation
+/// reads it, and the principal one in the Complex domain (CAS-177). It was
+/// a ball, which took the principal root in either.
+#[test]
+fn odd_roots_of_negatives_follow_the_domain() {
+    let pi = || Mpfr::with_val(100, Constant::Pi);
+    let mut real = Context::new();
+    real.set_domain(Domain::Real);
+    let (e, _) = eval_in(&real, "N[Power[Times[-1, Pi], 1/3]]");
+    assert!(contains_mpfr(&ball_of(&e), &-pi().cbrt()), "{e:?}");
+    let (e, _) = eval_in(&real, "N[Power[Sin[4], 1/3]]");
+    assert!(
+        contains_mpfr(&ball_of(&e), &Mpfr::with_val(100, 4).sin().cbrt()),
+        "{e:?}"
+    );
+    let mut complex = Context::new();
+    complex.set_domain(Domain::Complex);
+    let (e, _) = eval_in(&complex, "N[Power[Times[-1, Pi], 1/3]]");
+    // π^(1/3) e^(iπ/3).
+    let z = complex_ball_of(&e);
+    let third = Mpfr::with_val(100, pi() / 3);
+    assert!(contains_mpfr(z.re(), &(pi().cbrt() * third.clone().cos())));
+    assert!(contains_mpfr(z.im(), &(pi().cbrt() * third.sin())));
+}
+
 #[test]
 fn complex_values() {
     // A negative real to an odd number of halves: its real part is exactly

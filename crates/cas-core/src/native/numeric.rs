@@ -283,15 +283,11 @@ fn approximate(ev: &mut Eval<'_>, arg: &Expr, target: Target) -> Native {
 
 /// What `e` comes to with balls of `bits` bits for its numbers, as in `N`
 /// but evaluated once, at that precision, in [`Context::numeric`]: no Ziv's
-/// loop, so its balls are as wide as they come. Rational exponents stay
-/// exact, so that the odd root of a negative is the real one in the Real
-/// domain (O7), as exact evaluation reads it, where `N` takes the principal
-/// root of `Sin[4]^(1/3)`. For [`Trace::verify`](crate::Trace::verify),
-/// which compares the balls by overlap (CAS-175).
+/// loop, so its balls are as wide as they come. For
+/// [`Trace::verify`](crate::Trace::verify), which compares the balls by
+/// overlap (CAS-175).
 pub(crate) fn approximation(ctx: &Context, e: &Expr, bits: u64) -> Result<Expr, EvalError> {
-    let mut numeric = Numeric::new(ctx, bits);
-    numeric.exact_exponents = true;
-    let value = numeric.value(e);
+    let value = Numeric::new(ctx, bits).value(e);
     ctx.numeric(bits).eval(&value)
 }
 
@@ -351,15 +347,13 @@ fn round(e: &Expr, bits: u64) -> Expr {
 /// arguments of numeric functions (the `NumericFunction` heads: arithmetic
 /// and the elementary functions), lists, comparisons, logic, `If` and
 /// equations, as in Xcas's `evalf`. Elsewhere numbers keep their exact
-/// values (`f[1/3]`, `x[2]`), and so do integer exponents (`x^2`), the units
-/// `-1` and `±I` of a product (`x - y`), and `E` under an exponent that is
-/// no number (`E^x`).
+/// values (`f[1/3]`, `x[2]`), and so do integer exponents (`x^2`), rational
+/// exponents of numbers (`(-Pi)^(1/3)`, whose root is then real in the Real
+/// domain), the units `-1` and `±I` of a product (`x - y`), and `E` under
+/// an exponent that is no number (`E^x`).
 struct Numeric<'c> {
     context: &'c Context,
     bits: u64,
-    /// Whether rational exponents keep their exact values, as integers do
-    /// ([`approximation`]).
-    exact_exponents: bool,
     /// The applications made so far: an expression shares its parts.
     memo: HashMap<Expr, Expr, FixedState>,
 }
@@ -369,7 +363,6 @@ impl<'c> Numeric<'c> {
         Numeric {
             context,
             bits,
-            exact_exponents: false,
             memo: HashMap::with_hasher(FixedState::default()),
         }
     }
@@ -393,11 +386,7 @@ impl<'c> Numeric<'c> {
                     .iter()
                     .enumerate()
                     .map(|(i, a)| {
-                        let exponent = self.exact_exponents
-                            && h == Some(Symbol::POWER)
-                            && i == 1
-                            && a.to_rational().is_some();
-                        if exponent || kept(h, i, a, args) {
+                        if kept(h, i, a, args) {
                             a.clone()
                         } else {
                             self.value(a)
@@ -442,11 +431,17 @@ impl<'c> Numeric<'c> {
 }
 
 /// Whether the argument `a`, the `i`-th (from 0) of `args` under `head`,
-/// keeps its exact value: an integer exponent, a unit of a product, or `E`
-/// under an exponent that is no number.
+/// keeps its exact value: an integer exponent, a rational exponent of a
+/// number, a unit of a product, or `E` under an exponent that is no number.
 fn kept(head: Option<Symbol>, i: usize, a: &Expr, args: &[Expr]) -> bool {
     match (head, i) {
-        (Some(Symbol::POWER), 1) => a.to_rational().is_some_and(|q| q.is_integer()),
+        // A ball exponent would give the principal root of a negative: an
+        // exact one gives the real odd root in the Real domain (O7), as
+        // exact evaluation reads it (CAS-177). A symbol's stays a ball,
+        // `x^0.333…`, as Xcas's `evalf` writes it.
+        (Some(Symbol::POWER), 1) => a
+            .to_rational()
+            .is_some_and(|q| q.is_integer() || args.first().is_some_and(Expr::is_numeric)),
         (Some(Symbol::POWER), 0) => {
             a.as_symbol() == Some(Symbol::E) && !args.get(1).is_some_and(Expr::is_numeric)
         }
