@@ -477,7 +477,41 @@ fn at(e: &Expr, x: (i64, i64), y: (i64, i64)) -> Option<bool> {
     ];
     let mut plain = Context::new();
     plain.set_domain(Domain::Complex);
-    match plain.eval(&e.substitute(&values)).ok()?.as_symbol()? {
+    let e = e.substitute(&values);
+    // A side of a comparison that is infinite there tells nothing: `1 + 1/y`
+    // and `1/y` are both `ComplexInfinity` at 0, which `Equal` takes for
+    // equal.
+    let comparison = |p: &Expr| {
+        matches!(
+            p.head().and_then(Expr::as_symbol),
+            Some(
+                Symbol::EQUAL
+                    | Symbol::UNEQUAL
+                    | Symbol::LESS
+                    | Symbol::LESS_EQUAL
+                    | Symbol::GREATER
+                    | Symbol::GREATER_EQUAL
+            )
+        )
+    };
+    let infinite = |v: &Expr| {
+        [
+            Symbol::COMPLEX_INFINITY,
+            Symbol::DIRECTED_INFINITY,
+            Symbol::INFINITY,
+            Symbol::INDETERMINATE,
+        ]
+        .into_iter()
+        .any(|s| v.contains(&Expr::from(s)))
+    };
+    if e.distinct().filter(|p| comparison(p)).any(|p| {
+        p.args()
+            .iter()
+            .any(|side| plain.eval(side).is_ok_and(|v| infinite(&v)))
+    }) {
+        return None;
+    }
+    match plain.eval(&e).ok()?.as_symbol()? {
         Symbol::TRUE => Some(true),
         Symbol::FALSE => Some(false),
         _ => None,

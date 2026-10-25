@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 0d49297168ebe7e9eee31c21300c216907bb53deb3369f058f1aad08ed7297a8 # shrinks to Equal[Plus[1, Power[y, -1]], Power[y, -1]] under y >= 0 at y = 0
