@@ -229,6 +229,42 @@ fn linear_systems() {
     ]);
 }
 
+/// Equations in functions of the unknown (CAS-213): giac's principal
+/// solutions.
+#[test]
+fn transcendental_equations() {
+    check(&[
+        "solve(exp(x)=2,x)",
+        "solve(ln(x)=3,x)",
+        "solve(ln(x)=-1,x)",
+        "solve(sin(x)=0,x)",
+        "solve(sin(x)=1/2,x)",
+        "solve(cos(x)=1/2,x)",
+        "solve(tan(x)=1,x)",
+        "solve(cos(x)=0,x)",
+        "solve(sin(2*x)=1,x)",
+        "solve(atan(x)=1,x)",
+        "solve(asin(x)=1/2,x)",
+        "solve(exp(x)=-1,x)",
+        "csolve(exp(x)=-1,x)",
+        "solve(sin(x)=2,x)",
+        "solve(sqrt(x)=-1,x)",
+        "solve(sqrt(x)=3,x)",
+        "solve(1/sqrt(x)=2,x)",
+        "solve(x^(1/3)=2,x)",
+        "solve(sqrt(x^2+1)=2,x)",
+        "solve(sqrt(x+1)=x-1,x)",
+        "solve(sqrt(x-1)+1=x,x)",
+        "solve(sqrt(x)+sqrt(x+5)=5,x)",
+        "solve(exp(2*x)-3*exp(x)+2=0,x)",
+        "solve(exp(x)+exp(-x)=3,x)",
+        "solve(sin(x)^2=1/4,x)",
+        "solve(2^x=8,x)",
+        "solve(ln(x^2-3)=0,x)",
+        "solve(exp(x^2)=e,x)",
+    ]);
+}
+
 /// Identities and contradictions.
 #[test]
 fn identities() {

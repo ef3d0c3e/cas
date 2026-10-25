@@ -5,8 +5,10 @@
 //!   expression `e` is `e = 0`, with giac's warning. `True`, an `Equal` that
 //!   evaluation decided, is solved by every `x`, `False` by none.
 //! - `l − r` goes to a rational function of `x` whose other generators, free
-//!   of `x`, are parameters (CAS-DOC-8 §2), balls among them; anything else
-//!   stays, as `Sin[x] = 1/2` (CAS-213).
+//!   of `x`, are parameters (CAS-DOC-8 §2), balls among them. Generators
+//!   that hold `x`, as `Sin[x]` or `(x + 1)^(1/2)`, go to `transcendental`
+//!   (CAS-213): solved in such a generator then inverted, or roots raised
+//!   away and the candidates checked.
 //! - Its numerator and denominator are factored over ℚ, or ℚ(i) when a
 //!   number is complex, with the parameters (CAS-184, CAS-186): the factors
 //!   they share cancel, the denominator's are poles, and the numerator's
@@ -224,6 +226,14 @@ struct Unknown<'p> {
     real: bool,
 }
 
+/// What a call solves for: the call, for warnings, the unknown, and
+/// whether only real roots are wanted.
+struct Goal<'a> {
+    e: &'a Expr,
+    x: &'a Expr,
+    real: bool,
+}
+
 /// The roots of `f = 0` in `x`, each once, in giac's order; `None` when
 /// they are not found here.
 fn roots(
@@ -233,40 +243,8 @@ fn roots(
     x: &Expr,
     real: bool,
 ) -> Result<Option<Vec<Expr>>, EvalError> {
-    if !f.contains(x) {
-        let every = *f == Expr::from(0);
-        return Ok(Some(if every { vec![x.clone()] } else { Vec::new() }));
-    }
-    let Some(p) = convert(ev, e, std::slice::from_ref(f), true)? else {
-        return Ok(None);
-    };
-    let Some(k) = p.variable(x) else {
-        return Ok(None);
-    };
-    if p.generators()
-        .iter()
-        .enumerate()
-        .any(|(j, g)| j != k && g.contains(x))
-        || within_dense(ev, e, &p, Dense::All).is_none()
-    {
-        return Ok(None);
-    }
-    let unknown = Unknown { p: &p, k, real };
-    let n = p.generators().len();
-    let found = match &p.fractions()[0] {
-        Fraction::Integers { num, den } => {
-            factor_roots(ev, e, &unknown, &SparseRing::new(Integers, n), num, den)?
-        }
-        Fraction::GaussianIntegers { num, den } => factor_roots(
-            ev,
-            e,
-            &unknown,
-            &SparseRing::new(GaussianIntegers, n),
-            num,
-            den,
-        )?,
-    };
-    let Some(found) = found else {
+    let goal = Goal { e, x, real };
+    let Some(found) = roots_at(ev, &goal, f, 0)? else {
         return Ok(None);
     };
     let mut unique: Vec<Expr> = Vec::with_capacity(found.len());
@@ -276,6 +254,57 @@ fn roots(
         }
     }
     Ok(Some(ordered(ev.context(), unique)))
+}
+
+/// The roots of `f = 0`, `depth` steps of [`transcendental`] in: by
+/// factoring when `f` is a rational function of the unknown, else by
+/// [`transcendental`]; maybe repeated, in no order.
+fn roots_at(
+    ev: &mut Eval<'_>,
+    goal: &Goal<'_>,
+    f: &Expr,
+    depth: u32,
+) -> Result<Option<Vec<Expr>>, EvalError> {
+    let (e, x) = (goal.e, goal.x);
+    if !f.contains(x) {
+        let every = *f == Expr::from(0);
+        return Ok(Some(if every { vec![x.clone()] } else { Vec::new() }));
+    }
+    let Some(p) = convert(ev, e, std::slice::from_ref(f), true)? else {
+        return Ok(None);
+    };
+    let k = p.variable(x);
+    let others: Vec<usize> = (0..p.generators().len())
+        .filter(|&j| Some(j) != k && p.generators()[j].contains(x))
+        .collect();
+    if !others.is_empty() {
+        return transcendental::roots(ev, goal, f, &p, k.is_some(), &others, depth);
+    }
+    let Some(k) = k else {
+        return Ok(None);
+    };
+    if within_dense(ev, e, &p, Dense::All).is_none() {
+        return Ok(None);
+    }
+    let unknown = Unknown {
+        p: &p,
+        k,
+        real: goal.real,
+    };
+    let n = p.generators().len();
+    match &p.fractions()[0] {
+        Fraction::Integers { num, den } => {
+            factor_roots(ev, e, &unknown, &SparseRing::new(Integers, n), num, den)
+        }
+        Fraction::GaussianIntegers { num, den } => factor_roots(
+            ev,
+            e,
+            &unknown,
+            &SparseRing::new(GaussianIntegers, n),
+            num,
+            den,
+        ),
+    }
 }
 
 /// The roots of the factors of `num / den` that hold the unknown and are
@@ -670,3 +699,4 @@ mod linear;
 mod radicals;
 #[cfg(test)]
 mod tests;
+mod transcendental;

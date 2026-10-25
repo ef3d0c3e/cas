@@ -247,9 +247,14 @@ fn what_stays() {
             "Solve[Plus[-1, Times[-1, x], Power[x, 65]], x]",
             "Solve[Plus[-1, Times[-1, x], Power[x, 65]], x]",
         ),
+        // x e^x = 1, giac's LambertW; sin x = cos x.
         (
-            "Solve[Plus[-1/2, Sin[x]], x]",
-            "Solve[Plus[-1/2, Sin[x]], x]",
+            "Solve[Equation[Times[x, Exp[x]], 1], x]",
+            "Solve[Equation[Times[x, Exp[x]], 1], x]",
+        ),
+        (
+            "Solve[Equation[Sin[x], Cos[x]], x]",
+            "Solve[Equation[Sin[x], Cos[x]], x]",
         ),
         ("Solve[Power[x, 2], 2]", "Solve[Power[x, 2], 2]"),
         ("Solve[Power[x, 2]]", "Solve[Power[x, 2]]"),
@@ -539,5 +544,85 @@ fn linear_systems() {
             "List[1]",
         ),
         ("Solve[List[Equation[x, 1], Equation[x, 2]], x]", "List[]"),
+    ]);
+}
+
+/// Equations in functions of the unknown (CAS-213): substitution and
+/// inversion to giac's principal solutions, square roots squared away and
+/// the candidates checked.
+#[test]
+fn transcendental_equations() {
+    check(&[
+        ("Solve[Equation[Exp[x], 2], x]", "List[Log[2]]"),
+        ("Solve[Equation[Log[x], 3], x]", "List[Exp[3]]"),
+        ("Solve[Equation[Log[x], -1], x]", "List[Exp[-1]]"),
+        ("Solve[Equation[Sin[x], 0], x]", "List[0, Pi]"),
+        (
+            "Solve[Equation[Sin[x], 1/2], x]",
+            "List[Times[1/6, Pi], Times[5/6, Pi]]",
+        ),
+        (
+            "Solve[Equation[Cos[x], 1/2], x]",
+            "List[Times[-1/3, Pi], Times[1/3, Pi]]",
+        ),
+        ("Solve[Equation[Tan[x], 1], x]", "List[Times[1/4, Pi]]"),
+        (
+            "Solve[Equation[Cos[x], 0], x]",
+            "List[Times[-1/2, Pi], Times[1/2, Pi]]",
+        ),
+        (
+            "Solve[Equation[Sin[Times[2, x]], 1], x]",
+            "List[Times[1/4, Pi]]",
+        ),
+        ("Solve[Equation[ArcTan[x], 1], x]", "List[Tan[1]]"),
+        ("Solve[Equation[ArcSin[x], 1/2], x]", "List[Sin[1/2]]"),
+        // No real solution; a complex one.
+        ("Solve[Equation[Exp[x], -1], x]", "List[]"),
+        ("CSolve[Equation[Exp[x], -1], x]", "List[Times[I, Pi]]"),
+        ("Solve[Equation[Sin[x], 2], x]", "List[]"),
+        ("Solve[Equation[Power[x, 1/2], -1], x]", "List[]"),
+        // Roots: sqrt(x)=3, 1/sqrt(x)=2, x^(1/3)=2, sqrt(x^2+1)=2.
+        ("Solve[Equation[Power[x, 1/2], 3], x]", "List[9]"),
+        ("Solve[Equation[Power[x, -1/2], 2], x]", "List[1/4]"),
+        ("Solve[Equation[Power[x, 1/3], 2], x]", "List[8]"),
+        (
+            "Solve[Equation[Power[Plus[1, Power[x, 2]], 1/2], 2], x]",
+            "List[Times[-1, Power[3, 1/2]], Power[3, 1/2]]",
+        ),
+        // Squared away, the candidates checked: sqrt(x+1)=x-1 is 3, not 0.
+        (
+            "Solve[Equation[Power[Plus[x, 1], 1/2], Plus[x, -1]], x]",
+            "List[3]",
+        ),
+        (
+            "Solve[Equation[Plus[Power[Plus[x, -1], 1/2], 1], x], x]",
+            "List[1, 2]",
+        ),
+        (
+            "Solve[Equation[Plus[Power[x, 1/2], Power[Plus[x, 5], 1/2]], 5], x]",
+            "List[4]",
+        ),
+        // Polynomial in one function: exp(2x)-3exp(x)+2, exp(x)+exp(-x)=3,
+        // sin(x)^2=1/4.
+        (
+            "Solve[Plus[2, Times[-3, Exp[x]], Exp[Times[2, x]]], x]",
+            "List[0, Log[2]]",
+        ),
+        (
+            "Solve[Equation[Plus[Exp[x], Exp[Times[-1, x]]], 3], x]",
+            "List[Log[Plus[3/2, Times[-1/2, Power[5, 1/2]]]], \
+             Log[Plus[3/2, Times[1/2, Power[5, 1/2]]]]]",
+        ),
+        (
+            "Solve[Equation[Power[Sin[x], 2], 1/4], x]",
+            "List[Times[-1/6, Pi], Times[1/6, Pi], Times[5/6, Pi], Times[7/6, Pi]]",
+        ),
+        // 2^x = 8, ln(x^2-3) = 0, exp(x^2) = e.
+        ("Solve[Equation[Power[2, x], 8], x]", "List[3]"),
+        (
+            "Solve[Equation[Log[Plus[-3, Power[x, 2]]], 0], x]",
+            "List[-2, 2]",
+        ),
+        ("Solve[Equation[Exp[Power[x, 2]], E], x]", "List[-1, 1]"),
     ]);
 }
