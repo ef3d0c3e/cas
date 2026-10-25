@@ -1,0 +1,102 @@
+# Workloads for instruction counts and times, on demand (CAS-141, CAS-155):
+# an ignored test of one crate's library, built in release, run under
+# `perf stat` when the runner allows it and `/usr/bin/time` always, the best
+# time of a few runs. With `base`, the same runs of another commit too, on the
+# same runner, for a comparison. Like the tests, it runs here, never on the
+# development machine (CAS-158):
+#
+#   gh workflow run workload.yml -f base=<commit>
+#   gh workflow run workload.yml -f package=cas-poly \
+#       -f test=sparse::tests::sparse_workload \
+#       -f runs='CAS_POLY_SPARSE=fateman;CAS_POLY_SPARSE=pearce'
+name: Workload
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: The crate
+        default: cas-poly
+      test:
+        description: The ignored test, by its path in the library
+        default: sparse::tests::sparse_workload
+      runs:
+        description: The runs, separated by semicolons, each its space-separated NAME=value settings
+        default: CAS_POLY_SPARSE=fateman-inputs;CAS_POLY_SPARSE=fateman;CAS_POLY_SPARSE=pearce-inputs;CAS_POLY_SPARSE=pearce
+      repeat:
+        description: Timed runs of each, the best kept
+        default: '3'
+      base:
+        description: Another commit to measure alike, or nothing
+        default: ''
+
+env:
+  CARGO_TERM_COLOR: always
+  PACKAGE: ${{ inputs.package }}
+  TEST: ${{ inputs.test }}
+  RUNS: ${{ inputs.runs }}
+  REPEAT: ${{ inputs.repeat }}
+  BASE: ${{ inputs.base }}
+
+jobs:
+  workload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y m4
+          sudo apt-get install -y linux-tools-common "linux-tools-$(uname -r)" || true
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build
+        run: |
+          bin() {
+            cargo test --release -p "$PACKAGE" --lib --no-run --message-format=json \
+              | jq -r 'select(.executable != null) | .executable' | tail -1
+          }
+          echo "HEAD_BIN=$(bin)" >> "$GITHUB_ENV"
+          if [ -n "$BASE" ]; then
+            git worktree add ../base "$BASE"
+            cd ../base
+            export CARGO_TARGET_DIR="$GITHUB_WORKSPACE/target-base"
+            echo "BASE_BIN=$(bin)" >> "$GITHUB_ENV"
+          fi
+      - name: Run
+        run: |
+          sudo sysctl -w kernel.perf_event_paranoid=1 || true
+          perf=false
+          if command -v perf >/dev/null && perf stat -e instructions:u true 2>/dev/null; then
+            perf=true
+          fi
+          table="| Run | Commit | Instructions | Best time (s) | Max RSS (MB) |"$'\n'"|---|---|---|---|---|"
+          measure() {
+            local label=$1 bin=$2 settings=$3 best='' rss='' instructions='-'
+            echo "== $label: $settings"
+            if $perf; then
+              env $settings perf stat -x, -e instructions:u -o perf.txt \
+                "$bin" "$TEST" --ignored --exact --nocapture
+              instructions=$(awk -F, '/instructions/ { print $1 }' perf.txt)
+            fi
+            for _ in $(seq "$REPEAT"); do
+              env $settings /usr/bin/time -o time.txt -f '%e %M' \
+                "$bin" "$TEST" --ignored --exact --nocapture 2>&1 | grep -v '^$' | tail -3
+              read -r seconds kb < time.txt
+              if [ -z "$best" ] || awk "BEGIN { exit !($seconds < $best) }"; then best=$seconds; fi
+              rss=$((kb / 1024))
+            done
+            table+=$'\n'"| $settings | $label | $instructions | $best | $rss |"
+          }
+          IFS=';' read -ra runs <<< "$RUNS"
+          for settings in "${runs[@]}"; do
+            measure "$(git rev-parse --short HEAD)" "$HEAD_BIN" "$settings"
+            if [ -n "$BASE" ]; then
+              measure "$(git -C ../base rev-parse --short HEAD)" "$BASE_BIN" "$settings"
+            fi
+          done
+          echo "$table"
+          echo "$table" >> "$GITHUB_STEP_SUMMARY"

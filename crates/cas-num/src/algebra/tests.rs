@@ -73,6 +73,11 @@ fn ring_laws<R: Ring>(
     same(&r.elem_integer(&Integer::ONE), &r.one(), "hom 1")?;
     let ch = Integer::from(r.characteristic());
     same(&r.elem_integer(&ch), &r.zero(), "characteristic")?;
+    for x in [a, b, c] {
+        if let Some(k) = r.small_preimage(x) {
+            same(&r.elem_integer(&Integer::from(k)), x, "small preimage")?;
+        }
+    }
     Ok(())
 }
 
@@ -430,6 +435,40 @@ fn prime_field_construction() {
         f.ring().to_natural(&f.inv(&three).unwrap()),
         Natural::from(2u64)
     );
+}
+
+/// Which elements have a small preimage: integers in `i64`, integral
+/// rationals likewise, word residues below `2^63`; none over the rings
+/// without one at hand.
+#[test]
+fn small_preimages() {
+    let big = Integer::from(i64::MAX) + Integer::ONE;
+    assert_eq!(Integers.small_preimage(&Integer::from(-5)), Some(-5));
+    assert_eq!(
+        Integers.small_preimage(&Integer::from(i64::MIN)),
+        Some(i64::MIN)
+    );
+    assert_eq!(Integers.small_preimage(&big), None);
+    assert_eq!(Rationals.small_preimage(&Rational::from(7)), Some(7));
+    let half = Rational::new(Integer::ONE, Integer::from(2));
+    assert_eq!(Rationals.small_preimage(&half), None);
+    assert_eq!(Rationals.small_preimage(&Rational::from(big.clone())), None);
+    let r = ModWord::new(u64::MAX);
+    assert_eq!(r.small_preimage(&r.elem_integer(&Integer::from(-1))), None);
+    assert_eq!(
+        r.small_preimage(&r.elem_integer(&Integer::from(9))),
+        Some(9)
+    );
+    let f = WordPrimeField::new(u64::MAX - 58).unwrap();
+    assert_eq!(f.small_preimage(&f.elem_integer(&Integer::from(-1))), None);
+    assert_eq!(
+        f.small_preimage(&f.elem_integer(&Integer::from(i64::MAX))),
+        Some(i64::MAX)
+    );
+    let g = BigPrimeField::new(Natural::from(5u64)).unwrap();
+    assert_eq!(g.small_preimage(&g.elem_integer(&Integer::from(3))), None);
+    let i = Complex::new(Rational::ZERO, Rational::ONE);
+    assert_eq!(GaussianIntegers.small_preimage(&i), None);
 }
 
 #[test]

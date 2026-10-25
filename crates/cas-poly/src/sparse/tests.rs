@@ -1,6 +1,7 @@
 //! Tests of sparse polynomials against a naive reference, a map from
-//! exponent vectors to coefficients, over ℤ, ℚ and 𝔽ₚ; the packed fields
-//! at their boundaries; the benchmark products of CAS-DOC-8 §13.
+//! exponent vectors to coefficients, over ℤ, ℚ and 𝔽ₚ; the product's
+//! kernels and accumulators; the packed fields at their boundaries; the
+//! benchmark products of CAS-DOC-8 §13.
 
 #![allow(
     clippy::many_single_char_names,
@@ -8,15 +9,17 @@
 )]
 
 use std::collections::BTreeMap;
+use std::sync::atomic::AtomicBool;
 
 use cas_num::algebra::{EuclideanDomain, Integers, Rationals, Ring, WordPrimeField};
 use cas_num::{Integer, Rational};
 use proptest::prelude::*;
 
-use super::heap::{Overflow, product_terms};
+use super::heap::Overflow;
 use super::layout::Layout;
+use super::product::{Accumulator, Wide, heap_terms, mul_by, through_arrays};
 use super::{Sparse, SparseRing};
-use crate::cancel::Never;
+use crate::cancel::{Cancelled, Never};
 use crate::dense::DenseRing;
 
 /// A polynomial as a map from exponent vectors to non-zero coefficients.
@@ -307,26 +310,16 @@ fn packed_fields_at_their_boundaries() {
         mono(&[127, 0, 1]).repacked(layout),
         mono(&[1, 0, 0]).repacked(layout),
     );
-    assert_eq!(
-        product_terms(&ring, &a, &b, layout, &Never).unwrap(),
-        Err(Overflow)
-    );
+    assert_eq!(heap_terms(&ring, &a, &b, layout), Err(Overflow));
     let a = mono(&[126, 0, 1]).repacked(layout);
-    assert_eq!(
-        product_terms(&ring, &a, &b, layout, &Never).unwrap(),
-        Ok(mono(&[127, 0, 1]))
-    );
+    assert_eq!(heap_terms(&ring, &a, &b, layout), Ok(mono(&[127, 0, 1])));
     for var in 0..3 {
         let mut e = [0; 3];
         e[var] = 127;
         let mut one = [0; 3];
         one[var] = 1;
         let (a, b) = (mono(&e).repacked(layout), mono(&one).repacked(layout));
-        assert_eq!(
-            product_terms(&ring, &a, &b, layout, &Never).unwrap(),
-            Err(Overflow),
-            "x{var}"
-        );
+        assert_eq!(heap_terms(&ring, &a, &b, layout), Err(Overflow), "x{var}");
     }
     // The public product sizes its fields first.
     for (top, bits) in [
@@ -444,6 +437,229 @@ fn examples() {
         none.constant(Integer::from(12))
     );
     assert!(ring.zero().is_zero());
+}
+
+/// Every kernel and accumulator that can take `a b` gives the naive
+/// product, as does the product's own choice.
+fn check_kernels<R: Ring>(
+    ring: &SparseRing<R>,
+    a: &Sparse<R::Elem>,
+    b: &Sparse<R::Elem>,
+) -> Result<(), TestCaseError> {
+    let expected = ring.from_terms(naive_mul(ring.base(), &naive::<R>(a), &naive::<R>(b)));
+    prop_assert_eq!(&ring.mul(a, b), &expected);
+    for arrays in [false, true] {
+        for accumulator in [Accumulator::Words, Accumulator::Mixed, Accumulator::General] {
+            if let Some(p) = mul_by(ring, a, b, arrays, accumulator, &Never) {
+                prop_assert_eq!(
+                    &p.unwrap(),
+                    &expected,
+                    "arrays {}, {:?}",
+                    arrays,
+                    accumulator
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Coefficients for the accumulators: small ones, the edges of `i64`, and
+/// some past them, so that products and sums cross `2^126`, `2^127` and
+/// `2^128`, and some coefficients have no small preimage.
+fn coefficient() -> impl Strategy<Value = Integer> {
+    prop_oneof![
+        6 => (-9i64..9).prop_map(Integer::from),
+        2 => prop::sample::select(vec![i64::MIN, i64::MIN + 1, i64::MAX - 1, i64::MAX])
+            .prop_map(Integer::from),
+        1 => any::<i64>().prop_map(Integer::from),
+        1 => (any::<i64>(), any::<u64>())
+            .prop_map(|(h, l)| Integer::from(i128::from(h) << 64 | i128::from(l))),
+    ]
+}
+
+/// Terms of `n` variables for the kernels: exponents small enough for the
+/// arrays to take every product, coefficients from [`coefficient`].
+fn kernel_terms(n: usize) -> impl Strategy<Value = Vec<(Vec<u64>, Integer)>> {
+    prop::collection::vec((prop::collection::vec(0u64..4, n), coefficient()), 0..14)
+}
+
+type KernelCase = (usize, Vec<(Vec<u64>, Integer)>, Vec<(Vec<u64>, Integer)>);
+
+fn kernel_cases() -> impl Strategy<Value = KernelCase> {
+    (1usize..=4).prop_flat_map(|n| (Just(n), kernel_terms(n), kernel_terms(n)))
+}
+
+/// Products of two `i64`s at their edges, or anywhere.
+fn edge() -> impl Strategy<Value = i64> {
+    prop_oneof![
+        3 => prop::sample::select(vec![i64::MIN, i64::MIN + 1, -1, 0, 1, i64::MAX]),
+        1 => any::<i64>(),
+    ]
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(160))]
+
+    /// Over ℤ, coefficients in words and past them.
+    #[test]
+    fn kernels_over_integers((n, a, b) in kernel_cases()) {
+        let ring = SparseRing::new(Integers, n);
+        check_kernels(&ring, &ring.from_terms(a), &ring.from_terms(b))?;
+    }
+
+    /// Over ℚ, integers and fractions together; over word prime fields,
+    /// residues below `2^63`, which have small preimages, and above.
+    #[test]
+    fn kernels_over_rationals_and_fields(
+        (n, a, b) in kernel_cases(),
+        d in 1i64..4,
+        p in prop::sample::select(vec![7u64, (1 << 61) - 1, u64::MAX - 58]),
+    ) {
+        let q = SparseRing::new(Rationals, n);
+        let over = |t: &[(Vec<u64>, Integer)]| {
+            q.from_terms(t.iter().enumerate().map(|(k, (e, c))| {
+                let denominator = Integer::from(if k % 2 == 0 { d } else { 1 });
+                (e.clone(), Rational::new(c.clone(), denominator))
+            }))
+        };
+        check_kernels(&q, &over(&a), &over(&b))?;
+        let f = SparseRing::new(WordPrimeField::new(p).unwrap(), n);
+        let into = |t: &[(Vec<u64>, Integer)]| {
+            f.from_terms(t.iter().map(|(e, c)| (e.clone(), f.base().elem_integer(c))))
+        };
+        check_kernels(&f, &into(&a), &into(&b))?;
+    }
+
+    /// Sums of products in three words, against the integers.
+    #[test]
+    fn wide_sums(products in prop::collection::vec((edge(), edge()), 0..48)) {
+        let mut wide = Wide::default();
+        let mut sum = Integer::ZERO;
+        for (x, y) in products {
+            wide.add_product(x, y);
+            sum = &sum + &(&Integer::from(x) * &Integer::from(y));
+            prop_assert_eq!(wide.to_integer(), sum.clone(), "after {} × {}", x, y);
+        }
+    }
+}
+
+/// Sums in three words past `2^128` and down below `−2^128`: `(−2^63)²`
+/// sixty-four times, then `−2^63 (2^63 − 1)` two hundred times.
+#[test]
+fn wide_sums_past_two_words() {
+    let mut wide = Wide::default();
+    let mut sum = Integer::ZERO;
+    let up = &Integer::from(i64::MIN) * &Integer::from(i64::MIN);
+    for _ in 0..64 {
+        wide.add_product(i64::MIN, i64::MIN);
+        sum = &sum + &up;
+        assert_eq!(wide.to_integer(), sum);
+    }
+    assert_eq!(sum, Integer::from(2).pow(132));
+    let down = &Integer::from(i64::MIN) * &Integer::from(i64::MAX);
+    for _ in 0..200 {
+        wide.add_product(i64::MIN, i64::MAX);
+        sum = &sum + &down;
+        assert_eq!(wide.to_integer(), sum);
+    }
+    assert!(sum < -Integer::from(2).pow(133));
+}
+
+/// `n!`.
+fn factorial(n: u64) -> Integer {
+    (1..=n).fold(Integer::ONE, |f, k| &f * &Integer::from(k))
+}
+
+/// `(1 + x + y + z)^7` squared by every kernel and accumulator, against the
+/// multinomial coefficients of the 14th power; the heap's products chain
+/// the most in such a dense product.
+#[test]
+fn dense_products_by_every_kernel() {
+    let ring = SparseRing::new(Integers, 3);
+    let base = (0..3).fold(ring.one(), |s, v| ring.add(&s, &ring.var(v)));
+    let f = ring.pow(&base, 7);
+    let mut terms = Vec::new();
+    for x in 0..=14u64 {
+        for y in 0..=14 - x {
+            for z in 0..=14 - x - y {
+                let parts = factorial(x) * factorial(y) * factorial(z) * factorial(14 - x - y - z);
+                terms.push((vec![x, y, z], factorial(14).div_exact(&parts)));
+            }
+        }
+    }
+    let expected = ring.from_terms(terms);
+    assert_eq!(ring.mul(&f, &f), expected);
+    for arrays in [false, true] {
+        for accumulator in [Accumulator::Words, Accumulator::Mixed, Accumulator::General] {
+            let p = mul_by(&ring, &f, &f, arrays, accumulator, &Never);
+            assert_eq!(p, Some(Ok(expected.clone())), "{arrays} {accumulator:?}");
+        }
+    }
+}
+
+/// Products dense in their degree box go through the arrays, sparse ones
+/// through the heap; a chunk past its limit cannot take a product.
+#[test]
+fn the_kernel_suits_the_product() {
+    // Fateman's product at the sixth power: 13³ sums a chunk, 13 chunks,
+    // for 210 × 210 products of terms.
+    let ring = SparseRing::new(Integers, 4);
+    let base = (0..4).fold(ring.one(), |s, v| ring.add(&s, &ring.var(v)));
+    let f = ring.pow(&base, 6);
+    assert!(through_arrays(&f, &ring.add(&f, &ring.one())));
+    // Monagan and Pearce's at the fourth power: 25 chunks of 17³ 25 sums
+    // for 126 × 126 products.
+    let ring = SparseRing::new(Integers, 5);
+    let m = |c: i64, v: usize, e: u64| {
+        let mut x = vec![0; 5];
+        x[v] = e;
+        ring.monomial(Integer::from(c), &x)
+    };
+    let sum = |parts: &[Sparse<Integer>]| parts.iter().fold(ring.one(), |s, p| ring.add(&s, p));
+    let f = ring.pow(
+        &sum(&[m(1, 0, 1), m(1, 1, 1), m(2, 2, 2), m(3, 3, 3), m(5, 4, 5)]),
+        4,
+    );
+    let g = ring.pow(
+        &sum(&[m(1, 4, 1), m(1, 3, 1), m(2, 2, 2), m(3, 1, 3), m(5, 0, 5)]),
+        4,
+    );
+    assert!(!through_arrays(&f, &g));
+    // Dense in one variable, and with a gap.
+    let ring = SparseRing::new(Integers, 1);
+    let dense = ring.from_terms((0..20).map(|k| (vec![k], Integer::from(k + 1))));
+    assert!(through_arrays(&dense, &dense));
+    let gap = ring.add(&ring.one(), &ring.monomial(Integer::ONE, &[1000]));
+    assert!(!through_arrays(&gap, &gap));
+    // A chunk of 300001 sums is past the limit.
+    let ring = SparseRing::new(Integers, 2);
+    let (a, b) = (
+        ring.monomial(Integer::ONE, &[0, 200_000]),
+        ring.monomial(Integer::ONE, &[0, 100_000]),
+    );
+    assert_eq!(
+        mul_by(&ring, &a, &b, true, Accumulator::General, &Never),
+        None
+    );
+    assert_eq!(ring.mul(&a, &b), ring.monomial(Integer::ONE, &[0, 300_000]));
+}
+
+/// Both kernels stop when cancelled, whatever they accumulate in.
+#[test]
+fn cancelled_products() {
+    let ring = SparseRing::new(Integers, 3);
+    let base = (0..3).fold(ring.one(), |s, v| ring.add(&s, &ring.var(v)));
+    // 455 terms: 207025 products of terms, 2925 monomials.
+    let f = ring.pow(&base, 12);
+    let stop = AtomicBool::new(true);
+    for arrays in [false, true] {
+        for accumulator in [Accumulator::Words, Accumulator::Mixed, Accumulator::General] {
+            let p = mul_by(&ring, &f, &f, arrays, accumulator, &stop);
+            assert_eq!(p, Some(Err(Cancelled)), "{arrays} {accumulator:?}");
+        }
+    }
+    assert_eq!(ring.mul_with(&f, &f, &stop), Err(Cancelled));
 }
 
 /// A workload for instruction counts (CAS-136), as `products_workload`:

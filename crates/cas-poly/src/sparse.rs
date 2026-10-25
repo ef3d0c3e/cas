@@ -11,6 +11,7 @@
 
 mod heap;
 mod layout;
+mod product;
 
 #[cfg(test)]
 mod tests;
@@ -105,23 +106,33 @@ impl<E> Sparse<E> {
             .unwrap_or(0)
     }
 
+    /// The packed exponents in `layout`, wide enough: borrowed when they
+    /// are in it already.
+    fn exps_in(&self, layout: Layout) -> Cow<'_, [u64]> {
+        if layout == self.layout {
+            return Cow::Borrowed(&self.exps);
+        }
+        let w = layout.words();
+        let mut exps = vec![0; self.coeffs.len() * w];
+        let mut e = vec![0; self.nvars()];
+        for k in 0..self.coeffs.len() {
+            for (var, x) in e.iter_mut().enumerate() {
+                *x = self.layout.get(self.mono(k), var);
+            }
+            layout.pack(&e, &mut exps[k * w..(k + 1) * w]);
+        }
+        Cow::Owned(exps)
+    }
+
     /// The same polynomial in `layout`, wide enough.
     fn repacked(&self, layout: Layout) -> Sparse<E>
     where
         E: Clone,
     {
-        if layout == self.layout {
-            return self.clone();
-        }
-        let w = layout.words();
-        let mut exps = vec![0; self.coeffs.len() * w];
-        for k in 0..self.coeffs.len() {
-            layout.pack(&self.exponents(k), &mut exps[k * w..(k + 1) * w]);
-        }
         Sparse {
             layout,
             coeffs: self.coeffs.clone(),
-            exps,
+            exps: self.exps_in(layout).into_owned(),
         }
     }
 
@@ -338,7 +349,10 @@ impl<R: Ring> SparseRing<R> {
         out.done()
     }
 
-    /// `a b` by Monagan and Pearce's heap \[MP07\], polling `cancel`.
+    /// `a b`, polling `cancel`: through arrays when the product's degree box
+    /// is small next to its products of terms, otherwise through Monagan and
+    /// Pearce's chained heap \[MP07, MP11\]; the sums of products of
+    /// word-sized coefficients in three machine words.
     ///
     /// # Errors
     ///
@@ -349,7 +363,7 @@ impl<R: Ring> SparseRing<R> {
         b: &Sparse<R::Elem>,
         cancel: &dyn Cancel,
     ) -> Result<Sparse<R::Elem>, Cancelled> {
-        heap::mul(self, a, b, cancel)
+        product::mul(self, a, b, cancel)
     }
 
     /// `p(point)`, the coefficient ring's value at a point of `nvars`

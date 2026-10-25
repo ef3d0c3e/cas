@@ -79,6 +79,15 @@ pub trait Ring {
         }
         r
     }
+
+    /// An `n` in `i64` whose image under the canonical map ℤ → R is `a`,
+    /// when the ring has one at hand; `None` by default. Since that map is a
+    /// homomorphism, sums of products of such `n`, accumulated in machine
+    /// words and mapped by [`Ring::elem_integer`], are the sums in `R`:
+    /// sparse products use it (CAS-155).
+    fn small_preimage(&self, _a: &Self::Elem) -> Option<i64> {
+        None
+    }
 }
 
 /// An integral domain with division with remainder.
@@ -191,6 +200,10 @@ impl Ring for Integers {
     fn pow(&self, a: &Integer, e: u64) -> Integer {
         a.pow(e)
     }
+
+    fn small_preimage(&self, a: &Integer) -> Option<i64> {
+        a.to_i64()
+    }
 }
 
 impl EuclideanDomain for Integers {
@@ -255,6 +268,14 @@ impl Ring for Rationals {
 
     fn is_zero(&self, a: &Rational) -> bool {
         a.is_zero()
+    }
+
+    fn small_preimage(&self, a: &Rational) -> Option<i64> {
+        if a.denom().is_one() {
+            a.numer().to_i64()
+        } else {
+            None
+        }
     }
 }
 
@@ -323,6 +344,10 @@ impl Ring for ModWord {
 
     fn pow(&self, a: &u64, e: u64) -> u64 {
         ModWord::pow(self, *a, e)
+    }
+
+    fn small_preimage(&self, a: &u64) -> Option<i64> {
+        i64::try_from(*a).ok()
     }
 }
 
@@ -460,6 +485,10 @@ impl<M: Ring> Ring for PrimeField<M> {
 
     fn pow(&self, a: &M::Elem, e: u64) -> M::Elem {
         self.ring.pow(a, e)
+    }
+
+    fn small_preimage(&self, a: &M::Elem) -> Option<i64> {
+        self.ring.small_preimage(a)
     }
 }
 

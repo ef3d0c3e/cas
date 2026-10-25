@@ -90,7 +90,14 @@ algorithm here is taken from, or is compared with, are listed.
 - <a id="mp11"></a>**[MP11]** Michael Monagan and Roman Pearce, "Sparse
   polynomial division using a heap", *Journal of Symbolic Computation* 46
   (7) (2011), 807–822. Heap division as costly as multiplication,
-  fraction-free over ℤ.
+  fraction-free over ℤ. §5.2, chaining: a product entering the heap is
+  compared with the top, then from the bottom up, and joins a chain of like
+  terms where a comparison finds its monomial; all equal terms come out
+  before their successors go in. §5.3: for monomials stored apart, the
+  extraction promotes the larger child, one comparison a level, then
+  places the last element; products of two word-sized coefficients add
+  into a three-word array, the others through GMP, and the two sums meet
+  at the end of each term.
 - <a id="par05"></a>**[Par05]** Bernard Parisse, "A correct proof of the
   heuristic GCD algorithm", note, Institut Fourier, Grenoble, January 2005;
   an earlier version is arXiv:cs/0206032 (2002). Theorem 1: for integers
@@ -139,7 +146,10 @@ algorithm here is taken from, or is compared with, are listed.
   Number Theory*, documentation of `fmpq_poly.h`,
   <https://flintlib.org/doc/fmpq_poly.html>. A polynomial over ℚ as an
   integer polynomial over one positive denominator, coprime to it, with zero
-  as `0/1`.
+  as `0/1`. Of `fmpz_mpoly.h`, <https://flintlib.org/doc/fmpz_mpoly/>:
+  `fmpz_mpoly_mul_array` accumulates the products "in a dense array, one
+  slice of the main variable (lex) or of the total degree (degree
+  orderings) at a time", and declines when the array would be too large.
 - <a id="sympy"></a>**[SymPy]** SymPy 1.14, `sympy/polys/euclidtools.py`:
   `dup_zz_heu_gcd` and `dmp_zz_heu_gcd`, the heuristic gcd, which tries
   `HEU_GCD_MAX = 6` points, the next from `x` as `73794*x*K.sqrt(K.sqrt(x))

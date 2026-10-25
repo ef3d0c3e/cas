@@ -39,13 +39,43 @@ of linked lists.
 Merging the two term lists, monomials compared as words; equal monomials
 add, and zero sums drop out.
 
-## Products: Johnson's heap [Joh74, MP07]
+## Products (CAS-136, CAS-155)
+
+`src/sparse/product.rs`. A product goes through one of two kernels, and its
+sums of products through one of three accumulators.
+
+### Arrays, for products dense in their degree box
+
+- **Chunks.** The box of the product's degrees in the variables after the
+  first, `x₁ … xₙ₋₁`, is a chunk: an array of sums, one for each monomial,
+  at the index `Σ eᵥ sᵥ`. The strides `sᵥ` are those of the box, `x₁`'s the
+  largest, so that indices order monomials as lexicographic order does, and
+  the index of a product is the sum of its factors' indices.
+- **One degree of `x₀` at a time.** Lexicographic order keeps the terms of
+  each degree in `x₀` together: the parts of `a` and `b`. For each degree
+  `d` of the product in `x₀`, from the largest down, the parts whose degrees
+  add up to `d` add their products into the chunk, with no comparison. The
+  chunk is then read back from the largest index touched to the smallest,
+  which gives the terms of `x₀^d` in order, and is left zero for the next
+  degree. FLINT's `fmpz_mpoly_mul_array` likewise accumulates "one slice of
+  the main variable" at a time [FLINT]. One chunk is all the memory, and it
+  stays in the cache.
+- **When.** A chunk holds at most `2^18` sums. The arrays then take a product
+  when the sums read back and the parts of `a` looked up, `(deg_x₀ a +
+  deg_x₀ b + 1) (chunk + parts)`, are at most 4 for each product of terms.
+  - Fateman's product: 41 chunks of 41³ sums (1.6 MB of words) for 113 M
+    products of terms.
+  - Monagan and Pearce's: a chunk of 49³ · 73 sums, past the limit, and too
+    sparse anyway (73 chunks for 38 M products).
+  - In one variable, a chunk is one sum: dense products take the arrays,
+    and `1 + x^1000` squared takes the heap.
+
+### Johnson's heap [Joh74, MP07], otherwise
 
 The products `aᵢ bⱼ` of a row `i` decrease with `j`. A binary heap merges the
 rows:
 - it holds one product per row, keyed by its monomial;
-- the largest comes out, and the products of equal monomials add up as they
-  come;
+- the largest comes out, and the products of equal monomials add up;
 - each popped `(i, j)` is replaced by `(i, j+1)`.
 
 The result comes out in order, and needs no sort.
@@ -54,13 +84,44 @@ The result comes out in order, and needs no sort.
   which is taken as the first.
 - **Slots.** Each product's monomial is computed when it enters the heap, and
   stored in a slot that its successor reuses. The storage is linear in the
-  rows.
-- **Fields.** Both factors are repacked first in fields wide enough for the
-  sum of their largest exponents, so no product overflows. The guards still
-  check every monomial added. Were one to overflow, the product would start
-  over one bit wider; `packed_fields_at_their_boundaries` drives that path
-  with fields made too narrow on purpose.
-- `Cancel` is polled every 1024 monomials.
+  rows, and the heap itself moves slot numbers, not monomials.
+- **Chaining** [MP11 §5.2]. A product entering the heap is compared with the
+  top first, then from the bottom up. When a comparison finds its monomial,
+  it joins that slot's chain instead of taking a place. Every product of the
+  top monomial comes out, chains and all, before their successors go in, so
+  that the largest of those chain at the top.
+- **Extraction** [MP11 §5.3]. The hole left at the top goes down along the
+  larger children, one comparison a level. The last slot fills it, rising if
+  it must. That takes fewer comparisons than sifting the last slot down from
+  the top, two a level. MP11 does this for monomials kept outside the heap,
+  as ours are. The division shares the heap, unchained.
+- **Fields.** Both factors' exponents are repacked first (not their
+  coefficients) in fields wide enough for the sum of their largest
+  exponents, so no product overflows. The guards still check every monomial
+  added. Were one to overflow, the product would start over one bit wider;
+  `packed_fields_at_their_boundaries` drives that path with fields made too
+  narrow on purpose.
+
+`Cancel` is polled every 2^16 products of terms by the arrays, and every 1024
+monomials by the heap.
+
+### Accumulators [MP11 §5.3]
+
+cas-num's `Ring::small_preimage(c)` is an `i64` whose image in the ring is
+`c`, when the ring has one at hand: an integer that fits, an integral
+rational, a word residue below `2^63`. The map from ℤ is a homomorphism, so a
+sum of products of preimages, mapped into the ring once, is the sum in the
+ring.
+- **Words**, when every coefficient of both factors has a preimage. Each
+  product of two `i64`s, at most `2^126` in absolute value, adds into three
+  words, `hi 2^128 + lo`; fewer than `2^64` of them stay below `2^190`. Each
+  term of the result maps its sum into the ring once, and no coefficient
+  arithmetic allocates.
+- **Mixed**, when some have: the products of two preimages in words, the
+  others in the ring, added together at the end of each term. MP11 does the
+  same with word-sized and multiprecision integers.
+- **In the ring**, when none has (ℤ\[i\], ℚ(i), the big prime fields of
+  Hensel lifting).
 
 ## Division [MP07, MP11]
 
@@ -96,7 +157,7 @@ The result comes out in order, and needs no sort.
 
 ## Other operations
 
-- **Powers:** binary powering by heap products.
+- **Powers:** binary powering by products.
 - **Evaluation:** at a point, each term's powers multiplied out.
 - **Partial evaluation** (`eval_var`): rebuilds the terms, which must be
   sorted again.
@@ -162,6 +223,18 @@ to coefficients.
 - **Mixed layouts.** Exponents around 127 and 255, the largest of 8 and 9
   bits, so that operands come in different layouts and products cross into
   wider ones.
+- **Kernels and accumulators** (CAS-155). Every kernel and accumulator that
+  can take a product, forced, against the naive product:
+  - over ℤ, coefficients small, at the edges of `i64` and past them, so that
+    sums cross `2^127` and `2^128` and some products go to the ring;
+  - over ℚ, integers and fractions together; over word prime fields,
+    residues below `2^63` and above (modulo `2^64 − 59`);
+  - `(1 + x + y + z)^7` squared, against the multinomial coefficients.
+  - The three-word sums against the integers, at the edges of `i64` and past
+    `±2^128`.
+  - The kernel each product takes: arrays for Fateman's, the heap for
+    Monagan and Pearce's, both in one variable; a chunk past its limit.
+  - Both kernels stop when cancelled.
 - **Boundaries.**
   - The guards report overflow in every field of a layout too narrow.
   - Products sized from 8 to 64 bits, repacked down when large exponents
