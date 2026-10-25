@@ -228,6 +228,46 @@ fn rational_functions() {
     );
 }
 
+/// The heuristics of CAS-199: derivative-divides, parts, an exponential
+/// times a sine or cosine, products of sines and cosines; giac's answers up
+/// to a constant (`1/(x ln x)` aside: giac's `ln(ln(x))` is complex below
+/// 1, where this CAS's `ln|ln x|` is real).
+#[test]
+fn heuristics() {
+    check(
+        &[
+            "integrate(2*x*exp(x^2),x)",
+            "integrate(x*exp(x^2),x)",
+            "integrate(cos(x)*exp(sin(x)),x)",
+            "integrate(sqrt(x^2+1)*x,x)",
+            "integrate(ln(x)/x,x)",
+            "integrate(sin(x)*cos(x)^2,x)",
+            "integrate(exp(sqrt(x))/sqrt(x),x)",
+            "integrate(cos(ln(x))/x,x)",
+            "integrate(x*exp(x),x)",
+            "integrate(x^2*sin(x),x)",
+            "integrate(x*cos(2*x+1),x)",
+            "integrate(x^3*exp(-x),x)",
+            "integrate(x*ln(x),x)",
+            "integrate(x^2*ln(x),x)",
+            "integrate(ln(x)^2,x)",
+            "integrate(atan(x),x)",
+            "integrate(x*atan(x),x)",
+            "integrate(asin(x),x)",
+            "integrate(exp(x)*sin(x),x)",
+            "integrate(exp(2*x)*cos(3*x),x)",
+            "integrate(sin(x)*cos(x),x)",
+            "integrate(cos(x)^2,x)",
+            "integrate(sin(x)^2,x)",
+            "integrate(sin(x)^3,x)",
+            "integrate(sin(2*x)*cos(3*x),x)",
+            "integrate(x*sin(x)^2,x)",
+            "integrate(exp(x)*sin(x)*cos(x),x)",
+        ],
+        false,
+    );
+}
+
 /// Pairs of quadratic residues of CAS-197: real ones joined in one
 /// logarithm, complex ones as Rioboo's arctangents of polynomials, which
 /// giac's answers here match up to a constant.

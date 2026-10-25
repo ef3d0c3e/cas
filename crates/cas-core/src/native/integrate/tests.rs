@@ -1,8 +1,9 @@
-//! Tests of `Integrate` (CAS-194 to CAS-198): giac's antiderivatives,
-//! compared as values once evaluated; definite integrals, by value, and the
-//! improper ones that stay with their warnings; what stays; the trace and
-//! its verification; and a proptest that the derivative of a polynomial's
-//! antiderivative is the polynomial.
+//! Tests of `Integrate` (CAS-194 to CAS-199): giac's antiderivatives,
+//! compared as values once evaluated; the heuristics, by derivatives at
+//! points; definite integrals, by value, and the improper ones that stay
+//! with their warnings; what stays; the trace and its verification; and a
+//! proptest that the derivative of a polynomial's antiderivative is the
+//! polynomial.
 
 use proptest::prelude::*;
 
@@ -521,16 +522,111 @@ fn improper_integrals_stay() {
     }
 }
 
-/// What the methods of CAS-194 to CAS-197 leave as it is.
+/// Whether `D[found, x]` and `f` have the same values at three points, by
+/// [`same_value`]: trigonometric identities are beyond `Together`.
+fn derivative_agrees(ctx: &Context, f: &Expr, found: &Expr) -> bool {
+    let x = Expr::symbol("x");
+    let Ok(derivative) = ctx.eval(&Expr::call(Symbol::D, [found.clone(), x.clone()])) else {
+        return false;
+    };
+    [(3, 7), (5, 2), (-4, 3)].into_iter().all(|(p, q)| {
+        let point = [(x.clone(), Expr::from(p) / Expr::from(q))];
+        let (d, f) = (derivative.substitute(&point), f.substitute(&point));
+        match (ctx.eval(&d), ctx.eval(&f)) {
+            (Ok(d), Ok(f)) => same_value(ctx, &d, &f),
+            _ => false,
+        }
+    })
+}
+
+/// The heuristics of CAS-199, on giac's cases: what integrates whole, its
+/// derivative the integrand at three points; giac's forms where they are
+/// this CAS's.
+#[test]
+fn heuristics() {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in [
+        // Derivative-divides: exp(x^2), ln|ln x| (giac's ln(ln(x))),
+        // exp(sin(x)), sqrt(x^2+1)*(x^2+1)/3, ln(x)^2/2, -cos(x)^3/3,
+        // 2*exp(sqrt(x)), sin(ln(x)).
+        "Integrate[Times[2, x, Exp[Power[x, 2]]], x]",
+        "Integrate[Power[Times[x, Log[x]], -1], x]",
+        "Integrate[Times[Cos[x], Exp[Sin[x]]], x]",
+        "Integrate[Times[x, Power[Plus[1, Power[x, 2]], 1/2]], x]",
+        "Integrate[Times[Power[x, -1], Log[x]], x]",
+        "Integrate[Times[Sin[x], Power[Cos[x], 2]], x]",
+        "Integrate[Times[Exp[Power[x, 1/2]], Power[x, -1/2]], x]",
+        "Integrate[Times[Cos[Log[x]], Power[x, -1]], x]",
+        // Parts, tabular: x*exp(x)-exp(x), 2*cos(x)+2*x*sin(x)-x^2*cos(x),
+        // and at linear arguments, with other bases.
+        "Integrate[Times[x, Exp[x]], x]",
+        "Integrate[Times[Power[x, 2], Sin[x]], x]",
+        "Integrate[Times[x, Cos[Plus[1, Times[2, x]]]], x]",
+        "Integrate[Times[Power[x, 3], Exp[Times[-1, x]]], x]",
+        "Integrate[Times[x, Power[2, x]], x]",
+        // Parts with a logarithm or an inverse function.
+        "Integrate[Times[x, Log[x]], x]",
+        "Integrate[Times[Power[x, 2], Log[x]], x]",
+        "Integrate[Power[Log[x], 2], x]",
+        "Integrate[ArcTan[x], x]",
+        "Integrate[Times[x, ArcTan[x]], x]",
+        "Integrate[ArcSin[x], x]",
+        // An exponential times a sine or cosine.
+        "Integrate[Times[Exp[x], Sin[x]], x]",
+        "Integrate[Times[Exp[Times[2, x]], Cos[Times[3, x]]], x]",
+        // Products of sines and cosines, alone or with more.
+        "Integrate[Times[Sin[x], Cos[x]], x]",
+        "Integrate[Power[Cos[x], 2], x]",
+        "Integrate[Power[Sin[x], 3], x]",
+        "Integrate[Times[Sin[Times[2, x]], Cos[Times[3, x]]], x]",
+        "Integrate[Times[x, Power[Sin[x], 2]], x]",
+        "Integrate[Times[Exp[x], Sin[x], Cos[x]], x]",
+    ] {
+        let e = read(input);
+        let found = ctx.eval(&e).unwrap();
+        if found.contains(&Expr::from(Symbol::INTEGRATE))
+            || !derivative_agrees(&ctx, &e.args()[0], &found)
+        {
+            wrong.push(format!("{input}: {found:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    check(&[
+        (
+            "Integrate[Times[2, x, Exp[Power[x, 2]]], x]",
+            "Exp[Power[x, 2]]",
+        ),
+        (
+            "Integrate[Power[Times[x, Log[x]], -1], x]",
+            "Log[Abs[Log[x]]]",
+        ),
+        (
+            "Integrate[Times[x, Exp[x]], x]",
+            "Plus[Times[-1, Exp[x]], Times[x, Exp[x]]]",
+        ),
+        (
+            "Integrate[Power[Cos[x], 2], x]",
+            "Plus[Times[1/2, x], Times[1/4, Sin[Times[2, x]]]]",
+        ),
+        (
+            "Integrate[Times[Sin[x], Power[Cos[x], 2]], x]",
+            "Times[-1/3, Power[Cos[x], 3]]",
+        ),
+    ]);
+}
+
+/// What the methods of CAS-194 to CAS-199 leave as it is.
 #[test]
 fn integrals_that_stay() {
     let ctx = Context::new();
     for input in [
-        // Arguments that are not linear, products the heuristics of CAS-199
-        // take.
+        // Arguments that are not linear, without the derivative that
+        // derivative-divides wants.
         "Integrate[Sin[Power[x, 2]], x]",
         "Integrate[Exp[Power[x, 2]], x]",
-        "Integrate[Times[x, Exp[x]], x]",
+        // giac's tan(x)-x: tan^2 is no product of sines and cosines.
+        "Integrate[Power[Tan[x], 2], x]",
         // Residues of degree 3 and 4.
         "Integrate[Power[Plus[-2, Power[x, 3]], -1], x]",
         "Integrate[Power[Plus[1, Power[x, 4]], -1], x]",
@@ -573,6 +669,10 @@ fn traces_verify() {
         "Integrate[Power[Plus[-1, Times[-1, x], Power[x, 2]], -1], x]",
         "Integrate[Power[Plus[1, Power[x, 3]], -1], x]",
         "Integrate[Times[a, Power[Plus[x, y], 2]], x]",
+        "Integrate[Times[Power[x, 2], Sin[x]], x]",
+        "Integrate[Times[Cos[x], Exp[Sin[x]]], x]",
+        "Integrate[Power[Cos[x], 2], x]",
+        "Integrate[Times[x, Log[x]], x]",
         "Integrate[Plus[x, f[x]], x]",
         "Integrate[List[x, Power[x, 2]], x]",
     ] {

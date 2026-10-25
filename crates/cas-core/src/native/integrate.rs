@@ -25,6 +25,11 @@
 //!   (CAS-197), two logarithms joined for real ones, a logarithm and
 //!   Rioboo's arctangents of polynomials for complex ones; the part whose
 //!   residues are of degree 3 or more stays under `Integrate`.
+//! - Heuristics on what is left (CAS-199, `heuristics`): an exponential
+//!   times a sine or cosine; a polynomial times an exponential, sine or
+//!   cosine, by parts; derivative-divides, `2x exp(x²)` as `exp(u)` in
+//!   `u = x²`; a polynomial times a logarithm or an inverse trigonometric
+//!   function, by parts; products of sines and cosines, linearised.
 //!
 //! `Integrate[f, x, a, b]`, and Mathematica's `Integrate[f, {x, a, b}]`, is
 //! `F(b) − F(a)` where the integrand is shown continuous between the bounds,
@@ -40,7 +45,7 @@
 use cas_num::algebra::{GaussianIntegers, Integers, Rationals};
 use cas_num::{Integer, Natural, Rational};
 use cas_poly::{
-    Cancel, Cancelled, Dense, DenseRing, Pair, RationalIntegral, Sparse, SparseRing, Surd,
+    Cancel, Cancelled, Dense, DenseRing, Pair, Ratio, RationalIntegral, Sparse, SparseRing, Surd,
 };
 
 use super::polynomial::{Numbers, convert};
@@ -104,6 +109,17 @@ pub(super) fn integrate(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// An antiderivative of `f` in `x`, the parts that do not integrate kept
 /// under `Integrate`; `None` when no part integrates.
 fn integral(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr) -> Result<Option<Expr>, EvalError> {
+    integral_at(ev, e, f, x, 0)
+}
+
+/// [`integral`] with the heuristics of CAS-199 nested `depth` deep.
+fn integral_at(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    f: &Expr,
+    x: &Expr,
+    depth: u8,
+) -> Result<Option<Expr>, EvalError> {
     if !f.contains(x) {
         return Ok(Some(f.clone() * x.clone()));
     }
@@ -115,7 +131,7 @@ fn integral(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr) -> Result<Option<Ex
             let mut done = Vec::new();
             let mut rest = Vec::new();
             for t in f.args() {
-                match integral(ev, e, t, x)? {
+                match integral_at(ev, e, t, x, depth)? {
                     Some(g) => done.push(g),
                     None => rest.push(t.clone()),
                 }
@@ -133,16 +149,23 @@ fn integral(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr) -> Result<Option<Ex
             let (constant, varying): (Vec<Expr>, Vec<Expr>) =
                 f.args().iter().cloned().partition(|a| !a.contains(x));
             if constant.is_empty() {
-                return rational(ev, e, f, x);
+                return match rational(ev, e, f, x)? {
+                    Some(g) => Ok(Some(g)),
+                    None => heuristics::integral(ev, e, f, x, depth),
+                };
             }
             // When the rest does not integrate, the product stays whole, as
             // giac leaves integrate(2*f(x),x).
             let varying: Expr = varying.into_iter().product();
-            Ok(integral(ev, e, &varying, x)?.map(|g| constant.into_iter().product::<Expr>() * g))
+            Ok(integral_at(ev, e, &varying, x, depth)?
+                .map(|g| constant.into_iter().product::<Expr>() * g))
         }
         _ => match table(f, x) {
             Some(g) => Ok(Some(g)),
-            None => rational(ev, e, f, x),
+            None => match rational(ev, e, f, x)? {
+                Some(g) => Ok(Some(g)),
+                None => heuristics::integral(ev, e, f, x, depth),
+            },
         },
     }
 }
@@ -572,6 +595,55 @@ fn terms_integrated<R: Numbers>(
     Some(p.ratio_expr(&shifted, &den))
 }
 
+/// `g` as a polynomial in `x` over ℚ, `None` when it is not one.
+fn polynomial(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    g: &Expr,
+    x: &Expr,
+) -> Result<Option<Dense<Rational>>, EvalError> {
+    Ok(rational_function(ev, e, g, x)?.and_then(|(num, den)| {
+        (den.degree() == Some(0)).then(|| {
+            let qx = DenseRing::new(Rationals);
+            let inverse = den.coeffs()[0].checked_recip().expect("not 0");
+            qx.scale(&num, &inverse)
+        })
+    }))
+}
+
+/// `g` as a rational function of `x` alone over ℚ, `None` when it is not
+/// one.
+fn rational_function(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    g: &Expr,
+    x: &Expr,
+) -> Result<Option<Ratio>, EvalError> {
+    let Some((p, _)) = in_x(ev, e, g, x)? else {
+        return Ok(None);
+    };
+    if p.generators().len() != 1 {
+        return Ok(None);
+    }
+    let Fraction::Integers { num, den } = &p.fractions()[0] else {
+        return Ok(None);
+    };
+    let ring = SparseRing::new(Integers, 1);
+    let qx = DenseRing::new(Rationals);
+    let to_q = |s: &Sparse<Integer>| {
+        let dense = ring.to_dense(s, 0).expect("one variable");
+        qx.poly(
+            dense
+                .coeffs()
+                .iter()
+                .map(|c| Rational::from(c.clone()))
+                .collect(),
+        )
+    };
+    Ok(Some((to_q(num), to_q(den))))
+}
+
 mod definite;
+mod heuristics;
 #[cfg(test)]
 mod tests;

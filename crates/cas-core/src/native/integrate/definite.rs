@@ -28,17 +28,16 @@
 //! with a warning, where giac answers `+infinity`, `undef` or the principal
 //! value, `∫_{−1}^{1} 1/x = 0`. Infinite bounds wait for limits.
 
-use cas_num::algebra::{EuclideanDomain, Integers, Rationals};
+use cas_num::algebra::{EuclideanDomain, Rationals};
 use cas_num::{Integer, Rational};
-use cas_poly::{Dense, DenseRing, Ratio, Sparse, SparseRing};
+use cas_poly::{Dense, DenseRing};
 
-use super::{Native, in_x, slope};
+use super::{Native, polynomial, rational_function, slope};
 use crate::assume::{Sign, range, sign_of};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
 use crate::native::approximation;
-use crate::poly::Fraction;
 use crate::symbol::Symbol;
 use crate::trace::Warning;
 
@@ -274,54 +273,6 @@ fn positive(region: &Region, p: &Dense<Rational>, strict: bool) -> Continuity {
     } else {
         Continuity::Unknown
     }
-}
-
-/// `g` as a polynomial in `x` over ℚ, `None` when it is not one.
-fn polynomial(
-    ev: &mut Eval<'_>,
-    e: &Expr,
-    g: &Expr,
-    x: &Expr,
-) -> Result<Option<Dense<Rational>>, EvalError> {
-    Ok(rational_function(ev, e, g, x)?.and_then(|(num, den)| {
-        (den.degree() == Some(0)).then(|| {
-            let qx = DenseRing::new(Rationals);
-            let inverse = den.coeffs()[0].checked_recip().expect("not 0");
-            qx.scale(&num, &inverse)
-        })
-    }))
-}
-
-/// `g` as a rational function of `x` alone over ℚ, `None` when it is not
-/// one.
-fn rational_function(
-    ev: &mut Eval<'_>,
-    e: &Expr,
-    g: &Expr,
-    x: &Expr,
-) -> Result<Option<Ratio>, EvalError> {
-    let Some((p, _)) = in_x(ev, e, g, x)? else {
-        return Ok(None);
-    };
-    if p.generators().len() != 1 {
-        return Ok(None);
-    }
-    let Fraction::Integers { num, den } = &p.fractions()[0] else {
-        return Ok(None);
-    };
-    let ring = SparseRing::new(Integers, 1);
-    let qx = DenseRing::new(Rationals);
-    let to_q = |s: &Sparse<Integer>| {
-        let dense = ring.to_dense(s, 0).expect("one variable");
-        qx.poly(
-            dense
-                .coeffs()
-                .iter()
-                .map(|c| Rational::from(c.clone()))
-                .collect(),
-        )
-    };
-    Ok(Some((to_q(num), to_q(den))))
 }
 
 /// What is known of `f` on the region (the module's rules).
