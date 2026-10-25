@@ -16,7 +16,13 @@ fn giac() -> Option<&'static Giac> {
 }
 
 /// The parameters' values where solutions with parameters are compared.
-const PARAMETERS: [(&str, i64, i64); 4] = [("a", 3, 7), ("b", 5, 11), ("c", -2, 13), ("y", 1, 5)];
+const PARAMETERS: [(&str, i64, i64); 5] = [
+    ("a", 3, 7),
+    ("b", 5, 11),
+    ("c", -2, 13),
+    ("y", 1, 5),
+    ("z", 2, 9),
+];
 
 /// Whether `a == b` evaluates to `True` in `ctx`.
 fn equal(ctx: &Context, a: &Expr, b: &Expr) -> bool {
@@ -38,10 +44,16 @@ fn close(ctx: &Context, a: &Expr, b: &Expr) -> bool {
 }
 
 /// Whether two solutions are one: the same, equal by `==`, or, with the
-/// parameters at their values and approximated, equal by `==` or close.
+/// parameters at their values and approximated, equal by `==` or close;
+/// tuples part by part.
 fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     if a == b || equal(ctx, a, b) {
         return true;
+    }
+    let list = Expr::from(Symbol::LIST);
+    if a.head() == Some(&list) && b.head() == Some(&list) {
+        return a.args().len() == b.args().len()
+            && a.args().iter().zip(b.args()).all(|(a, b)| same(ctx, a, b));
     }
     let rules: Vec<(Expr, Expr)> = PARAMETERS
         .iter()
@@ -191,6 +203,30 @@ fn higher_degrees() {
     .filter_map(|input| agrees_with(giac, &format!("evalf({input})"), input).err())
     .collect();
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Linear systems (CAS-212): giac's tuples, in any order.
+#[test]
+fn linear_systems() {
+    check(&[
+        "solve([x+y=1,x-y=3],[x,y])",
+        "solve([x+y+z=6,2*x-y+z=3,x+2*y-z=2],[x,y,z])",
+        "solve([x+y=1,2*x+2*y=2],[x,y])",
+        "solve([x+y=1,x+y=2],[x,y])",
+        "solve([a*x+y=1,x-y=b],[x,y])",
+        "solve([x+y=a,x-y=b],[x,y])",
+        "solve([x+y+z=1,x-y=0],[x,y,z])",
+        "solve([x+y=1,x-y=3],[x,y,z])",
+        "solve([x+y=1,x-y=3,2*x=4],[x,y])",
+        "solve([x+y=1,x-y=3,2*x=5],[x,y])",
+        "solve([2*x+4*y=6,3*x+6*y=9],[x,y])",
+        "solve([1.5*x+y=2,x-y=1],[x,y])",
+        "csolve([x+i*y=1,x-y=0],[x,y])",
+        "solve(x+y=1,[x,y])",
+        "solve([0=0],[x,y])",
+        "solve(x^2-1,[x])",
+        "solve([x+1=0],x)",
+    ]);
 }
 
 /// Identities and contradictions.

@@ -35,9 +35,14 @@
 //! - `l − r` free of `x`: `{x}` when it is 0, every `x` a solution, as
 //!   giac's `solve(x=x,x)` is `[x]`; `{}` otherwise.
 //!
-//! A system, a list of equations or of unknowns, stays (CAS-212). Each call
-//! that solves takes one step, `"Solve"` or `"CSolve"`, which the trace
-//! leaves unchecked: the roots' order follows the parameters' values.
+//! Systems (CAS-212): `Solve[{eqns}, {x, y, …}]` solves a linear system
+//! ([`linear`]), as a list of tuples, giac's `[[2,-1]]`; one equation in a
+//! list of one unknown gives its roots as tuples, `[[1],[-1]]`, and a list
+//! of equations in one unknown `Solve[{eqns}, x]` a list of roots, giac's
+//! `solve([x+1=0],x)` being `[-1]`. A nonlinear system stays (CAS-215).
+//!
+//! Each call that solves takes one step, `"Solve"` or `"CSolve"`, which the
+//! trace leaves unchecked: the roots' order follows the parameters' values.
 
 #![allow(
     clippy::many_single_char_names,
@@ -101,32 +106,112 @@ fn solving(ev: &mut Eval<'_>, e: &Expr, complex: bool) -> Native {
     let [eqn, x] = e.args() else {
         return Ok(None);
     };
-    if x.as_symbol().is_none() || is_list(eqn) {
+    let result = if is_list(x) {
+        system(ev, e, eqn, x.args(), complex)?
+    } else if x.as_symbol().is_none() {
+        None
+    } else if is_list(eqn) {
+        in_one_unknown(ev, e, eqn.args(), x, complex)?
+    } else {
+        equation_roots(ev, e, eqn, x, complex, true)?.map(|roots| Expr::call(Symbol::LIST, roots))
+    };
+    let Some(result) = result else {
         return Ok(None);
-    }
-    let roots = match eqn.as_symbol() {
-        Some(Symbol::TRUE) => vec![x.clone()],
-        Some(Symbol::FALSE) => Vec::new(),
+    };
+    ev.step(if complex { "CSolve" } else { "Solve" }, e, &result);
+    Ok(Some(result))
+}
+
+/// The roots of the equation `eqn` in the symbol `x`; `None` when they are
+/// not found here. An expression that is no equation is solved `= 0`, with
+/// giac's warning when `warn`.
+fn equation_roots(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    eqn: &Expr,
+    x: &Expr,
+    complex: bool,
+    warn: bool,
+) -> Result<Option<Vec<Expr>>, EvalError> {
+    let f = match eqn.as_symbol() {
+        Some(Symbol::TRUE) => return Ok(Some(vec![x.clone()])),
+        Some(Symbol::FALSE) => return Ok(Some(Vec::new())),
         _ => {
-            let f = if let Some((l, r)) = sides(eqn) {
+            if let Some((l, r)) = sides(eqn) {
                 ev.eval(&(l.clone() - r.clone()))?
             } else {
-                ev.warn(Warning::Native {
-                    message: "argument is not an equation, solving".into(),
-                    expr: Expr::call(Symbol::EQUATION, [eqn.clone(), Expr::from(0)]),
-                });
+                if warn {
+                    ev.warn(Warning::Native {
+                        message: "argument is not an equation, solving".into(),
+                        expr: Expr::call(Symbol::EQUATION, [eqn.clone(), Expr::from(0)]),
+                    });
+                }
                 eqn.clone()
-            };
-            let real = !complex && ev.context().domain() == Domain::Real;
-            match roots(ev, e, &f, x, real)? {
-                Some(roots) => roots,
-                None => return Ok(None),
             }
         }
     };
-    let result = Expr::call(Symbol::LIST, roots);
-    ev.step(if complex { "CSolve" } else { "Solve" }, e, &result);
-    Ok(Some(result))
+    let real = !complex && ev.context().domain() == Domain::Real;
+    roots(ev, e, &f, x, real)
+}
+
+/// `Solve[{eqns}, {x, y, …}]` (CAS-212): a linear system by [`linear`],
+/// `{{…}}` or `{}`; one equation in one unknown, its roots as tuples, as
+/// giac's `solve(x^2-1,[x])` is `[[1],[-1]]`. Anything else stays, as
+/// distinct symbols are wanted for the unknowns.
+fn system(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    eqn: &Expr,
+    unknowns: &[Expr],
+    complex: bool,
+) -> Result<Option<Expr>, EvalError> {
+    let distinct = unknowns
+        .iter()
+        .enumerate()
+        .all(|(i, x)| x.as_symbol().is_some() && !unknowns[..i].contains(x));
+    if unknowns.is_empty() || !distinct {
+        return Ok(None);
+    }
+    let equations = if is_list(eqn) {
+        eqn.args().to_vec()
+    } else {
+        vec![eqn.clone()]
+    };
+    if let Some(solutions) = linear::system(ev, e, &equations, unknowns)? {
+        return Ok(Some(solutions));
+    }
+    let ([eqn], [x]) = (&equations[..], unknowns) else {
+        return Ok(None);
+    };
+    Ok(equation_roots(ev, e, eqn, x, complex, false)?.map(|roots| {
+        Expr::call(
+            Symbol::LIST,
+            roots.into_iter().map(|r| Expr::call(Symbol::LIST, [r])),
+        )
+    }))
+}
+
+/// `Solve[{eqns}, x]`: giac's `solve([x+1=0],x)` is `[-1]`. One equation's
+/// roots; of several, the solution of the linear system in `x`.
+fn in_one_unknown(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    equations: &[Expr],
+    x: &Expr,
+    complex: bool,
+) -> Result<Option<Expr>, EvalError> {
+    if let [eqn] = equations {
+        return Ok(equation_roots(ev, e, eqn, x, complex, false)?
+            .map(|roots| Expr::call(Symbol::LIST, roots)));
+    }
+    let Some(solutions) = linear::system(ev, e, equations, std::slice::from_ref(x))? else {
+        return Ok(None);
+    };
+    // `{{v}}` or `{}`.
+    Ok(Some(Expr::call(
+        Symbol::LIST,
+        solutions.args().iter().flat_map(|t| t.args().to_vec()),
+    )))
 }
 
 /// The unknown of an equation converted to rational functions.
@@ -581,6 +666,7 @@ fn numeric_order((a_re, a_im): &(Float, Float), (b_re, b_im): &(Float, Float)) -
     }
 }
 
+mod linear;
 mod radicals;
 #[cfg(test)]
 mod tests;

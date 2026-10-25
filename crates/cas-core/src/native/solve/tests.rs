@@ -253,9 +253,14 @@ fn what_stays() {
         ),
         ("Solve[Power[x, 2], 2]", "Solve[Power[x, 2], 2]"),
         ("Solve[Power[x, 2]]", "Solve[Power[x, 2]]"),
+        // A nonlinear system (CAS-215), repeated unknowns.
         (
-            "Solve[List[Equation[Plus[x, y], 1]], List[x, y]]",
-            "Solve[List[Equation[Plus[x, y], 1]], List[x, y]]",
+            "Solve[List[Equation[Times[x, y], 1], Equation[Plus[x, y], 2]], List[x, y]]",
+            "Solve[List[Equation[Times[x, y], 1], Equation[Plus[x, y], 2]], List[x, y]]",
+        ),
+        (
+            "Solve[List[Equation[Plus[x, y], 1]], List[x, x]]",
+            "Solve[List[Equation[Plus[x, y], 1]], List[x, x]]",
         ),
     ]);
 }
@@ -470,4 +475,69 @@ fn numeric_roots() {
         matches!(found.args()[0].view(), crate::View::Ball(_)),
         "{found:?}"
     );
+}
+
+/// Linear systems (CAS-212), giac's tuples: one solution, a family in its
+/// free unknowns, none; parameters; lists of one unknown.
+#[test]
+fn linear_systems() {
+    let two = "List[Equation[Plus[x, y], 1], Equation[Plus[x, Times[-1, y]], 3]]";
+    check(&[
+        (&format!("Solve[{two}, List[x, y]]"), "List[List[2, -1]]"),
+        // A free unknown no equation holds.
+        (
+            &format!("Solve[{two}, List[x, y, z]]"),
+            "List[List[2, -1, z]]",
+        ),
+        (
+            "Solve[List[Equation[Plus[x, y, z], 6], Equation[Plus[Times[2, x], Times[-1, y], z], 3], \
+             Equation[Plus[x, Times[2, y], Times[-1, z]], 2]], List[x, y, z]]",
+            "List[List[1, 2, 3]]",
+        ),
+        // A family: x + y = 1 twice over.
+        (
+            "Solve[List[Equation[Plus[x, y], 1], Equation[Plus[Times[2, x], Times[2, y]], 2]], List[x, y]]",
+            "List[List[Plus[1, Times[-1, y]], y]]",
+        ),
+        (
+            "Solve[Equation[Plus[x, y], 1], List[x, y]]",
+            "List[List[Plus[1, Times[-1, y]], y]]",
+        ),
+        (
+            "Solve[List[Equation[Plus[x, y, z], 1], Equation[Plus[x, Times[-1, y]], 0]], List[x, y, z]]",
+            "List[List[Plus[1/2, Times[-1/2, z]], Plus[1/2, Times[-1/2, z]], z]]",
+        ),
+        // None.
+        (
+            "Solve[List[Equation[Plus[x, y], 1], Equation[Plus[x, y], 2]], List[x, y]]",
+            "List[]",
+        ),
+        // Every point: 0 = 0.
+        (
+            "Solve[List[Equation[0, 0]], List[x, y]]",
+            "List[List[x, y]]",
+        ),
+        // Parameters: ax + y = 1, x - y = b.
+        (
+            "Solve[List[Equation[Plus[Times[a, x], y], 1], Equation[Plus[x, Times[-1, y]], b]], List[x, y]]",
+            "List[List[Times[Plus[1, b], Power[Plus[1, a], -1]], \
+             Times[Plus[1, Times[-1, a, b]], Power[Plus[1, a], -1]]]]",
+        ),
+        // A complex coefficient: x + iy = 1, x = y.
+        (
+            "CSolve[List[Equation[Plus[x, Times[I, y]], 1], Equation[x, y]], List[x, y]]",
+            "List[List[Plus[1/2, Times[-1/2, I]], Plus[1/2, Times[-1/2, I]]]]",
+        ),
+        // One unknown: a list of it, or of the equations.
+        (
+            "Solve[Plus[-1, Power[x, 2]], List[x]]",
+            "List[List[-1], List[1]]",
+        ),
+        ("Solve[List[Equation[Plus[x, 1], 0]], x]", "List[-1]"),
+        (
+            "Solve[List[Equation[x, 1], Equation[Times[2, x], 2]], x]",
+            "List[1]",
+        ),
+        ("Solve[List[Equation[x, 1], Equation[x, 2]], x]", "List[]"),
+    ]);
 }

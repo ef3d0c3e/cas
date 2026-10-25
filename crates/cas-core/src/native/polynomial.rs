@@ -260,7 +260,7 @@ type Ratio<E> = (Sparse<E>, Sparse<E>);
 
 /// `num / den` with their gcd cancelled and the denominator's leading
 /// coefficient in normal form.
-fn cancelled<R: Numbers>(
+pub(super) fn cancelled<R: Numbers>(
     ring: &SparseRing<R>,
     num: &Sparse<R::Elem>,
     den: &Sparse<R::Elem>,
