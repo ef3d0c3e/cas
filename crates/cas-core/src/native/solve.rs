@@ -41,7 +41,9 @@
 //! ([`linear`]), as a list of tuples, giac's `[[2,-1]]`; one equation in a
 //! list of one unknown gives its roots as tuples, `[[1],[-1]]`, and a list
 //! of equations in one unknown `Solve[{eqns}, x]` a list of roots, giac's
-//! `solve([x+1=0],x)` being `[-1]`. A nonlinear system stays (CAS-215).
+//! `solve([x+1=0],x)` being `[-1]`. Two polynomial equations in two
+//! unknowns by the resultant ([`nonlinear`], CAS-215); other nonlinear
+//! systems stay.
 //!
 //! Each call that solves takes one step, `"Solve"` or `"CSolve"`, which the
 //! trace leaves unchecked: the roots' order follows the parameters' values.
@@ -181,6 +183,10 @@ fn system(
         vec![eqn.clone()]
     };
     if let Some(solutions) = linear::system(ev, e, &equations, unknowns)? {
+        return Ok(Some(solutions));
+    }
+    let real = !complex && ev.context().domain() == Domain::Real;
+    if let Some(solutions) = nonlinear::system(ev, e, &equations, unknowns, real)? {
         return Ok(Some(solutions));
     }
     let ([eqn], [x]) = (&equations[..], unknowns) else {
@@ -698,6 +704,7 @@ fn numeric_order((a_re, a_im): &(Float, Float), (b_re, b_im): &(Float, Float)) -
 
 mod fsolve;
 mod linear;
+mod nonlinear;
 mod radicals;
 #[cfg(test)]
 mod tests;

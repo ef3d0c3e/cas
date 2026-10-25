@@ -258,10 +258,10 @@ fn what_stays() {
         ),
         ("Solve[Power[x, 2], 2]", "Solve[Power[x, 2], 2]"),
         ("Solve[Power[x, 2]]", "Solve[Power[x, 2]]"),
-        // A nonlinear system (CAS-215), repeated unknowns.
+        // A system with a function of an unknown; repeated unknowns.
         (
-            "Solve[List[Equation[Times[x, y], 1], Equation[Plus[x, y], 2]], List[x, y]]",
-            "Solve[List[Equation[Times[x, y], 1], Equation[Plus[x, y], 2]], List[x, y]]",
+            "Solve[List[Equation[Plus[Sin[x], y], 1], Equation[x, y]], List[x, y]]",
+            "Solve[List[Equation[Plus[Sin[x], y], 1], Equation[x, y]], List[x, y]]",
         ),
         (
             "Solve[List[Equation[Plus[x, y], 1]], List[x, x]]",
@@ -707,6 +707,64 @@ fn numeric_solutions() {
         (
             "FSolve[Plus[Times[-1, a], Power[x, 2]], x]",
             "FSolve[Plus[Times[-1, a], Power[x, 2]], x]",
+        ),
+    ]);
+}
+
+/// Two polynomial equations in two unknowns (CAS-215), by the resultant.
+#[test]
+fn polynomial_systems() {
+    let half_root_2 = "Times[1/2, Power[2, 1/2]]";
+    let minus_half_root_2 = "Times[-1/2, Power[2, 1/2]]";
+    let (low, high) = (
+        "Plus[3/2, Times[-1/2, Power[5, 1/2]]]",
+        "Plus[3/2, Times[1/2, Power[5, 1/2]]]",
+    );
+    check(&[
+        (
+            "Solve[List[Equation[Plus[Power[x, 2], Power[y, 2]], 1], Equation[x, y]], List[x, y]]",
+            &format!(
+                "List[List[{minus_half_root_2}, {minus_half_root_2}], List[{half_root_2}, {half_root_2}]]"
+            ),
+        ),
+        (
+            "Solve[List[Equation[Times[x, y], 1], Equation[Plus[x, y], 3]], List[x, y]]",
+            &format!("List[List[{low}, {high}], List[{high}, {low}]]"),
+        ),
+        (
+            "Solve[List[Equation[Times[x, y], 1], Equation[Plus[x, y], 2]], List[x, y]]",
+            "List[List[1, 1]]",
+        ),
+        (
+            "Solve[List[Equation[Plus[Power[x, 2], Power[y, 2]], 5], Equation[Times[x, y], 2]], List[x, y]]",
+            "List[List[-2, -1], List[-1, -2], List[1, 2], List[2, 1]]",
+        ),
+        (
+            "Solve[List[Equation[Power[x, 2], 1], Equation[Power[y, 2], 4]], List[x, y]]",
+            "List[List[-1, -2], List[-1, 2], List[1, -2], List[1, 2]]",
+        ),
+        (
+            "Solve[List[Equation[Power[x, 2], y], Equation[Plus[x, y], 2]], List[x, y]]",
+            "List[List[-2, 4], List[1, 1]]",
+        ),
+        (
+            "Solve[List[Equation[Times[x, y], 0], Equation[Plus[x, y], 1]], List[x, y]]",
+            "List[List[0, 1], List[1, 0]]",
+        ),
+        (
+            "Solve[List[Equation[Plus[Power[x, 2], Power[y, 2]], 1], \
+             Equation[Plus[Power[Plus[x, -1], 2], Power[y, 2]], 1]], List[x, y]]",
+            "List[List[1/2, Times[-1/2, Power[3, 1/2]]], List[1/2, Times[1/2, Power[3, 1/2]]]]",
+        ),
+        // No real solution: x^2 + y^2 = -1 with x = y.
+        (
+            "Solve[List[Equation[Plus[Power[x, 2], Power[y, 2]], -1], Equation[x, y]], List[x, y]]",
+            "List[]",
+        ),
+        (
+            "CSolve[List[Equation[Plus[Power[x, 2], Power[y, 2]], -1], Equation[x, y]], List[x, y]]",
+            "List[List[Times[1/2, I, Power[2, 1/2]], Times[1/2, I, Power[2, 1/2]]], \
+             List[Times[-1/2, I, Power[2, 1/2]], Times[-1/2, I, Power[2, 1/2]]]]",
         ),
     ]);
 }

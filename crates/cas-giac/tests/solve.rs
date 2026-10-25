@@ -273,6 +273,32 @@ fn transcendental_equations() {
     ]);
 }
 
+/// Two polynomial equations in two unknowns (CAS-215).
+#[test]
+fn polynomial_systems() {
+    check(&[
+        "solve([x^2+y^2=1,x-y=0],[x,y])",
+        "solve([x*y=1,x+y=3],[x,y])",
+        "solve([x*y=1,x+y=2],[x,y])",
+        "solve([x^2+y^2=5,x*y=2],[x,y])",
+        "solve([x^2-y=0,x+y=2],[x,y])",
+        "solve([y=x^2,y=1],[x,y])",
+        "solve([x*y=0,x+y=1],[x,y])",
+        "solve([x^2=1,y^2=4],[x,y])",
+        "solve([x^2+y^2=1,(x-1)^2+y^2=1],[x,y])",
+        "solve([x^3+y=2,x-y=0],[x,y])",
+        "solve([x^2+y^2=-1,x=y],[x,y])",
+        "csolve([x^2+y^2=-1,x=y],[x,y])",
+    ]);
+    let Some(giac) = giac() else {
+        return;
+    };
+    let input = "solve([x^2+y=3,x+y^2=5],[x,y])";
+    if let Err(wrong) = agrees_with(giac, &format!("evalf({input})"), input) {
+        panic!("{wrong}");
+    }
+}
+
 /// Numeric roots (CAS-214): giac's `fsolve`, by value.
 #[test]
 fn numeric_solutions() {
