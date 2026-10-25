@@ -16,27 +16,43 @@ fn giac() -> Option<&'static Giac> {
 }
 
 /// The parameters' values where solutions with parameters are compared.
-const POINT: &str = "List[Rule[a, 3/7], Rule[b, 5/11], Rule[c, -2/13], Rule[y, 1/5]]";
+const PARAMETERS: [(&str, i64, i64); 4] = [("a", 3, 7), ("b", 5, 11), ("c", -2, 13), ("y", 1, 5)];
 
 /// Whether `a == b` evaluates to `True` in `ctx`.
 fn equal(ctx: &Context, a: &Expr, b: &Expr) -> bool {
-    let e = Expr::call(Symbol::EQUAL, [a.clone(), b.clone()]);
-    ctx.eval(&e).ok().and_then(|e| e.as_symbol()) == Some(Symbol::TRUE)
+    holds(ctx, &Expr::call(Symbol::EQUAL, [a.clone(), b.clone()]))
 }
 
-/// Whether two solutions are one: the same, equal by `==`, or equal by
-/// `==` at [`POINT`] once approximated.
+/// Whether `proposition` evaluates to `True` in `ctx`.
+fn holds(ctx: &Context, proposition: &Expr) -> bool {
+    ctx.eval(proposition).ok().and_then(|e| e.as_symbol()) == Some(Symbol::TRUE)
+}
+
+/// Whether numbers agree to the digits giac prints, its decimals being
+/// balls at 53 bits: `|a − b| < 10⁻¹⁰ (1 + |b|)`.
+fn close(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    let difference = Expr::call(Symbol::ABS, [a.clone() - b.clone()]);
+    let scale = Expr::from(1) + Expr::call(Symbol::ABS, [b.clone()]);
+    let bound = scale / Expr::from(10_000_000_000_i64);
+    holds(ctx, &Expr::call(Symbol::LESS, [difference, bound]))
+}
+
+/// Whether two solutions are one: the same, equal by `==`, or, with the
+/// parameters at their values and approximated, equal by `==` or close.
 fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     if a == b || equal(ctx, a, b) {
         return true;
     }
-    let point = Expr::parse_full_form(POINT).expect("a point in full form");
+    let rules: Vec<(Expr, Expr)> = PARAMETERS
+        .iter()
+        .map(|&(s, p, q)| (Expr::symbol(s), Expr::from(p) / Expr::from(q)))
+        .collect();
     let at = |e: &Expr| {
-        let replaced = Expr::call(Symbol::REPLACE_ALL, [e.clone(), point.clone()]);
-        ctx.eval(&Expr::call(Symbol::N, [replaced])).ok()
+        ctx.eval(&Expr::call(Symbol::N, [e.substitute(&rules)]))
+            .ok()
     };
     match (at(a), at(b)) {
-        (Some(a), Some(b)) => equal(ctx, &a, &b),
+        (Some(a), Some(b)) => equal(ctx, &a, &b) || close(ctx, &a, &b),
         _ => false,
     }
 }
