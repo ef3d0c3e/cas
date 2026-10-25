@@ -1233,9 +1233,13 @@ pub fn fold_arithmetic(e: &Expr) -> Expr {
         return fold_times(vec![Expr::from(-1), positive]);
     }
     if let (Some(Symbol::POWER), [b, n]) = (head.as_symbol(), args) {
-        if fold_arithmetic(n).as_i64() == Some(-1) {
+        // The exponent is folded once: folded to test it and again with the
+        // base, a tower `x^y^z^…` took 2^depth (CAS-176).
+        let n = fold_arithmetic(n);
+        if n.as_i64() == Some(-1) {
             return reciprocal(b);
         }
+        return Expr::apply(head, &[fold_arithmetic(b), n]);
     }
     let head = fold_arithmetic(head);
     let args: Vec<Expr> = args.iter().map(fold_arithmetic).collect();

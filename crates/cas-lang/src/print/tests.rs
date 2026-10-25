@@ -882,6 +882,24 @@ fn reading_back_may_nest_deeper() {
     assert_eq!(error.kind, K::TooDeep);
 }
 
+/// `fold_arithmetic` folds each part once (CAS-176): it folded a power's
+/// exponent twice, so a tower of `n` powers took `2^n` folds, and the
+/// `lang_print` fuzz target timed out on towers through parentheses and
+/// applications (`t^(I(A(e tt^t^t^t^ …`). A tower of 120 round-trips at
+/// once.
+#[test]
+fn towers_fold_once() {
+    let start = std::time::Instant::now();
+    let mut tower = sym("x");
+    for _ in 0..120 {
+        tower = pow(&sym("y"), &tower);
+    }
+    assert_eq!(fold_arithmetic(&tower), tower);
+    round_trip(&tower);
+    let elapsed = start.elapsed();
+    assert!(elapsed < std::time::Duration::from_secs(5), "{elapsed:?}");
+}
+
 /// Every form in every operand position of every other: the precedence
 /// pairs, with the signs, numbers and heads that need parentheses.
 #[test]
