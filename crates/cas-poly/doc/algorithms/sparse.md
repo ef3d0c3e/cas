@@ -191,23 +191,41 @@ coarse comparison.
 | Fateman [Fat03]: `f = (1 + x + y + z + t)^20`, `f (f + 1)` | 10626 × 10626 → 135751 | 113 M | 148.9 G | 9.8 s | 0.43 s |
 | Monagan–Pearce: `(1 + x + y + 2z² + 3t³ + 5u⁵)^12 (1 + u + t + 2z² + 3y³ + 5x⁵)^12` | 6188 × 6188 → 5821335 | 38.3 M | 45.3 G | 2.9 s | 0.26 s |
 
-That is about 1,300 instructions per product of terms, 23 and 11 times
-giac's time.
-- **The heap** takes three quarters of it (`Heap::greater` and `pop`, by
-  perf), and it is bound by its unpredictable comparisons. Marking its
-  methods `#[inline]` (CAS-141), so that the products cas-core instantiates
-  inline them too, cut 11% of the instructions here and 26% through
-  cas-core's `expand`, but none of the time.
-- **cas-num's integers** take a fifth: they allocate once a coefficient
+That was about 1,300 instructions per product of terms, 23 and 11 times
+giac's time, with the plain heap of CAS-136:
+- **The heap** took three quarters of it (`Heap::greater` and `pop`, by
+  perf), bound by its unpredictable comparisons. Marking its methods
+  `#[inline]` (CAS-141), so that the products cas-core instantiates inline
+  them too, cut 11% of the instructions here and 26% through cas-core's
+  `expand`, but none of the time.
+- **cas-num's integers** took a fifth: they allocate once a coefficient
   passes a word.
-- **The way out** is array accumulation for products whose degree box is
-  small next to their products of terms (Fateman's: 41⁴ slots for 113 M
-  products), coefficients accumulated in a few fixed words, and chaining
-  the heap's equal monomials [MP07]: CAS-155.
 
-The criterion benchmarks of `benches/poly.rs` run smaller sizes: `fateman`
-at `K = 5` and `10` (0.76 ms and 58 ms), `pearce` at `K = 4` and `8` (0.90
-ms and 109 ms).
+**CAS-155**, measured by the `Workload` workflow on a GitHub runner, the
+best of three runs, against the commit before it (bf77326) on the same
+runner; the runner has no `perf`, and the inputs' construction takes at
+most 0.07 s:
+
+| Product | Before | CAS-155 | Kernel, accumulator |
+|---|---|---|---|
+| Fateman | 12.62 s | 0.13 s | arrays (41 chunks of 41³ sums), words |
+| Monagan–Pearce | 3.90 s | 1.56 s | chained heap, words |
+
+- Fateman's product is 97 times faster: about one nanosecond for each
+  product of terms, in a chunk that stays in the cache.
+- Monagan and Pearce's is 2.5 times faster. Its 38 M products of terms go
+  through the heap, and its 5.8 M terms have coefficients past a word.
+- **Against giac**, coarsely: giac's times were taken on the development
+  machine, where the old heap took 9.8 s and 2.9 s, three quarters of the
+  runner's times. By that ratio, Fateman's product now takes about a
+  quarter of giac's time, and Monagan and Pearce's about four and a half
+  times giac's.
+- **Next** for the heap: one-word monomials kept in the heap itself, MP11's
+  "immediate monomials", so that its comparisons read no other memory.
+
+The criterion benchmarks of `benches/poly.rs` run smaller sizes; at CAS-141,
+with the plain heap, `fateman` took 0.76 ms and 58 ms at `K = 5` and `10`,
+and `pearce` 0.90 ms and 109 ms at `K = 4` and `8`.
 
 ## Tests
 

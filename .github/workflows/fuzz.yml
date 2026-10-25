@@ -9,11 +9,11 @@
 #                 that cross-check cas-num against GMP and exercise the
 #                 readers, parsers and printers.
 #   - assertions: `-O -a -s none` (debug assertions, no sanitizer) for the
-#                 ball-function targets, eval and poly_factor — the crates
-#                 have no `unsafe` code, ASan's quarantine more than doubles
-#                 resident memory, and the debug assertions check the Float
-#                 invariants, the natives' shortcuts against their full
-#                 computation, and cas-poly's invariants.
+#                 ball-function targets, eval, poly_factor and poly_sparse —
+#                 the crates have no `unsafe` code, ASan's quarantine more
+#                 than doubles resident memory, and the debug assertions
+#                 check the Float invariants, the natives' shortcuts against
+#                 their full computation, and cas-poly's invariants.
 #
 # The corpus is carried between runs with the actions cache, one cache per
 # target (the save key always misses, restore-keys picks up the newest).
@@ -71,6 +71,7 @@ jobs:
           - ball_consts
           - eval
           - poly_factor
+          - poly_sparse
     runs-on: ubuntu-latest
     timeout-minutes: 60
     defaults:
@@ -93,7 +94,7 @@ jobs:
         if: steps.want.outputs.run == 'true'
         run: |
           case '${{ matrix.target }}' in
-            ball_fns|complex_fns|machine_fns|ball_consts|eval|poly_factor)
+            ball_fns|complex_fns|machine_fns|ball_consts|eval|poly_factor|poly_sparse)
               echo "group=assertions" >> "$GITHUB_OUTPUT"
               echo "flags=-O -a -s none" >> "$GITHUB_OUTPUT"
               echo "libfuzzer=-rss_limit_mb=2048 -malloc_limit_mb=1024 -timeout=60" >> "$GITHUB_OUTPUT"

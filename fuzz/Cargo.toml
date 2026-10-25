@@ -157,3 +157,10 @@ path = "fuzz_targets/poly_factor.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "poly_sparse"
+path = "fuzz_targets/poly_sparse.rs"
+test = false
+doc = false
+bench = false
