@@ -38,13 +38,15 @@ benchmarks; it returns `None` where the method does not apply or gives up.
 
 | Domain | One variable | Several variables |
 |---|---|---|
-| ℤ | heuristic, then Brown's modular algorithm | the same, with images by Brown's evaluation |
+| ℤ | heuristic, then Brown's modular algorithm | heuristic, then Zippel's algorithm, then Brown's |
 | ℤ\[i\] | heuristic, then subresultants | heuristic, then subresultants |
 | ℚ, ℚ(i) | the numerators over ℤ, ℤ\[i\] | the same |
 | 𝔽ₚ | Euclid | Brown's evaluation, then subresultants if the field runs out of points |
 
-`GcdMethod::Zippel` runs Zippel's sparse interpolation over prime fields of
-at least `2^31` elements (CAS-191); over ℤ it comes with CAS-192.
+`GcdMethod::Zippel` runs Zippel's sparse interpolation over ℤ (CAS-192), ℚ
+through the numerators, and prime fields of at least `2^31` elements
+(CAS-191). Over ℤ, `gcd` takes it in several variables when the heuristic
+gives up; when it gives up too, Brown's algorithm.
 
 Resultants:
 
@@ -239,6 +241,27 @@ evaluated:
   least `2^31` elements, where they rarely collide. `GcdMethod::Zippel`
   tests the result by division and returns `None` when it gives up.
 
+**The gcd over ℤ** (LINZIP M, CAS-192):
+1. The contents in `x` come out, by gcds in fewer variables. `γ` is the
+   gcd of the leading coefficients of the primitive parts.
+2. Word primes from `2^62` down that do not divide `γ`. The first image, by
+   Zippel's algorithm over `𝔽ₚ`, gives the form. The next primes' images
+   come from the sparse interpolation alone, in all the variables but `x`
+   at once: the univariate gcds of one prime are all its work.
+3. Each image is scaled to `γ` modulo its prime and combined by Chinese
+   remaindering, the leading monomials compared, as in Brown's algorithm.
+   Once the combination stops changing, its primitive part is tested by
+   division.
+- A wrong form (a coefficient of the gcd that the first prime divides, say)
+  makes the next prime's systems inconsistent; that prime gives a new form,
+  up to four in all. An unlucky prime (a larger gcd) is skipped.
+- The images' leading monomial is that of a gcd modulo a prime, at least
+  the gcd's, so the test by division is enough, as for Brown's algorithm.
+- It gives up, and Brown's algorithm takes over, after four forms or more
+  primes than the coefficients should need (64 and one for each 30 bits of
+  the largest coefficient and total degree): an image wrong in a way the
+  checks missed would keep the combination changing.
+
 ## Resultants
 
 - **Over a field**, by Euclid's algorithm:
@@ -333,7 +356,7 @@ comparison.
     resultant 260708 is the last of its subresultants.
   - `b² − 4ac` and `−4p³ − 27q²`, and giac's resultants.
   - The normal forms of detail 5, zeros, and cancellation of every method.
-- **Zippel's algorithm** (CAS-189 to CAS-191).
+- **Zippel's algorithm** (CAS-189 to CAS-192).
   - Transposed Vandermonde systems over word primes from 11 to `2^64 − 59`,
     their solutions and inverses; repeated points and 0.
   - Images from the forms of the gcds of random products, with single and
@@ -344,11 +367,14 @@ comparison.
     in the gcd properties; non-monic gcds in three variables with single
     and multiple scaling, a content in `x`, and Fateman's gcd at the fourth
     power.
+  - Over ℤ, against subresultants in the gcd properties.
+  - The fuzz target `poly_gcd`: every method that applies, and the
+    default, against subresultants over ℤ and modulo `2^61 − 1`, on
+    products with a common factor in one to three variables.
 
 ## Not yet
 
-- Zippel's algorithm over ℤ, from the form of a first prime's image, and as
-  the default for several variables (CAS-192).
+- Zippel's algorithm over ℤ\[i\], and over prime fields by default.
 - A modular gcd over ℤ\[i\].
 - Modular resultants in several variables.
 - The divisor heap of [MP07] for the trial divisions.

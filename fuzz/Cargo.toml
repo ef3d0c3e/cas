@@ -164,3 +164,10 @@ path = "fuzz_targets/poly_sparse.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "poly_gcd"
+path = "fuzz_targets/poly_gcd.rs"
+test = false
+doc = false
+bench = false

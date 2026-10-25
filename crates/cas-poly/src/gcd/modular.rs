@@ -51,7 +51,7 @@ impl Iterator for Primes {
 }
 
 /// `r` modulo `p` as the integer in `(-p/2, p/2)`.
-fn lift(r: u64, p: u64) -> Integer {
+pub(super) fn lift(r: u64, p: u64) -> Integer {
     if r > p / 2 {
         Integer::from(r) - Integer::from(p)
     } else {
@@ -62,15 +62,15 @@ fn lift(r: u64, p: u64) -> Integer {
 /// One step of Chinese remaindering: from `x ≡ h (mod m)`, `h` in
 /// `(-m/2, m/2]`, and `x ≡ g (mod p)`, the `x` in `(-mp/2, mp/2]`, as
 /// `h + m ((g - h) m⁻¹ mod p)` brought into range.
-struct Step<'a> {
+pub(super) struct Step<'a> {
     field: &'a WordPrimeField,
     m: &'a Integer,
-    mp: Integer,
+    pub(super) mp: Integer,
     inverse: u64,
 }
 
 impl<'a> Step<'a> {
-    fn new(field: &'a WordPrimeField, m: &'a Integer, p: u64) -> Step<'a> {
+    pub(super) fn new(field: &'a WordPrimeField, m: &'a Integer, p: u64) -> Step<'a> {
         let inverse = field
             .inv(&field.elem_integer(m))
             .expect("a modulus of other primes");
@@ -82,7 +82,7 @@ impl<'a> Step<'a> {
         }
     }
 
-    fn combine(&self, h: &Integer, g: u64) -> Integer {
+    pub(super) fn combine(&self, h: &Integer, g: u64) -> Integer {
         let f = self.field;
         let t = f.mul(&f.sub(&g, &f.elem_integer(h)), &self.inverse);
         let x = h + &(self.m * &Integer::from(t));
@@ -255,7 +255,7 @@ pub(crate) fn sparse_from(
 
 /// `old` modulo `m` and `g` modulo `p` combined term by term, a missing
 /// term 0.
-fn combine(
+pub(super) fn combine(
     ring: &SparseRing<Integers>,
     old: &Sparse<Integer>,
     g: &Sparse<u64>,

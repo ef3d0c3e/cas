@@ -1,9 +1,10 @@
 # Workloads for instruction counts and times, on demand (CAS-141, CAS-155):
 # an ignored test of one crate's library, built in release, run under
-# `perf stat` when the runner allows it and `/usr/bin/time` always, the best
-# time of a few runs. With `base`, the same runs of another commit too, on the
-# same runner, for a comparison. Like the tests, it runs here, never on the
-# development machine (CAS-158):
+# `perf stat` when the runner allows it; the best wall time of a few runs, to
+# the millisecond, and the largest resident set, by `/usr/bin/time`. With
+# `base`, the same runs of another commit too, on the same runner, for a
+# comparison. Like the tests, it runs here, never on the development machine
+# (CAS-158):
 #
 #   gh workflow run workload.yml -f base=<commit>
 #   gh workflow run workload.yml -f package=cas-poly \
@@ -83,9 +84,12 @@ jobs:
               instructions=$(awk -F, '/instructions/ { print $1 }' perf.txt)
             fi
             for _ in $(seq "$REPEAT"); do
-              env $settings /usr/bin/time -o time.txt -f '%e %M' \
+              start=$EPOCHREALTIME
+              env $settings /usr/bin/time -o time.txt -f '%M' \
                 "$bin" "$TEST" --ignored --exact --nocapture 2>&1 | grep -v '^$' | tail -3
-              read -r seconds kb < time.txt
+              end=$EPOCHREALTIME
+              seconds=$(awk "BEGIN { printf \"%.3f\", $end - $start }")
+              read -r kb < time.txt
               if [ -z "$best" ] || awk "BEGIN { exit !($seconds < $best) }"; then best=$seconds; fi
               rss=$((kb / 1024))
             done

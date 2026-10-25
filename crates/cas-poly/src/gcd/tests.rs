@@ -237,6 +237,7 @@ proptest! {
             prop_assert_eq!(dense(&d), zx.gcd_by(&dense(&a), &dense(&b), GcdMethod::Subresultant, &Never).unwrap().unwrap().0);
         }
         prop_assert_eq!(check_gcd(&ring, &f, &g, &h, GcdMethod::Modular)?, Some(d.clone()));
+        prop_assert_eq!(check_gcd(&ring, &f, &g, &h, GcdMethod::Zippel)?, Some(d.clone()));
         prop_assert_eq!(ring.gcd(&ring.mul(&f, &g), &ring.mul(&f, &h)), d);
         for p in [2u64, 3, 65_537, (1 << 61) - 1] {
             let fp = SparseRing::new(WordPrimeField::new(p).unwrap(), n);
@@ -905,9 +906,10 @@ impl Words {
 /// A workload for instruction counts (CAS-137), as `products_workload`:
 /// `CAS_POLY_GCD` is `dense:METHOD:DEGREE:BITS`, the gcd of `f g` and `f h`
 /// for pseudo-random `f`, `g`, `h` of that degree and coefficient size, or
-/// `sparse:METHOD:N`, the same for `f = (1 + x + y + z)^N + x`, `g` and `h`
-/// likewise with `y` and `z`. `METHOD` is `heuristic`, `modular`,
-/// `subresultant`, `auto`, or `inputs` to build the inputs alone.
+/// `sparse:METHOD:N[:VARS]`, the same for `f = (1 + x + y + z)^N + x`, `g`
+/// and `h` likewise with `y` and `z`, or with `VARS` variables in the sum
+/// (3 by default). `METHOD` is `heuristic`, `modular`,
+/// `subresultant`, `zippel`, `auto`, or `inputs` to build the inputs alone.
 #[test]
 #[ignore = "a workload for instruction counts"]
 fn gcd_workload() {
@@ -917,6 +919,7 @@ fn gcd_workload() {
         "heuristic" => Some(GcdMethod::Heuristic),
         "modular" => Some(GcdMethod::Modular),
         "subresultant" => Some(GcdMethod::Subresultant),
+        "zippel" => Some(GcdMethod::Zippel),
         "auto" | "inputs" => None,
         other => panic!("unknown method {other}"),
     };
@@ -944,9 +947,11 @@ fn gcd_workload() {
         }
         "sparse" => {
             let n: u64 = parts[2].parse().unwrap();
-            let ring = SparseRing::new(Integers, 3);
+            let vars: usize = parts.get(3).map_or(3, |v| v.parse().unwrap());
+            let ring = SparseRing::new(Integers, vars);
             let (x, y, w) = (ring.var(0), ring.var(1), ring.var(2));
-            let base = ring.pow(&ring.add(&ring.add(&ring.add(&ring.one(), &x), &y), &w), n);
+            let sum = (0..vars).fold(ring.one(), |s, v| ring.add(&s, &ring.var(v)));
+            let base = ring.pow(&sum, n);
             let (f, g, h) = (
                 ring.add(&base, &x),
                 ring.add(&base, &y),

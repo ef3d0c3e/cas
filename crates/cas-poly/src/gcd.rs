@@ -60,9 +60,10 @@ pub enum GcdMethod {
     Subresultant,
     /// Zippel's sparse interpolation \[Zip79, Zip90\] in de Kleine, Monagan
     /// and Wittkopf's form, LINZIP \[DKMW05\]: the form of the gcd from a
-    /// first image, the others by solving for its coefficients. Over prime
-    /// fields of at least `2^31` elements, for sparse polynomials in several
-    /// variables. It can give up.
+    /// first image, the others by solving for its coefficients. For sparse
+    /// polynomials over prime fields of at least `2^31` elements, and over
+    /// ℤ, from the form of a first prime's image, and ℚ through the
+    /// numerators. It can give up.
     Zippel,
 }
 
@@ -691,6 +692,16 @@ fn cofactors_of<R: GcdDomain>(
     Ok((g, a_cofactor, b_cofactor))
 }
 
+/// Whether `a` and `b` have two variables or more between them.
+fn several_variables<E>(a: &Sparse<E>, b: &Sparse<E>) -> bool {
+    let (da, db) = (a.degrees(), b.degrees());
+    da.iter()
+        .zip(&db)
+        .filter(|(x, y)| **x > 0 || **y > 0)
+        .count()
+        > 1
+}
+
 /// Points of Zippel's algorithm are drawn from fields of at least this many
 /// elements: fewer make its random points collide.
 const ZIPPEL_FIELD: u64 = 1 << 31;
@@ -735,7 +746,8 @@ sealed!(
 );
 
 /// ℤ: the heuristic, which gives up on large problems, then Brown's
-/// algorithm; resultants modulo primes in one variable.
+/// algorithm, or in several variables Zippel's first; resultants modulo
+/// primes in one variable.
 impl GcdDomain for Integers {
     fn dense_gcd(
         ring: &DenseRing<Integers>,
@@ -770,10 +782,15 @@ impl GcdDomain for Integers {
         b: &Sparse<Integer>,
         cancel: &dyn Cancel,
     ) -> Result<Cofactors<Sparse<Integer>>, Cancelled> {
-        match heuristic::sparse(ring, a, b, cancel)? {
-            Some(parts) => Ok(parts),
-            None => modular::sparse(ring, a, b, cancel),
+        if let Some(parts) = heuristic::sparse(ring, a, b, cancel)? {
+            return Ok(parts);
         }
+        if several_variables(a, b)
+            && let Some(parts) = zippel::integers(ring, a, b, cancel)?
+        {
+            return Ok(parts);
+        }
+        modular::sparse(ring, a, b, cancel)
     }
 
     fn sparse_gcd_by(
@@ -787,7 +804,7 @@ impl GcdDomain for Integers {
             GcdMethod::Heuristic => heuristic::sparse(ring, a, b, cancel),
             GcdMethod::Modular => Ok(Some(modular::sparse(ring, a, b, cancel)?)),
             GcdMethod::Subresultant => Ok(Some(subres::sparse_gcd(ring, a, b, cancel)?)),
-            GcdMethod::Zippel => Ok(None),
+            GcdMethod::Zippel => zippel::integers(ring, a, b, cancel),
         }
     }
 

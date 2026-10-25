@@ -24,10 +24,12 @@ mod tests;
 use std::cmp::Ordering;
 
 use cas_num::Integer;
-use cas_num::algebra::{EuclideanDomain, Field, Ring};
+use cas_num::algebra::{EuclideanDomain, Field, Integers, Ring};
 
-use super::modular::{Runs, content, divide_runs, from_runs, is_constant, runs};
-use super::{GcdDomain, normalized_sparse, vandermonde};
+use super::modular::{
+    Primes, Runs, Step, combine, content, divide_runs, from_runs, is_constant, lift, runs,
+};
+use super::{Cofactors, GcdDomain, normalized_sparse, vandermonde};
 use crate::cancel::{Cancel, Cancelled};
 use crate::dense::{Coefficients, Dense, DenseRing};
 use crate::random::Random;
@@ -645,6 +647,57 @@ pub(super) fn gcd<F: Field + Coefficients + Clone>(
     Ok(None)
 }
 
+/// `a` and `b` as `cₐ pₐ` and `c_b p_b`, `cₐ` and `c_b` their contents in
+/// the main variable, by gcds in fewer variables, and `c` the gcd of those.
+struct Contents<E> {
+    ca: Sparse<E>,
+    cb: Sparse<E>,
+    c: Sparse<E>,
+    pa: Sparse<E>,
+    pb: Sparse<E>,
+}
+
+impl<E> Contents<E> {
+    fn of<R: GcdDomain<Elem = E>>(
+        ring: &SparseRing<R>,
+        [a, b]: [&Sparse<E>; 2],
+        main: usize,
+        cancel: &dyn Cancel,
+    ) -> Result<Contents<E>, Cancelled> {
+        let content_in = |p: &Sparse<E>| -> Result<Sparse<E>, Cancelled> {
+            let mut g = ring.zero();
+            for (_, c) in ring.to_recursive(p, main) {
+                g = ring.gcd_with(&g, &c, cancel)?;
+                if ring.is_one(&g) {
+                    break;
+                }
+            }
+            Ok(g)
+        };
+        let (ca, cb) = (content_in(a)?, content_in(b)?);
+        let c = ring.gcd_with(&ca, &cb, cancel)?;
+        let pa = exact(ring, a, &ca, cancel)?;
+        let pb = exact(ring, b, &cb, cancel)?;
+        Ok(Contents { ca, cb, c, pa, pb })
+    }
+}
+
+/// `p / q`, which is exact.
+fn exact<R: GcdDomain>(
+    ring: &SparseRing<R>,
+    p: &Sparse<R::Elem>,
+    q: &Sparse<R::Elem>,
+    cancel: &dyn Cancel,
+) -> Result<Sparse<R::Elem>, Cancelled> {
+    Ok(ring.div_exact_with(p, q, cancel)?.expect("a divisor"))
+}
+
+/// The first variable of `a` or `b`, the main one.
+fn main_variable<E>(ring_vars: usize, a: &Sparse<E>, b: &Sparse<E>) -> Option<usize> {
+    let (da, db) = (a.degrees(), b.degrees());
+    (0..ring_vars).find(|&v| da[v] > 0 || db[v] > 0)
+}
+
 /// The gcd of non-zero `a` and `b` over a prime field by Zippel's algorithm,
 /// monic, their contents in the main variable taken out first, as LINZIP
 /// takes them \[DKMW05\]: a content of the gcd would leave the scales of
@@ -655,30 +708,142 @@ pub(super) fn field_gcd<F: GcdDomain + Field>(
     b: &Sparse<F::Elem>,
     cancel: &dyn Cancel,
 ) -> Result<Option<Sparse<F::Elem>>, Cancelled> {
-    let (da, db) = (a.degrees(), b.degrees());
-    let Some(main) = (0..ring.nvars()).find(|&v| da[v] > 0 || db[v] > 0) else {
+    let Some(main) = main_variable(ring.nvars(), a, b) else {
         return Ok(Some(ring.one()));
     };
-    let content_in = |p: &Sparse<F::Elem>| -> Result<Sparse<F::Elem>, Cancelled> {
-        let mut g = ring.zero();
-        for (_, c) in ring.to_recursive(p, main) {
-            g = ring.gcd_with(&g, &c, cancel)?;
-            if ring.is_one(&g) {
-                break;
-            }
-        }
-        Ok(g)
-    };
-    let (ca, cb) = (content_in(a)?, content_in(b)?);
-    let c = ring.gcd_with(&ca, &cb, cancel)?;
-    let quotient =
-        |p: &Sparse<F::Elem>, q: &Sparse<F::Elem>| -> Result<Sparse<F::Elem>, Cancelled> {
-            Ok(ring
-                .div_exact_with(p, q, cancel)?
-                .expect("a content divides"))
-        };
-    let (pa, pb) = (quotient(a, &ca)?, quotient(b, &cb)?);
+    let parts = Contents::of(ring, [a, b], main, cancel)?;
     let mut random = Random::new(SEED);
-    Ok(gcd(ring, &pa, &pb, &mut random, cancel)?
-        .map(|g| normalized_sparse(ring, &ring.mul(&c, &g))))
+    Ok(gcd(ring, &parts.pa, &parts.pb, &mut random, cancel)?
+        .map(|g| normalized_sparse(ring, &ring.mul(&parts.c, &g))))
+}
+
+/// Forms taken from a new prime before Zippel's gcd over ℤ gives up.
+const FORMS: usize = 4;
+
+/// The gcd of non-zero `a` and `b` over ℤ by Zippel's algorithm in
+/// LINZIP's form \[DKMW05\] (CAS-192), with its cofactors; `None` when it
+/// gives up, after `FORMS` forms or more primes than the coefficients
+/// should need, and Brown's algorithm takes over.
+///
+/// The contents in the main variable come out first, by gcds in fewer
+/// variables. With `γ` the gcd of the leading coefficients of the primitive
+/// parts, the first prime's image, by Zippel's algorithm over `𝔽ₚ`, gives
+/// the form of the gcd. The next primes' images come from the sparse
+/// interpolation alone, in all the other variables at once. Each image is
+/// scaled to `γ` modulo its prime, and they are combined by Chinese
+/// remaindering as in Brown's algorithm until the combination stops
+/// changing; its primitive part is then tested by division. A wrong form
+/// is taken again from the next prime.
+pub(super) fn integers(
+    ring: &SparseRing<Integers>,
+    a: &Sparse<Integer>,
+    b: &Sparse<Integer>,
+    cancel: &dyn Cancel,
+) -> Result<Option<Cofactors<Sparse<Integer>>>, Cancelled> {
+    let Some(main) = main_variable(ring.nvars(), a, b) else {
+        let (x, y) = (&a.coeffs()[0], &b.coeffs()[0]);
+        let g = x.gcd(y);
+        let constant = |c: Integer| ring.constant(c);
+        return Ok(Some((
+            constant(g.clone()),
+            constant(x.div_exact(&g)),
+            constant(y.div_exact(&g)),
+        )));
+    };
+    let Contents { ca, cb, c, pa, pb } = Contents::of(ring, [a, b], main, cancel)?;
+    // a = c (cₐ / c) g qₐ, b = c (c_b / c) g q_b.
+    let done = |g: &Sparse<Integer>, qa: &Sparse<Integer>, qb: &Sparse<Integer>| {
+        Ok::<_, Cancelled>(Some((
+            ring.mul(&c, g),
+            ring.mul(&exact(ring, &ca, &c, cancel)?, qa),
+            ring.mul(&exact(ring, &cb, &c, cancel)?, qb),
+        )))
+    };
+    if is_constant(&pa) || is_constant(&pb) {
+        return done(&ring.one(), &pa, &pb);
+    }
+    let (da, db) = (pa.degrees(), pb.degrees());
+    let others: Vec<usize> = (0..ring.nvars())
+        .filter(|&v| v != main && (da[v] > 0 || db[v] > 0))
+        .collect();
+    let gamma = pa.coeffs()[0].gcd(&pb.coeffs()[0]);
+    // More primes than this, and an undetected wrong image is likelier than
+    // coefficients so large.
+    let bits = |p: &Sparse<Integer>| {
+        p.coeffs()
+            .iter()
+            .map(Integer::bit_length)
+            .max()
+            .unwrap_or(0)
+    };
+    let total = |d: &[u64]| d.iter().sum::<u64>();
+    let most = 64 + (bits(&pa).max(bits(&pb)) + total(&da).max(total(&db))) / 30;
+    let mut random = Random::new(SEED);
+    let mut form: Option<Form> = None;
+    let mut forms = 0;
+    let mut h: Option<(Sparse<Integer>, Integer)> = None;
+    for (p, field) in Primes::new().take(usize::try_from(most).unwrap_or(usize::MAX)) {
+        if cancel.cancelled() {
+            return Err(Cancelled);
+        }
+        let gp = field.elem_integer(&gamma);
+        if gp == 0 {
+            continue;
+        }
+        let fp = SparseRing::new(field.clone(), ring.nvars());
+        let image_of = |q: &Sparse<Integer>| ring.map_into(q, &fp, |x| field.elem_integer(x));
+        let (ap, bp) = (image_of(&pa), image_of(&pb));
+        let g = if let Some(f) = &form {
+            match image(&fp, &ap, &bp, f, &mut random, cancel)? {
+                Ok(g) => g,
+                // An unlucky prime, likely.
+                Err(Failure::Points) => continue,
+                // A wrong form: the next prime gives another.
+                Err(_) => {
+                    form = None;
+                    continue;
+                }
+            }
+        } else {
+            if forms == FORMS {
+                return Ok(None);
+            }
+            forms += 1;
+            let Some(g) = gcd(&fp, &ap, &bp, &mut random, cancel)? else {
+                return Ok(None);
+            };
+            if is_constant(&g) {
+                return done(&ring.one(), &pa, &pb);
+            }
+            form = Some(Form::of(&g, main, &others));
+            g
+        };
+        let Some(inverse) = field.inv(&g.coeffs()[0]) else {
+            continue;
+        };
+        let g = fp.scale(&g, &field.mul(&gp, &inverse));
+        let lead = g.exponents(0);
+        h = match h {
+            Some((old, m)) if old.exponents(0) == lead => {
+                let step = Step::new(&field, &m, p);
+                let new = combine(ring, &old, &g, &step);
+                if new == old {
+                    let content = ring.content(&new);
+                    let candidate = ring.map_into(&new, ring, |x| x.div_exact(&content));
+                    let candidate = normalized_sparse(ring, &candidate);
+                    if let Some(qa) = ring.div_exact_with(&pa, &candidate, cancel)?
+                        && let Some(qb) = ring.div_exact_with(&pb, &candidate, cancel)?
+                    {
+                        return done(&candidate, &qa, &qb);
+                    }
+                }
+                Some((new, step.mp))
+            }
+            // An unlucky prime: its gcd is larger.
+            Some((old, m)) if old.exponents(0) < lead => Some((old, m)),
+            // The first prime, or the earlier ones were unlucky.
+            _ => Some((fp.map_into(&g, ring, |&r| lift(r, p)), Integer::from(p))),
+        };
+    }
+    Ok(None)
 }
