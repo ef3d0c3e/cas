@@ -456,6 +456,9 @@ fn exact_gives_the_simplest_fraction_shown() {
         ),
         ("Exact[Decimal[123456, -3]]", "15432/125"),
         ("Exact[Decimal[-25, -1]]", "-5/2"),
+        // A short decimal that a simpler fraction matches to 14 digits,
+        // far from a coincidence by the rule (CAS-178).
+        ("Exact[Decimal[-151515, -12]]", "-5/33000033"),
         // Exact balls are their value, however many digits it has.
         ("Exact[Decimal[5, -1]]", "1/2"),
         ("Exact[Ball[0x1p-60, 0x0p+0]]", "1/1152921504606846976"),
@@ -509,17 +512,33 @@ fn exact_measures_far_balls_first() {
 
 proptest! {
     /// A decimal of at most 6 digits is its own exact value, at any
-    /// magnitude: no simpler fraction matches it to 12 digits.
+    /// magnitude, unless a simpler fraction matches it to 12 digits far from
+    /// a coincidence, `q² w <= 10^-3` for its denominator `q` and half a unit
+    /// `w` of the 12th digit: about one decimal in a thousand, as
+    /// `-1.51515e-7` is `-5/33000033` (CAS-178).
     #[test]
     fn exact_keeps_short_decimals(n in -999_999i64..=999_999, e in -40i64..40) {
         let input = Expr::apply(&Symbol::EXACT.into(), &[Expr::apply(&Symbol::DECIMAL.into(), &[Expr::from(n), Expr::from(e)])]);
-        let ten = Integer::from(10u64).pow(e.unsigned_abs());
+        let ten = |k: u64| Integer::from(10u64).pow(k);
         let value = if e >= 0 {
-            Rational::from(Integer::from(n) * ten)
+            Rational::from(Integer::from(n) * ten(e.unsigned_abs()))
         } else {
-            Rational::new(Integer::from(n), ten)
+            Rational::new(Integer::from(n), ten(e.unsigned_abs()))
         };
-        prop_assert_eq!(Context::new().eval(&input), Ok(Expr::from(value)));
+        let found = Context::new().eval(&input).unwrap().to_rational().expect("a fraction");
+        if found != value {
+            // The 12th digit's power of 10, from the first digit's.
+            let digits = i64::try_from(n.unsigned_abs().to_string().len()).unwrap();
+            let k = digits - 1 + e - 11;
+            let unit = if k >= 0 { Rational::from(ten(k.unsigned_abs())) } else { Rational::new(Integer::from(1), ten(k.unsigned_abs())) };
+            let half = &unit / &Rational::from(2);
+            let gap = if found >= value { &found - &value } else { &value - &found };
+            prop_assert!(gap <= half, "{} gave {}", value, found);
+            let q = Rational::from(found.denom().clone());
+            let chance = &(&q * &q) * &half;
+            prop_assert!(chance <= Rational::new(Integer::from(1), Integer::from(1000)), "{} gave {}", value, found);
+            prop_assert!(found.denom() < value.denom(), "{} gave {}", value, found);
+        }
     }
 
     /// For up to 15 digits, the fraction matches the decimal at the digits
