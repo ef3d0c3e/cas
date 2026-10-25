@@ -63,7 +63,7 @@ const NUMBER_BITS: u64 = 1 << 12;
 /// (CAS-DOC-8 §11.5, CAS-140, CAS-185), the structural predicates, and the
 /// solvers, whose lists of roots are in an order that follows the
 /// parameters' values (CAS-DOC-11 §1).
-const FORMAL: [Symbol; 19] = [
+const FORMAL: [Symbol; 20] = [
     Symbol::GCD,
     Symbol::LCM,
     Symbol::POLYNOMIAL_QUOTIENT,
@@ -83,6 +83,7 @@ const FORMAL: [Symbol; 19] = [
     Symbol::SAME_Q,
     Symbol::SOLVE,
     Symbol::CSOLVE,
+    Symbol::FSOLVE,
 ];
 
 /// Whether `e` has a [`FORMAL`] head.

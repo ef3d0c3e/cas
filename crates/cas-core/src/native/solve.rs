@@ -67,6 +67,7 @@ use crate::expr::{Expr, View};
 use crate::poly::{Fraction, Polynomials};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
+pub(super) use fsolve::fsolve;
 
 type Native = Result<Option<Expr>, EvalError>;
 
@@ -695,6 +696,7 @@ fn numeric_order((a_re, a_im): &(Float, Float), (b_re, b_im): &(Float, Float)) -
     }
 }
 
+mod fsolve;
 mod linear;
 mod radicals;
 #[cfg(test)]

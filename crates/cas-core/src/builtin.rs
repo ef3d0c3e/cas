@@ -68,9 +68,11 @@ builtins! {
     SERIES = "Series" [PROTECTED];
     LIMIT = "Limit" [PROTECTED];
     ORDER_SIZE = "OrderSize" [PROTECTED];
-    // Equations (CAS-DOC-11): the real solutions and the complex ones.
+    // Equations (CAS-DOC-11): the real solutions, the complex ones, and
+    // numeric roots.
     SOLVE = "Solve" [PROTECTED];
     CSOLVE = "CSolve" [PROTECTED];
+    FSOLVE = "FSolve" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

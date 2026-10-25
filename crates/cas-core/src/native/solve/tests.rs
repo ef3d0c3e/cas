@@ -626,3 +626,87 @@ fn transcendental_equations() {
         ("Solve[Equation[Exp[Power[x, 2]], E], x]", "List[-1, 1]"),
     ]);
 }
+
+/// The value of the number `input` evaluates to: real and imaginary
+/// parts.
+fn bare_value(input: &str) -> (f64, f64) {
+    let found = Context::new().eval(&read(input)).unwrap();
+    match found.view() {
+        crate::View::Ball(b) => (b.mid().to_f64(), 0.0),
+        crate::View::ComplexBall(z) => (z.re().mid().to_f64(), z.im().mid().to_f64()),
+        _ => panic!("{input}: {found:?} is no number"),
+    }
+}
+
+/// Numeric roots (CAS-214): a polynomial's real roots, the number alone
+/// when there is one; sign changes bisected; Newton's iteration.
+#[test]
+fn numeric_solutions() {
+    let close = |(a, b): (f64, f64), x: f64| (a - x).abs() < 1e-12 && b == 0.0;
+    assert!(close(
+        bare_value("FSolve[Plus[-1, Times[-1, x], Power[x, 5]], x]"),
+        1.167_303_978_261_418_7
+    ));
+    assert!(close(
+        bare_value("FSolve[Equation[Cos[x], x], x, 0]"),
+        0.739_085_133_215_160_7
+    ));
+    assert!(close(
+        bare_value("FSolve[Equation[Log[x], 1], x, 2]"),
+        std::f64::consts::E
+    ));
+    assert!(close(
+        bare_value("FSolve[Plus[-2, Power[x, 2]], x, 1]"),
+        std::f64::consts::SQRT_2
+    ));
+    let r2 = std::f64::consts::SQRT_2;
+    check_values(&[
+        ("FSolve[Plus[-2, Power[x, 2]], x]", &[(-r2, 0.0), (r2, 0.0)]),
+        (
+            "FSolve[Plus[Times[-1, x], Power[x, 3]], x]",
+            &[(-1.0, 0.0), (0.0, 0.0), (1.0, 0.0)],
+        ),
+        ("FSolve[Plus[1, Power[x, 2]], x]", &[]),
+        (
+            "FSolve[Equation[Cos[x], x], x]",
+            &[(0.739_085_133_215_160_7, 0.0)],
+        ),
+        (
+            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]]]",
+            &[(0.739_085_133_215_160_7, 0.0)],
+        ),
+        (
+            "FSolve[Equation[Sin[x], 0], Equation[x, Range[2, 4]]]",
+            &[(std::f64::consts::PI, 0.0)],
+        ),
+        (
+            "FSolve[Equation[Exp[x], 3], x]",
+            &[(1.098_612_288_668_109_8, 0.0)],
+        ),
+        (
+            "FSolve[Equation[Times[x, Exp[x]], 1], x]",
+            &[(0.567_143_290_409_783_8, 0.0)],
+        ),
+        (
+            "FSolve[Equation[Tan[x], x], Equation[x, Range[4, 23/5]]]",
+            &[(4.493_409_457_909_064, 0.0)],
+        ),
+        // No root in the bracket; a pole of tan is no root.
+        (
+            "FSolve[Equation[Power[x, 2], 2], Equation[x, Range[0, 1]]]",
+            &[],
+        ),
+        ("FSolve[Tan[x], Equation[x, Range[1, 2]]]", &[]),
+    ]);
+    // Newton's iteration from 1 on x^2 + 1 finds nothing; parameters.
+    check(&[
+        (
+            "FSolve[Plus[1, Power[x, 2]], x, 1]",
+            "FSolve[Plus[1, Power[x, 2]], x, 1]",
+        ),
+        (
+            "FSolve[Plus[Times[-1, a], Power[x, 2]], x]",
+            "FSolve[Plus[Times[-1, a], Power[x, 2]], x]",
+        ),
+    ]);
+}

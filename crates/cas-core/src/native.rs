@@ -134,6 +134,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::LIMIT, limit::limit),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
+        (Symbol::FSOLVE, solve::fsolve),
         (Symbol::FACTOR_RATIONAL, polynomial::factor_rational),
         (Symbol::FACTOR_LIST, polynomial::factor_list),
         (Symbol::FACTOR_SQUARE_FREE, polynomial::factor_square_free),

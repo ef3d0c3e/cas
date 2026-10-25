@@ -82,6 +82,14 @@ fn agrees_with(giac: &Giac, asked: &str, input: &str) -> Result<(), String> {
     let ours = ours(input).map_err(|e| e.to_string())?;
     let differs = || format!("{input}: ours {ours:?}, giac's {theirs:?}");
     let list = Expr::from(Symbol::LIST);
+    // fsolve's number alone.
+    if theirs.head() != Some(&list) && ours.head() != Some(&list) {
+        return if same(&Context::new(), &ours, &theirs) {
+            Ok(())
+        } else {
+            Err(differs())
+        };
+    }
     if theirs.head() != Some(&list)
         || ours.head() != Some(&list)
         || theirs.args().len() != ours.args().len()
@@ -262,6 +270,28 @@ fn transcendental_equations() {
         "solve(2^x=8,x)",
         "solve(ln(x^2-3)=0,x)",
         "solve(exp(x^2)=e,x)",
+    ]);
+}
+
+/// Numeric roots (CAS-214): giac's `fsolve`, by value.
+#[test]
+fn numeric_solutions() {
+    check(&[
+        "fsolve(x^5-x-1,x)",
+        "fsolve(x^2-2,x)",
+        "fsolve(x^3-x,x)",
+        "fsolve(x^2+1,x)",
+        "fsolve(cos(x)=x,x)",
+        "fsolve(cos(x)=x,x,0)",
+        "fsolve(cos(x)=x,x=0..1)",
+        "fsolve(sin(x)=0,x=2..4)",
+        "fsolve(sin(x)=0,x,3)",
+        "fsolve(exp(x)=3,x)",
+        "fsolve(x*exp(x)=1,x)",
+        "fsolve(tan(x)=x,x=4..4.6)",
+        "fsolve(x^2=2,x=0..1)",
+        "fsolve(ln(x)=1,x,2)",
+        "fsolve(x^2-2,x,1)",
     ]);
 }
 
