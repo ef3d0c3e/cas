@@ -249,55 +249,56 @@ fn decided(ev: &Eval<'_>, c: &Expr) -> bool {
     }
 }
 
-/// `c t^q` with `log t` in `c`, `log t → −∞` (§4.2).
+/// `c t^q` with `log t` in `c`, `log t → −∞` (§4.2): powers of `t` beat
+/// the coefficients' logarithms, so 0 for `q > 0`; for `q = 0` the limit of
+/// `c`; for `q < 0` an infinity of the sign of `c` as `log t → −∞`, that of
+/// the leading coefficient of `c` at `log t = −1/s`, `s → 0⁺` (`x/ln x` at
+/// infinity is `−1/log t` in `t`, and `s` there: positive).
 fn logarithmic(
     ev: &mut Eval<'_>,
     c: &Expr,
     q: &Rational,
     depth: u32,
 ) -> Result<Result<Value, Failure>, EvalError> {
-    let l = log_t();
-    if q.is_zero() {
-        if depth >= MAX_LOGARITHMS {
-            return Ok(Err(Failure::Unknown));
-        }
-        // The limit of c as log t → −∞: log t = −1/s, s → 0⁺.
-        let s = fresh_logarithm();
-        let local = ev.eval(&c.substitute(&[(l, -(s.pow(-1)))]))?;
-        return one_side(ev, &local, &s, depth + 1);
-    }
-    // c a polynomial in log t: its leading term in log t, of sign
-    // sign(c_m) (−1)^m.
-    let degree = ev.eval(&Expr::call(Symbol::EXPONENT, [c.clone(), l.clone()]))?;
-    let Some(m) = degree.as_i64().filter(|m| *m >= 0) else {
-        return Ok(Err(Failure::Unknown));
-    };
-    let lead = ev.eval(&Expr::call(
-        Symbol::COEFFICIENT,
-        [c.clone(), l.clone(), Expr::from(m)],
-    ))?;
-    let rest = ev.eval(&Expr::call(
-        Symbol::TOGETHER,
-        [c.clone() - lead.clone() * l.pow(m)],
-    ))?;
-    let lower = rest == Expr::from(0) || {
-        let k = ev.eval(&Expr::call(Symbol::EXPONENT, [rest, l.clone()]))?;
-        k.as_i64().is_some_and(|k| k < m)
-    };
-    if lead.contains(&l) || !lower {
-        return Ok(Err(Failure::Unknown));
-    }
     if q.is_positive() {
         return Ok(Ok(Value::Finite(Expr::from(0))));
     }
-    let mut expander = Expander::new(ev, fresh());
-    Ok(Ok(match expander.sign(&lead) {
-        Some(s) => {
-            let positive = (s == Ordering::Greater) == (m % 2 == 0);
-            Value::Infinite(positive)
-        }
-        None => Value::Unsigned,
+    if depth >= MAX_LOGARITHMS {
+        return Ok(Err(Failure::Unknown));
+    }
+    let s = fresh_logarithm();
+    let local = ev.eval(&c.substitute(&[(log_t(), -(s.pow(-1)))]))?;
+    if q.is_zero() {
+        return one_side(ev, &local, &s, depth + 1);
+    }
+    Ok(Ok(match sign_near_zero(ev, &local, &s, depth + 1)? {
+        Some(Ordering::Greater) => Value::Infinite(true),
+        Some(Ordering::Less) => Value::Infinite(false),
+        _ => Value::Unsigned,
     }))
+}
+
+/// The sign of `local` as `s → 0⁺`: that of its leading coefficient, by
+/// the assumptions or its ball, `log s` in it followed the same way.
+fn sign_near_zero(
+    ev: &mut Eval<'_>,
+    local: &Expr,
+    s: &Expr,
+    depth: u32,
+) -> Result<Option<Ordering>, EvalError> {
+    let Some(series) = leading(ev, local, s)? else {
+        return Ok(None);
+    };
+    let c0 = series.coeffs[0].clone();
+    if !c0.contains(&log_t()) {
+        return Ok(Expander::new(ev, s.clone()).sign(&c0));
+    }
+    if depth >= MAX_LOGARITHMS {
+        return Ok(None);
+    }
+    let inner = fresh_logarithm();
+    let deeper = ev.eval(&c0.substitute(&[(log_t(), -(inner.pow(-1)))]))?;
+    sign_near_zero(ev, &deeper, &inner, depth + 1)
 }
 
 /// The variable of a limit in `log t`.

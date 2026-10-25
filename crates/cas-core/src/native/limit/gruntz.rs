@@ -26,11 +26,11 @@ use std::cmp::Ordering;
 
 use cas_num::{Integer, Rational};
 
-use super::Value;
+use super::{Value, one_side};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
-use crate::native::series::{Expander, expansion, log_t};
+use crate::native::series::{Expander, expansion, fresh, log_t};
 use crate::symbol::Symbol;
 
 type Found<T> = Result<Option<T>, EvalError>;
@@ -88,6 +88,16 @@ impl<'a, 'e> Gruntz<'a, 'e> {
         }
         if *e == self.x {
             return Ok(Some(Value::Infinite(true)));
+        }
+        // Series first, at x = 1/t: they decide x/ln x, which comparing
+        // e^x with x asks, and which the class of x would otherwise send
+        // back up to e^x/ln(e^x) and the same comparison.
+        let t = fresh();
+        let local = self
+            .ev
+            .eval(&e.substitute(&[(self.x.clone(), t.pow(-1))]))?;
+        if let Ok(value) = one_side(self.ev, &local, &t, 0)? {
+            return Ok(Some(value));
         }
         let e = self.exponentials(e)?;
         let Some(omega_set) = self.mrv(&e, depth)? else {
@@ -296,10 +306,10 @@ impl<'a, 'e> Gruntz<'a, 'e> {
                 }
                 return Ok(Some(sign));
             }
-            (Some(Symbol::POWER), [b, c]) if !c.contains(&self.x) => {
-                if self.sign(b, depth + 1)? == Some(Ordering::Greater) {
-                    return Ok(Some(Ordering::Greater));
-                }
+            (Some(Symbol::POWER), [b, c])
+                if !c.contains(&self.x) && self.sign(b, depth + 1)? == Some(Ordering::Greater) =>
+            {
+                return Ok(Some(Ordering::Greater));
             }
             _ => {}
         }
