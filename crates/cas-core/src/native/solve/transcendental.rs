@@ -151,13 +151,10 @@ fn invert(
         return Ok(None);
     };
     let equations = match (head, g.args()) {
-        (Symbol::EXP, [a]) => {
-            if real && matches!(sign(ev, c)?, Some(Ordering::Less | Ordering::Equal)) {
-                Vec::new()
-            } else {
-                vec![(a.clone(), call(Symbol::LOG, c.clone()))]
-            }
-        }
+        (Symbol::EXP, [a]) => match log(ev, c, real)? {
+            Some(v) => vec![(a.clone(), v)],
+            None => Vec::new(),
+        },
         (Symbol::LOG, [a]) => vec![(a.clone(), call(Symbol::EXP, c.clone()))],
         (Symbol::SIN, [a]) => {
             if real && outside(ev, c, Expr::from(-1), Expr::from(1), false)? {
@@ -243,17 +240,33 @@ fn power(
     if b.contains(goal.x) {
         return Ok(None);
     }
-    if real && matches!(sign(ev, c)?, Some(Ordering::Less | Ordering::Equal)) {
-        return Ok(Some(Vec::new()));
-    }
     let a = q.clone();
     if let (Some(base), Some(value)) = (b.to_rational(), c.to_rational())
         && let Some(k) = exact_log(&base, &value)
     {
         return Ok(Some(vec![(a, Expr::from(k))]));
     }
-    let log = |e: &Expr| call(Symbol::LOG, e.clone());
-    Ok(Some(vec![(a, log(c) / log(b))]))
+    Ok(Some(match log(ev, c, real)? {
+        Some(v) => vec![(a, v / call(Symbol::LOG, b.clone()))],
+        None => Vec::new(),
+    }))
+}
+
+/// The principal logarithm of `c`, `log|c| + iπ` for a negative `c`;
+/// `None` for none: `c = 0`, or `c < 0` when `real`.
+fn log(ev: &mut Eval<'_>, c: &Expr, real: bool) -> Result<Option<Expr>, EvalError> {
+    Ok(match sign(ev, c)? {
+        Some(Ordering::Equal) => None,
+        Some(Ordering::Less) if real => None,
+        Some(Ordering::Less) => Some(
+            call(Symbol::LOG, -c.clone())
+                + Expr::call(
+                    Symbol::TIMES,
+                    [Expr::from(Symbol::I), Expr::from(Symbol::PI)],
+                ),
+        ),
+        _ => Some(call(Symbol::LOG, c.clone())),
+    })
 }
 
 /// The integer `k` with `b^k = c`, for rationals `b > 0`, `b ≠ 1`, within
@@ -332,7 +345,7 @@ fn radicals(
     Ok(Some(
         candidates
             .into_iter()
-            .filter(|c| holds(ctx, f, goal.x, c))
+            .filter(|c| holds(ctx, f, &[(goal.x.clone(), c.clone())]))
             .collect(),
     ))
 }
@@ -361,10 +374,11 @@ fn split<R: Numbers>(
     Some((sum(a), sum(b)))
 }
 
-/// Whether `c` solves `f = 0` in `x`: its value is 0, or a number whose
-/// ball holds 0, or unknown for parameters; not a pole.
-fn holds(ctx: &Context, f: &Expr, x: &Expr, c: &Expr) -> bool {
-    let Ok(value) = ctx.eval(&f.substitute(&[(x.clone(), c.clone())])) else {
+/// Whether the values `rules` give the unknowns solve `f = 0`: its value
+/// is 0, or a number whose ball holds 0, or unknown for parameters; not a
+/// pole.
+pub(super) fn holds(ctx: &Context, f: &Expr, rules: &[(Expr, Expr)]) -> bool {
+    let Ok(value) = ctx.eval(&f.substitute(rules)) else {
         return true;
     };
     if value == Expr::from(0) {
