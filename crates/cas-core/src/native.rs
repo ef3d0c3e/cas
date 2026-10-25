@@ -27,6 +27,7 @@ mod polynomial;
 mod procedure;
 mod radical;
 mod replace;
+mod series;
 mod special;
 mod structure;
 
