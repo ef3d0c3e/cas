@@ -447,6 +447,23 @@ fn definite_integrals() {
             ),
             // A complex bound, for a polynomial.
             ("Integrate[x, x, 0, I]", "-1/2"),
+            // Improper (CAS-207): infinite bounds, singular points at the
+            // bounds, poles inside: 1, 1, pi, 2, -1, 1 and +infinity.
+            ("Integrate[Exp[Times[-1, x]], x, 0, Infinity]", "1"),
+            ("Integrate[Power[x, -2], x, 1, Infinity]", "1"),
+            (
+                "Integrate[Power[Plus[1, Power[x, 2]], -1], x, Times[-1, Infinity], Infinity]",
+                "Pi",
+            ),
+            ("Integrate[Power[x, -1/2], x, 0, 1]", "2"),
+            ("Integrate[Log[x], x, 0, 1]", "-1"),
+            (
+                "Integrate[Times[x, Exp[Times[-1, x]]], x, 0, Infinity]",
+                "1",
+            ),
+            ("Integrate[Power[x, -2], x, -1, 1]", "Infinity"),
+            ("Integrate[Power[x, -1], x, 1, Infinity]", "Infinity"),
+            ("Integrate[Exp[x], x, 0, Infinity]", "Infinity"),
             // Symbolic bounds, where the integrand is continuous on the line.
             (
                 "Integrate[x, x, a, b]",
@@ -473,26 +490,25 @@ fn definite_integrals() {
     );
 }
 
-/// Improper integrals and those not shown proper stay, each with its
-/// warning, where giac answers `+infinity`, a principal value or `undef`
-/// (CAS-198).
+/// What stays of improper integrals and those not shown proper, each with
+/// its warning: parts diverging to both signs, where giac answers the
+/// principal value; poles inside that are not split; bounds that may lie
+/// on either side of a pole (CAS-198, CAS-207).
 #[test]
 fn improper_integrals_stay() {
     let ctx = Context::new();
     let unbounded = "an improper integral: the integrand is unbounded between the bounds";
     let unknown = "the integrand is not shown continuous between the bounds";
+    let both_signs = "an improper integral whose parts diverge, or whose limits are not found";
     for (input, message) in [
-        ("Integrate[Power[x, -2], x, -1, 1]", unbounded),
-        ("Integrate[Power[x, -1], x, -1, 1]", unbounded),
-        ("Integrate[Power[Plus[-1, x], -1], x, 0, 2]", unbounded),
+        // giac's principal value 0.
+        ("Integrate[Power[x, -1], x, -1, 1]", both_signs),
+        ("Integrate[Power[Plus[-1, x], -1], x, 0, 2]", both_signs),
+        // A pole inside at sqrt(2) is not split; tan has one at pi/2.
         (
             "Integrate[Power[Plus[-2, Power[x, 2]], -1], x, 0, 2]",
             unbounded,
         ),
-        // Convergent, but at a singular point: for limits.
-        ("Integrate[Power[x, -1/2], x, 0, 1]", unbounded),
-        ("Integrate[Log[x], x, 0, 1]", unbounded),
-        // tan has a pole at pi/2.
         ("Integrate[Tan[x], x, 0, 2]", unbounded),
         // Where the bounds may lie on either side of the pole.
         ("Integrate[Power[x, -1], x, a, b]", unknown),
@@ -505,8 +521,8 @@ fn improper_integrals_stay() {
             unknown,
         ),
         (
-            "Integrate[Exp[x], x, 0, Infinity]",
-            "an infinite bound, which waits for limits",
+            "Integrate[x, x, 0, ComplexInfinity]",
+            "an infinite bound without a sign",
         ),
     ] {
         let e = read(input);

@@ -33,8 +33,9 @@
 //!
 //! `Integrate[f, x, a, b]`, and Mathematica's `Integrate[f, {x, a, b}]`, is
 //! `F(b) − F(a)` where the integrand is shown continuous between the bounds,
-//! and so the antiderivative `F` (CAS-198, `definite`); an improper integral
-//! stays, with a warning. Each call that rewrites takes one step,
+//! and so the antiderivative `F` (CAS-198, `definite`); an improper one, by
+//! the limits of `F` at the bounds and at rational poles inside (CAS-207),
+//! or it stays, with a warning. Each call that rewrites takes one step,
 //! `"Integrate"`, whose identity `D[F, x] = f` `Trace::verify` checks.
 
 #![allow(

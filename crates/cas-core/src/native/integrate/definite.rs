@@ -23,10 +23,16 @@
 //! `Tan[u]` for a linear `u` where no `(k + 1/2) π` lies between its values
 //! at the ends.
 //!
-//! An integrand surely unbounded at a point between the bounds makes the
-//! integral improper, and one not shown continuous may be: the call stays,
-//! with a warning, where giac answers `+infinity`, `undef` or the principal
-//! value, `∫_{−1}^{1} 1/x = 0`. Infinite bounds wait for limits.
+//! An improper integral (CAS-DOC-10 §7, CAS-207), with an infinite bound
+//! or a singular point at a bound, is the difference of the one-sided
+//! limits of `F` at the bounds, from inside, where the integrand is
+//! continuous on the open interval: `∫₀^∞ e^{−x} = 1`, `∫₀¹ 1/√x = 2`,
+//! `∫₀¹ ln x = −1`. A rational integrand with poles inside at rational
+//! points splits there, each piece by its limits; pieces that diverge make
+//! an infinity of their sign (`∫_{−1}^{1} 1/x² = Infinity`), and of both
+//! signs the call stays with a warning, where giac answers the principal
+//! value, `∫_{−1}^{1} 1/x = 0`. What is not shown continuous stays, with a
+//! warning.
 
 use cas_num::algebra::{EuclideanDomain, Rationals};
 use cas_num::{Integer, Rational};
@@ -59,9 +65,24 @@ impl Interval {
         }
     }
 
-    /// The roots of `p` in this interval.
-    fn roots(&self, p: &Dense<Rational>) -> usize {
-        DenseRing::new(Rationals).count_real_roots(p, self.lo.as_ref(), self.hi.as_ref())
+    /// The roots of `p` in this interval, at its finite ends but when
+    /// `open`.
+    fn roots(&self, p: &Dense<Rational>, open: bool) -> usize {
+        let qx = DenseRing::new(Rationals);
+        let all = qx.count_real_roots(p, self.lo.as_ref(), self.hi.as_ref());
+        if !open {
+            return all;
+        }
+        let mut ends = 0;
+        if let Some(lo) = &self.lo {
+            ends += usize::from(qx.eval(p, lo).is_zero());
+        }
+        if let Some(hi) = &self.hi
+            && self.lo.as_ref() != Some(hi)
+        {
+            ends += usize::from(qx.eval(p, hi).is_zero());
+        }
+        all.saturating_sub(ends)
     }
 
     /// A point inside, away from its ends when it has two.
@@ -79,10 +100,11 @@ impl Interval {
 /// Where the integral runs.
 enum Region {
     /// Between real bounds: `outer` holds them, and `inner`, when known,
-    /// lies between them.
+    /// lies between them; `open` leaves the ends out.
     Real {
         outer: Interval,
         inner: Option<Interval>,
+        open: bool,
     },
     /// A bound need not be real.
     Plane,
@@ -110,8 +132,8 @@ impl Continuity {
 }
 
 /// `F(b) − F(a)` for `e = Integrate[f, x, a, b]` and the antiderivative
-/// `F`, or `None` after a warning when it is not shown continuous between
-/// the bounds.
+/// `F`, or the improper integral by limits; `None` after a warning when
+/// neither is shown.
 pub(super) fn integral(
     ev: &mut Eval<'_>,
     e: &Expr,
@@ -123,25 +145,46 @@ pub(super) fn integral(
     if antiderivative.contains(&Expr::from(Symbol::INTEGRATE)) {
         return Ok(None);
     }
-    if infinite(a) || infinite(b) {
-        warn(ev, "an infinite bound, which waits for limits", e);
+    // Evaluated first, so that no `x^0` meets `x = 0`.
+    let antiderivative = ev.eval(antiderivative)?;
+    let bounded = !infinite(a) && !infinite(b);
+    if bounded && continuity(ev, e, f, x, &region(ev, a, b, false))? == Continuity::Continuous {
+        let at = |v: &Expr| antiderivative.substitute(&[(x.clone(), v.clone())]);
+        return Ok(Some(at(b) - at(a)));
+    }
+    // Improper: continuous on the open interval, by limits at the bounds.
+    if [a, b]
+        .into_iter()
+        .any(|bound| infinite(bound) && end(bound).is_none())
+    {
+        warn(ev, "an infinite bound without a sign", e);
         return Ok(None);
     }
-    let region = region(ev, a, b);
-    match continuity(ev, e, f, x, &region)? {
-        Continuity::Continuous => {
-            // Evaluated first, so that no `x^0` meets `x = 0`.
-            let antiderivative = ev.eval(antiderivative)?;
-            let at = |v: &Expr| antiderivative.substitute(&[(x.clone(), v.clone())]);
-            Ok(Some(at(b) - at(a)))
-        }
+    let open = region(ev, a, b, true);
+    let Some(ascending) = ascending(ev, a, b) else {
+        warn(
+            ev,
+            "the integrand is not shown continuous between the bounds",
+            e,
+        );
+        return Ok(None);
+    };
+    let (lo, hi) = if ascending { (a, b) } else { (b, a) };
+    let points = match continuity(ev, e, f, x, &open)? {
+        Continuity::Continuous => vec![lo.clone(), hi.clone()],
         Continuity::Singular => {
-            warn(
-                ev,
-                "an improper integral: the integrand is unbounded between the bounds",
-                e,
-            );
-            Ok(None)
+            let Some(poles) = interior_poles(ev, e, f, x, &open)? else {
+                warn(
+                    ev,
+                    "an improper integral: the integrand is unbounded between the bounds",
+                    e,
+                );
+                return Ok(None);
+            };
+            let mut points = vec![lo.clone()];
+            points.extend(poles.into_iter().map(Expr::from));
+            points.push(hi.clone());
+            points
         }
         Continuity::Unknown => {
             warn(
@@ -149,9 +192,168 @@ pub(super) fn integral(
                 "the integrand is not shown continuous between the bounds",
                 e,
             );
-            Ok(None)
+            return Ok(None);
+        }
+    };
+    let Some(value) = by_limits(ev, x, &antiderivative, &points)? else {
+        warn(
+            ev,
+            "an improper integral whose parts diverge, or whose limits are not found",
+            e,
+        );
+        return Ok(None);
+    };
+    Ok(Some(if ascending { value } else { -value }))
+}
+
+/// Whether `a < b` surely, `a > b` surely, or `None`.
+fn ascending(ev: &Eval<'_>, a: &Expr, b: &Expr) -> Option<bool> {
+    match (end(a), end(b)) {
+        (Some(true), _) | (_, Some(false)) => return Some(false),
+        (Some(false), _) | (_, Some(true)) => return Some(true),
+        _ => {}
+    }
+    let (p, q) = (enclosure(ev, a)?, enclosure(ev, b)?);
+    let below =
+        |p: &Interval, q: &Interval| matches!((&p.hi, &q.lo), (Some(hi), Some(lo)) if hi < lo);
+    if below(&p, &q) {
+        Some(true)
+    } else if below(&q, &p) {
+        Some(false)
+    } else {
+        None
+    }
+}
+
+/// `Some(true)` for `+∞`, `Some(false)` for `−∞`, `None` for a finite
+/// bound.
+fn end(e: &Expr) -> Option<bool> {
+    if !infinite(e) || e.contains(&Expr::from(Symbol::COMPLEX_INFINITY)) {
+        return None;
+    }
+    let negative = e.contains(&Expr::from(-1)) || e.to_rational().is_some_and(|q| q.is_negative());
+    Some(!negative)
+}
+
+/// What the parts of an integral divide into.
+enum Part {
+    Finite(Expr),
+    Infinite(bool),
+}
+
+/// The limit of `F` at `point` from `side` (1 from the right, −1 from the
+/// left), by `Limit`.
+fn one_sided(
+    ev: &mut Eval<'_>,
+    x: &Expr,
+    antiderivative: &Expr,
+    point: &Expr,
+    side: i64,
+) -> Result<Option<Part>, EvalError> {
+    let limit = Expr::call(
+        Symbol::LIMIT,
+        [
+            antiderivative.clone(),
+            x.clone(),
+            point.clone(),
+            Expr::from(side),
+        ],
+    );
+    let value = ev.eval(&limit)?;
+    if value.contains(&Expr::from(Symbol::LIMIT))
+        || value.contains(&Expr::from(Symbol::COMPLEX_INFINITY))
+    {
+        return Ok(None);
+    }
+    Ok(Some(match end(&value) {
+        Some(positive) => Part::Infinite(positive),
+        None if infinite(&value) || value.contains(&Expr::from(Symbol::INDETERMINATE)) => {
+            return Ok(None);
+        }
+        None => Part::Finite(value),
+    }))
+}
+
+/// `Σ F(p_{k+1}⁻) − F(p_k⁺)` over the ascending points; an infinity when
+/// the divergent pieces agree in sign; `None` when they do not, or a limit
+/// is not found.
+fn by_limits(
+    ev: &mut Eval<'_>,
+    x: &Expr,
+    antiderivative: &Expr,
+    points: &[Expr],
+) -> Result<Option<Expr>, EvalError> {
+    let mut finite = Vec::new();
+    let (mut up, mut down) = (false, false);
+    for pair in points.windows(2) {
+        let (Some(start), Some(stop)) = (
+            one_sided(ev, x, antiderivative, &pair[0], 1)?,
+            one_sided(ev, x, antiderivative, &pair[1], -1)?,
+        ) else {
+            return Ok(None);
+        };
+        match (stop, start) {
+            (Part::Finite(s), Part::Finite(r)) => finite.push(s - r),
+            (Part::Infinite(true), Part::Finite(_) | Part::Infinite(false))
+            | (Part::Finite(_), Part::Infinite(false)) => up = true,
+            (Part::Infinite(false), Part::Finite(_) | Part::Infinite(true))
+            | (Part::Finite(_), Part::Infinite(true)) => down = true,
+            (Part::Infinite(_), Part::Infinite(_)) => return Ok(None),
         }
     }
+    Ok(match (up, down) {
+        (true, true) => None,
+        (true, false) => Some(Expr::from(Symbol::INFINITY)),
+        (false, true) => Some(-Expr::from(Symbol::INFINITY)),
+        (false, false) => Some(finite.into_iter().sum()),
+    })
+}
+
+/// The poles of a rational integrand strictly inside the open region, when
+/// they are rational, ascending; `None` for another integrand, or a pole
+/// that is not rational.
+fn interior_poles(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    f: &Expr,
+    x: &Expr,
+    region: &Region,
+) -> Result<Option<Vec<Rational>>, EvalError> {
+    let Region::Real {
+        outer,
+        inner: Some(inner),
+        ..
+    } = region
+    else {
+        return Ok(None);
+    };
+    let Some((num, den)) = rational_function(ev, e, f, x)? else {
+        return Ok(None);
+    };
+    let qx = DenseRing::new(Rationals);
+    let g = qx.gcd(&num, &den);
+    let den = qx.div_rem(&den, &g).0;
+    let factors = qx.factor(&den);
+    let mut poles = Vec::new();
+    for (factor, _) in factors.factors() {
+        if outer.roots(factor, true) == 0 {
+            continue;
+        }
+        // A root inside: rational, and surely inside, or not split.
+        if factor.degree() != Some(1) {
+            return Ok(None);
+        }
+        let root = -(&factor.coeffs()[0] / &factor.coeffs()[1]);
+        let strictly = |i: &Interval| {
+            i.lo.as_ref().is_none_or(|lo| lo < &root) && i.hi.as_ref().is_none_or(|hi| &root < hi)
+        };
+        if !strictly(inner) {
+            return Ok(None);
+        }
+        poles.push(root);
+    }
+    poles.sort();
+    Ok(Some(poles))
 }
 
 fn warn(ev: &mut Eval<'_>, message: &'static str, e: &Expr) {
@@ -204,31 +406,74 @@ fn enclosure(ev: &Eval<'_>, e: &Expr) -> Option<Interval> {
     })
 }
 
-/// The region between `a` and `b`.
-fn region(ev: &Eval<'_>, a: &Expr, b: &Expr) -> Region {
-    let (Some(a), Some(b)) = (enclosure(ev, a), enclosure(ev, b)) else {
+/// The region between `a` and `b`, without its ends when `open`: an
+/// infinite bound leaves its side unbounded.
+fn region(ev: &Eval<'_>, a: &Expr, b: &Expr, open: bool) -> Region {
+    let bound = |e: &Expr| -> Option<(Interval, Option<bool>)> {
+        match end(e) {
+            Some(positive) => Some((Interval { lo: None, hi: None }, Some(positive))),
+            None => enclosure(ev, e).map(|i| (i, None)),
+        }
+    };
+    let (Some((p, pe)), Some((q, qe))) = (bound(a), bound(b)) else {
         return Region::Plane;
     };
-    let lower = |p: &Option<Rational>, q: &Option<Rational>| {
-        p.as_ref().zip(q.as_ref()).map(|(p, q)| p.min(q).clone())
+    // Lower and upper: an infinite end is on its side.
+    let (lower, upper) = match (pe, qe) {
+        (Some(true), _) | (_, Some(false)) => ((q, qe), (p, pe)),
+        _ => ((p, pe), (q, qe)),
     };
-    let upper = |p: &Option<Rational>, q: &Option<Rational>| {
-        p.as_ref().zip(q.as_ref()).map(|(p, q)| p.max(q).clone())
+    let (lower, lower_end) = lower;
+    let (upper, upper_end) = upper;
+    let (outer, inner) = match (lower_end, upper_end) {
+        (Some(false), Some(true)) => (
+            Interval { lo: None, hi: None },
+            Some(Interval { lo: None, hi: None }),
+        ),
+        (Some(false), _) => (
+            Interval {
+                lo: None,
+                hi: upper.hi.clone(),
+            },
+            Some(Interval {
+                lo: None,
+                hi: upper.lo.clone(),
+            }),
+        ),
+        (_, Some(true)) => (
+            Interval {
+                lo: lower.lo.clone(),
+                hi: None,
+            },
+            Some(Interval {
+                lo: lower.hi.clone(),
+                hi: None,
+            }),
+        ),
+        _ => {
+            let min = |p: &Option<Rational>, q: &Option<Rational>| {
+                p.as_ref().zip(q.as_ref()).map(|(p, q)| p.min(q).clone())
+            };
+            let max = |p: &Option<Rational>, q: &Option<Rational>| {
+                p.as_ref().zip(q.as_ref()).map(|(p, q)| p.max(q).clone())
+            };
+            let outer = Interval {
+                lo: min(&lower.lo, &upper.lo),
+                hi: max(&lower.hi, &upper.hi),
+            };
+            // What lies between them when one is surely below the other.
+            let between = |p: &Interval, q: &Interval| match (&p.hi, &q.lo) {
+                (Some(hi), Some(lo)) if hi <= lo => Some(Interval {
+                    lo: Some(hi.clone()),
+                    hi: Some(lo.clone()),
+                }),
+                _ => None,
+            };
+            let inner = between(&lower, &upper).or_else(|| between(&upper, &lower));
+            (outer, inner)
+        }
     };
-    let outer = Interval {
-        lo: lower(&a.lo, &b.lo),
-        hi: upper(&a.hi, &b.hi),
-    };
-    // What lies between them when one is surely below the other.
-    let between = |p: &Interval, q: &Interval| match (&p.hi, &q.lo) {
-        (Some(hi), Some(lo)) if hi <= lo => Some(Interval {
-            lo: Some(hi.clone()),
-            hi: Some(lo.clone()),
-        }),
-        _ => None,
-    };
-    let inner = between(&a, &b).or_else(|| between(&b, &a));
-    Region::Real { outer, inner }
+    Region::Real { outer, inner, open }
 }
 
 /// What the real roots of `p` tell: none in the region, one surely in it,
@@ -237,12 +482,12 @@ fn roots(region: &Region, p: &Dense<Rational>) -> Continuity {
     if p.degree().unwrap_or(0) == 0 {
         return Continuity::Continuous;
     }
-    let Region::Real { outer, inner } = region else {
+    let Region::Real { outer, inner, open } = region else {
         return Continuity::Unknown;
     };
-    if outer.roots(p) == 0 {
+    if outer.roots(p, *open) == 0 {
         Continuity::Continuous
-    } else if inner.as_ref().is_some_and(|i| i.roots(p) > 0) {
+    } else if inner.as_ref().is_some_and(|i| i.roots(p, *open) > 0) {
         Continuity::Singular
     } else {
         Continuity::Unknown
@@ -252,9 +497,11 @@ fn roots(region: &Region, p: &Dense<Rational>) -> Continuity {
 /// Whether `p` is positive on the region, or, unless `strict`, positive
 /// inside and maybe 0 at the ends.
 fn positive(region: &Region, p: &Dense<Rational>, strict: bool) -> Continuity {
-    let Region::Real { outer, .. } = region else {
+    let Region::Real { outer, open, .. } = region else {
         return Continuity::Unknown;
     };
+    // On an open interval, positive inside is enough.
+    let strict = strict && !open;
     let qx = DenseRing::new(Rationals);
     let at_ends = [&outer.lo, &outer.hi]
         .into_iter()
@@ -265,7 +512,7 @@ fn positive(region: &Region, p: &Dense<Rational>, strict: bool) -> Continuity {
     let shown = match found {
         Continuity::Continuous => true,
         // Roots at the ends only.
-        _ if !strict => outer.roots(p) == at_ends,
+        _ if !strict => outer.roots(p, false) == at_ends,
         _ => return found,
     };
     if shown && qx.eval(p, &outer.inside()).is_positive() {
@@ -374,7 +621,7 @@ fn real(g: &Expr) -> bool {
 /// where no `(k + 1/2) π` lies between the values of `u` at the ends of the
 /// interval, as `t = u/π − 1/2` passes no integer.
 fn tangent(ev: &mut Eval<'_>, u: &Expr, x: &Expr, region: &Region) -> Continuity {
-    let Region::Real { outer, inner } = region else {
+    let Region::Real { outer, inner, .. } = region else {
         return Continuity::Unknown;
     };
     if slope(u, x).is_none() || !real(u) {

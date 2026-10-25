@@ -169,6 +169,25 @@ fn definite_integrals() {
     );
 }
 
+/// Improper integrals of CAS-207, by limits: infinite bounds, singular
+/// points at the bounds, a pole inside whose sides diverge alike.
+#[test]
+fn improper_integrals() {
+    check(
+        &[
+            "integrate(exp(-x),x,0,inf)",
+            "integrate(1/x^2,x,1,inf)",
+            "integrate(1/(1+x^2),x,-inf,inf)",
+            "integrate(1/sqrt(x),x,0,1)",
+            "integrate(ln(x),x,0,1)",
+            "integrate(x*exp(-x),x,0,inf)",
+            "integrate(1/x^2,x,-1,1)",
+            "integrate(exp(x),x,0,inf)",
+        ],
+        true,
+    );
+}
+
 /// The table at linear arguments of CAS-195 (CAS-DOC-9 §4).
 #[test]
 fn the_table_at_linear_arguments() {
