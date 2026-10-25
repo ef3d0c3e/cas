@@ -32,12 +32,15 @@
     reason = "the names of series algebra: g = g₀ + h, s and c for sin h and cos h, sin0 and cos0"
 )]
 
+use std::cmp::Ordering;
+
 use cas_num::{Integer, Rational};
 
+use super::approximation;
 use crate::assume::{Sign, sign_of};
 use crate::context::EvalError;
 use crate::eval::Eval;
-use crate::expr::Expr;
+use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 
 type Found = Result<Option<Series>, EvalError>;
@@ -379,8 +382,61 @@ impl<'a, 'e> Expander<'a, 'e> {
             e.push(self.eval(&(terms / Expr::from(kk)))?);
         }
         let body = Series { coeffs: e, ..h };
-        let lead = self.eval(&Expr::call(Symbol::EXP, [g0]))?;
-        Ok(Some(self.scaled(&lead, &body)?.reduced()))
+        // e^{c + a log t} is e^c t^a for a rational a.
+        let Some((c, a)) = self.logarithmic_part(&g0)? else {
+            return Ok(None);
+        };
+        let lead = self.eval(&Expr::call(Symbol::EXP, [c]))?;
+        let mut body = self.scaled(&lead, &body)?;
+        if !a.is_zero() {
+            let (Some(p), Some(den)) = (a.numer().to_i64(), a.denom().to_i64()) else {
+                return Ok(None);
+            };
+            let m = den / gcd(den, body.ramification);
+            body = body.refined(m);
+            body.valuation += p * body.ramification / den;
+        }
+        Ok(Some(body.reduced()))
+    }
+
+    /// `g₀` as `c + a log t` for a rational `a`; `None` when `log t` is in
+    /// it otherwise.
+    fn logarithmic_part(&mut self, g0: &Expr) -> Result<Option<(Expr, Rational)>, EvalError> {
+        let l = log_t();
+        if !g0.contains(&l) {
+            return Ok(Some((g0.clone(), Rational::ZERO)));
+        }
+        let coefficient =
+            |k: i64| Expr::call(Symbol::COEFFICIENT, [g0.clone(), l.clone(), Expr::from(k)]);
+        let a = self.eval(&coefficient(1))?;
+        let c = self.eval(&coefficient(0))?;
+        let Some(a) = a.to_rational() else {
+            return Ok(None);
+        };
+        let rest = g0.clone() - c.clone() - Expr::from(a.clone()) * l;
+        if !self.is_zero(&rest)? {
+            return Ok(None);
+        }
+        Ok(Some((c, a)))
+    }
+
+    /// The sign of a real `c` for `t > 0`: by the assumptions, else by its
+    /// ball when it is a number; `None` when neither tells.
+    pub(crate) fn sign(&mut self, c: &Expr) -> Option<Ordering> {
+        match sign_of(self.ev.context(), c) {
+            Sign::Positive => return Some(Ordering::Greater),
+            Sign::Negative => return Some(Ordering::Less),
+            Sign::Zero => return Some(Ordering::Equal),
+            _ => {}
+        }
+        if c.contains(&log_t()) {
+            return None;
+        }
+        let value = approximation(self.ev.context(), c, 128).ok()?;
+        match value.view() {
+            View::Ball(b) => b.sign(),
+            _ => None,
+        }
     }
 
     /// `log g`, `log t` as [`log_t`].
@@ -498,9 +554,32 @@ impl<'a, 'e> Expander<'a, 'e> {
         }))
     }
 
-    /// `f(g)` as `f(g₀) + ∫ f′(g) g′` for `ArcTan`, `ArcSin` and `ArcCos`.
+    /// `f(g)` as `f(g₀) + ∫ f′(g) g′` for `ArcTan`, `ArcSin` and `ArcCos`;
+    /// `ArcTan` of a series with a pole as `±π/2 − atan(1/g)`, the sign of
+    /// `g`'s leading coefficient for `t > 0`.
     fn inverse(&mut self, f: Symbol, g: &Series) -> Found {
-        let Some((g0, _)) = self.split(g)? else {
+        let g = self.normalized(g.clone())?;
+        if f == Symbol::ARC_TAN && g.valuation < 0 {
+            let Some(c) = g.coeffs.first().cloned() else {
+                return Ok(None);
+            };
+            let side = match self.sign(&c) {
+                Some(Ordering::Greater) => 1,
+                Some(Ordering::Less) => -1,
+                _ => return Ok(None),
+            };
+            let Some(reciprocal) = self.power(&g, &Expr::from(-1))? else {
+                return Ok(None);
+            };
+            let Some(arctangent) = self.inverse(f, &reciprocal)? else {
+                return Ok(None);
+            };
+            let quarter = Expr::from(q(side, 2)) * Expr::from(Symbol::PI);
+            let start = Self::constant(&quarter, &arctangent.order());
+            let minus = self.scaled(&Expr::from(-1), &arctangent)?;
+            return Ok(Some(self.add(&start, &minus)?));
+        }
+        let Some((g0, _)) = self.split(&g)? else {
             return Ok(None);
         };
         let g = self.normalized(g.clone())?;
@@ -633,12 +712,12 @@ impl<'a, 'e> Expander<'a, 'e> {
     /// `|g|` for `t > 0` and a leading coefficient of known sign.
     fn abs(&mut self, g: &Series) -> Found {
         let g = self.normalized(g.clone())?;
-        let Some(c) = g.coeffs.first() else {
+        let Some(c) = g.coeffs.first().cloned() else {
             return Ok(None);
         };
-        match sign_of(self.ev.context(), c) {
-            Sign::Positive => Ok(Some(g)),
-            Sign::Negative => Ok(Some(self.scaled(&Expr::from(-1), &g)?)),
+        match self.sign(&c) {
+            Some(Ordering::Greater) => Ok(Some(g)),
+            Some(Ordering::Less) => Ok(Some(self.scaled(&Expr::from(-1), &g)?)),
             _ => Ok(None),
         }
     }
@@ -666,4 +745,4 @@ mod builtin;
 #[cfg(test)]
 mod tests;
 
-pub(super) use builtin::series;
+pub(crate) use builtin::{Point, fresh, series};

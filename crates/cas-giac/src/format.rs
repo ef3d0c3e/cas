@@ -72,9 +72,13 @@ pub(crate) fn undo_nws(answer: &str) -> String {
 
 /// giac's answer in the language's grammar (CAS-DOC-7): its lists
 /// `list[…]` and coefficient lists `poly1[…]` are `[…]`, its sets `set[…]`
-/// are `{…}`.
+/// are `{…}`, and its signed infinities `+infinity` and `-infinity`, where
+/// they stand alone, are `inf` and `-inf` (`infinity` alone is unsigned,
+/// the language's).
 pub(crate) fn for_language(answer: &str) -> String {
-    let mut s = answer.replace("list[", "[").replace("poly1[", "[");
+    let mut s = signed_infinities(answer)
+        .replace("list[", "[")
+        .replace("poly1[", "[");
     while let Some(at) = s.find("set[") {
         let open = at + "set".len();
         let Some(close) = closing(s.as_bytes(), open) else {
@@ -83,6 +87,33 @@ pub(crate) fn for_language(answer: &str) -> String {
         s = format!("{}{{{}}}{}", &s[..at], &s[open + 1..close], &s[close + 1..]);
     }
     s
+}
+
+/// `+infinity` and `-infinity` as `inf` and `-inf` where the sign starts
+/// the answer or follows `(`, `[` or `,`.
+fn signed_infinities(answer: &str) -> String {
+    let mut out = String::with_capacity(answer.len());
+    let mut rest = answer;
+    let mut previous: Option<char> = None;
+    while let Some(c) = rest.chars().next() {
+        let starts = previous.is_none_or(|p| matches!(p, '(' | '[' | ','));
+        if starts && rest.starts_with("+infinity") {
+            out.push_str("inf");
+            rest = &rest["+infinity".len()..];
+            previous = Some('f');
+            continue;
+        }
+        if starts && rest.starts_with("-infinity") {
+            out.push_str("-inf");
+            rest = &rest["-infinity".len()..];
+            previous = Some('f');
+            continue;
+        }
+        out.push(c);
+        previous = Some(c);
+        rest = &rest[c.len_utf8()..];
+    }
+    out
 }
 
 #[cfg(test)]
@@ -124,5 +155,10 @@ mod tests {
         assert_eq!(for_language("set[1,2]"), "{1,2}");
         assert_eq!(for_language("[set[1,[2,3]],x]"), "[{1,[2,3]},x]");
         assert_eq!(for_language("x+1"), "x+1");
+        assert_eq!(for_language("+infinity"), "inf");
+        assert_eq!(for_language("-infinity"), "-inf");
+        assert_eq!(for_language("infinity"), "infinity");
+        assert_eq!(for_language("list[+infinity,-infinity]"), "[inf,-inf]");
+        assert_eq!(for_language("x+infinity"), "x+infinity");
     }
 }

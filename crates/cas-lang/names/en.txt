@@ -59,6 +59,7 @@ OddQ: odd
 D: diff
 Integrate: integrate int
 Series: series taylor
+Limit: limit
 OrderSize: order_size
 # A ball, `ball(c, r)` (CAS-DOC-5 §6.5, CAS-83), and back to fractions
 # (D4, CAS-148).

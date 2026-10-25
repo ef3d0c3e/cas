@@ -19,6 +19,7 @@ mod factorial;
 mod index;
 mod integer;
 mod integrate;
+mod limit;
 mod linear;
 mod logic;
 mod number;
@@ -129,6 +130,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::FACTOR, polynomial::factor),
         (Symbol::INTEGRATE, integrate::integrate),
         (Symbol::SERIES, series::series),
+        (Symbol::LIMIT, limit::limit),
         (Symbol::FACTOR_RATIONAL, polynomial::factor_rational),
         (Symbol::FACTOR_LIST, polynomial::factor_list),
         (Symbol::FACTOR_SQUARE_FREE, polynomial::factor_square_free),
