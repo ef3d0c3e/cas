@@ -6,3 +6,4 @@
 # everyone who runs the test benefits from these saved cases.
 cc a51890e75e77302d1301ef498d56f506f9a2ca0679ff65ee2488b6406ae59e31 # shrinks to p = 4736, q = 3, d = 1
 cc 39f57a7135f70b7c8a75a34054b956bd946daf738569ff7b168ba3c04d6f0335 # shrinks to p = -1422, q = 8000, d = 4
+cc 7b1fb3cd28bbc8105e8ed7b6e792899b120056a5e046b768ab09ce2e630b881e # shrinks to p = -2323, q = 2501, d = 22
