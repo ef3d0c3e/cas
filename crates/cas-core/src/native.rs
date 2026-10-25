@@ -29,6 +29,7 @@ mod procedure;
 mod radical;
 mod replace;
 mod series;
+mod solve;
 mod special;
 mod structure;
 
@@ -131,6 +132,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::INTEGRATE, integrate::integrate),
         (Symbol::SERIES, series::series),
         (Symbol::LIMIT, limit::limit),
+        (Symbol::SOLVE, solve::solve),
+        (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FACTOR_RATIONAL, polynomial::factor_rational),
         (Symbol::FACTOR_LIST, polynomial::factor_list),
         (Symbol::FACTOR_SQUARE_FREE, polynomial::factor_square_free),

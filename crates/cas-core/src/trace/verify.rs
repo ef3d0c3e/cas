@@ -60,8 +60,10 @@ const NUMBER_BITS: u64 = 1 << 12;
 /// on their values, so that substituting a point does not commute with
 /// them: the polynomial builtins but `Expand`, `Together`, `Factor`,
 /// `FactorRational` and `FactorSquareFree`, which claim identities
-/// (CAS-DOC-8 §11.5, CAS-140, CAS-185), and the structural predicates.
-const FORMAL: [Symbol; 17] = [
+/// (CAS-DOC-8 §11.5, CAS-140, CAS-185), the structural predicates, and the
+/// solvers, whose lists of roots are in an order that follows the
+/// parameters' values (CAS-DOC-11 §1).
+const FORMAL: [Symbol; 19] = [
     Symbol::GCD,
     Symbol::LCM,
     Symbol::POLYNOMIAL_QUOTIENT,
@@ -79,6 +81,8 @@ const FORMAL: [Symbol; 17] = [
     Symbol::FACTOR_LIST,
     Symbol::FREE_Q,
     Symbol::SAME_Q,
+    Symbol::SOLVE,
+    Symbol::CSOLVE,
 ];
 
 /// Whether `e` has a [`FORMAL`] head.

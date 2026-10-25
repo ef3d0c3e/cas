@@ -357,7 +357,7 @@ fn is_constant<E>(p: &Sparse<E>) -> bool {
 /// The variables whose degrees bound the dense forms of an exact
 /// algorithm (CAS-156).
 #[derive(Clone, Copy)]
-enum Dense {
+pub(super) enum Dense {
     /// Every variable once two of the polynomials are not constants: a gcd
     /// of two goes dense in any variable either has, even one the other
     /// lacks (`gcd(x^(10^8) - 1, y + 1)`), where a constant's gcd is its
@@ -376,7 +376,12 @@ enum Dense {
 /// limit or more, as gcds, resultants and divisions make arrays of a
 /// degree's coefficients (CAS-156): `gcd(x^(10^8) - 1, x^(10^6) - 1)` went
 /// past any memory. `None` after the warning of the limit.
-fn within_dense(ev: &mut Eval<'_>, e: &Expr, p: &Polynomials, rule: Dense) -> Option<()> {
+pub(super) fn within_dense(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    p: &Polynomials,
+    rule: Dense,
+) -> Option<()> {
     let terms = u64::try_from(ev.context().limits().terms).unwrap_or(u64::MAX);
     let degrees: Vec<Vec<u64>> = p
         .fractions()
@@ -1156,7 +1161,7 @@ fn to_factor(ev: &mut Eval<'_>, e: &Expr, arg: &Expr) -> Result<Option<Polynomia
 
 /// The coefficient rings of the conversion that cas-poly factors over: ℤ
 /// over ℚ, and ℤ\[i\] over ℚ(i) (CAS-186).
-trait Factoring: Numbers + CharacteristicZero {
+pub(super) trait Factoring: Numbers + CharacteristicZero {
     fn factor_within(
         ring: &SparseRing<Self>,
         p: &Sparse<Self::Elem>,
@@ -1235,10 +1240,10 @@ fn readable<R: Numbers>(ring: &SparseRing<R>, p: &Sparse<R::Elem>) -> (Sparse<R:
 
 /// A rational function as a constant over a constant times powers of
 /// polynomials, the exponents of the denominator's negative.
-struct Powers<E> {
+pub(super) struct Powers<E> {
     numerator: E,
     denominator: E,
-    factors: Vec<(Sparse<E>, i64)>,
+    pub(super) factors: Vec<(Sparse<E>, i64)>,
 }
 
 impl<E: Coefficient + PartialEq> Powers<E> {
@@ -1303,7 +1308,7 @@ impl<E: Coefficient + PartialEq> Powers<E> {
 
 /// `s` and the square-free `d` with `n = s² d`, from the factorisation of
 /// `n`; a composite that resists it counts as square-free.
-fn root_part(n: &Natural) -> (Natural, Natural) {
+pub(super) fn root_part(n: &Natural) -> (Natural, Natural) {
     let (mut s, mut d) = (Natural::one(), Natural::one());
     for f in n.factor().factors() {
         let e = f.exponent();
@@ -1441,7 +1446,7 @@ fn split_expr<R: Factoring>(p: &Polynomials, powers: &Powers<R::Elem>) -> Expr {
 /// The factorisation of `num / den` over ℚ or ℚ(i), irreducible factors, the
 /// searches of each within `Limits::terms` steps; `None` after a warning
 /// past them.
-fn factored<R: Factoring>(
+pub(super) fn factored<R: Factoring>(
     ev: &mut Eval<'_>,
     e: &Expr,
     ring: &SparseRing<R>,
