@@ -215,7 +215,98 @@ fn the_table_at_linear_arguments() {
     ]);
 }
 
-/// What the methods of CAS-194 and CAS-195 leave as it is.
+/// giac's answers for rational functions with rational residues (CAS-196),
+/// as values; an arctangent where what is left meets the table.
+#[test]
+fn rational_functions() {
+    check(&[
+        // 1/2*ln(abs(x-1))-1/2*ln(abs(x+1)).
+        (
+            "Integrate[Power[Plus[-1, Power[x, 2]], -1], x]",
+            "Plus[Times[1/2, Log[Abs[Plus[-1, x]]]], Times[-1/2, Log[Abs[Plus[1, x]]]]]",
+        ),
+        // 1/2*ln(x^2+1): no real root, no absolute value.
+        (
+            "Integrate[Times[x, Power[Plus[1, Power[x, 2]], -1]], x]",
+            "Times[1/2, Log[Plus[1, Power[x, 2]]]]",
+        ),
+        // ln(abs(x))-ln(abs(x+1))+1/(x+1).
+        (
+            "Integrate[Times[Power[x, -1], Power[Plus[1, x], -2]], x]",
+            "Plus[Log[Abs[x]], Times[-1, Log[Abs[Plus[1, x]]]], Power[Plus[1, x], -1]]",
+        ),
+        // -1/x-ln(abs(x))+ln(abs(x+1)).
+        (
+            "Integrate[Times[Power[x, -2], Power[Plus[1, x], -1]], x]",
+            "Plus[Times[-1, Power[x, -1]], Times[-1, Log[Abs[x]]], Log[Abs[Plus[1, x]]]]",
+        ),
+        // x/(2*(x^2+1))+1/2*atan(x): what Hermite's reduction leaves meets
+        // the table.
+        (
+            "Integrate[Power[Plus[1, Power[x, 2]], -2], x]",
+            "Plus[Times[1/2, x, Power[Plus[1, Power[x, 2]], -1]], Times[1/2, ArcTan[x]]]",
+        ),
+        // 1/4*ln(abs(x-1))-1/4*ln(abs(x+1))-1/2*atan(x).
+        (
+            "Integrate[Power[Plus[-1, Power[x, 4]], -1], x]",
+            "Plus[Times[1/4, Log[Abs[Plus[-1, x]]]], Times[-1/4, Log[Abs[Plus[1, x]]]], Times[-1/2, ArcTan[x]]]",
+        ),
+        // (x^3+1)/(x-1): x^3/3+x^2/2+x+2*ln(abs(x-1)).
+        (
+            "Integrate[Times[Plus[1, Power[x, 3]], Power[Plus[-1, x], -1]], x]",
+            "Plus[x, Times[1/2, Power[x, 2]], Times[1/3, Power[x, 3]], Times[2, Log[Abs[Plus[-1, x]]]]]",
+        ),
+        // x^3/(x^2+1): 1/2*(x^2-ln(x^2+1)).
+        (
+            "Integrate[Times[Power[x, 3], Power[Plus[1, Power[x, 2]], -1]], x]",
+            "Plus[Times[1/2, Power[x, 2]], Times[-1/2, Log[Plus[1, Power[x, 2]]]]]",
+        ),
+        // (3*x^2+1)/(x^3+x): ln(abs(x^3+x)), one residue.
+        (
+            "Integrate[Times[Plus[1, Times[3, Power[x, 2]]], Power[Plus[x, Power[x, 3]], -1]], x]",
+            "Log[Abs[Plus[x, Power[x, 3]]]]",
+        ),
+        // A residue's argument with fractions, as its primitive integer
+        // multiple: 1/(2x - 1)/(x + 1).
+        (
+            "Integrate[Times[Power[Plus[-1, Times[2, x]], -1], Power[Plus[1, x], -1]], x]",
+            "Plus[Times[1/3, Log[Abs[Plus[-1, Times[2, x]]]]], Times[-1/3, Log[Abs[Plus[1, x]]]]]",
+        ),
+    ]);
+}
+
+/// A rational function whose residues are not all rational: the rational
+/// ones integrate, the rest stays under `Integrate`, and the derivative is
+/// the integrand (CAS-196).
+#[test]
+fn partial_rational_functions() {
+    let ctx = Context::new();
+    for input in [
+        // 1/(x^3+1): ln|x + 1|/3 and the rest over x^2 - x + 1.
+        "Integrate[Power[Plus[1, Power[x, 3]], -1], x]",
+        "Integrate[Power[Times[Plus[-1, x], Plus[1, x, Power[x, 2]]], -1], x]",
+    ] {
+        let e = read(input);
+        let found = ctx.eval(&e).unwrap();
+        assert!(
+            found.contains(&Expr::from(Symbol::LOG)),
+            "{input}: {found:?}"
+        );
+        assert!(
+            found.contains(&Expr::from(Symbol::INTEGRATE)),
+            "{input}: {found:?}"
+        );
+        let derivative = ctx
+            .eval(&Expr::call(Symbol::D, [found, Expr::symbol("x")]))
+            .unwrap();
+        assert!(
+            same(&ctx, &derivative, &e.args()[0]),
+            "{input}: {derivative:?}"
+        );
+    }
+}
+
+/// What the methods of CAS-194 to CAS-196 leave as it is.
 #[test]
 fn integrals_that_stay() {
     let ctx = Context::new();
@@ -225,8 +316,10 @@ fn integrals_that_stay() {
         "Integrate[Sin[Power[x, 2]], x]",
         "Integrate[Exp[Power[x, 2]], x]",
         "Integrate[Times[x, Exp[x]], x]",
-        "Integrate[Power[Plus[1, Power[x, 2]], -2], x]",
-        "Integrate[Power[Plus[x, Power[x, 2]], -1], x]",
+        // Residues that are not rational, for CAS-197.
+        "Integrate[Power[Plus[1, x, Power[x, 2]], -1], x]",
+        // Parameters in a denominator with x (CAS-DOC-9 §3.4).
+        "Integrate[Power[Plus[a, Power[x, 2]], -1], x]",
         "Integrate[f[x], x]",
         // giac's integrate(2*f(x),x) stays whole.
         "Integrate[Times[2, f[x]], x]",
@@ -261,6 +354,8 @@ fn traces_verify() {
         "Integrate[Log[Plus[x, 1]], x]",
         "Integrate[Power[Plus[4, Times[-1, Power[x, 2]]], -1/2], x]",
         "Integrate[Power[3, x], x]",
+        "Integrate[Power[Plus[-1, Power[x, 2]], -1], x]",
+        "Integrate[Power[Plus[1, Power[x, 2]], -2], x]",
         "Integrate[Times[a, Power[Plus[x, y], 2]], x]",
         "Integrate[Plus[x, f[x]], x]",
         "Integrate[List[x, Power[x, 2]], x]",

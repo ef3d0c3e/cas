@@ -34,6 +34,10 @@ algorithm here is taken from, or is compared with, are listed.
 
 ## Papers
 
+- <a id="bro05"></a>**[Bro05]** Manuel Bronstein, *Symbolic Integration I:
+  Transcendental Functions*, 2nd ed., Springer, 2005. Chapter 2, rational
+  functions: the Hermite reduction (§2.2), the Rothstein–Trager and
+  Lazard–Rioboo–Trager algorithms, and Rioboo's real form.
 - <a id="bro71"></a>**[Bro71]** W. S. Brown, "On Euclid's algorithm and the
   computation of polynomial greatest common divisors", *Journal of the ACM*
   18 (4) (1971), 478–504. The modular gcd: images modulo primes and at
@@ -41,6 +45,10 @@ algorithm here is taken from, or is compared with, are listed.
 - <a id="bro78"></a>**[Bro78]** W. S. Brown, "The subresultant PRS
   algorithm", *ACM Transactions on Mathematical Software* 4 (3) (1978),
   237–249.
+- <a id="bro98"></a>**[Bro98]** Manuel Bronstein, "Symbolic integration
+  tutorial", ISSAC'98, Rostock, 1998, and the Differential Algebra Workshop,
+  Rutgers, 2000. §1.2 the Hermite reduction, in Mack's linear form; §1.3 the
+  Rothstein–Trager and Lazard–Rioboo–Trager algorithms.
 - <a id="bt71"></a>**[BT71]** W. S. Brown and J. F. Traub, "On Euclid's
   algorithm and the theory of subresultants", *Journal of the ACM* 18 (4)
   (1971), 505–514. The subresultant remainder sequence, and why its
@@ -71,6 +79,10 @@ algorithm here is taken from, or is compared with, are listed.
   Symbolic Computation* 44 (10) (2009), 1502–1510; arXiv:0712.4046.
   Evaluates at several points (`2^N`, `−2^N`, `2^−N`, …) to replace one large
   integer product by several smaller ones; not used yet.
+- <a id="her1872"></a>**[Her1872]** Charles Hermite, "Sur l'intégration des
+  fractions rationnelles", *Nouvelles Annales de Mathématiques* (2e série)
+  11 (1872), 145–148, as Bro98 cites it. The rational part of the integral
+  of a rational function without factoring its denominator.
 - <a id="joh74"></a>**[Joh74]** Stephen C. Johnson, "Sparse polynomial
   arithmetic", *ACM SIGSAM Bulletin* 8 (3) (1974), 63–71. Products and
   division of sparse polynomials by merging the rows through a binary heap.
@@ -130,7 +142,9 @@ algorithm here is taken from, or is compared with, are listed.
   rational function integration", in *Proceedings of the Third ACM Symposium
   on Symbolic and Algebraic Computation (SYMSAC '76)*, ACM, 1976, 219–226.
   Factoring over an algebraic extension from the factors of a square-free
-  norm over the ground field.
+  norm over the ground field; and the residues of a rational function as
+  the roots of `res_x(E, P − t E′)`, whose gcds with `E` give the
+  logarithms (the Rothstein–Trager theorem).
 - <a id="vh02"></a>**[vH02]** Mark van Hoeij, "Factoring polynomials and
   the knapsack problem", *Journal of Number Theory* 95 (2) (2002), 167–189.
   The recombination of lifted factors by lattice reduction, and the lemma

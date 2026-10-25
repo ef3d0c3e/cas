@@ -60,6 +60,7 @@ mod cancel;
 mod dense;
 mod factor;
 mod gcd;
+mod integrate;
 mod random;
 mod shared;
 mod sparse;
@@ -68,6 +69,7 @@ pub use cancel::{Cancel, Cancelled, Never};
 pub use dense::{Coefficients, Dense, DenseRing};
 pub use factor::{CharacteristicZero, FactorError, Factors};
 pub use gcd::{Cofactors, GcdDomain, GcdMethod};
+pub use integrate::{Logarithm, Ratio, RationalIntegral};
 pub use shared::{
     GaussianRationalPoly, GaussianRationalPolys, Numerators, RationalPoly, RationalPolys, Shared,
     SharedRing,

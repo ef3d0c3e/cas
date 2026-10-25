@@ -18,6 +18,11 @@
 //!   arcsine, `1/(α + β x²)` with `α, β > 0` and `1/(1 + u²)` arctangents.
 //! - Polynomials in `x`, through the conversion of CAS-DOC-8 §2 (CAS-194):
 //!   each term `c x^k` is `c x^(k+1) / (k+1)`, over the common denominator.
+//! - Rational functions of `x` with numeric coefficients (CAS-196), through
+//!   cas-poly: the polynomial part, Hermite's rational part, and the
+//!   logarithms with rational residues, `ln|S|` where `S` has a real root
+//!   and `ln S` where it has none; the part whose residues are not rational
+//!   stays under `Integrate`.
 //!
 //! `Integrate[f, x, a, b]`, and Mathematica's `Integrate[f, {x, a, b}]`, is
 //! `F(b) − F(a)` where the antiderivative `F` is a polynomial in `x`, which
@@ -30,8 +35,9 @@
     reason = "the names of the calculus: f in x from a to b, n and m exponents"
 )]
 
+use cas_num::algebra::{GaussianIntegers, Integers, Rationals};
 use cas_num::{Integer, Rational};
-use cas_poly::{Sparse, SparseRing};
+use cas_poly::{Cancel, Cancelled, Dense, DenseRing, RationalIntegral, Sparse, SparseRing};
 
 use super::polynomial::{Numbers, convert};
 use crate::context::EvalError;
@@ -127,7 +133,7 @@ fn integral(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr) -> Result<Option<Ex
             let (constant, varying): (Vec<Expr>, Vec<Expr>) =
                 f.args().iter().cloned().partition(|a| !a.contains(x));
             if constant.is_empty() {
-                return polynomial(ev, e, f, x);
+                return rational(ev, e, f, x);
             }
             // When the rest does not integrate, the product stays whole, as
             // giac leaves integrate(2*f(x),x).
@@ -136,7 +142,7 @@ fn integral(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr) -> Result<Option<Ex
         }
         _ => match table(f, x) {
             Some(g) => Ok(Some(g)),
-            None => polynomial(ev, e, f, x),
+            None => rational(ev, e, f, x),
         },
     }
 }
@@ -299,30 +305,119 @@ fn in_x(
     Ok(Some((p, k)))
 }
 
-/// The antiderivative of `f` as a polynomial in `x`, when it is one:
-/// `c x^k` to `c x^(k+1) / (k+1)`, over the denominator, which is free of
-/// `x`.
-fn polynomial(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr) -> Result<Option<Expr>, EvalError> {
+/// The antiderivative of `f` as a rational function of `x` (CAS-DOC-9 §3):
+/// over a denominator free of `x`, term by term, `c x^k` to
+/// `c x^(k+1) / (k+1)` (CAS-194); otherwise, with `x` the only generator,
+/// by cas-poly's integration of rational functions over ℚ (CAS-196), the
+/// part whose residues are not rational kept under `Integrate`. `None` when
+/// nothing integrates.
+fn rational(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr) -> Result<Option<Expr>, EvalError> {
     let Some((p, k)) = in_x(ev, e, f, x)? else {
         return Ok(None);
     };
     let n = p.generators().len();
-    Ok(match &p.fractions()[0] {
-        Fraction::Integers { num, den } => terms_integrated(
-            &p,
-            &SparseRing::new(cas_num::algebra::Integers, n),
-            num,
-            den,
-            k,
-        ),
-        Fraction::GaussianIntegers { num, den } => terms_integrated(
-            &p,
-            &SparseRing::new(cas_num::algebra::GaussianIntegers, n),
-            num,
-            den,
-            k,
-        ),
-    })
+    let (num, den) = match &p.fractions()[0] {
+        Fraction::Integers { num, den } => {
+            let ring = SparseRing::new(Integers, n);
+            if let Some(g) = terms_integrated(&p, &ring, num, den, k) {
+                return Ok(Some(g));
+            }
+            (num, den)
+        }
+        Fraction::GaussianIntegers { num, den } => {
+            let ring = SparseRing::new(GaussianIntegers, n);
+            return Ok(terms_integrated(&p, &ring, num, den, k));
+        }
+    };
+    // Coefficients with other generators wait for CAS-DOC-9 §3.4.
+    if n != 1 {
+        return Ok(None);
+    }
+    let ring = SparseRing::new(Integers, 1);
+    let qx = DenseRing::new(Rationals);
+    let to_q = |s: &Sparse<Integer>| {
+        let dense = ring.to_dense(s, 0).expect("one variable");
+        qx.poly(
+            dense
+                .coeffs()
+                .iter()
+                .map(|c| Rational::from(c.clone()))
+                .collect(),
+        )
+    };
+    let cancel: &dyn Cancel = ev.context().interrupt_flag();
+    let integral = qx
+        .integrate_rational_with(&to_q(num), &to_q(den), cancel)
+        .map_err(|Cancelled| EvalError::Interrupted)?;
+    Ok(rational_expr(&integral, x))
+}
+
+/// The expression of cas-poly's `∫ A / D`: the polynomial and rational
+/// parts, the logarithms of the primitive integer multiples of their
+/// arguments, of their absolute values where they have real roots, as
+/// giac's `ln(abs(x-1))` and `ln(x^2+1)`, and what is left under
+/// `Integrate`. `None` when nothing integrated, so that what is left does
+/// not come back as itself.
+fn rational_expr(r: &RationalIntegral, x: &Expr) -> Option<Expr> {
+    let (gn, gd) = &r.rational;
+    if r.polynomial.is_zero() && gn.is_zero() && r.logarithms.is_empty() {
+        return None;
+    }
+    let mut terms = vec![dense_expr(&r.polynomial, x)];
+    if !gn.is_zero() {
+        terms.push(dense_expr(gn, x) / dense_expr(gd, x));
+    }
+    for log in &r.logarithms {
+        let argument = dense_expr(&primitive(&log.argument), x);
+        let argument = if log.real_root {
+            call(Symbol::ABS, argument)
+        } else {
+            argument
+        };
+        terms.push(Expr::from(log.coefficient.clone()) * call(Symbol::LOG, argument));
+    }
+    if let Some((p, q)) = &r.rest {
+        let rest = dense_expr(p, x) / dense_expr(q, x);
+        terms.push(Expr::call(Symbol::INTEGRATE, [rest, x.clone()]));
+    }
+    Some(terms.into_iter().sum())
+}
+
+/// `p` over ℚ as a polynomial in `x`, built.
+fn dense_expr(p: &Dense<Rational>, x: &Expr) -> Expr {
+    p.coeffs()
+        .iter()
+        .enumerate()
+        .filter(|(_, c)| !c.is_zero())
+        .map(|(k, c)| {
+            let k = i64::try_from(k).expect("a degree in memory");
+            Expr::from(c.clone()) * x.pow(k)
+        })
+        .sum()
+}
+
+/// The primitive integer multiple of `p` with a positive leading
+/// coefficient: `2x − 1` for `x − 1/2`.
+fn primitive(p: &Dense<Rational>) -> Dense<Rational> {
+    let l = p
+        .coeffs()
+        .iter()
+        .fold(Integer::ONE, |l, c| l.lcm(c.denom()));
+    let scaled: Vec<Integer> = p
+        .coeffs()
+        .iter()
+        .map(|c| (c * &Rational::from(l.clone())).numer().clone())
+        .collect();
+    let mut g = scaled.iter().fold(Integer::ZERO, |g, c| g.gcd(c));
+    if p.lead().is_some_and(Rational::is_negative) {
+        g = -g;
+    }
+    DenseRing::new(Rationals).poly(
+        scaled
+            .into_iter()
+            .map(|c| Rational::new(c, g.clone()))
+            .collect(),
+    )
 }
 
 /// `num / den` integrated term by term in the variable `k`, `den` free of
@@ -364,13 +459,10 @@ fn polynomial_in(ev: &mut Eval<'_>, f: &Expr, x: &Expr) -> Result<bool, EvalErro
     let n = p.generators().len();
     Ok(match &p.fractions()[0] {
         Fraction::Integers { den, .. } => {
-            SparseRing::new(cas_num::algebra::Integers, n)
-                .degree(den, k)
-                .unwrap_or(0)
-                == 0
+            SparseRing::new(Integers, n).degree(den, k).unwrap_or(0) == 0
         }
         Fraction::GaussianIntegers { den, .. } => {
-            SparseRing::new(cas_num::algebra::GaussianIntegers, n)
+            SparseRing::new(GaussianIntegers, n)
                 .degree(den, k)
                 .unwrap_or(0)
                 == 0

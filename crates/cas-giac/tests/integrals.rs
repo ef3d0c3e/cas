@@ -163,3 +163,27 @@ fn the_table_at_linear_arguments() {
         false,
     );
 }
+
+/// Rational functions of CAS-196: Hermite's reduction, logarithms with
+/// rational residues, and what is left meeting the table.
+#[test]
+fn rational_functions() {
+    check(
+        &[
+            "integrate(1/(x^2-1),x)",
+            "integrate(x/(x^2+1),x)",
+            "integrate(1/(x*(x+1)^2),x)",
+            "integrate(1/(x^2*(x+1)),x)",
+            "integrate(1/(x^2+1)^2,x)",
+            "integrate(1/(x^4-1),x)",
+            "integrate((x^3+1)/(x-1),x)",
+            "integrate(x^3/(x^2+1),x)",
+            "integrate((3*x^2+1)/(x^3+x),x)",
+            "integrate((2*x+1)/(x^2+x),x)",
+            "integrate(1/((2*x-1)*(x+1)),x)",
+            "integrate((x^4+x+1)/(x^3-x),x)",
+            "integrate(1/(x^2-4*x+3)^2,x)",
+        ],
+        false,
+    );
+}
