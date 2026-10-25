@@ -185,8 +185,10 @@ syntax_kinds! {
     Lambda,
     /// The parenthesised parameters of a lambda: `(x, y)`.
     ParamList,
-    /// Two operands and the operator between them: `or`, `and`, `+`, `-`,
-    /// `*`, `/`, `.*`, `./`.
+    /// Operands with an operator between each two, all of one binding power
+    /// (CAS-164): `or`; `and`; `+` and `-`; `*`, `/`, `.*` and `./`. So `a +
+    /// b - c` is one node, and `a * b + c` a sum whose first operand is a
+    /// product.
     BinaryExpr,
     /// `a = b`, an equation.
     Equation,

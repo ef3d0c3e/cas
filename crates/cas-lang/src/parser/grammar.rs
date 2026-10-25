@@ -40,6 +40,20 @@ fn binary(kind: K) -> Option<(u8, u8)> {
     })
 }
 
+/// Whether `op` after `previous` in a run of one binding power nests what
+/// came before it once lowered (CAS-164): every `./` after the first, as a
+/// quotient has two operands, and a switch between `*` or `/` and `.*` or
+/// `./`, which lowering folds from the left. The rest of a run lowers flat:
+/// sums, products, `and`, `or` and `.*`.
+fn nests(previous: K, op: K) -> bool {
+    let class = |kind: K| match kind {
+        K::Minus => K::Plus,
+        K::Slash => K::Star,
+        kind => kind,
+    };
+    op == K::DotSlash || class(op) != class(previous)
+}
+
 fn is_comparison(kind: K) -> bool {
     matches!(
         kind,
@@ -309,10 +323,15 @@ impl Parser<'_> {
 
     /// An expression whose operators bind at least as tightly as `min`.
     ///
-    /// The forms other than binary operators each wrap what came before
-    /// them, so each after the first is a level of nesting: `x² ² ²`,
-    /// `a = b = c` (CAS-168). The first is free, so that `x^2 = 1` takes
-    /// no more levels than `x^2`.
+    /// A run of binary operators of one binding power is one node, `a + b -
+    /// c` and `a * b .* c` (CAS-164): what came before it is wrapped once per
+    /// power, not once per operator, so a long sum is no deeper than `a +
+    /// b`, and nothing that walks the tree recurses down its length. In a
+    /// run, an operator that nests what came before it once lowered is a
+    /// level of nesting ([`nests`]): `a ./ b ./ c`. So are the other forms,
+    /// which each wrap what came before them, after the first: `x² ² ²`, `a
+    /// = b = c` (CAS-168). The first is free, so that `x^2 = 1` takes no
+    /// more levels than `x^2`.
     fn expr_bp(&mut self, min: u8) {
         if !self.enter() {
             return;
@@ -323,13 +342,24 @@ impl Parser<'_> {
         let mut levels = 0;
         loop {
             let kind = self.peek_continuing();
-            if let Some((left, right)) = binary(kind) {
+            if let Some(power @ (left, right)) = binary(kind) {
                 if left < min {
                     break;
                 }
                 self.start_at(checkpoint, K::BinaryExpr);
-                self.bump();
-                self.expr_bp(right);
+                let mut previous = None;
+                while binary(self.peek_continuing()) == Some(power) {
+                    let op = self.peek();
+                    if previous.is_some_and(|previous| nests(previous, op)) {
+                        if !self.enter() {
+                            break;
+                        }
+                        levels += 1;
+                    }
+                    previous = Some(op);
+                    self.bump();
+                    self.expr_bp(right);
+                }
                 self.finish_node();
                 continue;
             }

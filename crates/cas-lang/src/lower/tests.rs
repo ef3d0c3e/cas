@@ -2,7 +2,7 @@ use proptest::prelude::*;
 
 use super::{LowerErrorKind as E, Lowered, Severity, lower};
 use crate::names::Names;
-use crate::parser::{ParseErrorKind, SyntaxErrorKind, parse};
+use crate::parser::{MAX_DEPTH, ParseErrorKind, SyntaxErrorKind, parse};
 
 fn lowered(text: &str) -> Lowered {
     lower(&parse(text), Names::english())
@@ -92,6 +92,25 @@ fn arithmetic() {
         ("∛8", "Power[8, 1/3]"),
         ("a .* b .* c", "ElementwiseTimes[a, b, c]"),
         ("a ./ b", "ElementwiseDivide[a, b]"),
+        // Runs of one binding power, folded from the left (CAS-164).
+        ("a - b - c", "Plus[a, Times[-1, b], Times[-1, c]]"),
+        ("a / b * c", "Times[a, Power[b, -1], c]"),
+        ("a * b .* c", "ElementwiseTimes[Times[a, b], c]"),
+        ("a .* b * c", "Times[ElementwiseTimes[a, b], c]"),
+        ("2x * y .* z", "ElementwiseTimes[Times[2, x, y], z]"),
+        (
+            "a ./ b ./ c",
+            "ElementwiseDivide[ElementwiseDivide[a, b], c]",
+        ),
+        (
+            "a * b .* c / d",
+            "Times[ElementwiseTimes[Times[a, b], c], Power[d, -1]]",
+        ),
+        (
+            "a .* b ./ c .* d",
+            "ElementwiseTimes[ElementwiseDivide[ElementwiseTimes[a, b], c], d]",
+        ),
+        ("a and b and c or d", "Or[And[a, b, c], d]"),
         ("a .^ 2", "ElementwisePower[a, 2]"),
         ("n!", "Factorial[n]"),
         ("3x^2(x - 1)", "Times[3, Power[x, 2], Plus[x, -1]]"),
@@ -508,6 +527,55 @@ fn long_postfix_chains_stay_within_the_depth_limit() {
         "h0h".to_owned() + &"!".repeat(4000),
         "f".to_owned() + &"(1)".repeat(2000),
         "a".to_owned() + &"[1]".repeat(2000),
+    ] {
+        let parse = parse(&text);
+        assert!(
+            parse
+                .errors()
+                .iter()
+                .any(|e| e.kind == SyntaxErrorKind::Parse(ParseErrorKind::TooDeep)),
+            "{}",
+            &text[..20]
+        );
+        let _ = lower(&parse, Names::english());
+    }
+}
+
+/// A run of binary operators of one binding power is one node, which
+/// lowering takes in a loop (CAS-164): long sums and products lower flat,
+/// where they nested once per operator, and lowering recursed as deep as
+/// they were long, and dropping the tree too. `./` after `./`, and `*`
+/// alternating with `.*`, nest once lowered, so they are levels of nesting:
+/// within the depth limit they lower in a loop, past it they do not parse.
+#[test]
+fn binary_runs_lower_in_a_loop() {
+    let lowered_one = |text: &str| {
+        let lowered = lowered(text);
+        assert!(!lowered.has_errors(), "{:?}", lowered.diagnostics);
+        lowered.statements[0].expr.clone()
+    };
+    for op in [" + ", " * "] {
+        let flat = lowered_one(&vec!["x"; 100_000].join(op));
+        assert_eq!(flat.args().len(), 100_000, "{op}");
+    }
+    // Each `./` divides all before it, and each run of `*` or `.*` takes
+    // all before it as its first operand.
+    let n = MAX_DEPTH / 2;
+    for text in [
+        vec!["a"; n + 1].join(" ./ "),
+        "a".to_owned() + &" * a .* a".repeat(n / 2),
+    ] {
+        let mut depth = 0;
+        let mut inner = lowered_one(&text);
+        while let [first, _] = inner.args() {
+            inner = first.clone();
+            depth += 1;
+        }
+        assert_eq!(depth, n, "{}", &text[..20]);
+    }
+    for text in [
+        vec!["a"; 4001].join(" ./ "),
+        "a".to_owned() + &" * a .* a".repeat(2000),
     ] {
         let parse = parse(&text);
         assert!(

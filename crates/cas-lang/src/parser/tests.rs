@@ -266,24 +266,51 @@ fn lambdas() {
     ]);
 }
 
+/// A run of binary operators of one binding power is one node (CAS-164),
+/// wrapped by a looser run: a long sum is no deeper than `a + b`, where it
+/// nested once per operator and dropping its tree recursed as deep.
+#[test]
+fn binary_runs_are_one_node() {
+    check_exprs(&[
+        ("a + b - c + d", "(BinaryExpr a + b - c + d)"),
+        ("a * b .* c ./ d / e", "(BinaryExpr a * b .* c ./ d / e)"),
+        (
+            "a * b + c * d - e",
+            "(BinaryExpr (BinaryExpr a * b) + (BinaryExpr c * d) - e)",
+        ),
+        (
+            "a and b and c or d",
+            "(BinaryExpr (BinaryExpr a and b and c) or d)",
+        ),
+        ("a +\nb - c", "(BinaryExpr a + b - c)"),
+    ]);
+    let text = vec!["x"; 100_000].join(" + ");
+    let parse = parse(&text);
+    assert!(parse.errors().is_empty());
+    let root = parse.syntax();
+    let depth = root.descendants().map(|n| n.ancestors().count()).max();
+    // Root, ExprStmt, BinaryExpr, Name.
+    assert_eq!(depth, Some(4));
+}
+
 /// Binary forms from the loosest to the tightest (CAS-DOC-7 §3): the
 /// operator, the node, the binding power and how it chains.
 const LEVELS: &[(&str, &str, u8, Chain)] = &[
-    ("or", "BinaryExpr", 1, Chain::Left),
-    ("and", "BinaryExpr", 3, Chain::Left),
+    ("or", "BinaryExpr", 1, Chain::Flat),
+    ("and", "BinaryExpr", 3, Chain::Flat),
     ("<", "Comparison", 7, Chain::Flat),
     ("..", "RangeExpr", 9, Chain::Error),
-    ("+", "BinaryExpr", 11, Chain::Left),
-    ("*", "BinaryExpr", 13, Chain::Left),
+    ("+", "BinaryExpr", 11, Chain::Flat),
+    ("*", "BinaryExpr", 13, Chain::Flat),
     (" ", "ImplicitProduct", 15, Chain::Flat),
     ("^", "PowerExpr", 20, Chain::Right),
 ];
 
 #[derive(Clone, Copy, PartialEq)]
 enum Chain {
-    Left,
     Right,
-    /// One node for the whole chain.
+    /// One node for the whole chain: the binary operators (CAS-164),
+    /// comparisons and implicit products.
     Flat,
     /// Chaining is an error.
     Error,
@@ -315,7 +342,7 @@ fn every_pair_of_levels() {
             let left = form(node2, op2, &form(node1, op1, "a", "b"), "c");
             let right = form(node1, op1, "a", &form(node2, op2, "b", "c"));
             match (bp1.cmp(&bp2), chain) {
-                (Ordering::Greater, _) | (Ordering::Equal, Chain::Left) => {
+                (Ordering::Greater, _) => {
                     assert_eq!(expr(&text), left, "{text}");
                 }
                 (Ordering::Less, _) | (Ordering::Equal, Chain::Right) => {
@@ -579,11 +606,16 @@ fn nesting_up_to_the_limit() {
         );
     }
     // Chained equations, ranges, and comparisons alternating with `=`: each
-    // link after the first wraps the ones before it (CAS-168).
+    // link after the first wraps the ones before it (CAS-168); so do some
+    // binary operators once lowered.
     for text in [
         "a".to_owned() + &" = a".repeat(MAX_DEPTH + 10),
         "a".to_owned() + &"..a".repeat(MAX_DEPTH + 10),
         "a".to_owned() + &" < a = a".repeat(MAX_DEPTH + 10),
+        // `./` after `./`, and `*` alternating with `.*`, which lowering
+        // nests (CAS-164).
+        "a".to_owned() + &" ./ a".repeat(MAX_DEPTH + 10),
+        "a".to_owned() + &" * a .* a".repeat(MAX_DEPTH),
     ] {
         let parse = parse(&text);
         assert_eq!(parse.syntax().text().to_string(), text);

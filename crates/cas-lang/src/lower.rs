@@ -768,66 +768,103 @@ impl Lowerer<'_> {
         }
     }
 
-    /// `+`, `-`, `*`, `/` and the logical and element-wise operators. A chain
-    /// of one associative operator is one node.
+    /// `+`, `-`, `*`, `/` and the logical and element-wise operators: a run
+    /// of one binding power is one node (CAS-164), whose operands are taken
+    /// in a loop, so that a long one recurses no deeper than a short one.
     fn binary(&mut self, node: &SyntaxNode) -> Lowering {
         let range = range(node);
         match operator(node) {
             Some(K::Plus | K::Minus) => {
+                // `a - b` gives the terms `a` and `-b`.
+                let mut operands = node.children();
                 let mut terms = Vec::new();
-                self.terms(node, &mut terms);
+                if let Some(first) = operands.next() {
+                    terms.push(self.expr(&first));
+                }
+                for (op, operand) in operators(node).zip(operands) {
+                    let term = self.expr(&operand);
+                    terms.push(if op == K::Minus { negate(term) } else { term });
+                }
                 apply(Symbol::PLUS, terms, range)
             }
-            Some(K::Star | K::Slash) => self.product(node),
-            Some(op @ (K::AndKw | K::OrKw | K::DotStar)) => {
-                let head = match op {
-                    K::AndKw => Symbol::AND,
-                    K::OrKw => Symbol::OR,
-                    _ => Symbol::ELEMENTWISE_TIMES,
+            Some(K::Star | K::Slash | K::DotStar | K::DotSlash) => self.products(node),
+            Some(op @ (K::AndKw | K::OrKw)) => {
+                let head = if op == K::AndKw {
+                    Symbol::AND
+                } else {
+                    Symbol::OR
                 };
-                let mut operands = Vec::new();
-                self.chain(node, op, &mut operands);
-                apply(head, operands, range)
-            }
-            Some(K::DotSlash) => {
                 let operands = node.children().map(|n| self.expr(&n)).collect();
-                apply(Symbol::ELEMENTWISE_DIVIDE, operands, range)
+                apply(head, operands, range)
             }
             _ => self.fail_silently(range),
         }
     }
 
-    /// The terms of a sum, `a - b` giving `a` and `-b`.
-    fn terms(&mut self, node: &SyntaxNode, out: &mut Vec<Lowering>) {
-        let op = operator(node);
-        if node.kind() == K::BinaryExpr && matches!(op, Some(K::Plus | K::Minus)) {
-            let mut sides = node.children();
-            if let (Some(lhs), Some(rhs)) = (sides.next(), sides.next()) {
-                self.terms(&lhs, out);
-                let term = self.expr(&rhs);
-                out.push(if op == Some(K::Minus) {
-                    negate(term)
-                } else {
-                    term
-                });
-                return;
-            }
+    /// A run of `*`, `/`, `.*` and `./`, folded from the left: `*` and `/`
+    /// make one `Times` with the factors of implicit products, `.*` one
+    /// `ElementwiseTimes`, and each `./` an `ElementwiseDivide` of all
+    /// before it. So `a * b .* c / d` is `(a b .* c) / d` with a `Times`
+    /// around the `ElementwiseTimes`.
+    fn products(&mut self, node: &SyntaxNode) -> Lowering {
+        let operands: Vec<SyntaxNode> = node.children().collect();
+        let Some((first, rest)) = operands.split_first() else {
+            return self.fail_silently(range(node));
+        };
+        let pairs: Vec<(K, &SyntaxNode)> = operators(node).zip(rest).collect();
+        // `*` and `/` share their runs.
+        let class = |op: K| if op == K::Slash { K::Star } else { op };
+        let start = range(first).start;
+        // What the runs before the one at hand make.
+        let mut value: Option<Lowering> = None;
+        for run in pairs.chunk_by(|a, b| class(a.0) == class(b.0)) {
+            let (Some(&(op, _)), Some(&(_, last))) = (run.first(), run.last()) else {
+                continue;
+            };
+            let before = value.take();
+            value = Some(match class(op) {
+                K::Star => {
+                    let mut factors = Vec::new();
+                    match before {
+                        Some(v) => factors.push(v),
+                        None => self.factors(first, &mut factors),
+                    }
+                    for &(op, operand) in run {
+                        if op == K::Slash {
+                            let divisor = self.expr(operand);
+                            let range = range(operand);
+                            factors.push(apply(
+                                Symbol::POWER,
+                                vec![divisor, (Expr::from(-1), Spans::leaf(range.clone()))],
+                                range,
+                            ));
+                        } else {
+                            self.factors(operand, &mut factors);
+                        }
+                    }
+                    apply(Symbol::TIMES, factors, start..range(last).end)
+                }
+                K::DotStar => {
+                    let mut factors = vec![before.unwrap_or_else(|| self.expr(first))];
+                    factors.extend(run.iter().map(|&(_, operand)| self.expr(operand)));
+                    apply(Symbol::ELEMENTWISE_TIMES, factors, start..range(last).end)
+                }
+                _ => {
+                    let mut quotient = before.unwrap_or_else(|| self.expr(first));
+                    for &(_, operand) in run {
+                        let divisor = self.expr(operand);
+                        let range = start..range(operand).end;
+                        quotient =
+                            apply(Symbol::ELEMENTWISE_DIVIDE, vec![quotient, divisor], range);
+                    }
+                    quotient
+                }
+            });
         }
-        out.push(self.expr(node));
+        value.unwrap_or_else(|| self.fail_silently(range(node)))
     }
 
-    /// The operands of a chain of `op`.
-    fn chain(&mut self, node: &SyntaxNode, op: K, out: &mut Vec<Lowering>) {
-        if node.kind() == K::BinaryExpr && operator(node) == Some(op) {
-            for side in node.children() {
-                self.chain(&side, op, out);
-            }
-        } else {
-            out.push(self.expr(node));
-        }
-    }
-
-    /// A product, `*`, `/` and implicit products flattened into one `Times`.
+    /// An implicit product, flattened into one `Times`.
     fn product(&mut self, node: &SyntaxNode) -> Lowering {
         let mut factors = Vec::new();
         self.factors(node, &mut factors);
@@ -836,24 +873,6 @@ impl Lowerer<'_> {
 
     fn factors(&mut self, node: &SyntaxNode, out: &mut Vec<Lowering>) {
         match node.kind() {
-            K::BinaryExpr if operator(node) == Some(K::Star) => {
-                for side in node.children() {
-                    self.factors(&side, out);
-                }
-            }
-            K::BinaryExpr if operator(node) == Some(K::Slash) => {
-                let mut sides = node.children();
-                if let (Some(lhs), Some(rhs)) = (sides.next(), sides.next()) {
-                    self.factors(&lhs, out);
-                    let divisor = self.expr(&rhs);
-                    let range = range(&rhs);
-                    out.push(apply(
-                        Symbol::POWER,
-                        vec![divisor, (Expr::from(-1), Spans::leaf(range.clone()))],
-                        range,
-                    ));
-                }
-            }
             K::ImplicitProduct => self.implicit_factors(node, out),
             K::Application if self.mode == Mode::Value => {
                 let ((expr, spans), product) = self.application(node);
@@ -1693,9 +1712,14 @@ fn significant_tokens(node: &SyntaxNode) -> impl Iterator<Item = SyntaxToken> {
         .filter(|t| !t.kind().is_trivia() && t.kind() != K::Newline)
 }
 
-/// The operator of a binary or prefix node.
+/// The operator of a binary or prefix node, the first of a binary one.
 fn operator(node: &SyntaxNode) -> Option<K> {
-    significant_tokens(node).next().map(|t| t.kind())
+    operators(node).next()
+}
+
+/// The operators of a binary node, in order: one between each two operands.
+fn operators(node: &SyntaxNode) -> impl Iterator<Item = K> {
+    significant_tokens(node).map(|t| t.kind())
 }
 
 /// `head[args…]`, built structurally.
