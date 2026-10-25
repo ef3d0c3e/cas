@@ -694,10 +694,11 @@ fn traces_verify() {
             .iter()
             .filter(|s| matches!(s.kind, StepKind::Algorithm(_)))
             .collect();
-        assert!(!steps.is_empty(), "{input}");
-        assert_eq!(
-            steps[0].before.head(),
-            Some(&Expr::from(Symbol::INTEGRATE)),
+        // Derivative-divides takes `Together` steps of its own.
+        assert!(
+            steps
+                .iter()
+                .any(|s| s.before.head() == Some(&Expr::from(Symbol::INTEGRATE))),
             "{input}"
         );
     }
