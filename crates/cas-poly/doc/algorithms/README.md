@@ -40,9 +40,11 @@ the tickets. This documentation describes the code as it is.
   Hensel lifting; factoring over ℚ(i) by Trager's norms; van Hoeij's
   recombination by integral LLL.
 - [integrate.md](integrate.md): the integration of rational functions over
-  ℚ (CAS-196, planned in CAS-PLAN-3). The polynomial part; Hermite's
-  reduction in Mack's linear form; the logarithms with rational residues
-  from the factors of the residue resultant; Sturm's count of real roots,
-  for the absolute values of the logarithms.
+  ℚ (CAS-196 and CAS-197, planned in CAS-PLAN-3). The polynomial part;
+  Hermite's reduction in Mack's linear form; the logarithms with rational
+  residues from the factors of the residue resultant; pairs of quadratic
+  residues over ℚ(√Δ), real ones joined in one logarithm, complex ones as
+  Rioboo's arctangents of polynomials; Sturm's count of real roots, for
+  the absolute values of the logarithms.
 - [references.md](references.md): the bibliography. Chapters and doc
   comments cite it by key, as in "Kronecker substitution [Sch82]".

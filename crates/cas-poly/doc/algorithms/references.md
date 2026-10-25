@@ -37,7 +37,9 @@ algorithm here is taken from, or is compared with, are listed.
 - <a id="bro05"></a>**[Bro05]** Manuel Bronstein, *Symbolic Integration I:
   Transcendental Functions*, 2nd ed., Springer, 2005. Chapter 2, rational
   functions: the Hermite reduction (§2.2), the Rothstein–Trager and
-  Lazard–Rioboo–Trager algorithms, and Rioboo's real form.
+  Lazard–Rioboo–Trager algorithms, and Rioboo's real form (§2.8), the
+  conversion of `i log((A + iB)/(A − iB))` into arctangents of
+  polynomials.
 - <a id="bro71"></a>**[Bro71]** W. S. Brown, "On Euclid's algorithm and the
   computation of polynomial greatest common divisors", *Journal of the ACM*
   18 (4) (1971), 478–504. The modular gcd: images modulo primes and at

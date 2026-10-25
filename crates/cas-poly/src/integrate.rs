@@ -1,19 +1,22 @@
-//! Integration of rational functions over ℚ (CAS-DOC-9 §3, CAS-196): the
-//! polynomial part; Hermite's reduction in Mack's linear form [Her1872,
-//! Bro98 §1.2], which leaves a square-free denominator; and the logarithms
-//! whose residues are rational, from the factors of the residue resultant
+//! Integration of rational functions over ℚ (CAS-DOC-9 §3, CAS-196,
+//! CAS-197): the polynomial part; Hermite's reduction in Mack's linear form
+//! [Her1872, Bro98 §1.2], which leaves a square-free denominator; and the
+//! logarithmic part from the factors of the residue resultant
 //! `R(t) = res_x(E, P − t E′)` [Tra76]: for each rational root `c` of `R`,
-//! `c log gcd(E, P − c E′)`. The part whose residues are not rational comes
-//! back as it is, for the logarithmic part of Lazard, Rioboo and Trager
-//! (CAS-197).
+//! `c log gcd(E, P − c E′)`, and for each quadratic factor, the pair of its
+//! roots in a real form (`quadratic`). The part whose residues are of
+//! degree 3 or more comes back as it is (CAS-DOC-9 §7).
 
 #![allow(
     clippy::many_single_char_names,
     reason = "the names of the algorithms: A/D, P/E, b u + c v = w, s and t"
 )]
 
+mod quadratic;
 #[cfg(test)]
 mod tests;
+
+pub use quadratic::{Pair, Surd};
 
 use cas_num::Rational;
 use cas_num::algebra::{EuclideanDomain, Field, Rationals, Ring};
@@ -40,7 +43,7 @@ pub struct Logarithm {
 
 /// `∫ A / D` for a rational function over ℚ: the integrated polynomial
 /// part, Hermite's rational part, the logarithms with rational residues,
-/// and what is left.
+/// the pairs of quadratic ones, and what is left.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct RationalIntegral {
     /// The antiderivative of the polynomial part.
@@ -50,9 +53,12 @@ pub struct RationalIntegral {
     pub rational: Ratio,
     /// The logarithms whose residues are rational.
     pub logarithms: Vec<Logarithm>,
+    /// The pairs of residues that are conjugate quadratic irrationals,
+    /// real or complex (CAS-197).
+    pub pairs: Vec<Pair>,
     /// What is left to integrate, `P / E` with `deg P < deg E` and `E`
-    /// square-free, whose residues are not rational; `None` when nothing
-    /// is.
+    /// square-free, whose residues are algebraic of degree 3 or more;
+    /// `None` when nothing is.
     pub rest: Option<Ratio>,
 }
 
@@ -158,17 +164,18 @@ pub(crate) fn real_roots(ring: &DenseRing<Rationals>, p: &Dense<Rational>) -> us
 }
 
 /// The logarithms of `∫ P / E`, `deg P < deg E` and `E` square-free, whose
-/// residues are rational, and the part left [Tra76]. With `E_c` the product
-/// of their arguments and `E_r = E / E_c`, `s E_r + t E_c = 1`, the part
-/// left is `(P t mod E_r) / E_r`.
+/// residues are rational, the pairs of quadratic ones, and the part left
+/// [Tra76]. With `E_c` the product of their arguments and norms and
+/// `E_r = E / E_c`, `s E_r + t E_c = 1`, the part left is
+/// `(P t mod E_r) / E_r`.
 fn logarithms(
     ring: &DenseRing<Rationals>,
     p: &Dense<Rational>,
     e: &Dense<Rational>,
     cancel: &dyn Cancel,
-) -> Result<(Vec<Logarithm>, Option<Ratio>), Cancelled> {
+) -> Result<Logarithmic, Cancelled> {
     if p.is_zero() {
-        return Ok((Vec::new(), None));
+        return Ok((Vec::new(), Vec::new(), None));
     }
     // R(t) = res_x(E, P − t E′), x the variable 0 and t the variable 1.
     let two = SparseRing::new(Rationals, 2);
@@ -178,8 +185,16 @@ fn logarithms(
     let r = two.to_dense(&r, 1).expect("a polynomial in t");
     let factors = ring.factor_with(&r, cancel)?;
     let mut logarithms = Vec::new();
+    let mut pairs = Vec::new();
     let mut rational = ring.one();
     for (f, _) in factors.factors() {
+        if f.degree() == Some(2) {
+            if let Some(pair) = quadratic::pair(ring, p, e, f) {
+                rational = ring.mul(&rational, pair.norm());
+                pairs.push(pair);
+            }
+            continue;
+        }
         if f.degree() != Some(1) {
             continue;
         }
@@ -199,18 +214,23 @@ fn logarithms(
     }
     let others = exact(ring, e, &rational);
     if others.degree().unwrap_or(0) == 0 {
-        return Ok((logarithms, None));
+        return Ok((logarithms, pairs, None));
     }
     let (_, _, t) = ring.gcd_ext(&others, &rational);
     let rest = ring.div_rem(&ring.mul(p, &t), &others).1;
-    Ok((logarithms, Some((rest, others))))
+    Ok((logarithms, pairs, Some((rest, others))))
 }
 
+/// The logarithms with rational residues, the pairs of quadratic ones, and
+/// what is left.
+type Logarithmic = (Vec<Logarithm>, Vec<Pair>, Option<Ratio>);
+
 impl DenseRing<Rationals> {
-    /// `∫ a / d` for `d` not zero, as far as rational residues go
-    /// (CAS-DOC-9 §3): the integrated polynomial part, Hermite's rational
-    /// part, the logarithms with rational residues, and the part whose
-    /// residues are not rational.
+    /// `∫ a / d` for `d` not zero, as far as rational and quadratic
+    /// residues go (CAS-DOC-9 §3): the integrated polynomial part,
+    /// Hermite's rational part, the logarithms with rational residues, the
+    /// pairs of quadratic ones, and the part whose residues are of degree 3
+    /// or more.
     ///
     /// # Panics
     ///
@@ -241,11 +261,12 @@ impl DenseRing<Rationals> {
         // Hermite's remainder can be improper.
         let (q2, p) = self.div_rem(&h, &e);
         let polynomial = antiderivative(self, &self.add(&q, &q2));
-        let (logarithms, rest) = logarithms(self, &p, &e, cancel)?;
+        let (logarithms, pairs, rest) = logarithms(self, &p, &e, cancel)?;
         Ok(RationalIntegral {
             polynomial,
             rational,
             logarithms,
+            pairs,
             rest,
         })
     }

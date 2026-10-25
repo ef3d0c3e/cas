@@ -4,6 +4,7 @@
 
 use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, OracleError, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the checks skip.
 fn giac() -> Option<&'static Giac> {
@@ -186,4 +187,76 @@ fn rational_functions() {
         ],
         false,
     );
+}
+
+/// Pairs of quadratic residues of CAS-197: real ones joined in one
+/// logarithm, complex ones as Rioboo's arctangents of polynomials, which
+/// giac's answers here match up to a constant.
+#[test]
+fn quadratic_residues() {
+    check(
+        &[
+            "integrate(1/(x^2+x+1),x)",
+            "integrate(x/(x^2+x+1),x)",
+            "integrate(1/(x^2+x+1)^2,x)",
+            "integrate(1/(3*x^2+2*x+1),x)",
+            "integrate((2*x+3)/(x^2+2*x+5),x)",
+            "integrate(1/(x^2-x-1),x)",
+            "integrate(2*x/(x^2-x-1),x)",
+            "integrate(1/(x^2-2),x)",
+            "integrate((x+1)/(x^2-3),x)",
+            "integrate(1/(x^3+1),x)",
+            "integrate(x/(x^4+1),x)",
+            "integrate((8*x^2-24)/(x^4-2*x^2+9),x)",
+            "integrate((x^4-3*x^2+6)/(x^6-5*x^4+5*x^2+4),x)",
+        ],
+        false,
+    );
+}
+
+/// `p / ((x − r₁)^e₁ ⋯ (x² + b x + c))` as Xcas text: a numerator of small
+/// coefficients, linear factors with multiplicities, at most one quadratic,
+/// whose roots are integers when they are rational, so that neither point
+/// of [`constant`] is a pole.
+fn rational_function() -> impl Strategy<Value = String> {
+    (
+        prop::collection::vec(-5i64..6, 1..5),
+        prop::collection::vec((-3i64..4, 1u32..3), 0..3),
+        prop::option::of((-3i64..4, -3i64..5)),
+    )
+        .prop_map(|(numerator, roots, quadratic)| {
+            let numerator: Vec<String> = numerator
+                .iter()
+                .enumerate()
+                .map(|(k, c)| format!("({c})*x^{k}"))
+                .collect();
+            let mut factors: Vec<String> = roots
+                .iter()
+                .map(|(r, e)| format!("(x-({r}))^{e}"))
+                .collect();
+            if let Some((b, c)) = quadratic {
+                factors.push(format!("(x^2+({b})*x+({c}))"));
+            }
+            factors.push("1".to_owned());
+            format!(
+                "integrate(({})/({}),x)",
+                numerator.join("+"),
+                factors.join("*")
+            )
+        })
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(48))]
+
+    /// Random products of CAS-197: linear factors and a quadratic, whose
+    /// residues are rational or a pair, with any numerator; giac's answer
+    /// up to a constant.
+    #[test]
+    fn random_rational_functions(input in rational_function()) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        agrees(giac, &input, false).map_err(TestCaseError::fail)?;
+    }
 }

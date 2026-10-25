@@ -21,8 +21,10 @@
 //! - Rational functions of `x` with numeric coefficients (CAS-196), through
 //!   cas-poly: the polynomial part, Hermite's rational part, and the
 //!   logarithms with rational residues, `ln|S|` where `S` has a real root
-//!   and `ln S` where it has none; the part whose residues are not rational
-//!   stays under `Integrate`.
+//!   and `ln S` where it has none; pairs of conjugate quadratic residues
+//!   (CAS-197), two logarithms joined for real ones, a logarithm and
+//!   Rioboo's arctangents of polynomials for complex ones; the part whose
+//!   residues are of degree 3 or more stays under `Integrate`.
 //!
 //! `Integrate[f, x, a, b]`, and Mathematica's `Integrate[f, {x, a, b}]`, is
 //! `F(b) − F(a)` where the antiderivative `F` is a polynomial in `x`, which
@@ -36,10 +38,13 @@
 )]
 
 use cas_num::algebra::{GaussianIntegers, Integers, Rationals};
-use cas_num::{Integer, Rational};
-use cas_poly::{Cancel, Cancelled, Dense, DenseRing, RationalIntegral, Sparse, SparseRing};
+use cas_num::{Integer, Natural, Rational};
+use cas_poly::{
+    Cancel, Cancelled, Dense, DenseRing, Pair, RationalIntegral, Sparse, SparseRing, Surd,
+};
 
 use super::polynomial::{Numbers, convert};
+use super::radical::square_root;
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
@@ -359,15 +364,18 @@ fn rational(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr) -> Result<Option<Ex
 /// The expression of cas-poly's `∫ A / D`: the polynomial and rational
 /// parts, the logarithms of the primitive integer multiples of their
 /// arguments, of their absolute values where they have real roots, as
-/// giac's `ln(abs(x-1))` and `ln(x^2+1)`, and what is left under
-/// `Integrate`. `None` when nothing integrated, so that what is left does
-/// not come back as itself.
+/// giac's `ln(abs(x-1))` and `ln(x^2+1)`, the parts of the pairs of
+/// quadratic residues, and what is left under `Integrate`. `None` when
+/// nothing integrated, so that what is left does not come back as itself.
 fn rational_expr(r: &RationalIntegral, x: &Expr) -> Option<Expr> {
     let (gn, gd) = &r.rational;
-    if r.polynomial.is_zero() && gn.is_zero() && r.logarithms.is_empty() {
+    if r.polynomial.is_zero() && gn.is_zero() && r.logarithms.is_empty() && r.pairs.is_empty() {
         return None;
     }
-    let mut terms = vec![dense_expr(&r.polynomial, x)];
+    let mut terms = Vec::new();
+    if !r.polynomial.is_zero() {
+        terms.push(dense_expr(&r.polynomial, x));
+    }
     if !gn.is_zero() {
         terms.push(dense_expr(gn, x) / dense_expr(gd, x));
     }
@@ -380,6 +388,7 @@ fn rational_expr(r: &RationalIntegral, x: &Expr) -> Option<Expr> {
         };
         terms.push(Expr::from(log.coefficient.clone()) * call(Symbol::LOG, argument));
     }
+    terms.extend(r.pairs.iter().flat_map(|pair| pair_terms(pair, x)));
     if let Some((p, q)) = &r.rest {
         let rest = dense_expr(p, x) / dense_expr(q, x);
         terms.push(Expr::call(Symbol::INTEGRATE, [rest, x.clone()]));
@@ -387,9 +396,125 @@ fn rational_expr(r: &RationalIntegral, x: &Expr) -> Option<Expr> {
     Some(terms.into_iter().sum())
 }
 
+/// The terms of a pair of conjugate residues `u ± v √d` (CAS-197), surds
+/// written as `Power` writes them, `k √m`: real ones,
+/// `u ln|N| + v √d ln|S / S̄|`, the two logarithms joined as giac joins
+/// them, `(√5/5) ln|(2x − 1 − √5)/(2x − 1 + √5)|`, without the absolute
+/// values when `N` has no real root; complex ones,
+/// `u ln N + v √−d Σ 2 atan(Qⱼ)`, Rioboo's arctangents of polynomials,
+/// `(2√3/3) atan((√3/3)(2x + 1))`, a sign out of each as it is odd.
+fn pair_terms(pair: &Pair, x: &Expr) -> Vec<Expr> {
+    let log = |e: Expr, real_root: bool| {
+        call(
+            Symbol::LOG,
+            if real_root { call(Symbol::ABS, e) } else { e },
+        )
+    };
+    let (u, norm, real_root) = match pair {
+        Pair::Real {
+            u, norm, real_root, ..
+        } => (u, norm, *real_root),
+        Pair::Complex { u, norm, .. } => (u, norm, false),
+    };
+    let mut terms = Vec::new();
+    if !u.is_zero() {
+        let norm = dense_expr(&primitive(norm), x);
+        terms.push(scaled(u.clone(), log(norm, real_root)));
+    }
+    match pair {
+        Pair::Real { d, v, s, .. } => {
+            let (k, m) = square_root(d);
+            let (_, a, b) = surd_parts(s, &k, &m);
+            let minus_b: Vec<Rational> = b.iter().map(|c| -c).collect();
+            let ratio = surd_expr(&a, &b, &m, x) / surd_expr(&a, &minus_b, &m, x);
+            terms.push(scaled(v * &k, times_root(&m, log(ratio, real_root))));
+        }
+        Pair::Complex { d, v, atans, .. } => {
+            let (k, m) = square_root(&-d);
+            let scale = &(v * &k) * &Rational::from(Integer::from(2));
+            for q in atans {
+                let (c, a, b) = surd_parts(q, &k, &m);
+                let atan = call(Symbol::ARC_TAN, scaled(c.abs(), surd_expr(&a, &b, &m, x)));
+                let scale = if c.is_negative() {
+                    -&scale
+                } else {
+                    scale.clone()
+                };
+                terms.push(scaled(scale, times_root(&m, atan)));
+            }
+        }
+    }
+    terms
+}
+
+/// A polynomial over ℚ(√D), its coefficients `aₖ + bₖ √D` with
+/// `√D = k √m`, as `c (A + B √m)`: `A` and `B` integer polynomials without
+/// a common factor, the leading coefficient of `A`, or of `B` when `A` is
+/// 0, positive, and `B` 0 when `m` is 1.
+fn surd_parts(
+    coeffs: &[Surd],
+    k: &Rational,
+    m: &Natural,
+) -> (Rational, Vec<Rational>, Vec<Rational>) {
+    let mut a: Vec<Rational> = coeffs.iter().map(|(a, _)| a.clone()).collect();
+    let mut b: Vec<Rational> = coeffs.iter().map(|(_, b)| b * k).collect();
+    if *m == Natural::from(1u64) {
+        for (a, b) in a.iter_mut().zip(&mut b) {
+            *a = &*a + &std::mem::replace(b, Rational::ZERO);
+        }
+    }
+    let mut c = content(a.iter().chain(&b));
+    if a.iter()
+        .rev()
+        .chain(b.iter().rev())
+        .find(|c| !c.is_zero())
+        .is_some_and(Rational::is_negative)
+    {
+        c = -c;
+    }
+    let divided = |p: &[Rational]| p.iter().map(|e| e / &c).collect();
+    (c.clone(), divided(&a), divided(&b))
+}
+
+/// `A + B √m`, built, without a part that is 0.
+fn surd_expr(a: &[Rational], b: &[Rational], m: &Natural, x: &Expr) -> Expr {
+    let rational = coefficients_expr(a, x);
+    if b.iter().all(Rational::is_zero) {
+        return rational;
+    }
+    let surd = times_root(m, coefficients_expr(b, x));
+    if a.iter().all(Rational::is_zero) {
+        return surd;
+    }
+    rational + surd
+}
+
+/// `√m e`, `e` alone when `m` is 1.
+fn times_root(m: &Natural, e: Expr) -> Expr {
+    if *m == Natural::from(1u64) {
+        return e;
+    }
+    let half = Expr::from(Rational::new(Integer::ONE, Integer::from(2)));
+    Expr::from(Integer::from(m.clone())).pow(half) * e
+}
+
+/// `c e`, `e` alone when `c` is 1.
+fn scaled(c: Rational, e: Expr) -> Expr {
+    if c == Rational::ONE {
+        e
+    } else {
+        Expr::from(c) * e
+    }
+}
+
 /// `p` over ℚ as a polynomial in `x`, built.
 fn dense_expr(p: &Dense<Rational>, x: &Expr) -> Expr {
-    p.coeffs()
+    coefficients_expr(p.coeffs(), x)
+}
+
+/// `Σ cₖ xᵏ`, built.
+fn coefficients_expr(coeffs: &[Rational], x: &Expr) -> Expr {
+    coeffs
         .iter()
         .enumerate()
         .filter(|(_, c)| !c.is_zero())
@@ -403,25 +528,25 @@ fn dense_expr(p: &Dense<Rational>, x: &Expr) -> Expr {
 /// The primitive integer multiple of `p` with a positive leading
 /// coefficient: `2x − 1` for `x − 1/2`.
 fn primitive(p: &Dense<Rational>) -> Dense<Rational> {
-    let l = p
-        .coeffs()
-        .iter()
-        .fold(Integer::ONE, |l, c| l.lcm(c.denom()));
-    let scaled: Vec<Integer> = p
-        .coeffs()
-        .iter()
-        .map(|c| (c * &Rational::from(l.clone())).numer().clone())
-        .collect();
-    let mut g = scaled.iter().fold(Integer::ZERO, |g, c| g.gcd(c));
+    let mut c = content(p.coeffs().iter());
     if p.lead().is_some_and(Rational::is_negative) {
-        g = -g;
+        c = -c;
     }
-    DenseRing::new(Rationals).poly(
-        scaled
-            .into_iter()
-            .map(|c| Rational::new(c, g.clone()))
-            .collect(),
-    )
+    DenseRing::new(Rationals).poly(p.coeffs().iter().map(|e| e / &c).collect())
+}
+
+/// The rational `c > 0` such that the `cs / c` are integers without a
+/// common factor, 1 when they are all 0.
+fn content<'a>(cs: impl Iterator<Item = &'a Rational> + Clone) -> Rational {
+    let l = cs.clone().fold(Integer::ONE, |l, c| l.lcm(c.denom()));
+    let g = cs.fold(Integer::ZERO, |g, c| {
+        g.gcd((c * &Rational::from(l.clone())).numer())
+    });
+    if g.is_zero() {
+        Rational::ONE
+    } else {
+        Rational::new(g, l)
+    }
 }
 
 /// `num / den` integrated term by term in the variable `k`, `den` free of

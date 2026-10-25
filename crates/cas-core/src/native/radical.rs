@@ -98,6 +98,21 @@ pub(super) fn power(b: &Rational, r: &Rational, real_domain: bool, max_bits: u64
     })
 }
 
+/// `√r` for a rational `r > 0` as `k √m`, `m` a positive integer, 1 when `r`
+/// is a square, without the square factors [`power`] takes out: `√(4/3)` is
+/// `(2/3) √3`.
+pub(super) fn square_root(r: &Rational) -> (Rational, Natural) {
+    let (n, d) = (r.numer().unsigned_abs(), r.denom().unsigned_abs());
+    let mut roots = Roots::default();
+    let out = roots.extract(&(&n * &d), 1, 2);
+    let m = roots
+        .0
+        .into_values()
+        .next()
+        .unwrap_or_else(|| Natural::from(1u64));
+    (Rational::new(Integer::from(out), Integer::from(d)), m)
+}
+
 /// `r` as `whole + numer/denom` with `0 < numer < denom`, if `r` is not an
 /// integer and its parts fit.
 fn split_exponent(r: &Rational) -> Option<(i64, u64, u64)> {

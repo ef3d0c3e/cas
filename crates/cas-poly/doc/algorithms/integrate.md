@@ -1,7 +1,8 @@
 # Integration of rational functions
 
-`src/integrate.rs` (CAS-196, planned in CAS-PLAN-3; the design is CAS-DOC-9
-§3 in Lific). cas-core's `Integrate` turns the result into an expression.
+`src/integrate.rs` and `src/integrate/quadratic.rs` (CAS-196 and CAS-197,
+planned in CAS-PLAN-3; the design is CAS-DOC-9 §3 in Lific). cas-core's
+`Integrate` turns the result into an expression.
 
 ## What is computed
 
@@ -14,10 +15,12 @@ returns a `RationalIntegral`:
   in lowest terms;
 - `logarithms`: the terms `c log S` whose residues `c` are rational, each
   `S` monic and square-free, with whether `S` has a real root;
+- `pairs`: the parts whose residues are conjugate quadratic irrationals
+  `u ± v √Δ` (CAS-197), in a real form;
 - `rest`: `P / E`, `deg P < deg E` and `E` square-free, whose residues are
-  not rational, or `None`.
+  algebraic of degree 3 or more, or `None`.
 
-The antiderivative is `polynomial + rational + Σ c log S + ∫ rest`.
+The antiderivative is `polynomial + rational + Σ c log S + Σ pairs + ∫ rest`.
 
 ## The polynomial part
 
@@ -49,12 +52,52 @@ the antiderivative at the roots of `E` with residue `c` (the
 Rothstein–Trager theorem).
 - `R` is factored over ℚ (CAS-182). Each linear factor `t − c` gives its
   logarithm.
-- With `E_c` the product of their arguments and `E_r = E / E_c`, and
-  `s E_r + t E_c = 1`, the part left is `(P t mod E_r) / E_r`: `P / E` is
-  `(P s mod E_c) / E_c + (P t mod E_r) / E_r`, and the first part is the
-  sum of the logarithms. The residues of the second are the other roots of
-  `R`; the logarithmic part of Lazard, Rioboo and Trager will take it
-  (CAS-197).
+- With `E_c` the product of their arguments and of the norms of the pairs
+  below, `E_r = E / E_c`, and `s E_r + t E_c = 1`, the part left is
+  `(P t mod E_r) / E_r`: `P / E` is `(P s mod E_c) / E_c + (P t mod E_r) /
+  E_r`, and the first part is the sum of the logarithms and the pairs. The
+  residues of the second are the roots of the factors of `R` of degree 3 or
+  more, which stay (CAS-DOC-9 §7).
+
+## Pairs of quadratic residues [Tra76; Bro05 §2.8]
+
+An irreducible factor `t² + β t + γ` of `R`, `Δ = β² − 4γ` not a square,
+has the roots `α, ᾱ = u ± v √Δ`, `u = −β/2` and `v = 1/2`. Over the field
+ℚ(√Δ) (`Quadratic`: pairs `a + b √Δ`, the inverse by the norm
+`a² − Δ b²`, which is 0 only at 0), `S = gcd(E, P − α E′)`, monic, is the
+argument of the residue `α`, and its conjugate `S̄` that of `ᾱ`. With
+`N = S S̄`, over ℚ, `α log S + ᾱ log S̄ = u log N + v √Δ log(S / S̄)`.
+
+- `Δ > 0`: `u log|N| + v √Δ log|S / S̄|`, the two logarithms joined as giac
+  joins them, `(1/√5) ln|(2x − 1 − √5)/(2x − 1 + √5)|` for
+  `1/(x² − x − 1)`. When `N` has no real root, neither has `S` nor `S̄`:
+  real, monic and of even degree, they are positive, and the absolute
+  values go, `√2 ln((x² − 2√2 x + 3)/(x² + 2√2 x + 3))` for
+  `(8x² − 24)/(x⁴ − 2x² + 9)`.
+- `Δ < 0`: with `√Δ = i √−Δ`, `S = A + i B` for real `A` and
+  `B = √−Δ B′`, `A` and `B′` over ℚ, and `v √Δ log(S / S̄)` is
+  `v √−Δ · i log((A + iB)/(A − iB))`. Rioboo's conversion writes the last
+  as `Σⱼ 2 atan(Qⱼ)` for polynomials `Qⱼ`, which have no poles, so the
+  antiderivative is continuous on ℝ where a single `atan(A/B)` jumps at the
+  roots of `B` [Bro05 §2.8]:
+  - if `B` divides `A`, `2 atan(A/B)`;
+  - if `deg A < deg B`, the same for `(−B, A)`, a constant apart;
+  - otherwise, with `B D − A C = 1` from the extended Euclidean algorithm,
+    `(A + iB)(D − iC) = (A D + B C) + i`, so it is `2 atan(A D + B C)` and
+    the same for `(D, C)`, of lower degrees.
+
+  `N` is positive, so `u log N` takes no absolute value. The `Qⱼ` are over
+  ℚ when `−Δ` is a square, `1/(x² + 1)` giving `atan(x)`; otherwise the
+  conversion runs over ℚ(√−Δ), where `A` is rational and `B` a multiple of
+  `√−Δ`, and each `Qⱼ` is `√−Δ` times a polynomial over ℚ: the Euclidean
+  steps keep one of the pair rational and the other such a multiple.
+
+Lazard, Rioboo and Trager's subresultants give the `S` of every residue
+without an extension; with factors of degree 2 at most, one Euclidean
+algorithm over ℚ(√Δ), a field of degree 2, gives `S` monic, and the real
+form needs `√Δ` anyway. Bronstein's example,
+`(x⁴ − 3x² + 6)/(x⁶ − 5x⁴ + 5x² + 4)`, has `R = 45796 (4t² + 1)³` and
+`S = x³ + i x² − 3x − 2i`: `atan((x⁵ − 3x³ + x)/2) + atan(x³) + atan(x)`.
 
 ## Real roots
 
@@ -67,16 +110,24 @@ absolute value, `ln|x − 1|`; one without, which is positive, as it is,
 
 ## Tests
 
-`src/integrate/tests.rs`:
+`src/integrate/tests.rs` checks each result by its derivative at rational
+points, exactly, in the field of its residues (ℚ(√Δ) for a real pair,
+ℚ(√−Δ) or ℚ for a complex one):
 - **Examples**: `1/x²`; `1/(x² (x + 1))` with its rational part and two
   logarithms; `1/(x² − 1)`; `2x/(x² + 1)` without an absolute value;
-  `1/(x² + 1)` left whole; `(x³ + 1)/(x − 1)` with its polynomial part;
-  `1/(x (x² + 1))`, two logarithms; `1/((x − 1)(x² + 1))`, a logarithm and
-  a rest; `1/(x² + 1)²`, Hermite's `x/(2(x² + 1))` and a rest.
+  `1/(x² + 1)`, an arctangent over ℚ; `1/(x² + x + 1)` over ℚ(√(4/3));
+  `1/(x² − x − 1)`, a real pair; `1/(x² − 2)` with its `S`;
+  `x/(x⁴ + 1)`, `S = x² + i`; Bronstein's example, three arctangents;
+  `(x³ + 1)/(x − 1)` with its polynomial part; `1/(x (x² + 1))`, two
+  logarithms; `1/((x − 1)(x² + 1))`, a logarithm and a pair;
+  `1/(x² + 1)²`, Hermite's `x/(2(x² + 1))` and a pair;
+  `(x² + 1)/(x⁴ + x² + 1)`, whose arctangents of polynomials have no jump
+  where giac's `atan((x² − 1)/(x √3))` has one; `1/(x³ − 2)`, whose cubic
+  residues stay.
 - **Sturm's count** on polynomials with 0 to 3 real roots and constants.
 - **Properties**: any numerator over products of linear factors with
-  multiplicities and positive quadratics: the derivative of the result and
-  the part left add up to the integrand, the rational part is in lowest
-  terms over a monic denominator, the arguments are monic and square-free,
-  their real roots counted right, the part left proper; without the
-  quadratics, nothing is left.
+  multiplicities and at most one irreducible quadratic: the derivative of
+  the result is the integrand, the rational part is in lowest terms over a
+  monic denominator, the arguments are monic and square-free, their real
+  roots counted right, as those of the norms of the pairs, nothing is
+  left.
