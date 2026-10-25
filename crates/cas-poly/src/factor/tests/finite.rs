@@ -10,7 +10,8 @@ use proptest::prelude::*;
 
 use crate::cancel::{Cancelled, Never};
 use crate::dense::{Dense, DenseRing};
-use crate::factor::finite::{Random, distinct_degree, equal_degree, factor_squarefree};
+use crate::factor::finite::{distinct_degree, equal_degree, factor_squarefree};
+use crate::random::Random;
 
 fn fp(p: u64) -> DenseRing<WordPrimeField> {
     DenseRing::new(WordPrimeField::new(p).unwrap())

@@ -21,6 +21,7 @@ mod modular;
 mod resultant;
 mod subres;
 mod vandermonde;
+mod zippel;
 
 #[cfg(test)]
 mod tests;

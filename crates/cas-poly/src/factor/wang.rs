@@ -16,13 +16,13 @@ use std::collections::HashSet;
 use cas_num::algebra::{Integers, Rationals, Ring};
 use cas_num::{Integer, Natural, Rational};
 
-use super::finite::Random;
 use super::lifting::lift_variables;
 use super::zassenhaus;
 use super::{FactorError, Factors, Search, unbounded};
 use crate::cancel::{Cancel, Cancelled, Never, uncancelled};
 use crate::dense::{Dense, DenseRing};
 use crate::gcd::split_sparse;
+use crate::random::Random;
 use crate::sparse::{Sparse, SparseRing};
 
 /// How many good points are gathered before one is chosen. Those whose

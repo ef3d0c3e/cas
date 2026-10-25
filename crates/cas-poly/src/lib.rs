@@ -60,6 +60,7 @@ mod cancel;
 mod dense;
 mod factor;
 mod gcd;
+mod random;
 mod shared;
 mod sparse;
 

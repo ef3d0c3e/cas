@@ -2,29 +2,24 @@
 //! \[Zip90\] (CAS-189): `Σⱼ cⱼ vⱼⁱ = yᵢ` for `i = 1 … t` in `O(t²)`
 //! operations. Zippel's sparse interpolation (`zippel.rs`) solves one for
 //! each power of the main variable of a gcd's images.
+//!
+//! With `P(Z) = ∏ₗ (Z − vₗ)` and `Pⱼ(Z) = P(Z) / (Z − vⱼ) = Σₖ qⱼₖ Zᵏ`,
+//! `Σᵢ yᵢ qⱼ,ᵢ₋₁ = Σₗ cₗ vₗ Pⱼ(vₗ) = cⱼ vⱼ Pⱼ(vⱼ)`, since `Pⱼ` vanishes at
+//! the other `vₗ`: row `j` of the inverse is `qⱼ` over `vⱼ Pⱼ(vⱼ)`, one
+//! synthetic division and one evaluation.
 
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "used by the sparse interpolation, CAS-190")
-)]
+#![cfg_attr(not(test), expect(dead_code, reason = "used by Zippel's gcd, CAS-191"))]
 
 use cas_num::algebra::Field;
 
-/// The `c` with `Σⱼ cⱼ vⱼⁱ = yᵢ` for `i = 1 … t`, `t` the length of `v` and
-/// of `y`; `None` when two of the `vⱼ` coincide or one is 0, which makes the
-/// system singular.
-///
-/// With `P(Z) = ∏ₗ (Z − vₗ)` and `Pⱼ(Z) = P(Z) / (Z − vⱼ) = Σₖ qⱼₖ Zᵏ`,
-/// `Σᵢ yᵢ qⱼ,ᵢ₋₁ = Σₗ cₗ vₗ Pⱼ(vₗ) = cⱼ vⱼ Pⱼ(vⱼ)`, since `Pⱼ` vanishes at
-/// the other `vₗ`: one synthetic division, one sum and one evaluation for
-/// each `j`.
-///
-/// # Panics
-///
-/// If `y` and `v` differ in length.
-pub(crate) fn solve<F: Field>(field: &F, v: &[F::Elem], y: &[F::Elem]) -> Option<Vec<F::Elem>> {
+/// For each point `vⱼ` in turn, `row(qⱼ, 1 / (vⱼ Pⱼ(vⱼ)))`; `None` when two
+/// of the points coincide or one is 0, which makes the system singular.
+fn each_row<F: Field>(
+    field: &F,
+    v: &[F::Elem],
+    mut row: impl FnMut(&[F::Elem], &F::Elem),
+) -> Option<()> {
     let t = v.len();
-    assert_eq!(y.len(), t, "as many values as points");
     // P, from its constant term up: monic of degree t.
     let mut p = vec![field.one()];
     for x in v {
@@ -35,7 +30,6 @@ pub(crate) fn solve<F: Field>(field: &F, v: &[F::Elem], y: &[F::Elem]) -> Option
         p[0] = field.neg(&field.mul(x, &p[0]));
     }
     let mut q = vec![field.zero(); t];
-    let mut c = Vec::with_capacity(t);
     for x in v {
         if field.is_zero(x) {
             return None;
@@ -45,17 +39,42 @@ pub(crate) fn solve<F: Field>(field: &F, v: &[F::Elem], y: &[F::Elem]) -> Option
         for k in (1..t).rev() {
             q[k - 1] = field.add(&p[k], &field.mul(x, &q[k]));
         }
-        let sum = y.iter().zip(&q).fold(field.zero(), |s, (yi, qk)| {
-            field.add(&s, &field.mul(yi, qk))
-        });
         let at = q
             .iter()
             .rev()
             .fold(field.zero(), |s, qk| field.add(&field.mul(&s, x), qk));
         // Pⱼ(vⱼ) is 0 when vⱼ is another point too.
-        c.push(field.mul(&sum, &field.inv(&field.mul(x, &at))?));
+        row(&q, &field.inv(&field.mul(x, &at))?);
     }
+    Some(())
+}
+
+/// The `c` with `Σⱼ cⱼ vⱼⁱ = yᵢ` for `i = 1 … t`, `t` the length of `v` and
+/// of `y`; `None` when two of the `vⱼ` coincide or one is 0.
+///
+/// # Panics
+///
+/// If `y` and `v` differ in length.
+pub(crate) fn solve<F: Field>(field: &F, v: &[F::Elem], y: &[F::Elem]) -> Option<Vec<F::Elem>> {
+    assert_eq!(y.len(), v.len(), "as many values as points");
+    let mut c = Vec::with_capacity(v.len());
+    each_row(field, v, |q, scale| {
+        let sum = y.iter().zip(q).fold(field.zero(), |s, (yi, qk)| {
+            field.add(&s, &field.mul(yi, qk))
+        });
+        c.push(field.mul(&sum, scale));
+    })?;
     Some(c)
+}
+
+/// The inverse of the system's matrix: the rows `m` with `cⱼ = Σᵢ mⱼᵢ yᵢ`,
+/// `mⱼᵢ` for `yᵢ₊₁`; `None` as for [`solve`].
+pub(crate) fn inverse<F: Field>(field: &F, v: &[F::Elem]) -> Option<Vec<Vec<F::Elem>>> {
+    let mut rows = Vec::with_capacity(v.len());
+    each_row(field, v, |q, scale| {
+        rows.push(q.iter().map(|qk| field.mul(qk, scale)).collect());
+    })?;
+    Some(rows)
 }
 
 #[cfg(test)]
@@ -96,6 +115,13 @@ mod tests {
                 }
             }
             let y = values(&f, &c, &v);
+            // The inverse's rows give the solution too.
+            let m = inverse(&f, &v).unwrap();
+            let by_rows: Vec<u64> = m
+                .iter()
+                .map(|row| row.iter().zip(&y).fold(0, |s, (x, yi)| f.add(&s, &f.mul(x, yi))))
+                .collect();
+            prop_assert_eq!(&by_rows, &c);
             prop_assert_eq!(solve(&f, &v, &y), Some(c));
         }
     }
@@ -112,6 +138,8 @@ mod tests {
         // A repeated point, and 0.
         assert_eq!(solve(&f, &[3, 4, 3], &[1, 2, 3]), None);
         assert_eq!(solve(&f, &[3, 0], &[1, 2]), None);
+        assert_eq!(inverse(&f, &[3, 4, 3]), None);
+        assert_eq!(inverse(&f, &[0]), None);
         // Over a prime past a word.
         let big = BigPrimeField::new(Natural::power_of_two(127) - 1u64).unwrap();
         let int = |x: i64| big.elem_integer(&Integer::from(x));
