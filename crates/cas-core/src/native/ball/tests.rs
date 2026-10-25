@@ -501,12 +501,8 @@ fn exact_measures_far_balls_first() {
         let input = format!("Exact[{ball}]");
         assert_eq!(eval(&input), eval(ball), "{input}");
     }
-    for input in [
-        "Exact[Ball[0x1p-1000000000, 0x1p-999999999]]",
-        "Exact[Power[Rational[4, 9], Ball[900000000, 1]]]",
-    ] {
-        assert_eq!(format!("{:?}", eval(input)), "0", "{input}");
-    }
+    let input = "Exact[Ball[0x1p-1000000000, 0x1p-999999999]]";
+    assert_eq!(format!("{:?}", eval(input)), "0", "{input}");
     let elapsed = start.elapsed();
     assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
 }

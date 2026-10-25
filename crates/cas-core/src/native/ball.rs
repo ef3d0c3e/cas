@@ -147,9 +147,8 @@ pub(super) fn exact(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// `max_bits` bits.
 ///
 /// The midpoint and the radius become fractions only within `max_bits`
-/// bits, which their exponents tell first: a ball near `2^(-10^9)`, as
-/// `(4/9)^Ball[9×10^8, 1]` is, would otherwise make fractions of 10^9 bits
-/// to refuse them (CAS-170).
+/// bits, which their exponents tell first: a ball near `2^(-10^9)` would
+/// otherwise make fractions of 10^9 bits to refuse them (CAS-170).
 fn exact_ball(b: &Ball, prec: u64, max_bits: u64) -> Option<Rational> {
     let fits = |q: &Rational| q.numer().bit_length().max(q.denom().bit_length()) <= max_bits;
     if b.is_exact() {
