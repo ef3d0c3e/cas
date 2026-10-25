@@ -170,16 +170,20 @@ fn step(p: &[ComplexBall], z: &mut [ComplexBall], prec: u64) {
     }
 }
 
-/// An upper bound of `|z|`.
-fn upper(z: &ComplexBall, prec: u64) -> Mag {
-    let a = z.abs(prec);
-    Mag::from_float(a.mid()).add(a.rad())
+/// An upper bound of `|z|`, from those of its parts: not through
+/// `ComplexBall::abs`, whose ball of a correction that rounding dominates
+/// is unbounded.
+fn upper(z: &ComplexBall) -> Mag {
+    let part = |b: &Ball| Mag::from_float(b.mid()).add(b.rad());
+    let (a, b) = (part(z.re()), part(z.im()));
+    a.mul(&a).add(&b.mul(&b)).sqrt()
 }
 
 /// A lower bound of `|z|`, 0 when the ball holds 0.
-fn lower(z: &ComplexBall, prec: u64) -> Mag {
-    let a = z.abs(prec);
-    Mag::from_float_lower(a.mid()).sub_lower(a.rad())
+fn lower(z: &ComplexBall) -> Mag {
+    let part = |b: &Ball| Mag::from_float_lower(b.mid()).sub_lower(b.rad());
+    let (a, b) = (part(z.re()), part(z.im()));
+    a.mul_lower(&a).add_lower(&b.mul_lower(&b)).sqrt_lower()
 }
 
 /// The roots in balls, when the disks `D(zᵢ, n |Wᵢ|)` are apart and to
@@ -200,14 +204,13 @@ fn validated(
         if !w.is_finite() {
             return None;
         }
-        let r = upper(&w, prec).mul(&degree);
-        if r.mul(&scale) > lower(zi, prec) {
+        let r = upper(&w).mul(&degree);
+        if r.mul(&scale) > lower(zi) {
             return None;
         }
         radii.push(r);
     }
-    let apart =
-        |a: &ComplexBall, j: usize, r: &Mag| lower(&a.sub(&z[j], prec), prec) > r.add(&radii[j]);
+    let apart = |a: &ComplexBall, j: usize, r: &Mag| lower(&a.sub(&z[j], prec)) > r.add(&radii[j]);
     for i in 0..n {
         if !(i + 1..n).all(|j| apart(&z[i], j, &radii[i])) {
             return None;
