@@ -1,18 +1,23 @@
 //! `Integrate` (CAS-DOC-9, CAS-193): antiderivatives and definite integrals
 //! in one symbol, Xcas's `integrate` and `int`, without a constant of
-//! integration. Here, CAS-194:
+//! integration.
 //!
-//! - lists thread over the integrand;
-//! - what is free of the variable `x` is `f x`;
-//! - sums go term by term, and the terms that do not integrate stay under
-//!   one `Integrate`, as giac's `x + f(x)` gives `x^2/2 + integrate(f(x), x)`;
-//! - the factors of a product free of `x` come out of its antiderivative;
+//! - Lists thread over the integrand (CAS-194).
+//! - What is free of the variable `x` is `f x`.
+//! - Sums go term by term, and the terms that do not integrate stay under
+//!   one `Integrate`, as giac's `x + f(x)` gives `x^2/2 + integrate(f(x), x)`.
+//! - The factors of a product free of `x` come out of its antiderivative;
 //!   when the rest does not integrate, the product stays whole, as giac's
-//!   `integrate(2*f(x),x)`;
-//! - `x^n` with `n` free of `x` is `x^(n+1) / (n+1)`, giac's answer even for
-//!   a symbolic `n`, and `x^-1` is `Log[Abs[x]]`;
-//! - polynomials in `x`, through the conversion of CAS-DOC-8 §2: each term
-//!   `c x^k` is `c x^(k+1) / (k+1)`, over the common denominator.
+//!   `integrate(2*f(x),x)`.
+//! - The table at linear arguments `u = a x + b`, `a` and `b` free of `x`
+//!   (CAS-DOC-9 §4, CAS-195), each entry over `a`: `u^n` is
+//!   `u^(n+1) / (n+1)` for `n` free of `x`, giac's answer even for a
+//!   symbolic `n`, and `u^-1` is `Log[Abs[u]]`; `Exp[u]` and `E^u` are
+//!   themselves, `c^u` is `c^u / Log[c]`; `Sin`, `Cos`, `Tan` (`−ln|cos u|`)
+//!   and `Log` (`u ln u − u`); `1/√(α + β x²)` with `α > 0 > β` is an
+//!   arcsine, `1/(α + β x²)` with `α, β > 0` and `1/(1 + u²)` arctangents.
+//! - Polynomials in `x`, through the conversion of CAS-DOC-8 §2 (CAS-194):
+//!   each term `c x^k` is `c x^(k+1) / (k+1)`, over the common denominator.
 //!
 //! `Integrate[f, x, a, b]`, and Mathematica's `Integrate[f, {x, a, b}]`, is
 //! `F(b) − F(a)` where the antiderivative `F` is a polynomial in `x`, which
@@ -25,7 +30,7 @@
     reason = "the names of the calculus: f in x from a to b, n and m exponents"
 )]
 
-use cas_num::Integer;
+use cas_num::{Integer, Rational};
 use cas_poly::{Sparse, SparseRing};
 
 use super::polynomial::{Numbers, convert};
@@ -129,17 +134,145 @@ fn integral(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr) -> Result<Option<Ex
             let varying: Expr = varying.into_iter().product();
             Ok(integral(ev, e, &varying, x)?.map(|g| constant.into_iter().product::<Expr>() * g))
         }
-        Some(Symbol::POWER) if f.args()[0] == *x && !f.args()[1].contains(x) => {
-            let n = &f.args()[1];
+        _ => match table(f, x) {
+            Some(g) => Ok(Some(g)),
+            None => polynomial(ev, e, f, x),
+        },
+    }
+}
+
+/// The coefficient `a` of `u = a x + b`, `a` and `b` free of `x`; `None`
+/// when `u` is not linear in `x`.
+fn slope(u: &Expr, x: &Expr) -> Option<Expr> {
+    // The coefficient of `x` in a term `c x`.
+    let coefficient = |t: &Expr| -> Option<Expr> {
+        if t == x {
+            return Some(Expr::from(1));
+        }
+        if t.head() != Some(&Expr::from(Symbol::TIMES)) {
+            return None;
+        }
+        let mut rest = Vec::new();
+        let mut found = false;
+        for factor in t.args() {
+            if factor == x && !found {
+                found = true;
+            } else if factor.contains(x) {
+                return None;
+            } else {
+                rest.push(factor.clone());
+            }
+        }
+        found.then(|| rest.into_iter().product())
+    };
+    if let Some(a) = coefficient(u) {
+        return Some(a);
+    }
+    if u.head() != Some(&Expr::from(Symbol::PLUS)) {
+        return None;
+    }
+    let mut a = Vec::new();
+    for t in u.args() {
+        if t.contains(x) {
+            a.push(coefficient(t)?);
+        }
+    }
+    (!a.is_empty()).then(|| a.into_iter().sum())
+}
+
+fn call(head: Symbol, arg: Expr) -> Expr {
+    Expr::call(head, [arg])
+}
+
+/// `f` from the table of antiderivatives at linear arguments `u = a x + b`
+/// (CAS-DOC-9 §4), each entry over `a`.
+fn table(f: &Expr, x: &Expr) -> Option<Expr> {
+    let log_abs = |u: Expr| call(Symbol::LOG, call(Symbol::ABS, u));
+    match (f.head()?.as_symbol()?, f.args()) {
+        (Symbol::POWER, [u, n]) if !n.contains(x) => {
+            let Some(a) = slope(u, x) else {
+                return quadratic(u, n, x);
+            };
             if n.as_i64() == Some(-1) {
-                let abs = Expr::call(Symbol::ABS, [x.clone()]);
-                return Ok(Some(Expr::call(Symbol::LOG, [abs])));
+                return Some(log_abs(u.clone()) / a);
             }
             let m = n.clone() + 1;
-            Ok(Some(x.pow(m.clone()) / m))
+            Some(u.pow(m.clone()) / (m * a))
         }
-        _ => polynomial(ev, e, f, x),
+        (Symbol::POWER, [c, u]) if !c.contains(x) => {
+            let a = slope(u, x)?;
+            Some(f.clone() / (a * call(Symbol::LOG, c.clone())))
+        }
+        (Symbol::EXP, [u]) => Some(f.clone() / slope(u, x)?),
+        (Symbol::SIN, [u]) => Some(-call(Symbol::COS, u.clone()) / slope(u, x)?),
+        (Symbol::COS, [u]) => Some(call(Symbol::SIN, u.clone()) / slope(u, x)?),
+        (Symbol::TAN, [u]) => {
+            let a = slope(u, x)?;
+            Some(-log_abs(call(Symbol::COS, u.clone())) / a)
+        }
+        (Symbol::LOG, [u]) => {
+            let a = slope(u, x)?;
+            Some((u.clone() * f.clone() - u.clone()) / a)
+        }
+        _ => None,
     }
+}
+
+/// `q^n` with `q = α + β x²`, `α` and `β` rationals, as an arcsine for
+/// `n = −1/2` and `α > 0 > β`, `asin(x √(−β/α)) / √(−β)`, or an
+/// arctangent for `n = −1` and `α, β > 0`, `atan(x √(β/α)) / √(α β)`; and
+/// `(1 + u²)^−1` for a linear `u`, `atan(u) / a`.
+fn quadratic(q: &Expr, n: &Expr, x: &Expr) -> Option<Expr> {
+    let n = n.to_rational()?;
+    let minus_one = Rational::from(Integer::from(-1));
+    let minus_half = Rational::new(Integer::from(-1), Integer::from(2));
+    let sqrt =
+        |r: Rational| Expr::from(r).pow(Expr::from(Rational::new(Integer::ONE, Integer::from(2))));
+    if n == minus_one
+        && let [one, square] = q.args()
+        && q.head() == Some(&Expr::from(Symbol::PLUS))
+        && one.as_i64() == Some(1)
+        && square.head() == Some(&Expr::from(Symbol::POWER))
+        && square.args()[1].as_i64() == Some(2)
+        && let Some(a) = slope(&square.args()[0], x)
+    {
+        return Some(call(Symbol::ARC_TAN, square.args()[0].clone()) / a);
+    }
+    let (alpha, beta) = even_quadratic(q, x)?;
+    if n == minus_half && alpha.is_positive() && beta.is_negative() {
+        let scale = sqrt(&-&beta / &alpha);
+        return Some(call(Symbol::ARC_SIN, x.clone() * scale) / sqrt(-beta));
+    }
+    if n == minus_one && alpha.is_positive() && beta.is_positive() {
+        let scale = sqrt(&beta / &alpha);
+        return Some(call(Symbol::ARC_TAN, x.clone() * scale) / sqrt(&alpha * &beta));
+    }
+    None
+}
+
+/// `q` as `α + β x²`, `α` and `β` rationals, `β` not 0.
+fn even_quadratic(q: &Expr, x: &Expr) -> Option<(Rational, Rational)> {
+    if q.head() != Some(&Expr::from(Symbol::PLUS)) {
+        return None;
+    }
+    let square = x.pow(2);
+    let (mut alpha, mut beta) = (None, None);
+    for t in q.args() {
+        if let Some(r) = t.to_rational() {
+            alpha = Some(r);
+        } else if *t == square {
+            beta = Some(Rational::ONE);
+        } else if let [c, s] = t.args()
+            && t.head() == Some(&Expr::from(Symbol::TIMES))
+            && *s == square
+            && let Some(r) = c.to_rational()
+        {
+            beta = Some(r);
+        } else {
+            return None;
+        }
+    }
+    Some((alpha?, beta?))
 }
 
 /// `f` as a rational function whose generators but `x` are free of `x`,

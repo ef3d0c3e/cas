@@ -82,10 +82,11 @@ fn antiderivatives() {
             "Integrate[List[x, Power[x, 2]], x]",
             "List[Times[1/2, Power[x, 2]], Times[1/3, Power[x, 3]]]",
         ),
-        // Polynomials that are not expanded; giac's (x+1)^3/3 is 1/3 more.
+        // A power of a linear form, as giac: (x+1)^3/3; polynomials that
+        // are not expanded.
         (
             "Integrate[Power[Plus[x, 1], 2], x]",
-            "Plus[x, Power[x, 2], Times[1/3, Power[x, 3]]]",
+            "Times[1/3, Power[Plus[1, x], 3]]",
         ),
         (
             "Integrate[Times[x, Plus[x, y]], x]",
@@ -111,16 +112,121 @@ fn antiderivatives() {
     ]);
 }
 
-/// What the methods of CAS-194 leave as it is.
+/// giac's answers at linear arguments (CAS-DOC-9 §4, CAS-195), as values.
+#[test]
+fn the_table_at_linear_arguments() {
+    check(&[
+        // exp(x), exp(2*x+1)/2, -exp(-x), exp(a*x)/a, and E^x.
+        ("Integrate[Exp[x], x]", "Exp[x]"),
+        (
+            "Integrate[Exp[Plus[Times[2, x], 1]], x]",
+            "Times[1/2, Exp[Plus[1, Times[2, x]]]]",
+        ),
+        (
+            "Integrate[Exp[Times[-1, x]], x]",
+            "Times[-1, Exp[Times[-1, x]]]",
+        ),
+        (
+            "Integrate[Exp[Times[a, x]], x]",
+            "Times[Power[a, -1], Exp[Times[a, x]]]",
+        ),
+        ("Integrate[Power[E, x], x]", "Power[E, x]"),
+        // 1/ln(2)*2^x, and 3^(2x)/(2 ln 3).
+        (
+            "Integrate[Power[2, x], x]",
+            "Times[Power[2, x], Power[Log[2], -1]]",
+        ),
+        (
+            "Integrate[Power[3, Times[2, x]], x]",
+            "Times[1/2, Power[3, Times[2, x]], Power[Log[3], -1]]",
+        ),
+        // -cos(x), sin(3*x)/3, -cos(a*x+b)/a, 2*sin(x/2).
+        ("Integrate[Sin[x], x]", "Times[-1, Cos[x]]"),
+        (
+            "Integrate[Cos[Times[3, x]], x]",
+            "Times[1/3, Sin[Times[3, x]]]",
+        ),
+        (
+            "Integrate[Sin[Plus[Times[a, x], b]], x]",
+            "Times[-1, Power[a, -1], Cos[Plus[b, Times[a, x]]]]",
+        ),
+        (
+            "Integrate[Cos[Times[1/2, x]], x]",
+            "Times[2, Sin[Times[1/2, x]]]",
+        ),
+        // -ln(abs(cos(x))) and -ln(abs(cos(2*x)))/2.
+        ("Integrate[Tan[x], x]", "Times[-1, Log[Abs[Cos[x]]]]"),
+        (
+            "Integrate[Tan[Times[2, x]], x]",
+            "Times[-1/2, Log[Abs[Cos[Times[2, x]]]]]",
+        ),
+        // x*ln(x)-x and (-2*x-1+(2*x+1)*ln(2*x+1))/2.
+        (
+            "Integrate[Log[x], x]",
+            "Plus[Times[-1, x], Times[x, Log[x]]]",
+        ),
+        (
+            "Integrate[Log[Plus[Times[2, x], 1]], x]",
+            "Times[1/2, Plus[-1, Times[-2, x], Times[Plus[1, Times[2, x]], Log[Plus[1, Times[2, x]]]]]]",
+        ),
+        // Powers of linear forms: 1/2*ln(abs(2*x+3)), ln(abs(x+a)),
+        // -(2*x+1)^-2/4, sqrt(2*x+1)*(2*x+1)/3.
+        (
+            "Integrate[Power[Plus[Times[2, x], 3], -1], x]",
+            "Times[1/2, Log[Abs[Plus[3, Times[2, x]]]]]",
+        ),
+        (
+            "Integrate[Power[Plus[x, a], -1], x]",
+            "Log[Abs[Plus[a, x]]]",
+        ),
+        (
+            "Integrate[Power[Plus[Times[2, x], 1], -3], x]",
+            "Times[-1/4, Power[Plus[1, Times[2, x]], -2]]",
+        ),
+        (
+            "Integrate[Power[Plus[Times[2, x], 1], 1/2], x]",
+            "Times[1/3, Power[Plus[1, Times[2, x]], 3/2]]",
+        ),
+        // asin(x), 1/2*asin(2*x), asin(1/2*x).
+        (
+            "Integrate[Power[Plus[1, Times[-1, Power[x, 2]]], -1/2], x]",
+            "ArcSin[x]",
+        ),
+        (
+            "Integrate[Power[Plus[1, Times[-4, Power[x, 2]]], -1/2], x]",
+            "Times[1/2, ArcSin[Times[2, x]]]",
+        ),
+        (
+            "Integrate[Power[Plus[4, Times[-1, Power[x, 2]]], -1/2], x]",
+            "ArcSin[Times[1/2, x]]",
+        ),
+        // atan(x), 1/2*atan(2*x+1), and atan(2x)/2 for 1/(1+4x^2).
+        ("Integrate[Power[Plus[1, Power[x, 2]], -1], x]", "ArcTan[x]"),
+        (
+            "Integrate[Power[Plus[1, Power[Plus[Times[2, x], 1], 2]], -1], x]",
+            "Times[1/2, ArcTan[Plus[1, Times[2, x]]]]",
+        ),
+        (
+            "Integrate[Power[Plus[1, Times[4, Power[x, 2]]], -1], x]",
+            "Times[1/2, ArcTan[Times[2, x]]]",
+        ),
+        // With a constant factor.
+        ("Integrate[Times[3, Cos[x]], x]", "Times[3, Sin[x]]"),
+    ]);
+}
+
+/// What the methods of CAS-194 and CAS-195 leave as it is.
 #[test]
 fn integrals_that_stay() {
     let ctx = Context::new();
     for input in [
-        // The elementary functions come with CAS-195, rational functions with
-        // CAS-196.
-        "Integrate[Sin[x], x]",
-        "Integrate[Exp[x], x]",
-        "Integrate[Power[Plus[x, 1], -1], x]",
+        // Arguments that are not linear, products the heuristics of CAS-199
+        // take, rational functions of CAS-196 and CAS-197.
+        "Integrate[Sin[Power[x, 2]], x]",
+        "Integrate[Exp[Power[x, 2]], x]",
+        "Integrate[Times[x, Exp[x]], x]",
+        "Integrate[Power[Plus[1, Power[x, 2]], -2], x]",
+        "Integrate[Power[Plus[x, Power[x, 2]], -1], x]",
         "Integrate[f[x], x]",
         // giac's integrate(2*f(x),x) stays whole.
         "Integrate[Times[2, f[x]], x]",
@@ -151,6 +257,10 @@ fn traces_verify() {
         "Integrate[Plus[Times[3, Power[x, 2]], Times[2, x], 1], x]",
         "Integrate[Power[x, -1], x]",
         "Integrate[Power[x, 1/2], x]",
+        "Integrate[Tan[Times[2, x]], x]",
+        "Integrate[Log[Plus[x, 1]], x]",
+        "Integrate[Power[Plus[4, Times[-1, Power[x, 2]]], -1/2], x]",
+        "Integrate[Power[3, x], x]",
         "Integrate[Times[a, Power[Plus[x, y], 2]], x]",
         "Integrate[Plus[x, f[x]], x]",
         "Integrate[List[x, Power[x, 2]], x]",

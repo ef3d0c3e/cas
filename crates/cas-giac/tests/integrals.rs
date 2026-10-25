@@ -128,3 +128,38 @@ fn definite_integrals_of_polynomials() {
         true,
     );
 }
+
+/// The table at linear arguments of CAS-195 (CAS-DOC-9 §4).
+#[test]
+fn the_table_at_linear_arguments() {
+    check(
+        &[
+            "integrate(exp(x),x)",
+            "integrate(exp(2*x+1),x)",
+            "integrate(exp(-x),x)",
+            "integrate(exp(a*x),x)",
+            "integrate(2^x,x)",
+            "integrate(3^(2*x),x)",
+            "integrate(sin(x),x)",
+            "integrate(cos(3*x),x)",
+            "integrate(sin(a*x+b),x)",
+            "integrate(cos(x/2),x)",
+            "integrate(tan(x),x)",
+            "integrate(tan(2*x),x)",
+            "integrate(ln(x),x)",
+            "integrate(ln(2*x+1),x)",
+            "integrate(1/(2*x+3),x)",
+            "integrate(1/(x+a),x)",
+            "integrate((2*x+1)^(-3),x)",
+            "integrate(sqrt(2*x+1),x)",
+            "integrate(1/sqrt(1-x^2),x)",
+            "integrate(1/sqrt(1-4*x^2),x)",
+            "integrate(1/sqrt(4-x^2),x)",
+            "integrate(1/(1+x^2),x)",
+            "integrate(1/(1+(2*x+1)^2),x)",
+            "integrate(1/(1+4*x^2),x)",
+            "integrate(3*cos(x)+x^2,x)",
+        ],
+        false,
+    );
+}
