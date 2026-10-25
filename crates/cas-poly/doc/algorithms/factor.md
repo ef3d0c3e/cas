@@ -177,8 +177,51 @@ The recombination is exponential in the number of local factors in the worst
 case. Swinnerton-Dyer polynomials are that case. For `n` square roots their
 Galois group is `(ℤ/2)ⁿ`, so modulo every prime they have at least `2ⁿ⁻¹`
 local factors, of degree 1 or 2, and only one true factor. The one of degree
-16, from √2, √3, √5 and √7, takes 127 subsets with 8 local factors. van
-Hoeij's method is CAS-188. `factor_with` polls `Cancel` before each subset.
+16, from √2, √3, √5 and √7, takes 127 subsets with 8 local factors. Past 8
+local factors, van Hoeij's knapsack replaces the subsets (CAS-188, below).
+`factor_with` polls `Cancel` before each subset.
+
+## van Hoeij's recombination (CAS-188)
+
+With more than 8 local factors, `factor` recombines by van Hoeij's knapsack
+[vH02] instead of subsets, in polynomial time.
+
+**The knapsack.** Take the lifts `Gᵢ` of `f ≡ ℓ ∏ Gᵢ (mod pᵃ)`, and
+`Lᵢ = (f / Gᵢ) Gᵢ′ mod pᵃ`, `f` times the logarithmic derivative of `Gᵢ`.
+- A true factor `g` is `∏_(i∈S) Gᵢ` up to a constant. So
+  `Σ_(i∈S) Lᵢ ≡ f g′/g`, which has integer coefficients.
+- They are small: `f g′/g = Σ_α f/(x − α)` over the roots `α` of `g`. By
+  Mahler's inequality [Mig74], coefficient `j` of each `f/(x − α)` is within
+  `C(n−1, j) M(f) ≤ C(n−1, j) ‖f‖₂`. So coefficient `j` of `f g′/g` is within
+  `Bⱼ = n C(n−1, j) ‖f‖₂`.
+- So the 0/1 vector of `S` is short in a lattice. Its basis is the identity
+  on the `r` lifts, beside a column per coefficient `j`. A column holds
+  coefficient `j` of each `Lᵢ` with its lowest `bⱼ` digits cut off,
+  `p^(bⱼ) ≥ Bⱼ`. A row `p^(a − bⱼ)` stands for the modulus.
+- The true vector of `S` then has each column within `r/2 + 1`. The digits
+  cut off add up to `r/2` at most, and the true coefficient to 1.
+
+**Columns one at a time.** Columns come from both ends of `f g′/g`, in the
+order `n − 1, 0, n − 2, 1, …`, where `C(n−1, j)` is smallest. A column is
+used when `pᵃ` has enough digits past `p^(bⱼ)`: a margin of
+`r/2 + 2 log₂ r + 24` bits, for LLL's approximation factor. For each column:
+- the lattice is reduced by integral LLL [Coh93 Algorithm 2.6.7], in exact
+  integers, with `δ = 3/4`;
+- while the last vector's Gram-Schmidt norm is past `√(r + c (r/2 + 1)²)`
+  (`c` columns so far), the norm of the true vectors, it is dropped. By van
+  Hoeij's lemma, the span of the true vectors stays within what is left;
+- the first `r` coordinates of what is left are put in reduced echelon form
+  over ℚ. If they are 0/1 rows that partition the lifts, each row gives a
+  factor `pp(ℓ ∏ Gᵢ mod pᵃ)`, which must divide `f`.
+
+**Precision.** `a` is taken with the margin past the first four columns'
+digits, and at least as for Zassenhaus's bound, so that the candidates come
+out exact. When the columns run out without a partition, `a` doubles and
+the factors lift again, up to four times. After that, the subsets take over.
+
+The `x⁷²⁰ − 1` of the bounded search, with 120 local factors for 30 true
+ones, is in reach this way. The LLL is exact, so its numbers grow with the
+lattice. Lattices of a few hundred vectors would want floating-point LLL.
 
 ## Multivariate Hensel lifting (CAS-183)
 
@@ -308,15 +351,15 @@ search.
 
 ## Bounded searches (CAS-185)
 
-Two searches have no bound but the interrupt: Zassenhaus's recombination,
-exponential in the number of local factors (`x⁷²⁰ − 1` has 120 of them
-modulo 13, the fewest of the primes tried, for 30 true factors), and Wang's
-points. `factor_within` counts their steps,
-the subsets and the points, against a bound, and stops with
-`FactorError::Search` past it. The builtins take `Limits::terms` as the
-bound, so they warn, as for a product past the limit, where a factorisation
-would take minutes. van Hoeij's method (CAS-188) will make the subsets
-polynomial. `factor_with` is unbounded.
+Some searches have no bound but the interrupt: Zassenhaus's recombination,
+exponential in the number of local factors, van Hoeij's columns, and Wang's
+points. `factor_within` counts their steps (subsets, columns and points)
+against a bound, and stops with `FactorError::Search` past it. The builtins
+take `Limits::terms` as the bound, so they warn, as for a product past the
+limit, where a factorisation would take minutes. Since van Hoeij's knapsack
+(CAS-188) takes over past 8 local factors, the subsets stay below 2⁷, and
+`x⁷²⁰ − 1`, with 120 local factors modulo 13 for 30 true ones, takes a few
+columns. `factor_with` is unbounded.
 
 ## Tests
 
@@ -385,6 +428,18 @@ Univariate factoring (`zassenhaus.rs`):
   degrees 4, 8 and 16, `x⁴ + 1` and `x² − 2` are irreducible.
 - **Examples.** giac's answers, Sophie Germain's `x⁴ + 4`, coefficients of
   hundreds of bits, twelve linear factors, and cancellation.
+
+LLL and van Hoeij's recombination (`lll.rs`, `vanhoeij.rs`):
+
+- **LLL.** Random bases of up to 7 independent vectors, and knapsack-like
+  examples. The result is size-reduced, meets Lovász's condition with
+  `δ = 3/4`, and spans the same lattice: the same rank together, and the same
+  volume.
+- **Many local factors.** Products of 9 to 16 distinct linear factors with
+  powers. Irreducible quadratics with lines. `xⁿ − 1` for `n` up to 120,
+  with 11 to 39 local factors, into its cyclotomic factors. The
+  Swinnerton-Dyer polynomial of degree 32, irreducible with at least 16 local
+  factors, alone and times `x² − 3`.
 
 The fuzz target `poly_factor` checks the same properties on products of
 random polynomials, with coefficients of up to three limbs.

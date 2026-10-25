@@ -3,7 +3,9 @@
 mod finite;
 mod hensel;
 mod lifting;
+mod lll;
 mod squarefree;
 mod trager;
+mod vanhoeij;
 mod wang;
 mod zassenhaus;

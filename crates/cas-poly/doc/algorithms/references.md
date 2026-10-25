@@ -10,7 +10,8 @@ algorithm here is taken from, or is compared with, are listed.
   Algebraic Number Theory*, Graduate Texts in Mathematics 138, Springer,
   1993. §3.3, "The Sub-Resultant Algorithm": §3.3.1, "Description of the
   Algorithm", the gcd of the contents times the primitive part of the last
-  remainder; §3.3.2, "Resultants and Discriminants".
+  remainder; §3.3.2, "Resultants and Discriminants". §2.6, Algorithm 2.6.7,
+  the integral LLL algorithm, after de Weger.
 - <a id="gcl92"></a>**[GCL92]** Keith O. Geddes, Stephen R. Czapor and
   George Labahn, *Algorithms for Computer Algebra*, Kluwer, 1992. Chapter 6,
   "Newton's iteration and the Hensel construction": §6.7–6.8, the
@@ -115,6 +116,11 @@ algorithm here is taken from, or is compared with, are listed.
   on Symbolic and Algebraic Computation (SYMSAC '76)*, ACM, 1976, 219–226.
   Factoring over an algebraic extension from the factors of a square-free
   norm over the ground field.
+- <a id="vh02"></a>**[vH02]** Mark van Hoeij, "Factoring polynomials and
+  the knapsack problem", *Journal of Number Theory* 95 (2) (2002), 167–189.
+  The recombination of lifted factors by lattice reduction, and the lemma
+  that drops the basis vectors whose Gram-Schmidt norms pass the true
+  vectors'.
 - <a id="wan78"></a>**[Wan78]** Paul S. Wang, "An improved multivariate
   polynomial factoring algorithm", *Mathematics of Computation* 32 (144)
   (1978), 1215–1231. Evaluation points, the leading coefficients of the

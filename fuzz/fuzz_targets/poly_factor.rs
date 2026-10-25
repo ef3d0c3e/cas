@@ -12,10 +12,10 @@ use cas_num_fuzz::integer;
 use cas_poly::{Dense, DenseRing, Factors, Sparse, SparseRing};
 use libfuzzer_sys::fuzz_target;
 
-/// Univariate inputs past this total degree are skipped. Zassenhaus's
-/// recombination tries subsets of the local factors, exponentially many in
-/// the worst case, until van Hoeij's method (CAS-188).
-const MAX_DEGREE: usize = 20;
+/// Univariate inputs past this total degree are skipped, as each factor's
+/// lifting and LLL grow with it. Past 8 local factors van Hoeij's knapsack
+/// (CAS-188) recombines them in polynomial time.
+const MAX_DEGREE: usize = 32;
 
 /// The same for the total degree of multivariate inputs, whose lifting
 /// costs grow with each variable.

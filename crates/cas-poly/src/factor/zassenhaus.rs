@@ -13,6 +13,7 @@ use cas_num::{Integer, Natural, Rational};
 
 use super::finite::{distinct_degree, split_degrees};
 use super::hensel::lift;
+use super::vanhoeij;
 use super::{FactorError, Factors, Search, unbounded};
 use crate::cancel::{Cancel, Cancelled, Never, uncancelled};
 use crate::dense::{Dense, DenseRing};
@@ -244,12 +245,29 @@ pub(crate) fn factor_squarefree(
     let fp = DenseRing::new(prime.field);
     let local = split_degrees(&fp, &prime.ddf, cancel)?;
     let p = u64::try_from(&fp.characteristic()).expect("a word prime");
-    let k = exponent(&f, p);
+    let mut k = exponent(&f, p);
+    // Many lifts: van Hoeij's knapsack (CAS-188), at doubling precisions,
+    // before the subsets.
+    if local.len() > vanhoeij::THRESHOLD {
+        k = k.max(vanhoeij::precision(&f, local.len(), p));
+        for _ in 0..PRECISIONS {
+            let lifted = lift(&f, &local, &fp, k, cancel)?;
+            if let Some(factors) = vanhoeij::recombine(&f, &lifted, p, k, search)? {
+                out.extend(factors);
+                return Ok(out);
+            }
+            k *= 2;
+        }
+    }
     let lifted = lift(&f, &local, &fp, k, cancel)?;
     let m = Integer::from(Natural::from(p).pow(k));
     out.extend(recombine(f, lifted, &m, &allowed, search)?);
     Ok(out)
 }
+
+/// The precisions van Hoeij's recombination tries, each twice the last,
+/// before Zassenhaus's subsets take over.
+const PRECISIONS: usize = 4;
 
 /// The factors in the order of `factor` over ℤ: by degree, then by
 /// coefficients from the constant term up, then by exponent.

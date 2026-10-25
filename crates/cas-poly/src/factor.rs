@@ -3,14 +3,17 @@
 //! Zassenhaus's algorithm, from the factors of square-free polynomials over
 //! word-size prime fields and their Hensel lifts to prime powers;
 //! multivariate factoring over ℤ and ℚ by Wang's algorithm, with its
-//! Hensel lifting; and factoring over ℚ(i) by Trager's norms.
+//! Hensel lifting; factoring over ℚ(i) by Trager's norms; and van Hoeij's
+//! recombination by lattice reduction.
 //! `doc/algorithms/factor.md` describes the algorithms.
 
 mod finite;
 mod hensel;
 mod lifting;
+mod lll;
 mod squarefree;
 mod trager;
+mod vanhoeij;
 mod wang;
 mod zassenhaus;
 
@@ -31,9 +34,7 @@ pub enum FactorError {
     /// The [`Cancel`] said so.
     Cancelled,
     /// The searches would pass their bound: Zassenhaus's subsets of local
-    /// factors, and Wang's points. Zassenhaus's recombination is
-    /// exponential in the number of local factors in the worst case, as for
-    /// `x^720 − 1`.
+    /// factors, van Hoeij's columns, and Wang's points.
     Search,
 }
 
