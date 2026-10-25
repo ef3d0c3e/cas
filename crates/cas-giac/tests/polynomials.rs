@@ -1,5 +1,5 @@
-//! The polynomial builtins against giac (CAS-140; CAS-DOC-8 §7–§10, §15):
-//! giac's answers to each, read back; the departures of §15, each as
+//! The polynomial builtins against giac (CAS-140, CAS-185; CAS-DOC-8 §4,
+//! §7–§10, §15): giac's answers to each, read back; the departures, each as
 //! decided; and a few hundred random inputs a run to `expand`, `normal` and
 //! `gcd`.
 
@@ -145,6 +145,69 @@ fn agreement() {
         ("discriminant(x^4+1, x)", "256"),
         ("discriminant(2*x^2+3*x+1, x)", "1"),
         ("discriminant(x^2/2+1, x)", "-2"),
+        // factor and collect over ℚ (CAS-185), each factor with a positive
+        // leading coefficient in the first variable, as giac's.
+        ("factor(2*x^2-2)", "2*(x-1)*(x+1)"),
+        ("factor(-x^2+1)", "-(x-1)*(x+1)"),
+        ("factor(6*x+12)", "6*(x+2)"),
+        ("factor(x^4-y^4)", "(x-y)*(x+y)*(x^2+y^2)"),
+        ("factor(x^2*y+x*y^2)", "y*x*(x+y)"),
+        ("factor(x*y-x)", "(y-1)*x"),
+        ("factor(sin(x)^2-1)", "(sin(x)-1)*(sin(x)+1)"),
+        ("factor((x^2-1)/(x^2+2*x+1))", "(x-1)/(x+1)"),
+        ("factor((6*x^2-6)/(4*x+4))", "3*(x-1)/2"),
+        ("factor(x^2/2-1/8)", "(2*x-1)*(2*x+1)/8"),
+        ("factor((x+1)^3*(x-2)^2)", "(x-2)^2*(x+1)^3"),
+        ("factor(x^6-1)", "(x-1)*(x+1)*(x^2-x+1)*(x^2+x+1)"),
+        ("factor(x^4+x^2+1)", "(x^2-x+1)*(x^2+x+1)"),
+        ("factor(x^4+4)", "(x^2-2*x+2)*(x^2+2*x+2)"),
+        ("factor(1/(x^2-1))", "1/((x-1)*(x+1))"),
+        ("factor(2/(x^2-1))", "2/((x-1)*(x+1))"),
+        ("factor(x^2+1)", "x^2+1"),
+        ("factor(x^3-2)", "x^3-2"),
+        ("factor(x^4-10*x^2+1)", "x^4-10*x^2+1"),
+        ("factor(exp(2*x)-1)", "exp(2*x)-1"),
+        ("factor(x^(1/2)*x-x)", "x*(sqrt(x)-1)"),
+        ("factor(x^2-x)", "x*(x-1)"),
+        ("factor((x^2-1)/(x-1))", "x+1"),
+        ("factor(-x)", "-x"),
+        ("factor(x^2*y^2-1)", "(x*y-1)*(x*y+1)"),
+        ("factor(x^2-y^2+x+y)", "(x+y)*(x-y+1)"),
+        ("factor(2*x^2+4*x*y+2*y^2)", "2*(x+y)^2"),
+        ("factor(3/4)", "3/4"),
+        ("collect(x^2-2)", "x^2-2"),
+        ("collect(x^2-4)", "(x-2)*(x+2)"),
+        ("collect(2*x^2-2)", "2*(x-1)*(x+1)"),
+        ("collect(x^6-1)", "(x-1)*(x+1)*(x^2-x+1)*(x^2+x+1)"),
+        ("collect(x^4-y^4)", "(x-y)*(x+y)*(x^2+y^2)"),
+        ("collect(sin(x)^2-1)", "(sin(x)-1)*(sin(x)+1)"),
+        ("collect((x^2-1)/(x^2+2*x+1))", "(x-1)/(x+1)"),
+        ("collect(-2*x^2+4)", "-2*(x^2-2)"),
+        // factors.
+        ("factors(x^2-1)", "[x-1,1,x+1,1]"),
+        ("factors(12*x^4-12)", "[12,1,x-1,1,x+1,1,x^2+1,1]"),
+        ("factors((x^2-1)/(x+2))", "[x-1,1,x+1,1,x+2,-1]"),
+        ("factors((x^2-1)/(2*x+4))", "[x-1,1,x+1,1,2,-1,x+2,-1]"),
+        ("factors(x^4-y^4)", "[x-y,1,x+y,1,x^2+y^2,1]"),
+        ("factors(x^2/2-1/8)", "[2*x-1,1,2*x+1,1,8,-1]"),
+        ("factors((x-1)^2/(x+1)^3)", "[x-1,2,x+1,-3]"),
+        ("factors(1/(x^2-1))", "[x-1,-1,x+1,-1]"),
+        ("factors(6)", "[6,1]"),
+        ("factors(0)", "[0,1]"),
+        ("factors(1)", "[1,1]"),
+        ("factors(-1)", "[-1,1]"),
+        ("factors(2/3)", "[2/3,1]"),
+        ("factors(x)", "[x,1]"),
+        // sqrfree, over ℤ and ℤ[i], a content's parts apart.
+        ("sqrfree(x^3-x^2-x+1)", "(x+1)*(x-1)^2"),
+        ("sqrfree(12*x^4-24*x^2+12)", "12*(x^2-1)^2"),
+        ("sqrfree((x^2-1)/(x+1)^2)", "(x-1)/(x+1)"),
+        ("sqrfree(x^2*y^2+2*x*y^2+y^2)", "y^2*(x+1)^2"),
+        ("sqrfree(x^3/2-x^2-x/2+1)", "(x^3-2*x^2-x+2)/2"),
+        ("sqrfree((x+1)^2/((x-1)^3*4))", "(x+1)^2/(4*(x-1)^3)"),
+        ("sqrfree(i*x^2+2*i*x+i)", "i*(x+1)^2"),
+        ("sqrfree(x^4-2*x^2+1)", "(x^2-1)^2"),
+        ("sqrfree(6)", "6"),
     ];
     for (input, answer) in recorded {
         assert_eq!(giac.eval(input).unwrap(), answer, "{input}");
@@ -202,6 +265,23 @@ fn departures() {
             "1/((1-i)*x+2-2*i)",
             "i/((1+i)*x+2+2*i)",
         ),
+        // factor over ℚ, as collect, until CAS-187 decides about giac's
+        // square roots (CAS-185).
+        ("factor(x^2-2)", "(x-sqrt(2))*(x+sqrt(2))", "x^2-2"),
+        (
+            "factor(x^4+1)",
+            "(x^2+(-sqrt(2))*x+1)*(x^2+sqrt(2)*x+1)",
+            "x^4+1",
+        ),
+        ("factor(2*x^2-1)", "(x+sqrt(2)/2)*(2*x-sqrt(2))", "2*x^2-1"),
+        // The constant first, where giac lists -1 last.
+        (
+            "factors(-x^2+1)",
+            "[x-1,1,x+1,1,-1,1]",
+            "[-1,1,x-1,1,x+1,1]",
+        ),
+        // Signs as factor's, where giac keeps -x+1.
+        ("sqrfree(-2*x^2+4*x-2)", "-2*(-x+1)^2", "-2*(x-1)^2"),
     ];
     for (input, answer, decided) in cases {
         assert_eq!(giac.eval(input).unwrap(), answer, "{input}");

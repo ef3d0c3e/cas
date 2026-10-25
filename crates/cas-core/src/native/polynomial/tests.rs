@@ -602,6 +602,198 @@ fn resultants_and_discriminants() {
     ]);
 }
 
+/// `(input, expected)` in full form, the expected one evaluated: the same
+/// expression, without a warning.
+fn check_evaluated(cases: &[(&str, &str)]) {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, expected) in cases {
+        let (found, warnings) = eval(&ctx, input);
+        let (expected, _) = eval(&ctx, expected);
+        if found != expected || !warnings.is_empty() {
+            wrong.push(format!(
+                "{input}: {found:?} {warnings:?}, expected {expected:?}"
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// giac 1.9's `factor` and `collect` over ℚ (CAS-DOC-8 §4, CAS-185), each
+/// factor with a positive leading coefficient in the first variable.
+#[test]
+fn factor() {
+    check_evaluated(&[
+        // factor(x^2-1), factor(2*x^2-2), factor(-x^2+1), factor(6*x+12).
+        (
+            "Factor[Plus[Power[x, 2], -1]]",
+            "Times[Plus[x, -1], Plus[x, 1]]",
+        ),
+        (
+            "Factor[Plus[Times[2, Power[x, 2]], -2]]",
+            "Times[2, Plus[x, -1], Plus[x, 1]]",
+        ),
+        (
+            "Factor[Plus[Times[-1, Power[x, 2]], 1]]",
+            "Times[-1, Plus[x, -1], Plus[x, 1]]",
+        ),
+        ("Factor[Plus[Times[6, x], 12]]", "Times[6, Plus[x, 2]]"),
+        // factor(x^4-y^4) = (x-y)*(x+y)*(x^2+y^2): x - y, as giac, where
+        // normal's main variable would give y - x.
+        (
+            "Factor[Plus[Power[x, 4], Times[-1, Power[y, 4]]]]",
+            "Times[Plus[x, Times[-1, y]], Plus[x, y], Plus[Power[x, 2], Power[y, 2]]]",
+        ),
+        // factor(x^2*y+x*y^2) = y*x*(x+y), factor(x*y-x) = (y-1)*x.
+        (
+            "Factor[Plus[Times[Power[x, 2], y], Times[x, Power[y, 2]]]]",
+            "Times[x, y, Plus[x, y]]",
+        ),
+        (
+            "Factor[Plus[Times[x, y], Times[-1, x]]]",
+            "Times[x, Plus[y, -1]]",
+        ),
+        // Generators: factor(sin(x)^2-1), x*(sqrt(x)-1), exp(2*x)-1 stays.
+        (
+            "Factor[Plus[Power[Sin[x], 2], -1]]",
+            "Times[Plus[Sin[x], -1], Plus[Sin[x], 1]]",
+        ),
+        (
+            "Factor[Plus[Power[x, 3/2], Times[-1, x]]]",
+            "Times[x, Plus[Power[x, 1/2], -1]]",
+        ),
+        (
+            "Factor[Plus[Power[E, Times[2, x]], -1]]",
+            "Plus[Power[E, Times[2, x]], -1]",
+        ),
+        // Rational functions, common factors cancelled.
+        (
+            "Factor[Times[Plus[Power[x, 2], -1], Power[Plus[Power[x, 2], Times[2, x], 1], -1]]]",
+            "Times[Plus[x, -1], Power[Plus[x, 1], -1]]",
+        ),
+        (
+            "Factor[Times[Plus[Times[6, Power[x, 2]], -6], Power[Plus[Times[4, x], 4], -1]]]",
+            "Times[3/2, Plus[x, -1]]",
+        ),
+        (
+            "Factor[Plus[Times[1/2, Power[x, 2]], -1/8]]",
+            "Times[1/8, Plus[Times[2, x], -1], Plus[Times[2, x], 1]]",
+        ),
+        (
+            "Factor[Power[Plus[Power[x, 2], -1], -1]]",
+            "Times[Power[Plus[x, -1], -1], Power[Plus[x, 1], -1]]",
+        ),
+        // factor(x^6-1), factor(x^4+4), powers.
+        (
+            "Factor[Plus[Power[x, 6], -1]]",
+            "Times[Plus[x, -1], Plus[x, 1], Plus[Power[x, 2], Times[-1, x], 1], Plus[Power[x, 2], x, 1]]",
+        ),
+        (
+            "Factor[Plus[Power[x, 4], 4]]",
+            "Times[Plus[Power[x, 2], Times[-2, x], 2], Plus[Power[x, 2], Times[2, x], 2]]",
+        ),
+        (
+            "Factor[Times[Power[Plus[x, 1], 3], Power[Plus[x, -2], 2]]]",
+            "Times[Power[Plus[x, -2], 2], Power[Plus[x, 1], 3]]",
+        ),
+        // Irreducible over ℚ: they stay as they are.
+        ("Factor[Plus[Power[x, 2], -2]]", "Plus[Power[x, 2], -2]"),
+        (
+            "Factor[Plus[Power[x, 2], Times[-2, Power[y, 2]]]]",
+            "Plus[Power[x, 2], Times[-2, Power[y, 2]]]",
+        ),
+        // Numbers, lists, and an infinity given back.
+        ("Factor[6]", "6"),
+        ("Factor[0]", "0"),
+        ("Factor[3/4]", "3/4"),
+        (
+            "Factor[List[Plus[Power[x, 2], -1], Plus[Power[x, 3], -1]]]",
+            "List[Times[Plus[x, -1], Plus[x, 1]], Times[Plus[x, -1], Plus[Power[x, 2], x, 1]]]",
+        ),
+        ("Factor[Infinity]", "Infinity"),
+    ]);
+}
+
+/// giac 1.9's `factors` (CAS-185): each factor and its exponent, the
+/// denominator's negative, the constant's numerator first and its
+/// denominator before the denominator's factors.
+#[test]
+fn factor_list() {
+    check_evaluated(&[
+        (
+            "FactorList[Plus[Times[12, Power[x, 4]], -12]]",
+            "List[12, 1, Plus[x, -1], 1, Plus[x, 1], 1, Plus[Power[x, 2], 1], 1]",
+        ),
+        (
+            "FactorList[Times[Plus[Power[x, 2], -1], Power[Plus[Times[2, x], 4], -1]]]",
+            "List[Plus[x, -1], 1, Plus[x, 1], 1, 2, -1, Plus[x, 2], -1]",
+        ),
+        (
+            "FactorList[Plus[Times[1/2, Power[x, 2]], -1/8]]",
+            "List[Plus[Times[2, x], -1], 1, Plus[Times[2, x], 1], 1, 8, -1]",
+        ),
+        (
+            "FactorList[Plus[Power[x, 4], Times[-1, Power[y, 4]]]]",
+            "List[Plus[x, Times[-1, y]], 1, Plus[x, y], 1, Plus[Power[x, 2], Power[y, 2]], 1]",
+        ),
+        (
+            "FactorList[Times[Power[Plus[x, -1], 2], Power[Plus[x, 1], -3]]]",
+            "List[Plus[x, -1], 2, Plus[x, 1], -3]",
+        ),
+        // giac lists the constant -1 last.
+        (
+            "FactorList[Plus[Times[-1, Power[x, 2]], 1]]",
+            "List[-1, 1, Plus[x, -1], 1, Plus[x, 1], 1]",
+        ),
+        ("FactorList[6]", "List[6, 1]"),
+        ("FactorList[0]", "List[0, 1]"),
+        ("FactorList[1]", "List[1, 1]"),
+        ("FactorList[2/3]", "List[2/3, 1]"),
+        ("FactorList[x]", "List[x, 1]"),
+    ]);
+}
+
+/// giac 1.9's `sqrfree` (CAS-185), over ℤ and ℤ\[i\].
+#[test]
+fn factor_square_free() {
+    check_evaluated(&[
+        (
+            "FactorSquareFree[Plus[Power[x, 3], Times[-1, Power[x, 2]], Times[-1, x], 1]]",
+            "Times[Power[Plus[x, -1], 2], Plus[x, 1]]",
+        ),
+        (
+            "FactorSquareFree[Plus[Times[12, Power[x, 4]], Times[-24, Power[x, 2]], 12]]",
+            "Times[12, Power[Plus[Power[x, 2], -1], 2]]",
+        ),
+        // Over a cancelled denominator.
+        (
+            "FactorSquareFree[Times[Plus[Power[x, 2], -1], Power[Plus[x, 1], -2]]]",
+            "Times[Plus[x, -1], Power[Plus[x, 1], -1]]",
+        ),
+        // A content's parts apart: sqrfree(x^2*y^2+2*x*y^2+y^2).
+        (
+            "FactorSquareFree[Plus[Times[Power[x, 2], Power[y, 2]], Times[2, x, Power[y, 2]], Power[y, 2]]]",
+            "Times[Power[y, 2], Power[Plus[x, 1], 2]]",
+        ),
+        // giac's -2*(-x+1)^2.
+        (
+            "FactorSquareFree[Plus[Times[-2, Power[x, 2]], Times[4, x], -2]]",
+            "Times[-2, Power[Plus[x, -1], 2]]",
+        ),
+        // giac's (x^3-2*x^2-x+2)/2.
+        (
+            "FactorSquareFree[Plus[Times[1/2, Power[x, 3]], Times[-1, Power[x, 2]], Times[-1/2, x], 1]]",
+            "Times[1/2, Plus[Power[x, 3], Times[-2, Power[x, 2]], Times[-1, x], 2]]",
+        ),
+        // i*(x+1)^2.
+        (
+            "FactorSquareFree[Plus[Times[Complex[0, 1], Power[x, 2]], Times[Complex[0, 2], x], Complex[0, 1]]]",
+            "Times[Complex[0, 1], Power[Plus[x, 1], 2]]",
+        ),
+        ("FactorSquareFree[6]", "6"),
+    ]);
+}
+
 /// The calls that stay, with their warnings.
 #[test]
 fn refusals() {
@@ -693,7 +885,56 @@ fn refusals() {
         // Infinities, even inside a generator (CAS-139).
         ("Expand[f[Infinity]]", "not polynomials"),
         ("GCD[Plus[x, 1], f[Indeterminate]]", "not polynomials"),
+        // Factoring (CAS-185): complex coefficients until CAS-186, balls,
+        // dense forms past the limit.
+        (
+            "Factor[Plus[Times[Complex[0, 1], Power[x, 2]], Complex[0, 1]]]",
+            "complex coefficients are not factored yet",
+        ),
+        (
+            "FactorList[Plus[x, Complex[0, 1]]]",
+            "complex coefficients are not factored yet",
+        ),
+        ("Factor[Times[N[2], x]]", "must be exact"),
+        ("FactorSquareFree[Plus[x, N[1]]]", "must be exact"),
+        (
+            "Factor[Plus[Power[x, 10000000], -1]]",
+            "could pass 1000000 terms",
+        ),
+        (
+            "FactorSquareFree[Plus[Power[x, 10000000], -1]]",
+            "could pass 1000000 terms",
+        ),
     ]);
+}
+
+/// The Swinnerton-Dyer polynomial of 2, 3, 5 and 7, irreducible, whose 8
+/// or more local factors make Zassenhaus's recombination try at least 127
+/// subsets.
+const SWINNERTON_DYER: &str = "Factor[Plus[Power[x, 16], Times[-136, Power[x, 14]], Times[6476, Power[x, 12]], Times[-141912, Power[x, 10]], Times[1513334, Power[x, 8]], Times[-7453176, Power[x, 6]], Times[13950764, Power[x, 4]], Times[-5596840, Power[x, 2]], 46225]]";
+
+/// Past `Limits::terms` steps of its searches, factoring stays with a
+/// warning that gives the limit (CAS-185); within the default, the
+/// polynomial comes back irreducible.
+#[test]
+fn the_factoring_search() {
+    let mut ctx = Context::new();
+    let mut limits = ctx.limits();
+    limits.terms = 64;
+    ctx.set_limits(limits);
+    let (found, warnings) = eval(&ctx, SWINNERTON_DYER);
+    assert_eq!(found.head(), Some(&Expr::from(Symbol::FACTOR)), "{found:?}");
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("more than 64 steps of its searches")),
+        "{warnings:?}"
+    );
+    let ctx = Context::new();
+    let (found, warnings) = eval(&ctx, SWINNERTON_DYER);
+    let argument = ctx.eval(&read(SWINNERTON_DYER).args()[0]).unwrap();
+    assert_eq!(found, argument);
+    assert_eq!(warnings, Vec::<String>::new());
 }
 
 /// Past `Limits::terms`, which bounds the terms of each product before it
@@ -780,6 +1021,7 @@ fn the_interrupt_stops_them() {
     for input in [
         "Expand[Power[Plus[1, x, y], 10]]",
         "GCD[Plus[Power[x, 2], -1], Plus[x, -1]]",
+        "Factor[Plus[Power[x, 2], -1]]",
     ] {
         assert_eq!(
             ctx.eval(&read(input)),
@@ -840,6 +1082,9 @@ fn traces_verify() {
         "PrimitivePart[Plus[Times[6, Power[x, 2]], Times[4, x]]]",
         "Resultant[Plus[Times[x, y], -1], Plus[Power[x, 2], Power[y, 2], -4], x]",
         "Discriminant[Plus[Times[a, Power[x, 2]], Times[b, x], c], x]",
+        "Factor[Plus[Power[x, 4], Times[-1, Power[y, 4]]]]",
+        "FactorSquareFree[Plus[Power[x, 3], Times[-1, Power[x, 2]], Times[-1, x], 1]]",
+        "FactorList[Plus[Times[12, Power[x, 4]], -12]]",
     ];
     for input in inputs {
         let options = EvalOptions {
@@ -864,8 +1109,9 @@ fn traces_verify() {
         assert_eq!(algorithm[0].before.head(), read(input).head(), "{input}");
         assert_eq!(ctx.eval(&algorithm[0].after), Ok(result), "{input}");
     }
-    // Expand's and Together's steps are checked.
-    for input in &inputs[..2] {
+    // Expand's, Together's, Factor's and FactorSquareFree's steps are
+    // checked.
+    for input in inputs[..2].iter().chain(&inputs[16..18]) {
         let options = EvalOptions {
             trace: TraceLevel::Rules,
         };
@@ -1032,6 +1278,35 @@ proptest! {
         let (u, v) = (at(&sum), at(&together));
         if u.is_exact_number() && v.is_exact_number() {
             prop_assert_eq!(u, v, "{} and {}", sum, together);
+        }
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(64))]
+
+    /// `Factor` and `FactorSquareFree` keep the value: expanded, each is the
+    /// expansion of its argument, a product of powers of polynomials in x,
+    /// y and z over a number.
+    #[test]
+    fn factoring_keeps_the_value(
+        a in nonzero_terms(3, 3),
+        b in nonzero_terms(3, 3),
+        c in terms(3, 2),
+        d in 1i64..5,
+    ) {
+        let ctx = Context::new();
+        let product = poly_expr(&a)
+            * poly_expr(&b).pow(2)
+            * poly_expr(&c)
+            * Expr::from(Rational::new(Integer::ONE, Integer::from(d)));
+        let p = ctx.eval(&product).unwrap();
+        let expanded = ctx.eval(&Expr::call(Symbol::EXPAND, [p.clone()])).unwrap();
+        for head in [Symbol::FACTOR, Symbol::FACTOR_SQUARE_FREE] {
+            let f = ctx.eval(&Expr::call(head, [p.clone()])).unwrap();
+            prop_assert!(f.head() != Some(&Expr::from(head)), "{} stays", f);
+            let back = ctx.eval(&Expr::call(Symbol::EXPAND, [f.clone()])).unwrap();
+            prop_assert_eq!(&back, &expanded, "{} is {}", p, f);
         }
     }
 }

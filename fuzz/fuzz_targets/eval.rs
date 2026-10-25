@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 59] = [
+const BUILTINS: [&str; 62] = [
     "Plus",
     "Times",
     "Power",
@@ -100,6 +100,10 @@ const BUILTINS: [&str; 59] = [
     "PrimitivePart",
     "Resultant",
     "Discriminant",
+    // Factoring (CAS-185), its searches within the limit on terms.
+    "Factor",
+    "FactorList",
+    "FactorSquareFree",
 ];
 
 /// Builtins that apply something to parts, only in the expression

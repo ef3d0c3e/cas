@@ -11,9 +11,9 @@
 use cas_num::algebra::{EuclideanDomain, Integers, Rationals, Ring, WordPrimeField};
 use cas_num::{Integer, Natural, Rational};
 
-use super::Factors;
 use super::finite::{distinct_degree, split_degrees};
 use super::hensel::lift;
+use super::{FactorError, Factors, Search, unbounded};
 use crate::cancel::{Cancel, Cancelled, Never, uncancelled};
 use crate::dense::{Dense, DenseRing};
 use crate::gcd::split;
@@ -160,8 +160,8 @@ fn recombine(
     mut lifted: Vec<Dense<Integer>>,
     m: &Integer,
     allowed: &[bool],
-    cancel: &dyn Cancel,
-) -> Result<Vec<Dense<Integer>>, Cancelled> {
+    search: &Search<'_>,
+) -> Result<Vec<Dense<Integer>>, FactorError> {
     let zx = DenseRing::new(Integers);
     let mut out = Vec::new();
     let mut s = 1;
@@ -171,9 +171,7 @@ fn recombine(
         let constant = &lead * f.coeff(0).unwrap_or(&Integer::ZERO);
         let mut subset: Vec<usize> = (0..s).collect();
         loop {
-            if cancel.cancelled() {
-                return Err(Cancelled);
-            }
+            search.step()?;
             // At half the lifts a subset and its complement give one split:
             // only the subsets with the first are tried.
             if 2 * s == r && subset[0] != 0 {
@@ -191,7 +189,7 @@ fn recombine(
             if allowed[degree] && constant.is_divisible_by(&c()) {
                 let mut product = zx.constant(lead.clone());
                 for &i in &subset {
-                    let full = zx.mul_with(&product, &lifted[i], cancel)?;
+                    let full = zx.mul_with(&product, &lifted[i], search.cancel())?;
                     product = zx.poly(full.coeffs().iter().map(|x| symmetric(x, m)).collect());
                 }
                 let g = zx.primitive_part(&product);
@@ -219,11 +217,13 @@ fn recombine(
 /// The irreducible factors of square-free, primitive `f` of positive degree
 /// with a positive leading coefficient, each primitive with a positive
 /// leading coefficient. A factor `x` is split off first, so that `f(0)` is
-/// not 0 for the constant-term test.
+/// not 0 for the constant-term test. Each subset of the recombination is a
+/// step of `search`.
 pub(crate) fn factor_squarefree(
     f: &Dense<Integer>,
-    cancel: &dyn Cancel,
-) -> Result<Vec<Dense<Integer>>, Cancelled> {
+    search: &Search<'_>,
+) -> Result<Vec<Dense<Integer>>, FactorError> {
+    let cancel = search.cancel();
     let zx = DenseRing::new(Integers);
     let mut out = Vec::new();
     let mut f = f.clone();
@@ -247,7 +247,7 @@ pub(crate) fn factor_squarefree(
     let k = exponent(&f, p);
     let lifted = lift(&f, &local, &fp, k, cancel)?;
     let m = Integer::from(Natural::from(p).pow(k));
-    out.extend(recombine(f, lifted, &m, &allowed, cancel)?);
+    out.extend(recombine(f, lifted, &m, &allowed, search)?);
     Ok(out)
 }
 
@@ -285,10 +285,35 @@ impl DenseRing<Integers> {
         p: &Dense<Integer>,
         cancel: &dyn Cancel,
     ) -> Result<Factors<Integer, Dense<Integer>>, Cancelled> {
-        let (constant, parts) = self.squarefree_with(p, cancel)?.into_parts();
+        unbounded(self.factor_within(p, u64::MAX, cancel))
+    }
+
+    /// As `factor_with`, trying at most `bound` subsets of local factors in
+    /// all.
+    ///
+    /// # Errors
+    ///
+    /// [`FactorError::Cancelled`] when `cancel` says so, and
+    /// [`FactorError::Search`] past the bound.
+    pub fn factor_within(
+        &self,
+        p: &Dense<Integer>,
+        bound: u64,
+        cancel: &dyn Cancel,
+    ) -> Result<Factors<Integer, Dense<Integer>>, FactorError> {
+        self.factor_search(p, &Search::new(cancel, bound))
+    }
+
+    /// As `factor_within`, the subsets counted by `search`.
+    pub(crate) fn factor_search(
+        &self,
+        p: &Dense<Integer>,
+        search: &Search<'_>,
+    ) -> Result<Factors<Integer, Dense<Integer>>, FactorError> {
+        let (constant, parts) = self.squarefree_with(p, search.cancel())?.into_parts();
         let mut factors = Vec::new();
         for (f, e) in parts {
-            for g in factor_squarefree(&f, cancel)? {
+            for g in factor_squarefree(&f, search)? {
                 factors.push((g, e));
             }
         }

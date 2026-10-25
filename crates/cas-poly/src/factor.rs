@@ -16,9 +16,85 @@ mod zassenhaus;
 #[cfg(test)]
 mod tests;
 
+use std::cell::Cell;
+use std::fmt;
+
 use cas_num::algebra::{GaussianIntegers, GaussianRationals, Integers, Rationals};
 
+use crate::cancel::{Cancel, Cancelled};
 use crate::gcd::GcdDomain;
+
+/// Why a bounded factorisation stopped.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub enum FactorError {
+    /// The [`Cancel`] said so.
+    Cancelled,
+    /// The searches would pass their bound: Zassenhaus's subsets of local
+    /// factors, and Wang's points. Zassenhaus's recombination is
+    /// exponential in the number of local factors in the worst case, as for
+    /// `x^720 − 1`.
+    Search,
+}
+
+impl fmt::Display for FactorError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FactorError::Cancelled => f.write_str("cancelled"),
+            FactorError::Search => f.write_str("too long a search"),
+        }
+    }
+}
+
+impl std::error::Error for FactorError {}
+
+impl From<Cancelled> for FactorError {
+    fn from(Cancelled: Cancelled) -> FactorError {
+        FactorError::Cancelled
+    }
+}
+
+/// The searches of a factorisation, counted against their bound, and what
+/// the long loops poll.
+pub(crate) struct Search<'a> {
+    cancel: &'a dyn Cancel,
+    left: Cell<u64>,
+}
+
+impl<'a> Search<'a> {
+    pub(crate) fn new(cancel: &'a dyn Cancel, bound: u64) -> Search<'a> {
+        Search {
+            cancel,
+            left: Cell::new(bound),
+        }
+    }
+
+    /// The [`Cancel`] of the loops.
+    pub(crate) fn cancel(&self) -> &'a dyn Cancel {
+        self.cancel
+    }
+
+    /// One more subset or point, polling the [`Cancel`].
+    pub(crate) fn step(&self) -> Result<(), FactorError> {
+        if self.cancel.cancelled() {
+            return Err(FactorError::Cancelled);
+        }
+        let left = self.left.get();
+        if left == 0 {
+            return Err(FactorError::Search);
+        }
+        self.left.set(left - 1);
+        Ok(())
+    }
+}
+
+/// The value of an unbounded search, which only a cancellation stops.
+pub(crate) fn unbounded<T>(result: Result<T, FactorError>) -> Result<T, Cancelled> {
+    match result {
+        Ok(value) => Ok(value),
+        Err(FactorError::Cancelled) => Err(Cancelled),
+        Err(FactorError::Search) => unreachable!("an unbounded search"),
+    }
+}
 
 /// A polynomial as a constant times powers of polynomials, `c f₁^e₁ ⋯
 /// fₖ^eₖ`. Each `fᵢ` has a positive degree, is primitive, and has its

@@ -82,8 +82,9 @@ fn is_constant<E>(p: &Sparse<E>) -> bool {
     p.degrees().iter().all(|&d| d == 0)
 }
 
-/// As [`check_dense`], for sparse polynomials: square-free means coprime to
-/// the derivative in each variable it has, up to factors without it.
+/// As [`check_dense`], for sparse polynomials, whose exponents can repeat:
+/// square-free means coprime to the derivative in each variable it has, up
+/// to factors without it.
 fn check_sparse<R: CharacteristicZero>(
     ring: &SparseRing<R>,
     p: &Sparse<R::Elem>,
@@ -92,7 +93,7 @@ fn check_sparse<R: CharacteristicZero>(
     prop_assert_eq!(&sparse_product(ring, &s), p);
     let base = ring.base();
     for pair in s.factors().windows(2) {
-        prop_assert!(pair[0].1 < pair[1].1, "increasing exponents");
+        prop_assert!(pair[0].1 <= pair[1].1, "sorted exponents");
     }
     for (i, (f, e)) in s.factors().iter().enumerate() {
         prop_assert!(*e >= 1);
@@ -266,18 +267,21 @@ fn sparse_examples() {
         s.factors(),
         &[(xpy.clone(), 1), (y.clone(), 2), (xmy.clone(), 3)]
     );
-    // 4 x^2 y - 4 y: y and x^2 - 1 share the exponent 1.
-    let p = ring.mul(
-        &int(4),
-        &ring.mul(&y, &ring.sub(&ring.mul(&x, &x), &int(1))),
-    );
+    // 4 x^2 y - 4 y: the content y and x^2 - 1 share the exponent 1, and
+    // stay apart.
+    let xx1 = ring.sub(&ring.mul(&x, &x), &int(1));
+    let p = ring.mul(&int(4), &ring.mul(&y, &xx1));
     let s = ring.squarefree(&p);
     assert_eq!(s.constant(), &Integer::from(4));
-    assert_eq!(s.factors(), &[(ring.div_exact(&p, &int(4)).unwrap(), 1)]);
-    // x^2 y^2: one part.
+    assert_eq!(s.factors(), &[(y.clone(), 1), (xx1, 1)]);
+    // x^2 y^2 and (y + 1)^2 x^2: the content's part first, as giac's
+    // sqrfree(x^2*y^2+2*x*y^2+y^2) is y^2*(x+1)^2.
     let p = ring.mul(&ring.mul(&x, &x), &ring.mul(&y, &y));
     let s = ring.squarefree(&p);
-    assert_eq!(s.factors(), &[(ring.mul(&x, &y), 2)]);
+    assert_eq!(s.factors(), &[(y.clone(), 2), (x.clone(), 2)]);
+    let p = ring.mul(&ring.pow(&ring.add(&y, &int(1)), 2), &ring.mul(&x, &x));
+    let s = ring.squarefree(&p);
+    assert_eq!(s.factors(), &[(ring.add(&y, &int(1)), 2), (x.clone(), 2)]);
     // -(y + 1)^2 (x - 1): the sign of the lexicographic lead.
     let p = ring.neg(&ring.mul(&ring.pow(&ring.add(&y, &int(1)), 2), &ring.sub(&x, &int(1))));
     let s = ring.squarefree(&p);
@@ -403,9 +407,10 @@ proptest! {
     }
 
     /// Products of powers of distinct linear forms in one to four
-    /// variables, irreducible and pairwise coprime, decompose into exactly
-    /// those parts, merged by exponent. Forms without the first variable
-    /// come from contents.
+    /// variables, irreducible and pairwise coprime, decompose into parts
+    /// that, multiplied together by exponent, are those of the forms: the
+    /// unique decomposition with one part an exponent. Forms without the
+    /// first variable come from contents.
     #[test]
     fn sparse_decompositions_of_known_parts((n, forms) in (1usize..=4).prop_flat_map(|n| (Just(n), forms(n))), k in 1i64..10) {
         let ring = SparseRing::new(Integers, n);
@@ -430,7 +435,6 @@ proptest! {
         let p = power_product(&ring, ring.constant(Integer::from(k)), &parts);
         let s = check_sparse(&ring, &p)?;
         prop_assert_eq!(s.constant(), &Integer::from(k));
-        let expected = grouped(&ring, &parts);
-        prop_assert_eq!(s.factors(), expected.as_slice());
+        prop_assert_eq!(grouped(&ring, s.factors()), grouped(&ring, &parts));
     }
 }

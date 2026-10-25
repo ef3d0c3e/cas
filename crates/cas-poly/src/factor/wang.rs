@@ -16,10 +16,10 @@ use std::collections::HashSet;
 use cas_num::algebra::{Integers, Rationals, Ring};
 use cas_num::{Integer, Natural, Rational};
 
-use super::Factors;
 use super::finite::Random;
 use super::lifting::lift_variables;
 use super::zassenhaus;
+use super::{FactorError, Factors, Search, unbounded};
 use crate::cancel::{Cancel, Cancelled, Never, uncancelled};
 use crate::dense::{Dense, DenseRing};
 use crate::gcd::split_sparse;
@@ -105,15 +105,18 @@ fn configuration(
     x: usize,
     point: Vec<(usize, Integer)>,
     leading: &(Integer, Vec<(Sparse<Integer>, u64)>),
-    cancel: &dyn Cancel,
-) -> Result<Option<Configuration>, Cancelled> {
+    search: &Search<'_>,
+) -> Result<Option<Configuration>, FactorError> {
     let zx = DenseRing::new(Integers);
     let (constant, lc_factors) = leading;
     let u = ring
         .to_dense(&at(ring, f, &point), x)
         .expect("only the main variable at the point");
     if u.degree().map(|d| d as u64) != ring.degree(f, x)
-        || zx.gcd_with(&u, &zx.derivative(&u), cancel)?.degree() != Some(0)
+        || zx
+            .gcd_with(&u, &zx.derivative(&u), search.cancel())?
+            .degree()
+            != Some(0)
     {
         return Ok(None);
     }
@@ -137,7 +140,7 @@ fn configuration(
         .max()
         .unwrap_or(Natural::ZERO);
     let factors = zx
-        .factor_with(&h, cancel)?
+        .factor_search(&h, search)?
         .into_parts()
         .1
         .into_iter()
@@ -153,10 +156,10 @@ fn configuration(
 }
 
 /// What the search for points finds.
-enum Search {
+enum Found {
     /// An image with one factor: `f` is irreducible.
     Irreducible,
-    Found(Configuration),
+    Points(Configuration),
 }
 
 /// The points of the search: values in `[−range, range]`, `range` growing
@@ -179,22 +182,21 @@ impl Points {
 }
 
 /// [`CONFIGURATIONS`] good points whose images have the fewest factors seen,
-/// and of those the one whose image has the smallest coefficients.
-fn search(
+/// and of those the one whose image has the smallest coefficients. Each
+/// point is a step of `search`.
+fn find_points(
     ring: &SparseRing<Integers>,
     f: &Sparse<Integer>,
     x: usize,
     ys: &[usize],
     leading: &(Integer, Vec<(Sparse<Integer>, u64)>),
     points: &mut Points,
-    cancel: &dyn Cancel,
-) -> Result<Search, Cancelled> {
+    search: &Search<'_>,
+) -> Result<Found, FactorError> {
     let mut found: Vec<Configuration> = Vec::new();
     while found.len() < CONFIGURATIONS {
         for _ in 0..TRIES {
-            if cancel.cancelled() {
-                return Err(Cancelled);
-            }
+            search.step()?;
             let Some(values) = points.next(ys.len()) else {
                 continue;
             };
@@ -203,11 +205,11 @@ fn search(
                 .zip(&values)
                 .map(|(&v, &a)| (v, Integer::from(a)))
                 .collect();
-            let Some(config) = configuration(ring, f, x, point, leading, cancel)? else {
+            let Some(config) = configuration(ring, f, x, point, leading, search)? else {
                 continue;
             };
             if config.factors.len() == 1 {
-                return Ok(Search::Irreducible);
+                return Ok(Found::Irreducible);
             }
             match found
                 .first()
@@ -230,7 +232,7 @@ fn search(
         .into_iter()
         .min_by(|a, b| a.norm.cmp(&b.norm))
         .expect("configurations");
-    Ok(Search::Found(best))
+    Ok(Found::Points(best))
 }
 
 /// The polynomial to lift, the factors at the point and their leading
@@ -329,11 +331,11 @@ fn wang(
     ring: &SparseRing<Integers>,
     f: &Sparse<Integer>,
     x: usize,
-    cancel: &dyn Cancel,
-) -> Result<Vec<Sparse<Integer>>, Cancelled> {
+    search: &Search<'_>,
+) -> Result<Vec<Sparse<Integer>>, FactorError> {
     let ys: Vec<usize> = variables(f).into_iter().filter(|&v| v != x).collect();
     let leading = ring
-        .factor_with(&ring.lead_coeff(f, x), cancel)?
+        .factor_search(&ring.lead_coeff(f, x), search)?
         .into_parts();
     let mut points = Points {
         random: Random::new(SEED),
@@ -341,15 +343,21 @@ fn wang(
         tried: HashSet::new(),
     };
     loop {
-        let config = match search(ring, f, x, &ys, &leading, &mut points, cancel)? {
-            Search::Irreducible => return Ok(vec![f.clone()]),
-            Search::Found(config) => config,
+        let config = match find_points(ring, f, x, &ys, &leading, &mut points, search)? {
+            Found::Irreducible => return Ok(vec![f.clone()]),
+            Found::Points(config) => config,
         };
         if let Some((g, factors, lcs)) = leading_coefficients(ring, f, &leading.1, &config) {
             let prime = lifting_prime(&g);
-            if let Some(lifted) =
-                lift_variables(&g, x, &config.point, &factors, &lcs, &prime, cancel)?
-            {
+            if let Some(lifted) = lift_variables(
+                &g,
+                x,
+                &config.point,
+                &factors,
+                &lcs,
+                &prime,
+                search.cancel(),
+            )? {
                 return Ok(lifted.iter().map(|u| ring.primitive_part(u)).collect());
             }
         }
@@ -405,10 +413,36 @@ impl SparseRing<Integers> {
         p: &Sparse<Integer>,
         cancel: &dyn Cancel,
     ) -> Result<Factors<Integer, Sparse<Integer>>, Cancelled> {
-        let (constant, parts) = self.squarefree_with(p, cancel)?.into_parts();
+        unbounded(self.factor_within(p, u64::MAX, cancel))
+    }
+
+    /// As `factor_with`, with at most `bound` steps of the searches in all:
+    /// subsets of local factors in Zassenhaus's recombination, and points in
+    /// Wang's algorithm.
+    ///
+    /// # Errors
+    ///
+    /// [`FactorError::Cancelled`] when `cancel` says so, and
+    /// [`FactorError::Search`] past the bound.
+    pub fn factor_within(
+        &self,
+        p: &Sparse<Integer>,
+        bound: u64,
+        cancel: &dyn Cancel,
+    ) -> Result<Factors<Integer, Sparse<Integer>>, FactorError> {
+        self.factor_search(p, &Search::new(cancel, bound))
+    }
+
+    /// As `factor_within`, the steps counted by `search`.
+    pub(crate) fn factor_search(
+        &self,
+        p: &Sparse<Integer>,
+        search: &Search<'_>,
+    ) -> Result<Factors<Integer, Sparse<Integer>>, FactorError> {
+        let (constant, parts) = self.squarefree_with(p, search.cancel())?.into_parts();
         let mut factors = Vec::new();
         for (f, e) in parts {
-            for g in self.factor_squarefree(&f, cancel)? {
+            for g in self.factor_squarefree(&f, search)? {
                 factors.push((g, e));
             }
         }
@@ -423,8 +457,9 @@ impl SparseRing<Integers> {
     fn factor_squarefree(
         &self,
         f: &Sparse<Integer>,
-        cancel: &dyn Cancel,
-    ) -> Result<Vec<Sparse<Integer>>, Cancelled> {
+        search: &Search<'_>,
+    ) -> Result<Vec<Sparse<Integer>>, FactorError> {
+        let cancel = search.cancel();
         let vars = variables(f);
         let degrees = f.degrees();
         let Some(&x) = vars.iter().min_by_key(|&&v| degrees[v]) else {
@@ -432,7 +467,7 @@ impl SparseRing<Integers> {
         };
         if let [v] = vars.as_slice() {
             let dense = self.to_dense(f, *v).expect("one variable");
-            return Ok(zassenhaus::factor_squarefree(&dense, cancel)?
+            return Ok(zassenhaus::factor_squarefree(&dense, search)?
                 .iter()
                 .map(|g| self.from_dense(g, *v))
                 .collect());
@@ -441,12 +476,12 @@ impl SparseRing<Integers> {
         let mut out = if self.is_one(&content) {
             Vec::new()
         } else {
-            self.factor_squarefree(&content, cancel)?
+            self.factor_squarefree(&content, search)?
         };
         if variables(&primitive).len() == 1 {
-            out.extend(self.factor_squarefree(&primitive, cancel)?);
+            out.extend(self.factor_squarefree(&primitive, search)?);
         } else {
-            out.extend(wang(self, &primitive, x, cancel)?);
+            out.extend(wang(self, &primitive, x, search)?);
         }
         Ok(out)
     }

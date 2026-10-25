@@ -157,6 +157,11 @@ builtins! {
     PRIMITIVE_PART = "PrimitivePart" [LISTABLE, PROTECTED];
     RESULTANT = "Resultant" [PROTECTED];
     DISCRIMINANT = "Discriminant" [LISTABLE, PROTECTED];
+    // Factoring (CAS-DOC-8 §4, CAS-185): Xcas's `factor` and `collect`,
+    // `factors` and `sqrfree`.
+    FACTOR = "Factor" [LISTABLE, PROTECTED];
+    FACTOR_LIST = "FactorList" [LISTABLE, PROTECTED];
+    FACTOR_SQUARE_FREE = "FactorSquareFree" [LISTABLE, PROTECTED];
     // The number sets of `Element` (CAS-DOC-4 §7).
     INTEGERS = "Integers" [PROTECTED];
     RATIONALS = "Rationals" [PROTECTED];

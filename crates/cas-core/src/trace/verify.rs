@@ -55,9 +55,10 @@ const NUMBER_BITS: u64 = 1 << 12;
 
 /// The heads whose value depends on the form of their arguments, not only
 /// on their values, so that substituting a point does not commute with
-/// them: the polynomial builtins but `Expand` and `Together`, which claim
-/// identities (CAS-DOC-8 §11.5, CAS-140), and the structural predicates.
-const FORMAL: [Symbol; 16] = [
+/// them: the polynomial builtins but `Expand`, `Together`, `Factor` and
+/// `FactorSquareFree`, which claim identities (CAS-DOC-8 §11.5, CAS-140,
+/// CAS-185), and the structural predicates.
+const FORMAL: [Symbol; 17] = [
     Symbol::GCD,
     Symbol::LCM,
     Symbol::POLYNOMIAL_QUOTIENT,
@@ -72,6 +73,7 @@ const FORMAL: [Symbol; 16] = [
     Symbol::PRIMITIVE_PART,
     Symbol::RESULTANT,
     Symbol::DISCRIMINANT,
+    Symbol::FACTOR_LIST,
     Symbol::FREE_Q,
     Symbol::SAME_Q,
 ];

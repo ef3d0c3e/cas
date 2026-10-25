@@ -10,7 +10,7 @@ use cas_num::algebra::{EuclideanDomain, Ring};
 use super::{CharacteristicZero, Factors};
 use crate::cancel::{Cancel, Cancelled, Never, uncancelled};
 use crate::dense::{Dense, DenseRing};
-use crate::gcd::{Cofactors, normalized_sparse};
+use crate::gcd::Cofactors;
 use crate::sparse::{Sparse, SparseRing};
 
 /// Yun's algorithm on `q`, primitive in the variable of `derivative`, of
@@ -112,11 +112,13 @@ impl<R: CharacteristicZero> DenseRing<R> {
 pub(super) type Split<E> = (Sparse<E>, Sparse<E>);
 
 impl<R: CharacteristicZero> SparseRing<R> {
-    /// The square-free decomposition `p = c f₁ f₂² ⋯ fₖᵏ`, as
-    /// [`DenseRing::squarefree`]'s. The leading coefficients are the
-    /// lexicographic ones. The content in the first variable that occurs is
-    /// decomposed in the others, and the primitive part by Yun's algorithm in
-    /// that variable. Parts with one exponent are then multiplied together.
+    /// The square-free decomposition `p = c f₁^e₁ ⋯ fₖ^eₖ`, the `fᵢ`
+    /// square-free and pairwise coprime, as [`DenseRing::squarefree`]'s, with
+    /// the lexicographic leading coefficients. The content in the first
+    /// variable that occurs is decomposed in the others, and the primitive
+    /// part by Yun's algorithm in that variable. Their parts stay apart, so
+    /// an exponent can repeat; the parts are sorted by exponent, those of the
+    /// content first. giac: `sqrfree(x^2*y^2+2*x*y^2+y^2)` is `y^2*(x+1)^2`.
     #[must_use]
     pub fn squarefree(&self, p: &Sparse<R::Elem>) -> Factors<R::Elem, Sparse<R::Elem>> {
         uncancelled(self.squarefree_with(p, &Never))
@@ -139,18 +141,9 @@ impl<R: CharacteristicZero> SparseRing<R> {
                 factors: Vec::new(),
             });
         };
-        let mut parts = Vec::new();
-        self.squarefree_parts(&self.primitive_part(p), &mut parts, cancel)?;
-        parts.sort_by_key(|&(_, e)| e);
-        let mut factors: Vec<(Sparse<R::Elem>, u64)> = Vec::with_capacity(parts.len());
-        for (f, e) in parts {
-            match factors.last_mut() {
-                Some((g, last)) if *last == e => {
-                    *g = normalized_sparse(self, &self.mul_with(g, &f, cancel)?);
-                }
-                _ => factors.push((f, e)),
-            }
-        }
+        let mut factors = Vec::new();
+        self.squarefree_parts(&self.primitive_part(p), &mut factors, cancel)?;
+        factors.sort_by_key(|&(_, e)| e);
         let leads = factors.iter().map(|(f, e)| (f.coeffs()[0].clone(), *e));
         Ok(Factors {
             constant: constant_of(base, lead, leads),

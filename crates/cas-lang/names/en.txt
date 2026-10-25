@@ -83,12 +83,16 @@ Content: content
 PrimitivePart: primpart
 Resultant: resultant
 Discriminant: discriminant
+# Factoring (CAS-DOC-8 §4, CAS-185). Xcas's one-argument `collect` factors
+# over ℚ, as `factor` does until CAS-187 decides about giac's square roots.
+Factor: factor collect
+FactorList: factors
+FactorSquareFree: sqrfree
 
 [planned]
 # Calculus, algebra and numerics (CAS-DOC-1, CAS-DOC-4 §1 and §8, CAS-DOC-5).
 Integrate: integrate int
 Sum: sum
-Factor: factor
 Simplify: simplify
 
 [constants]

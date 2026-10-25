@@ -23,10 +23,11 @@ decomposition needs `p`-th roots as well. Factoring over ℚ does not need it.
 
 ## Square-free decomposition (CAS-179)
 
-`squarefree` writes `p = c f₁ f₂² ⋯ fₖᵏ` with the `fᵢ` square-free and
-pairwise coprime. Parts of degree 0 are left out, so the exponents increase.
-giac's `sqrfree(12x⁴ − 24x² + 12)` is `12 (x² − 1)²`, which is the same
-decomposition.
+`squarefree` writes `p = c f₁^e₁ ⋯ fₖ^eₖ` with the `fᵢ` square-free and
+pairwise coprime, sorted by exponent. Parts of degree 0 are left out. In one
+variable the exponents increase: `p = c f₁ f₂² ⋯ fₖᵏ` without the parts of
+degree 0. giac's `sqrfree(12x⁴ − 24x² + 12)` is `12 (x² − 1)²`, which is the
+same decomposition.
 
 **Yun's algorithm [Yun76].** It runs on the primitive part `q = ∏ fᵢ^i`.
 
@@ -53,9 +54,11 @@ that occurs, as `content_v · primitive_v`.
   divides `p`. So Yun's algorithm with the derivative in `v` decomposes it,
   and a gcd constant in `v` is a unit.
 
-Parts with the same exponent from different variables are then multiplied
-together, so the result is the unique decomposition. For example,
-`4x²y − 4y` is `4 · (x²y − y)`, where `y` and `x² − 1` share the exponent 1.
+The parts of the content and of the primitive part stay apart, sorted by
+exponent with the content's first, so an exponent can repeat. giac does the
+same: `sqrfree(x²y² + 2xy² + y²)` is `y² (x + 1)²`, not `(xy + y)²`.
+Multiplying the parts of each exponent together would give the unique
+decomposition. CAS-185 changed this; CAS-179 had merged them.
 
 ## Factors over prime fields (CAS-180)
 
@@ -273,16 +276,29 @@ Most points give images without extraneous factors (Hilbert's
 irreducibility theorem), so the search ends with probability 1. It polls
 `Cancel` at each point.
 
+## Bounded searches (CAS-185)
+
+Two searches have no bound but the interrupt: Zassenhaus's recombination,
+exponential in the number of local factors (`x⁷²⁰ − 1` has 120 of them
+modulo 13, the fewest of the primes tried, for 30 true factors), and Wang's
+points. `factor_within` counts their steps,
+the subsets and the points, against a bound, and stops with
+`FactorError::Search` past it. The builtins take `Limits::terms` as the
+bound, so they warn, as for a product past the limit, where a factorisation
+would take minutes. van Hoeij's method (CAS-188) will make the subsets
+polynomial. `factor_with` is unbounded.
+
 ## Tests
 
 `src/factor/tests/` has one module a step.
 
 Square-free decomposition (`squarefree.rs`):
 
-- **Checks of every result.** The decomposition multiplies back. Its exponents
-  increase. Each factor has a positive degree, is primitive and normalised,
-  and is square-free: coprime to its derivative in each variable it has, up
-  to factors without that variable. The factors are pairwise coprime.
+- **Checks of every result.** The decomposition multiplies back. Its
+  exponents increase, or in several variables do not decrease. Each factor
+  has a positive degree, is primitive and normalised, and is square-free:
+  coprime to its derivative in each variable it has, up to factors without
+  that variable. The factors are pairwise coprime.
 - **Random products.** `k f g² h³` over ℤ, checked and compared with Musser's
   algorithm, a reference independent of Yun's. Over ℚ the factors are the
   monic associates and the constant is the leading coefficient. Sparse cases
@@ -291,9 +307,11 @@ Square-free decomposition (`squarefree.rs`):
   irreducible, pairwise coprime parts:
   - distinct linear factors and `x² + b` over ℤ;
   - linear factors with distinct Gaussian roots over ℤ\[i\] and ℚ(i);
-  - distinct linear forms in one to four variables, merged by exponent. Forms
-    without the first variable come from contents.
-- **Examples.** giac's answers, signs and contents, and `(x + 1)^10`.
+  - distinct linear forms in one to four variables, whose parts, multiplied
+    together by exponent, are those of the forms. Forms without the first
+    variable come from contents.
+- **Examples.** giac's answers, signs and contents, parts of a content kept
+  apart, and `(x + 1)^10`.
 
 Over prime fields (`finite.rs`):
 
