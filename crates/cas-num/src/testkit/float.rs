@@ -333,12 +333,14 @@ mod tests {
             prop_assert_eq!(a.mant_mag(), &Mag::from_rug(&a.mant().to_rug().abs()));
         }
 
-        /// The second operand sits `0..=gap` bits lower, and the shift is exact.
+        /// The second operand sits `0..=gap` bits lower, and the shift is
+        /// exact. `exp` is the place of the top bit, so a mantissa of up to
+        /// 256 bits under an exponent of up to 64 reaches 320.
         #[test]
         fn far_apart_shifts_exactly((a, b) in far_apart_pair(1 << 20)) {
             prop_assert!(a.to_rug().is_some());
             if !b.is_zero() {
-                prop_assert!(b.exp().to_rug() <= 64);
+                prop_assert!(b.exp().to_rug() <= 64 + 256);
                 prop_assert!(b.exp().to_rug() >= -64 - (1 << 20) - 256);
             }
         }
