@@ -562,8 +562,9 @@ fn fuzz_findings() {
 }
 
 /// `Limits::number_bits` bounds the precision of ball arithmetic: `15/2`
-/// plus a ball of `2^-10^9` is a ball that knows `10^9` bits, and a product
-/// with it worked at its accuracy took gigabytes. The fuzz target found it
+/// plus a ball of 0 within `2^-10^9` is a ball that knows `10^9` bits, its
+/// midpoint exact, and a product with it worked at its accuracy took
+/// gigabytes. The fuzz target found it
 /// through `Trace::verify`, which lowers the limit to 4096 bits, at
 /// `N[0^(…(-1)^(1 + 2 i)…)]`.
 #[test]
@@ -574,13 +575,13 @@ fn ball_arithmetic_stays_within_the_number_bits() {
     ctx.set_limits(limits);
     // The sum knows about 10^9 bits.
     let sum = ctx
-        .eval(&read("Plus[15/2, Ball[0x1p-1000000000, 0x1p-1000000053]]"))
+        .eval(&read("Plus[15/2, Ball[0x0p+0, 0x1p-1000000000]]"))
         .unwrap();
     let View::Ball(b) = sum.view() else {
         panic!("{sum:?}");
     };
     assert!(b.rel_accuracy_bits() > 1_000_000, "{sum:?}");
-    let e = read("Times[Plus[15/2, Ball[0x1p-1000000000, 0x1p-1000000053]], Complex[34/3, -34/7]]");
+    let e = read("Times[Plus[15/2, Ball[0x0p+0, 0x1p-1000000000]], Complex[34/3, -34/7]]");
     let found = ctx.eval(&e).unwrap();
     let View::ComplexBall(z) = found.view() else {
         panic!("{found:?}");
