@@ -28,6 +28,8 @@ mod radical;
 mod replace;
 mod structure;
 
+pub(crate) use numeric::approximation;
+
 use crate::build;
 use crate::builtin;
 use crate::context::Context;

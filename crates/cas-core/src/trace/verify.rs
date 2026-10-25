@@ -12,13 +12,17 @@
 //! numbers compare by overlap (CAS-85): a ball holds the number it stands
 //! for, so the sides of a right step overlap however differently they round,
 //! and a ball apart from the other side's, or without its exact value, makes
-//! the step wrong. Other values agree when they are equal and tell nothing
-//! otherwise, nor do infinities. A step whose sides differ at a point is
-//! wrong; one where no point told is unchecked, and so is one where an
-//! evaluation, of a side or an assumption, reaches a limit, as it would at
-//! the other points. So rational expressions are checked, and those with
-//! balls in them; those whose values need balls they do not have
-//! (`Sin[1/2]`) tell nothing.
+//! the step wrong. A value that is no number, as `Sin[3/7]`, unless both
+//! sides are the same, is approximated (CAS-175): its numbers, `Pi` and `E`
+//! become balls of the working precision and 32 bits more, and it is
+//! evaluated once, rational exponents kept exact so that odd roots of
+//! negatives stay real in the Real domain (O7). What it comes to then
+//! compares by overlap, and what still holds no number tells nothing, nor
+//! do infinities. A step whose sides differ at a point is wrong; one where
+//! no point told is unchecked, and so is one where an evaluation, of a side
+//! or an assumption, reaches a limit, as it would at the other points. So
+//! rational expressions are checked, and those with balls or transcendental
+//! functions, `Sin[x]^2 + Cos[x]^2` against `1`.
 //!
 //! A step with a [`FORMAL`] head is unchecked: such a head reads the form
 //! of its arguments, not their values, so its value at a point is not its
@@ -33,6 +37,7 @@ use super::{Step, StepKind, Trace};
 use crate::assume::Domain;
 use crate::context::Context;
 use crate::expr::{Expr, View};
+use crate::native::approximation;
 use crate::symbol::Symbol;
 use crate::{Complex, Rational};
 
@@ -43,8 +48,9 @@ const POINTS: usize = 4;
 const DRAWS: usize = 32;
 
 /// The bits a power of numbers may have at a point, at most: a larger one
-/// stays unevaluated and tells nothing, where computing it could take
-/// seconds (`Limits::number_bits`).
+/// stays unevaluated, where computing it could take seconds
+/// (`Limits::number_bits`), and is approximated by balls (CAS-175). Also
+/// the most bits of those balls.
 const NUMBER_BITS: u64 = 1 << 12;
 
 /// The heads whose value depends on the form of their arguments, not only
@@ -107,7 +113,8 @@ impl Trace {
     /// first wrong one: "the result is wrong" becomes "this rule, at this
     /// position, is wrong" (CAS-DOC-4 §9). The points are drawn the same
     /// way each time. At a point, a power of numbers over 2¹² bits stays
-    /// unevaluated and tells nothing, which bounds the time each takes.
+    /// unevaluated, which bounds the time each takes; what holds no number
+    /// there, as such a power or `Sin[3/7]`, is approximated by balls.
     ///
     /// ```
     /// use cas_core::{Context, EvalOptions, Expr, Symbol, TraceLevel};
@@ -219,8 +226,12 @@ fn check(ctx: &Context, step: &Step) -> Outcome {
             continue;
         }
         let at = |side: &Expr| value(ctx.eval(&side.substitute(&rules)));
-        match (at(&step.before), at(&step.after)) {
+        let sides = match (at(&step.before), at(&step.after)) {
             (Value::Failed, _) | (_, Value::Failed) => return Outcome::Unchecked,
+            (Value::Other(b), Value::Other(a)) if a == b => (Value::Other(b), Value::Other(a)),
+            (b, a) => (approximate(ctx, b), approximate(ctx, a)),
+        };
+        match sides {
             (Value::Exact(b), Value::Exact(a)) if a != b => {
                 return Outcome::Differs(point, b, a);
             }
@@ -351,6 +362,20 @@ fn value(result: Result<Expr, crate::EvalError>) -> Value {
         Value::Approximate(v)
     } else {
         Value::Other(v)
+    }
+}
+
+/// A value at a point that is no number approximated by balls (CAS-175):
+/// `Sin[3/7]` comes to a ball. One that still holds no number, or whose
+/// evaluation fails, tells nothing; other values are as they are.
+fn approximate(ctx: &Context, v: Value) -> Value {
+    let Value::Other(e) = v else {
+        return v;
+    };
+    let bits = ctx.working_precision().saturating_add(32).min(NUMBER_BITS);
+    match value(approximation(ctx, &e, bits)) {
+        v @ (Value::Exact(_) | Value::Approximate(_)) => v,
+        _ => Value::Nothing,
     }
 }
 

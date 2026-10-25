@@ -612,9 +612,10 @@ fn verify_draws_points_that_satisfy_the_assumptions() {
     }
 }
 
-/// Points evaluate with small numbers only (`Limits::number_bits`): two
-/// sides equal once computed, but not in form, tell nothing where their
-/// powers would have over 2^12 bits.
+/// Points evaluate with small numbers only (`Limits::number_bits`): a power
+/// that would have over 2^12 bits stays unevaluated at a point, and two
+/// sides equal once computed, but not in form, are approximated by balls
+/// instead (CAS-175), which agree.
 #[test]
 fn verify_leaves_large_powers_alone() {
     let mut ctx = Context::new();
@@ -636,8 +637,11 @@ fn verify_leaves_large_powers_alone() {
     let (_, report) = traced(&ctx, "big[x]", TraceLevel::Rules);
     let verification = report.trace.verify(&ctx);
     assert_eq!(verification.wrong, None);
-    let algorithm: Vec<&StepKind> = verification.unchecked.iter().map(|s| &s.kind).collect();
-    assert_eq!(algorithm, [&StepKind::Algorithm("square".into())]);
+    assert!(
+        verification.unchecked.is_empty(),
+        "{:?}",
+        verification.unchecked
+    );
     // What the fuzz target found (CAS-60): its points made powers of
     // millions of bits, minutes of verification.
     let (_, report) = traced(
@@ -708,6 +712,59 @@ fn verify_compares_balls_by_overlap() {
     ];
     for (name, before, after, right) in cases {
         let (before, after) = (read(&before), read(&after));
+        let returned = after.clone();
+        ctx.define_native(
+            sym(name),
+            Arc::new(move |ev, _| {
+                ev.step(name, &before, &after);
+                Ok(Some(returned.clone()))
+            }),
+        )
+        .unwrap();
+        let (_, report) = traced(&ctx, &format!("{name}[z]"), TraceLevel::Rules);
+        let verification = report.trace.verify(&ctx);
+        let algorithm = StepKind::Algorithm(name.into());
+        if right {
+            assert_eq!(verification.wrong, None, "{name}");
+            assert!(
+                !verification.unchecked.iter().any(|s| s.kind == algorithm),
+                "{name}"
+            );
+        } else {
+            let wrong = verification.wrong.expect("a wrong step");
+            assert_eq!(wrong.step.kind, algorithm, "{name}");
+        }
+    }
+}
+
+/// A value that is no number at a point is approximated by balls
+/// (CAS-175): steps on transcendental functions are checked, the right
+/// ones agreeing and the wrong ones located, against each other or against
+/// an exact value, and an odd root of a negative is the real one in the
+/// Real domain (O7), as exact evaluation reads it: `sin z - 2 < 0`.
+#[test]
+fn verify_approximates_what_stays_symbolic() {
+    let mut ctx = Context::new();
+    let pythagoras = "Plus[Power[Sin[z], 2], Power[Cos[z], 2]]";
+    let cases = [
+        (
+            "double",
+            "Sin[z]",
+            "Times[2, Sin[Times[1/2, z]], Cos[Times[1/2, z]]]",
+            true,
+        ),
+        ("half", "Sin[z]", "Times[2, Sin[Times[1/2, z]]]", false),
+        ("unit", pythagoras, "1", true),
+        ("two", pythagoras, "2", false),
+        (
+            "cube",
+            "Power[Plus[-2, Sin[z]], 1/3]",
+            "Times[-1, Power[Plus[2, Times[-1, Sin[z]]], 1/3]]",
+            true,
+        ),
+    ];
+    for (name, before, after, right) in cases {
+        let (before, after) = (read(before), read(after));
         let returned = after.clone();
         ctx.define_native(
             sym(name),

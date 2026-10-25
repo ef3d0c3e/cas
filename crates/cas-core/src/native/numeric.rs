@@ -281,6 +281,20 @@ fn approximate(ev: &mut Eval<'_>, arg: &Expr, target: Target) -> Native {
     }
 }
 
+/// What `e` comes to with balls of `bits` bits for its numbers, as in `N`
+/// but evaluated once, at that precision, in [`Context::numeric`]: no Ziv's
+/// loop, so its balls are as wide as they come. Rational exponents stay
+/// exact, so that the odd root of a negative is the real one in the Real
+/// domain (O7), as exact evaluation reads it, where `N` takes the principal
+/// root of `Sin[4]^(1/3)`. For [`Trace::verify`](crate::Trace::verify),
+/// which compares the balls by overlap (CAS-175).
+pub(crate) fn approximation(ctx: &Context, e: &Expr, bits: u64) -> Result<Expr, EvalError> {
+    let mut numeric = Numeric::new(ctx, bits);
+    numeric.exact_exponents = true;
+    let value = numeric.value(e);
+    ctx.numeric(bits).eval(&value)
+}
+
 /// Gives the warnings of the last round, but those of comparisons left
 /// undecided, which `N` reports itself.
 fn pass_on(ev: &mut Eval<'_>, warnings: Vec<Warning>) {
@@ -343,6 +357,9 @@ fn round(e: &Expr, bits: u64) -> Expr {
 struct Numeric<'c> {
     context: &'c Context,
     bits: u64,
+    /// Whether rational exponents keep their exact values, as integers do
+    /// ([`approximation`]).
+    exact_exponents: bool,
     /// The applications made so far: an expression shares its parts.
     memo: HashMap<Expr, Expr, FixedState>,
 }
@@ -352,6 +369,7 @@ impl<'c> Numeric<'c> {
         Numeric {
             context,
             bits,
+            exact_exponents: false,
             memo: HashMap::with_hasher(FixedState::default()),
         }
     }
@@ -375,7 +393,11 @@ impl<'c> Numeric<'c> {
                     .iter()
                     .enumerate()
                     .map(|(i, a)| {
-                        if kept(h, i, a, args) {
+                        let exponent = self.exact_exponents
+                            && h == Some(Symbol::POWER)
+                            && i == 1
+                            && a.to_rational().is_some();
+                        if exponent || kept(h, i, a, args) {
                             a.clone()
                         } else {
                             self.value(a)
