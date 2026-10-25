@@ -1141,27 +1141,61 @@ pub(super) fn discriminant(ev: &mut Eval<'_>, e: &Expr) -> Native {
     Ok(Some(result))
 }
 
-/// The rational function of a one-argument factoring call, over ℤ, or over
-/// ℤ\[i\] when `gaussian`; `None` after a warning: refused by the
-/// conversion, complex coefficients where they are not taken (CAS-186), or
-/// a degree that would go past `Limits::terms` in dense form.
-fn to_factor(
-    ev: &mut Eval<'_>,
-    e: &Expr,
-    arg: &Expr,
-    gaussian: bool,
-) -> Result<Option<Polynomials>, EvalError> {
+/// The rational function of a one-argument factoring call; `None` after a
+/// warning: refused by the conversion, or a degree that would go past
+/// `Limits::terms` in dense form.
+fn to_factor(ev: &mut Eval<'_>, e: &Expr, arg: &Expr) -> Result<Option<Polynomials>, EvalError> {
     let Some(p) = convert(ev, e, std::slice::from_ref(arg), false)? else {
         return Ok(None);
     };
-    if !gaussian && matches!(p.fractions()[0], Fraction::GaussianIntegers { .. }) {
-        warn(ev, "complex coefficients are not factored yet", e);
-        return Ok(None);
-    }
     if within_dense(ev, e, &p, Dense::All).is_none() {
         return Ok(None);
     }
     Ok(Some(p))
+}
+
+/// The coefficient rings of the conversion that cas-poly factors over: ℤ
+/// over ℚ, and ℤ\[i\] over ℚ(i) (CAS-186).
+trait Factoring: Numbers + CharacteristicZero {
+    fn factor_within(
+        ring: &SparseRing<Self>,
+        p: &Sparse<Self::Elem>,
+        bound: u64,
+        cancel: &dyn Cancel,
+    ) -> Result<Factors<Self::Elem, Sparse<Self::Elem>>, FactorError>;
+
+    /// The real and imaginary parts, the order of `factors`' lists.
+    fn parts(c: &Self::Elem) -> (Rational, Rational);
+}
+
+impl Factoring for Integers {
+    fn factor_within(
+        ring: &SparseRing<Integers>,
+        p: &Sparse<Integer>,
+        bound: u64,
+        cancel: &dyn Cancel,
+    ) -> Result<Factors<Integer, Sparse<Integer>>, FactorError> {
+        ring.factor_within(p, bound, cancel)
+    }
+
+    fn parts(c: &Integer) -> (Rational, Rational) {
+        (Rational::from(c.clone()), Rational::ZERO)
+    }
+}
+
+impl Factoring for GaussianIntegers {
+    fn factor_within(
+        ring: &SparseRing<GaussianIntegers>,
+        p: &Sparse<Complex>,
+        bound: u64,
+        cancel: &dyn Cancel,
+    ) -> Result<Factors<Complex, Sparse<Complex>>, FactorError> {
+        ring.factor_within(p, bound, cancel)
+    }
+
+    fn parts(c: &Complex) -> (Rational, Rational) {
+        (c.re().clone(), c.im().clone())
+    }
 }
 
 /// `p` times the unit that puts its leading coefficient in normal form in
@@ -1254,22 +1288,21 @@ impl<E: Coefficient + PartialEq> Powers<E> {
     }
 }
 
-/// The factorisation of `num / den` over ℤ, irreducible factors, the
+/// The factorisation of `num / den` over ℚ or ℚ(i), irreducible factors, the
 /// searches of each within `Limits::terms` steps; `None` after a warning
 /// past them.
-fn factored(
+fn factored<R: Factoring>(
     ev: &mut Eval<'_>,
     e: &Expr,
-    ring: &SparseRing<Integers>,
-    num: &Sparse<Integer>,
-    den: &Sparse<Integer>,
-) -> Result<Option<Powers<Integer>>, EvalError> {
+    ring: &SparseRing<R>,
+    num: &Sparse<R::Elem>,
+    den: &Sparse<R::Elem>,
+) -> Result<Option<Powers<R::Elem>>, EvalError> {
     let terms = ev.context().limits().terms;
     let bound = u64::try_from(terms).unwrap_or(u64::MAX);
     let cancel = ev.context().interrupt_flag();
-    let parts = ring
-        .factor_within(num, bound, cancel)
-        .and_then(|top| Ok((top, ring.factor_within(den, bound, cancel)?)));
+    let parts = R::factor_within(ring, num, bound, cancel)
+        .and_then(|top| Ok((top, R::factor_within(ring, den, bound, cancel)?)));
     match parts {
         Ok((top, bottom)) => Ok(Some(Powers::new(ring, top, bottom))),
         Err(FactorError::Cancelled) => Err(EvalError::Interrupted),
@@ -1284,23 +1317,17 @@ fn factored(
     }
 }
 
-/// The integer polynomial and fraction of a conversion over ℤ.
-fn over_integers(p: &Polynomials) -> (SparseRing<Integers>, &Sparse<Integer>, &Sparse<Integer>) {
-    let Fraction::Integers { num, den } = &p.fractions()[0] else {
-        unreachable!("over ℤ");
-    };
-    (SparseRing::new(Integers, p.generators().len()), num, den)
-}
-
 /// `Factor[e]`, Xcas's `factor` and `collect` (CAS-DOC-8 §4, CAS-185): the
-/// numerator and the denominator factored over ℚ, the generators as
-/// variables, their common factors cancelled. The result is a constant
-/// times powers of irreducible, primitive polynomials, each with a positive
-/// leading coefficient in the first generator of canonical order, as giac
-/// writes them: `factor(x^4-y^4)` is `(x-y)*(x+y)*(x^2+y^2)`, and
-/// `factor(sin(x)^2-1)` is `(sin(x)-1)*(sin(x)+1)`. giac's `factor` also
-/// splits quadratic factors over square roots, which `collect` does not;
-/// both factor over ℚ here until CAS-187 decides. An infinity is given back.
+/// numerator and the denominator factored over ℚ, or over ℚ(i) when a
+/// coefficient is complex (CAS-186), the generators as variables, their
+/// common factors cancelled. The result is a constant times powers of
+/// irreducible, primitive polynomials, each with its leading coefficient in
+/// normal form in the first generator of canonical order, as giac writes
+/// them: `factor(x^4-y^4)` is `(x-y)*(x+y)*(x^2+y^2)`, `factor(sin(x)^2-1)`
+/// is `(sin(x)-1)*(sin(x)+1)`, and `factor(x^2+(1+2*i)*x+2*i)` is
+/// `(x+1)*(x+2*i)`. giac's `factor` also splits quadratic factors over
+/// square roots, which `collect` does not; both factor over ℚ here until
+/// CAS-187 decides. An infinity is given back.
 pub(super) fn factor(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [arg] = e.args() else {
         return Ok(None);
@@ -1308,29 +1335,78 @@ pub(super) fn factor(ev: &mut Eval<'_>, e: &Expr) -> Native {
     if infinite(arg) {
         return Ok(Some(arg.clone()));
     }
-    let Some(p) = to_factor(ev, e, arg, false)? else {
+    let Some(p) = to_factor(ev, e, arg)? else {
         return Ok(None);
     };
-    let (ring, num, den) = over_integers(&p);
-    let Some(powers) = factored(ev, e, &ring, num, den)? else {
+    let n = p.generators().len();
+    let result = match &p.fractions()[0] {
+        Fraction::Integers { num, den } => {
+            factored(ev, e, &SparseRing::new(Integers, n), num, den)?.map(|f| f.expr(&p))
+        }
+        Fraction::GaussianIntegers { num, den } => {
+            factored(ev, e, &SparseRing::new(GaussianIntegers, n), num, den)?.map(|f| f.expr(&p))
+        }
+    };
+    let Some(result) = result else {
         return Ok(None);
     };
-    let result = powers.expr(&p);
     ev.step("factor", e, &result);
     Ok(Some(result))
 }
 
-/// The order of `factors`' list: by total degree, then by terms with the
+/// A key of the order of `factors`' lists: the total degree, then the terms
+/// with the first generator in canonical order most significant, each by
+/// exponents, then real and imaginary parts.
+type ListKey = (u64, Vec<(Vec<u64>, (Rational, Rational))>);
+
+/// The order of `factors`' lists: by total degree, then by terms with the
 /// first generator in canonical order most significant, as giac lists
 /// `x-1` before `x+1` and `x-y` before `x+y`.
-fn list_order(p: &Sparse<Integer>) -> (u64, Vec<(Vec<u64>, Integer)>) {
-    let mut terms: Vec<(Vec<u64>, Integer)> = p
+fn list_order<R: Factoring>(p: &Sparse<R::Elem>) -> ListKey {
+    let mut terms: Vec<(Vec<u64>, (Rational, Rational))> = p
         .terms()
-        .map(|(e, c)| (e.into_iter().rev().collect(), c.clone()))
+        .map(|(e, c)| (e.into_iter().rev().collect(), R::parts(c)))
         .collect();
     terms.sort_by(|(a, _), (b, _)| b.cmp(a));
     let degree = terms.iter().map(|(e, _)| e.iter().sum()).max().unwrap_or(0);
     (degree, terms)
+}
+
+/// The list of `FactorList`: the constant's numerator, reduced, the
+/// numerator's factors, the constant's denominator, normalised, and the
+/// denominator's factors, each followed by its exponent; a constant alone
+/// is `[c, 1]`.
+fn listed<R: Factoring>(p: &Polynomials, base: &R, mut powers: Powers<R::Elem>) -> Expr {
+    powers
+        .factors
+        .sort_by_cached_key(|(f, k)| (*k < 0, list_order::<R>(f)));
+    let g = base.gcd(&powers.numerator, &powers.denominator);
+    let (n, d) = if base.is_zero(&g) {
+        (powers.numerator, powers.denominator)
+    } else {
+        let n = base.div_rem(&powers.numerator, &g).0;
+        let (d, unit) = base.normal_form(&base.div_rem(&powers.denominator, &g).0);
+        (base.mul(&n, &unit), d)
+    };
+    let mut items = Vec::with_capacity(2 * powers.factors.len() + 4);
+    if powers.factors.is_empty() {
+        items.extend([n.over(&d), Expr::from(1)]);
+    } else {
+        let mut push = |base: Expr, k: i64| items.extend([base, Expr::from(k)]);
+        if !n.is_one() {
+            push(n.to_expr(), 1);
+        }
+        for (f, k) in powers.factors.iter().filter(|&&(_, k)| k > 0) {
+            push(p.polynomial_expr(f), *k);
+        }
+        if !d.is_one() {
+            push(d.to_expr(), -1);
+        }
+        for (f, k) in powers.factors.iter().filter(|&&(_, k)| k < 0) {
+            push(p.polynomial_expr(f), *k);
+        }
+    }
+    Expr::call(Symbol::LIST, items)
 }
 
 /// `FactorList[e]`, Xcas's `factors` (CAS-185): the factorisation of
@@ -1344,36 +1420,23 @@ pub(super) fn factor_list(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [arg] = e.args() else {
         return Ok(None);
     };
-    let Some(p) = to_factor(ev, e, arg, false)? else {
+    let Some(p) = to_factor(ev, e, arg)? else {
         return Ok(None);
     };
-    let (ring, num, den) = over_integers(&p);
-    let Some(mut powers) = factored(ev, e, &ring, num, den)? else {
+    let n = p.generators().len();
+    let result = match &p.fractions()[0] {
+        Fraction::Integers { num, den } => {
+            factored(ev, e, &SparseRing::new(Integers, n), num, den)?
+                .map(|f| listed(&p, &Integers, f))
+        }
+        Fraction::GaussianIntegers { num, den } => {
+            factored(ev, e, &SparseRing::new(GaussianIntegers, n), num, den)?
+                .map(|f| listed(&p, &GaussianIntegers, f))
+        }
+    };
+    let Some(result) = result else {
         return Ok(None);
     };
-    powers
-        .factors
-        .sort_by_cached_key(|(f, k)| (*k < 0, list_order(f)));
-    let constant = Rational::new(powers.numerator, powers.denominator);
-    let mut items = Vec::with_capacity(2 * powers.factors.len() + 4);
-    if powers.factors.is_empty() {
-        items.extend([Expr::from(constant), Expr::from(1)]);
-    } else {
-        let mut push = |base: Expr, k: i64| items.extend([base, Expr::from(k)]);
-        if !constant.numer().is_one() {
-            push(Expr::from(constant.numer()), 1);
-        }
-        for (f, k) in powers.factors.iter().filter(|&&(_, k)| k > 0) {
-            push(p.polynomial_expr(f), *k);
-        }
-        if !constant.denom().is_one() {
-            push(Expr::from(constant.denom()), -1);
-        }
-        for (f, k) in powers.factors.iter().filter(|&&(_, k)| k < 0) {
-            push(p.polynomial_expr(f), *k);
-        }
-    }
-    let result = Expr::call(Symbol::LIST, items);
     ev.step("factors", e, &result);
     Ok(Some(result))
 }
@@ -1406,7 +1469,7 @@ pub(super) fn factor_square_free(ev: &mut Eval<'_>, e: &Expr) -> Native {
     if infinite(arg) {
         return Ok(Some(arg.clone()));
     }
-    let Some(p) = to_factor(ev, e, arg, true)? else {
+    let Some(p) = to_factor(ev, e, arg)? else {
         return Ok(None);
     };
     let cancel = ev.context().interrupt_flag();

@@ -714,6 +714,42 @@ fn factor() {
     ]);
 }
 
+/// Over ℚ(i) when a coefficient is complex (CAS-186), as giac's `factor`.
+#[test]
+fn factor_over_gaussian_rationals() {
+    check_evaluated(&[
+        // As giac:
+        // factor(x^2+(1+2*i)*x+2*i) = (x+1)*(x+2*i),
+        // factor(i*x^2+i) = i*(x+i)*(x-i), factor((2+i)*x+(1-2*i)) =
+        // (2+i)*(x-i), factor(i*x^2-i) = i*(x-1)*(x+1), and x^4+4*i stays.
+        (
+            "Factor[Plus[Power[x, 2], Times[Complex[1, 2], x], Complex[0, 2]]]",
+            "Times[Plus[x, 1], Plus[x, Complex[0, 2]]]",
+        ),
+        (
+            "Factor[Plus[Times[Complex[0, 1], Power[x, 2]], Complex[0, 1]]]",
+            "Times[Complex[0, 1], Plus[x, Complex[0, 1]], Plus[x, Complex[0, -1]]]",
+        ),
+        (
+            "Factor[Plus[Times[Complex[2, 1], x], Complex[1, -2]]]",
+            "Times[Complex[2, 1], Plus[x, Complex[0, -1]]]",
+        ),
+        (
+            "Factor[Plus[Times[Complex[0, 1], Power[x, 2]], Complex[0, -1]]]",
+            "Times[Complex[0, 1], Plus[x, -1], Plus[x, 1]]",
+        ),
+        (
+            "Factor[Plus[Power[x, 4], Complex[0, 4]]]",
+            "Plus[Power[x, 4], Complex[0, 4]]",
+        ),
+        // x^3 - i, whose quadratic factor giac splits over sqrt(3).
+        (
+            "Factor[Plus[Power[x, 3], Complex[0, -1]]]",
+            "Times[Plus[x, Complex[0, 1]], Plus[Power[x, 2], Times[Complex[0, -1], x], -1]]",
+        ),
+    ]);
+}
+
 /// giac 1.9's `factors` (CAS-185): each factor and its exponent, the
 /// denominator's negative, the constant's numerator first and its
 /// denominator before the denominator's factors.
@@ -750,6 +786,15 @@ fn factor_list() {
         ("FactorList[1]", "List[1, 1]"),
         ("FactorList[2/3]", "List[2/3, 1]"),
         ("FactorList[x]", "List[x, 1]"),
+        // Over ℚ(i): the constant i first, the factors by their parts.
+        (
+            "FactorList[Plus[Times[Complex[0, 1], Power[x, 2]], Complex[0, 1]]]",
+            "List[Complex[0, 1], 1, Plus[x, Complex[0, -1]], 1, Plus[x, Complex[0, 1]], 1]",
+        ),
+        (
+            "FactorList[Times[Plus[x, Complex[0, 1]], Power[Times[Complex[1, 1], Plus[x, 2]], -1]]]",
+            "List[Plus[x, Complex[0, 1]], 1, Complex[1, 1], -1, Plus[x, 2], -1]",
+        ),
     ]);
 }
 
@@ -885,16 +930,7 @@ fn refusals() {
         // Infinities, even inside a generator (CAS-139).
         ("Expand[f[Infinity]]", "not polynomials"),
         ("GCD[Plus[x, 1], f[Indeterminate]]", "not polynomials"),
-        // Factoring (CAS-185): complex coefficients until CAS-186, balls,
-        // dense forms past the limit.
-        (
-            "Factor[Plus[Times[Complex[0, 1], Power[x, 2]], Complex[0, 1]]]",
-            "complex coefficients are not factored yet",
-        ),
-        (
-            "FactorList[Plus[x, Complex[0, 1]]]",
-            "complex coefficients are not factored yet",
-        ),
+        // Factoring (CAS-185): balls, dense forms past the limit.
         ("Factor[Times[N[2], x]]", "must be exact"),
         ("FactorSquareFree[Plus[x, N[1]]]", "must be exact"),
         (

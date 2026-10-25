@@ -110,6 +110,11 @@ algorithm here is taken from, or is compared with, are listed.
   of the 2014 ACM International Conference on Object Oriented Programming
   Systems Languages & Applications (OOPSLA '14)*, ACM, 2014, 453–472. The
   `SplitMix64` generator of the random splitting polynomials.
+- <a id="tra76"></a>**[Tra76]** Barry M. Trager, "Algebraic factoring and
+  rational function integration", in *Proceedings of the Third ACM Symposium
+  on Symbolic and Algebraic Computation (SYMSAC '76)*, ACM, 1976, 219–226.
+  Factoring over an algebraic extension from the factors of a square-free
+  norm over the ground field.
 - <a id="wan78"></a>**[Wan78]** Paul S. Wang, "An improved multivariate
   polynomial factoring algorithm", *Mathematics of Computation* 32 (144)
   (1978), 1215–1231. Evaluation points, the leading coefficients of the

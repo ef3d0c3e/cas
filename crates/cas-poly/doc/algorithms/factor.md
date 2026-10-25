@@ -276,6 +276,36 @@ Most points give images without extraneous factors (Hilbert's
 irreducibility theorem), so the search ends with probability 1. It polls
 `Cancel` at each point.
 
+## Factoring over ℚ(i) (CAS-186)
+
+`SparseRing<GaussianIntegers>::factor` writes `p = c f₁^e₁ ⋯ fₖ^eₖ` over
+ℚ(i). The `fᵢ` are primitive over ℤ\[i\], with their lexicographic leading
+coefficients in the first quadrant, and `c` is the content times a unit:
+giac's `factor(x² + (1 + 2i)x + 2i)` is `(x + 1)(x + 2i)`. Over ℚ(i)
+(`SparseRing<GaussianRationals>`) the factors are those of the numerator,
+monic.
+
+Each square-free part (CAS-179) is factored by Trager's norms [Tra76]:
+
+- The content in the first variable `x` is factored the same way in the
+  other variables. The primitive part has no factor without `x`, so a shift
+  in `x` can move its factors apart from their conjugates.
+- For `s = 0, 1, −1, 2, …`, the norm `N = f(x − s i) · f̄(x + s i)` has
+  integer coefficients: it is its own conjugate. A real factor of `f`, such
+  as `x² + 1`, makes `N` a square at `s = 0`, and some shifts make the
+  shifted factor and its conjugate share a factor. The first `s` whose `N`
+  is square-free is used.
+- `N` is factored over ℚ, by Zassenhaus's or Wang's algorithm. With `N`
+  square-free, each irreducible factor of the shifted `f` over ℚ(i) is
+  `gcd(f(x − s i), Nⱼ)` for one irreducible factor `Nⱼ` of `N` [Tra76].
+  The gcds are over ℤ\[i\], shifted back by `x + s i`, and normalised.
+- `f` is a unit times the product of its normalised factors. The unit,
+  `lead(f) / ∏ lead(gᵢ)`, goes into the constant.
+
+`x² + 1` takes the shift `s = 2`, whose norm `x⁴ + 10x² + 9 = (x² + 1)(x² + 9)`
+gives the factors `x + i` and `x − i`. Each shift is a step of the bounded
+search.
+
 ## Bounded searches (CAS-185)
 
 Two searches have no bound but the interrupt: Zassenhaus's recombination,
@@ -386,3 +416,16 @@ Multivariate factoring (`wang.rs`):
 
 The fuzz target `poly_factor` also checks products in two and three
 variables, of total degree at most 12.
+
+Factoring over ℚ(i) (`trager.rs`):
+
+- **Random products.** Products of powers of random Gaussian polynomials in
+  one or two variables. The checks: the result multiplies back, and its
+  factors are sorted, distinct, primitive over ℤ\[i\], normalised, and
+  factor as themselves. The factorisation is the union of the parts'.
+- **Examples.** giac's answers. `x⁴ + 4i` and `x² + 2` stay irreducible,
+  while `x⁴ + 1` and `x² + y²` split over ℚ(i). A content `y + i`, powers, a
+  constant, and the monic factors over ℚ(i).
+
+The fuzz target `poly_factor` checks Gaussian products in one or two
+variables, of total degree at most 8.

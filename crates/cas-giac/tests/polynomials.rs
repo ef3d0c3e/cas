@@ -183,6 +183,18 @@ fn agreement() {
         ("collect(sin(x)^2-1)", "(sin(x)-1)*(sin(x)+1)"),
         ("collect((x^2-1)/(x^2+2*x+1))", "(x-1)/(x+1)"),
         ("collect(-2*x^2+4)", "-2*(x^2-2)"),
+        // Over ℚ(i) when a coefficient is complex (CAS-186).
+        ("factor(x^2+(1+2*i)*x+2*i)", "(x+1)*(x+2*i)"),
+        ("factor(i*x^2+i)", "i*(x+i)*(x-i)"),
+        ("factor((2+i)*x+(1-2*i))", "(2+i)*(x-i)"),
+        ("factor(x^2+i*x+2)", "(x+2*i)*(x-i)"),
+        ("factor(2*i*x+2)", "2*i*(x-i)"),
+        ("factor((x+i)^2*(x-i))", "(x+i)^2*(x-i)"),
+        ("factor(x^2+2*x+1+i*(x+1))", "(x+1)*(x+1+i)"),
+        ("factor(i*x^2-i)", "i*(x-1)*(x+1)"),
+        ("factor(x^4+4*i)", "x^4+4*i"),
+        ("collect(x^2+(1+2*i)*x+2*i)", "(x+1)*(x+2*i)"),
+        ("collect(i*x^2+i)", "i*(x+i)*(x-i)"),
         // factors.
         ("factors(x^2-1)", "[x-1,1,x+1,1]"),
         ("factors(12*x^4-12)", "[12,1,x-1,1,x+1,1,x^2+1,1]"),
@@ -279,6 +291,19 @@ fn departures() {
             "factors(-x^2+1)",
             "[x-1,1,x+1,1,-1,1]",
             "[-1,1,x-1,1,x+1,1]",
+        ),
+        // Over ℚ(i): factors in the order of their parts, and the quadratic
+        // that giac splits over sqrt(3) (CAS-186).
+        ("factors(i*x^2+i)", "[i,1,x+i,1,x-i,1]", "[i,1,x-i,1,x+i,1]"),
+        (
+            "factors(x^2+(1+2*i)*x+2*i)",
+            "[x+1,1,x+2*i,1]",
+            "[x+2*i,1,x+1,1]",
+        ),
+        (
+            "factor(x^3-i)",
+            "(x+i)*(x+(-sqrt(3)-i)/2)*(x+(sqrt(3)-i)/2)",
+            "(x+i)*(x^2-i*x-1)",
         ),
         // Signs as factor's, where giac keeps -x+1.
         ("sqrfree(-2*x^2+4*x-2)", "-2*(-x+1)^2", "-2*(x-1)^2"),

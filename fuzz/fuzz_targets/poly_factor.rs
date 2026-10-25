@@ -1,13 +1,13 @@
 //! Factoring polynomials over ℤ: univariate (CAS-182) and in two or three
-//! variables (CAS-184). Products of powers of random polynomials factor
-//! into distinct, primitive, normalised factors that multiply back. The
-//! factorisation of the product is the union of the parts', and each factor
-//! factors as itself.
+//! variables (CAS-184); and over ℚ(i), in one or two (CAS-186). Products of
+//! powers of random polynomials factor into distinct, primitive, normalised
+//! factors that multiply back. The factorisation of the product is the
+//! union of the parts', and each factor factors as itself.
 #![no_main]
 
 use arbitrary::Unstructured;
-use cas_num::Integer;
-use cas_num::algebra::{Integers, Ring};
+use cas_num::algebra::{EuclideanDomain, GaussianIntegers, Integers, Ring};
+use cas_num::{Complex, Integer, Rational};
 use cas_num_fuzz::integer;
 use cas_poly::{Dense, DenseRing, Factors, Sparse, SparseRing};
 use libfuzzer_sys::fuzz_target;
@@ -164,10 +164,92 @@ fn multivariate(u: &mut Unstructured<'_>, n: usize) -> arbitrary::Result<()> {
     Ok(())
 }
 
+/// The same over ℚ(i): Gaussian coefficients in one or two variables, of
+/// total degree at most 8, as each norm doubles the degree.
+fn gaussian(u: &mut Unstructured<'_>) -> arbitrary::Result<()> {
+    let n = u.int_in_range(1usize..=2)?;
+    let ring = SparseRing::new(GaussianIntegers, n);
+    let count = u.int_in_range(1u8..=3)?;
+    let mut parts: Vec<(Sparse<Complex>, u64)> = Vec::new();
+    let mut degree = 0;
+    for _ in 0..count {
+        let (terms, e) = (u.int_in_range(1usize..=3)?, u.int_in_range(1u64..=2)?);
+        let mut t = Vec::with_capacity(terms);
+        for _ in 0..terms {
+            let mut exps = Vec::with_capacity(n);
+            for _ in 0..n {
+                exps.push(u.int_in_range(0u64..=2)?);
+            }
+            let (re, im) = (u.int_in_range(-9i64..=9)?, u.int_in_range(-9i64..=9)?);
+            t.push((exps, Complex::new(Rational::from(re), Rational::from(im))));
+        }
+        let a = ring.from_terms(t);
+        if a.is_zero() {
+            return Ok(());
+        }
+        degree += total_degree(&a) * e;
+        parts.push((a, e));
+    }
+    if degree > 8 {
+        return Ok(());
+    }
+    let p = parts.iter().fold(ring.one(), |acc, (a, e)| ring.mul(&acc, &ring.pow(a, *e)));
+    let f = ring.factor(&p);
+    let back = f
+        .factors()
+        .iter()
+        .fold(ring.constant(f.constant().clone()), |acc, (g, e)| ring.mul(&acc, &ring.pow(g, *e)));
+    assert_eq!(back, p, "the factors multiply back");
+    let base = ring.base();
+    for (i, (g, e)) in f.factors().iter().enumerate() {
+        assert!(*e >= 1 && total_degree(g) > 0, "a factor with a variable");
+        assert!(base.is_one(&ring.content(g)), "a primitive factor");
+        assert!(base.is_one(&base.normal_form(&g.coeffs()[0]).1), "a normalised factor");
+        assert!(f.factors()[i + 1..].iter().all(|(h, _)| h != g), "distinct factors");
+        assert_eq!(ring.factor(g).factors(), &[(g.clone(), 1)][..], "a factor factors as itself");
+    }
+    let (constant, mut factors) = gaussian_union(&ring, &parts);
+    assert_eq!(f.constant(), &constant, "the product of the parts' constants");
+    let mut found = f.factors().to_vec();
+    let key = |p: &Sparse<Complex>| -> Vec<(Vec<u64>, Rational, Rational)> {
+        p.terms().map(|(e, c)| (e, c.re().clone(), c.im().clone())).collect()
+    };
+    factors.sort_by_cached_key(|(g, e)| (key(g), *e));
+    found.sort_by_cached_key(|(g, e)| (key(g), *e));
+    assert_eq!(found, factors, "the union of the parts' factors");
+    Ok(())
+}
+
+/// The factors of `∏ aᵢ^eᵢ` over ℚ(i) from those of the `aᵢ`, with the
+/// product of their constants.
+fn gaussian_union(
+    ring: &SparseRing<GaussianIntegers>,
+    parts: &[(Sparse<Complex>, u64)],
+) -> (Complex, Vec<(Sparse<Complex>, u64)>) {
+    let mut constant = Complex::from(1);
+    let mut union: Vec<(Sparse<Complex>, u64)> = Vec::new();
+    for (a, e) in parts {
+        let fa = ring.factor(a);
+        constant = &constant * &GaussianIntegers.pow(fa.constant(), *e);
+        for (g, k) in fa.factors() {
+            match union.iter_mut().find(|(h, _)| h == g) {
+                Some((_, x)) => *x += k * e,
+                None => union.push((g.clone(), k * e)),
+            }
+        }
+    }
+    (constant, union)
+}
+
 fuzz_target!(|data: &[u8]| {
     let mut u = Unstructured::new(data);
-    let Ok(n) = u.int_in_range(1usize..=3) else {
+    let Ok(kind) = u.int_in_range(0u8..=3) else {
         return;
     };
-    let _ = if n == 1 { univariate(&mut u) } else { multivariate(&mut u, n) };
+    let _ = match kind {
+        0 => univariate(&mut u),
+        1 => multivariate(&mut u, 2),
+        2 => multivariate(&mut u, 3),
+        _ => gaussian(&mut u),
+    };
 });

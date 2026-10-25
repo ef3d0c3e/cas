@@ -26,7 +26,8 @@
 //!   the result of the square-free decomposition over the
 //!   [`CharacteristicZero`] domains ℤ, ℚ, ℤ\[i\] and ℚ(i), dense and sparse
 //!   (`squarefree`), and of factoring over ℤ and ℚ (`factor`): univariate
-//!   polynomials by Zassenhaus's algorithm, multivariate ones by Wang's.
+//!   polynomials by Zassenhaus's algorithm, multivariate ones by Wang's; and
+//!   over ℚ(i) by Trager's norms.
 //! - [`Cancel`]: what long computations poll to stop early, with the
 //!   never-cancelled default [`Never`].
 //!
