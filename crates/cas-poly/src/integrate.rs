@@ -204,8 +204,13 @@ fn logarithms(
         if s.degree().unwrap_or(0) == 0 {
             continue;
         }
-        let real_root = real_roots(ring, &s) > 0;
         rational = ring.mul(&rational, &s);
+        // A residue 0, where Hermite's remainder and `E` share a factor, as
+        // `x/(x (x + 1))` after `1/x²`, adds nothing.
+        if c.is_zero() {
+            continue;
+        }
+        let real_root = real_roots(ring, &s) > 0;
         logarithms.push(Logarithm {
             coefficient: c,
             argument: s,

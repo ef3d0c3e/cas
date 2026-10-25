@@ -164,6 +164,7 @@ fn check(a: &Dense<Rational>, d: &Dense<Rational>) -> Result<RationalIntegral, T
     prop_assert!(ring.is_one(&ring.gcd(gn, gd)) || gn.is_zero());
     prop_assert_eq!(gd.lead(), Some(&Rational::ONE));
     for log in &r.logarithms {
+        prop_assert!(!log.coefficient.is_zero());
         prop_assert_eq!(log.argument.lead(), Some(&Rational::ONE));
         let s = &log.argument;
         prop_assert!(ring.is_one(&ring.gcd(s, &ring.derivative(s))));
@@ -200,6 +201,13 @@ fn examples() {
         .collect();
     assert!(logs.contains(&(q(-1, 1), poly(&[0, 1]), true)));
     assert!(logs.contains(&(q(1, 1), poly(&[1, 1]), true)));
+    // ∫ 1/x² + 1/(x + 1) = −1/x + ln|x + 1|: Hermite's remainder is
+    // x/(x (x + 1)), whose residue 0 at 0 gives no logarithm.
+    let r = check(&poly(&[1, 1, 1]), &poly(&[0, 0, 1, 1])).unwrap();
+    assert_eq!(r.rational, (poly(&[-1]), poly(&[0, 1])));
+    assert_eq!(r.logarithms.len(), 1);
+    assert_eq!(r.logarithms[0].argument, poly(&[1, 1]));
+    assert!(r.pairs.is_empty() && r.rest.is_none());
     // ∫ 1/(x² − 1) = ln|x − 1|/2 − ln|x + 1|/2.
     let r = check(&poly(&[1]), &poly(&[-1, 0, 1])).unwrap();
     assert_eq!(r.logarithms.len(), 2);
