@@ -177,6 +177,51 @@ local factors, of degree 1 or 2, and only one true factor. The one of degree
 16, from √2, √3, √5 and √7, takes 127 subsets with 8 local factors. van
 Hoeij's method is CAS-188. `factor_with` polls `Cancel` before each subset.
 
+## Multivariate Hensel lifting (CAS-183)
+
+`factor::lifting::lift_variables`, crate-internal, is the lifting half of
+Wang's algorithm [Wan78], as Geddes, Czapor and Labahn give it [GCL92
+§6.7–6.8].
+
+**Input.** `f` over ℤ, a main variable `x`, and a point `a` of the other
+variables `y₁, …, yₘ`, in the order in which they lift. At the point,
+`f(x, a) = ∏ uᵢ(x)`, with the `uᵢ` pairwise coprime. The leading
+coefficients `Lᵢ` of the factors in `x` are given, with `Lᵢ(a) = lc(uᵢ)`.
+Wang's algorithm finds them (CAS-184).
+
+**Output.** The `Uᵢ` with `f = ∏ Uᵢ`, `Uᵢ(x, a) = uᵢ` and `lc_x(Uᵢ) = Lᵢ`, or
+nothing when no such factorisation exists.
+
+**The modulus.** The arithmetic is modulo a prime `P`, chosen by the caller
+above twice a bound on the coefficients of the `Uᵢ`. So the lifts' symmetric
+residues are the factors over ℤ, and a final product checks them. `P` is
+also above the degrees, so the factorials of Taylor coefficients are
+invertible. Rather than lifting the coefficients `p`-adically too, as
+[GCL92] does from a small prime, this lifts modulo one large prime, as
+SymPy's `dmp_zz_wang` does [SymPy].
+
+**Lifting `yⱼ` [GCL92 Algorithm 6.4].** The variables after `yⱼ` stay at their
+values.
+- Each factor takes `Lᵢ`, at those values, as its leading coefficient in `x`.
+  The error `e = f − ∏ Uᵢ` then has a smaller degree in `x` than `f`.
+- For `k = 1, …, deg_(yⱼ) f`, the coefficient `c` of `(yⱼ − aⱼ)ᵏ` in `e` is
+  `e⁽ᵏ⁾(aⱼ)/k!`.
+- The diophantine equation `Σ σᵢ ∏_(l≠i) U′ₗ = c` in the factors `U′` from
+  before the step gives the corrections `Uᵢ += σᵢ (yⱼ − aⱼ)ᵏ`.
+
+**The diophantine equation [GCL92 Algorithm 6.2].** It solves
+`Σ σᵢ bᵢ = c`, with `bᵢ = ∏_(l≠i) aₗ` and `deg_x σᵢ < deg_x aᵢ`, modulo
+`(y − α)^(d+1)` for each lifted variable, `d` being the largest degree of `f`
+in them.
+- The last variable is set to its value, and the equation is solved for the
+  images, recursively.
+- The error is then corrected one power of `y − α` at a time, as in the
+  lifting.
+- Univariate, at the point, the factors are the `uᵢ`. With `tᵢ` the inverse
+  of `bᵢ` modulo `uᵢ`, computed once, `σᵢ = c tᵢ mod uᵢ`. Both sides of
+  `Σ σᵢ bᵢ = c` agree modulo every `uᵢ`, so modulo their product. Both have
+  a smaller degree, since `deg c < deg ∏ uᵢ`.
+
 ## Tests
 
 `src/factor/tests/` has one module a step.
@@ -244,3 +289,15 @@ Univariate factoring (`zassenhaus.rs`):
 
 The fuzz target `poly_factor` checks the same properties on products of
 random polynomials, with coefficients of up to three limbs.
+
+Multivariate Hensel lifting (`lifting.rs`):
+
+- **Random factors.** Two or three random factors in two or three variables,
+  with leading coefficients in the others. Where their images at a random
+  point are coprime and keep their degrees, the images and leading
+  coefficients lift back to exactly the factors.
+- **Examples.** `x² − y²` from `y = 2`. A leading coefficient `y`. Three
+  factors in three variables, lifted in both orders of the variables. A main
+  variable other than the first.
+- **Wrong leading coefficients.** Leading coefficients that agree with the
+  images but that no factorisation has: nothing comes back.

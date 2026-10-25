@@ -11,6 +11,12 @@ algorithm here is taken from, or is compared with, are listed.
   1993. §3.3, "The Sub-Resultant Algorithm": §3.3.1, "Description of the
   Algorithm", the gcd of the contents times the primitive part of the last
   remainder; §3.3.2, "Resultants and Discriminants".
+- <a id="gcl92"></a>**[GCL92]** Keith O. Geddes, Stephen R. Czapor and
+  George Labahn, *Algorithms for Computer Algebra*, Kluwer, 1992. Chapter 6,
+  "Newton's iteration and the Hensel construction": §6.7–6.8, the
+  multivariate Hensel construction, with Algorithm 6.2, the multivariate
+  diophantine equation, and Algorithm 6.4, multivariate Hensel lifting with
+  the leading coefficients given.
 - <a id="knu97"></a>**[Knu97]** Donald E. Knuth, *The Art of Computer
   Programming*, volume 2, *Seminumerical Algorithms*, 3rd edition,
   Addison-Wesley, 1997. §4.6.1, "Division of Polynomials": Algorithm D
@@ -104,6 +110,10 @@ algorithm here is taken from, or is compared with, are listed.
   of the 2014 ACM International Conference on Object Oriented Programming
   Systems Languages & Applications (OOPSLA '14)*, ACM, 2014, 453–472. The
   `SplitMix64` generator of the random splitting polynomials.
+- <a id="wan78"></a>**[Wan78]** Paul S. Wang, "An improved multivariate
+  polynomial factoring algorithm", *Mathematics of Computation* 32 (144)
+  (1978), 1215–1231. Evaluation points, the leading coefficients of the
+  factors found before lifting, and lifting one variable at a time.
 - <a id="yun76"></a>**[Yun76]** David Y. Y. Yun, "On square-free
   decomposition algorithms", in *Proceedings of the Third ACM Symposium on
   Symbolic and Algebraic Computation (SYMSAC '76)*, ACM, 1976, 26–35. The
@@ -123,4 +133,5 @@ algorithm here is taken from, or is compared with, are listed.
   `dup_zz_heu_gcd` and `dmp_zz_heu_gcd`, the heuristic gcd, which tries
   `HEU_GCD_MAX = 6` points, the next from `x` as `73794*x*K.sqrt(K.sqrt(x))
   // 27011`. It cites Liao and Fateman's evaluation of the heuristic (ISSAC
-  1995).
+  1995). `sympy/polys/factortools.py`: `dmp_zz_wang`, Wang's algorithm, which
+  lifts modulo one prime above Mignotte's bound.

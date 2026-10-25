@@ -2,5 +2,6 @@
 
 mod finite;
 mod hensel;
+mod lifting;
 mod squarefree;
 mod zassenhaus;
