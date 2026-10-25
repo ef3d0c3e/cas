@@ -2,6 +2,8 @@
 //! property test that what they decide never contradicts exact evaluation at
 //! points that satisfy them.
 
+use std::time::{Duration, Instant};
+
 use proptest::prelude::*;
 
 use super::{Domain, Sign, Truth};
@@ -200,6 +202,38 @@ fn bounds_decide_comparisons() {
             ("LessEqual[-1, x, 2]", "True"),
         ],
     );
+}
+
+/// A ball's range is its interval, with exact ends; one whose midpoint or
+/// radius would be a fraction of more than `BALL_RANGE_BITS` bits has the
+/// range of the sign it proves, where its exact ends took fractions of 10^9
+/// bits at each decision (CAS-171).
+#[test]
+fn balls_range_by_their_ends_or_far_by_their_signs() {
+    let start = Instant::now();
+    let ctx = Context::new();
+    let tiny = "Ball[0x1p-1000000000, 0x0p+0]";
+    let huge = "Ball[0x3p1000000000, 0x1p1000000000]";
+    assert_eq!(ctx.sign(&read(tiny)), Sign::Positive);
+    assert_eq!(
+        ctx.sign(&read(&format!("Times[-1, {huge}]"))),
+        Sign::Negative
+    );
+    assert_eq!(
+        ctx.sign(&read("Ball[0x1p-1000000000, 0x1p-999999999]")),
+        Sign::Unknown
+    );
+    let positive = assuming(&ctx, &["Greater[x, 0]"]);
+    for ball in [tiny, huge] {
+        let query = format!("Greater[Plus[x, {ball}], 0]");
+        assert_eq!(positive.decide(&read(&query)), Truth::True, "{query}");
+    }
+    let elapsed = start.elapsed();
+    assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
+    // 0 < x < 1/2 gives x + 1/4 < 1 by the ball's exact upper end.
+    let bounded = assuming(&ctx, &["Greater[x, 0]", "Less[x, 1/2]"]);
+    let query = "Less[Plus[x, Ball[0x1p-2, 0x0p+0]], 1]";
+    assert_eq!(bounded.decide(&read(query)), Truth::True);
 }
 
 #[test]

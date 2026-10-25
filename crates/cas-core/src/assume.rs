@@ -641,15 +641,32 @@ fn linear_range(ctx: &Context, shift: &Rational, scale: &Rational, subject: &Exp
     r
 }
 
-/// The range of a ball: its closed interval, exactly (CAS-DOC-5 §9.3);
-/// some real for one too large for exact ends.
+/// The most bits of the fractions [`ball_range`] makes of a ball's midpoint
+/// and radius, as many as the decimals of balls show exactly.
+const BALL_RANGE_BITS: u64 = 1 << 16;
+
+/// The range of a ball: its closed interval, exactly (CAS-DOC-5 §9.3), when
+/// its midpoint and radius are fractions of at most [`BALL_RANGE_BITS`]
+/// bits. Otherwise the sign it proves, if any: a ball near `2^(±10^9)`, as
+/// a power of a ball makes, would take fractions of 10^9 bits and a second
+/// at each decision (CAS-171).
 fn ball_range(b: &Ball) -> Range {
-    let ends = b
-        .mid()
-        .checked_to_rational()
-        .zip(b.rad().to_float().and_then(|r| r.checked_to_rational()));
+    let ends = b.mid().to_rational_within(BALL_RANGE_BITS).zip(
+        b.rad()
+            .to_float()
+            .and_then(|r| r.to_rational_within(BALL_RANGE_BITS)),
+    );
     let Some((mid, rad)) = ends else {
-        return Range::real();
+        let zero = Rational::from(0);
+        let signed = match b.sign() {
+            Some(std::cmp::Ordering::Greater) => Range::above(zero, true),
+            Some(std::cmp::Ordering::Less) => Range::below(zero, true),
+            _ => return Range::real(),
+        };
+        return Range {
+            nonzero: true,
+            ..signed
+        };
     };
     let (lo, hi) = (&mid - &rad, &mid + &rad);
     let zero = Rational::from(0);
