@@ -63,6 +63,10 @@ builtins! {
     D = "D" [PROTECTED];
     DERIVATIVE = "Derivative" [PROTECTED];
     INTEGRATE = "Integrate" [PROTECTED];
+    // Series and limits (CAS-DOC-10): `OrderSize[u]`, giac's `order_size`,
+    // a bounded function of `u`, inert.
+    SERIES = "Series" [PROTECTED];
+    ORDER_SIZE = "OrderSize" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

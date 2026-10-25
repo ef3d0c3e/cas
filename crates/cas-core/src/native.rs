@@ -128,6 +128,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::DISCRIMINANT, polynomial::discriminant),
         (Symbol::FACTOR, polynomial::factor),
         (Symbol::INTEGRATE, integrate::integrate),
+        (Symbol::SERIES, series::series),
         (Symbol::FACTOR_RATIONAL, polynomial::factor_rational),
         (Symbol::FACTOR_LIST, polynomial::factor_list),
         (Symbol::FACTOR_SQUARE_FREE, polynomial::factor_square_free),

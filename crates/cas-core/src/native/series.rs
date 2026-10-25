@@ -26,10 +26,6 @@
 //! A function of a series with a pole (`exp(1/t)`), of `t` in an unknown
 //! head, or a power by `t` of a series with a pole has no series here.
 
-#![cfg_attr(
-    not(test),
-    expect(dead_code, reason = "Series and Limit call it from CAS-204 on")
-)]
 #![allow(
     clippy::many_single_char_names,
     clippy::similar_names,
@@ -666,5 +662,8 @@ pub(crate) fn expansion(ev: &mut Eval<'_>, f: &Expr, t: &Expr, order: &Rational)
     Ok(None)
 }
 
+mod builtin;
 #[cfg(test)]
 mod tests;
+
+pub(super) use builtin::series;

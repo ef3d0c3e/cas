@@ -161,3 +161,69 @@ fn what_has_no_series() {
     assert_eq!(expand("Exp[Power[t, -1]]", 3), None);
     assert_eq!(expand("f[t]", 3), None);
 }
+
+/// `(input, expected)` in full form, both evaluated: the same expression.
+fn check_calls(cases: &[(&str, &str)]) {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, expected) in cases {
+        let found = ctx.eval(&read(input)).unwrap();
+        let expected = ctx.eval(&read(expected)).unwrap();
+        if found != expected {
+            wrong.push(format!("{input}: {found:?}, expected {expected:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// giac's `series` and `taylor` (CAS-204): the forms of the call, at 0, at
+/// another point, at infinity; Laurent and Puiseux terms; a series that
+/// ends; a logarithm kept.
+#[test]
+fn the_builtin() {
+    let exp5 = "Plus[1, x, Times[1/2, Power[x, 2]], Times[1/6, Power[x, 3]], Times[1/24, Power[x, 4]], Times[1/120, Power[x, 5]], Times[Power[x, 6], OrderSize[x]]]";
+    check_calls(&[
+        ("Series[Exp[x], List[x, 0, 5]]", exp5),
+        ("Series[Exp[x], Equation[x, 0], 5]", exp5),
+        ("Series[Exp[x], x, 0, 5]", exp5),
+        ("Series[Exp[x], x]", exp5),
+        // 1-x+1+(x-1)^2-(x-1)^3+(x-1)^4*order_size(x-1).
+        (
+            "Series[Power[x, -1], Equation[x, 1], 3]",
+            "Plus[1, Times[-1, Plus[-1, x]], Power[Plus[-1, x], 2], Times[-1, Power[Plus[-1, x], 3]], Times[Power[Plus[-1, x], 4], OrderSize[Plus[-1, x]]]]",
+        ),
+        // 1/x+1/6*x+7/360*x^3+x^4*order_size(x).
+        (
+            "Series[Power[Sin[x], -1], x, 0, 3]",
+            "Plus[Power[x, -1], Times[1/6, x], Times[7/360, Power[x, 3]], Times[Power[x, 4], OrderSize[x]]]",
+        ),
+        // 1/x+x: the series ends.
+        (
+            "Series[Plus[Power[x, -1], x], x, 0, 3]",
+            "Plus[Power[x, -1], x]",
+        ),
+        // 1+1/x+1/2*(1/x)^2+1/6*(1/x)^3+(1/x)^4*order_size(1/x).
+        (
+            "Series[Exp[Power[x, -1]], Equation[x, Infinity], 3]",
+            "Plus[1, Power[x, -1], Times[1/2, Power[x, -2]], Times[1/6, Power[x, -3]], Times[Power[x, -4], OrderSize[Power[x, -1]]]]",
+        ),
+        // sqrt(x)+1/2*sqrt(x)*x+sqrt(x)*x^2*order_size(x).
+        (
+            "Series[Power[Plus[x, Power[x, 2]], 1/2], x, 0, 2]",
+            "Plus[Power[x, 1/2], Times[1/2, Power[x, 3/2]], Times[Power[x, 5/2], OrderSize[x]]]",
+        ),
+        // ln(x)*x.
+        ("Series[Times[x, Log[x]], x, 0, 3]", "Times[x, Log[x]]"),
+    ]);
+    // What stays: no series, a variable that is no symbol, a bad order.
+    let ctx = Context::new();
+    for input in [
+        "Series[Exp[Power[x, -1]], x, 0, 3]",
+        "Series[f[x], x, 0, 3]",
+        "Series[Exp[x], 2, 0, 3]",
+        "Series[Exp[x], x, 0, -1]",
+    ] {
+        let e = ctx.eval(&read(input)).unwrap();
+        assert_eq!(e.head(), read(input).head(), "{input}: {e:?}");
+    }
+}

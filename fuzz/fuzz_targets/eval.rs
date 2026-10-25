@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 64] = [
+const BUILTINS: [&str; 65] = [
     "Plus",
     "Times",
     "Power",
@@ -107,6 +107,7 @@ const BUILTINS: [&str; 64] = [
     "FactorSquareFree",
     // Integrals (CAS-194).
     "Integrate",
+    "Series",
 ];
 
 /// Builtins that apply something to parts, only in the expression

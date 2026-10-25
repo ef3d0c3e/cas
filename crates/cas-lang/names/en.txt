@@ -58,6 +58,8 @@ OddQ: odd
 # Calculus (CAS-DOC-4 §8, CAS-59), and integrals (CAS-DOC-9, CAS-194).
 D: diff
 Integrate: integrate int
+Series: series taylor
+OrderSize: order_size
 # A ball, `ball(c, r)` (CAS-DOC-5 §6.5, CAS-83), and back to fractions
 # (D4, CAS-148).
 Ball: ball
