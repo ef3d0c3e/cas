@@ -207,6 +207,10 @@ fn table(f: &Expr, x: &Expr) -> Option<Expr> {
         }
         (Symbol::POWER, [c, u]) if !c.contains(x) => {
             let a = slope(u, x)?;
+            // Log[E] stays as it is: E^u is the exponential's case.
+            if c.as_symbol() == Some(Symbol::E) {
+                return Some(f.clone() / a);
+            }
             Some(f.clone() / (a * call(Symbol::LOG, c.clone())))
         }
         (Symbol::EXP, [u]) => Some(f.clone() / slope(u, x)?),
