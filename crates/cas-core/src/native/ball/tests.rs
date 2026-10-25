@@ -1,6 +1,8 @@
 //! Tests of balls in expressions (CAS-83, CAS-DOC-5 §9.1): the builtin,
 //! contagion, printing and comparisons.
 
+use std::time::{Duration, Instant};
+
 use cas_num::ball::{Ball, Float, Mag};
 use cas_num::{Integer, Rational};
 use proptest::prelude::*;
@@ -483,6 +485,30 @@ fn exact_gives_the_simplest_fraction_shown() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `exact` makes fractions of a ball's midpoint and radius only within
+/// `Limits::number_bits` bits, which their exponents tell first, and a ball
+/// that shows no digit and holds 0 is 0 without them: each of these made
+/// fractions of about 10^9 bits (CAS-170).
+#[test]
+fn exact_measures_far_balls_first() {
+    let start = Instant::now();
+    for ball in [
+        "Ball[0x1p-1000000000, 0x0p+0]",
+        "Ball[0x3p-1000000000, 0x1p-1000000000]",
+    ] {
+        let input = format!("Exact[{ball}]");
+        assert_eq!(eval(&input), eval(ball), "{input}");
+    }
+    for input in [
+        "Exact[Ball[0x1p-1000000000, 0x1p-999999999]]",
+        "Exact[Power[Rational[4, 9], Ball[900000000, 1]]]",
+    ] {
+        assert_eq!(format!("{:?}", eval(input)), "0", "{input}");
+    }
+    let elapsed = start.elapsed();
+    assert!(elapsed < Duration::from_secs(5), "{elapsed:?}");
 }
 
 proptest! {

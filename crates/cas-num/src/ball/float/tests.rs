@@ -481,6 +481,41 @@ fn small_cases() {
     .unwrap();
 }
 
+/// `to_rational_within` refuses just the values whose numerator or
+/// denominator has more bits than allowed, telling them by the exponent:
+/// `2^(-10^9)` is refused at once, not built (CAS-170).
+#[test]
+fn rationals_within_a_size() {
+    let scaled = |m: i64, e: i64| Float::from(m).mul_2exp(&Integer::from(e));
+    for (x, bits) in [
+        (scaled(3, 0), 2),
+        (scaled(-4, 0), 3),
+        (scaled(1, -1), 2),
+        (scaled(3, -1), 2),
+        (scaled(3, -2), 3),
+        (scaled(-255, -3), 8),
+        (scaled(1, -100), 101),
+        (scaled(5, 200), 203),
+    ] {
+        let q = x.checked_to_rational().unwrap();
+        assert_eq!(
+            q.numer().bit_length().max(q.denom().bit_length()),
+            bits,
+            "{x:?}"
+        );
+        assert_eq!(x.to_rational_within(bits), Some(q), "{x:?}");
+        assert_eq!(x.to_rational_within(bits - 1), None, "{x:?}");
+    }
+    assert_eq!(
+        Float::ZERO.to_rational_within(0),
+        Some(Rational::from(Integer::ZERO))
+    );
+    let tiny = scaled(1, -1_000_000_000);
+    assert_eq!(tiny.to_rational_within(1 << 20), None);
+    let huge = scaled(1, 1_000_000_000);
+    assert_eq!(huge.to_rational_within(64), None);
+}
+
 /// `|true - approx|` checked exactly: `approx` is a lower bound of the
 /// magnitude within `APPROX_ULPS` units of `2^(exp(approx) - prec)`.
 fn check_approx_quotient(q: &Float, exact: &Rational, prec: u64) -> Result<(), TestCaseError> {

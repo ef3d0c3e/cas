@@ -407,23 +407,34 @@ impl Float {
     /// The exact value as a fraction, or `None` if its numerator or
     /// denominator would have more than [`EXACT_BITS_MAX`] bits.
     #[must_use]
+    pub fn checked_to_rational(&self) -> Option<Rational> {
+        self.to_rational_within(EXACT_BITS_MAX)
+    }
+
+    /// The exact value as a fraction, or `None` if its numerator or
+    /// denominator would have more than `max_bits` bits, or more than
+    /// [`EXACT_BITS_MAX`]. The exponent and the mantissa's length tell
+    /// before anything is built, so a value far beyond `max_bits` costs
+    /// nothing.
+    #[must_use]
     #[allow(
         clippy::missing_panics_doc,
-        reason = "the shift fits u64 once the size is below EXACT_BITS_MAX"
+        reason = "the shift fits u64 once the size is at most EXACT_BITS_MAX"
     )]
-    pub fn checked_to_rational(&self) -> Option<Rational> {
+    pub fn to_rational_within(&self, max_bits: u64) -> Option<Rational> {
         if self.is_zero() {
             return Some(Rational::from(Integer::ZERO));
         }
-        // x = m 2^e with m of b bits: numerator b + e bits (e >= 0) or a
-        // denominator of -e bits.
-        let low = &self.exp - &Integer::from(self.bit_length());
+        // x = m 2^low for an odd m of b bits: for low >= 0 an integer of exp
+        // bits, else m / 2^-low, a denominator of 1 - low bits.
+        let b = self.bit_length();
+        let low = &self.exp - &Integer::from(b);
         let size = if low.is_negative() {
-            -&low
+            (&Integer::ONE - &low).max(Integer::from(b))
         } else {
             self.exp.clone()
         };
-        if size >= Integer::from(EXACT_BITS_MAX) {
+        if size > Integer::from(max_bits.min(EXACT_BITS_MAX)) {
             return None;
         }
         let (m, e) = self.to_integer_exp();

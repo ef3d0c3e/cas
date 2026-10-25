@@ -121,7 +121,9 @@ const SLACK_DIGITS: u64 = 3;
 ///   holds 0.
 /// - A complex ball, part by part.
 ///
-/// A fraction above `Limits::number_bits` bits leaves the ball as it is.
+/// A fraction above `Limits::number_bits` bits leaves the ball as it is,
+/// and so does a ball that shows no digit, does not hold 0, and whose
+/// midpoint or radius is above it.
 pub(super) fn exact(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [arg] = e.args() else {
         return Ok(None);
@@ -143,14 +145,24 @@ pub(super) fn exact(ev: &mut Eval<'_>, e: &Expr) -> Native {
 
 /// The fraction [`exact`] makes of `b`; `None` when it would take more than
 /// `max_bits` bits.
+///
+/// The midpoint and the radius become fractions only within `max_bits`
+/// bits, which their exponents tell first: a ball near `2^(-10^9)`, as
+/// `(4/9)^Ball[9×10^8, 1]` is, would otherwise make fractions of 10^9 bits
+/// to refuse them (CAS-170).
 fn exact_ball(b: &Ball, prec: u64, max_bits: u64) -> Option<Rational> {
     let fits = |q: &Rational| q.numer().bit_length().max(q.denom().bit_length()) <= max_bits;
     if b.is_exact() {
-        return b.mid().checked_to_rational().filter(fits);
+        return b.mid().to_rational_within(max_bits);
     }
     let Some((negative, digits, exponent)) = shown_decimal(&ball_decimal(b, prec)) else {
-        let mid = b.mid().checked_to_rational()?;
-        let rad = b.rad().to_float()?.checked_to_rational()?;
+        let rad = b.rad().to_float()?;
+        if b.sign().is_none() {
+            // The ball holds 0, the simplest fraction of all.
+            return Some(Rational::from(0));
+        }
+        let mid = b.mid().to_rational_within(max_bits)?;
+        let rad = rad.to_rational_within(max_bits)?;
         return Rational::simplest_between(&(&mid - &rad), &(&mid + &rad)).filter(fits);
     };
     let accuracy = u64::try_from(b.rel_accuracy_bits()).unwrap_or(0);
