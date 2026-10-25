@@ -648,6 +648,91 @@ fn verify_leaves_large_powers_alone() {
     assert_eq!(report.trace.verify(&ctx).wrong, None);
 }
 
+/// Balls at a point compare by overlap (CAS-85): the sides of a right step
+/// agree however differently they round, and a ball apart from the other
+/// side's, or without its exact value, makes the step wrong. Such steps went
+/// unchecked.
+#[test]
+fn verify_compares_balls_by_overlap() {
+    let mut ctx = Context::new();
+    // Right: `x^2` is `(x + 0.5)^2 - x - 0.25`, a ball at each point that
+    // holds the exact square.
+    up(
+        &mut ctx,
+        "x",
+        "Power[x, 2]",
+        "Plus[Power[Plus[x, Decimal[5, -1]], 2], Times[-1, x], Decimal[-25, -2]]",
+    );
+    // Wrong: the `- 0.25` left out.
+    up(
+        &mut ctx,
+        "y",
+        "Power[y, 2]",
+        "Plus[Power[Plus[y, Decimal[5, -1]], 2], Times[-1, y]]",
+    );
+    let (_, report) = traced(&ctx, "Power[x, 2]", TraceLevel::Rules);
+    let verification = report.trace.verify(&ctx);
+    assert_eq!(verification.wrong, None);
+    assert!(
+        !verification
+            .unchecked
+            .iter()
+            .any(|s| matches!(s.kind, StepKind::Rule(_))),
+        "{}",
+        show(&report.trace)
+    );
+    let (_, report) = traced(&ctx, "Power[y, 2]", TraceLevel::Rules);
+    let wrong = report.trace.verify(&ctx).wrong.expect("a wrong step");
+    assert_eq!(wrong.step.before, read("Power[y, 2]"));
+    // Steps between balls, and lists of them.
+    let tenth = "Times[Decimal[1, -1], z]";
+    let cases = [
+        (
+            "double",
+            format!("Plus[{tenth}, {tenth}]"),
+            "Times[Decimal[2, -1], z]".to_owned(),
+            true,
+        ),
+        (
+            "triple",
+            format!("Plus[{tenth}, {tenth}]"),
+            "Times[Decimal[3, -1], z]".to_owned(),
+            false,
+        ),
+        (
+            "pair",
+            format!("List[{tenth}, 1]"),
+            format!("List[{tenth}, 2]"),
+            false,
+        ),
+    ];
+    for (name, before, after, right) in cases {
+        let (before, after) = (read(&before), read(&after));
+        let returned = after.clone();
+        ctx.define_native(
+            sym(name),
+            Arc::new(move |ev, _| {
+                ev.step(name, &before, &after);
+                Ok(Some(returned.clone()))
+            }),
+        )
+        .unwrap();
+        let (_, report) = traced(&ctx, &format!("{name}[z]"), TraceLevel::Rules);
+        let verification = report.trace.verify(&ctx);
+        let algorithm = StepKind::Algorithm(name.into());
+        if right {
+            assert_eq!(verification.wrong, None, "{name}");
+            assert!(
+                !verification.unchecked.iter().any(|s| s.kind == algorithm),
+                "{name}"
+            );
+        } else {
+            let wrong = verification.wrong.expect("a wrong step");
+            assert_eq!(wrong.step.kind, algorithm, "{name}");
+        }
+    }
+}
+
 #[test]
 fn verify_flags_what_it_cannot_check() {
     let mut ctx = Context::new();

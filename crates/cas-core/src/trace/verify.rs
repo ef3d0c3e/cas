@@ -8,18 +8,24 @@
 //! it; a point where one is not `True` is drawn again, and the symbols such
 //! an assumption ties to the step's get values too. Both sides are evaluated
 //! at the point. Exact values (rationals, Gaussian rationals, `True` and
-//! `False`, lists of them) are compared; other values agree when they are
-//! equal and tell nothing otherwise, nor do infinities. A step whose sides
-//! differ at a point is wrong; one where no point told is unchecked, and so
-//! is one where an evaluation, of a side or an assumption, reaches a limit,
-//! as it would at the other points. So rational expressions are checked
-//! now, and those whose values need balls (`Sin[1/2]`) when Balls lands.
+//! `False`, lists of them) are compared. Values with finite balls among their
+//! numbers compare by overlap (CAS-85): a ball holds the number it stands
+//! for, so the sides of a right step overlap however differently they round,
+//! and a ball apart from the other side's, or without its exact value, makes
+//! the step wrong. Other values agree when they are equal and tell nothing
+//! otherwise, nor do infinities. A step whose sides differ at a point is
+//! wrong; one where no point told is unchecked, and so is one where an
+//! evaluation, of a side or an assumption, reaches a limit, as it would at
+//! the other points. So rational expressions are checked, and those with
+//! balls in them; those whose values need balls they do not have
+//! (`Sin[1/2]`) tell nothing.
 //!
 //! A step with a [`FORMAL`] head is unchecked: such a head reads the form
 //! of its arguments, not their values, so its value at a point is not its
 //! value there (`GCD[x^2 - 1, x - 1]` is `x - 1`, `GCD[5/4, 1/2]` is
 //! `1/4`).
 
+use cas_num::ball::Ball;
 use foldhash::fast::FixedState;
 use hashbrown::HashSet;
 
@@ -162,6 +168,8 @@ enum Outcome {
 enum Value {
     /// A number, a truth value, or a list of them.
     Exact(Expr),
+    /// The same with finite balls among the numbers: compared by overlap.
+    Approximate(Expr),
     Other(Expr),
     /// An infinity or `Indeterminate`.
     Nothing,
@@ -217,6 +225,12 @@ fn check(ctx: &Context, step: &Step) -> Outcome {
                 return Outcome::Differs(point, b, a);
             }
             (Value::Exact(b) | Value::Other(b), Value::Exact(a) | Value::Other(a)) if a == b => {
+                told += 1;
+            }
+            (Value::Exact(b) | Value::Approximate(b), Value::Exact(a) | Value::Approximate(a)) => {
+                if !overlap(&b, &a) {
+                    return Outcome::Differs(point, b, a);
+                }
                 told += 1;
             }
             _ => {}
@@ -333,6 +347,8 @@ fn value(result: Result<Expr, crate::EvalError>) -> Value {
     }
     if is_exact(&v) {
         Value::Exact(v)
+    } else if is_approximate(&v) {
+        Value::Approximate(v)
     } else {
         Value::Other(v)
     }
@@ -340,7 +356,7 @@ fn value(result: Result<Expr, crate::EvalError>) -> Value {
 
 /// Whether `v` is an exact number, `True`, `False`, or a list of such. A
 /// ball is not: two sides may round differently and still overlap, which
-/// CAS-85 compares.
+/// [`overlap`] compares.
 fn is_exact(v: &Expr) -> bool {
     match v.view() {
         View::Symbol(s) => s == Symbol::TRUE || s == Symbol::FALSE,
@@ -348,6 +364,68 @@ fn is_exact(v: &Expr) -> bool {
             args.iter().all(is_exact)
         }
         _ => v.is_exact_number(),
+    }
+}
+
+/// Whether `v` is a number, `True`, `False`, or a list of such, its balls
+/// finite: an infinite one holds anything.
+fn is_approximate(v: &Expr) -> bool {
+    match v.view() {
+        View::Ball(b) => b.is_finite(),
+        View::ComplexBall(z) => z.is_finite(),
+        View::Apply { head, args } if head.as_symbol() == Some(Symbol::LIST) => {
+            args.iter().all(is_approximate)
+        }
+        _ => is_exact(v),
+    }
+}
+
+/// Whether two values at a point may be equal, of which one at least has a
+/// ball (CAS-85): lists entry by entry, numbers part by part, a ball meeting
+/// a ball or holding an exact part, truth values when they are the same.
+fn overlap(a: &Expr, b: &Expr) -> bool {
+    if let (Some(xs), Some(ys)) = (entries(a), entries(b)) {
+        return xs.len() == ys.len() && xs.iter().zip(ys).all(|(x, y)| overlap(x, y));
+    }
+    let (Some((ar, ai)), Some((br, bi))) = (parts(a), parts(b)) else {
+        return a == b;
+    };
+    meet(&ar, &br) && meet(&ai, &bi)
+}
+
+/// The entries of a list.
+fn entries(e: &Expr) -> Option<&[Expr]> {
+    match e.view() {
+        View::Apply { head, args } if head.as_symbol() == Some(Symbol::LIST) => Some(args),
+        _ => None,
+    }
+}
+
+/// A real number at a point: exact, or a ball that holds it.
+enum Part<'e> {
+    Exact(Rational),
+    Ball(&'e Ball),
+}
+
+/// The real and imaginary parts of a number.
+fn parts(e: &Expr) -> Option<(Part<'_>, Part<'_>)> {
+    let zero = || Part::Exact(Rational::from(0));
+    Some(match e.view() {
+        View::Ball(b) => (Part::Ball(b), zero()),
+        View::ComplexBall(z) => (Part::Ball(z.re()), Part::Ball(z.im())),
+        _ => {
+            let z = e.to_complex()?;
+            (Part::Exact(z.re().clone()), Part::Exact(z.im().clone()))
+        }
+    })
+}
+
+/// Whether two parts may be equal.
+fn meet(x: &Part<'_>, y: &Part<'_>) -> bool {
+    match (x, y) {
+        (Part::Exact(p), Part::Exact(q)) => p == q,
+        (Part::Ball(b), Part::Exact(q)) | (Part::Exact(q), Part::Ball(b)) => b.contains_rational(q),
+        (Part::Ball(a), Part::Ball(b)) => a.overlaps(b),
     }
 }
 
