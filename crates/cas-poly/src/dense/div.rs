@@ -65,6 +65,14 @@ impl<R: Coefficients> DenseRing<R> {
     /// dividing in `R`, so over any ring: polynomials in other variables
     /// too. `(0, a)` when `deg a < deg b`.
     ///
+    /// Algorithm R multiplies the whole remainder and the quotient so far by
+    /// `lc(b)` at each of its `s = deg a - deg b + 1` rounds, `O(s deg a)`
+    /// products even when `lc(b)` is 1. Here a round multiplies only the
+    /// `deg b` coefficients it subtracts from: a coefficient of `a` takes the
+    /// power of `lc(b)` it is owed when the rounds reach it, and the
+    /// quotient's coefficients theirs at the end. `O(s deg b)` products, as
+    /// for a division, and none by `lc(b)` when it is 1 (CAS-172).
+    ///
     /// # Panics
     ///
     /// If `b` is zero.
@@ -76,22 +84,45 @@ impl<R: Coefficients> DenseRing<R> {
         if a.coeffs.len() <= n {
             return (Dense::default(), a.clone());
         }
+        let s = a.coeffs.len() - n;
+        if n == 0 {
+            // d^s a = (d^(s-1) a) d.
+            let power = r_.pow(d, (s - 1) as u64);
+            return (self.scale(a, &power), Dense::default());
+        }
+        let monic = r_.is_one(d);
         let mut r = a.coeffs.clone();
-        let mut q = vec![r_.zero(); r.len() - n];
-        // Each round: q <- d q + c x^k, r <- d r - c x^k b, which keeps
-        // d^s a = q b + r and clears r's coefficient of x^(n + k).
-        for k in (0..q.len()).rev() {
+        let mut q = vec![r_.zero(); s];
+        // Round k, from s - 1 down to 0, is Algorithm R's: q <- d q + c x^k
+        // and r <- d r - c x^k b for c = r_(n+k), keeping d^(s-k) a = q b +
+        // r. It reads r_(n+k) and changes only r_k to r_(n+k-1), so only
+        // those are scaled: r_(k+1) to r_(n+k-1) by d, as the round before
+        // brought them up to date, and r_k, still a_k, by the d^(s-k) it is
+        // owed. The coefficients below wait for their round; q_k takes its
+        // d^k at the end.
+        let mut power = r_.one();
+        for k in (0..s).rev() {
             let c = r[n + k].clone();
-            for qj in &mut q[k + 1..] {
-                *qj = r_.mul(d, qj);
+            if !monic {
+                for rj in &mut r[k + 1..n + k] {
+                    *rj = r_.mul(d, rj);
+                }
+                power = r_.mul(&power, d);
+                r[k] = r_.mul(&power, &r[k]);
             }
-            for rj in &mut r[..n + k] {
-                *rj = r_.mul(d, rj);
-            }
-            for (rj, bj) in r[k..n + k].iter_mut().zip(&b.coeffs) {
-                *rj = r_.sub(rj, &r_.mul(&c, bj));
+            if !r_.is_zero(&c) {
+                for (rj, bj) in r[k..n + k].iter_mut().zip(&b.coeffs) {
+                    *rj = r_.sub(rj, &r_.mul(&c, bj));
+                }
             }
             q[k] = c;
+        }
+        if !monic {
+            let mut power = r_.one();
+            for qk in &mut q[1..] {
+                power = r_.mul(&power, d);
+                *qk = r_.mul(&power, qk);
+            }
         }
         r.truncate(n);
         (self.poly(q), self.poly(r))

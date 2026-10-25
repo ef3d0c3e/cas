@@ -6,6 +6,7 @@
     reason = "the names of polynomial identities"
 )]
 
+use std::cell::Cell;
 use std::sync::atomic::AtomicBool;
 
 use cas_num::algebra::{
@@ -405,6 +406,91 @@ fn small_examples() {
     let z4 = DenseRing::new(ModWord::new(4));
     let p = z4.from_i64s(&[1, 2]);
     assert_eq!(z4.mul(&p, &p), z4.one());
+}
+
+/// A ring that counts its products, to bound an algorithm's work.
+struct Counting<R> {
+    ring: R,
+    products: Cell<u64>,
+}
+
+impl<R: Ring> Ring for Counting<R> {
+    type Elem = R::Elem;
+
+    fn zero(&self) -> R::Elem {
+        self.ring.zero()
+    }
+
+    fn one(&self) -> R::Elem {
+        self.ring.one()
+    }
+
+    fn add(&self, a: &R::Elem, b: &R::Elem) -> R::Elem {
+        self.ring.add(a, b)
+    }
+
+    fn sub(&self, a: &R::Elem, b: &R::Elem) -> R::Elem {
+        self.ring.sub(a, b)
+    }
+
+    fn neg(&self, a: &R::Elem) -> R::Elem {
+        self.ring.neg(a)
+    }
+
+    fn mul(&self, a: &R::Elem, b: &R::Elem) -> R::Elem {
+        self.products.set(self.products.get() + 1);
+        self.ring.mul(a, b)
+    }
+
+    fn elem_integer(&self, n: &Integer) -> R::Elem {
+        self.ring.elem_integer(n)
+    }
+
+    fn characteristic(&self) -> Natural {
+        self.ring.characteristic()
+    }
+}
+
+impl<R: Ring> Coefficients for Counting<R> {}
+
+/// Pseudo-division by a divisor of degree `n` takes `O(s n)` products for
+/// `s = deg a - n + 1` rounds, and none by a leading coefficient of 1,
+/// where Algorithm R multiplied the whole remainder and quotient by it at
+/// each round: `s^2`, 4 million, for `x^2000 + …` by `x + 1` (CAS-172). The
+/// results are Algorithm R's.
+#[test]
+fn pseudo_division_scales_lazily() {
+    let counting = DenseRing::new(Counting {
+        ring: Integers,
+        products: Cell::new(0),
+    });
+    let zx = zx();
+    let mut a = vec![0; 2001];
+    (a[0], a[7], a[1999], a[2000]) = (-1, 3, 5, 1);
+    for (b, monic) in [
+        (&[1, 1][..], true),
+        (&[1, 0, 1][..], true),
+        (&[1, -1][..], false),
+        (&[3, 1, 2][..], false),
+        (&[-4, 0, 0, 0, 0, 0, 0, 0, 0, 7][..], false),
+        (&[2][..], false),
+    ] {
+        let (a, b) = (counting.from_i64s(&a), counting.from_i64s(b));
+        counting.base().products.set(0);
+        let (q, r) = counting.pseudo_div_rem(&a, &b);
+        let products = counting.base().products.get();
+        let n = b.degree().unwrap() as u64;
+        let s = 2000 - n + 1;
+        let bound = if monic { s * n } else { s * (2 * n + 3) };
+        assert!(products <= bound, "{products} products by {b:?}");
+        let power = b.lead().unwrap().pow(s);
+        assert_eq!(
+            zx.scale(&a, &power),
+            zx.add(&zx.mul(&q, &b), &r),
+            "by {b:?}"
+        );
+        assert!(r.degree() < b.degree());
+    }
 }
 
 #[test]

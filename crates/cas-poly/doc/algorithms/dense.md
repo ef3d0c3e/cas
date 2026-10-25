@@ -149,6 +149,20 @@ coefficient. Exactly `deg a − deg b + 1` rounds give the power, even when the
 top coefficient is already zero. When `deg a < deg b`, the result is `(0,
 a)`.
 
+Scaling all of `q` and `r` at each of the `s = deg a − deg b + 1` rounds
+takes `O(s deg a)` products, even when `d` is 1: 16 million for `x^4000 + i`
+by `x + 1`. A round reads only the top coefficient and changes only the
+`deg b` below it, so the scaling waits (ours, CAS-172):
+- a round multiplies by `d` the coefficients that the round before changed
+  too;
+- the next coefficient of `a`, `aₖ`, untouched until then, takes its
+  `d^(s−k)` at once;
+- `q`'s coefficient of `xᵏ` takes its `d^k` at the end.
+
+The results are Algorithm R's, with `O(s deg b)` products, as for a
+division, and none by `d` when it is 1. A constant `b = d` gives `q =
+d^(s−1) a` and `r = 0`.
+
 ### Exact division
 
 Long division in which each quotient coefficient must be an exact quotient
@@ -249,7 +263,8 @@ most of its time below a thousand coefficients.
   - Every operation of the shared-denominator types against coefficient-wise
     arithmetic over `Rationals` and `GaussianRationals`, each result
     reduced.
-- **Examples.** Polynomials over polynomials; balls; cancellation.
+- **Examples.** Polynomials over polynomials; balls; cancellation; the
+  products pseudo-division takes, counted by a ring that counts them.
 - **Sabotages** (CAS-135): seventeen changes are caught.
   - Kronecker: no carry, a digit a bit short, the negative part added, word
     digits too narrow.
