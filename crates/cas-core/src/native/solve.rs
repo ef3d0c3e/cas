@@ -199,6 +199,7 @@ fn factor_roots<R: Factoring>(
         if *m < 0 {
             continue;
         }
+        let f = &in_unknown(ring, f, u.k);
         match ring.degree(f, u.k).unwrap_or(0) {
             0 => {}
             1 => {
@@ -218,6 +219,28 @@ fn factor_roots<R: Factoring>(
         }
     }
     Ok(Some(roots))
+}
+
+/// `f` times the unit that puts the first coefficient of its leading
+/// coefficient in `x_k` in normal form, positive over ℤ: the factors are
+/// normal in the first generator of canonical order, as giac writes them
+/// (`a − x²`), and their roots come from `x² − a`, `+√a` first.
+fn in_unknown<R: Factoring>(
+    ring: &SparseRing<R>,
+    f: &Sparse<R::Elem>,
+    k: usize,
+) -> Sparse<R::Elem> {
+    let base = ring.base();
+    let lead = ring.lead_coeff(f, k);
+    let Some(c) = lead.coeffs().first() else {
+        return f.clone();
+    };
+    let unit = base.normal_form(c).1;
+    if base.is_one(&unit) {
+        f.clone()
+    } else {
+        ring.scale(f, &unit)
+    }
 }
 
 /// The roots of the irreducible `a x² + b x + c`, `+√Δ` first: none when
