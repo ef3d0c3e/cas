@@ -34,8 +34,8 @@
 = 15
 > evalf(evalf(pi, 20), 20)
 = 3.1415926535897932385
-> evalf(sin(pi))
-warning at 26:1 `evalf(sin(pi))`: the value of sin(pi) could not be told from 0 within 1448 bits
+> evalf(atan(2) + atan(1/2) - pi/2)
+warning at 26:1 `evalf(atan(2) + atan(1/2) - pi/2)`: the value of -pi/2 + atan(1/2) + atan(2) could not be told from 0 within 1448 bits
 = ball(0.0, 3.67e-436)
 > evalf(0.1, 30)
 note at 28:1 `evalf(0.1, 30)`: the accuracy of 0.1 is limited by its input: 15 digits
@@ -46,11 +46,11 @@ note at 29:1 `evalf(sin(ball(1, 1/100000)), 20)`: the accuracy of 0.8415 is limi
 > step(t) := if t < 1 then 0 elif t == 1 then 1/2 else 1 end
 > step(1)
 = 1/2
-> c := 2*sin(pi/6)
-= 2*sin(pi/6)
+> c := 4*sin(pi/10)*cos(pi/5)
+= 4*cos(pi/5)*sin(pi/10)
 > evalf(step(c))
 warning at 36:1 `evalf(step(c))`: could not decide 1.0 < 1.0: its sides overlap at 1448 bits
-= evalf(if 2*sin(pi/6) < 1 then 0 elif 2*sin(pi/6) == 1 then 1/2 else 1 end)
+= evalf(if 4*cos(pi/5)*sin(pi/10) < 1 then 0 elif 4*cos(pi/5)*sin(pi/10) == 1 then 1/2 else 1 end)
 > evalf(step(c + 10^-1000), 400)
 = 1.0
 > evalf(step(ball(1, 1/100000)))

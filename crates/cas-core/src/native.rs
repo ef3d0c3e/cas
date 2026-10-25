@@ -27,6 +27,7 @@ mod polynomial;
 mod procedure;
 mod radical;
 mod replace;
+mod special;
 mod structure;
 
 pub(crate) use numeric::approximation;

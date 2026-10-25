@@ -4,12 +4,13 @@
 //! of exact numbers met with balls (§9.1). The real function where it has a
 //! value, else the principal complex one, as `Power` does; where neither has
 //! one, `Indeterminate` with a warning, and `-Infinity` for the logarithm of
-//! `0.0`. Exact arguments stay as they are: their values are symbolic
-//! simplification's.
+//! `0.0`. Exact arguments have their special values first (CAS-200,
+//! `special`), `Sin[Pi/6]` is `1/2`; others stay as they are.
 
 use cas_num::ball::{Ball, ComplexBall};
 
 use super::number::{Infinity, Num, Precision};
+use super::special;
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
@@ -18,8 +19,9 @@ use crate::trace::Warning;
 
 type Native = Result<Option<Expr>, EvalError>;
 
-/// `f[x]` for a ball `x`: `real` of a real ball, `complex` of a complex one
-/// or where the real function has no value.
+/// `f[x]` at a special value of an exact `x` ([`special::value`]), or for a
+/// ball `x`: `real` of a real ball, `complex` of a complex one or where the
+/// real function has no value.
 fn elementary(
     ev: &mut Eval<'_>,
     e: &Expr,
@@ -29,6 +31,11 @@ fn elementary(
     let [x] = e.args() else {
         return Ok(None);
     };
+    if let Some(f) = e.head().and_then(Expr::as_symbol)
+        && let Some(v) = special::value(f, x)
+    {
+        return Ok(Some(v));
+    }
     let Some(n) = Num::of(x).filter(Num::is_ball) else {
         return Ok(None);
     };

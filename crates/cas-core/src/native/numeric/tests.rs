@@ -116,16 +116,21 @@ fn cancellation_is_overcome_by_restarting() {
     assert!(b.rel_accuracy_bits() >= 100);
 }
 
+/// An exact 0 that evaluation does not see: `atan(2) + atan(1/2) = π/2`.
+/// (`Sin[Pi]` is 0 itself, CAS-200.)
+const ZERO: &str = "Plus[ArcTan[2], ArcTan[1/2], Times[-1/2, Pi]]";
+
 #[test]
 fn zero_cannot_be_certified() {
-    let (e, warnings) = eval("N[Sin[Pi]]");
+    let (e, warnings) = eval(&format!("N[{ZERO}]"));
     let b = ball_of(&e);
     assert!(b.contains_rational(&Rational::from(0)));
     // The cap: 8t + 1024 bits for t = 53.
+    let zero = Context::new().eval(&read(ZERO)).unwrap();
     assert_eq!(
         warnings,
         [Warning::Inaccurate {
-            expr: read("Sin[Pi]"),
+            expr: zero.clone(),
             digits: 0,
             bits: 1448,
         }]
@@ -134,7 +139,7 @@ fn zero_cannot_be_certified() {
     assert!(b.rad().exponent() < &cas_num::Integer::from(-1400));
     assert_eq!(
         warnings[0].to_string(),
-        "the value of Sin[Pi] could not be told from 0 within 1448 bits"
+        format!("the value of {zero} could not be told from 0 within 1448 bits")
     );
 }
 
@@ -145,11 +150,11 @@ fn the_limit_on_numbers_bounds_the_precision() {
         number_bits: 256,
         ..Limits::default()
     });
-    let (_, warnings) = eval_in(&ctx, "N[Sin[Pi]]");
+    let (_, warnings) = eval_in(&ctx, &format!("N[{ZERO}]"));
     assert_eq!(
         warnings,
         [Warning::Inaccurate {
-            expr: read("Sin[Pi]"),
+            expr: ctx.eval(&read(ZERO)).unwrap(),
             digits: 0,
             bits: 256,
         }]
