@@ -616,3 +616,18 @@ proptest! {
         prop_assert_eq!(e.full_form().to_string(), model(&e));
     }
 }
+
+/// A ball that knows far more than its midpoint has shows the midpoint's
+/// digits: `7.5` within `2^-10^9`, which the language's fuzz target asked
+/// for at its accuracy, 3·10^8 digits (CAS-201).
+#[test]
+fn a_ball_shows_no_more_digits_than_its_midpoint_has() {
+    let sum = crate::Context::new()
+        .eval(&Expr::parse_full_form("Plus[15/2, Ball[0x0p+0, 0x1p-1000000000]]").unwrap())
+        .unwrap();
+    let crate::View::Ball(b) = sum.view() else {
+        panic!("{sum:?}");
+    };
+    assert!(b.rel_accuracy_bits() > 1_000_000);
+    assert_eq!(super::ball_decimal(b, 53), "7.5");
+}

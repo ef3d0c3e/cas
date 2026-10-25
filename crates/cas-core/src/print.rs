@@ -103,7 +103,12 @@ const DISPLAY_PRECISION: u64 = 53;
 /// ```
 #[must_use]
 pub fn ball_decimal(b: &Ball, prec: u64) -> String {
-    let accuracy = u64::try_from(b.rel_accuracy_bits()).unwrap_or(0);
+    // No more digits than its midpoint has: `7.5` within `2^-10^9` knows
+    // `10^9` bits, and shows `7.5`, where those digits would take gigabytes
+    // (CAS-201).
+    let accuracy = u64::try_from(b.rel_accuracy_bits())
+        .unwrap_or(0)
+        .min(b.mid().bit_length());
     let bits = if b.is_exact() {
         prec
     } else {
