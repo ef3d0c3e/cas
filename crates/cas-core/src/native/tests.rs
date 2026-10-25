@@ -561,6 +561,33 @@ fn fuzz_findings() {
     );
 }
 
+/// `Limits::number_bits` bounds the precision of ball arithmetic: `15/2`
+/// plus a ball of `2^-10^9` is a ball that knows `10^9` bits, and a product
+/// with it worked at its accuracy took gigabytes. The fuzz target found it
+/// through `Trace::verify`, which lowers the limit to 4096 bits, at
+/// `N[0^(…(-1)^(1 + 2 i)…)]`.
+#[test]
+fn ball_arithmetic_stays_within_the_number_bits() {
+    let mut ctx = Context::new();
+    let mut limits = ctx.limits();
+    limits.number_bits = 4096;
+    ctx.set_limits(limits);
+    // The sum knows about 10^9 bits.
+    let sum = ctx
+        .eval(&read("Plus[15/2, Ball[0x1p-1000000000, 0x1p-1000000053]]"))
+        .unwrap();
+    let View::Ball(b) = sum.view() else {
+        panic!("{sum:?}");
+    };
+    assert!(b.rel_accuracy_bits() > 1_000_000, "{sum:?}");
+    let e = read("Times[Plus[15/2, Ball[0x1p-1000000000, 0x1p-1000000053]], Complex[34/3, -34/7]]");
+    let found = ctx.eval(&e).unwrap();
+    let View::ComplexBall(z) = found.view() else {
+        panic!("{found:?}");
+    };
+    assert!(z.rel_accuracy_bits() <= 4096 + 64, "{found:?}");
+}
+
 /// `Limits::number_bits` bounds the powers of numbers computed: one
 /// estimated larger stays, its integer part for a rational exponent.
 #[test]

@@ -6,6 +6,7 @@ use std::cmp::Ordering;
 use cas_num::ball::{Ball, ComplexBall};
 use cas_num::{Complex, Integer, Rational};
 
+use crate::context::Context;
 use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 
@@ -29,16 +30,41 @@ const GUARD: u64 = 16;
 /// The least precision ball arithmetic keeps, a double's.
 const MIN_BITS: u64 = 53;
 
-/// The working precision to give arithmetic where no ball can occur: the
-/// directions of infinities and exact roots. Exact arithmetic ignores it.
-pub(super) const EXACT_ONLY: u64 = MIN_BITS;
+/// The precisions ball arithmetic works with: the context's working
+/// precision, and the most bits a ball result keeps, its
+/// `Limits::number_bits`.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Precision {
+    pub(super) working: u64,
+    pub(super) most: u64,
+}
+
+impl Precision {
+    /// The precisions of `ctx`.
+    pub(super) fn of(ctx: &Context) -> Precision {
+        Precision {
+            working: ctx.working_precision(),
+            most: ctx.limits().number_bits,
+        }
+    }
+}
+
+/// The precisions to give arithmetic where no ball can occur: the
+/// directions of infinities and exact roots. Exact arithmetic ignores them.
+pub(super) const EXACT_ONLY: Precision = Precision {
+    working: MIN_BITS,
+    most: MIN_BITS,
+};
 
 /// The bits a ball result keeps (CAS-DOC-5 §9.1): the least accuracy of the
 /// inexact balls among `operands`, since the least accurate bounds the
 /// result, at least [`MIN_BITS`]; or with exact balls only, their longest
-/// midpoint, at least the `working` precision (CAS-148), so that `1/3.0`
-/// has the digits a precision set for it asks. `None` without a ball.
-fn ball_bits(operands: &[&Num], working: u64) -> Option<u64> {
+/// midpoint, at least the working precision (CAS-148), so that `1/3.0` has
+/// the digits a precision set for it asks. At most `most` bits: a ball may
+/// know far more than it was computed to, as `7.5` plus a ball of `2^-10^11`
+/// knows `10^11` bits, and working at its accuracy would take that many.
+/// `None` without a ball.
+fn ball_bits(operands: &[&Num], precision: Precision) -> Option<u64> {
     let mut inexact: Option<u64> = None;
     let mut exact: Option<u64> = None;
     let mut see = |b: &Ball| {
@@ -61,7 +87,8 @@ fn ball_bits(operands: &[&Num], working: u64) -> Option<u64> {
     }
     inexact
         .map(|bits| bits.max(MIN_BITS))
-        .or(exact.map(|bits| bits.max(working)))
+        .or(exact.map(|bits| bits.max(precision.working)))
+        .map(|bits| bits.min(precision.most.max(MIN_BITS)))
 }
 
 /// A complex ball rounded to `bits`.
@@ -174,11 +201,11 @@ impl Num {
     fn ball_op(
         &self,
         other: &Num,
-        working: u64,
+        precision: Precision,
         real: impl Fn(&Ball, &Ball, u64) -> Ball,
         complex: impl Fn(&ComplexBall, &ComplexBall, u64) -> ComplexBall,
     ) -> Num {
-        let bits = ball_bits(&[self, other], working).expect("a ball");
+        let bits = ball_bits(&[self, other], precision).expect("a ball");
         let working = bits + GUARD;
         if let (Some(a), Some(b)) = (self.to_ball(working), other.to_ball(working)) {
             return Num::Ball(Box::new(real(&a, &b, working).round_to_accuracy(bits)));
@@ -196,11 +223,11 @@ impl Num {
     /// precision of [`ball_bits`], rounded back. `None` for an exact value.
     pub(super) fn ball_function(
         &self,
-        working: u64,
+        precision: Precision,
         real: impl Fn(&Ball, u64) -> Ball,
         complex: impl Fn(&ComplexBall, u64) -> ComplexBall,
     ) -> Option<Num> {
-        let bits = ball_bits(&[self], working)?;
+        let bits = ball_bits(&[self], precision)?;
         let prec = bits + GUARD;
         if let Num::Ball(x) = self {
             let y = real(x, prec);
@@ -259,8 +286,8 @@ impl Num {
         }
     }
 
-    /// `self + other`; balls at the `working` precision ([`ball_bits`]).
-    pub(super) fn add(&self, other: &Num, working: u64) -> Num {
+    /// `self + other`; balls at the precision of [`ball_bits`].
+    pub(super) fn add(&self, other: &Num, precision: Precision) -> Num {
         match (self, other) {
             (Num::Real(a), Num::Real(b)) => Num::Real(a + b),
             _ if self.is_ball() || other.is_ball() => {
@@ -270,14 +297,14 @@ impl Num {
                 if other.is_exact(false) {
                     return self.clone();
                 }
-                self.ball_op(other, working, Ball::add, ComplexBall::add)
+                self.ball_op(other, precision, Ball::add, ComplexBall::add)
             }
             _ => Num::from_complex(&self.complex() + &other.complex()),
         }
     }
 
-    /// `self · other`; balls at the `working` precision ([`ball_bits`]).
-    pub(super) fn mul(&self, other: &Num, working: u64) -> Num {
+    /// `self · other`; balls at the precision of [`ball_bits`].
+    pub(super) fn mul(&self, other: &Num, precision: Precision) -> Num {
         match (self, other) {
             (Num::Real(a), Num::Real(b)) => Num::Real(a * b),
             _ if self.is_ball() || other.is_ball() => {
@@ -295,7 +322,7 @@ impl Num {
                 if other.is_minus_one() {
                     return self.negated();
                 }
-                self.ball_op(other, working, Ball::mul, ComplexBall::mul)
+                self.ball_op(other, precision, Ball::mul, ComplexBall::mul)
             }
             _ => Num::from_complex(&self.complex() * &other.complex()),
         }
@@ -304,7 +331,7 @@ impl Num {
     /// `self^n`; `None` for zero to a negative power. A ball containing 0
     /// to a negative power is the indeterminate ball, which becomes
     /// `Indeterminate`.
-    pub(super) fn pow(&self, n: i64, working: u64) -> Option<Num> {
+    pub(super) fn pow(&self, n: i64, precision: Precision) -> Option<Num> {
         if self.is_zero() && n < 0 {
             return None;
         }
@@ -312,11 +339,11 @@ impl Num {
             Num::Real(q) => Num::Real(q.pow(n)),
             Num::Complex(z) => Num::from_complex(z.pow(n)),
             Num::Ball(b) => {
-                let bits = ball_bits(&[self], working).expect("a ball");
+                let bits = ball_bits(&[self], precision).expect("a ball");
                 Num::Ball(Box::new(b.pow(n, bits + GUARD).round_to_accuracy(bits)))
             }
             Num::ComplexBall(z) => {
-                let bits = ball_bits(&[self], working).expect("a ball");
+                let bits = ball_bits(&[self], precision).expect("a ball");
                 Num::from_complex_ball(round_complex(&z.pow_int(n, bits + GUARD), bits))
             }
         })
@@ -331,9 +358,9 @@ impl Num {
         &self,
         exponent: &Num,
         real_domain: bool,
-        working: u64,
+        precision: Precision,
     ) -> Option<Num> {
-        let bits = ball_bits(&[self, exponent], working)?;
+        let bits = ball_bits(&[self, exponent], precision)?;
         let working = bits + GUARD;
         if self.is_zero() && !matches!(exponent.sign(), Some(Ordering::Greater)) {
             return None;
@@ -381,8 +408,8 @@ impl Num {
 
     /// The bits ball arithmetic on this value keeps ([`ball_bits`]); the
     /// least for an exact value.
-    pub(super) fn precision(&self, working: u64) -> u64 {
-        ball_bits(&[self], working).unwrap_or(working)
+    pub(super) fn precision(&self, precision: Precision) -> u64 {
+        ball_bits(&[self], precision).unwrap_or(precision.working)
     }
 
     /// The sign of a real value, if known.

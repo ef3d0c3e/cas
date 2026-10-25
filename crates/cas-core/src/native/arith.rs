@@ -9,7 +9,7 @@
 use cas_num::Rational;
 
 use super::linear;
-use super::number::{EXACT_ONLY, Infinity, Num};
+use super::number::{EXACT_ONLY, Infinity, Num, Precision};
 use super::radical;
 use crate::assume::{self, Domain, Set, Sign, Truth};
 use crate::context::{Context, EvalError};
@@ -39,7 +39,7 @@ fn changed(e: &Expr, result: Expr) -> Option<Expr> {
 /// opposite directions, `ComplexInfinity` with another infinity, and
 /// `Indeterminate` give `Indeterminate`.
 pub(super) fn plus(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    let working = ev.context().working_precision();
+    let working = Precision::of(ev.context());
     if is_normal_sum(e.args()) {
         debug_assert_eq!(
             sum(e, working),
@@ -63,8 +63,8 @@ fn warn_indeterminate(ev: &mut Eval<'_>, e: &Expr, result: Option<&Expr>) {
 }
 
 /// What `Plus` makes of `e`, if anything; balls at the `working`
-/// precision.
-fn sum(e: &Expr, working: u64) -> Option<Expr> {
+/// precisions.
+fn sum(e: &Expr, working: Precision) -> Option<Expr> {
     let mut number = Num::zero();
     let mut infinity: Option<Infinity> = None;
     // `(c, m)` for the term `c·m`; like terms are adjacent.
@@ -258,7 +258,7 @@ fn signed_infinity(ev: &Eval<'_>, e: &Expr) -> Option<Expr> {
 ///
 /// [`EvalError::Shape`] for lists whose dimensions do not fit.
 fn product(ctx: &Context, e: &Expr) -> Result<Option<Expr>, EvalError> {
-    let working = ctx.working_precision();
+    let working = Precision::of(ctx);
     let mut coefficient = Num::one();
     let mut infinity: Option<Infinity> = None;
     // `(base, exponents, the factor itself)`; equal bases are adjacent.
@@ -426,7 +426,7 @@ fn merged_power(base: &Expr, exponents: &[Expr]) -> Expr {
 /// evaluated, since symbolic terms may cancel (`y^s y^(1/6 - s) y^(1/6)`
 /// would make `y^(1/3)`).
 fn principal_stays(ctx: &Context, exponents: &[Expr]) -> bool {
-    let working = ctx.working_precision();
+    let working = Precision::of(ctx);
     let mut sum = Some(Num::zero());
     for r in exponents {
         sum = match (sum, Num::of(r)) {
@@ -609,7 +609,7 @@ fn scalar_power(ev: &mut Eval<'_>, b: &Expr, n: &Expr) -> Native {
             &exponent,
             real_domain,
             ev.context().limits().number_bits,
-            ev.context().working_precision(),
+            Precision::of(ev.context()),
         );
         // `1/0` and `0^0`.
         if base.is_zero() {
@@ -754,7 +754,7 @@ pub(super) fn abs(ev: &mut Eval<'_>, e: &Expr) -> Native {
             }
             Num::Ball(b) => Expr::from(b.abs()),
             Num::ComplexBall(z) => {
-                let bits = Num::ComplexBall(z.clone()).precision(ev.context().working_precision());
+                let bits = Num::ComplexBall(z.clone()).precision(Precision::of(ev.context()));
                 Num::Ball(Box::new(z.abs(bits))).to_expr()
             }
         }));
@@ -797,7 +797,7 @@ fn number_power(
     exponent: &Num,
     real_domain: bool,
     max_bits: u64,
-    working: u64,
+    working: Precision,
 ) -> Option<Expr> {
     if base.is_ball() || exponent.is_ball() {
         return Some(match base.ball_power(exponent, real_domain, working) {

@@ -9,7 +9,7 @@
 
 use cas_num::ball::{Ball, ComplexBall};
 
-use super::number::{Infinity, Num};
+use super::number::{Infinity, Num, Precision};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
@@ -32,7 +32,7 @@ fn elementary(
     let Some(n) = Num::of(x).filter(Num::is_ball) else {
         return Ok(None);
     };
-    let working = ev.context().working_precision();
+    let working = Precision::of(ev.context());
     let value = n
         .ball_function(working, real, complex)
         .expect("a ball")
