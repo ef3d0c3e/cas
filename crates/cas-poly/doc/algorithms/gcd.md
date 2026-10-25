@@ -315,15 +315,37 @@ comparison.
   final trial division over ℤ, whose integer operations allocate, and a fifth
   in Euclid's algorithm modulo the primes.
 - **Several variables.** At `N = 5` the heuristic is faster than giac. At
-  `N = 8` and `N = 12` this is 3 and 20 times slower: the heuristic gives up
-  at `N = 12`, and Brown's evaluation is dense in every variable. Zippel's
-  sparse interpolation (CAS-152) and coefficients accumulated in place
-  (CAS-155) are for later tickets.
+  `N = 8` and `N = 12` this was 3 and 20 times slower: the heuristic gives
+  up at `N = 12`, and Brown's evaluation is dense in every variable.
 - **Since CAS-141** the heap's methods are inlined: the sparse gcds take
   9.3 M, 113.9 M and 1.94 G instructions, in the same times. The criterion
   benchmarks of `benches/poly.rs`, `gcd_dense` at degrees 100 and 400 and
   `gcd_sparse` at `N = 5` and `8`, take 1.27 ms, 16.8 ms, 0.39 ms and 5.7
   ms.
+
+**Since CAS-155 and CAS-152**, measured by the `Workload` workflow on a
+GitHub runner, the best of three runs, to the millisecond; the runner has no
+`perf`. The faster sparse products (CAS-155) took Brown's gcd at `N = 12`
+from 0.25 s to 0.18 s. Zippel's algorithm against Brown's, on one commit
+(e427b30), for `f = (1 + x₁ + … + xₙ)^N + x₁` and `g`, `h` likewise with
+`x₂` and `x₃`; building them takes 6 to 8 ms:
+
+| Workload | Brown's | Zippel's | `gcd` |
+|---|---|---|---|
+| `N = 12`, 3 variables | 0.183 s | 0.058 s | 0.064 s |
+| `N = 8`, 4 variables | 0.445 s | 0.097 s | 0.120 s |
+| `N = 6`, 5 variables | 0.983 s | 0.130 s | 0.140 s |
+
+- Zippel's algorithm takes from a third to a seventh of Brown's time, the
+  less the more variables. Brown's images multiply by the degree in each
+  variable; Zippel's, after the first prime, number the terms of the gcd's
+  largest coefficient in `x₁`, plus one, for each prime.
+- `gcd` tries the heuristic first, which gives up at these sizes after 6 to
+  23 ms; at `N = 8` in 3 variables it succeeds, in 16 ms.
+- Against giac, coarsely: its 5.1 ms at `N = 12` on the development
+  machine is about 6.6 ms on the runner (sparse.md: the machine takes three
+  quarters of the runner's times), so this is still about eight times
+  slower.
 
 ## Tests
 
