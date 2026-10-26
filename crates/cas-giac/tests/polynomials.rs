@@ -254,10 +254,19 @@ fn agreement() {
         ("sqrfree(x^4-2*x^2+1)", "(x^2-1)^2"),
         ("sqrfree(6)", "6"),
     ];
+    // giac's versions differ in prefixes of lists: `poly1[…]` for `[…]`.
+    let normal = |s: &str| s.replace("poly1[", "[").replace("list[", "[");
+    let mut wrong = Vec::new();
     for (input, answer) in recorded {
-        assert_eq!(giac.eval(input).unwrap(), answer, "{input}");
-        giac.agrees(input).unwrap_or_else(|e| panic!("{e}"));
+        let printed = giac.eval(input).unwrap();
+        if normal(&printed) != normal(answer) {
+            wrong.push(format!("{input}: giac prints {printed}, recorded {answer}"));
+        }
+        if let Err(e) = giac.agrees(input) {
+            wrong.push(e.to_string());
+        }
     }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
 /// Where this CAS departs from giac on purpose: giac's answer as it
@@ -350,11 +359,21 @@ fn departures() {
         // Signs as factor's, where giac keeps -x+1.
         ("sqrfree(-2*x^2+4*x-2)", "-2*(-x+1)^2", "-2*(x-1)^2"),
     ];
+    let normal = |s: &str| s.replace("poly1[", "[").replace("list[", "[");
+    let mut wrong = Vec::new();
     for (input, answer, decided) in cases {
-        assert_eq!(giac.eval(input).unwrap(), answer, "{input}");
-        assert_eq!(ours(input), ours(decided), "{input}");
-        assert!(giac.agrees(input).is_err(), "{input} agrees now");
+        let printed = giac.eval(input).unwrap();
+        if normal(&printed) != normal(answer) {
+            wrong.push(format!("{input}: giac prints {printed}, recorded {answer}"));
+        }
+        if ours(input) != ours(decided) {
+            wrong.push(format!("{input}: ours is not {decided}"));
+        }
+        if giac.agrees(input).is_ok() {
+            wrong.push(format!("{input} agrees now"));
+        }
     }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
 /// The variables of the random inputs; none is a giac constant.

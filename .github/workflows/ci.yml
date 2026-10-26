@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo test -p cas-giac
+      - run: cargo test -p cas-giac --no-fail-fast
 
   # The fuzz crate sits outside the workspace and rots silently otherwise.
   # A type check on nightly (what cargo-fuzz uses) catches API drift on every
