@@ -26,6 +26,10 @@
 //! - `RowReduce`, Xcas's `rref`; `MatrixRank`, `rank`; `NullSpace`, `ker`;
 //!   `ColumnSpace`, `image`; `LinSolve`, `linsolve`: from the reduced row
 //!   echelon form of [`elimination`], generic in the parameters.
+//! - `CharacteristicPolynomial`, Xcas's `charpoly`: `det(x I − m)`, by
+//!   Bareiss's for exact entries and the Faddeev–Le Verrier recurrence for
+//!   numeric ones; `Eigenvalues`, `eigenvals`: its roots as `CSolve`'s, each
+//!   as often as its multiplicity.
 //!
 //! Dimensions that do not fit are [`EvalError::Shape`], as in products.
 //! Results are built unevaluated, for the loop to evaluate; each call takes
@@ -296,40 +300,46 @@ pub(super) fn det(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some((m, n)) = square(ev, e) else {
         return Ok(None);
     };
-    let result = if numeric(&m) {
-        let Some(d) = numeric_det(ev, rows_of(&m))? else {
+    match determinant(ev, e, &m, n)? {
+        Some(d) => stepped(ev, "det", e, d),
+        None => Ok(None),
+    }
+}
+
+/// The determinant of the `n × n` matrix `m`, built; `None` after a warning
+/// on `e` when a numeric pivot is undecided or eliminating too large.
+fn determinant(ev: &mut Eval<'_>, e: &Expr, m: &Expr, n: usize) -> Result<Option<Expr>, EvalError> {
+    if numeric(m) {
+        let d = numeric_det(ev, rows_of(m))?;
+        if d.is_none() {
             warn(ev, "a pivot cannot be told from 0", e);
-            return Ok(None);
-        };
-        d
-    } else {
-        let Some(p) = convert(ev, e, &entries(&m), true)? else {
-            return Ok(None);
-        };
-        let k = p.generators().len();
-        let found = match &p.fractions()[0] {
-            Fraction::Integers { .. } => exact_det(
-                ev,
-                &p,
-                &SparseRing::new(Integers, k),
-                &integer_fractions(&p),
-                n,
-            )?,
-            Fraction::GaussianIntegers { .. } => exact_det(
-                ev,
-                &p,
-                &SparseRing::new(GaussianIntegers, k),
-                &gaussian_fractions(&p),
-                n,
-            )?,
-        };
-        let Some(d) = found else {
-            too_large(ev, e);
-            return Ok(None);
-        };
-        d
+        }
+        return Ok(d);
+    }
+    let Some(p) = convert(ev, e, &entries(m), true)? else {
+        return Ok(None);
     };
-    stepped(ev, "det", e, result)
+    let k = p.generators().len();
+    let found = match &p.fractions()[0] {
+        Fraction::Integers { .. } => exact_det(
+            ev,
+            &p,
+            &SparseRing::new(Integers, k),
+            &integer_fractions(&p),
+            n,
+        )?,
+        Fraction::GaussianIntegers { .. } => exact_det(
+            ev,
+            &p,
+            &SparseRing::new(GaussianIntegers, k),
+            &gaussian_fractions(&p),
+            n,
+        )?,
+    };
+    if found.is_none() {
+        too_large(ev, e);
+    }
+    Ok(found)
 }
 
 /// The determinant of the `n × n` matrix of `fractions`: Bareiss's on the
@@ -702,6 +712,186 @@ fn matrix_lin_solve(ev: &mut Eval<'_>, e: &Expr, a: &Expr, b: &Expr, columns: us
     }
     let x = (0..columns).map(|i| r.rows[i][columns].clone());
     stepped(ev, "linsolve", e, list(x.collect::<Vec<_>>()))
+}
+
+/// The variable of a characteristic polynomial computed for its roots or
+/// coefficients.
+fn fresh() -> Expr {
+    Expr::from(Symbol::new("CharacteristicPolynomial$x"))
+}
+
+/// `det(x I − m)` in the variable [`fresh`], evaluated and expanded, and
+/// its coefficients from the leading one, 1, to the constant; `None` after
+/// a warning on `e`. Exact entries: the determinant of `x I − m` by
+/// [`determinant`]; numeric ones: the Faddeev–Le Verrier recurrence.
+fn char_poly(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    m: &Expr,
+    n: usize,
+) -> Result<Option<(Expr, Vec<Expr>)>, EvalError> {
+    let x = fresh();
+    if numeric(m) {
+        let c = faddeev(ev, &rows_of(m))?;
+        let poly = ev.eval(&Expr::call(
+            Symbol::PLUS,
+            c.iter()
+                .enumerate()
+                .map(|(i, ci)| {
+                    let degree = i64::try_from(n - i).expect("a degree in memory");
+                    ci.clone() * x.clone().pow(degree)
+                })
+                .collect::<Vec<_>>(),
+        ))?;
+        return Ok(Some((poly, c)));
+    }
+    let shifted = list(m.args().iter().enumerate().map(|(i, row)| {
+        list(row.args().iter().enumerate().map(|(j, a)| {
+            if i == j {
+                x.clone() - a.clone()
+            } else {
+                -a.clone()
+            }
+        }))
+    }));
+    let shifted = ev.eval(&shifted)?;
+    let Some(d) = determinant(ev, e, &shifted, n)? else {
+        return Ok(None);
+    };
+    let poly = ev.eval(&d)?;
+    // Its coefficients in x, by the conversion.
+    let Some(p) = convert(ev, e, std::slice::from_ref(&poly), true)? else {
+        return Ok(None);
+    };
+    let Some(kx) = p.variable(&x) else {
+        return Ok(None);
+    };
+    let k = p.generators().len();
+    let coefficients = match &p.fractions()[0] {
+        Fraction::Integers { num, den } => {
+            coefficients_in(&p, &SparseRing::new(Integers, k), num, den, kx, n)
+        }
+        Fraction::GaussianIntegers { num, den } => {
+            coefficients_in(&p, &SparseRing::new(GaussianIntegers, k), num, den, kx, n)
+        }
+    };
+    let c = coefficients
+        .into_iter()
+        .map(|c| ev.eval(&c))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(Some((poly, c)))
+}
+
+/// The coefficients of `num / den` in the variable `kx`, from degree `n`
+/// down to 0, built.
+fn coefficients_in<R: Numbers>(
+    p: &Polynomials,
+    ring: &SparseRing<R>,
+    num: &Sparse<R::Elem>,
+    den: &Sparse<R::Elem>,
+    kx: usize,
+    n: usize,
+) -> Vec<Expr> {
+    (0..=n)
+        .rev()
+        .map(|d| {
+            let c = ring.coeff(num, kx, u64::try_from(d).expect("a degree in memory"));
+            p.ratio_expr(&c, den)
+        })
+        .collect()
+}
+
+/// The coefficients of the characteristic polynomial of the numbers `a`
+/// by the Faddeev–Le Verrier recurrence: `c_n = 1`, `M₁ = I`,
+/// `c_{n−k} = −tr(A Mₖ)/k`, `Mₖ₊₁ = A Mₖ + c_{n−k} I`.
+fn faddeev(ev: &mut Eval<'_>, a: &[Vec<Expr>]) -> Result<Vec<Expr>, EvalError> {
+    let n = a.len();
+    let identity = |c: &Expr| -> Vec<Vec<Expr>> {
+        (0..n)
+            .map(|i| {
+                (0..n)
+                    .map(|j| if i == j { c.clone() } else { Expr::from(0) })
+                    .collect()
+            })
+            .collect()
+    };
+    let product = |ev: &mut Eval<'_>,
+                   x: &[Vec<Expr>],
+                   y: &[Vec<Expr>]|
+     -> Result<Vec<Vec<Expr>>, EvalError> {
+        (0..n)
+            .map(|i| {
+                (0..n)
+                    .map(|j| {
+                        let terms: Vec<Expr> =
+                            (0..n).map(|l| x[i][l].clone() * y[l][j].clone()).collect();
+                        ev.eval(&Expr::call(Symbol::PLUS, terms))
+                    })
+                    .collect()
+            })
+            .collect()
+    };
+    let mut c = vec![Expr::from(1)];
+    let mut m = identity(&Expr::from(1));
+    for k in 1..=n {
+        let am = product(ev, a, &m)?;
+        let trace = Expr::call(
+            Symbol::PLUS,
+            (0..n).map(|i| am[i][i].clone()).collect::<Vec<_>>(),
+        );
+        let k_expr = Expr::from(i64::try_from(k).expect("a size in memory"));
+        let ck = ev.eval(&(-(trace / k_expr)))?;
+        if k < n {
+            m = am;
+            for (i, row) in m.iter_mut().enumerate() {
+                row[i] = ev.eval(&(row[i].clone() + ck.clone()))?;
+            }
+        }
+        c.push(ck);
+    }
+    Ok(c)
+}
+
+/// `CharacteristicPolynomial[m, x]`, Xcas's `charpoly`: `det(x I − m)`,
+/// monic in `x`; `CharacteristicPolynomial[m]`, its coefficients from the
+/// leading one, as giac's `poly1[1,-5,-2]`.
+pub(super) fn characteristic_polynomial(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let (m, x) = match e.args() {
+        [m] => (m, None),
+        [m, x] if x.as_symbol().is_some() && !m.contains(x) => (m, Some(x)),
+        _ => return Ok(None),
+    };
+    let Some(Shape::Matrix(n, columns)) = shape(m) else {
+        return Ok(None);
+    };
+    if n != columns {
+        not_square(ev, e);
+        return Ok(None);
+    }
+    let Some((poly, c)) = char_poly(ev, e, m, n)? else {
+        return Ok(None);
+    };
+    let result = match x {
+        None => list(c),
+        Some(x) => poly.substitute(&[(fresh(), x.clone())]),
+    };
+    stepped(ev, "charpoly", e, result)
+}
+
+/// `Eigenvalues[m]`, Xcas's `eigenvals`: the roots of the characteristic
+/// polynomial, complex ones included, each as often as its multiplicity
+/// (CAS-DOC-12 §4).
+pub(super) fn eigenvalues(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some((m, n)) = square(ev, e) else {
+        return Ok(None);
+    };
+    let Some((poly, _)) = char_poly(ev, e, &m, n)? else {
+        return Ok(None);
+    };
+    let Some(values) = super::solve::roots_counted(ev, e, &poly, &fresh())? else {
+        return Ok(None);
+    };
+    stepped(ev, "eigenvals", e, list(values))
 }
 
 mod elimination;

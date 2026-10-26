@@ -148,6 +148,11 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::NULL_SPACE, matrix::null_space),
         (Symbol::COLUMN_SPACE, matrix::column_space),
         (Symbol::LIN_SOLVE, matrix::lin_solve),
+        (
+            Symbol::CHARACTERISTIC_POLYNOMIAL,
+            matrix::characteristic_polynomial,
+        ),
+        (Symbol::EIGENVALUES, matrix::eigenvalues),
         (Symbol::FACTOR_RATIONAL, polynomial::factor_rational),
         (Symbol::FACTOR_LIST, polynomial::factor_list),
         (Symbol::FACTOR_SQUARE_FREE, polynomial::factor_square_free),

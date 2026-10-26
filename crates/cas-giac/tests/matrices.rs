@@ -142,3 +142,53 @@ fn row_reductions() {
         "linsolve([[a,1],[1,-1]],[1,b])",
     ]);
 }
+
+/// Characteristic polynomials and eigenvalues (CAS-221): giac's
+/// eigenvalues, a sequence, as a list in any order.
+#[test]
+fn eigenvalues() {
+    check_values(&[
+        "charpoly([[1,2],[3,4]],x)",
+        "charpoly([[1,2,3],[4,5,6],[7,8,10]],x)",
+        "charpoly([[1,2],[3,4]],t)",
+    ]);
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, matrix) in [
+        ("eigenvals([[2,1],[1,2]])", "[[2,1],[1,2]]"),
+        ("eigenvals([[0,-1],[1,0]])", "[[0,-1],[1,0]]"),
+        ("eigenvals([[1,2],[3,4]])", "[[1,2],[3,4]]"),
+        ("eigenvals([[1,1],[0,1]])", "[[1,1],[0,1]]"),
+        (
+            "eigenvals([[2,0,0],[0,2,0],[0,0,3]])",
+            "[[2,0,0],[0,2,0],[0,0,3]]",
+        ),
+        (
+            "eigenvals([[1,2,0],[2,1,0],[0,0,5]])",
+            "[[1,2,0],[2,1,0],[0,0,5]]",
+        ),
+    ] {
+        // giac's sequence, bracketed into a list.
+        let theirs = giac.value(&format!("[{input}]"));
+        let ours = ours(&format!("eigenvals({matrix})"));
+        let (Ok(theirs), Ok(ours)) = (theirs, ours) else {
+            wrong.push(format!("{input}: unreadable"));
+            continue;
+        };
+        let mut left: Vec<&Expr> = theirs.args().iter().collect();
+        let all = ours.args().len() == left.len()
+            && ours.args().iter().all(|v| {
+                left.iter()
+                    .position(|t| same(&ctx, v, t))
+                    .map(|k| left.swap_remove(k))
+                    .is_some()
+            });
+        if !all {
+            wrong.push(format!("{input}: ours {ours:?}, giac's {theirs:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}

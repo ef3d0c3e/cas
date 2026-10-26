@@ -200,6 +200,66 @@ fn system(
     }))
 }
 
+/// The complex roots of the polynomial `f` in `x`, each as often as its
+/// multiplicity: of each part of its square-free decomposition, as
+/// `CSolve`'s, repeated by the part's exponent, in the order of
+/// [`ordered`]; `None` when they are not found here. For `Eigenvalues`
+/// (CAS-221).
+pub(super) fn roots_counted(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    f: &Expr,
+    x: &Expr,
+) -> Result<Option<Vec<Expr>>, EvalError> {
+    let Some(p) = convert(ev, e, std::slice::from_ref(f), true)? else {
+        return Ok(None);
+    };
+    let cancel: &dyn Cancel = ev.context().interrupt_flag();
+    let n = p.generators().len();
+    let parts = match &p.fractions()[0] {
+        Fraction::Integers { num, .. } => {
+            counted_parts(&p, &SparseRing::new(Integers, n), num, cancel)?
+        }
+        Fraction::GaussianIntegers { num, .. } => {
+            counted_parts(&p, &SparseRing::new(GaussianIntegers, n), num, cancel)?
+        }
+    };
+    let mut all = Vec::new();
+    for (part, k) in parts {
+        if !part.contains(x) {
+            continue;
+        }
+        let Some(found) = roots(ev, e, &part, x, false)? else {
+            return Ok(None);
+        };
+        for r in found {
+            all.extend(std::iter::repeat_n(
+                r,
+                usize::try_from(k).unwrap_or(usize::MAX),
+            ));
+        }
+    }
+    Ok(Some(ordered(ev.context(), all)))
+}
+
+/// The parts of the square-free decomposition of `num` and their
+/// exponents.
+fn counted_parts<R: Factoring>(
+    p: &Polynomials,
+    ring: &SparseRing<R>,
+    num: &Sparse<R::Elem>,
+    cancel: &dyn Cancel,
+) -> Result<Vec<(Expr, u64)>, EvalError> {
+    let parts = ring
+        .squarefree_with(num, cancel)
+        .map_err(|Cancelled| EvalError::Interrupted)?;
+    Ok(parts
+        .factors()
+        .iter()
+        .map(|(f, k)| (p.polynomial_expr(f), *k))
+        .collect())
+}
+
 /// The solutions of the linear system `equations` in the distinct symbols
 /// `unknowns`, as `{{…}}` or `{}`; `None` when it is not linear: for
 /// `LinSolve` (CAS-220).

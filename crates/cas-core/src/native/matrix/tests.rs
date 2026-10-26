@@ -331,3 +331,66 @@ fn linear_solutions() {
         ),
     ]);
 }
+
+/// Characteristic polynomials and eigenvalues (CAS-221).
+#[test]
+fn eigenvalues() {
+    check(&[
+        (
+            &format!("CharacteristicPolynomial[{M2}, x]"),
+            "Plus[-2, Times[-5, x], Power[x, 2]]",
+        ),
+        (
+            &format!("CharacteristicPolynomial[{M2}]"),
+            "List[1, -5, -2]",
+        ),
+        (
+            "CharacteristicPolynomial[List[List[1, 2, 3], List[4, 5, 6], List[7, 8, 10]], x]",
+            "Plus[3, Times[-12, x], Times[-16, Power[x, 2]], Power[x, 3]]",
+        ),
+        (
+            "CharacteristicPolynomial[List[List[a, b], List[c, d]], x]",
+            "Plus[Times[a, d], Times[-1, b, c], Times[-1, a, x], Times[-1, d, x], Power[x, 2]]",
+        ),
+        // A variable the matrix holds stays.
+        (
+            "CharacteristicPolynomial[List[List[x, 1], List[1, x]], x]",
+            "CharacteristicPolynomial[List[List[x, 1], List[1, x]], x]",
+        ),
+        ("Eigenvalues[List[List[2, 1], List[1, 2]]]", "List[1, 3]"),
+        (
+            "Eigenvalues[List[List[0, -1], List[1, 0]]]",
+            "List[I, Times[-1, I]]",
+        ),
+        (
+            &format!("Eigenvalues[{M2}]"),
+            "List[Plus[5/2, Times[-1/2, Power[33, 1/2]]], Plus[5/2, Times[1/2, Power[33, 1/2]]]]",
+        ),
+        ("Eigenvalues[List[List[1, 1], List[0, 1]]]", "List[1, 1]"),
+        (
+            "Eigenvalues[List[List[2, 0, 0], List[0, 2, 0], List[0, 0, 3]]]",
+            "List[2, 2, 3]",
+        ),
+        (
+            "Eigenvalues[List[List[1, 2, 0], List[2, 1, 0], List[0, 0, 5]]]",
+            "List[-1, 3, 5]",
+        ),
+    ]);
+    // Numeric entries: the Faddeev–Le Verrier recurrence.
+    let ctx = Context::new();
+    let found = ctx
+        .eval(&read("Eigenvalues[List[List[Ball[1, 0], 2], List[3, 4]]]"))
+        .unwrap();
+    let values: Vec<f64> = found
+        .args()
+        .iter()
+        .map(|v| match v.view() {
+            crate::View::Ball(b) => b.mid().to_f64(),
+            _ => panic!("{found:?}"),
+        })
+        .collect();
+    let root = 33f64.sqrt();
+    assert_eq!(values.len(), 2, "{found:?}");
+    assert!((values[0] - (5.0 - root) / 2.0).abs() < 1e-12, "{found:?}");
+    assert!((values[1] - f64::midpoint(5.0, root)).abs() < 1e-12, "{found:?}");
+}
