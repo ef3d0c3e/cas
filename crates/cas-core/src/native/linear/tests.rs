@@ -86,8 +86,12 @@ fn powers_and_sums() {
         ),
         (&format!("Power[{A}, 1]"), A),
         (&format!("Power[{A}, 0]"), "List[List[1, 0], List[0, 1]]"),
-        // The inverse belongs to Linear algebra; a vector has no power.
-        (&format!("Power[{A}, -1]"), &format!("Power[{A}, -1]")),
+        // A negative power is a power of the inverse (CAS-219); a vector
+        // has no power.
+        (
+            &format!("Power[{A}, -1]"),
+            "List[List[-2, 1], List[3/2, -1/2]]",
+        ),
         ("Power[List[1, 2], 2]", "Power[List[1, 2], 2]"),
         ("Power[List[1, 2], 0]", "Power[List[1, 2], 0]"),
         (

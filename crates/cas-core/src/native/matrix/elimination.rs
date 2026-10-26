@@ -232,7 +232,6 @@ pub(super) fn numeric_gauss_jordan(
     rows: &mut [Vec<Expr>],
     columns: usize,
 ) -> Result<Numeric, EvalError> {
-    let width = rows.first().map_or(0, Vec::len);
     let mut pivots = Vec::new();
     for j in 0..columns {
         let rank = pivots.len();
@@ -252,14 +251,14 @@ pub(super) fn numeric_gauss_jordan(
         for x in &mut rows[rank] {
             *x = ev.eval(&(x.clone() / pivot.clone()))?;
         }
-        for i in 0..rows.len() {
-            if i == rank || zero(&rows[i][j]).0 {
+        let pivot_row = rows[rank].clone();
+        for (i, row) in rows.iter_mut().enumerate() {
+            if i == rank || zero(&row[j]).0 {
                 continue;
             }
-            let c = rows[i][j].clone();
-            for k in 0..width {
-                let t = rows[i][k].clone() - c.clone() * rows[rank][k].clone();
-                rows[i][k] = ev.eval(&t)?;
+            let c = row[j].clone();
+            for (x, p) in row.iter_mut().zip(&pivot_row) {
+                *x = ev.eval(&(x.clone() - c.clone() * p.clone()))?;
             }
         }
         pivots.push(j);
@@ -295,11 +294,11 @@ pub(super) fn numeric_det(
         }
         let pivot = rows[k][k].clone();
         det = ev.eval(&(det * pivot.clone()))?;
-        for i in k + 1..n {
-            let c = ev.eval(&(rows[i][k].clone() / pivot.clone()))?;
-            for j in k + 1..n {
-                let t = rows[i][j].clone() - c.clone() * rows[k][j].clone();
-                rows[i][j] = ev.eval(&t)?;
+        let pivot_row = rows[k].clone();
+        for row in &mut rows[k + 1..] {
+            let c = ev.eval(&(row[k].clone() / pivot.clone()))?;
+            for (x, p) in row.iter_mut().zip(&pivot_row).skip(k + 1) {
+                *x = ev.eval(&(x.clone() - c.clone() * p.clone()))?;
             }
         }
     }
