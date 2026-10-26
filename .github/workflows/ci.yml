@@ -1,10 +1,11 @@
 # Tests run here, never on the development machine (CAS-158).
 #
 # The gmp-mpfr-sys build (GMP, MPFR, MPC for the `rug` oracle) dominates a cold
-# run; Swatinem/rust-cache keeps it warm between runs. libgiac is installed so
-# the cas-giac oracle tests run instead of skipping; if the package ever
-# disappears from the runner image, those tests skip with a note and the job
-# still passes.
+# run; Swatinem/rust-cache keeps it warm between runs.
+#
+# Ubuntu's runner images have no giac package, so the cas-giac oracle tests
+# skip in `test` and run in `oracle`, a Debian container with libgiac, where
+# CAS_GIAC_REQUIRED makes a library that does not load a failure.
 name: CI
 
 on:
@@ -43,11 +44,25 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y m4
-      - name: Install libgiac (cas-giac oracle; its tests skip if missing)
-        run: sudo apt-get install -y giac || echo "giac unavailable; oracle tests will skip"
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo test --workspace
+
+  # The giac oracle (CAS-DOC-8 §12) against Debian's libgiac.
+  oracle:
+    runs-on: ubuntu-latest
+    container: debian:sid
+    env:
+      CAS_GIAC_REQUIRED: "1"
+    steps:
+      - name: Install build dependencies and libgiac
+        run: >
+          apt-get update && apt-get install -y --no-install-recommends
+          ca-certificates curl git build-essential m4 libgiac0t64
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test -p cas-giac
 
   # The fuzz crate sits outside the workspace and rots silently otherwise.
   # A type check on nightly (what cargo-fuzz uses) catches API drift on every

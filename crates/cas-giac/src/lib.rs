@@ -2,7 +2,8 @@
 //!
 //! Xcas is the reference for this CAS's defaults, so tests compare with its
 //! answers. The library is loaded at run time, so this crate builds without
-//! it, and checks skip when it is missing ([`Giac::shared`] is `None`).
+//! it, and checks skip when it is missing ([`Giac::shared`] is `None`),
+//! unless [`REQUIRED_VARIABLE`] is set, as in CI's oracle job.
 //!
 //! - [`Giac`]: the library's two entry points. [`Giac::eval`] is
 //!   `caseval`, about 10 ms a call whatever it computes. [`Giac::eval_fast`]
@@ -50,6 +51,11 @@ use library::Library;
 /// The environment variable naming the library to load instead of
 /// `libgiac.so.0`.
 pub const LIBRARY_VARIABLE: &str = "CAS_GIAC_LIBRARY";
+
+/// The environment variable that, set, makes a library that cannot be
+/// loaded a panic of [`Giac::shared`] instead of skipped checks: for CI's
+/// oracle job, whose checks must not skip.
+pub const REQUIRED_VARIABLE: &str = "CAS_GIAC_REQUIRED";
 
 /// The library loaded by default, from the usual paths.
 pub const DEFAULT_LIBRARY: &str = "libgiac.so.0";
@@ -115,6 +121,10 @@ impl Giac {
     /// The library named by [`LIBRARY_VARIABLE`], or [`DEFAULT_LIBRARY`],
     /// loaded once for the process; `None` when it cannot be loaded, so that
     /// checks skip.
+    ///
+    /// # Panics
+    ///
+    /// When the library cannot be loaded and [`REQUIRED_VARIABLE`] is set.
     #[must_use]
     pub fn shared() -> Option<&'static Giac> {
         static SHARED: OnceLock<Option<Giac>> = OnceLock::new();
@@ -122,7 +132,13 @@ impl Giac {
             .get_or_init(|| {
                 let path =
                     std::env::var(LIBRARY_VARIABLE).unwrap_or_else(|_| DEFAULT_LIBRARY.to_owned());
-                Giac::load(&path).ok()
+                match Giac::load(&path) {
+                    Ok(giac) => Some(giac),
+                    Err(why) if std::env::var_os(REQUIRED_VARIABLE).is_some() => {
+                        panic!("{REQUIRED_VARIABLE} is set and {path} cannot be loaded: {why}")
+                    }
+                    Err(_) => None,
+                }
             })
             .as_ref()
     }
