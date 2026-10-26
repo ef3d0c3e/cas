@@ -242,6 +242,17 @@ pub(super) fn roots_counted(
     Ok(Some(ordered(ev.context(), all)))
 }
 
+/// The complex roots of `f` in `x`, as `CSolve`'s, each once: for the
+/// eigenvalues of one factor (CAS-222).
+pub(super) fn complex_roots(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    f: &Expr,
+    x: &Expr,
+) -> Result<Option<Vec<Expr>>, EvalError> {
+    roots(ev, e, f, x, false)
+}
+
 /// The parts of the square-free decomposition of `num` and their
 /// exponents.
 fn counted_parts<R: Factoring>(

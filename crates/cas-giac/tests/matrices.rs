@@ -192,3 +192,81 @@ fn eigenvalues() {
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+/// The columns of a matrix.
+fn columns(m: &Expr) -> Vec<Vec<Expr>> {
+    let n = m.args().first().map_or(0, |r| r.args().len());
+    (0..n)
+        .map(|j| m.args().iter().map(|r| r.args()[j].clone()).collect())
+        .collect()
+}
+
+/// Whether two vectors are parallel: each of their 2 × 2 minors 0 by
+/// value, within 10⁻⁹ of the vectors' scale.
+fn parallel(ctx: &Context, u: &[Expr], v: &[Expr]) -> bool {
+    let n = u.len();
+    if n != v.len() {
+        return false;
+    }
+    let minors: Vec<Expr> = (0..n)
+        .flat_map(|i| (i + 1..n).map(move |j| (i, j)))
+        .map(|(i, j)| u[i].clone() * v[j].clone() - u[j].clone() * v[i].clone())
+        .collect();
+    let scale = Expr::call(
+        Symbol::PLUS,
+        u.iter()
+            .chain(v)
+            .map(|x| Expr::call(Symbol::ABS, [x.clone()]).pow(2))
+            .collect::<Vec<_>>(),
+    );
+    minors.iter().all(|minor| {
+        let small = Expr::call(
+            Symbol::LESS,
+            [
+                Expr::call(Symbol::ABS, [minor.clone()]),
+                scale.clone() / Expr::from(1_000_000_000_i64),
+            ],
+        );
+        holds(ctx, &Expr::call(Symbol::N, [small]))
+            || holds(
+                ctx,
+                &Expr::call(Symbol::EQUAL, [minor.clone(), Expr::from(0)]),
+            )
+    })
+}
+
+/// Eigenvectors (CAS-222): each of our columns parallel to one of giac's.
+#[test]
+fn eigenvectors() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in [
+        "egv([[1,2],[2,1]])",
+        "eigenvects([[2,1],[1,2]])",
+        "eigenvects([[0,-1],[1,0]])",
+        "eigenvects([[1,2],[3,4]])",
+        "eigenvects([[2,1,0],[1,2,0],[0,0,3]])",
+        "eigenvects([[2,0,0],[0,2,0],[0,0,3]])",
+    ] {
+        let (Ok(theirs), Ok(ours)) = (giac.value(input), ours(input)) else {
+            wrong.push(format!("{input}: unreadable"));
+            continue;
+        };
+        let mut left = columns(&theirs);
+        let ours_columns = columns(&ours);
+        let all = ours_columns.len() == left.len()
+            && ours_columns.iter().all(|c| {
+                left.iter()
+                    .position(|t| parallel(&ctx, c, t))
+                    .map(|k| left.swap_remove(k))
+                    .is_some()
+            });
+        if !all {
+            wrong.push(format!("{input}: ours {ours:?}, giac's {theirs:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}

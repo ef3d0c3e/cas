@@ -397,3 +397,69 @@ fn eigenvalues() {
         "{found:?}"
     );
 }
+
+/// Eigenvectors (CAS-222): columns in the order of the eigenvalues, 1 or
+/// a positive integer at the free entry.
+#[test]
+fn eigenvectors() {
+    check(&[
+        (
+            "Eigenvectors[List[List[1, 2], List[2, 1]]]",
+            "List[List[-1, 1], List[1, 1]]",
+        ),
+        (
+            "Eigenvectors[List[List[2, 1], List[1, 2]]]",
+            "List[List[-1, 1], List[1, 1]]",
+        ),
+        (
+            "Eigenvectors[List[List[0, -1], List[1, 0]]]",
+            "List[List[I, Times[-1, I]], List[1, 1]]",
+        ),
+        (
+            "Eigenvectors[List[List[2, 0, 0], List[0, 2, 0], List[0, 0, 3]]]",
+            "List[List[1, 0, 0], List[0, 1, 0], List[0, 0, 1]]",
+        ),
+        // Not diagonalizable: it stays.
+        (
+            "Eigenvectors[List[List[1, 1], List[0, 1]]]",
+            "Eigenvectors[List[List[1, 1], List[0, 1]]]",
+        ),
+    ]);
+    // M v = λ v for each column, numerically, for eigenvalues in radicals.
+    let ctx = Context::new();
+    for m in [
+        "List[List[1, 2], List[3, 4]]",
+        "List[List[1, 2, 0], List[2, 1, 0], List[0, 0, 5]]",
+        "List[List[2, 1, 1], List[1, 3, 1], List[1, 1, 4]]",
+    ] {
+        let vectors = ctx.eval(&read(&format!("Eigenvectors[{m}]"))).unwrap();
+        let values = ctx.eval(&read(&format!("Eigenvalues[{m}]"))).unwrap();
+        let n = values.args().len();
+        assert_eq!(vectors.args().len(), n, "{m}: {vectors:?}");
+        for (j, lambda) in values.args().iter().enumerate() {
+            let column = Expr::call(
+                crate::Symbol::LIST,
+                vectors
+                    .args()
+                    .iter()
+                    .map(|r| r.args()[j].clone())
+                    .collect::<Vec<_>>(),
+            );
+            let residual = Expr::call(
+                crate::Symbol::N,
+                [read(m) * column.clone() - lambda.clone() * column],
+            );
+            let residual = ctx.eval(&residual).unwrap();
+            for r in residual.args() {
+                let small = match r.view() {
+                    crate::View::Ball(b) => b.mid().to_f64().abs() < 1e-9,
+                    crate::View::ComplexBall(z) => {
+                        z.re().mid().to_f64().abs() < 1e-9 && z.im().mid().to_f64().abs() < 1e-9
+                    }
+                    _ => false,
+                };
+                assert!(small, "{m}, eigenvalue {lambda:?}: {residual:?}");
+            }
+        }
+    }
+}

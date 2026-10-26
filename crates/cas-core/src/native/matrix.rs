@@ -29,7 +29,8 @@
 //! - `CharacteristicPolynomial`, Xcas's `charpoly`: `det(x I − m)`, by
 //!   Bareiss's for exact entries and the Faddeev–Le Verrier recurrence for
 //!   numeric ones; `Eigenvalues`, `eigenvals`: its roots as `CSolve`'s, each
-//!   as often as its multiplicity.
+//!   as often as its multiplicity; `Eigenvectors`, `eigenvects`, by
+//!   [`eigen`].
 //!
 //! Dimensions that do not fit are [`EvalError::Shape`], as in products.
 //! Results are built unevaluated, for the loop to evaluate; each call takes
@@ -894,6 +895,9 @@ pub(super) fn eigenvalues(ev: &mut Eval<'_>, e: &Expr) -> Native {
     stepped(ev, "eigenvals", e, list(values))
 }
 
+mod eigen;
 mod elimination;
 #[cfg(test)]
 mod tests;
+
+pub(super) use eigen::eigenvectors;
