@@ -338,8 +338,9 @@ fn factor_roots<R: Factoring>(
         match ring.degree(f, u.k).unwrap_or(0) {
             0 => {}
             1 => {
-                let [c0, c1] = [0, 1].map(|d| u.p.polynomial_expr(&ring.coeff(f, u.k, d)));
-                let root = Expr::call(Symbol::TIMES, [Expr::from(-1), c0, c1.pow(-1)]);
+                // −c₀/c₁, each term of c₀ over a constant c₁.
+                let [c0, c1] = [0, 1].map(|d| ring.coeff(f, u.k, d));
+                let root = u.p.ratio_expr(&ring.neg(&c0), &c1);
                 roots.push(ev.eval(&root)?);
             }
             2 => roots.extend(quadratic_roots(ev, u, ring, f)?),
