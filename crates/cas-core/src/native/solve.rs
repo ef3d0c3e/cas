@@ -200,6 +200,18 @@ fn system(
     }))
 }
 
+/// The solutions of the linear system `equations` in the distinct symbols
+/// `unknowns`, as `{{…}}` or `{}`; `None` when it is not linear: for
+/// `LinSolve` (CAS-220).
+pub(super) fn linear_system(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    equations: &[Expr],
+    unknowns: &[Expr],
+) -> Result<Option<Expr>, EvalError> {
+    linear::system(ev, e, equations, unknowns)
+}
+
 /// `Solve[{eqns}, x]`: giac's `solve([x+1=0],x)` is `[-1]`. One equation's
 /// roots; of several, the solution of the linear system in `x`.
 fn in_one_unknown(

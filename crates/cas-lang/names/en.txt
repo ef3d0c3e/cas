@@ -65,7 +65,7 @@ OrderSize: order_size
 Solve: solve
 CSolve: csolve
 FSolve: fsolve
-# Linear algebra (CAS-DOC-12, CAS-218, CAS-219).
+# Linear algebra (CAS-DOC-12, CAS-218 to CAS-220).
 Transpose: tran transpose
 IdentityMatrix: idn identity
 Tr: trace
@@ -73,6 +73,11 @@ Dot: dot
 Cross: cross
 Det: det
 Inverse: inv
+RowReduce: rref
+MatrixRank: rank
+NullSpace: ker kernel nullspace
+ColumnSpace: image
+LinSolve: linsolve
 # A ball, `ball(c, r)` (CAS-DOC-5 §6.5, CAS-83), and back to fractions
 # (D4, CAS-148).
 Ball: ball

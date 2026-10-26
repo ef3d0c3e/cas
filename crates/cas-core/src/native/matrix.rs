@@ -23,6 +23,10 @@
 //!   or one whose numeric pivots cannot be told from 0, stays with a
 //!   warning, where giac errs.
 //!
+//! - `RowReduce`, Xcas's `rref`; `MatrixRank`, `rank`; `NullSpace`, `ker`;
+//!   `ColumnSpace`, `image`; `LinSolve`, `linsolve`: from the reduced row
+//!   echelon form of [`elimination`], generic in the parameters.
+//!
 //! Dimensions that do not fit are [`EvalError::Shape`], as in products.
 //! Results are built unevaluated, for the loop to evaluate; each call takes
 //! one step, named after the giac function.
@@ -458,6 +462,246 @@ fn exact_inverse<R: Numbers>(
         result.push(list(entries));
     }
     Ok(Inverted::Matrix(list(result)))
+}
+
+/// A matrix in reduced row echelon form: its rows, built, and its pivot
+/// columns, the pivot of the `k`-th in row `k`.
+struct Reduced {
+    rows: Vec<Vec<Expr>>,
+    pivots: Vec<usize>,
+}
+
+/// The reduced row echelon form of the matrix `m`; `None` after a warning
+/// on `e` when its numeric pivots are undecided or eliminating is too
+/// large.
+fn reduced(ev: &mut Eval<'_>, e: &Expr, m: &Expr) -> Result<Option<Reduced>, EvalError> {
+    let Some(Shape::Matrix(rows, columns)) = shape(m) else {
+        return Ok(None);
+    };
+    if numeric(m) {
+        let mut entries = rows_of(m);
+        return Ok(match numeric_gauss_jordan(ev, &mut entries, columns)? {
+            Numeric::Pivots(pivots) => {
+                for row in &mut entries[pivots.len()..] {
+                    row.fill(Expr::from(0));
+                }
+                Some(Reduced {
+                    rows: entries,
+                    pivots,
+                })
+            }
+            Numeric::Undecided => {
+                warn(ev, "a pivot cannot be told from 0", e);
+                None
+            }
+        });
+    }
+    let Some(p) = convert(ev, e, &entries(m), true)? else {
+        return Ok(None);
+    };
+    let k = p.generators().len();
+    let found = match &p.fractions()[0] {
+        Fraction::Integers { .. } => exact_reduced(
+            ev,
+            &p,
+            &SparseRing::new(Integers, k),
+            &integer_fractions(&p),
+            rows,
+            columns,
+        )?,
+        Fraction::GaussianIntegers { .. } => exact_reduced(
+            ev,
+            &p,
+            &SparseRing::new(GaussianIntegers, k),
+            &gaussian_fractions(&p),
+            rows,
+            columns,
+        )?,
+    };
+    if found.is_none() {
+        too_large(ev, e);
+    }
+    Ok(found)
+}
+
+/// The reduced row echelon form of the `rows × columns` matrix of
+/// `fractions`: Gauss–Jordan on its scaled rows, each pivot row over its
+/// pivot in lowest terms, the rows past the rank 0; `None` when too large.
+fn exact_reduced<R: Numbers>(
+    ev: &Eval<'_>,
+    p: &Polynomials,
+    ring: &SparseRing<R>,
+    fractions: &Entries<'_, R::Elem>,
+    rows: usize,
+    columns: usize,
+) -> Result<Option<Reduced>, EvalError> {
+    let (mut a, _) = scaled_rows(ring, fractions, columns);
+    let cancel: &dyn Cancel = ev.context().interrupt_flag();
+    let Some(pivots) = gauss_jordan(ring, &mut a, columns, cancel, ev.context().limits().terms)?
+    else {
+        return Ok(None);
+    };
+    let mut result = Vec::with_capacity(rows);
+    for (i, row) in a.iter().enumerate() {
+        result.push(match pivots.get(i) {
+            Some(&j) => row
+                .iter()
+                .map(|x| ratio(p, ring, x, &row[j], cancel))
+                .collect::<Result<Vec<_>, _>>()?,
+            None => vec![Expr::from(0); columns],
+        });
+    }
+    Ok(Some(Reduced {
+        rows: result,
+        pivots,
+    }))
+}
+
+/// The one matrix argument of `e`.
+fn matrix_argument(e: &Expr) -> Option<&Expr> {
+    match e.args() {
+        [m] if matches!(shape(m), Some(Shape::Matrix(..))) => Some(m),
+        _ => None,
+    }
+}
+
+/// `RowReduce[m]`, Xcas's `rref`.
+pub(super) fn row_reduce(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some(m) = matrix_argument(e) else {
+        return Ok(None);
+    };
+    let Some(r) = reduced(ev, e, m)? else {
+        return Ok(None);
+    };
+    stepped(ev, "rref", e, list(r.rows.into_iter().map(list)))
+}
+
+/// `MatrixRank[m]`, Xcas's `rank`: generic in the parameters.
+pub(super) fn matrix_rank(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some(m) = matrix_argument(e) else {
+        return Ok(None);
+    };
+    let Some(r) = reduced(ev, e, m)? else {
+        return Ok(None);
+    };
+    let rank = i64::try_from(r.pivots.len()).expect("a rank in memory");
+    stepped(ev, "rank", e, Expr::from(rank))
+}
+
+/// `NullSpace[m]`, Xcas's `ker`: for each free column `f`, the vector with
+/// `−1` there, the entries of column `f` in the pivot rows at their pivot
+/// columns, and 0 elsewhere, as giac's `ker([[1,2,3],[2,4,6]])` is
+/// `[[2,-1,0],[3,0,-1]]`.
+pub(super) fn null_space(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some(m) = matrix_argument(e) else {
+        return Ok(None);
+    };
+    let Some(r) = reduced(ev, e, m)? else {
+        return Ok(None);
+    };
+    let columns = m.args()[0].args().len();
+    let basis = (0..columns).filter(|j| !r.pivots.contains(j)).map(|f| {
+        let mut v = vec![Expr::from(0); columns];
+        v[f] = Expr::from(-1);
+        for (i, &p) in r.pivots.iter().enumerate() {
+            v[p] = r.rows[i][f].clone();
+        }
+        list(v)
+    });
+    stepped(ev, "ker", e, list(basis.collect::<Vec<_>>()))
+}
+
+/// `ColumnSpace[m]`, Xcas's `image`: the nonzero rows of the reduced row
+/// echelon form of the transpose.
+pub(super) fn column_space(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some(m) = matrix_argument(e) else {
+        return Ok(None);
+    };
+    let Some(Shape::Matrix(rows, columns)) = shape(m) else {
+        return Ok(None);
+    };
+    let transposed = list((0..columns).map(|j| list((0..rows).map(|i| entry(m, i, j).clone()))));
+    let Some(r) = reduced(ev, e, &transposed)? else {
+        return Ok(None);
+    };
+    let rank = r.pivots.len();
+    stepped(
+        ev,
+        "image",
+        e,
+        list(r.rows.into_iter().take(rank).map(list)),
+    )
+}
+
+/// `LinSolve[eqns, vars]` and `LinSolve[a, b]`, Xcas's `linsolve`: the
+/// solution of a linear system as one list, `[]` for none. Of equations,
+/// that of `Solve`, free unknowns kept; of a matrix and a vector, the
+/// vector `x` with `a x = b`, a family staying with a warning, where giac
+/// names its constants `C_0`, ….
+pub(super) fn lin_solve(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [first, second] = e.args() else {
+        return Ok(None);
+    };
+    if let (Some(Shape::Matrix(rows, columns)), Some(Shape::Vector(k))) =
+        (shape(first), shape(second))
+    {
+        if k != rows {
+            return Err(EvalError::Shape);
+        }
+        return matrix_lin_solve(ev, e, first, second, columns);
+    }
+    let equations = if is_list(first) {
+        first.args().to_vec()
+    } else {
+        vec![first.clone()]
+    };
+    let unknowns = if is_list(second) {
+        second.args().to_vec()
+    } else {
+        vec![second.clone()]
+    };
+    let distinct = unknowns
+        .iter()
+        .enumerate()
+        .all(|(i, x)| x.as_symbol().is_some() && !unknowns[..i].contains(x));
+    if unknowns.is_empty() || !distinct {
+        return Ok(None);
+    }
+    let Some(solutions) = super::solve::linear_system(ev, e, &equations, &unknowns)? else {
+        return Ok(None);
+    };
+    let result = match solutions.args() {
+        [tuple] => tuple.clone(),
+        _ => list([]),
+    };
+    stepped(ev, "linsolve", e, result)
+}
+
+/// `LinSolve[a, b]` for an `a` of `columns` columns: the reduced row echelon
+/// form of `[a | b]`.
+fn matrix_lin_solve(ev: &mut Eval<'_>, e: &Expr, a: &Expr, b: &Expr, columns: usize) -> Native {
+    let augmented = list(
+        a.args()
+            .iter()
+            .zip(b.args())
+            .map(|(row, y)| list(row.args().iter().cloned().chain([y.clone()]))),
+    );
+    let Some(r) = reduced(ev, e, &augmented)? else {
+        return Ok(None);
+    };
+    if r.pivots.contains(&columns) {
+        return stepped(ev, "linsolve", e, list([]));
+    }
+    if r.pivots.len() < columns {
+        warn(
+            ev,
+            "a family of solutions: LinSolve[eqns, vars] names its unknowns",
+            e,
+        );
+        return Ok(None);
+    }
+    let x = (0..columns).map(|i| r.rows[i][columns].clone());
+    stepped(ev, "linsolve", e, list(x.collect::<Vec<_>>()))
 }
 
 mod elimination;

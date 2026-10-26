@@ -116,3 +116,29 @@ fn determinants_and_inverses() {
         "[[1,2],[3,4]]^-2",
     ]);
 }
+
+/// Row reductions and linear systems (CAS-220).
+#[test]
+fn row_reductions() {
+    check_values(&[
+        "rref([[1,2,3],[4,5,6]])",
+        "rref([[a,b],[c,d]])",
+        "rref([[1,2,3],[4,5,6],[7,8,9]])",
+        "rank([[1,2],[2,4]])",
+        "rank([[1,2,3],[4,5,6],[7,8,9]])",
+        "rank([[a,b],[c,d]])",
+        "ker([[1,2,3],[2,4,6]])",
+        "ker([[1,0],[0,1]])",
+        "ker([[1,2,3],[4,5,6],[7,8,9]])",
+        "ker([[a,b],[2*a,2*b]])",
+        "image([[1,2,3],[2,4,6]])",
+        "image([[1,0,1],[0,1,1]])",
+        "linsolve([x+y=1,x-y=3],[x,y])",
+        "linsolve([x+y=1,2*x+2*y=2],[x,y])",
+        "linsolve([x+y=1,x+y=2],[x,y])",
+        "linsolve([[1,1],[1,-1]],[1,3])",
+        "linsolve([[1,2],[3,4]],[5,6])",
+        "linsolve([[1,1],[1,1]],[1,2])",
+        "linsolve([[a,1],[1,-1]],[1,b])",
+    ]);
+}

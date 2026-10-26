@@ -244,3 +244,90 @@ fn numeric_matrices() {
         assert!((entry(i, j) - x).abs() < 1e-12, "{inverse:?}");
     }
 }
+
+const M33: &str = "List[List[1, 2, 3], List[4, 5, 6], List[7, 8, 9]]";
+
+/// Row reductions (CAS-220): giac's rref, rank, ker and image.
+#[test]
+fn row_reductions() {
+    check(&[
+        (
+            &format!("RowReduce[{M23}]"),
+            "List[List[1, 0, -1], List[0, 1, 2]]",
+        ),
+        (
+            "RowReduce[List[List[a, b], List[c, d]]]",
+            "List[List[1, 0], List[0, 1]]",
+        ),
+        (
+            "RowReduce[List[List[0, 1], List[0, 0]]]",
+            "List[List[0, 1], List[0, 0]]",
+        ),
+        (
+            &format!("RowReduce[{M33}]"),
+            "List[List[1, 0, -1], List[0, 1, 2], List[0, 0, 0]]",
+        ),
+        ("MatrixRank[List[List[1, 2], List[2, 4]]]", "1"),
+        (&format!("MatrixRank[{M33}]"), "2"),
+        ("MatrixRank[List[List[0, 0], List[0, 0]]]", "0"),
+        ("MatrixRank[List[List[a, b], List[c, d]]]", "2"),
+        (
+            "NullSpace[List[List[1, 2, 3], List[2, 4, 6]]]",
+            "List[List[2, -1, 0], List[3, 0, -1]]",
+        ),
+        ("NullSpace[List[List[1, 0], List[0, 1]]]", "List[]"),
+        (&format!("NullSpace[{M33}]"), "List[List[-1, 2, -1]]"),
+        (
+            "NullSpace[List[List[a, b], List[Times[2, a], Times[2, b]]]]",
+            "List[List[Times[b, Power[a, -1]], -1]]",
+        ),
+        (
+            "NullSpace[List[List[0, 0], List[0, 0]]]",
+            "List[List[-1, 0], List[0, -1]]",
+        ),
+        (
+            "ColumnSpace[List[List[1, 2, 3], List[2, 4, 6]]]",
+            "List[List[1, 2]]",
+        ),
+        (
+            "ColumnSpace[List[List[1, 0, 1], List[0, 1, 1]]]",
+            "List[List[1, 0], List[0, 1]]",
+        ),
+        // Numeric entries.
+        ("MatrixRank[List[List[Ball[1, 0], 2], List[2, 4]]]", "1"),
+    ]);
+}
+
+/// Linear systems by `LinSolve` (CAS-220): one list.
+#[test]
+fn linear_solutions() {
+    let two = "List[Equation[Plus[x, y], 1], Equation[Plus[x, Times[-1, y]], 3]]";
+    check(&[
+        (&format!("LinSolve[{two}, List[x, y]]"), "List[2, -1]"),
+        (
+            "LinSolve[List[Equation[Plus[x, y], 1], Equation[Plus[Times[2, x], Times[2, y]], 2]], List[x, y]]",
+            "List[Plus[1, Times[-1, y]], y]",
+        ),
+        (
+            "LinSolve[List[Equation[Plus[x, y], 1], Equation[Plus[x, y], 2]], List[x, y]]",
+            "List[]",
+        ),
+        (
+            "LinSolve[List[List[1, 1], List[1, -1]], List[1, 3]]",
+            "List[2, -1]",
+        ),
+        (
+            "LinSolve[List[List[1, 2], List[3, 4]], List[5, 6]]",
+            "List[-4, 9/2]",
+        ),
+        (
+            "LinSolve[List[List[1, 1], List[1, 1]], List[1, 2]]",
+            "List[]",
+        ),
+        // A family in matrix form stays, with a warning.
+        (
+            "LinSolve[List[List[1, 1], List[1, 1]], List[1, 1]]",
+            "LinSolve[List[List[1, 1], List[1, 1]], List[1, 1]]",
+        ),
+    ]);
+}
