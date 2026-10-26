@@ -7,7 +7,8 @@
 //!   equation in one unknown (§2, §3). `R = 0` when `f` and `g` share a
 //!   factor that has `y`, and so infinitely many solutions: the call stays.
 //! - At each root `a`, the equation of the lower degree in `y` that still
-//!   has `y` there is solved for `y`, and each `(a, b)` kept when both
+//!   has `y` there, of one degree the one whose leading coefficient in `y`
+//!   is free of `x`, is solved for `y`, and each `(a, b)` kept when both
 //!   equations hold at it, their values 0 or numbers whose balls hold 0
 //!   (the check of CAS-213): `[x^2+y^2=1,x-y=0]` gives `±(√2/2, √2/2)`.
 //! - Each pair once; when all are numbers, by `x` then `y`, ascending.
@@ -79,12 +80,18 @@ pub(super) fn system(
     let Some(xs) = roots(ev, e, &r, x, real)? else {
         return Ok(None);
     };
-    // The equations by their degree in y, the lower first.
-    let mut order: Vec<(u64, &Expr)> = [(a, &fs[0]), (b, &fs[1])]
+    // The equations by their degree in y, the lower first, and of one
+    // degree first the one whose leading coefficient in y is free of x,
+    // which y is then not divided by: x + y = 3 before x y = 1.
+    let mut order: Vec<((u64, bool), &Expr)> = [(a, &fs[0]), (b, &fs[1])]
         .into_iter()
-        .map(|(n, f)| (ring.degree(n, ky).unwrap_or(0), f))
+        .map(|(n, f)| {
+            let lead = ring.lead_coeff(n, ky);
+            let by_x = ring.degree(&lead, kx).unwrap_or(0) > 0;
+            ((ring.degree(n, ky).unwrap_or(0), by_x), f)
+        })
         .collect();
-    order.sort_by_key(|&(d, _)| d);
+    order.sort_by_key(|&(key, _)| key);
     let mut pairs: Vec<(Expr, Expr)> = Vec::new();
     for xa in xs {
         let Some(ys) = y_roots(ev, e, &order, x, &xa, y, real)? else {
@@ -114,7 +121,7 @@ pub(super) fn system(
 fn y_roots(
     ev: &mut Eval<'_>,
     e: &Expr,
-    order: &[(u64, &Expr)],
+    order: &[((u64, bool), &Expr)],
     x: &Expr,
     xa: &Expr,
     y: &Expr,
