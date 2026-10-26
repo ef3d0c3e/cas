@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 74] = [
+const BUILTINS: [&str; 76] = [
     "Plus",
     "Times",
     "Power",
@@ -113,12 +113,14 @@ const BUILTINS: [&str; 74] = [
     "Solve",
     "CSolve",
     "FSolve",
-    // Linear algebra (CAS-218).
+    // Linear algebra (CAS-218, CAS-219).
     "Transpose",
     "IdentityMatrix",
     "Tr",
     "Dot",
     "Cross",
+    "Det",
+    "Inverse",
 ];
 
 /// Builtins that apply something to parts, only in the expression

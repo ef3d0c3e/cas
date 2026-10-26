@@ -16,6 +16,13 @@
 //!   2-vector taken with a third entry 0 (`cross([1,2],[3,4])` is
 //!   `[0,0,-2]`).
 //!
+//! - `Det[m]`, Xcas's `det`, and `Inverse[m]`, Xcas's `inv`, of a square
+//!   matrix, by [`elimination`]: Bareiss's for the determinant, Gauss–Jordan
+//!   on `[m | I]` for the inverse, each entry in lowest terms; negative
+//!   powers are powers of the inverse (`linear::power`). A singular matrix,
+//!   or one whose numeric pivots cannot be told from 0, stays with a
+//!   warning, where giac errs.
+//!
 //! Dimensions that do not fit are [`EvalError::Shape`], as in products.
 //! Results are built unevaluated, for the loop to evaluate; each call takes
 //! one step, named after the giac function.
@@ -25,13 +32,23 @@
     reason = "the names of linear algebra: vectors u and v, an m × n matrix"
 )]
 
+use cas_num::algebra::{GaussianIntegers, Integers, Ring};
+use cas_num::{Complex, Integer};
+use cas_poly::{Cancel, Sparse, SparseRing};
+
 use super::linear::{Shape, is_list, shape};
+use super::polynomial::{Numbers, cancelled, convert};
 use crate::assume::{Set, Truth, element};
 use crate::context::{Context, EvalError};
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
+use crate::poly::{Fraction, Polynomials};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
+use elimination::{
+    Entries, Numeric, bareiss, gauss_jordan, numeric, numeric_det, numeric_gauss_jordan,
+    scaled_rows,
+};
 
 type Native = Result<Option<Expr>, EvalError>;
 
@@ -190,5 +207,259 @@ pub(super) fn cross(ev: &mut Eval<'_>, e: &Expr) -> Native {
     stepped(ev, "cross", e, result)
 }
 
+/// The square matrix of `e`'s one argument and its size; `None`, after a
+/// warning when it is not square, otherwise.
+fn square(ev: &mut Eval<'_>, e: &Expr) -> Option<(Expr, usize)> {
+    let [m] = e.args() else {
+        return None;
+    };
+    let Some(Shape::Matrix(rows, columns)) = shape(m) else {
+        return None;
+    };
+    if rows != columns {
+        not_square(ev, e);
+        return None;
+    }
+    Some((m.clone(), rows))
+}
+
+/// The entries of `m` row by row.
+fn entries(m: &Expr) -> Vec<Expr> {
+    m.args()
+        .iter()
+        .flat_map(|r| r.args().iter().cloned())
+        .collect()
+}
+
+/// The rows of `m` as vectors of entries.
+fn rows_of(m: &Expr) -> Vec<Vec<Expr>> {
+    m.args().iter().map(|r| r.args().to_vec()).collect()
+}
+
+/// Gives the warning `message` on `e`.
+fn warn(ev: &mut Eval<'_>, message: impl Into<std::borrow::Cow<'static, str>>, e: &Expr) {
+    ev.warn(Warning::Native {
+        message: message.into(),
+        expr: e.clone(),
+    });
+}
+
+/// Says that a product could pass the limit on terms.
+fn too_large(ev: &mut Eval<'_>, e: &Expr) {
+    let terms = ev.context().limits().terms;
+    warn(ev, format!("eliminating could pass {terms} terms"), e);
+}
+
+/// The fractions of a conversion over ℤ.
+fn integer_fractions(p: &Polynomials) -> Vec<(&Sparse<Integer>, &Sparse<Integer>)> {
+    p.fractions()
+        .iter()
+        .map(|f| match f {
+            Fraction::Integers { num, den } => (num, den),
+            Fraction::GaussianIntegers { .. } => unreachable!("one ring"),
+        })
+        .collect()
+}
+
+/// The fractions of a conversion over ℤ\[i\].
+fn gaussian_fractions(p: &Polynomials) -> Vec<(&Sparse<Complex>, &Sparse<Complex>)> {
+    p.fractions()
+        .iter()
+        .map(|f| match f {
+            Fraction::GaussianIntegers { num, den } => (num, den),
+            Fraction::Integers { .. } => unreachable!("one ring"),
+        })
+        .collect()
+}
+
+/// `a / b` in lowest terms, built.
+fn ratio<R: Numbers>(
+    p: &Polynomials,
+    ring: &SparseRing<R>,
+    a: &Sparse<R::Elem>,
+    b: &Sparse<R::Elem>,
+    cancel: &dyn Cancel,
+) -> Result<Expr, EvalError> {
+    if a.is_zero() {
+        return Ok(Expr::from(0));
+    }
+    let (n, d) = cancelled(ring, a, b, cancel)?;
+    Ok(p.ratio_expr(&n, &d))
+}
+
+/// `Det[m]`.
+pub(super) fn det(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some((m, n)) = square(ev, e) else {
+        return Ok(None);
+    };
+    let result = if numeric(&m) {
+        let Some(d) = numeric_det(ev, rows_of(&m))? else {
+            warn(ev, "a pivot cannot be told from 0", e);
+            return Ok(None);
+        };
+        d
+    } else {
+        let Some(p) = convert(ev, e, &entries(&m), true)? else {
+            return Ok(None);
+        };
+        let k = p.generators().len();
+        let found = match &p.fractions()[0] {
+            Fraction::Integers { .. } => exact_det(
+                ev,
+                &p,
+                &SparseRing::new(Integers, k),
+                &integer_fractions(&p),
+                n,
+            )?,
+            Fraction::GaussianIntegers { .. } => exact_det(
+                ev,
+                &p,
+                &SparseRing::new(GaussianIntegers, k),
+                &gaussian_fractions(&p),
+                n,
+            )?,
+        };
+        let Some(d) = found else {
+            too_large(ev, e);
+            return Ok(None);
+        };
+        d
+    };
+    stepped(ev, "det", e, result)
+}
+
+/// The determinant of the `n × n` matrix of `fractions`: Bareiss's on the
+/// scaled rows, over the product of the scales.
+fn exact_det<R: Numbers>(
+    ev: &Eval<'_>,
+    p: &Polynomials,
+    ring: &SparseRing<R>,
+    fractions: &Entries<'_, R::Elem>,
+    n: usize,
+) -> Result<Option<Expr>, EvalError> {
+    let (rows, scales) = scaled_rows(ring, fractions, n);
+    let Some(d) = bareiss(ring, rows, ev.context().limits().terms) else {
+        return Ok(None);
+    };
+    let scale = scales.iter().fold(ring.one(), |a, s| ring.mul(&a, s));
+    ratio(p, ring, &d, &scale, ev.context().interrupt_flag()).map(Some)
+}
+
+/// `Inverse[m]`.
+pub(super) fn inverse(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some((m, _)) = square(ev, e) else {
+        return Ok(None);
+    };
+    match inverse_of(ev, e, &m)? {
+        Some(result) => stepped(ev, "inv", e, result),
+        None => Ok(None),
+    }
+}
+
+/// The inverse of the square matrix `m`; `None` after a warning on `e` when
+/// it is singular, its numeric pivots undecided, or eliminating too large.
+pub(super) fn inverse_of(ev: &mut Eval<'_>, e: &Expr, m: &Expr) -> Result<Option<Expr>, EvalError> {
+    let Some(Shape::Matrix(n, columns)) = shape(m) else {
+        return Ok(None);
+    };
+    if n != columns {
+        return Err(EvalError::Shape);
+    }
+    if numeric(m) {
+        let mut rows: Vec<Vec<Expr>> = rows_of(m)
+            .into_iter()
+            .enumerate()
+            .map(|(i, mut r)| {
+                r.extend((0..n).map(|j| Expr::from(i64::from(i == j))));
+                r
+            })
+            .collect();
+        return Ok(match numeric_gauss_jordan(ev, &mut rows, n)? {
+            Numeric::Pivots(pivots) if pivots.len() == n => {
+                Some(list(rows.into_iter().map(|r| list(r.into_iter().skip(n)))))
+            }
+            Numeric::Pivots(_) => {
+                warn(ev, "the matrix is singular", e);
+                None
+            }
+            Numeric::Undecided => {
+                warn(ev, "a pivot cannot be told from 0", e);
+                None
+            }
+        });
+    }
+    let Some(p) = convert(ev, e, &entries(m), true)? else {
+        return Ok(None);
+    };
+    let k = p.generators().len();
+    let found = match &p.fractions()[0] {
+        Fraction::Integers { .. } => exact_inverse(
+            ev,
+            &p,
+            &SparseRing::new(Integers, k),
+            &integer_fractions(&p),
+            n,
+        )?,
+        Fraction::GaussianIntegers { .. } => exact_inverse(
+            ev,
+            &p,
+            &SparseRing::new(GaussianIntegers, k),
+            &gaussian_fractions(&p),
+            n,
+        )?,
+    };
+    Ok(match found {
+        Inverted::Matrix(result) => Some(result),
+        Inverted::Singular => {
+            warn(ev, "the matrix is singular", e);
+            None
+        }
+        Inverted::TooLarge => {
+            too_large(ev, e);
+            None
+        }
+    })
+}
+
+/// How an inversion ended.
+enum Inverted {
+    Matrix(Expr),
+    Singular,
+    TooLarge,
+}
+
+/// The inverse of the `n × n` matrix of `fractions`: Gauss–Jordan on the
+/// scaled rows and `scale · I`, each entry of the right half over its row's
+/// pivot.
+fn exact_inverse<R: Numbers>(
+    ev: &Eval<'_>,
+    p: &Polynomials,
+    ring: &SparseRing<R>,
+    fractions: &Entries<'_, R::Elem>,
+    n: usize,
+) -> Result<Inverted, EvalError> {
+    let (mut rows, scales) = scaled_rows(ring, fractions, n);
+    for (i, (row, scale)) in rows.iter_mut().zip(&scales).enumerate() {
+        row.extend((0..n).map(|j| if i == j { scale.clone() } else { ring.zero() }));
+    }
+    let cancel: &dyn Cancel = ev.context().interrupt_flag();
+    let Some(pivots) = gauss_jordan(ring, &mut rows, n, cancel, ev.context().limits().terms)?
+    else {
+        return Ok(Inverted::TooLarge);
+    };
+    if pivots.len() < n {
+        return Ok(Inverted::Singular);
+    }
+    let mut result = Vec::with_capacity(n);
+    for (j, row) in rows.iter().enumerate() {
+        let entries = (0..n)
+            .map(|k| ratio(p, ring, &row[n + k], &row[j], cancel))
+            .collect::<Result<Vec<_>, _>>()?;
+        result.push(list(entries));
+    }
+    Ok(Inverted::Matrix(list(result)))
+}
+
+mod elimination;
 #[cfg(test)]
 mod tests;

@@ -109,3 +109,138 @@ fn shapes() {
         "{messages:?}"
     );
 }
+
+const M2: &str = "List[List[1, 2], List[3, 4]]";
+
+/// Determinants (CAS-219): exact over the generators, numeric with balls.
+#[test]
+fn determinants() {
+    check(&[
+        (&format!("Det[{M2}]"), "-2"),
+        (
+            "Det[List[List[a, b], List[c, d]]]",
+            "Plus[Times[a, d], Times[-1, b, c]]",
+        ),
+        (
+            "Det[List[List[1, 2, 3], List[4, 5, 6], List[7, 8, 10]]]",
+            "-3",
+        ),
+        ("Det[List[List[1, 2], List[2, 4]]]", "0"),
+        ("Det[List[List[1/2, 1/3], List[1/4, 1/5]]]", "1/60"),
+        ("Det[List[List[I, 1], List[1, I]]]", "-2"),
+        ("Det[List[List[x, 1], List[1, x]]]", "Plus[-1, Power[x, 2]]"),
+        ("Det[List[List[2]]]", "2"),
+        // A row swap: [[0,1],[1,0]].
+        ("Det[List[List[0, 1], List[1, 0]]]", "-1"),
+    ]);
+}
+
+/// The value of `input`, each entry of a matrix through `Together`.
+fn together(ctx: &Context, input: &str) -> Expr {
+    let found = ctx.eval(&read(input)).unwrap();
+    let rows = found
+        .args()
+        .iter()
+        .map(|r| {
+            let entries = r
+                .args()
+                .iter()
+                .map(|x| {
+                    ctx.eval(&Expr::call(crate::Symbol::TOGETHER, [x.clone()]))
+                        .unwrap()
+                })
+                .collect::<Vec<_>>();
+            Expr::call(crate::Symbol::LIST, entries)
+        })
+        .collect::<Vec<_>>();
+    Expr::call(crate::Symbol::LIST, rows)
+}
+
+/// Inverses and negative powers (CAS-219).
+#[test]
+fn inverses() {
+    check(&[
+        (
+            &format!("Inverse[{M2}]"),
+            "List[List[-2, 1], List[3/2, -1/2]]",
+        ),
+        (
+            &format!("Power[{M2}, -1]"),
+            "List[List[-2, 1], List[3/2, -1/2]]",
+        ),
+        (
+            &format!("Power[{M2}, -2]"),
+            "List[List[11/2, -5/2], List[-15/4, 7/4]]",
+        ),
+        (
+            "Inverse[List[List[1, 2, 3], List[0, 1, 4], List[5, 6, 0]]]",
+            "List[List[-24, 18, 5], List[20, -15, -4], List[-5, 4, 1]]",
+        ),
+        ("Inverse[List[List[2]]]", "List[List[1/2]]"),
+        (
+            "Inverse[List[List[I, 0], List[0, 2]]]",
+            "List[List[Times[-1, I], 0], List[0, 1/2]]",
+        ),
+    ]);
+    // With parameters: the product with the matrix is the identity.
+    let ctx = Context::new();
+    for m in [
+        "List[List[a, b], List[c, d]]",
+        "List[List[1, a], List[a, 2]]",
+        "List[List[x, 1, 0], List[0, x, 1], List[1, 0, x]]",
+    ] {
+        let product = together(&ctx, &format!("Times[{m}, Inverse[{m}]]"));
+        let n = read(m).args().len();
+        let identity = ctx.eval(&read(&format!("IdentityMatrix[{n}]"))).unwrap();
+        assert_eq!(product, identity, "{m}");
+    }
+}
+
+/// A singular matrix stays, with a warning.
+#[test]
+fn singular_matrices() {
+    let ctx = Context::new();
+    for input in [
+        "Inverse[List[List[1, 2], List[2, 4]]]",
+        "Power[List[List[1, 2], List[2, 4]], -1]",
+        "Inverse[List[List[a, b], List[Times[2, a], Times[2, b]]]]",
+    ] {
+        let read = read(input);
+        let (found, report) = ctx.eval_with(&read, &EvalOptions::default());
+        assert_eq!(found.unwrap(), read, "{input}");
+        let messages: Vec<String> = report.warnings.iter().map(Warning::to_string).collect();
+        assert!(
+            messages.iter().any(|m| m.contains("singular")),
+            "{input}: {messages:?}"
+        );
+    }
+}
+
+/// Numeric entries: elimination on balls.
+#[test]
+fn numeric_matrices() {
+    let ctx = Context::new();
+    let value = |input: &str| -> f64 {
+        let found = ctx.eval(&read(input)).unwrap();
+        match found.view() {
+            crate::View::Ball(b) => b.mid().to_f64(),
+            _ => panic!("{input}: {found:?}"),
+        }
+    };
+    let m = "List[List[Ball[3/2, 0], 2], List[3, Ball[5, 0]]]";
+    assert!((value(&format!("Det[{m}]")) - 1.5).abs() < 1e-12);
+    let inverse = ctx.eval(&read(&format!("Inverse[{m}]"))).unwrap();
+    let entry = |i: usize, j: usize| match inverse.args()[i].args()[j].view() {
+        crate::View::Ball(b) => b.mid().to_f64(),
+        _ => panic!("{inverse:?}"),
+    };
+    // [[1.5, 2], [3, 5]]^-1 = [[10/3, -4/3], [-2, 1]].
+    for (i, j, x) in [
+        (0, 0, 10.0 / 3.0),
+        (0, 1, -4.0 / 3.0),
+        (1, 0, -2.0),
+        (1, 1, 1.0),
+    ] {
+        assert!((entry(i, j) - x).abs() < 1e-12, "{inverse:?}");
+    }
+}

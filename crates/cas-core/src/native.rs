@@ -141,6 +141,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::TR, matrix::tr),
         (Symbol::DOT, matrix::dot),
         (Symbol::CROSS, matrix::cross),
+        (Symbol::DET, matrix::det),
+        (Symbol::INVERSE, matrix::inverse),
         (Symbol::FACTOR_RATIONAL, polynomial::factor_rational),
         (Symbol::FACTOR_LIST, polynomial::factor_list),
         (Symbol::FACTOR_SQUARE_FREE, polynomial::factor_square_free),

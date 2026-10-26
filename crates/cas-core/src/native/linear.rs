@@ -11,9 +11,9 @@
 //! associative, as in Xcas. Entries are built unevaluated, for the loop to
 //! evaluate.
 //!
-//! A square matrix to an integer power from 0 is the matrix power, by
-//! squaring, each product evaluated; the inverse, a negative power, belongs
-//! to Linear algebra and waits.
+//! A square matrix to an integer power is the matrix power, by squaring,
+//! each product evaluated; a negative power is that of the inverse
+//! (CAS-DOC-12, CAS-219).
 
 use crate::context::EvalError;
 use crate::eval::Eval;
@@ -145,8 +145,9 @@ fn identity(n: usize) -> Expr {
 }
 
 /// `m^k` for a matrix `m` and an integer `k`: the matrix power for a square
-/// `m` and `0 <= k <= 2^16`, by squaring, each product evaluated; `None` for
-/// a vector, a negative or larger `k`.
+/// `m` and `|k| <= 2^16`, by squaring, each product evaluated, of the
+/// inverse for a negative `k`; `None` for a vector, a larger `k`, or a
+/// matrix without an inverse (after a warning).
 ///
 /// # Errors
 ///
@@ -156,18 +157,26 @@ pub(super) fn power(ev: &mut Eval<'_>, m: &Expr, k: &Expr) -> Native {
     let Some(Shape::Matrix(rows, columns)) = shape(m) else {
         return Ok(None);
     };
-    let Some(k) = k.as_i64().and_then(|k| u64::try_from(k).ok()) else {
+    let Some(k) = k.as_i64() else {
         return Ok(None);
     };
     if rows != columns {
         return Err(EvalError::Shape);
     }
-    if k > MAX_MATRIX_POWER {
+    if k.unsigned_abs() > MAX_MATRIX_POWER {
         return Ok(None);
     }
+    // A negative power is a power of the inverse (CAS-219).
+    let mut base = if k < 0 {
+        match super::matrix::inverse_of(ev, m, m)? {
+            Some(inverse) => inverse,
+            None => return Ok(None),
+        }
+    } else {
+        m.clone()
+    };
+    let mut k = k.unsigned_abs();
     let mut result: Option<Expr> = None;
-    let mut base = m.clone();
-    let mut k = k;
     while k > 0 {
         if k & 1 == 1 {
             result = Some(match result {
