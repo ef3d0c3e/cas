@@ -73,6 +73,12 @@ builtins! {
     SOLVE = "Solve" [PROTECTED];
     CSOLVE = "CSolve" [PROTECTED];
     FSOLVE = "FSolve" [PROTECTED];
+    // Linear algebra (CAS-DOC-12), next to the products of lists.
+    TRANSPOSE = "Transpose" [PROTECTED];
+    IDENTITY_MATRIX = "IdentityMatrix" [PROTECTED];
+    TR = "Tr" [PROTECTED];
+    DOT = "Dot" [PROTECTED];
+    CROSS = "Cross" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

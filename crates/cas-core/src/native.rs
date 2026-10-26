@@ -22,6 +22,7 @@ mod integrate;
 mod limit;
 mod linear;
 mod logic;
+mod matrix;
 mod number;
 mod numeric;
 mod polynomial;
@@ -135,6 +136,11 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),
+        (Symbol::TRANSPOSE, matrix::transpose),
+        (Symbol::IDENTITY_MATRIX, matrix::identity_matrix),
+        (Symbol::TR, matrix::tr),
+        (Symbol::DOT, matrix::dot),
+        (Symbol::CROSS, matrix::cross),
         (Symbol::FACTOR_RATIONAL, polynomial::factor_rational),
         (Symbol::FACTOR_LIST, polynomial::factor_list),
         (Symbol::FACTOR_SQUARE_FREE, polynomial::factor_square_free),

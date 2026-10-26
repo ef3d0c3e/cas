@@ -71,14 +71,15 @@ pub(crate) fn undo_nws(answer: &str) -> String {
 }
 
 /// giac's answer in the language's grammar (CAS-DOC-7): its lists
-/// `list[…]` and coefficient lists `poly1[…]` are `[…]`, its sets `set[…]`
-/// are `{…}`, and its signed infinities `+infinity` and `-infinity`, where
-/// they stand alone, are `inf` and `-inf` (`infinity` alone is unsigned,
-/// the language's).
+/// `list[…]`, coefficient lists `poly1[…]` and matrices `matrix[…]` are
+/// `[…]`, its sets `set[…]` are `{…}`, and its signed infinities
+/// `+infinity` and `-infinity`, where they stand alone, are `inf` and
+/// `-inf` (`infinity` alone is unsigned, the language's).
 pub(crate) fn for_language(answer: &str) -> String {
     let mut s = signed_infinities(answer)
         .replace("list[", "[")
-        .replace("poly1[", "[");
+        .replace("poly1[", "[")
+        .replace("matrix[", "[");
     while let Some(at) = s.find("set[") {
         let open = at + "set".len();
         let Some(close) = closing(s.as_bytes(), open) else {
@@ -152,6 +153,7 @@ mod tests {
     fn giac_notations_are_rewritten() {
         assert_eq!(for_language("list[1,2]"), "[1,2]");
         assert_eq!(for_language("poly1[1,3,0]"), "[1,3,0]");
+        assert_eq!(for_language("matrix[[1,0],[0,1]]"), "[[1,0],[0,1]]");
         assert_eq!(for_language("set[1,2]"), "{1,2}");
         assert_eq!(for_language("[set[1,[2,3]],x]"), "[{1,[2,3]},x]");
         assert_eq!(for_language("x+1"), "x+1");
