@@ -39,7 +39,8 @@ fn holds(ctx: &Context, proposition: &Expr) -> bool {
 }
 
 /// Whether two values are one: lists part by part, entries the same, equal
-/// by `==`, or equal by `==` with the parameters at their values.
+/// by `==`, or equal by `==` once approximated with the parameters at their
+/// values.
 fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     let list = Expr::from(Symbol::LIST);
     if a.head() == Some(&list) && b.head() == Some(&list) {
@@ -54,7 +55,10 @@ fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
         .iter()
         .map(|&(s, p, q)| (Expr::symbol(s), Expr::from(p) / Expr::from(q)))
         .collect();
-    let at = |e: &Expr| ctx.eval(&e.substitute(&rules)).ok();
+    let at = |e: &Expr| {
+        ctx.eval(&Expr::call(Symbol::N, [e.substitute(&rules)]))
+            .ok()
+    };
     match (at(a), at(b)) {
         (Some(a), Some(b)) => a == b || equal(&a, &b),
         _ => false,
