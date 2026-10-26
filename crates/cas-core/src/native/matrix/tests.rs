@@ -392,5 +392,8 @@ fn eigenvalues() {
     let root = 33f64.sqrt();
     assert_eq!(values.len(), 2, "{found:?}");
     assert!((values[0] - (5.0 - root) / 2.0).abs() < 1e-12, "{found:?}");
-    assert!((values[1] - f64::midpoint(5.0, root)).abs() < 1e-12, "{found:?}");
+    assert!(
+        (values[1] - f64::midpoint(5.0, root)).abs() < 1e-12,
+        "{found:?}"
+    );
 }
