@@ -241,25 +241,34 @@ fn decomposed(
     Ok(Some((a, b, c)))
 }
 
-/// The integer root of `f` when it is `α h + β` in the variable `hv` alone.
-fn integer_root(ring: &SparseRing<Integers>, f: &Sparse<Integer>, hv: usize) -> Option<i64> {
+/// The root `−β/α` of `f` when it is `α v + β` in the variable `v` alone.
+pub(super) fn linear_root(
+    ring: &SparseRing<Integers>,
+    f: &Sparse<Integer>,
+    v: usize,
+) -> Option<Rational> {
     if f.degrees()
         .iter()
         .enumerate()
-        .any(|(j, &d)| j != hv && d > 0)
-        || ring.degree(f, hv) != Some(1)
+        .any(|(j, &d)| j != v && d > 0)
+        || ring.degree(f, v) != Some(1)
     {
         return None;
     }
-    let alpha = ring.coeff(f, hv, 1).coeffs().first()?.clone();
+    let alpha = ring.coeff(f, v, 1).coeffs().first()?.clone();
     let beta = ring
-        .coeff(f, hv, 0)
+        .coeff(f, v, 0)
         .coeffs()
         .first()
         .cloned()
         .unwrap_or(Integer::ZERO);
-    let (q, r) = (-beta).div_rem_trunc(&alpha);
-    r.is_zero().then(|| q.to_i64()).flatten()
+    Some(Rational::new(-beta, alpha))
+}
+
+/// The integer root of `f` when it is `α h + β` in the variable `hv` alone.
+fn integer_root(ring: &SparseRing<Integers>, f: &Sparse<Integer>, hv: usize) -> Option<i64> {
+    let root = linear_root(ring, f, hv)?;
+    root.is_integer().then(|| root.numer().to_i64()).flatten()
 }
 
 /// Gosper's bound on the degree of `x(k)`: `deg c − max(deg a, deg b)`

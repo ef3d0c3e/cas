@@ -111,3 +111,41 @@ fn hypergeometric_sums() {
         "sum(k*k!,k,0,n)",
     ]);
 }
+
+/// Infinite sums (CAS-226): limits of antidifferences, known series and
+/// divergence.
+#[test]
+fn infinite_sums() {
+    check(&[
+        "sum(1/2^k,k,0,inf)",
+        "sum(1/(k*(k+1)),k,1,inf)",
+        "sum(1/(k^2-1),k,2,inf)",
+        "sum(k/2^k,k,1,inf)",
+        "sum(1/k!,k,0,inf)",
+        "sum(3^k/k!,k,0,inf)",
+        "sum((-1)^k/k,k,1,inf)",
+        "sum(1/k^2,k,1,inf)",
+        "sum(1/k^4,k,1,inf)",
+        "sum(1,k,1,inf)",
+        "sum(1/k,k,1,inf)",
+        "sum(1/k^2,k,2,inf)",
+        "sum(1/k^6,k,1,inf)",
+        "sum(2/k^2,k,1,inf)",
+        "sum((-1)^k/k^2,k,1,inf)",
+        "sum(1/k!,k,2,inf)",
+        "sum((-1)^k/k!,k,0,inf)",
+        "sum(x^k/k!,k,0,inf)",
+        "sum(1/(2^k*k),k,1,inf)",
+        "sum(1/(3^k*k),k,2,inf)",
+        "sum(k^2/2^k,k,0,inf)",
+        "sum(1/(k*(k+2)),k,1,inf)",
+        "sum(1/(4*k^2-1),k,1,inf)",
+        "sum((1/2)^k,k,1,inf)",
+        "sum((-1/2)^k,k,0,inf)",
+        "sum(k,k,1,inf)",
+        "sum(-1,k,1,inf)",
+    ]);
+    // Odd zeta values stay, where giac has Zeta(3).
+    let stays = ours("sum(1/k^3,k,1,inf)").unwrap();
+    assert_eq!(stays.head(), Some(&Expr::from(Symbol::SUM)), "{stays:?}");
+}

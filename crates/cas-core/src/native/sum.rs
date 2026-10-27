@@ -16,6 +16,8 @@
 //!   under one `Sum`, and when none has one the call stays, as giac's
 //!   `sum(k!,k,0,n)`. A product of a factor
 //!   free of `k` is its power; another stays (CAS-227).
+//! - A sum with an infinite bound, `Infinity` or `-Infinity`: by limits,
+//!   divergence and known series ([`infinite`], CAS-226).
 //!
 //! Each call that computes takes one step, `"sum"` or `"product"`.
 
@@ -100,6 +102,13 @@ fn definite(ev: &mut Eval<'_>, e: &Expr, kind: Kind) -> Native {
     let Some((f, k, a, b)) = parts(e) else {
         return Ok(None);
     };
+    if kind == Kind::Sum && (infinite::infinity(a).is_some() || infinite::infinity(b).is_some()) {
+        let Some(result) = infinite::sum(ev, e, f, k, a, b)? else {
+            return Ok(None);
+        };
+        ev.step(kind.name(), e, &result);
+        return Ok(Some(result));
+    }
     let result = match (a.to_rational(), b.to_rational()) {
         (Some(a), Some(b)) if a.is_integer() && b.is_integer() => {
             let (a, b) = (a.numer().clone(), b.numer().clone());
@@ -354,5 +363,6 @@ fn stirling(n: usize) -> Vec<Vec<Integer>> {
 }
 
 mod gosper;
+mod infinite;
 #[cfg(test)]
 mod tests;
