@@ -2,8 +2,8 @@
 //! §5, CAS-262), `Σ aₖ y⁽ᵏ⁾ = f` over the basis of the homogeneous one:
 //!
 //! - **Undetermined coefficients**: `f`, its products of sines and cosines
-//!   reduced (`TrigReduce`) and its exponentials of sums split, expanded
-//!   into terms `c x^j e^(α x)` times `cos(β x)`, `sin(β x)` or neither,
+//!   reduced (`TrigReduce`), expanded into terms `c x^j e^(α x + γ)` times
+//!   `cos(β x)`, `sin(β x)` or neither,
 //!   grouped by `(α, β)`. A group's trial is `x^s e^(α x) (Q₁(x) cos(β x) +
 //!   Q₂(x) sin(β x))`, `s` the multiplicity of `α + β i` as a
 //!   characteristic root and `Q₁`, `Q₂` of the group's degree with unknown
@@ -22,7 +22,6 @@
 use cas_num::Complex;
 
 use super::super::solve::linear_system;
-use super::first::split_exponentials;
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
@@ -79,7 +78,7 @@ pub(super) fn particular(
 ) -> Result<Option<Expr>, EvalError> {
     let reduced = ev.eval(&Expr::call(
         Symbol::EXPAND,
-        [Expr::call(Symbol::TRIG_REDUCE, [split_exponentials(f)])],
+        [Expr::call(Symbol::TRIG_REDUCE, [f.clone()])],
     ))?;
     let terms = if reduced.head() == Some(&Expr::from(Symbol::PLUS)) {
         reduced.args().to_vec()
@@ -121,8 +120,10 @@ pub(super) fn particular(
     .map(Some)
 }
 
-/// `β` for `u = β x`, `β` free of `x`.
-fn slope(ev: &mut Eval<'_>, u: &Expr, x: &Expr) -> Result<Option<Expr>, EvalError> {
+/// `β` for `u = β x + γ`, `β` and `γ` free of `x`, and `γ = 0` unless
+/// `offset`: an exponential's constant factor `e^γ` is the term's, a sine's
+/// or a cosine's phase is not.
+fn slope(ev: &mut Eval<'_>, u: &Expr, x: &Expr, offset: bool) -> Result<Option<Expr>, EvalError> {
     let beta = ev.eval(&Expr::call(Symbol::D, [u.clone(), x.clone()]))?;
     if beta.contains(x) {
         return Ok(None);
@@ -131,7 +132,12 @@ fn slope(ev: &mut Eval<'_>, u: &Expr, x: &Expr) -> Result<Option<Expr>, EvalErro
         Symbol::EXPAND,
         [u.clone() - beta.clone() * x.clone()],
     ))?;
-    Ok((gap == Expr::from(0)).then_some(beta))
+    let fits = if offset {
+        !gap.contains(x)
+    } else {
+        gap == Expr::from(0)
+    };
+    Ok(fits.then_some(beta))
 }
 
 /// A term of the right side as `c x^j e^(α x) trig(β x)`; `None` when it
@@ -161,19 +167,19 @@ fn classify(ev: &mut Eval<'_>, t: &Expr, x: &Expr) -> Result<Option<Term>, EvalE
                 power += k;
             }
             (Some(Symbol::POWER), [b, u]) if b.as_symbol() == Some(Symbol::E) => {
-                let Some(alpha) = slope(ev, u, x)? else {
+                let Some(alpha) = slope(ev, u, x, true)? else {
                     return Ok(None);
                 };
                 alphas.push(alpha);
             }
             (Some(Symbol::EXP), [u]) => {
-                let Some(alpha) = slope(ev, u, x)? else {
+                let Some(alpha) = slope(ev, u, x, true)? else {
                     return Ok(None);
                 };
                 alphas.push(alpha);
             }
             (Some(s @ (Symbol::COS | Symbol::SIN)), [u]) if trig.0 == Trig::None => {
-                let Some(beta) = slope(ev, u, x)? else {
+                let Some(beta) = slope(ev, u, x, false)? else {
                     return Ok(None);
                 };
                 let kind = if s == Symbol::COS {
