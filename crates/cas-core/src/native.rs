@@ -30,6 +30,7 @@ mod polynomial;
 mod procedure;
 mod radical;
 mod replace;
+mod rounding;
 mod series;
 mod simplify;
 mod solve;
@@ -79,6 +80,12 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::IM, parts::part),
         (Symbol::CONJUGATE, parts::part),
         (Symbol::ARG, parts::arg),
+        (Symbol::FLOOR, rounding::round),
+        (Symbol::CEILING, rounding::round),
+        (Symbol::ROUND, rounding::round),
+        (Symbol::SIGN, rounding::sign),
+        (Symbol::MAX, rounding::extremum),
+        (Symbol::MIN, rounding::extremum),
         (Symbol::DIRECTED_INFINITY, arith::directed_infinity),
         (Symbol::EQUAL, logic::equal_native),
         (Symbol::UNEQUAL, logic::unequal),

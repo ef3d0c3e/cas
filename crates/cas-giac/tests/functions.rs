@@ -170,3 +170,42 @@ fn complex_parts() {
         "re(sqrt(-2))",
     ]);
 }
+
+/// Rounding, sign and order (CAS-241). giac's `floor(sqrt(2))` warns of
+/// its approximation; here balls decide.
+#[test]
+fn rounding_sign_and_order() {
+    check(&[
+        "floor(3.7)",
+        "floor(-3.7)",
+        "floor(7/2)",
+        "ceil(7/2)",
+        "ceil(-7/2)",
+        "round(7/2)",
+        "round(5/2)",
+        "round(-5/2)",
+        "round(-7/2)",
+        "round(-1/2)",
+        "floor(sqrt(2))",
+        "ceil(pi)",
+        "floor(10^30+1/2)",
+        "sign(-3)",
+        "sign(0)",
+        "sign(pi-3)",
+        "sign(3+4*i)",
+        "max(1,2,3)",
+        "min(1,2,3)",
+        "max(2,sqrt(5))",
+        "max([1,5,3])",
+        "min(-1/2,-1/3)",
+        "min(sqrt(2),3/2)",
+        "max(pi,22/7)",
+    ]);
+    for stays in ["floor(x)", "sign(x)", "max(x,1)"] {
+        let found = ours(stays).unwrap();
+        assert!(
+            found.args().iter().any(|a| a.as_symbol().is_some()),
+            "{stays}: {found:?}"
+        );
+    }
+}

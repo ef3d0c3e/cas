@@ -49,6 +49,12 @@ Re: re
 Im: im
 Conjugate: conj conjugate
 Arg: arg
+Floor: floor
+Ceiling: ceil ceiling
+Round: round
+Sign: sign
+Max: max
+Min: min
 Sqrt: sqrt
 Factorial: factorial
 Pi: pi

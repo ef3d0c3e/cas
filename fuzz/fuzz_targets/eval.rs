@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 108] = [
+const BUILTINS: [&str; 114] = [
     "Plus",
     "Times",
     "Power",
@@ -158,6 +158,13 @@ const BUILTINS: [&str; 108] = [
     "Im",
     "Conjugate",
     "Arg",
+    // Rounding, sign and order (CAS-241).
+    "Floor",
+    "Ceiling",
+    "Round",
+    "Sign",
+    "Max",
+    "Min",
 ];
 
 /// Builtins that apply something to parts, only in the expression
