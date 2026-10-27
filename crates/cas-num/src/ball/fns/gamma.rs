@@ -105,6 +105,22 @@ fn coefficients(n: usize) -> Arc<Vec<Rational>> {
     values
 }
 
+/// The Bernoulli number `B_n` (`B_1 = −1/2`), from the cached tangent
+/// numbers, `B_{2k} = c_k 2k (2k − 1)`; `None` past `B_{2·MAX_TERMS}`.
+#[must_use]
+pub fn bernoulli(n: u64) -> Option<Rational> {
+    match n {
+        0 => Some(Rational::ONE),
+        1 => Some(Rational::new(Integer::from(-1), Integer::from(2))),
+        _ if n % 2 == 1 => Some(Rational::ZERO),
+        _ => {
+            let k = usize::try_from(n / 2).ok().filter(|&k| k <= MAX_TERMS)?;
+            let c = &coefficients(k)[k - 1];
+            Some(c * &Rational::from(Integer::from(n) * Integer::from(n - 1)))
+        }
+    }
+}
+
 /// An estimate of `log2 |c_k|`, from `|B_{2k}| ≈ 2 (2k)! / (2π)^(2k)`.
 #[allow(clippy::cast_precision_loss, reason = "an estimate")]
 fn log2_coefficient(k: usize) -> f64 {
@@ -164,24 +180,35 @@ fn brent_size(t: f64, wp: u64) -> Option<(u64, u64)> {
         n = target + (t - 1.0).max(0.0) * n.max(2.0).ln();
     }
     let n = n.max(2.0 * t + 2.0).ceil();
-    // The terms past t + k ≥ 2N halve.
-    let steps = (2.0 * n - t).ceil().max(0.0) + 2.0;
+    // The terms fall below 2^-wp of the sum by about k = e N (N^k/k! against
+    // e^N), and halve from t + k ≥ 2N: about 3N steps at most.
+    let steps = (3.0 * n - t).ceil().max(0.0) + 16.0;
     (steps.is_finite() && steps < MAX_BRENT_STEPS as f64).then_some((n as u64, steps as u64))
 }
 
-/// `Γ(t)` for an exact `t > 0` by Brent's series with `N = n`, `steps`
-/// terms, at about `wp` bits.
+/// `Γ(t)` for an exact `t > 0` by Brent's series with `N = n`, at about
+/// `wp` bits: the terms summed until `t + k ≥ 2N`, past which they halve,
+/// and the last is below `2^-(wp + 12)` of the sum; at most `steps`.
 fn brent(t: &Float, wp: u64, n: u64, steps: u64) -> Ball {
     let q = wp + 2 * u64::from(u64::BITS - steps.leading_zeros()) + 16;
     let big_n = Integer::from(n);
     let bn = Ball::from_integer(&big_n);
+    let twice_n = Float::from(Integer::from(2 * n));
+    let small = -Integer::from(wp + 12);
     let mut term = one().div(&Ball::exact(t.clone()), q);
     let mut sum = term.clone();
     for k in 1..steps {
         let k = i64::try_from(k).expect("fewer than 2^63 steps");
-        let denominator = Ball::exact(t.add(&Float::from(k)));
-        term = term.mul(&bn, q).div(&denominator, q);
+        let at = t.add(&Float::from(k));
+        term = term.mul(&bn, q).div(&Ball::exact(at.clone()), q);
         sum = sum.add(&term, q);
+        let halving = at >= twice_n;
+        if halving
+            && upper(&term)
+                <= Mag::from_float_lower(sum.mid()).mul_lower(&Mag::power_of_two(&small))
+        {
+            break;
+        }
     }
     // N^t e^(−N).
     let exponent_ball = Ball::exact(t.clone()).mul(&bn.log(q), q).sub(&bn, q);

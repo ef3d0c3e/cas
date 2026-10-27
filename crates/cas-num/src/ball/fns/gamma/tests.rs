@@ -123,9 +123,32 @@ proptest! {
     #[test]
     fn against_mpfr(x in dyadic_with(2, -40..=12), prec in prop_oneof![2u64..120, 120u64..600, Just(1500u64)]) {
         let x = x.to_ours();
-        if x.is_zero() || (x.is_negative() && x.to_rational().is_integer()) {
+        // Below 2^12, where MPFR's gamma has a value (two limbs of mantissa
+        // reach 2^140), and away from the poles.
+        if x.is_zero()
+            || *x.exponent() > Integer::from(12)
+            || (x.is_negative() && x.to_rational().is_integer())
+        {
             return Ok(());
         }
         check(&x, prec).map_err(TestCaseError::fail)?;
     }
+}
+
+/// The Bernoulli numbers from the tangent numbers.
+#[test]
+fn bernoulli_numbers() {
+    use crate::Rational;
+    use crate::ball::bernoulli;
+    let q = |n: i64, d: i64| Some(Rational::new(Integer::from(n), Integer::from(d)));
+    assert_eq!(bernoulli(0), q(1, 1));
+    assert_eq!(bernoulli(1), q(-1, 2));
+    assert_eq!(bernoulli(2), q(1, 6));
+    assert_eq!(bernoulli(3), q(0, 1));
+    assert_eq!(bernoulli(4), q(-1, 30));
+    assert_eq!(bernoulli(6), q(1, 42));
+    assert_eq!(bernoulli(10), q(5, 66));
+    assert_eq!(bernoulli(12), q(-691, 2730));
+    assert_eq!(bernoulli(20), q(-174_611, 330));
+    assert_eq!(bernoulli(100_000), None);
 }
