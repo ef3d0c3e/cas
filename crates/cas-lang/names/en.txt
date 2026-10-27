@@ -101,6 +101,9 @@ EulerPhi: euler
 PowerMod: powmod
 ExtendedGCD: iegcd igcdex
 ChineseRemainder: ichinrem
+JacobiSymbol: jacobi_symbol
+LegendreSymbol: legendre_symbol
+BernoulliB: bernoulli
 # Equations (CAS-DOC-11, CAS-210, CAS-214).
 Solve: solve
 CSolve: csolve

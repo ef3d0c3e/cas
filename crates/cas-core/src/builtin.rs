@@ -139,6 +139,9 @@ builtins! {
     POWER_MOD = "PowerMod" [LISTABLE, PROTECTED];
     EXTENDED_GCD = "ExtendedGCD" [PROTECTED];
     CHINESE_REMAINDER = "ChineseRemainder" [PROTECTED];
+    JACOBI_SYMBOL = "JacobiSymbol" [LISTABLE, PROTECTED];
+    LEGENDRE_SYMBOL = "LegendreSymbol" [LISTABLE, PROTECTED];
+    BERNOULLI_B = "BernoulliB" [LISTABLE, PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

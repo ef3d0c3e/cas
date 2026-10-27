@@ -26,12 +26,19 @@
 //!   `ChineseRemainder[{a₁, m₁}, …]` (`ichinrem`): `{c, M}`, `M` the moduli's
 //!   least common multiple and `c` in `[0, M)`, moduli not coprime allowed
 //!   where the residues agree; none stays, with giac's "no integer solution".
+//! - Symbols (CAS-270). `JacobiSymbol[a, n]` (`jacobi_symbol`) for an odd
+//!   `n`, by `|n|` (giac's `jacobi_symbol(3,-7)` is (3/7)), and
+//!   `LegendreSymbol[a, p]` (`legendre_symbol`) the same, as giac's for a
+//!   composite `p`; an even `n` stays, with a warning. `BernoulliB[n]`
+//!   (`bernoulli`): `B_n` from cas-num's cache, `B_1 = −1/2`, to `B_1200`;
+//!   beyond, it stays.
 
 #![allow(
     clippy::many_single_char_names,
     reason = "the textbook names: a^b mod m, u a + v b = d, c ≡ a (mod m)"
 )]
 
+use cas_num::ball::bernoulli;
 use cas_num::modular::crt;
 use cas_num::{Factorization, Integer, Natural};
 
@@ -310,6 +317,29 @@ pub(super) fn chinese_remainder(ev: &mut Eval<'_>, e: &Expr) -> Native {
         Symbol::LIST,
         [Expr::from(Integer::from(x)), Expr::from(Integer::from(l))],
     )))
+}
+
+/// `JacobiSymbol[a, n]` and `LegendreSymbol[a, n]`.
+pub(super) fn jacobi_symbol(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some([a, n]) = integer_arguments(e).and_then(|v| <[Integer; 2]>::try_from(v).ok()) else {
+        return Ok(None);
+    };
+    let n = Integer::from(magnitude(&n));
+    if n.is_divisible_by(&Integer::from(2)) {
+        return refuse(ev, e, "the modulus is even");
+    }
+    Ok(Some(Expr::from(i64::from(a.jacobi(&n)))))
+}
+
+/// `BernoulliB[n]`.
+pub(super) fn bernoulli_b(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some(n) = integer_argument(e) else {
+        return Ok(None);
+    };
+    let Some(n) = n.to_i64().and_then(|n| u64::try_from(n).ok()) else {
+        return Ok(None);
+    };
+    Ok(bernoulli(n).map(Expr::from))
 }
 
 #[cfg(test)]

@@ -142,3 +142,20 @@ fn modular_arithmetic() {
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+/// Jacobi and Legendre symbols, Bernoulli numbers (CAS-270).
+#[test]
+fn symbols_and_bernoulli_numbers() {
+    check(&[
+        "jacobi_symbol(2,15)",
+        "jacobi_symbol(3,-7)",
+        "legendre_symbol(2,7)",
+        "legendre_symbol(3,7)",
+        "legendre_symbol(5,9)",
+        "bernoulli(0)",
+        "bernoulli(1)",
+        "bernoulli(3)",
+        "bernoulli(6)",
+        "bernoulli(30)",
+    ]);
+}

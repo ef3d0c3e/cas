@@ -120,3 +120,24 @@ fn modular_arithmetic() {
         ),
     ]);
 }
+
+/// Jacobi and Legendre symbols, Bernoulli numbers (CAS-270).
+#[test]
+fn symbols_and_bernoulli_numbers() {
+    check(&[
+        ("JacobiSymbol[2, 15]", "1"),
+        ("JacobiSymbol[3, -7]", "-1"),
+        ("JacobiSymbol[3, 9]", "0"),
+        ("JacobiSymbol[2, 8]", "JacobiSymbol[2, 8]"),
+        ("LegendreSymbol[2, 7]", "1"),
+        ("LegendreSymbol[3, 7]", "-1"),
+        ("LegendreSymbol[5, 9]", "1"),
+        ("BernoulliB[0]", "1"),
+        ("BernoulliB[1]", "-1/2"),
+        ("BernoulliB[3]", "0"),
+        ("BernoulliB[6]", "1/42"),
+        ("BernoulliB[30]", "8615841276005/14322"),
+        ("BernoulliB[2000]", "BernoulliB[2000]"),
+        ("BernoulliB[-2]", "BernoulliB[-2]"),
+    ]);
+}
