@@ -143,3 +143,30 @@ fn reciprocal_trigonometric() {
         "acsc(-1)",
     ]);
 }
+
+/// The complex parts (CAS-240).
+#[test]
+fn complex_parts() {
+    check(&[
+        "re(3+4*i)",
+        "im(3+4*i)",
+        "conj(3+4*i)",
+        "arg(1+i)",
+        "arg(-1)",
+        "arg(i)",
+        "arg(-3+4*i)",
+        "arg(1+i*sqrt(3))",
+        "re(x)",
+        "im(x)",
+        "conj(x)",
+        "re(x+i*y)",
+        "im(x+i*y)",
+        "conj(x+i*y)",
+        "re(exp(i*x))",
+        "im(exp(i*x))",
+        "conj(exp(i*x))",
+        "re(1/(x+i*y))",
+        "im(x^2)",
+        "re(sqrt(-2))",
+    ]);
+}

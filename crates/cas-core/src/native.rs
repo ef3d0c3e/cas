@@ -25,6 +25,7 @@ mod logic;
 mod matrix;
 mod number;
 mod numeric;
+mod parts;
 mod polynomial;
 mod procedure;
 mod radical;
@@ -74,6 +75,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::ARC_SEC, elementary::reciprocal),
         (Symbol::ARC_CSC, elementary::reciprocal),
         (Symbol::ARC_COT, elementary::reciprocal),
+        (Symbol::RE, parts::part),
+        (Symbol::IM, parts::part),
+        (Symbol::CONJUGATE, parts::part),
+        (Symbol::ARG, parts::arg),
         (Symbol::DIRECTED_INFINITY, arith::directed_infinity),
         (Symbol::EQUAL, logic::equal_native),
         (Symbol::UNEQUAL, logic::unequal),

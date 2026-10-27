@@ -45,6 +45,10 @@ Cot: cot
 ArcSec: asec arcsec
 ArcCsc: acsc arccsc
 ArcCot: acot arccot
+Re: re
+Im: im
+Conjugate: conj conjugate
+Arg: arg
 Sqrt: sqrt
 Factorial: factorial
 Pi: pi
