@@ -27,7 +27,7 @@ macro_rules! mpfr {
     };
 }
 
-const UNARY: [(&str, Ours, Mpfr); 21] = [
+const UNARY: [(&str, Ours, Mpfr); 23] = [
     ("exp", Ball::exp, mpfr!(exp_ref)),
     ("expm1", Ball::expm1, mpfr!(exp_m1_ref)),
     ("log", Ball::log, mpfr!(ln_ref)),
@@ -49,6 +49,8 @@ const UNARY: [(&str, Ours, Mpfr); 21] = [
     ("sqrt", Ball::sqrt, mpfr!(sqrt_ref)),
     ("gamma", Ball::gamma, mpfr!(gamma_ref)),
     ("zeta", Ball::zeta, mpfr!(zeta_ref)),
+    ("erf", Ball::erf, mpfr!(erf_ref)),
+    ("erfc", Ball::erfc, mpfr!(erfc_ref)),
 ];
 
 /// `sin` and `cos` give `[0 ± 1]` for arguments of exponent above this

@@ -21,6 +21,7 @@
 
 mod atan;
 mod bitburst;
+mod erf;
 mod exp;
 mod fixed;
 mod gamma;
