@@ -15,8 +15,9 @@
 //!   powers, of total degree 2 to [`MAX_DEGREE`], as a sum by `sin a sin b
 //!   = (cos(a − b) − cos(a + b))/2`, `cos a cos b = (cos(a − b) + cos(a +
 //!   b))/2` and `sin a cos b = (sin(a + b) + sin(a − b))/2`, the angles
-//!   expanded, a negative one's sign out, and the terms of one function at
-//!   one angle together; the other factors stay as they are (giac's
+//!   expanded, a negative one's sign out (a sum's when its first term is
+//!   negative), and the terms of one function at one angle together; the
+//!   other factors stay as they are (giac's
 //!   `tlin(cos(x)^3)` is `3/4*cos(x)+1/4*cos(3*x)`).
 //! - `TrigToExp`: `sin u = (e^(iu) − e^(−iu))/(2i)`, `cos u = (e^(iu) +
 //!   e^(−iu))/2` and `tan u = −i (e^(iu) − e^(−iu))/(e^(iu) + e^(−iu))`.
@@ -354,7 +355,8 @@ fn times(ev: &mut Eval<'_>, terms: &[Term], g: Kind, phi: &Expr) -> Result<Vec<T
         };
         for (c, k, angle) in new {
             let angle = ev.eval(&angle)?;
-            add(&mut out, normalized(c, k, angle));
+            let term = normalized(ev, c, k, angle)?;
+            add(&mut out, term);
         }
     }
     out.retain(|(c, _, _)| !c.is_zero());
@@ -362,19 +364,29 @@ fn times(ev: &mut Eval<'_>, terms: &[Term], g: Kind, phi: &Expr) -> Result<Vec<T
 }
 
 /// `c f(θ)` with `sin 0 = 0`, `cos 0 = 1`, and the sign of a negative angle
-/// out.
-fn normalized(c: Rational, k: Kind, angle: Expr) -> Term {
+/// out: a negative number, a product with a negative coefficient, or a sum
+/// whose first term is one, so that `sin(y − x)` and `sin(x − y)` meet.
+fn normalized(ev: &mut Eval<'_>, c: Rational, k: Kind, angle: Expr) -> Result<Term, EvalError> {
     if angle == Expr::from(0) {
-        return match k {
+        return Ok(match k {
             Kind::Sin => (Rational::ZERO, Kind::One, angle),
             _ => (c, Kind::One, angle),
-        };
+        });
     }
-    match negated(&angle) {
+    let opposite = match negated(&angle) {
+        Some(positive) => Some(positive),
+        None => match (angle.head().and_then(Expr::as_symbol), angle.args()) {
+            (Some(Symbol::PLUS), [first, ..]) if negated(first).is_some() => {
+                Some(ev.eval(&Expr::call(Symbol::EXPAND, [-angle.clone()]))?)
+            }
+            _ => None,
+        },
+    };
+    Ok(match opposite {
         Some(positive) if k == Kind::Sin => (-c, k, positive),
         Some(positive) => (c, k, positive),
         None => (c, k, angle),
-    }
+    })
 }
 
 /// `terms` plus `c f(θ)`, with the term of the same function and angle.

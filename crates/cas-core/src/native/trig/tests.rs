@@ -98,6 +98,11 @@ fn reductions() {
             "Plus[Times[3/4, Cos[x]], Times[1/4, Cos[Times[3, x]]]]",
         ),
         ("TrigReduce[Plus[Power[Sin[x], 2], Power[Cos[x], 2]]]", "1"),
+        // sin(y − x) and sin(x − y) meet.
+        (
+            "TrigReduce[Plus[Times[Sin[x], Cos[y]], Times[Cos[x], Sin[y]]]]",
+            "Sin[Plus[x, y]]",
+        ),
         // One factor: as it is.
         ("TrigReduce[Times[a, Sin[x]]]", "Times[a, Sin[x]]"),
     ]);
