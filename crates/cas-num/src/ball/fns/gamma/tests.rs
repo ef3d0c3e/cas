@@ -100,6 +100,14 @@ fn poles() {
     assert_eq!(reach.gamma(64), Ball::INDETERMINATE);
     let short = Ball::new(next, Mag::power_of_two(&Integer::from(-170i64)));
     assert!(short.gamma(64).is_finite());
+    // A tiny negative argument, beyond MPFR's exponents: Γ(−ε) ≈ −1/ε,
+    // shifted by two steps without a rational (CAS-253).
+    let tiny = Float::from(-1i64).mul_2exp(&-Integer::from(1i64 << 40));
+    let g = Ball::exact(tiny).gamma(64);
+    assert!(g.is_finite() && g.rel_accuracy_bits() >= 61, "{g:?}");
+    let scaled = g.mid().mul_2exp(&-Integer::from(1i64 << 40));
+    let near = Float::from(1i64).mul_2exp(&Integer::from(-60i64));
+    assert!(scaled.add(&Float::from(1i64)).abs() <= near, "{g:?}");
 }
 
 /// A ball's value holds the values at its ends.

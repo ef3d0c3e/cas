@@ -380,9 +380,10 @@ impl Ball {
 /// `Γ(x)` for a ball below 0 that meets no pole.
 fn negative(x: &Ball, wp: u64) -> Ball {
     let m = x.mid();
-    // Steps up to [1, 2): n = ⌈1 − m⌉ when that is small.
+    // Steps up to [1, 2): n = ⌈1 − m⌉ = 1 + ⌈−m⌉ when that is small, with
+    // no rational, which a tiny m has not (CAS-253).
     let steps = if exponent(m) <= 7 {
-        let need = (&Rational::ONE - &m.to_rational()).ceil();
+        let need = &to_integer(&m.neg(), true) + &Integer::ONE;
         need.to_i64().and_then(|n| u64::try_from(n).ok())
     } else {
         None
