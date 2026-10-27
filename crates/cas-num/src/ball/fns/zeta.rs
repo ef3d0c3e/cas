@@ -27,13 +27,16 @@ use super::{exponent, one, working};
 use crate::ball::{Ball, Float, Mag, Round};
 use crate::{Integer, Rational};
 
-/// `1 − x` for a ball: exact for an exact `x`, rounded at `q` bits.
+/// `1 − x` for a ball: exact for an exact `x` where that fits, as next to
+/// the pole, rounded at `q` bits otherwise (a tiny `x` of exponent `−2^68`
+/// spanned `2^68` bits, CAS-252).
 fn one_minus(x: &Ball, q: u64) -> Ball {
-    if x.is_exact() {
-        Ball::exact(Float::from(1i64).sub(x.mid()))
-    } else {
-        one().sub(x, q)
+    if x.is_exact()
+        && let Some(d) = Float::from(1i64).checked_sub(x.mid())
+    {
+        return Ball::exact(d);
     }
+    one().sub(x, q)
 }
 
 /// `m^(−σ)` for `m = 1 … n` (index `m − 1`): exponentials at the primes,
