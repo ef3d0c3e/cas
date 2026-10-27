@@ -23,6 +23,7 @@ mod atan;
 mod bitburst;
 mod exp;
 mod fixed;
+mod gamma;
 mod hyp;
 mod log;
 mod pow;

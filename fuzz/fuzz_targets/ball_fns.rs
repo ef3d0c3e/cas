@@ -27,7 +27,7 @@ macro_rules! mpfr {
     };
 }
 
-const UNARY: [(&str, Ours, Mpfr); 19] = [
+const UNARY: [(&str, Ours, Mpfr); 20] = [
     ("exp", Ball::exp, mpfr!(exp_ref)),
     ("expm1", Ball::expm1, mpfr!(exp_m1_ref)),
     ("log", Ball::log, mpfr!(ln_ref)),
@@ -47,6 +47,7 @@ const UNARY: [(&str, Ours, Mpfr); 19] = [
     ("acosh", Ball::acosh, mpfr!(acosh_ref)),
     ("atanh", Ball::atanh, mpfr!(atanh_ref)),
     ("sqrt", Ball::sqrt, mpfr!(sqrt_ref)),
+    ("gamma", Ball::gamma, mpfr!(gamma_ref)),
 ];
 
 /// `sin` and `cos` give `[0 ± 1]` for arguments of exponent above this
@@ -116,6 +117,8 @@ fn pole(name: &str, x: &Float) -> bool {
         "log" => x.is_zero(),
         "log1p" => at(-1),
         "atanh" => at(1) || at(-1),
+        // MPFR's gamma is ±∞ at ±0, NaN at the negative integers.
+        "gamma" => x.is_zero(),
         _ => false,
     }
 }
