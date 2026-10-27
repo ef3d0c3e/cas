@@ -33,6 +33,7 @@ mod series;
 mod solve;
 mod special;
 mod structure;
+mod sum;
 
 pub(crate) use numeric::approximation;
 
@@ -154,6 +155,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         ),
         (Symbol::EIGENVALUES, matrix::eigenvalues),
         (Symbol::EIGENVECTORS, matrix::eigenvectors),
+        (Symbol::SUM, sum::sum),
+        (Symbol::PRODUCT, sum::product),
         (Symbol::FACTOR_RATIONAL, polynomial::factor_rational),
         (Symbol::FACTOR_LIST, polynomial::factor_list),
         (Symbol::FACTOR_SQUARE_FREE, polynomial::factor_square_free),

@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 84] = [
+const BUILTINS: [&str; 86] = [
     "Plus",
     "Times",
     "Power",
@@ -129,6 +129,9 @@ const BUILTINS: [&str; 84] = [
     "CharacteristicPolynomial",
     "Eigenvalues",
     "Eigenvectors",
+    // Sums and products (CAS-224).
+    "Sum",
+    "Product",
 ];
 
 /// Builtins that apply something to parts, only in the expression

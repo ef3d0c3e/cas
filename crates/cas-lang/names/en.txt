@@ -81,6 +81,9 @@ LinSolve: linsolve
 CharacteristicPolynomial: charpoly pcar
 Eigenvalues: eigenvals
 Eigenvectors: eigenvects egv
+# Sums and products (CAS-DOC-13, CAS-224).
+Sum: sum
+Product: product mul
 # A ball, `ball(c, r)` (CAS-DOC-5 §6.5, CAS-83), and back to fractions
 # (D4, CAS-148).
 Ball: ball
@@ -117,7 +120,6 @@ FactorSquareFree: sqrfree
 
 [planned]
 # Calculus, algebra and numerics (CAS-DOC-1, CAS-DOC-4 §1 and §8, CAS-DOC-5).
-Sum: sum
 Simplify: simplify
 
 [constants]
