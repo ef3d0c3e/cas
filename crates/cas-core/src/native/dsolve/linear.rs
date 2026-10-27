@@ -70,26 +70,85 @@ fn basis(
         Symbol::PLUS,
         a.iter().zip(0i64..).map(|(ak, k)| ak.clone() * r.pow(k)),
     );
-    let polynomial = ev.eval(&polynomial)?;
-    let Some(roots) = roots_counted(ev, e, &polynomial, &r)? else {
+    let real = real(ev, a);
+    let Some((roots, distinct)) = roots(ev, e, &polynomial, &r, a.len() - 1, real)? else {
         return Ok(None);
     };
-    if roots.len() + 1 != a.len() {
+    let mut basis = Vec::with_capacity(a.len() - 1);
+    for root in roots {
+        let m = root.multiplicity();
+        for j in 0..m {
+            let power = x.pow(i64::try_from(j).unwrap_or(i64::MAX));
+            match &root {
+                Root::Pair(re, im, _) => {
+                    let scale = power * Expr::from(Symbol::E).pow(re.clone() * x.clone());
+                    let angle = im.clone() * x.clone();
+                    basis.push(scale.clone() * Expr::call(Symbol::COS, [angle.clone()]));
+                    basis.push(scale * Expr::call(Symbol::SIN, [angle]));
+                }
+                Root::Single(s, _) => {
+                    basis.push(power * Expr::from(Symbol::E).pow(s.clone() * x.clone()));
+                }
+            }
+        }
+    }
+    let mut evaluated = Vec::with_capacity(basis.len());
+    for b in basis {
+        evaluated.push(ev.eval(&b)?);
+    }
+    Ok(Some((evaluated, distinct)))
+}
+
+/// A root of a characteristic or indicial polynomial with its
+/// multiplicity: alone, or `a ± b i` with its conjugate.
+pub(super) enum Root {
+    Single(Expr, usize),
+    Pair(Expr, Expr, usize),
+}
+
+impl Root {
+    pub(super) fn multiplicity(&self) -> usize {
+        match self {
+            Root::Single(_, m) | Root::Pair(_, _, m) => *m,
+        }
+    }
+}
+
+/// Whether every coefficient is real, by its parts.
+pub(super) fn real(ev: &Eval<'_>, a: &[Expr]) -> bool {
+    a.iter()
+        .all(|ak| parts(ev.context(), ak).is_some_and(|(_, im)| im == Expr::from(0)))
+}
+
+/// The roots of `polynomial` in `r`, of degree `degree`, in their order
+/// with their multiplicities, conjugates together when `real`; and the
+/// distinct roots with their multiplicities. `None` when not all are
+/// found.
+#[allow(clippy::type_complexity, reason = "the roots, two ways")]
+pub(super) fn roots(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    polynomial: &Expr,
+    r: &Expr,
+    degree: usize,
+    real: bool,
+) -> Result<Option<(Vec<Root>, Vec<(Expr, usize)>)>, EvalError> {
+    let polynomial = ev.eval(polynomial)?;
+    let Some(found) = roots_counted(ev, e, &polynomial, r)? else {
+        return Ok(None);
+    };
+    if found.len() != degree {
         return Ok(None);
     }
-    // The distinct roots, each with its multiplicity, in their order.
     let mut distinct: Vec<(Expr, usize)> = Vec::new();
-    for root in roots {
+    for root in found {
         match distinct.iter_mut().find(|(s, _)| *s == root) {
             Some((_, m)) => *m += 1,
             None => distinct.push((root, 1)),
         }
     }
-    let real = a
-        .iter()
-        .all(|ak| parts(ev.context(), ak).is_some_and(|(_, im)| im == Expr::from(0)));
     let mut used = vec![false; distinct.len()];
-    let mut basis = Vec::with_capacity(a.len() - 1);
+    let mut grouped = Vec::with_capacity(distinct.len());
     for i in 0..distinct.len() {
         if used[i] {
             continue;
@@ -101,29 +160,15 @@ fn basis(
         } else {
             None
         };
-        for j in 0..m {
-            let power = x.pow(i64::try_from(j).unwrap_or(i64::MAX));
-            match &pair {
-                Some((re, im, _)) => {
-                    let scale = power * Expr::from(Symbol::E).pow(re.clone() * x.clone());
-                    let angle = im.clone() * x.clone();
-                    basis.push(scale.clone() * Expr::call(Symbol::COS, [angle.clone()]));
-                    basis.push(scale * Expr::call(Symbol::SIN, [angle]));
-                }
-                None => {
-                    basis.push(power * Expr::from(Symbol::E).pow(root.clone() * x.clone()));
-                }
+        grouped.push(match pair {
+            Some((re, im, k)) => {
+                used[k] = true;
+                Root::Pair(re, im, m)
             }
-        }
-        if let Some((_, _, k)) = pair {
-            used[k] = true;
-        }
+            None => Root::Single(root, m),
+        });
     }
-    let mut evaluated = Vec::with_capacity(basis.len());
-    for b in basis {
-        evaluated.push(ev.eval(&b)?);
-    }
-    Ok(Some((evaluated, distinct)))
+    Ok(Some((grouped, distinct)))
 }
 
 /// `(a, b, k)` for a root `a + b i`, `b` not 0, whose conjugate `a − b i`

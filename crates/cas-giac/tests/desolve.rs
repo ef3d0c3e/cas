@@ -220,3 +220,13 @@ fn right_sides() {
         Case("diff(Y, x, x) + Y - tan(x)", "x", 2, false),
     ]);
 }
+
+/// Euler's equations (CAS-263): those giac solves, by the residual (its
+/// constants are scaled otherwise, and `ln(abs(x))` is `ln(x)` here).
+#[test]
+fn euler_equations() {
+    check(&[
+        Case("x^2*diff(Y, x, x) + x*diff(Y, x) - Y", "x", 2, false),
+        Case("x^2*diff(Y, x, x) + 3*x*diff(Y, x) + Y", "x", 2, false),
+    ]);
+}

@@ -339,8 +339,8 @@ fn solved(
 }
 
 /// The particular solution for `g` by variation of parameters over
-/// `basis`.
-fn variation(
+/// `basis`, `a` the equation's coefficients, `aₙ` the leading one.
+pub(super) fn variation(
     ev: &mut Eval<'_>,
     e: &Expr,
     a: &[Expr],

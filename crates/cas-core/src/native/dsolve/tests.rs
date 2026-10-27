@@ -221,6 +221,28 @@ fn right_sides() {
     }
 }
 
+/// Euler's equations (CAS-263), some of which giac does not solve.
+#[test]
+fn euler_equations() {
+    let cases = [
+        "Plus[Times[Power[x, 2], D[Y, x, x]], Times[x, D[Y, x]], Times[-1, Y]]",
+        "Plus[Times[Power[x, 2], D[Y, x, x]], Times[3, x, D[Y, x]], Y]",
+        "Plus[Times[Power[x, 2], D[Y, x, x]], Times[x, D[Y, x]], Y]",
+        "Plus[Times[Power[x, 2], D[Y, x, x]], Times[-2, Y], Times[-1, x]]",
+        // Up to a common factor: y″ + y′/x − y/x² = 0.
+        "Plus[D[Y, x, x], Times[D[Y, x], Power[x, -1]], Times[-1, Y, Power[x, -2]]]",
+        "Plus[Times[Power[x, 3], D[Y, x, x, x]], Times[-3, Power[x, 2], D[Y, x, x]], Times[6, x, D[Y, x]], Times[-6, Y]]",
+    ];
+    for template in cases {
+        let order = if template.contains("D[Y, x, x, x]") {
+            3
+        } else {
+            2
+        };
+        general(template, "x", order);
+    }
+}
+
 /// What no method solves, or what is not an equation in `y`, stays.
 #[test]
 fn stays() {
