@@ -142,13 +142,13 @@ fn first_order_nonlinear() {
     for template in cases {
         general(template, "x", 1);
     }
-    // giac's constant, H(x) − G(y) = c_0: y′ = y² is 1/(c_0 − x).
+    // giac's constant, H(x) − G(y) = c_0: y′ = y² is −1/(x − c_0).
     let ctx = Context::new();
     let found = ctx
         .eval(&read("DSolve[Equation[D[y[x], x], Power[y[x], 2]], y[x]]"))
         .unwrap();
     let expected = ctx
-        .eval(&read("List[Power[Plus[c_0, Times[-1, x]], -1]]"))
+        .eval(&read("List[Times[-1, Power[Plus[Times[-1, c_0], x], -1]]]"))
         .unwrap();
     assert_eq!(found, expected);
 }
@@ -280,7 +280,7 @@ fn conditions() {
         (
             "DSolve[List[Equation[D[y[x], x], Power[y[x], 2]], Equation[y[0], 1]], y[x]]"
                 .to_owned(),
-            "List[Power[Plus[1, Times[-1, x]], -1]]",
+            "List[Times[-1, Power[Plus[-1, x], -1]]]",
         ),
         // The unknown alone: its argument from the equation, not y[0].
         (
