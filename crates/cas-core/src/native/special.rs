@@ -198,7 +198,7 @@ fn trigonometric(f: Symbol, x: &Expr) -> Option<Expr> {
 
 /// `-x` when `x` is a negative number or a product with a negative
 /// rational coefficient.
-fn negated(x: &Expr) -> Option<Expr> {
+pub(super) fn negated(x: &Expr) -> Option<Expr> {
     if let Some(r) = x.to_rational() {
         return r.is_negative().then(|| Expr::from(-r));
     }

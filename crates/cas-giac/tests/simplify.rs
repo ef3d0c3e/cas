@@ -139,3 +139,25 @@ fn radicals() {
         "simplify(sqrt(x)/x)",
     ]);
 }
+
+/// The trigonometric rewritings (CAS-233): giac's `texpand`, `tlin`,
+/// `trig2exp` and `exp2trig`.
+#[test]
+fn trigonometric_rewritings() {
+    check(&[
+        "texpand(sin(2*x))",
+        "texpand(cos(3*x))",
+        "texpand(sin(x+y))",
+        "texpand(tan(x+y))",
+        "texpand(cos(2*x+y))",
+        "tlin(sin(x)*cos(x))",
+        "tlin(sin(x)^2)",
+        "tlin(cos(x)^3)",
+        "tlin(sin(x)*sin(y))",
+        "tlin(sin(x)^2*cos(x))",
+        "trig2exp(sin(x))",
+        "trig2exp(tan(x))",
+        "exp2trig(exp(i*x))",
+        "exp2trig(trig2exp(cos(x)))",
+    ]);
+}

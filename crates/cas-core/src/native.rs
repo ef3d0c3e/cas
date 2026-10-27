@@ -35,6 +35,7 @@ mod solve;
 mod special;
 mod structure;
 mod sum;
+mod trig;
 
 pub(crate) use numeric::approximation;
 
@@ -157,6 +158,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::EIGENVALUES, matrix::eigenvalues),
         (Symbol::EIGENVECTORS, matrix::eigenvectors),
         (Symbol::SIMPLIFY, simplify::simplify),
+        (Symbol::TRIG_EXPAND, trig::trig_expand),
+        (Symbol::TRIG_REDUCE, trig::trig_reduce),
+        (Symbol::TRIG_TO_EXP, trig::trig_to_exp),
+        (Symbol::EXP_TO_TRIG, trig::exp_to_trig),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),

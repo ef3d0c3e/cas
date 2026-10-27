@@ -85,8 +85,12 @@ Eigenvectors: eigenvects egv
 Sum: sum
 Product: product mul
 Binomial: binomial comb
-# Simplification (CAS-DOC-14, CAS-229).
+# Simplification (CAS-DOC-14, CAS-229, CAS-233).
 Simplify: simplify
+TrigExpand: texpand trigexpand
+TrigReduce: tlin
+TrigToExp: trig2exp
+ExpToTrig: exp2trig
 # A ball, `ball(c, r)` (CAS-DOC-5 §6.5, CAS-83), and back to fractions
 # (D4, CAS-148).
 Ball: ball
