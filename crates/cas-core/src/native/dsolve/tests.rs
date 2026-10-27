@@ -24,16 +24,25 @@ fn general(template: &str, v: &str, order: usize) -> Expr {
         solution.head() != Some(&Expr::from(crate::symbol::Symbol::DSOLVE)),
         "{input}: stays"
     );
-    let residual = template.replace('Y', &format!("{solution:?}"));
-    let at = format!("Less[Abs[N[ReplaceAll[{residual}, {POINT}]]], 1/10000000000]");
-    assert_eq!(
-        ctx.eval(&read(&at)).unwrap(),
-        read("True"),
-        "{input}: {solution:?}"
-    );
-    for k in 0..order {
-        let c = read(&format!("c_{k}"));
-        assert!(solution.contains(&c), "{input}: {solution:?} lacks c_{k}");
+    // A nonlinear equation's branches each satisfy it.
+    let branches = if solution.head() == Some(&Expr::from(crate::symbol::Symbol::LIST)) {
+        solution.args().to_vec()
+    } else {
+        vec![solution.clone()]
+    };
+    assert!(!branches.is_empty(), "{input}: no branch");
+    for branch in &branches {
+        let residual = template.replace('Y', &format!("{branch:?}"));
+        let at = format!("Less[Abs[N[ReplaceAll[{residual}, {POINT}]]], 1/10000000000]");
+        assert_eq!(
+            ctx.eval(&read(&at)).unwrap(),
+            read("True"),
+            "{input}: {branch:?}"
+        );
+        for k in 0..order {
+            let c = read(&format!("c_{k}"));
+            assert!(branch.contains(&c), "{input}: {branch:?} lacks c_{k}");
+        }
     }
     solution
 }
@@ -99,6 +108,41 @@ fn first_order_linear() {
             "{input}"
         );
     }
+}
+
+/// First-order equations that are not linear (CAS-260): lists of branches.
+#[test]
+fn first_order_nonlinear() {
+    let cases = [
+        // Separable.
+        "Plus[D[Y, x], Times[-1, Power[Y, 2]]]",
+        "Plus[D[Y, x], Times[-1, x, Power[Y, 2]]]",
+        "Plus[D[Y, x], Times[-1, x, Power[Y, -1]]]",
+        "Plus[D[Y, x], -1, Times[-1, Power[Y, 2]]]",
+        "Plus[D[Y, x], Times[-1, x, Power[E, Y]]]",
+        "Plus[D[Y, x], Times[-1, Power[E, Plus[x, Y]]]]",
+        // Bernoulli.
+        "Plus[D[Y, x], Y, Times[-1, Power[Y, 2]]]",
+        "Plus[D[Y, x], Times[Y, Power[x, -1]], Times[-1, Power[x, 2], Power[Y, 3]]]",
+        "Plus[D[Y, x], Times[-1, Plus[Power[x, 2], Power[Y, 2]], Power[x, -1], Power[Y, -1]]]",
+        // Homogeneous.
+        "Plus[D[Y, x], Times[Plus[Times[3, x, Y], Power[Y, 2]], Power[Plus[Power[x, 2], Times[x, Y]], -1]]]",
+        // Exact, and exact once multiplied by x.
+        "Plus[Times[3, Power[x, 2]], Y, Times[Plus[x, Times[2, Y]], D[Y, x]]]",
+        "Plus[Times[2, Power[Y, 2]], Times[3, x], Times[2, x, Y, D[Y, x]]]",
+    ];
+    for template in cases {
+        general(template, "x", 1);
+    }
+    // giac's constant, H(x) − G(y) = c_0: y′ = y² is 1/(c_0 − x).
+    let ctx = Context::new();
+    let found = ctx
+        .eval(&read("DSolve[Equation[D[y[x], x], Power[y[x], 2]], y[x]]"))
+        .unwrap();
+    let expected = ctx
+        .eval(&read("List[Power[Plus[c_0, Times[-1, x]], -1]]"))
+        .unwrap();
+    assert_eq!(found, expected);
 }
 
 /// What no method solves, or what is not an equation in `y`, stays.

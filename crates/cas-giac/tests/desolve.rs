@@ -98,15 +98,24 @@ fn check(cases: &[Case]) {
             wrong.push(format!("{input}: unreadable"));
             continue;
         };
-        let satisfies = print(&solution, Names::english()).is_ok_and(|text| {
-            let residual = template.replace('Y', &format!("({text})"));
-            ours(&residual)
-                .ok()
-                .and_then(|r| at(&ctx, &r))
-                .is_some_and(|r| close(&ctx, &r, &Expr::from(0)))
-        });
-        let constants = (0..order).all(|k| solution.contains(&Expr::symbol(&format!("c_{k}"))));
-        if !satisfies || !constants {
+        // A nonlinear equation's answer is a list of branches.
+        let branches = if solution.head() == Some(&Expr::from(Symbol::LIST)) {
+            solution.args().to_vec()
+        } else {
+            vec![solution.clone()]
+        };
+        let satisfies = |branch: &Expr| {
+            print(branch, Names::english()).is_ok_and(|text| {
+                let residual = template.replace('Y', &format!("({text})"));
+                ours(&residual)
+                    .ok()
+                    .and_then(|r| at(&ctx, &r))
+                    .is_some_and(|r| close(&ctx, &r, &Expr::from(0)))
+            })
+        };
+        let constants =
+            |branch: &Expr| (0..order).all(|k| branch.contains(&Expr::symbol(&format!("c_{k}"))));
+        if branches.is_empty() || !branches.iter().all(|b| satisfies(b) && constants(b)) {
             wrong.push(format!("{input}: {solution:?}"));
             continue;
         }
@@ -135,5 +144,25 @@ fn first_order_linear() {
         Case("diff(Y, x) - sin(x)", "x", 1, true),
         Case("diff(Y, x) - a*Y", "x", 1, true),
         Case("diff(Y, x) + Y - 1/x", "x", 1, false),
+    ]);
+}
+
+/// Separable, Bernoulli, homogeneous and exact equations (CAS-260), lists
+/// of branches. Alike where giac's constant is ours, `H(x) − G(y) = c_0`;
+/// giac's others are parametrised otherwise.
+#[test]
+fn first_order_nonlinear() {
+    check(&[
+        Case("diff(Y, x) - Y^2", "x", 1, true),
+        Case("diff(Y, x) - x*Y^2", "x", 1, true),
+        Case("diff(Y, x) - x/Y", "x", 1, true),
+        Case("diff(Y, x) - 1 - Y^2", "x", 1, true),
+        Case("diff(Y, x) + Y - Y^2", "x", 1, false),
+        Case("diff(Y, x) - sqrt(Y)", "x", 1, false),
+        Case("diff(Y, x) - x*exp(Y)", "x", 1, true),
+        Case("diff(Y, x) + Y/x - x^2*Y^3", "x", 1, true),
+        Case("diff(Y, x) - (x + Y)/x", "x", 1, true),
+        Case("diff(Y, x) - (Y^2 + x^2)/(x*Y)", "x", 1, false),
+        Case("(3*x^2 + Y) + (x + 2*Y)*diff(Y, x)", "x", 1, false),
     ]);
 }
