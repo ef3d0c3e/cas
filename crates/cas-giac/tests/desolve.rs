@@ -54,9 +54,19 @@ fn close(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     })
 }
 
-/// `e` approximated at [`POINT`].
-fn at(ctx: &Context, e: &Expr) -> Option<Expr> {
-    let rules: Vec<(Expr, Expr)> = POINT
+/// [`POINT`] with `c_0 < x`, where `(x − c_0)²/4` solves `y′ = √y`.
+const RIGHT_OF_C0: [(&str, i64, i64); 6] = [
+    ("x", 2, 9),
+    ("t", 5, 7),
+    ("a", 3, 4),
+    ("c_0", -7, 5),
+    ("c_1", -2, 3),
+    ("c_2", 5, 11),
+];
+
+/// `e` approximated at `point`.
+fn at(ctx: &Context, e: &Expr, point: &[(&str, i64, i64)]) -> Option<Expr> {
+    let rules: Vec<(Expr, Expr)> = point
         .iter()
         .map(|&(s, p, q)| (Expr::symbol(s), Expr::from(p) / Expr::from(q)))
         .collect();
@@ -65,14 +75,17 @@ fn at(ctx: &Context, e: &Expr) -> Option<Expr> {
 }
 
 /// Whether two answers are one: lists part by part, values close at
-/// [`POINT`].
-fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+/// `point`.
+fn same(ctx: &Context, a: &Expr, b: &Expr, point: &[(&str, i64, i64)]) -> bool {
     let list = Expr::from(Symbol::LIST);
     if a.head() == Some(&list) && b.head() == Some(&list) {
         return a.args().len() == b.args().len()
-            && a.args().iter().zip(b.args()).all(|(a, b)| same(ctx, a, b));
+            && a.args()
+                .iter()
+                .zip(b.args())
+                .all(|(a, b)| same(ctx, a, b, point));
     }
-    match (at(ctx, a), at(ctx, b)) {
+    match (at(ctx, a, point), at(ctx, b, point)) {
         (Some(a), Some(b)) => close(ctx, &a, &b),
         _ => false,
     }
@@ -82,9 +95,14 @@ fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
 /// variable, its order, and whether giac's constants are ours.
 struct Case(&'static str, &'static str, usize, bool);
 
-/// Each case's general solution satisfies its equation, with its constants;
-/// those alike are giac's by value.
+/// Each case's general solution satisfies its equation at [`POINT`], with
+/// its constants; those alike are giac's by value.
 fn check(cases: &[Case]) {
+    check_at(cases, &POINT);
+}
+
+/// [`check`] at `point`, for solutions valid on part of the line.
+fn check_at(cases: &[Case], point: &[(&str, i64, i64)]) {
     let ctx = Context::new();
     let giac = giac();
     let mut wrong = Vec::new();
@@ -109,7 +127,7 @@ fn check(cases: &[Case]) {
                 let residual = template.replace('Y', &format!("({text})"));
                 ours(&residual)
                     .ok()
-                    .and_then(|r| at(&ctx, &r))
+                    .and_then(|r| at(&ctx, &r, point))
                     .is_some_and(|r| close(&ctx, &r, &Expr::from(0)))
             })
         };
@@ -121,7 +139,7 @@ fn check(cases: &[Case]) {
         }
         if let (true, Some(giac)) = (alike, giac) {
             match giac.value(&input) {
-                Ok(theirs) if same(&ctx, &solution, &theirs) => {}
+                Ok(theirs) if same(&ctx, &solution, &theirs, point) => {}
                 theirs => wrong.push(format!("{input}: ours {solution:?}, giac's {theirs:?}")),
             }
         }
@@ -158,13 +176,14 @@ fn first_order_nonlinear() {
         Case("diff(Y, x) - x/Y", "x", 1, true),
         Case("diff(Y, x) - 1 - Y^2", "x", 1, true),
         Case("diff(Y, x) + Y - Y^2", "x", 1, false),
-        Case("diff(Y, x) - sqrt(Y)", "x", 1, false),
         Case("diff(Y, x) - x*exp(Y)", "x", 1, true),
         Case("diff(Y, x) + Y/x - x^2*Y^3", "x", 1, true),
         Case("diff(Y, x) - (x + Y)/x", "x", 1, true),
         Case("diff(Y, x) - (Y^2 + x^2)/(x*Y)", "x", 1, false),
         Case("(3*x^2 + Y) + (x + 2*Y)*diff(Y, x)", "x", 1, false),
     ]);
+    // (x − c_0)²/4, giac's too, solves y′ = √y where x > c_0 only.
+    check_at(&[Case("diff(Y, x) - sqrt(Y)", "x", 1, true)], &RIGHT_OF_C0);
 }
 
 /// Linear equations with constant coefficients (CAS-261). Alike where giac
