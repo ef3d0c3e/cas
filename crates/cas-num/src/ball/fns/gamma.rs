@@ -37,6 +37,7 @@ use std::sync::{Arc, PoisonError, RwLock};
 
 use super::exp::HUGE_EXP;
 use super::{exponent, one, upper, working};
+use crate::ball::decimal::to_integer;
 use crate::ball::{Ball, Float, Mag, Round};
 use crate::{Integer, Rational};
 
@@ -333,13 +334,15 @@ fn meets_pole(x: &Ball) -> bool {
     if *x.rad() >= Mag::power_of_two(&-Integer::ONE) {
         return true;
     }
-    // Otherwise the midpoint has a fractional part, a short mantissa: the
-    // integers between the ends, exactly.
-    let hi = m.add_round(&r, 64, Round::Ceil).0;
-    let (lo, hi) = (lo.to_rational(), hi.to_rational());
-    let first = lo.ceil();
-    let last = hi.floor().min(Integer::ZERO);
-    first <= last
+    // Otherwise the midpoint has a fractional part and the radius is below
+    // 1/2: the one integer the ball can meet is the nearest, `n`, and it does
+    // where `n ≤ 0` and `|m − n| ≤ r`, exactly. (The ends rounded to 64 bits
+    // made `−8 + 2^-164` meet `−8`, CAS-250.)
+    let n = to_integer(m, false);
+    if n > Integer::ZERO {
+        return false;
+    }
+    m.sub(&Float::from(n)).abs() <= r
 }
 
 impl Ball {

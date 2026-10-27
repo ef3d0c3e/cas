@@ -92,6 +92,14 @@ fn poles() {
     assert_eq!(near(-3.25, 0).gamma(64), Ball::INDETERMINATE);
     // Close to a pole but not on it: finite.
     assert!(near(-1.5, -4).gamma(64).is_finite());
+    // Closer than 64 bits tell: decided exactly (−8 + 2^-164 at 228 bits
+    // was indeterminate, CAS-250), and a radius that reaches the pole.
+    let next = Float::from(-8i64).add(&Float::from(1i64).mul_2exp(&Integer::from(-164i64)));
+    check(&next, 228).unwrap();
+    let reach = Ball::new(next.clone(), Mag::power_of_two(&Integer::from(-163i64)));
+    assert_eq!(reach.gamma(64), Ball::INDETERMINATE);
+    let short = Ball::new(next, Mag::power_of_two(&Integer::from(-170i64)));
+    assert!(short.gamma(64).is_finite());
 }
 
 /// A ball's value holds the values at its ends.
