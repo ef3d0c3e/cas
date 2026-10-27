@@ -39,6 +39,12 @@ Tanh: tanh
 ArcSinh: asinh arcsinh
 ArcCosh: acosh arccosh
 ArcTanh: atanh arctanh
+Sec: sec
+Csc: csc
+Cot: cot
+ArcSec: asec arcsec
+ArcCsc: acsc arccsc
+ArcCot: acot arccot
 Sqrt: sqrt
 Factorial: factorial
 Pi: pi

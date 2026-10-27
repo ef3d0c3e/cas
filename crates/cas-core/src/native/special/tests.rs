@@ -261,3 +261,23 @@ fn hyperbolic_calculus() {
         ("Integrate[Tanh[x], x]", "Log[Cosh[x]]"),
     ]);
 }
+
+/// The reciprocal trigonometric functions, rewritten (CAS-239).
+#[test]
+fn reciprocal_functions() {
+    check(&[
+        ("Sec[x]", "Power[Cos[x], -1]"),
+        ("Csc[x]", "Power[Sin[x], -1]"),
+        ("Cot[x]", "Times[Cos[x], Power[Sin[x], -1]]"),
+        ("Sec[Times[1/3, Pi]]", "2"),
+        ("Cot[Times[1/4, Pi]]", "1"),
+        ("ArcCot[1]", "Times[1/4, Pi]"),
+        ("ArcCot[-1]", "Times[-1/4, Pi]"),
+        ("ArcCot[0]", "Times[1/2, Pi]"),
+        ("ArcSec[2]", "Times[1/3, Pi]"),
+        ("ArcSec[-2]", "Times[2/3, Pi]"),
+        ("ArcCsc[2]", "Times[1/6, Pi]"),
+        ("ArcCsc[-1]", "Times[-1/2, Pi]"),
+        ("ArcCot[x]", "ArcTan[Power[x, -1]]"),
+    ]);
+}

@@ -9,6 +9,7 @@
 //! `special`), `Sin[Pi/6]` is `1/2`; others stay as they are.
 
 use cas_num::ball::{Ball, ComplexBall};
+use cas_num::{Integer, Rational};
 
 use super::number::{Infinity, Num, Precision};
 use super::special;
@@ -115,4 +116,28 @@ pub(super) fn arc_cosh(ev: &mut Eval<'_>, e: &Expr) -> Native {
 
 pub(super) fn arc_tanh(ev: &mut Eval<'_>, e: &Expr) -> Native {
     elementary(ev, e, Ball::atanh, ComplexBall::atanh)
+}
+
+/// The reciprocal trigonometric functions, rewritten as giac does
+/// (CAS-DOC-15 §3, CAS-239): `Sec[x] = 1/Cos[x]`, `Csc[x] = 1/Sin[x]`,
+/// `Cot[x] = Cos[x]/Sin[x]`, `ArcSec[x] = ArcCos[1/x]`, `ArcCsc[x] =
+/// ArcSin[1/x]` and `ArcCot[x] = ArcTan[1/x]`, `ArcCot[0] = Pi/2`.
+pub(super) fn reciprocal(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let (Some(f), [x]) = (e.head().and_then(Expr::as_symbol), e.args()) else {
+        return Ok(None);
+    };
+    let call = |g: Symbol, u: Expr| Expr::call(g, [u]);
+    let inverse = || x.pow(-1);
+    Ok(Some(match f {
+        Symbol::SEC => call(Symbol::COS, x.clone()).pow(-1),
+        Symbol::CSC => call(Symbol::SIN, x.clone()).pow(-1),
+        Symbol::COT => call(Symbol::COS, x.clone()) * call(Symbol::SIN, x.clone()).pow(-1),
+        Symbol::ARC_SEC => call(Symbol::ARC_COS, inverse()),
+        Symbol::ARC_CSC => call(Symbol::ARC_SIN, inverse()),
+        Symbol::ARC_COT if *x == Expr::from(0) => {
+            Expr::from(Rational::new(Integer::ONE, Integer::from(2))) * Expr::from(Symbol::PI)
+        }
+        Symbol::ARC_COT => call(Symbol::ARC_TAN, inverse()),
+        _ => return Ok(None),
+    }))
 }

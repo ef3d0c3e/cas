@@ -124,3 +124,22 @@ fn hyperbolic() {
     ]);
     assert_eq!(ours("sinh(ln(2))").unwrap(), ours("3/4").unwrap());
 }
+
+/// The reciprocal trigonometric functions (CAS-239).
+#[test]
+fn reciprocal_trigonometric() {
+    check(&[
+        "sec(x)",
+        "csc(x)",
+        "cot(x)",
+        "sec(pi/3)",
+        "cot(pi/4)",
+        "acot(1)",
+        "acot(-1)",
+        "acot(0)",
+        "asec(2)",
+        "asec(-2)",
+        "acsc(2)",
+        "acsc(-1)",
+    ]);
+}

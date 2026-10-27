@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 98] = [
+const BUILTINS: [&str; 104] = [
     "Plus",
     "Times",
     "Power",
@@ -146,6 +146,13 @@ const BUILTINS: [&str; 98] = [
     "ArcSinh",
     "ArcCosh",
     "ArcTanh",
+    // Reciprocal trigonometric functions (CAS-239).
+    "Sec",
+    "Csc",
+    "Cot",
+    "ArcSec",
+    "ArcCsc",
+    "ArcCot",
 ];
 
 /// Builtins that apply something to parts, only in the expression
