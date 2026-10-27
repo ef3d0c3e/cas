@@ -108,6 +108,18 @@ fn poles() {
     let scaled = g.mid().mul_2exp(&-Integer::from(1i64 << 40));
     let near = Float::from(1i64).mul_2exp(&Integer::from(-60i64));
     assert!(scaled.add(&Float::from(1i64)).abs() <= near, "{g:?}");
+    // The reflection at a large argument, 1 − x to absolute accuracy:
+    // −0xc90fdaa2216·2^-3 ≈ −1.7e12 had −324 bits at 1 (CAS-256). |Γ| there
+    // is below MPFR's exponents.
+    let large =
+        Float::from_integer_exp(&Integer::from(-0x0c90_fdaa_2216_i64), &Integer::from(-3i64));
+    for prec in [1i64, 64, 200] {
+        let g = Ball::exact(large.clone()).gamma(prec.unsigned_abs());
+        assert!(
+            g.is_finite() && g.rel_accuracy_bits() >= prec - 3,
+            "{prec}: {g:?}"
+        );
+    }
 }
 
 /// A ball's value holds the values at its ends.

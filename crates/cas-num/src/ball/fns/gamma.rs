@@ -398,9 +398,17 @@ fn negative(x: &Ball, wp: u64) -> Ball {
         return gamma_positive(&shifted, q).div(&product, q);
     }
     // π e^(−log Γ(1 − x)) / sin(πx); past exp's range e^(−L) is a bound
-    // about 0, for which a low precision does.
-    let q = if exponent(m) > HUGE_EXP { 64 } else { wp + 16 };
-    let y = one().sub(x, q);
+    // about 0, for which a low precision does. Below it, 1 − x to an
+    // absolute 2^-(q + 16), as ψ(1 − x) ≈ log |x| carries its error into
+    // L: at q bits, x ≈ −1.7e12 had a radius of 8 and Γ −324 bits (CAS-256).
+    let huge = exponent(m) > HUGE_EXP;
+    let q = if huge { 64 } else { wp + 16 };
+    let above = if huge {
+        0
+    } else {
+        exponent(m).unsigned_abs() + 16
+    };
+    let y = one().sub(x, q + above);
     let l = log_gamma_positive(&y, q);
     Ball::const_pi(q)
         .mul(&l.neg().exp(q), q)
