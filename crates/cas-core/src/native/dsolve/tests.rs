@@ -32,13 +32,18 @@ fn general(template: &str, v: &str, order: usize) -> Expr {
     };
     assert!(!branches.is_empty(), "{input}: no branch");
     for branch in &branches {
+        // Each part apart: the modulus of a complex ball about 0 is
+        // unbounded.
         let residual = template.replace('Y', &format!("{branch:?}"));
-        let at = format!("Less[Abs[N[ReplaceAll[{residual}, {POINT}]]], 1/10000000000]");
-        assert_eq!(
-            ctx.eval(&read(&at)).unwrap(),
-            read("True"),
-            "{input}: {branch:?}"
-        );
+        let value = format!("N[ReplaceAll[{residual}, {POINT}]]");
+        for part in ["Re", "Im"] {
+            let at = format!("Less[Abs[{part}[{value}]], 1/10000000000]");
+            assert_eq!(
+                ctx.eval(&read(&at)).unwrap(),
+                read("True"),
+                "{input}: {branch:?}"
+            );
+        }
         for k in 0..order {
             let c = read(&format!("c_{k}"));
             assert!(branch.contains(&c), "{input}: {branch:?} lacks c_{k}");

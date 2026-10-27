@@ -2,9 +2,10 @@
 //! CAS-260), each written `M(x, y) + N(x, y) y′ = 0` with `y′ = F = −M/N`,
 //! in this order:
 //!
-//! - **Separable**, `F = f(x) g(y)`, the factors of `F` apart once its
-//!   exponentials of sums are products: `H(x) − G(y) = c_0` for `H = ∫f`,
-//!   `G = ∫ dy/g`, giac's constant (`y′ = y²` is `1/(−x + c_0)`).
+//! - **Separable**, `F = f(x) g(y)`, the factors of `F` apart, an
+//!   exponential of a sum `e^(u(x) + v(y))` as `e^u e^v`: `H(x) − G(y) = c_0`
+//!   for `H = ∫f`, `G = ∫ dy/g`, giac's constant (`y′ = y²` is
+//!   `1/(−x + c_0)`).
 //! - **Bernoulli**, `F = −p y + q yᵏ`, `k ≠ 0, 1` free of `x`: `v = y^(1−k)`
 //!   is linear, `v′ + (1 − k) p v = (1 − k) q`, and `y = v^(1/(1−k))`, both
 //!   signs where that root is even.
@@ -92,24 +93,13 @@ fn branches(roots: Vec<Expr>) -> Expr {
     Expr::call(Symbol::LIST, roots)
 }
 
-/// `e` with each exponential of a sum a product: `e^(x + y)` is `e^x e^y`,
-/// so that its factors can be told apart.
-pub(super) fn split_exponentials(e: &Expr) -> Expr {
-    e.map_bottom_up(|part| {
-        let exponent = match (part.head().and_then(Expr::as_symbol), part.args()) {
-            (Some(Symbol::POWER), [b, s]) if b.as_symbol() == Some(Symbol::E) => s,
-            (Some(Symbol::EXP), [s]) => s,
-            _ => return part.clone(),
-        };
-        if exponent.head() != Some(&Expr::from(Symbol::PLUS)) {
-            return part.clone();
-        }
-        let factors = exponent
-            .args()
-            .iter()
-            .map(|t| Expr::from(Symbol::E).pow(t.clone()));
-        Expr::call(Symbol::TIMES, factors)
-    })
+/// The exponent `s` of `e^s`.
+fn exponent(e: &Expr) -> Option<&Expr> {
+    match (e.head().and_then(Expr::as_symbol), e.args()) {
+        (Some(Symbol::POWER), [b, s]) if b.as_symbol() == Some(Symbol::E) => Some(s),
+        (Some(Symbol::EXP), [s]) => Some(s),
+        _ => None,
+    }
 }
 
 /// `F = f(x) g(y)`: `H(x) − G(y) = c` solved for `y`.
@@ -140,8 +130,7 @@ fn separate(
     x: &Expr,
     y: &Expr,
 ) -> Result<Option<(Expr, Expr)>, EvalError> {
-    let split = ev.eval(&split_exponentials(f))?;
-    let factored = ev.eval(&Expr::call(Symbol::FACTOR, [split]))?;
+    let factored = ev.eval(&Expr::call(Symbol::FACTOR, [f.clone()]))?;
     let factors = if factored.head() == Some(&Expr::from(Symbol::TIMES)) {
         factored.args().to_vec()
     } else {
@@ -150,7 +139,29 @@ fn separate(
     let (mut in_x, mut in_y) = (Vec::new(), Vec::new());
     for factor in factors {
         match (factor.contains(x), factor.contains(y)) {
-            (true, true) => return Ok(None),
+            (true, true) => {
+                // e^(u(x) + v(y)) as e^u e^v, which evaluation would merge
+                // back: the products are built apart.
+                let Some(s) = exponent(&factor) else {
+                    return Ok(None);
+                };
+                let terms = if s.head() == Some(&Expr::from(Symbol::PLUS)) {
+                    s.args().to_vec()
+                } else {
+                    vec![s.clone()]
+                };
+                let (mut sx, mut sy) = (Vec::new(), Vec::new());
+                for t in terms {
+                    match (t.contains(x), t.contains(y)) {
+                        (true, true) => return Ok(None),
+                        (_, true) => sy.push(t),
+                        _ => sx.push(t),
+                    }
+                }
+                let e = || Expr::from(Symbol::E);
+                in_x.push(e().pow(Expr::call(Symbol::PLUS, sx)));
+                in_y.push(e().pow(Expr::call(Symbol::PLUS, sy)));
+            }
             (_, true) => in_y.push(factor),
             _ => in_x.push(factor),
         }
