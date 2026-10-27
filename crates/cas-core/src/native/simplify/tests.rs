@@ -121,3 +121,41 @@ fn never_more_complex() {
         );
     }
 }
+
+/// Exponentials and logarithms (CAS-230).
+#[test]
+fn exponentials_and_logarithms() {
+    check(&[
+        ("Simplify[Exp[Times[2, Log[x]]]]", "Power[x, 2]"),
+        ("Simplify[Exp[Plus[x, Log[2]]]]", "Times[2, Exp[x]]"),
+        (
+            "Simplify[Times[Exp[x], Power[Exp[Plus[-1, x]], -1]]]",
+            "Exp[1]",
+        ),
+        ("Simplify[Times[Exp[x], Exp[y]]]", "Exp[Plus[x, y]]"),
+        ("Simplify[Plus[Log[2], Log[3]]]", "Log[6]"),
+        ("Simplify[Plus[Log[4], Times[-2, Log[2]]]]", "0"),
+        ("Simplify[Times[Log[8], Power[Log[2], -1]]]", "3"),
+        // A fractional power of x out of an exponent only for a positive
+        // x: in the Real domain an odd root of a negative is real.
+        (
+            "Simplify[Exp[Times[1/3, Log[x]]]]",
+            "Exp[Times[1/3, Log[x]]]",
+        ),
+        // Log[x^2] is 2 Log[Abs[x]] for a real x of unknown sign.
+        (
+            "Simplify[Plus[Log[Power[x, 2]], Times[-2, Log[x]]]]",
+            "Plus[Log[Power[x, 2]], Times[-2, Log[x]]]",
+        ),
+    ]);
+    // With x positive, Log[x^2] is 2 Log[x], and x^(1/3) comes out.
+    let ctx = Context::new().assuming(read("Greater[x, 0]"));
+    for (input, expected) in [
+        ("Simplify[Plus[Log[Power[x, 2]], Times[-2, Log[x]]]]", "0"),
+        ("Simplify[Exp[Times[1/3, Log[x]]]]", "Power[x, 1/3]"),
+        ("Simplify[Plus[Log[x], Log[y]]]", "Plus[Log[x], Log[y]]"),
+    ] {
+        let found = ctx.eval(&read(input)).unwrap();
+        assert_eq!(found, ctx.eval(&read(expected)).unwrap(), "{input}");
+    }
+}

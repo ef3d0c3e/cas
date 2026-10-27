@@ -91,3 +91,19 @@ fn rational_simplification() {
         "simplify(sin((x^2-1)/(x-1)))",
     ]);
 }
+
+/// Exponentials and logarithms (CAS-230). `ln(x^2)-2*ln(x)` under
+/// `assume(x>0)` is the unit tests': an assumption would stay in giac's
+/// shared session.
+#[test]
+fn exponentials_and_logarithms() {
+    check(&[
+        "simplify(exp(2*ln(x)))",
+        "simplify(exp(x+ln(2)))",
+        "simplify(exp(x)/exp(x-1))",
+        "simplify(exp(x)*exp(y))",
+        "simplify(ln(2)+ln(3))",
+        "simplify(ln(4)-2*ln(2))",
+        "simplify(ln(8)/ln(2))",
+    ]);
+}

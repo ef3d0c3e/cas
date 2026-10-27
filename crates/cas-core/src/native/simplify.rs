@@ -7,9 +7,10 @@
 //!   and its arguments'.
 //! - The search (§3): the arguments of functions, and the base and exponent
 //!   of powers but integer ones, first, each by a `Simplify` of its own;
-//!   then the candidates `Together`, `Factor` and `Expand` of the whole, and
-//!   the least complex of it and them, the first on a tie, in at most
-//!   [`ROUNDS`] rounds while the choice changes. A candidate is evaluated on
+//!   then the candidates `Together`, `Factor` and `Expand` of the whole, its
+//!   exponential and logarithmic forms ([`exp_log`], CAS-230), and the least
+//!   complex of it and them, the first on a tie, in at most [`ROUNDS`] rounds
+//!   while the choice changes. A candidate is evaluated on
 //!   its own: one that fails, short of an interrupt, is left out, and the
 //!   warnings of all are.
 //! - Lists, the sides of equations and comparisons, and the arguments of
@@ -128,10 +129,7 @@ fn holds(attributes: Attributes) -> bool {
 fn least(ev: &mut Eval<'_>, e: &Expr) -> Result<Expr, EvalError> {
     let mut best = e.clone();
     let mut cost = complexity(e);
-    for head in CANDIDATES {
-        let Some(c) = candidate(ev, &Expr::call(head, [e.clone()]))? else {
-            continue;
-        };
+    for c in candidates(ev, e)? {
         let k = complexity(&c);
         if k < cost {
             best = c;
@@ -141,12 +139,31 @@ fn least(ev: &mut Eval<'_>, e: &Expr) -> Result<Expr, EvalError> {
     Ok(best)
 }
 
-/// `call` evaluated on its own, without a trace or warnings; `None` when
-/// that fails short of an interrupt, or leaves the call.
-fn candidate(ev: &mut Eval<'_>, call: &Expr) -> Result<Option<Expr>, EvalError> {
+/// The candidates of `e`, each evaluated: the rewritings of [`CANDIDATES`],
+/// and the exponential and logarithmic forms (§4).
+fn candidates(ev: &mut Eval<'_>, e: &Expr) -> Result<Vec<Expr>, EvalError> {
+    let mut out = Vec::new();
+    for head in CANDIDATES {
+        let call = Expr::call(head, [e.clone()]);
+        if let Some(c) = evaluated(ev, &call)?
+            && c.head() != call.head()
+        {
+            out.push(c);
+        }
+    }
+    for rewritten in exp_log::rewritings(ev.context(), e) {
+        if let Some(c) = evaluated(ev, &rewritten)? {
+            out.push(c);
+        }
+    }
+    Ok(out)
+}
+
+/// `e` evaluated on its own, without a trace or warnings; `None` when that
+/// fails short of an interrupt.
+fn evaluated(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Expr>, EvalError> {
     let context = ev.context();
-    match ev.eval_in(context, call).0 {
-        Ok(c) if c.head() == call.head() => Ok(None),
+    match ev.eval_in(context, e).0 {
         Ok(c) => Ok(Some(c)),
         Err(EvalError::Interrupted) => Err(EvalError::Interrupted),
         Err(_) => Ok(None),
@@ -202,5 +219,6 @@ fn rational(q: &cas_num::Rational) -> u64 {
     integer(q.numer()) + integer(q.denom()) + 1
 }
 
+mod exp_log;
 #[cfg(test)]
 mod tests;
