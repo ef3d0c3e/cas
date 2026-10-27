@@ -7,8 +7,9 @@
 //!   `= 0`; its derivatives are `Derivative[n][y][x]`, which `D` makes of
 //!   `diff(y(x), x)` (§1).
 //! - The normal form (§3): `y[x]` and its derivatives become the symbols
-//!   `DSolve$y0`, `DSolve$y1`, …, and the residual `l − r` is cleared of a
-//!   denominator free of them; another occurrence of `y` leaves the call.
+//!   `DSolve$y0`, `DSolve$y1`, …, `Exp[u]` becomes `E^u`, and the residual
+//!   `l − r` is cleared of a denominator free of them; another occurrence of
+//!   `y` leaves the call.
 //! - A linear equation `Σ aₖ y⁽ᵏ⁾ = f` is one whose residual has
 //!   derivatives in the `yₖ` free of all of them.
 //! - First order, linear (§4.1): `y′ + p y = q` is `y = (∫ μ q dx + c_0)/μ`
@@ -171,6 +172,13 @@ impl Ode {
             (Some(Symbol::EQUATION | Symbol::EQUAL), [l, r]) => l.clone() - r.clone(),
             _ => eq.clone(),
         };
+        // Exp[u] as E^u, which products merge: x Exp[x] E^(−x) would stay.
+        let residual = residual.map_bottom_up(|part| {
+            match (part.head().and_then(Expr::as_symbol), part.args()) {
+                (Some(Symbol::EXP), [u]) => Expr::from(Symbol::E).pow(u.clone()),
+                _ => part.clone(),
+            }
+        });
         let mut order = 0;
         let replaced = residual.replace(|part| {
             let View::Apply { head, args: [a] } = part.view() else {
