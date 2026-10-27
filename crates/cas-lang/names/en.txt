@@ -55,6 +55,8 @@ Round: round
 Sign: sign
 Max: max
 Min: min
+Gamma: Gamma
+Beta: Beta
 Sqrt: sqrt
 Factorial: factorial
 Pi: pi

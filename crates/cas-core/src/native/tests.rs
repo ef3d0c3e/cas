@@ -628,12 +628,46 @@ fn factorials() {
         ("Factorial[-1]", "ComplexInfinity"),
         ("Factorial[-3]", "ComplexInfinity"),
         ("Factorial[List[1, 2, 3]]", "List[1, 2, 6]"),
-        // Waiting for the Gamma function.
+        // Other fractions stay exact; `N` gives them a value (CAS-243).
         ("Factorial[1/3]", "Factorial[1/3]"),
         ("Factorial[Complex[3, 1]]", "Factorial[Complex[3, 1]]"),
         ("Factorial[x]", "Factorial[x]"),
         ("Factorial[1, 2]", "Factorial[1, 2]"),
     ]);
+}
+
+/// `Gamma` and `Beta` (CAS-243).
+#[test]
+fn gamma_and_beta() {
+    check(&[
+        ("Gamma[5]", "24"),
+        ("Gamma[1/2]", "Power[Pi, 1/2]"),
+        ("Gamma[3/2]", "Times[1/2, Power[Pi, 1/2]]"),
+        ("Gamma[-1/2]", "Times[-2, Power[Pi, 1/2]]"),
+        ("Gamma[0]", "ComplexInfinity"),
+        ("Gamma[-2]", "ComplexInfinity"),
+        ("Gamma[1/3]", "Gamma[1/3]"),
+        ("Gamma[Plus[1, x]]", "Gamma[Plus[1, x]]"),
+        ("Beta[2, 3]", "1/12"),
+        ("Beta[1/2, 1/2]", "Pi"),
+        ("Beta[3, 4]", "1/60"),
+        ("Beta[x, 1]", "Beta[x, 1]"),
+    ]);
+    // Balls: within 10^-15 of the exact values' approximations.
+    let ctx = Context::new();
+    for (left, right) in [
+        ("N[Factorial[1/3]]", "N[Times[1/3, Gamma[1/3]]]"),
+        ("N[Gamma[1/2]]", "N[Power[Pi, 1/2]]"),
+        ("Gamma[N[5]]", "24"),
+        ("N[Beta[5/2, 3/2]]", "N[Times[1/16, Pi]]"),
+    ] {
+        let gap = format!("Less[Abs[Plus[{left}, Times[-1, {right}]]], 1/1000000000000000]");
+        assert_eq!(
+            ctx.eval(&read(&gap)).unwrap(),
+            read("True"),
+            "{left} against {right}"
+        );
+    }
 }
 
 /// `Limits::number_bits` bounds the factorials computed, by estimate.

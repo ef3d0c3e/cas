@@ -86,6 +86,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::SIGN, rounding::sign),
         (Symbol::MAX, rounding::extremum),
         (Symbol::MIN, rounding::extremum),
+        (Symbol::GAMMA, factorial::gamma),
+        (Symbol::BETA, factorial::beta),
         (Symbol::DIRECTED_INFINITY, arith::directed_infinity),
         (Symbol::EQUAL, logic::equal_native),
         (Symbol::UNEQUAL, logic::unequal),

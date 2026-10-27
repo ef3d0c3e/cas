@@ -2,6 +2,7 @@
 
 use cas_num::{Integer, Natural, Rational};
 
+use super::number::{Infinity, Num, Precision};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
@@ -26,11 +27,16 @@ fn factorial_bits(n: u64) -> u64 {
 /// - a result estimated above `Limits::number_bits` bits stays
 ///   unevaluated, as a large power of numbers does.
 ///
-/// Anything else stays, waiting for the Gamma function.
+/// A real ball's factorial is `Γ(x + 1)` (CAS-DOC-15 §6, CAS-243), so that
+/// `N` of any rational's has a value. Anything else stays.
 pub(super) fn factorial(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [arg] = e.args() else {
         return Ok(None);
     };
+    if matches!(Num::of(arg), Some(Num::Ball(_))) {
+        let shifted = ev.eval(&(arg.clone() + Expr::from(1)))?;
+        return Ok(ball_gamma(ev, e, &shifted));
+    }
     let Some(value) = arg.to_rational() else {
         return Ok(None);
     };
@@ -133,4 +139,70 @@ pub(super) fn binomial(ev: &mut Eval<'_>, e: &Expr) -> Native {
     Ok(Some(
         Expr::apply(&Symbol::TIMES.into(), &factors) / denominator,
     ))
+}
+
+/// `Γ` of a real ball at its precision, `Indeterminate` with a warning
+/// where the ball meets a pole; `None` for another argument.
+fn ball_gamma(ev: &mut Eval<'_>, e: &Expr, x: &Expr) -> Option<Expr> {
+    let number = Num::of(x)?;
+    let Num::Ball(ball) = &number else {
+        return None;
+    };
+    let bits = number.precision(Precision::of(ev.context()));
+    let value = ball.gamma(bits + 16).round_to_accuracy(bits);
+    if !value.is_finite() {
+        ev.warn(Warning::Indeterminate(e.clone()));
+        return Some(Symbol::INDETERMINATE.into());
+    }
+    Some(Num::Ball(Box::new(value)).to_expr())
+}
+
+/// `Gamma[z]`, Xcas's `Gamma` (CAS-DOC-15 §6, CAS-243): `(z − 1)!` at the
+/// positive integers and the half-integers (`Gamma[1/2] = √π`), through
+/// `Factorial`; `ComplexInfinity` with a warning at the poles, the integers
+/// `≤ 0`; a real ball's by `Ball::gamma`. Anything else stays.
+pub(super) fn gamma(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [z] = e.args() else {
+        return Ok(None);
+    };
+    if let Some(q) = z.to_rational() {
+        if q.is_integer() && !q.is_positive() {
+            ev.warn(Warning::Infinite(e.clone()));
+            return Ok(Some(Symbol::COMPLEX_INFINITY.into()));
+        }
+        if q.is_integer() || q.denom().to_i64() == Some(2) {
+            let below = &q - &Rational::ONE;
+            return Ok(Some(Expr::call(Symbol::FACTORIAL, [Expr::from(below)])));
+        }
+        return Ok(None);
+    }
+    Ok(ball_gamma(ev, e, z))
+}
+
+/// `Beta[a, b]`, Xcas's `Beta` (CAS-DOC-15 §6, CAS-243): `Gamma[a]
+/// Gamma[b] / Gamma[a + b]` where each has a value, finite; otherwise it
+/// stays.
+pub(super) fn beta(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [a, b] = e.args() else {
+        return Ok(None);
+    };
+    let mut values = Vec::with_capacity(3);
+    for x in [a.clone(), b.clone(), a.clone() + b.clone()] {
+        let g = ev.eval(&Expr::call(Symbol::GAMMA, [x]))?;
+        let stays = g.contains(&Expr::from(Symbol::GAMMA))
+            || [
+                Symbol::COMPLEX_INFINITY,
+                Symbol::INDETERMINATE,
+                Symbol::INFINITY,
+            ]
+            .into_iter()
+            .any(|s| g.contains(&Expr::from(s)))
+            || Infinity::of(&g).is_some();
+        if stays {
+            return Ok(None);
+        }
+        values.push(g);
+    }
+    let [ga, gb, gab]: [Expr; 3] = values.try_into().expect("three values");
+    Ok(Some(ga * gb / gab))
 }

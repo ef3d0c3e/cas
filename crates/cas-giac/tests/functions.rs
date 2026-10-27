@@ -209,3 +209,27 @@ fn rounding_sign_and_order() {
         );
     }
 }
+
+/// `Gamma` and `Beta` (CAS-243). giac's `infinity` at the poles is
+/// `ComplexInfinity` here too.
+#[test]
+fn gamma_and_beta() {
+    check(&[
+        "Gamma(5)",
+        "Gamma(1/2)",
+        "Gamma(3/2)",
+        "Gamma(-1/2)",
+        "Gamma(-3/2)",
+        "Gamma(1.5)",
+        "Gamma(0.3)",
+        "Gamma(10.5)",
+        "Gamma(-2.5)",
+        "Gamma(0)",
+        "Gamma(-2)",
+        "Gamma(x+1)",
+        "Beta(2,3)",
+        "Beta(1/2,1/2)",
+        "Beta(3,4)",
+        "Beta(2.5,1.5)",
+    ]);
+}
