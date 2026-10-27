@@ -24,9 +24,10 @@ use crate::eval::Eval;
 use crate::expr::Expr;
 use crate::symbol::Symbol;
 
-/// The general solution of `Σ aₖ y⁽ᵏ⁾ = f` with constant coefficients, a
-/// right side by [`particular`]; `None` when a coefficient holds `x`, or
-/// the roots or a particular solution are not found.
+/// The general solution of `Σ aₖ y⁽ᵏ⁾ = f` with constant coefficients,
+/// once divided by `aₙ`, a right side by [`particular`]; `None` when a
+/// coefficient holds `x`, or the roots or a particular solution are not
+/// found.
 pub(super) fn constant_coefficients(
     ev: &mut Eval<'_>,
     e: &Expr,
@@ -35,9 +36,19 @@ pub(super) fn constant_coefficients(
     x: &Expr,
     constants: &[Expr],
 ) -> Result<Option<Expr>, EvalError> {
-    if a.iter().any(|ak| ak.contains(x)) {
-        return Ok(None);
+    // Over the leading coefficient: clearing the equation's denominator
+    // made y″ − y = 1/x into x y″ − x y = 1.
+    let lead = a[a.len() - 1].clone();
+    let mut normalized = Vec::with_capacity(a.len());
+    for ak in a {
+        let ratio = ev.eval(&Expr::call(Symbol::TOGETHER, [ak.clone() / lead.clone()]))?;
+        if ratio.contains(x) {
+            return Ok(None);
+        }
+        normalized.push(ratio);
     }
+    let (a, f) = (normalized.as_slice(), ev.eval(&(f.clone() / lead))?);
+    let f = &f;
     let Some((basis, roots)) = basis(ev, e, a, x)? else {
         return Ok(None);
     };
