@@ -103,8 +103,10 @@ fn exact_values() {
     let huge = Float::from(1i64).mul_2exp(&Integer::from(1i64 << 40));
     assert_eq!(Ball::exact(huge.neg()).zeta(64), Ball::ZERO);
     check(&Float::from(1i64).mul_2exp(&Integer::from(47i64)), 2).unwrap();
-    // A tiny argument, beyond MPFR's exponents: 1 − s rounded, not exact
-    // over 2^68 bits (CAS-252), and ζ next to ζ(0) = −1/2.
+    // Tiny arguments: 1 − s rounded, not exact over 2^68 bits (CAS-252),
+    // nor a million (a timeout, CAS-254); ζ next to ζ(0) = −1/2.
+    let small = Float::from(-1i64).mul_2exp(&Integer::from(-1_048_559i64));
+    check(&small, 200).unwrap();
     let e = -(&Integer::from(2).pow(68) + &Integer::from(496));
     let tiny = Ball::exact(Float::from(-16383i64).mul_2exp(&e)).zeta(49);
     let half = Float::from(-1i64).mul_2exp(&-Integer::ONE);

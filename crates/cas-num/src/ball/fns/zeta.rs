@@ -27,15 +27,10 @@ use super::{exponent, one, working};
 use crate::ball::{Ball, Float, Mag, Round};
 use crate::{Integer, Rational};
 
-/// `1 − x` for a ball: exact for an exact `x` where that fits, as next to
-/// the pole, rounded at `q` bits otherwise (a tiny `x` of exponent `−2^68`
-/// spanned `2^68` bits, CAS-252).
+/// `1 − x` for a ball at `q` bits: rounded to `q` bits of the result, which
+/// keeps its relative accuracy next to the pole; not exact, which a tiny `x`
+/// made a mantissa of a million bits (CAS-252, CAS-254).
 fn one_minus(x: &Ball, q: u64) -> Ball {
-    if x.is_exact()
-        && let Some(d) = Float::from(1i64).checked_sub(x.mid())
-    {
-        return Ball::exact(d);
-    }
     one().sub(x, q)
 }
 
