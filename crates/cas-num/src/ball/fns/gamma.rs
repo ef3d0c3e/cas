@@ -253,7 +253,7 @@ fn digamma_bound(a: &Float, b: &Float) -> Mag {
 
 /// `log Γ(y)` for a ball `y` whose points are positive: the midpoint's,
 /// then `ρ sup |ψ|`.
-fn log_gamma_positive(y: &Ball, wp: u64) -> Ball {
+pub(super) fn log_gamma_positive(y: &Ball, wp: u64) -> Ball {
     let m = y.mid();
     let core = match exact_value(m, wp) {
         Value::Log(l) => l,

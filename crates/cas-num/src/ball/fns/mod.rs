@@ -29,6 +29,7 @@ mod log;
 mod pow;
 mod tables;
 mod trig;
+mod zeta;
 
 #[cfg(test)]
 mod core_tests;
