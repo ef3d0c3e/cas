@@ -142,6 +142,8 @@ builtins! {
     JACOBI_SYMBOL = "JacobiSymbol" [LISTABLE, PROTECTED];
     LEGENDRE_SYMBOL = "LegendreSymbol" [LISTABLE, PROTECTED];
     BERNOULLI_B = "BernoulliB" [LISTABLE, PROTECTED];
+    PRIME = "Prime" [LISTABLE, PROTECTED];
+    PRIME_PI = "PrimePi" [LISTABLE, PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

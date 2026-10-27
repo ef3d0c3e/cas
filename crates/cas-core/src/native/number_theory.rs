@@ -32,6 +32,11 @@
 //!   composite `p`; an even `n` stays, with a warning. `BernoulliB[n]`
 //!   (`bernoulli`): `B_n` from cas-num's cache, `B_1 = −1/2`, to `B_1200`;
 //!   beyond, it stays.
+//! - Counting primes (CAS-271), by cas-num's segmented sieve. `Prime[n]`
+//!   (`ithprime`): the n-th prime, `Prime[1] = 2`, to `n = 10⁶`; giac's
+//!   `ithprime(0)` is 1, which stays here, with a warning as past the
+//!   limit. `PrimePi[x]` (`nprimes`): the number of primes up to `x`, a
+//!   rational `x` by its floor, to `10⁸`.
 
 #![allow(
     clippy::many_single_char_names,
@@ -40,7 +45,7 @@
 
 use cas_num::ball::bernoulli;
 use cas_num::modular::crt;
-use cas_num::{Factorization, Integer, Natural};
+use cas_num::{Factorization, Integer, Natural, nth_prime, prime_pi};
 
 use crate::context::EvalError;
 use crate::eval::Eval;
@@ -340,6 +345,44 @@ pub(super) fn bernoulli_b(_: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(None);
     };
     Ok(bernoulli(n).map(Expr::from))
+}
+
+/// `Prime[n]`.
+pub(super) fn prime(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some(n) = integer_argument(e) else {
+        return Ok(None);
+    };
+    let found = n
+        .to_i64()
+        .and_then(|n| u64::try_from(n).ok())
+        .and_then(nth_prime);
+    match found {
+        Some(p) => Ok(Some(Expr::from(Integer::from(p)))),
+        None if n.is_positive() => refuse(ev, e, "past the millionth prime"),
+        None => refuse(ev, e, "no n-th prime for n below 1"),
+    }
+}
+
+/// `PrimePi[x]`.
+pub(super) fn prime_pi_native(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    let Some(x) = x.to_rational() else {
+        return Ok(None);
+    };
+    let x = x.floor();
+    if x.is_negative() {
+        return Ok(Some(Expr::from(0)));
+    }
+    let count = x
+        .to_i64()
+        .and_then(|x| u64::try_from(x).ok())
+        .and_then(prime_pi);
+    match count {
+        Some(c) => Ok(Some(Expr::from(Integer::from(c)))),
+        None => refuse(ev, e, "past the sieve's limit"),
+    }
 }
 
 #[cfg(test)]

@@ -141,3 +141,21 @@ fn symbols_and_bernoulli_numbers() {
         ("BernoulliB[-2]", "BernoulliB[-2]"),
     ]);
 }
+
+/// Counting primes (CAS-271).
+#[test]
+fn counting_primes() {
+    check(&[
+        ("Prime[1]", "2"),
+        ("Prime[10]", "29"),
+        ("Prime[100000]", "1299709"),
+        ("Prime[0]", "Prime[0]"),
+        ("Prime[1000001]", "Prime[1000001]"),
+        ("PrimePi[1]", "0"),
+        ("PrimePi[100]", "25"),
+        ("PrimePi[1000000]", "78498"),
+        ("PrimePi[21/2]", "4"),
+        ("PrimePi[-5]", "0"),
+        ("PrimePi[1000000000]", "PrimePi[1000000000]"),
+    ]);
+}

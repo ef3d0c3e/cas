@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 133] = [
+const BUILTINS: [&str; 135] = [
     "Plus",
     "Times",
     "Power",
@@ -129,6 +129,8 @@ const BUILTINS: [&str; 133] = [
     "JacobiSymbol",
     "LegendreSymbol",
     "BernoulliB",
+    "Prime",
+    "PrimePi",
     // Linear algebra (CAS-218 to CAS-222).
     "Transpose",
     "IdentityMatrix",

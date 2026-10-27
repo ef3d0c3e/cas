@@ -10,14 +10,18 @@
 //! - [`Natural::factor`]: trial division, perfect powers and Pollard's rho
 //!   (Brent's variant), with an effort bound; factors it cannot split stay
 //!   labelled [`Primality::NotPrime`].
+//! - [`prime_pi`] and [`nth_prime`]: a segmented sieve of Eratosthenes, to
+//!   [`PRIME_PI_LIMIT`] and [`NTH_PRIME_LIMIT`].
 
 mod factor;
 mod jacobi;
 mod probable;
+mod sieve;
 mod small;
 
 pub use factor::{Factor, Factorization};
 pub(crate) use probable::is_prime_u64;
+pub use sieve::{NTH_PRIME_LIMIT, PRIME_PI_LIMIT, nth_prime, prime_pi};
 
 #[cfg(doc)]
 use crate::Natural;

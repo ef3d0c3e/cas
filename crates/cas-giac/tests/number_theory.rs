@@ -159,3 +159,16 @@ fn symbols_and_bernoulli_numbers() {
         "bernoulli(30)",
     ]);
 }
+
+/// Counting primes (CAS-271).
+#[test]
+fn counting_primes() {
+    check(&[
+        "ithprime(1)",
+        "ithprime(10)",
+        "ithprime(100000)",
+        "nprimes(1)",
+        "nprimes(100)",
+        "nprimes(10^6)",
+    ]);
+}

@@ -104,6 +104,8 @@ ChineseRemainder: ichinrem
 JacobiSymbol: jacobi_symbol
 LegendreSymbol: legendre_symbol
 BernoulliB: bernoulli
+Prime: ithprime
+PrimePi: nprimes
 # Equations (CAS-DOC-11, CAS-210, CAS-214).
 Solve: solve
 CSolve: csolve

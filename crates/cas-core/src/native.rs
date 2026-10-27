@@ -186,6 +186,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::JACOBI_SYMBOL, number_theory::jacobi_symbol),
         (Symbol::LEGENDRE_SYMBOL, number_theory::jacobi_symbol),
         (Symbol::BERNOULLI_B, number_theory::bernoulli_b),
+        (Symbol::PRIME, number_theory::prime),
+        (Symbol::PRIME_PI, number_theory::prime_pi_native),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),
