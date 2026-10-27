@@ -195,3 +195,57 @@ fn radicals() {
         ),
     ]);
 }
+
+/// Trigonometric simplification (CAS-234).
+#[test]
+fn trigonometric() {
+    check(&[
+        ("Simplify[Plus[Power[Sin[x], 2], Power[Cos[x], 2]]]", "1"),
+        (
+            "Simplify[Times[Sin[Times[2, x]], Power[Sin[x], -1]]]",
+            "Times[2, Cos[x]]",
+        ),
+        ("Simplify[Times[Tan[x], Cos[x]]]", "Sin[x]"),
+        ("Simplify[Times[Sin[x], Power[Cos[x], -1]]]", "Tan[x]"),
+        (
+            "Simplify[Times[Plus[1, Power[Tan[x], 2]], Power[Cos[x], 2]]]",
+            "1",
+        ),
+        (
+            "Simplify[Plus[Sin[Plus[x, y]], Times[-1, Sin[x], Cos[y]], Times[-1, Cos[x], Sin[y]]]]",
+            "0",
+        ),
+        (
+            "Simplify[Plus[Power[Sin[x], -2], Times[-1, Power[Tan[x], -2]]]]",
+            "1",
+        ),
+        (
+            "Simplify[Plus[Cos[Times[2, x]], Times[2, Power[Sin[x], 2]]]]",
+            "1",
+        ),
+        (
+            "Simplify[Times[Power[Sin[x], 2], Power[Plus[1, Times[-1, Cos[x]]], -1]]]",
+            "Plus[1, Cos[x]]",
+        ),
+        (
+            "Simplify[Plus[Power[Sin[x], 3], Times[Sin[x], Power[Cos[x], 2]]]]",
+            "Sin[x]",
+        ),
+        (
+            "Simplify[Times[Cos[x], Power[Plus[1, Times[-1, Power[Sin[x], 2]]], -1]]]",
+            "Power[Cos[x], -1]",
+        ),
+        (
+            "Simplify[Plus[Times[Sin[x], Tan[x]], Cos[x]]]",
+            "Power[Cos[x], -1]",
+        ),
+        (
+            "Simplify[Times[Tan[Times[2, x]], Plus[1, Times[-1, Power[Tan[x], 2]]]]]",
+            "Times[2, Tan[x]]",
+        ),
+        (
+            "Simplify[Plus[Times[Sin[x], Cos[y]], Times[Cos[x], Sin[y]]]]",
+            "Sin[Plus[x, y]]",
+        ),
+    ]);
+}

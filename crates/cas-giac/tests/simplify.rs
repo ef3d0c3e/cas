@@ -161,3 +161,25 @@ fn trigonometric_rewritings() {
         "exp2trig(trig2exp(cos(x)))",
     ]);
 }
+
+/// Trigonometric simplification (CAS-234).
+#[test]
+fn trigonometric_simplification() {
+    check(&[
+        "simplify(sin(x)^2+cos(x)^2)",
+        "simplify(sin(2*x)/sin(x))",
+        "simplify(tan(x)*cos(x))",
+        "simplify(sin(x)/cos(x))",
+        "simplify((1+tan(x)^2)*cos(x)^2)",
+        "simplify(sin(x+y)-sin(x)*cos(y)-cos(x)*sin(y))",
+        "simplify(1/sin(x)^2-1/tan(x)^2)",
+        "simplify(cos(2*x)+2*sin(x)^2)",
+        "simplify(sin(x)^2/(1-cos(x)))",
+        "simplify(sin(x)^3+sin(x)*cos(x)^2)",
+        "simplify(cos(x)/(1-sin(x)^2))",
+        "simplify(sin(x)*tan(x)+cos(x))",
+        "simplify(tan(2*x)*(1-tan(x)^2))",
+        "simplify(sin(3*x)/sin(x))",
+        "simplify(sin(x)*cos(y)+cos(x)*sin(y))",
+    ]);
+}
