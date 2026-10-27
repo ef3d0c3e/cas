@@ -159,3 +159,39 @@ fn exponentials_and_logarithms() {
         assert_eq!(found, ctx.eval(&read(expected)).unwrap(), "{input}");
     }
 }
+
+/// Radicals (CAS-232): denominators rationalized, square roots denested.
+#[test]
+fn radicals() {
+    check(&[
+        (
+            "Simplify[Power[Plus[1, Power[2, 1/2]], -1]]",
+            "Plus[-1, Power[2, 1/2]]",
+        ),
+        (
+            "Simplify[Power[Plus[Power[3, 1/2], Times[-1, Power[2, 1/2]]], -1]]",
+            "Plus[Power[2, 1/2], Power[3, 1/2]]",
+        ),
+        (
+            "Simplify[Power[Plus[3, Times[2, Power[2, 1/2]]], 1/2]]",
+            "Plus[1, Power[2, 1/2]]",
+        ),
+        (
+            "Simplify[Power[Plus[5, Times[2, Power[6, 1/2]]], 1/2]]",
+            "Plus[Power[2, 1/2], Power[3, 1/2]]",
+        ),
+        (
+            "Simplify[Power[Plus[3, Times[-2, Power[2, 1/2]]], 1/2]]",
+            "Plus[-1, Power[2, 1/2]]",
+        ),
+        (
+            "Simplify[Times[Plus[1, Power[x, 1/2]], Plus[-1, Power[x, 1/2]]]]",
+            "Plus[-1, x]",
+        ),
+        // A root that does not denest stays.
+        (
+            "Simplify[Power[Plus[1, Power[2, 1/2]], 1/2]]",
+            "Power[Plus[1, Power[2, 1/2]], 1/2]",
+        ),
+    ]);
+}

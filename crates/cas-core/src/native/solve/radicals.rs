@@ -69,7 +69,7 @@ fn rational_sqrt(q: &Rational) -> Option<Rational> {
 }
 
 /// The sign of `α + β √n`, `n > 0`, exactly.
-fn surd_sign(alpha: &Rational, beta: &Rational, n: &Rational) -> Ordering {
+pub(in crate::native) fn surd_sign(alpha: &Rational, beta: &Rational, n: &Rational) -> Ordering {
     let a = alpha.cmp(&Rational::ZERO);
     let b = beta.cmp(&Rational::ZERO);
     if b == Ordering::Equal || a == b {
@@ -93,7 +93,7 @@ fn surd(alpha: &Rational, beta: &Rational, n: &Rational) -> Expr {
 
 /// `√(α + β √n)` for `α + β √n > 0`, denested when `α² − β² n = s²`:
 /// `√((α + s)/2) + sgn(β) √((α − s)/2)`.
-fn surd_sqrt(alpha: &Rational, beta: &Rational, n: &Rational) -> Expr {
+pub(in crate::native) fn surd_sqrt(alpha: &Rational, beta: &Rational, n: &Rational) -> Expr {
     if beta.is_zero() {
         return sqrt(number(alpha));
     }

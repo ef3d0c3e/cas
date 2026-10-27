@@ -70,6 +70,7 @@ use crate::poly::{Fraction, Polynomials};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
 pub(super) use fsolve::fsolve;
+pub(super) use radicals::{surd_sign, surd_sqrt};
 
 type Native = Result<Option<Expr>, EvalError>;
 

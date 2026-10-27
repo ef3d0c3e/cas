@@ -125,3 +125,17 @@ fn compositions() {
         "ln(exp(2))",
     ]);
 }
+
+/// Radicals (CAS-232): denominators rationalized, square roots denested.
+#[test]
+fn radicals() {
+    check(&[
+        "simplify(1/(1+sqrt(2)))",
+        "simplify(1/(sqrt(3)-sqrt(2)))",
+        "simplify(1/(1+sqrt(2)+sqrt(3)))",
+        "simplify(sqrt(3+2*sqrt(2)))",
+        "simplify(sqrt(5+2*sqrt(6)))",
+        "simplify((sqrt(x)+1)*(sqrt(x)-1))",
+        "simplify(sqrt(x)/x)",
+    ]);
+}

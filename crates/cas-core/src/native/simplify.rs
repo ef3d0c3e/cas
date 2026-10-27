@@ -8,7 +8,8 @@
 //! - The search (§3): the arguments of functions, and the base and exponent
 //!   of powers but integer ones, first, each by a `Simplify` of its own;
 //!   then the candidates `Together`, `Factor` and `Expand` of the whole, its
-//!   exponential and logarithmic forms ([`exp_log`], CAS-230), and the least
+//!   exponential and logarithmic forms ([`exp_log`], CAS-230), its radicals
+//!   denested and rationalized ([`radicals`], CAS-232), and the least
 //!   complex of it and them, the first on a tie, in at most [`ROUNDS`] rounds
 //!   while the choice changes. A candidate is evaluated on
 //!   its own: one that fails, short of an interrupt, is left out, and the
@@ -140,7 +141,8 @@ fn least(ev: &mut Eval<'_>, e: &Expr) -> Result<Expr, EvalError> {
 }
 
 /// The candidates of `e`, each evaluated: the rewritings of [`CANDIDATES`],
-/// and the exponential and logarithmic forms (§4).
+/// the exponential and logarithmic forms (§4), and the radicals denested
+/// and rationalized (§6).
 fn candidates(ev: &mut Eval<'_>, e: &Expr) -> Result<Vec<Expr>, EvalError> {
     let mut out = Vec::new();
     for head in CANDIDATES {
@@ -151,8 +153,13 @@ fn candidates(ev: &mut Eval<'_>, e: &Expr) -> Result<Vec<Expr>, EvalError> {
             out.push(c);
         }
     }
-    for rewritten in exp_log::rewritings(ev.context(), e) {
-        if let Some(c) = evaluated(ev, &rewritten)? {
+    let mut rewritten = exp_log::rewritings(ev.context(), e);
+    rewritten.extend(radicals::denested(e));
+    if let Some(r) = radicals::rationalized(ev, e)? {
+        rewritten.push(r);
+    }
+    for r in rewritten {
+        if let Some(c) = evaluated(ev, &r)? {
             out.push(c);
         }
     }
@@ -220,5 +227,6 @@ fn rational(q: &cas_num::Rational) -> u64 {
 }
 
 mod exp_log;
+mod radicals;
 #[cfg(test)]
 mod tests;
