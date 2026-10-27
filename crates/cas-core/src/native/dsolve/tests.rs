@@ -243,6 +243,56 @@ fn euler_equations() {
     }
 }
 
+/// Conditions (CAS-264): the constants fixed, free where they are fewer
+/// than the order, `{}` when no solution meets them.
+#[test]
+fn conditions() {
+    let ctx = Context::new();
+    let second = "Equation[Plus[D[y[x], x, x], y[x]], 0]";
+    for (input, expected) in [
+        (
+            "DSolve[List[Equation[D[y[x], x], y[x]], Equation[y[0], 1]], y[x]]".to_owned(),
+            "Power[E, x]",
+        ),
+        (
+            format!(
+                "DSolve[List[{second}, Equation[y[0], 0], Equation[Derivative[1][y][0], 1]], y[x]]"
+            ),
+            "Sin[x]",
+        ),
+        (
+            format!(
+                "DSolve[List[{second}, Equation[y[0], 0], Equation[y[Times[1/2, Pi]], 1]], y[x]]"
+            ),
+            "Sin[x]",
+        ),
+        (
+            format!("DSolve[List[{second}, Equation[y[0], 0], Equation[y[Pi], 1]], y[x]]"),
+            "List[]",
+        ),
+        (
+            format!("DSolve[List[{second}, Equation[y[0], 1]], y[x]]"),
+            "Plus[Cos[x], Times[c_1, Sin[x]]]",
+        ),
+        (
+            "DSolve[List[Equation[D[y[x], x], Power[y[x], 2]], Equation[y[0], 1]], y[x]]"
+                .to_owned(),
+            "List[Power[Plus[1, Times[-1, x]], -1]]",
+        ),
+        // The unknown alone: its argument from the equation, not y[0].
+        (
+            "DSolve[List[Equation[D[y[t], t], y[t]], Equation[y[0], 2]], y]".to_owned(),
+            "Times[2, Power[E, t]]",
+        ),
+    ] {
+        assert_eq!(
+            format!("{:?}", ctx.eval(&read(&input)).unwrap()),
+            expected,
+            "{input}"
+        );
+    }
+}
+
 /// What no method solves, or what is not an equation in `y`, stays.
 #[test]
 fn stays() {

@@ -17,6 +17,8 @@
 //!   `c_0 x²`, as giac's); a term `c ln u` of `∫p` makes `u^c` of `μ`.
 //! - The answer is expanded; the constants `c_0`, `c_1`, … skip the names of
 //!   the call. What no method solves stays, with a warning.
+//! - `DSolve[{eq, conditions…}, y[x]]` fixes the constants by the
+//!   conditions ([`conditions`], §8).
 //!
 //! Each call that solves takes one step, `"DSolve"`.
 
@@ -33,12 +35,20 @@ pub(super) fn dsolve(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some((eq, y, x)) = problem(e) else {
         return Ok(None);
     };
-    // Conditions come in a list with the equation (§8).
-    if eq.head() == Some(&Expr::from(Symbol::LIST)) {
-        return Ok(None);
-    }
+    // Conditions come in a list after the equation (§8).
+    let (eq, conditions) = match (eq.head() == Some(&Expr::from(Symbol::LIST)), eq.args()) {
+        (true, [first, rest @ ..]) => (first.clone(), rest.to_vec()),
+        (true, []) => return Ok(None),
+        _ => (eq, Vec::new()),
+    };
     let solution = match Ode::of(ev, &eq, &y, &x)? {
-        Some(ode) => solve(ev, e, &ode, &x)?,
+        Some(ode) => match solve(ev, e, &ode, &x)? {
+            Some(general) if !conditions.is_empty() => {
+                let constants = constants(e, ode.order);
+                conditions::apply(ev, e, &general, &conditions, &y, &x, &constants)?
+            }
+            general => general,
+        },
         None => None,
     };
     let Some(solution) = solution else {
@@ -76,7 +86,12 @@ fn problem(e: &Expr) -> Option<(Expr, Expr, Expr)> {
     let variable = |x: &Expr| x.as_symbol().is_some_and(|s| !s.is_builtin());
     match e.args() {
         [eq, y] if unknown(y) => {
-            let x = argument_of(eq, y)?;
+            // The equation's argument, not the conditions' points.
+            let ode = match eq.args() {
+                [first, ..] if eq.head() == Some(&Expr::from(Symbol::LIST)) => first,
+                _ => eq,
+            };
+            let x = argument_of(ode, y)?;
             Some((eq.clone(), y.clone(), x))
         }
         [eq, f] => {
@@ -280,6 +295,7 @@ fn logarithm_multiple(t: &Expr) -> Option<(Expr, Expr)> {
     }
 }
 
+mod conditions;
 mod euler;
 mod first;
 mod linear;

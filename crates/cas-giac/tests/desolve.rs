@@ -221,6 +221,60 @@ fn right_sides() {
     ]);
 }
 
+/// Conditions fix the solution (CAS-264): giac's answer to its input,
+/// derivatives with primes, is ours to our input, with `subst`, by value.
+fn check_conditions(cases: &[(&str, &str)]) {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (theirs, input) in cases {
+        match (giac.value(theirs), ours(input)) {
+            (Ok(t), Ok(o)) if same(&ctx, &o, &t, &POINT) => {}
+            (t, o) => wrong.push(format!("{input}: ours {o:?}, giac's {t:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+#[test]
+fn conditions() {
+    let second = "diff(y(x), x, x) + y(x) = 0";
+    let derivative = "subst(diff(y(x), x), x = 0)";
+    check_conditions(&[
+        (
+            "desolve([y'=y,y(0)=1],y)",
+            "desolve([diff(y(x), x) = y(x), y(0) = 1], y(x))",
+        ),
+        (
+            "desolve([y''+y=0,y(0)=0,y'(0)=1],y)",
+            &format!("desolve([{second}, y(0) = 0, {derivative} = 1], y(x))"),
+        ),
+        (
+            "desolve([y'+y=x,y(1)=2],y)",
+            "desolve([diff(y(x), x) + y(x) = x, y(1) = 2], y(x))",
+        ),
+        (
+            "desolve([y'=y^2,y(0)=1],y)",
+            "desolve([diff(y(x), x) = y(x)^2, y(0) = 1], y(x))",
+        ),
+        (
+            "desolve([y'=x*y^2,y(0)=1],y)",
+            "desolve([diff(y(x), x) = x*y(x)^2, y(0) = 1], y(x))",
+        ),
+        (
+            "desolve([y''+y=0,y(0)=0,y(pi/2)=1],y)",
+            &format!("desolve([{second}, y(0) = 0, y(pi/2) = 1], y(x))"),
+        ),
+        // No solution: giac's [].
+        (
+            "desolve([y''+y=0,y(0)=0,y(pi)=1],y)",
+            &format!("desolve([{second}, y(0) = 0, y(pi) = 1], y(x))"),
+        ),
+    ]);
+}
+
 /// Euler's equations (CAS-263): those giac solves, by the residual (its
 /// constants are scaled otherwise, and `ln(abs(x))` is `ln(x)` here).
 #[test]
