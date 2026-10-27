@@ -645,6 +645,58 @@ fn calls() {
     ]);
 }
 
+/// The derivatives of unknown functions, which have no name (CAS-DOC-7
+/// L13): printed as the `diff` or `subst` that evaluates back to them
+/// (CAS-258), not read back by lowering alone.
+#[test]
+fn derivatives() {
+    use cas_core::Context;
+
+    let [f, x] = ["f", "x"].map(sym);
+    let derivative = |n: i64, h: &Expr, a: &Expr| {
+        let d = app(Symbol::DERIVATIVE, [int(n)]);
+        apply(&apply(&d, [h.clone()]), [a.clone()])
+    };
+    let cases = [
+        (derivative(1, &f, &x), "diff(f(x), x)"),
+        (derivative(2, &f, &x), "diff(f(x), x, x)"),
+        (derivative(3, &f, &sym("t")), "diff(f(t), t, t, t)"),
+        (derivative(5, &f, &x), "diff(f(x), [x, 5])"),
+        (derivative(1, &f, &int(0)), "subst(diff(f(x), x), x = 0)"),
+        (
+            derivative(2, &f, &plus([int(1), x.clone()])),
+            "subst(diff(f(t), t, t), t = 1 + x)",
+        ),
+        // The variable is neither the function nor in the argument.
+        (derivative(1, &x, &int(0)), "subst(diff(x(t), t), t = 0)"),
+        (
+            derivative(1, &f, &call("g", [x.clone(), sym("t")])),
+            "subst(diff(f(u), u), u = g(x, t))",
+        ),
+        (
+            derivative(1, &f, &Expr::from(Symbol::PI)),
+            "subst(diff(f(x), x), x = pi)",
+        ),
+        (
+            times([int(2), derivative(1, &f, &times([int(2), x.clone()]))]),
+            "2*subst(diff(f(t), t), t = 2*x)",
+        ),
+    ];
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (e, text) in &cases {
+        let found = printed(e);
+        let back = ctx.eval(&read_with(&found, Names::english()));
+        if found != *text || back.as_ref() != Ok(e) {
+            wrong.push(format!("{e:?}: {found}, evaluated back {back:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    // A bare derivative, a function and not a value, has no form.
+    let bare = apply(&app(Symbol::DERIVATIVE, [int(1)]), [f]);
+    assert!(print(&bare, Names::english()).is_err());
+}
+
 #[test]
 fn lambdas_and_conditionals() {
     let [c, d, x, y] = ["c", "d", "x", "y"].map(sym);

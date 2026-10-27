@@ -209,7 +209,8 @@ Sequence Rule RuleDelayed
 Blank BlankSequence BlankNullSequence Pattern Alternatives Optional Condition PatternTest
 HoldPattern
 # The derivative of an unknown function, which `diff` gives: without a
-# surface name, as there is no prime notation (CAS-DOC-7 L13).
+# surface name, as there is no prime notation (CAS-DOC-7 L13); printed as
+# the `diff` or `subst` that evaluates to it (CAS-258).
 Derivative
 # A decimal literal, a ball once its statement runs (CAS-148).
 Decimal

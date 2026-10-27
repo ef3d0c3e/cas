@@ -1,0 +1,9 @@
+// Derivatives of unknown functions, written back as the diff or subst that
+// evaluates to them: there is no prime notation (CAS-DOC-7 L13; CAS-DOC-16
+// §2, CAS-258).
+diff(f(x), x)
+diff(f(x), x, x)
+diff(f(x), [x, 5])
+subst(diff(f(x), x), x = 0)
+subst(diff(f(x), x, x), x = x + 1)
+diff(f(2*x), x)

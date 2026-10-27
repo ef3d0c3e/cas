@@ -120,6 +120,10 @@ impl std::error::Error for PrintError {}
 ///   share their operands is a chain, `0 < x <= 1`.
 /// - `+infinity` for `Infinity` and `-infinity` for `DirectedInfinity[-1]`,
 ///   whole forms (§5); so the negated complex infinity is `-(infinity)`.
+/// - The derivative of an unknown function, `Derivative[n][f][a]`, which has
+///   no name (L13), as what evaluates to it: `diff(f(x), x, x)`,
+///   `diff(f(x), [x, 5])`, and `subst(diff(f(t), t), t = a)` at an argument
+///   that is not a symbol (CAS-258).
 ///
 /// What the language cannot write is an error ([`PrintError`]): internal
 /// builtins on their own (`Plus`), operators with another number of
@@ -259,6 +263,9 @@ enum Form<'a> {
     MinusInfinity,
     /// A decimal literal, `Decimal[digits, exponent]` (CAS-148).
     Decimal(Integer, i64),
+    /// The derivative of an unknown function at an argument,
+    /// `Derivative[n][f][a]`: its order, the function and the argument.
+    Derivative(u64, &'a Expr, &'a Expr),
     /// Anything else: `head(args…)` or `call(head, args…)`.
     Call(&'a Expr, &'a [Expr]),
 }
@@ -269,7 +276,10 @@ fn form(e: &Expr) -> Form<'_> {
         unreachable!("only applications have a form");
     };
     let Some(symbol) = head.as_symbol() else {
-        return Form::Call(head, args);
+        return match (derivative_order(head), args) {
+            (Some((n, f)), [a]) => Form::Derivative(n, f, a),
+            _ => Form::Call(head, args),
+        };
     };
     match (symbol, args) {
         (Symbol::PLUS, [_, _, ..]) => Form::Sum(args),
@@ -305,6 +315,22 @@ fn form(e: &Expr) -> Form<'_> {
         },
         _ => Form::Call(head, args),
     }
+}
+
+/// `Derivative[n][f]`, the head of an unknown function's derivative applied:
+/// its order `n ≥ 1` and the function.
+fn derivative_order(head: &Expr) -> Option<(u64, &Expr)> {
+    let View::Apply { head: d, args: [f] } = head.view() else {
+        return None;
+    };
+    let View::Apply { head: d, args: [n] } = d.view() else {
+        return None;
+    };
+    if d.as_symbol() != Some(Symbol::DERIVATIVE) {
+        return None;
+    }
+    let n = u64::try_from(n.as_i64()?).ok().filter(|&n| n >= 1)?;
+    Some((n, f))
 }
 
 /// The operator of `Equation` and of the comparisons.
@@ -382,6 +408,7 @@ fn shape(e: &Expr) -> Shape {
             | Form::Bracketed(..)
             | Form::Index(..)
             | Form::Decimal(..)
+            | Form::Derivative(..)
             | Form::Call(..) => (Prec::Postfix, false),
         },
         _ => (Prec::Postfix, false),
@@ -929,8 +956,55 @@ impl<'a> Printer<'a> {
                     .push_str(&decimal_text(&n, exponent).expect("checked by form"));
                 Ok(())
             }
+            Form::Derivative(n, f, a) => self.derivative(n, f, a),
             Form::Call(head, args) => self.call(e, head, args),
         }
+    }
+
+    /// `diff(f(x), x)` for `Derivative[1][f][x]` at a symbol, the variable
+    /// written `n` times up to 3 and as `[x, n]` above; at another argument
+    /// `subst(diff(f(t), t), t = a)`, `t` the first of `x`, `t`, `u`, `v`,
+    /// `x1`, `x2`, … that is neither `f` nor in `a` (CAS-DOC-16 §2, CAS-258).
+    /// Both evaluate back to the derivative, which has no name (CAS-DOC-7
+    /// L13).
+    fn derivative(&mut self, n: u64, f: &Expr, a: &Expr) -> Result<(), PrintError> {
+        let at_symbol = a
+            .as_symbol()
+            .is_some_and(|s| !s.is_builtin() && self.symbol_name(s).is_some());
+        let x = if at_symbol {
+            a.clone()
+        } else {
+            let names = ["x", "t", "u", "v"].map(String::from);
+            names
+                .into_iter()
+                .chain((1u64..=1 << 20).map(|k| format!("x{k}")))
+                .map(|name| Expr::from(Symbol::new(&name)))
+                .find(|t| t != f && !a.contains(t) && !f.contains(t))
+                .expect("an argument with fewer than 2^20 names")
+        };
+        let mut diff = vec![Expr::apply(f, std::slice::from_ref(&x))];
+        if n <= 3 {
+            diff.extend(std::iter::repeat_n(
+                x.clone(),
+                usize::try_from(n).expect("at most 3"),
+            ));
+        } else {
+            let order = Expr::from(i64::try_from(n).unwrap_or(i64::MAX));
+            diff.push(Expr::call(Symbol::LIST, [x.clone(), order]));
+        }
+        let diff = Expr::call(Symbol::D, diff);
+        if at_symbol {
+            return self.expr(&diff);
+        }
+        let subst = Target::Builtin(Symbol::REPLACE_ALL);
+        self.out.push_str(spelled(self.names, &subst));
+        self.out.push('(');
+        self.expr(&diff)?;
+        self.out.push_str(", ");
+        self.expr(&x)?;
+        self.relation("=", a)?;
+        self.out.push(')');
+        Ok(())
     }
 
     /// ` op b`, the right-hand side of a relation.
