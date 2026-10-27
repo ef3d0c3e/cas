@@ -257,3 +257,33 @@ fn zeta() {
         "sum(1/k^5,k,2,inf)",
     ]);
 }
+
+/// `Erf` and `Erfc` (CAS-247). giac writes `erfc(x)` as `1-erf(x)` and
+/// leaves `erf(-x)`; here `Erfc` stays and the sign comes out, the same by
+/// value.
+#[test]
+fn error_functions() {
+    check(&[
+        "erf(0)",
+        "erfc(0)",
+        "erf(1.0)",
+        "erfc(1.0)",
+        "erf(-1.0)",
+        "erfc(-1.0)",
+        "erf(0.5)",
+        "erf(3.0)",
+        "erfc(3.0)",
+        "erf(10.0)",
+        "erfc(10.0)",
+        "erf(inf)",
+        "erfc(inf)",
+        "erf(-inf)",
+        "erfc(-inf)",
+        "erf(-x)",
+        "erfc(-x)",
+        "erf(-2*x)",
+        "diff(erf(x),x)",
+        "diff(erfc(x),x)",
+        "diff(erf(x^2),x)",
+    ]);
+}

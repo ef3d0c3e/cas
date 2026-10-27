@@ -8,8 +8,8 @@
 //! integer powers by complex arithmetic, a negative power through the
 //! conjugate over `a² + b²` (`1/(x + i y)` is `(x − i y)/(x² + y²)`); `Exp[u]`
 //! of `u = a + i b` as `e^a (cos b + i sin b)`; `Sin`, `Cos`, `Tan`,
-//! `ArcTan`, `Sinh`, `Cosh`, `Tanh` and `ArcSinh` of a real argument, and
-//! a power of a positive base by a real exponent, real. Where they are
+//! `ArcTan`, `Sinh`, `Cosh`, `Tanh`, `ArcSinh`, `Erf` and `Erfc` of a real
+//! argument, and a power of a positive base by a real exponent, real. Where they are
 //! found, `Re` is `a`, `Im` is `b`, `Conjugate` is `a − i b`, and `Arg` is
 //! `0` or `Pi` for a real of known sign, `±Pi/2` for an imaginary one, and
 //! `ArcTan[b/a]` for `a > 0`, plus or minus `Pi` for `a < 0` by the sign of
@@ -148,7 +148,9 @@ pub(super) fn parts(ctx: &Context, z: &Expr) -> Option<(Expr, Expr)> {
             | Symbol::SINH
             | Symbol::COSH
             | Symbol::TANH
-            | Symbol::ARC_SINH,
+            | Symbol::ARC_SINH
+            | Symbol::ERF
+            | Symbol::ERFC,
             [u],
         ) if element(ctx, u, Set::Reals) == Truth::True => Some((z.clone(), zero())),
         _ => None,

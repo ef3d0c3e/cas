@@ -58,6 +58,8 @@ Min: min
 Gamma: Gamma
 Beta: Beta
 Zeta: Zeta
+Erf: erf
+Erfc: erfc
 Sqrt: sqrt
 Factorial: factorial
 Pi: pi

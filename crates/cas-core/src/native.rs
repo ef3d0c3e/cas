@@ -15,6 +15,7 @@
 mod arith;
 mod ball;
 mod elementary;
+mod erf;
 mod factorial;
 mod index;
 mod integer;
@@ -90,6 +91,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::GAMMA, factorial::gamma),
         (Symbol::BETA, factorial::beta),
         (Symbol::ZETA, zeta::zeta),
+        (Symbol::ERF, erf::erf),
+        (Symbol::ERFC, erf::erf),
         (Symbol::DIRECTED_INFINITY, arith::directed_infinity),
         (Symbol::EQUAL, logic::equal_native),
         (Symbol::UNEQUAL, logic::unequal),

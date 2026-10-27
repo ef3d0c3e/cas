@@ -704,6 +704,74 @@ fn zeta_values() {
     }
 }
 
+/// `Erf` and `Erfc` (CAS-247).
+#[test]
+fn error_functions() {
+    check(&[
+        ("Erf[0]", "0"),
+        ("Erfc[0]", "1"),
+        ("Erf[Infinity]", "1"),
+        ("Erf[DirectedInfinity[-1]]", "-1"),
+        ("Erfc[Infinity]", "0"),
+        ("Erfc[DirectedInfinity[-1]]", "2"),
+        ("Erf[x]", "Erf[x]"),
+        ("Erf[1/2]", "Erf[1/2]"),
+        ("Erf[Times[-1, x]]", "Times[-1, Erf[x]]"),
+        ("Erf[-1/2]", "Times[-1, Erf[1/2]]"),
+        (
+            "Erfc[Times[-2, x]]",
+            "Plus[2, Times[-1, Erfc[Times[2, x]]]]",
+        ),
+        ("Erfc[x]", "Erfc[x]"),
+        ("Erf[DirectedInfinity[I]]", "Erf[DirectedInfinity[I]]"),
+    ]);
+    let ctx = Context::new();
+    // The derivatives, by value.
+    for (left, right) in [
+        (
+            "D[Erf[x], x]",
+            "Times[2, Power[Pi, -1/2], Power[E, Times[-1, Power[x, 2]]]]",
+        ),
+        (
+            "D[Erfc[x], x]",
+            "Times[-2, Power[Pi, -1/2], Power[E, Times[-1, Power[x, 2]]]]",
+        ),
+        (
+            "D[Erf[Power[x, 2]], x]",
+            "Times[4, x, Power[Pi, -1/2], Power[E, Times[-1, Power[x, 4]]]]",
+        ),
+    ] {
+        assert_eq!(
+            ctx.eval(&read(left)).unwrap(),
+            ctx.eval(&read(right)).unwrap(),
+            "{left}"
+        );
+    }
+    // Balls; Erfc of a large argument keeps its relative accuracy.
+    for (left, right) in [
+        (
+            "N[Erf[1]]",
+            "8427007929497148693412/10000000000000000000000",
+        ),
+        (
+            "N[Erfc[1]]",
+            "1572992070502851306588/10000000000000000000000",
+        ),
+        (
+            "N[Erf[-3/2]]",
+            "-9661051464753107270669/10000000000000000000000",
+        ),
+        (
+            "N[Times[Power[10, 45], Erfc[10]]]",
+            "2088487583762544757000/1000000000000000000000",
+        ),
+        ("N[Erfc[-1]]", "Plus[1, N[Erf[1]]]"),
+    ] {
+        let gap = format!("Less[Abs[Plus[{left}, Times[-1, {right}]]], 1/1000000000000000]");
+        assert_eq!(ctx.eval(&read(&gap)).unwrap(), read("True"), "{left}");
+    }
+}
+
 /// `Limits::number_bits` bounds the factorials computed, by estimate.
 #[test]
 fn factorials_stay_within_the_number_bits() {
