@@ -57,6 +57,12 @@ const UNARY: [(&str, Ours, Mpfr); 23] = [
 /// (`fns/trig.rs`), and `tan` the indeterminate ball.
 const HUGE_EXP: i64 = 1 << 16;
 
+/// The most bits `zeta` is fuzzed at: MPFR's took 21 s for `ζ(−63.5)` at
+/// 6264 bits, ours 0.45 s at 6200 (CAS-251), and the oracle alone would
+/// reach the timeout at the top precision. The unit tests take ours to
+/// 4000 bits.
+const ZETA_MAX_PREC: u64 = 2048;
+
 fuzz_target!(|data: &[u8]| {
     warm_up();
     let _ = run(&mut Unstructured::new(data));
@@ -133,6 +139,11 @@ fn unary(
     x: &Ball,
     prec: u64,
 ) -> Result<()> {
+    let prec = if name == "zeta" {
+        prec.min(ZETA_MAX_PREC)
+    } else {
+        prec
+    };
     let y = f(x, prec);
     for p in points(u, x, prec)? {
         let Some(pm) = to_mp(&p) else { continue };
