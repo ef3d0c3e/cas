@@ -20,7 +20,8 @@
 //!   other factors stay as they are (giac's
 //!   `tlin(cos(x)^3)` is `3/4*cos(x)+1/4*cos(3*x)`).
 //! - `TrigToExp`: `sin u = (e^(iu) − e^(−iu))/(2i)`, `cos u = (e^(iu) +
-//!   e^(−iu))/2` and `tan u = −i (e^(iu) − e^(−iu))/(e^(iu) + e^(−iu))`.
+//!   e^(−iu))/2` and `tan u = −i (e^(iu) − e^(−iu))/(e^(iu) + e^(−iu))`;
+//!   `sinh`, `cosh` and `tanh` the same with `e^(±u)` (CAS-DOC-15 §2).
 //! - `ExpToTrig`: `Exp[a + i b]` and `E^(a + i b)`, the terms of the
 //!   exponent with a non-real coefficient its `i b`, as `e^a (cos b + i
 //!   sin b)` when every term of `a` and `b` is real by the domain or the
@@ -400,20 +401,28 @@ fn add(terms: &mut Vec<Term>, (c, k, angle): Term) {
     }
 }
 
-/// `x` with `Sin`, `Cos` and `Tan` as exponentials, built.
+/// `x` with `Sin`, `Cos`, `Tan` and the hyperbolic `Sinh`, `Cosh`, `Tanh`
+/// as exponentials, built.
 pub(super) fn to_exp(x: &Expr) -> Expr {
     x.map_bottom_up(|part| {
-        let (Some(f @ (Symbol::SIN | Symbol::COS | Symbol::TAN)), [u]) =
-            (part.head().and_then(Expr::as_symbol), part.args())
-        else {
+        let (Some(f), [u]) = (part.head().and_then(Expr::as_symbol), part.args()) else {
             return part.clone();
         };
-        let plus = Expr::call(Symbol::EXP, [i() * u.clone()]);
-        let minus = Expr::call(Symbol::EXP, [-(i() * u.clone())]);
+        // e^(±iu) for the circular functions, e^(±u) for the hyperbolic.
+        let circular = matches!(f, Symbol::SIN | Symbol::COS | Symbol::TAN);
+        let hyperbolic = matches!(f, Symbol::SINH | Symbol::COSH | Symbol::TANH);
+        if !circular && !hyperbolic {
+            return part.clone();
+        }
+        let v = if circular { i() * u.clone() } else { u.clone() };
+        let plus = Expr::call(Symbol::EXP, [v.clone()]);
+        let minus = Expr::call(Symbol::EXP, [-v]);
         match f {
             Symbol::SIN => (plus - minus) / (Expr::from(2) * i()),
-            Symbol::COS => (plus + minus) / Expr::from(2),
-            _ => -i() * (plus.clone() - minus.clone()) / (plus + minus),
+            Symbol::COS | Symbol::COSH => (plus + minus) / Expr::from(2),
+            Symbol::TAN => -i() * (plus.clone() - minus.clone()) / (plus + minus),
+            Symbol::SINH => (plus - minus) / Expr::from(2),
+            _ => (plus.clone() - minus.clone()) / (plus + minus),
         }
     })
 }

@@ -57,23 +57,52 @@ impl<'a, 'e> Gruntz<'a, 'e> {
         Gruntz { ev, x }
     }
 
-    /// `e` with its powers by an exponent in `x` as exponentials, and
-    /// `E^h` as `Exp[h]`.
+    /// `e` with its powers by an exponent in `x` as exponentials, `E^h` as
+    /// `Exp[h]`, and the hyperbolic functions of `x` in exponentials and
+    /// logarithms (CAS-DOC-15 §2): `sinh u = (e^u − e^(−u))/2`, `asinh u =
+    /// log(u + √(u² + 1))`, `acosh u = log(u + √(u − 1) √(u + 1))`, `atanh u
+    /// = (log(1 + u) − log(1 − u))/2`.
     fn exponentials(&mut self, e: &Expr) -> Result<Expr, EvalError> {
         let x = self.x.clone();
-        let rewritten =
-            e.replace(
-                |part| match (part.head().and_then(Expr::as_symbol), part.args()) {
-                    (Some(Symbol::POWER), [b, c]) if b.as_symbol() == Some(Symbol::E) => {
-                        Some(Expr::call(Symbol::EXP, [c.clone()]))
-                    }
-                    (Some(Symbol::POWER), [b, c]) if c.contains(&x) => Some(Expr::call(
-                        Symbol::EXP,
-                        [c.clone() * Expr::call(Symbol::LOG, [b.clone()])],
+        let exp = |u: Expr| Expr::call(Symbol::EXP, [u]);
+        let log = |u: Expr| Expr::call(Symbol::LOG, [u]);
+        let half = Expr::from(Rational::new(Integer::ONE, Integer::from(2)));
+        let root = |u: Expr| u.pow(half.clone());
+        let rewritten = e.replace(|part| {
+            let (head, args) = (part.head().and_then(Expr::as_symbol), part.args());
+            if let (Some(f), [u]) = (head, args)
+                && u.contains(&x)
+            {
+                let (plus, minus) = (exp(u.clone()), exp(-u.clone()));
+                let one = || Expr::from(1);
+                let hyperbolic = match f {
+                    Symbol::SINH => Some(half.clone() * (plus - minus)),
+                    Symbol::COSH => Some(half.clone() * (plus + minus)),
+                    Symbol::TANH => Some((plus.clone() - minus.clone()) / (plus + minus)),
+                    Symbol::ARC_SINH => Some(log(u.clone() + root(u.pow(2) + one()))),
+                    Symbol::ARC_COSH => Some(log(
+                        u.clone() + root(u.clone() - one()) * root(u.clone() + one())
                     )),
+                    Symbol::ARC_TANH => {
+                        Some(half.clone() * (log(one() + u.clone()) - log(one() - u.clone())))
+                    }
                     _ => None,
-                },
-            );
+                };
+                if hyperbolic.is_some() {
+                    return hyperbolic;
+                }
+            }
+            match (head, args) {
+                (Some(Symbol::POWER), [b, c]) if b.as_symbol() == Some(Symbol::E) => {
+                    Some(Expr::call(Symbol::EXP, [c.clone()]))
+                }
+                (Some(Symbol::POWER), [b, c]) if c.contains(&x) => Some(Expr::call(
+                    Symbol::EXP,
+                    [c.clone() * Expr::call(Symbol::LOG, [b.clone()])],
+                )),
+                _ => None,
+            }
+        });
         // Evaluated, but the exponentials kept: `Exp` evaluates to itself.
         self.ev.eval(&rewritten)
     }

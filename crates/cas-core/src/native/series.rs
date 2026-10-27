@@ -17,7 +17,8 @@
 //!   `sin h` and `cos h`, then `e^{g₀} exp h`, `log c + v log t + log(1 + h)`
 //!   and the addition formulas; `Tan` as `sin/cos`; `ArcTan`, `ArcSin` and
 //!   `ArcCos` as `f(g₀) + ∫ f′(g) g′` [BK78], the derivative and the
-//!   integral in `t`;
+//!   integral in `t`; the hyperbolic functions by `e^g` and `e^(−g)`, and
+//!   their inverses as `ArcTan` (CAS-DOC-15 §2);
 //! - an expression tree from its leaves, each node's series from its
 //!   children's to one target order; where a product with a pole or a
 //!   cancellation leaves less, the caller asks again with a larger target
@@ -554,7 +555,8 @@ impl<'a, 'e> Expander<'a, 'e> {
         }))
     }
 
-    /// `f(g)` as `f(g₀) + ∫ f′(g) g′` for `ArcTan`, `ArcSin` and `ArcCos`;
+    /// `f(g)` as `f(g₀) + ∫ f′(g) g′` for `ArcTan`, `ArcSin`, `ArcCos` and
+    /// the inverse hyperbolic functions;
     /// `ArcTan` of a series with a pole as `±π/2 − atan(1/g)`, the sign of
     /// `g`'s leading coefficient for `t > 0`.
     fn inverse(&mut self, f: Symbol, g: &Series) -> Found {
@@ -585,17 +587,41 @@ impl<'a, 'e> Expander<'a, 'e> {
         let g = self.normalized(g.clone())?;
         let square = self.mul(&g, &g)?;
         let one = Self::constant(&Expr::from(1), &g.order());
-        let derivative_of_f = if f == Symbol::ARC_TAN {
-            let w = self.add(&one, &square)?;
-            self.power(&w, &Expr::from(-1))?
-        } else {
-            let minus = self.scaled(&Expr::from(-1), &square)?;
-            let w = self.add(&one, &minus)?;
-            let half = Expr::from(q(-1, 2));
-            let root = self.power(&w, &half)?;
-            match (f, root) {
-                (Symbol::ARC_COS, Some(r)) => Some(self.scaled(&Expr::from(-1), &r)?),
-                (_, r) => r,
+        let minus_square = self.scaled(&Expr::from(-1), &square)?;
+        let minus_half = Expr::from(q(-1, 2));
+        let derivative_of_f = match f {
+            Symbol::ARC_TAN => {
+                let w = self.add(&one, &square)?;
+                self.power(&w, &Expr::from(-1))?
+            }
+            Symbol::ARC_TANH => {
+                let w = self.add(&one, &minus_square)?;
+                self.power(&w, &Expr::from(-1))?
+            }
+            Symbol::ARC_SINH => {
+                let w = self.add(&one, &square)?;
+                self.power(&w, &minus_half)?
+            }
+            Symbol::ARC_COSH => {
+                // 1/(√(g − 1) √(g + 1)), the principal branch's.
+                let minus_one = Self::constant(&Expr::from(-1), &g.order());
+                let below = self.add(&g, &minus_one)?;
+                let above = self.add(&g, &one)?;
+                match (
+                    self.power(&below, &minus_half)?,
+                    self.power(&above, &minus_half)?,
+                ) {
+                    (Some(a), Some(b)) => Some(self.mul(&a, &b)?),
+                    _ => None,
+                }
+            }
+            _ => {
+                let w = self.add(&one, &minus_square)?;
+                let root = self.power(&w, &minus_half)?;
+                match (f, root) {
+                    (Symbol::ARC_COS, Some(r)) => Some(self.scaled(&Expr::from(-1), &r)?),
+                    (_, r) => r,
+                }
             }
         };
         let Some(derivative_of_f) = derivative_of_f else {
@@ -679,6 +705,12 @@ impl<'a, 'e> Expander<'a, 'e> {
                 | Symbol::ARC_TAN
                 | Symbol::ARC_SIN
                 | Symbol::ARC_COS
+                | Symbol::SINH
+                | Symbol::COSH
+                | Symbol::TANH
+                | Symbol::ARC_SINH
+                | Symbol::ARC_COSH
+                | Symbol::ARC_TANH
                 | Symbol::ABS,
                 [g],
             ) => {
@@ -701,12 +733,33 @@ impl<'a, 'e> Expander<'a, 'e> {
                         };
                         Ok(Some(self.mul(&sin, &sec)?))
                     }
+                    Symbol::SINH | Symbol::COSH | Symbol::TANH => self.hyperbolic(head, &s),
                     Symbol::ABS => self.abs(&s),
                     _ => self.inverse(head, &s),
                 }
             }
             _ => Ok(None),
         }
+    }
+
+    /// `sinh g`, `cosh g` or `tanh g` from `e^g` and `e^(−g)`.
+    fn hyperbolic(&mut self, f: Symbol, g: &Series) -> Found {
+        let minus = self.scaled(&Expr::from(-1), g)?;
+        let (Some(plus), Some(minus)) = (self.exp(g)?, self.exp(&minus)?) else {
+            return Ok(None);
+        };
+        let negated = self.scaled(&Expr::from(-1), &minus)?;
+        let difference = self.add(&plus, &negated)?;
+        let sum = self.add(&plus, &minus)?;
+        let half = Expr::from(q(1, 2));
+        Ok(match f {
+            Symbol::SINH => Some(self.scaled(&half, &difference)?),
+            Symbol::COSH => Some(self.scaled(&half, &sum)?),
+            _ => match self.power(&sum, &Expr::from(-1))? {
+                Some(inverse) => Some(self.mul(&difference, &inverse)?),
+                None => None,
+            },
+        })
     }
 
     /// `|g|` for `t > 0` and a leading coefficient of known sign.

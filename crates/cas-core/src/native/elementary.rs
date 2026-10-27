@@ -1,5 +1,6 @@
 //! The elementary functions of balls (CAS-DOC-5 §9.2, CAS-84): `Exp`,
 //! `Log`, `Sin`, `Cos`, `Tan`, `ArcSin`, `ArcCos` and `ArcTan` of a ball,
+//! and the hyperbolic `Sinh` … `ArcTanh` (CAS-DOC-15 §2, CAS-238),
 //! real or complex, are the balls of their values, as arithmetic makes balls
 //! of exact numbers met with balls (§9.1). The real function where it has a
 //! value, else the principal complex one, as `Power` does; where neither has
@@ -90,4 +91,28 @@ pub(super) fn arc_cos(ev: &mut Eval<'_>, e: &Expr) -> Native {
 
 pub(super) fn arc_tan(ev: &mut Eval<'_>, e: &Expr) -> Native {
     elementary(ev, e, Ball::atan, ComplexBall::atan)
+}
+
+pub(super) fn sinh(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    elementary(ev, e, Ball::sinh, ComplexBall::sinh)
+}
+
+pub(super) fn cosh(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    elementary(ev, e, Ball::cosh, ComplexBall::cosh)
+}
+
+pub(super) fn tanh(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    elementary(ev, e, Ball::tanh, ComplexBall::tanh)
+}
+
+pub(super) fn arc_sinh(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    elementary(ev, e, Ball::asinh, ComplexBall::asinh)
+}
+
+pub(super) fn arc_cosh(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    elementary(ev, e, Ball::acosh, ComplexBall::acosh)
+}
+
+pub(super) fn arc_tanh(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    elementary(ev, e, Ball::atanh, ComplexBall::atanh)
 }

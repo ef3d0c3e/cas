@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 92] = [
+const BUILTINS: [&str; 98] = [
     "Plus",
     "Times",
     "Power",
@@ -139,6 +139,13 @@ const BUILTINS: [&str; 92] = [
     "TrigReduce",
     "TrigToExp",
     "ExpToTrig",
+    // Hyperbolic functions (CAS-238).
+    "Sinh",
+    "Cosh",
+    "Tanh",
+    "ArcSinh",
+    "ArcCosh",
+    "ArcTanh",
 ];
 
 /// Builtins that apply something to parts, only in the expression

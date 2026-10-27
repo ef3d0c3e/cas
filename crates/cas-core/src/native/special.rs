@@ -16,6 +16,12 @@
 //! Other exact arguments stay as they are, as giac's `sin(1)` and
 //! `sin(pi/5)` would not in radicals of this table.
 //!
+//! The hyperbolic functions (CAS-DOC-15 §2, CAS-238): 0 at 0 (`Cosh` 1,
+//! `ArcCosh[1]` 0 and `ArcCosh[0]` `i π/2`), `ArcTanh[±1]` `±Infinity`,
+//! `Sinh`, `Cosh` and `Tanh` of `Log[u]` in `u`, of `i y` as `i Sin[y]`,
+//! `Cos[y]` and `i Tan[y]`, `ArcSinh` and `ArcTanh` of `i y` as `i ArcSin[y]`
+//! and `i ArcTan[y]`, and the sign of a negative argument out (`Cosh` even).
+//!
 //! Compositions with the inverse functions ([`composition`], CAS-DOC-14 §5,
 //! CAS-231), as giac evaluates them: `Sin`, `Cos` and `Tan` of `ArcSin`,
 //! `ArcCos` and `ArcTan` for every argument (`Cos[ArcSin[x]]` is
@@ -34,7 +40,7 @@ use cas_num::{Integer, Rational};
 
 use crate::assume::{Set, Truth, element, range};
 use crate::context::Context;
-use crate::expr::Expr;
+use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 
 fn q(n: i64, d: i64) -> Rational {
@@ -302,8 +308,95 @@ pub(super) fn value(f: Symbol, x: &Expr) -> Option<Expr> {
             Some(r) => Some(pi_times(r)),
             None => negated(x).map(|y| -call(f, y)),
         },
+        Symbol::SINH | Symbol::COSH | Symbol::TANH => hyperbolic(f, x),
+        Symbol::ARC_SINH | Symbol::ARC_TANH => {
+            if *x == Expr::from(0) {
+                return Some(Expr::from(0));
+            }
+            if f == Symbol::ARC_TANH && x.to_rational().is_some_and(|q| q.abs() == Rational::ONE) {
+                let infinity = Expr::from(Symbol::INFINITY);
+                return Some(if x.to_rational()?.is_negative() {
+                    -infinity
+                } else {
+                    infinity
+                });
+            }
+            // asinh(i y) = i asin(y), atanh(i y) = i atan(y).
+            if let Some(y) = imaginary(x) {
+                let g = if f == Symbol::ARC_SINH {
+                    Symbol::ARC_SIN
+                } else {
+                    Symbol::ARC_TAN
+                };
+                return Some(Expr::from(Symbol::I) * call(g, y));
+            }
+            negated(x).map(|y| -call(f, y))
+        }
+        Symbol::ARC_COSH => {
+            if *x == Expr::from(1) {
+                return Some(Expr::from(0));
+            }
+            // The principal branch, log(z + √(z+1) √(z−1)): i π/2 at 0.
+            (*x == Expr::from(0)).then(|| Expr::from(Symbol::I) * pi_times(q(1, 2)))
+        }
         _ => None,
     }
+}
+
+/// `y` for `x = i y`, `y` real in form: a pure imaginary number, or a
+/// product with one as its coefficient.
+fn imaginary(x: &Expr) -> Option<Expr> {
+    let pure = |c: &Expr| match c.view() {
+        View::Complex(z) if z.re().is_zero() => Some(z.im().clone()),
+        _ => None,
+    };
+    if let Some(b) = pure(x) {
+        return Some(Expr::from(b));
+    }
+    let (Some(Symbol::TIMES), [c, rest @ ..]) = (x.head().and_then(Expr::as_symbol), x.args())
+    else {
+        return None;
+    };
+    let b = pure(c)?;
+    let mut factors: Vec<Expr> = Vec::with_capacity(rest.len() + 1);
+    if b != Rational::ONE {
+        factors.push(Expr::from(b));
+    }
+    factors.extend(rest.iter().cloned());
+    Some(match factors.len() {
+        1 => factors.pop().expect("one"),
+        _ => Expr::call(Symbol::TIMES, factors),
+    })
+}
+
+/// `Sinh`, `Cosh` or `Tanh` of `x`: at 0, of `Log[u]` (`sinh(ln u) = (u −
+/// 1/u)/2`), of `i y` (`sinh(i y) = i sin y`, `cosh(i y) = cos y`), and the
+/// sign of a negative `x` out (`Cosh` even, the others odd).
+fn hyperbolic(f: Symbol, x: &Expr) -> Option<Expr> {
+    if *x == Expr::from(0) {
+        return Some(Expr::from(i64::from(f == Symbol::COSH)));
+    }
+    if let (Some(Symbol::LOG), [u]) = (x.head().and_then(Expr::as_symbol), x.args()) {
+        let (u, inverse) = (u.clone(), u.pow(-1));
+        let half = Expr::from(q(1, 2));
+        return Some(match f {
+            Symbol::SINH => half * (u - inverse),
+            Symbol::COSH => half * (u + inverse),
+            _ => (u.pow(2) - Expr::from(1)) / (u.pow(2) + Expr::from(1)),
+        });
+    }
+    if let Some(y) = imaginary(x) {
+        return Some(match f {
+            Symbol::SINH => Expr::from(Symbol::I) * call(Symbol::SIN, y),
+            Symbol::COSH => call(Symbol::COS, y),
+            _ => Expr::from(Symbol::I) * call(Symbol::TAN, y),
+        });
+    }
+    let y = negated(x)?;
+    Some(match f {
+        Symbol::COSH => call(f, y),
+        _ => -call(f, y),
+    })
 }
 
 /// `f[x]` for `x` an inverse function's value, or the other way (the
@@ -328,7 +421,10 @@ pub(super) fn composition(ctx: &Context, f: Symbol, x: &Expr) -> Option<Expr> {
     match (f, g) {
         (Symbol::SIN, Symbol::ARC_SIN)
         | (Symbol::COS, Symbol::ARC_COS)
-        | (Symbol::TAN, Symbol::ARC_TAN) => Some(u.clone()),
+        | (Symbol::TAN, Symbol::ARC_TAN)
+        | (Symbol::SINH, Symbol::ARC_SINH)
+        | (Symbol::COSH, Symbol::ARC_COSH)
+        | (Symbol::TANH, Symbol::ARC_TANH) => Some(u.clone()),
         (Symbol::COS, Symbol::ARC_SIN) | (Symbol::SIN, Symbol::ARC_COS) => Some(root(-1)),
         (Symbol::TAN, Symbol::ARC_SIN) => Some(u.clone() / root(-1)),
         (Symbol::TAN, Symbol::ARC_COS) => Some(root(-1) / u.clone()),

@@ -13,8 +13,8 @@
 //!   (CAS-DOC-9 §4, CAS-195), each entry over `a`: `u^n` is
 //!   `u^(n+1) / (n+1)` for `n` free of `x`, giac's answer even for a
 //!   symbolic `n`, and `u^-1` is `Log[Abs[u]]`; `Exp[u]` and `E^u` are
-//!   themselves, `c^u` is `c^u / Log[c]`; `Sin`, `Cos`, `Tan` (`−ln|cos u|`)
-//!   and `Log` (`u ln u − u`); `1/√(α + β x²)` with `α > 0 > β` is an
+//!   themselves, `c^u` is `c^u / Log[c]`; `Sin`, `Cos`, `Tan` (`−ln|cos u|`),
+//!   `Sinh`, `Cosh`, `Tanh` (`ln cosh u`) and `Log` (`u ln u − u`); `1/√(α + β x²)` with `α > 0 > β` is an
 //!   arcsine, `1/(α + β x²)` with `α, β > 0` and `1/(1 + u²)` arctangents.
 //! - Polynomials in `x`, through the conversion of CAS-DOC-8 §2 (CAS-194):
 //!   each term `c x^k` is `c x^(k+1) / (k+1)`, over the common denominator.
@@ -243,6 +243,14 @@ fn table(f: &Expr, x: &Expr) -> Option<Expr> {
         (Symbol::TAN, [u]) => {
             let a = slope(u, x)?;
             Some(-log_abs(call(Symbol::COS, u.clone())) / a)
+        }
+        // The hyperbolic functions (CAS-DOC-15 §2): cosh > 0, so tanh's is a
+        // logarithm without an absolute value.
+        (Symbol::SINH, [u]) => Some(call(Symbol::COSH, u.clone()) / slope(u, x)?),
+        (Symbol::COSH, [u]) => Some(call(Symbol::SINH, u.clone()) / slope(u, x)?),
+        (Symbol::TANH, [u]) => {
+            let a = slope(u, x)?;
+            Some(call(Symbol::LOG, call(Symbol::COSH, u.clone())) / a)
         }
         (Symbol::LOG, [u]) => {
             let a = slope(u, x)?;

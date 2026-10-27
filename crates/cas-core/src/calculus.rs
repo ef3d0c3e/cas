@@ -13,7 +13,8 @@
 //! - the product rule, `D[a_ b__, x_]`, through AC matching;
 //! - powers: `f^n` with `n` free of `x`, `E^g`, and `f^g` in general;
 //! - the chain rule for `Sin`, `Cos`, `Tan`, `ArcSin`, `ArcCos`, `ArcTan`,
-//!   `Exp` and `Log`, from a table, and `Abs`, whose derivative is
+//!   the hyperbolic `Sinh` … `ArcTanh` (CAS-DOC-15 §2), `Exp` and `Log`,
+//!   from a table, and `Abs`, whose derivative is
 //!   `Abs[f] / f` times `f′`, giac's `abs(x)/x`, so that the logarithms of
 //!   absolute values integrals give differentiate back (CAS-DOC-9);
 //! - a function the table does not know: `Derivative[1][g][u] D[u, x]`, and
@@ -112,6 +113,37 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "D/ArcTan",
             "ArcTan[Pattern[f, Blank[]]]",
             "Times[Power[Plus[1, Power[f, 2]], -1], D[f, x]]",
+        ),
+        // The hyperbolic functions (CAS-DOC-15 §2).
+        d(
+            "D/Sinh",
+            "Sinh[Pattern[f, Blank[]]]",
+            "Times[Cosh[f], D[f, x]]",
+        ),
+        d(
+            "D/Cosh",
+            "Cosh[Pattern[f, Blank[]]]",
+            "Times[Sinh[f], D[f, x]]",
+        ),
+        d(
+            "D/Tanh",
+            "Tanh[Pattern[f, Blank[]]]",
+            "Times[Power[Cosh[f], -2], D[f, x]]",
+        ),
+        d(
+            "D/ArcSinh",
+            "ArcSinh[Pattern[f, Blank[]]]",
+            "Times[Power[Plus[1, Power[f, 2]], -1/2], D[f, x]]",
+        ),
+        d(
+            "D/ArcCosh",
+            "ArcCosh[Pattern[f, Blank[]]]",
+            "Times[Power[Plus[-1, f], -1/2], Power[Plus[1, f], -1/2], D[f, x]]",
+        ),
+        d(
+            "D/ArcTanh",
+            "ArcTanh[Pattern[f, Blank[]]]",
+            "Times[Power[Plus[1, Times[-1, Power[f, 2]]], -1], D[f, x]]",
         ),
         d(
             "D/Exp",

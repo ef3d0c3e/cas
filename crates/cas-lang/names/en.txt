@@ -33,6 +33,12 @@ Tan: tan
 ArcSin: asin arcsin
 ArcCos: acos arccos
 ArcTan: atan arctan
+Sinh: sinh
+Cosh: cosh
+Tanh: tanh
+ArcSinh: asinh arcsinh
+ArcCosh: acosh arccosh
+ArcTanh: atanh arctanh
 Sqrt: sqrt
 Factorial: factorial
 Pi: pi

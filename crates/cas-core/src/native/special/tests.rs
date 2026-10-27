@@ -197,3 +197,67 @@ fn compositions() {
         assert_eq!(found, ctx.eval(&read(expected)).unwrap(), "{input}");
     }
 }
+
+/// The hyperbolic functions' values (CAS-238).
+#[test]
+fn hyperbolic_values() {
+    check(&[
+        ("Sinh[0]", "0"),
+        ("Cosh[0]", "1"),
+        ("Tanh[0]", "0"),
+        ("ArcSinh[0]", "0"),
+        ("ArcCosh[1]", "0"),
+        ("ArcTanh[0]", "0"),
+        ("ArcTanh[1]", "Infinity"),
+        ("ArcTanh[-1]", "Times[-1, Infinity]"),
+        ("ArcCosh[0]", "Times[I, Times[1/2, Pi]]"),
+        // Odd and even.
+        ("Sinh[Times[-1, x]]", "Times[-1, Sinh[x]]"),
+        ("Cosh[Times[-2, x]]", "Cosh[Times[2, x]]"),
+        ("Tanh[-3]", "Times[-1, Tanh[3]]"),
+        ("ArcSinh[Times[-1, x]]", "Times[-1, ArcSinh[x]]"),
+        // Imaginary arguments.
+        ("Sinh[Times[I, x]]", "Times[I, Sin[x]]"),
+        ("Cosh[Times[I, x]]", "Cos[x]"),
+        ("Tanh[Times[I, x]]", "Times[I, Tan[x]]"),
+        ("ArcSinh[Times[I, x]]", "Times[I, ArcSin[x]]"),
+        // Of logarithms.
+        ("Sinh[Log[2]]", "3/4"),
+        ("Cosh[Log[2]]", "5/4"),
+        ("Tanh[Log[2]]", "3/5"),
+        // Compositions.
+        ("Sinh[ArcSinh[x]]", "x"),
+        ("Cosh[ArcCosh[x]]", "x"),
+        ("Tanh[ArcTanh[x]]", "x"),
+    ]);
+}
+
+/// The hyperbolic functions in `D`, `Limit` and `Integrate` (CAS-238).
+#[test]
+fn hyperbolic_calculus() {
+    check(&[
+        ("D[Sinh[x], x]", "Cosh[x]"),
+        ("D[Cosh[x], x]", "Sinh[x]"),
+        ("D[Tanh[x], x]", "Power[Cosh[x], -2]"),
+        ("D[ArcSinh[x], x]", "Power[Plus[1, Power[x, 2]], -1/2]"),
+        (
+            "D[ArcCosh[x], x]",
+            "Times[Power[Plus[-1, x], -1/2], Power[Plus[1, x], -1/2]]",
+        ),
+        (
+            "D[ArcTanh[x], x]",
+            "Power[Plus[1, Times[-1, Power[x, 2]]], -1]",
+        ),
+        ("Limit[Times[Sinh[x], Power[x, -1]], x, 0]", "1"),
+        ("Limit[Times[Plus[-1, Cosh[x]], Power[x, -2]], x, 0]", "1/2"),
+        ("Limit[Times[ArcTanh[x], Power[x, -1]], x, 0]", "1"),
+        ("Limit[Times[ArcSinh[x], Power[x, -1]], x, 0]", "1"),
+        ("Limit[Tanh[x], x, Infinity]", "1"),
+        ("Integrate[Sinh[x], x]", "Cosh[x]"),
+        (
+            "Integrate[Cosh[Times[2, x]], x]",
+            "Times[1/2, Sinh[Times[2, x]]]",
+        ),
+        ("Integrate[Tanh[x], x]", "Log[Cosh[x]]"),
+    ]);
+}
