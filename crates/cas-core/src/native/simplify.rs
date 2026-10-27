@@ -10,7 +10,8 @@
 //!   then the candidates `Together`, `Factor` and `Expand` of the whole, its
 //!   exponential and logarithmic forms ([`exp_log`], CAS-230), its radicals
 //!   denested and rationalized ([`radicals`], CAS-232), its trigonometric
-//!   forms ([`trigonometric`], CAS-234), and the least
+//!   forms ([`trigonometric`], CAS-234), its factorials over one a class
+//!   ([`factorials`], CAS-235), and the least
 //!   complex of it and them, the first on a tie, in at most [`ROUNDS`] rounds
 //!   while the choice changes. A candidate is evaluated on
 //!   its own: one that fails, short of an interrupt, is left out, and the
@@ -143,7 +144,8 @@ fn least(ev: &mut Eval<'_>, e: &Expr) -> Result<Expr, EvalError> {
 
 /// The candidates of `e`, each evaluated: the rewritings of [`CANDIDATES`],
 /// the exponential and logarithmic forms (§4), the radicals denested and
-/// rationalized (§6), and the trigonometric forms (§8).
+/// rationalized (§6), the trigonometric forms (§8), and the factorial
+/// ratios (§9).
 fn candidates(ev: &mut Eval<'_>, e: &Expr) -> Result<Vec<Expr>, EvalError> {
     let mut out = Vec::new();
     for head in CANDIDATES {
@@ -165,6 +167,7 @@ fn candidates(ev: &mut Eval<'_>, e: &Expr) -> Result<Vec<Expr>, EvalError> {
         }
     }
     out.extend(trigonometric::candidates(ev, e)?);
+    out.extend(factorials::candidates(ev, e)?);
     Ok(out)
 }
 
@@ -229,6 +232,7 @@ fn rational(q: &cas_num::Rational) -> u64 {
 }
 
 mod exp_log;
+mod factorials;
 mod radicals;
 #[cfg(test)]
 mod tests;

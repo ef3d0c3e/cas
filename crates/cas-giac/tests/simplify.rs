@@ -183,3 +183,23 @@ fn trigonometric_simplification() {
         "simplify(sin(x)*cos(y)+cos(x)*sin(y))",
     ]);
 }
+
+/// Factorials and binomials (CAS-235).
+#[test]
+fn factorials() {
+    check(&[
+        "simplify(n!/(n-1)!)",
+        "simplify((n+1)!/n!)",
+        "simplify((n+2)!/n!)",
+        "simplify((2*n)!/(2*n-2)!)",
+        "simplify(n!/(n+1)!)",
+        "simplify(binomial(n,k)/binomial(n,k-1))",
+        "simplify(binomial(n+1,k)/binomial(n,k))",
+        "simplify(n!-n*(n-1)!)",
+        "simplify((n+2)/(n+2)!)",
+    ]);
+    // giac keeps (n+2)/(n+2)!: here it is 1/(n+1)!.
+    let found = ours("simplify((n+2)/(n+2)!)").unwrap();
+    let expected = ours("1/(n+1)!").unwrap();
+    assert_eq!(found, expected);
+}

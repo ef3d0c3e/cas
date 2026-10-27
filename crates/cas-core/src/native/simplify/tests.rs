@@ -249,3 +249,36 @@ fn trigonometric() {
         ),
     ]);
 }
+
+/// Factorials and binomials (CAS-235).
+#[test]
+fn factorials() {
+    check(&[
+        (
+            "Simplify[Times[Factorial[n], Power[Factorial[Plus[-1, n]], -1]]]",
+            "n",
+        ),
+        (
+            "Simplify[Times[Factorial[Plus[1, n]], Power[Factorial[n], -1]]]",
+            "Plus[1, n]",
+        ),
+        (
+            "Simplify[Times[Factorial[n], Power[Factorial[Plus[1, n]], -1]]]",
+            "Power[Plus[1, n], -1]",
+        ),
+        (
+            "Simplify[Plus[Factorial[n], Times[-1, n, Factorial[Plus[-1, n]]]]]",
+            "0",
+        ),
+        (
+            "Simplify[Times[Plus[2, n], Power[Factorial[Plus[2, n]], -1]]]",
+            "Power[Factorial[Plus[1, n]], -1]",
+        ),
+        (
+            "Simplify[Times[Binomial[n, k], Power[Binomial[n, Plus[-1, k]], -1]]]",
+            "Times[Power[k, -1], Plus[1, Times[-1, k], n]]",
+        ),
+        // A binomial alone stays one.
+        ("Simplify[Binomial[n, k]]", "Binomial[n, k]"),
+    ]);
+}
