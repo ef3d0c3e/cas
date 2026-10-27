@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 123] = [
+const BUILTINS: [&str; 127] = [
     "Plus",
     "Times",
     "Power",
@@ -119,6 +119,10 @@ const BUILTINS: [&str; 123] = [
     "PrimeQ",
     "NextPrime",
     "PreviousPrime",
+    "IntegerFactor",
+    "IntegerFactorList",
+    "Divisors",
+    "EulerPhi",
     // Linear algebra (CAS-218 to CAS-222).
     "Transpose",
     "IdentityMatrix",

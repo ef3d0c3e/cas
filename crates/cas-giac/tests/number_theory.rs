@@ -57,3 +57,47 @@ fn primes() {
         "prevprime(3)",
     ]);
 }
+
+/// Factorisation and divisors (CAS-268).
+#[test]
+fn factorisation() {
+    check(&[
+        "ifactors(360)",
+        "ifactors(-12)",
+        "ifactors(1)",
+        "ifactors(2^64+1)",
+        "idivis(12)",
+        "idivis(-12)",
+        "euler(36)",
+        "euler(1)",
+        "euler(0)",
+    ]);
+}
+
+/// `ifactor`: giac's product reads back multiplied out, so ours, held, is
+/// compared by its value; its structure is `ifactors`'.
+#[test]
+fn held_factorisations() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in [
+        "ifactor(360)",
+        "ifactor(-12)",
+        "ifactor(2^64+1)",
+        "ifactor(97)",
+    ] {
+        let held = ours(input).ok();
+        let value = held.as_ref().map(|h| match h.args() {
+            [inner] if h.head() == Some(&Expr::from(Symbol::HOLD)) => ctx.eval(inner).ok(),
+            _ => Some(h.clone()),
+        });
+        match (giac.value(input), value.flatten()) {
+            (Ok(theirs), Some(ours)) if same(&ctx, &ours, &theirs) => {}
+            (theirs, _) => wrong.push(format!("{input}: ours {held:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}

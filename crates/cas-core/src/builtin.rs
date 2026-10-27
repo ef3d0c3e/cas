@@ -132,6 +132,10 @@ builtins! {
     PRIME_Q = "PrimeQ" [LISTABLE, PROTECTED];
     NEXT_PRIME = "NextPrime" [LISTABLE, PROTECTED];
     PREVIOUS_PRIME = "PreviousPrime" [LISTABLE, PROTECTED];
+    INTEGER_FACTOR = "IntegerFactor" [LISTABLE, PROTECTED];
+    INTEGER_FACTOR_LIST = "IntegerFactorList" [LISTABLE, PROTECTED];
+    DIVISORS = "Divisors" [LISTABLE, PROTECTED];
+    EULER_PHI = "EulerPhi" [LISTABLE, PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

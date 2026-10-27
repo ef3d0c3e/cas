@@ -49,3 +49,45 @@ fn primes() {
         ("PreviousPrime[-4]", "PreviousPrime[-4]"),
     ]);
 }
+
+/// Factorisation and divisors (CAS-268).
+#[test]
+fn factorisation() {
+    check(&[
+        (
+            "IntegerFactor[360]",
+            "Hold[Times[Power[2, 3], Power[3, 2], 5]]",
+        ),
+        ("IntegerFactor[-12]", "Hold[Times[-1, Power[2, 2], 3]]"),
+        ("IntegerFactor[8]", "Hold[Power[2, 3]]"),
+        ("IntegerFactor[-8]", "Hold[Times[-1, Power[2, 3]]]"),
+        ("IntegerFactor[7]", "7"),
+        ("IntegerFactor[-7]", "-7"),
+        ("IntegerFactor[0]", "0"),
+        ("IntegerFactor[1]", "1"),
+        ("IntegerFactor[-1]", "-1"),
+        (
+            "IntegerFactor[Plus[Power[2, 64], 1]]",
+            "Hold[Times[274177, 67280421310721]]",
+        ),
+        ("IntegerFactorList[360]", "List[2, 3, 3, 2, 5, 1]"),
+        ("IntegerFactorList[-12]", "List[-1, 1, 2, 2, 3, 1]"),
+        ("IntegerFactorList[1]", "List[]"),
+        ("IntegerFactorList[0]", "IntegerFactorList[0]"),
+        ("Divisors[12]", "List[1, 2, 3, 4, 6, 12]"),
+        ("Divisors[-12]", "List[1, 2, 3, 4, 6, 12]"),
+        ("Divisors[1]", "List[1]"),
+        ("Divisors[0]", "Divisors[0]"),
+        ("EulerPhi[36]", "12"),
+        ("EulerPhi[1]", "1"),
+        ("EulerPhi[0]", "0"),
+        ("EulerPhi[97]", "96"),
+        ("EulerPhi[-5]", "EulerPhi[-5]"),
+    ]);
+    // Large and smooth: trial division and perfect powers at once.
+    let ctx = Context::new();
+    assert_eq!(
+        ctx.eval(&read("EulerPhi[Power[2, 1000]]")).unwrap(),
+        ctx.eval(&read("Power[2, 999]")).unwrap()
+    );
+}

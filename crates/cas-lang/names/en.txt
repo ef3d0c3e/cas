@@ -94,6 +94,10 @@ DSolve: desolve
 PrimeQ: isprime
 NextPrime: nextprime
 PreviousPrime: prevprime
+IntegerFactor: ifactor
+IntegerFactorList: ifactors
+Divisors: idivis
+EulerPhi: euler
 # Equations (CAS-DOC-11, CAS-210, CAS-214).
 Solve: solve
 CSolve: csolve

@@ -173,6 +173,13 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),
+        (Symbol::INTEGER_FACTOR, number_theory::integer_factor),
+        (
+            Symbol::INTEGER_FACTOR_LIST,
+            number_theory::integer_factor_list,
+        ),
+        (Symbol::DIVISORS, number_theory::divisors),
+        (Symbol::EULER_PHI, number_theory::euler_phi),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),
