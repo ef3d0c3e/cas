@@ -114,9 +114,11 @@ fn borwein(sigma: &Ball, one_minus_sigma: &Ball, wp: u64) -> Ball {
     let value = sum
         .neg()
         .div(&Ball::from_rational(&dn, q).mul(&factor, q), q);
-    // 3/((3 + √8)^n |1 − 2^(1−σ)|), with (3 + √8)^n ≥ 2^(5n/2).
+    // 3/((3 + √8)^n |1 − 2^(1−σ)|), with (3 + √8)^n ≥ 2^(2.54 n) as `n` was
+    // chosen: 2^(5n/2) fell short of the precision by 0.04 n bits, past the
+    // working bits from 3000 bits on (CAS-248).
     let tail = Mag::from_integer(&Integer::from(3))
-        .mul(&Mag::power_of_two(&-Integer::from(5 * n / 2)))
+        .mul(&Mag::power_of_two(&-Integer::from(254 * n / 100)))
         .div(&low);
     value.add_error(&tail)
 }

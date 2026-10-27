@@ -72,6 +72,19 @@ fn values() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// Past 3000 bits Borwein's tail bound lost `0.04 n` bits: `ζ(-63.5)` at
+/// 8489 bits had 8425 (`ball_fns` fuzz, CAS-248).
+#[test]
+fn high_precision() {
+    let mut wrong = Vec::new();
+    for x in [2.5, 0.75, -63.5] {
+        if let Err(e) = check(&float(x), 4000) {
+            wrong.push(e);
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 #[test]
 fn exact_values() {
     let at = |x: i64| Ball::exact(Float::from(x)).zeta(64);
