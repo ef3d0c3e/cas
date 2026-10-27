@@ -293,6 +293,21 @@ fn conditions() {
     }
 }
 
+/// Higher orders without `y` (CAS-265): `p = y⁽ᵏ⁾` solved, then integrated.
+#[test]
+fn without_y() {
+    let cases = [
+        ("Plus[D[Y, x, x], Times[-1, Power[D[Y, x], 2]]]", 2),
+        ("Plus[D[Y, x, x], Times[-1, Power[D[Y, x], 2]], -1]", 2),
+        ("Plus[D[Y, x, x], Times[-1, D[Y, x], Tan[x]]]", 2),
+        ("Plus[D[Y, x, x, x], Times[-1, D[Y, x, x]]]", 3),
+        ("Plus[Times[x, D[Y, x, x]], Times[-1, D[Y, x]]]", 2),
+    ];
+    for (template, order) in cases {
+        general(template, "x", order);
+    }
+}
+
 /// What no method solves, or what is not an equation in `y`, stays.
 #[test]
 fn stays() {

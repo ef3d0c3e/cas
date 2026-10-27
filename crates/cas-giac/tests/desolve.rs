@@ -275,6 +275,13 @@ fn conditions() {
     ]);
 }
 
+/// Higher orders without `y` (CAS-265), by the residual: giac's
+/// `ln(x − c_0)` is `ln|x − c_0|` here.
+#[test]
+fn without_y() {
+    check(&[Case("diff(Y, x, x) - diff(Y, x)^2", "x", 2, false)]);
+}
+
 /// Euler's equations (CAS-263): those giac solves, by the residual (its
 /// constants are scaled otherwise, and `ln(abs(x))` is `ln(x)` here).
 #[test]

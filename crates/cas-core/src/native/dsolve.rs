@@ -72,12 +72,13 @@ fn solve(ev: &mut Eval<'_>, e: &Expr, ode: &Ode, x: &Expr) -> Result<Option<Expr
         if let Some(y) = linear::constant_coefficients(ev, e, &a, &f, x, &constants)? {
             return Ok(Some(y));
         }
-        return euler::euler(ev, e, &a, &f, x, &constants);
-    }
-    if ode.order == 1 {
+        if let Some(y) = euler::euler(ev, e, &a, &f, x, &constants)? {
+            return Ok(Some(y));
+        }
+    } else if ode.order == 1 {
         return first::nonlinear(ev, ode, x, &constants[0]);
     }
-    Ok(None)
+    reduced::without_y(ev, e, ode, x, &constants)
 }
 
 /// The equation, the unknown `y` and the variable `x` of a call.
@@ -300,6 +301,7 @@ mod euler;
 mod first;
 mod linear;
 mod particular;
+mod reduced;
 
 #[cfg(test)]
 mod tests;
