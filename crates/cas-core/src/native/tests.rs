@@ -723,7 +723,10 @@ fn error_functions() {
             "Plus[2, Times[-1, Erfc[Times[2, x]]]]",
         ),
         ("Erfc[x]", "Erfc[x]"),
-        ("Erf[DirectedInfinity[I]]", "Erf[DirectedInfinity[I]]"),
+        (
+            "Erf[DirectedInfinity[I]]",
+            "Erf[DirectedInfinity[Complex[0, 1]]]",
+        ),
     ]);
     let ctx = Context::new();
     // The derivatives, by value.
