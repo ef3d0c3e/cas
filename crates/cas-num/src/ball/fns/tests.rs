@@ -272,6 +272,23 @@ fn huge_and_tiny_arguments() {
         assert!(v.rel_accuracy_bits() >= 97, "{v:?}");
         assert!(v.contains(t.mid()) || v.rel_accuracy_bits() > 0);
     }
+    // At high precision too: the ball_fns fuzz target's asinh of
+    // -0x0.ffffffffffffffffp-1575 at 11938 bits had 11542 (CAS-236), from
+    // log1p's Newton start.
+    let x = Float::from_integer_exp(&-Integer::from(u64::MAX), &Integer::from(-1575i64 - 64));
+    let tiny = Ball::exact(x);
+    for (name, f) in [("asinh", Ball::asinh as Ours), ("log1p", Ball::log1p)] {
+        for p in [11938u64, 13000] {
+            let v = f(&tiny, p);
+            #[allow(clippy::cast_possible_wrap, reason = "small")]
+            let want = p as i64 - 3;
+            assert!(
+                v.rel_accuracy_bits() >= want,
+                "{name} at {p}: {} bits",
+                v.rel_accuracy_bits()
+            );
+        }
+    }
 }
 
 // ---- Trigonometric functions (CAS-80).

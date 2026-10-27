@@ -92,12 +92,15 @@ fn log_approx(m: &Float, target: u64) -> Float {
 fn log1p_approx(x: &Float, target: u64) -> Float {
     // y0 = x - x^2/2 is within about |x|^3/3 of log1p(x), so relative to it
     // within |x|^2/2: 2(-e) - 1 bits for |x| < 2^e (at least 3 bits at e = -2).
+    // x^2 rounded at -e + 8 bits keeps its error, x^2 2^(e - 8), below that;
+    // at 64 it held y0 to -e + 64 bits, and the schedule's steps fell short
+    // of the target for a tiny x at high precision (CAS-236).
+    let e = x.exponent().to_i64().map_or(1, i64::unsigned_abs);
     let mut y = x.sub(
-        &x.mul_round(x, 64, Round::Nearest)
+        &x.mul_round(x, (e + 8).max(64), Round::Nearest)
             .0
             .mul_2exp(&-Integer::ONE),
     );
-    let e = x.exponent().to_i64().map_or(1, i64::unsigned_abs);
     for p in schedule((2 * e).saturating_sub(1).max(3), target) {
         let p = p + 8;
         let em1 = expm1_exact(&y, p);
