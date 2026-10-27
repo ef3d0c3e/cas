@@ -187,6 +187,35 @@ fn constant_coefficients() {
     }
 }
 
+/// Right sides (CAS-262): undetermined coefficients, with the resonance's
+/// power of `x`, and variation of parameters for the rest.
+#[test]
+fn right_sides() {
+    let cases = [
+        "Plus[D[Y, x, x], Times[-3, D[Y, x]], Times[2, Y], Times[-1, Power[E, x]]]",
+        "Plus[D[Y, x, x], Times[4, Y], Times[-1, Sin[x]]]",
+        "Plus[D[Y, x, x], Times[-1, x]]",
+        "Plus[D[Y, x, x], Times[-1, Y], Times[-1, Power[x, 2]]]",
+        "Plus[D[Y, x, x], Y, Times[-1, Cos[x]]]",
+        "Plus[D[Y, x, x], Y, Times[-1, x, Power[E, x]]]",
+        "Plus[D[Y, x, x], Times[-2, D[Y, x]], Y, Times[-1, Power[E, x]]]",
+        "Plus[D[Y, x, x], Y, Times[-1, Sin[x]], Times[-1, x]]",
+        "Plus[D[Y, x, x], Y, Times[-1, Power[E, Plus[1, Times[2, x]]]]]",
+        "Plus[D[Y, x, x, x], Times[-1, D[Y, x]], Times[-1, Sin[x], Cos[x]]]",
+        // Variation of parameters.
+        "Plus[D[Y, x, x], Y, Times[-1, Tan[x]]]",
+        "Plus[D[Y, x, x], Times[-1, Y], Times[-1, Power[x, -1]]]",
+    ];
+    for template in cases {
+        let order = if template.contains("D[Y, x, x, x]") {
+            3
+        } else {
+            2
+        };
+        general(template, "x", order);
+    }
+}
+
 /// What no method solves, or what is not an equation in `y`, stays.
 #[test]
 fn stays() {

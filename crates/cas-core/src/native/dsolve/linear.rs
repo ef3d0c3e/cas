@@ -18,14 +18,15 @@ use cas_num::Complex;
 
 use super::super::parts::parts;
 use super::super::solve::roots_counted;
+use super::particular::particular;
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
 use crate::symbol::Symbol;
 
-/// The general solution of `Σ aₖ y⁽ᵏ⁾ = f` with constant coefficients;
-/// `None` when a coefficient holds `x`, the roots are not found, or `f` is
-/// not 0.
+/// The general solution of `Σ aₖ y⁽ᵏ⁾ = f` with constant coefficients, a
+/// right side by [`particular`]; `None` when a coefficient holds `x`, or
+/// the roots or a particular solution are not found.
 pub(super) fn constant_coefficients(
     ev: &mut Eval<'_>,
     e: &Expr,
@@ -34,27 +35,36 @@ pub(super) fn constant_coefficients(
     x: &Expr,
     constants: &[Expr],
 ) -> Result<Option<Expr>, EvalError> {
-    if a.iter().any(|ak| ak.contains(x)) || *f != Expr::from(0) {
+    if a.iter().any(|ak| ak.contains(x)) {
         return Ok(None);
     }
-    let Some(basis) = basis(ev, e, a, x)? else {
+    let Some((basis, roots)) = basis(ev, e, a, x)? else {
         return Ok(None);
     };
-    let terms = constants
+    let mut terms: Vec<Expr> = constants
         .iter()
         .zip(&basis)
-        .map(|(c, b)| c.clone() * b.clone());
+        .map(|(c, b)| c.clone() * b.clone())
+        .collect();
+    if *f != Expr::from(0) {
+        let Some(y) = particular(ev, e, a, f, x, &basis, &roots)? else {
+            return Ok(None);
+        };
+        terms.push(y);
+    }
     ev.eval(&Expr::call(Symbol::PLUS, terms)).map(Some)
 }
 
-/// The basis of `Σ aₖ y⁽ᵏ⁾ = 0` from the roots of `Σ aₖ rᵏ`; `None` when
-/// they are not found.
+/// The basis of `Σ aₖ y⁽ᵏ⁾ = 0` from the roots of `Σ aₖ rᵏ`, and the
+/// distinct roots with their multiplicities; `None` when they are not
+/// found.
+#[allow(clippy::type_complexity, reason = "the basis and the roots")]
 fn basis(
     ev: &mut Eval<'_>,
     e: &Expr,
     a: &[Expr],
     x: &Expr,
-) -> Result<Option<Vec<Expr>>, EvalError> {
+) -> Result<Option<(Vec<Expr>, Vec<(Expr, usize)>)>, EvalError> {
     let r = Expr::from(Symbol::new("DSolve$r"));
     let polynomial = Expr::call(
         Symbol::PLUS,
@@ -113,7 +123,7 @@ fn basis(
     for b in basis {
         evaluated.push(ev.eval(&b)?);
     }
-    Ok(Some(evaluated))
+    Ok(Some((evaluated, distinct)))
 }
 
 /// `(a, b, k)` for a root `a + b i`, `b` not 0, whose conjugate `a − b i`

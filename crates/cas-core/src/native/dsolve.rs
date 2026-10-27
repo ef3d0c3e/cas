@@ -279,6 +279,7 @@ fn logarithm_multiple(t: &Expr) -> Option<(Expr, Expr)> {
 
 mod first;
 mod linear;
+mod particular;
 
 #[cfg(test)]
 mod tests;

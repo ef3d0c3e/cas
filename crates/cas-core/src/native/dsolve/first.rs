@@ -94,7 +94,7 @@ fn branches(roots: Vec<Expr>) -> Expr {
 
 /// `e` with each exponential of a sum a product: `e^(x + y)` is `e^x e^y`,
 /// so that its factors can be told apart.
-fn split_exponentials(e: &Expr) -> Expr {
+pub(super) fn split_exponentials(e: &Expr) -> Expr {
     e.map_bottom_up(|part| {
         let exponent = match (part.head().and_then(Expr::as_symbol), part.args()) {
             (Some(Symbol::POWER), [b, s]) if b.as_symbol() == Some(Symbol::E) => s,

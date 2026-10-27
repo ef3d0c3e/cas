@@ -184,3 +184,20 @@ fn constant_coefficients() {
         Case("diff(Y, x, x) + diff(Y, x)", "x", 2, true),
     ]);
 }
+
+/// Right sides (CAS-262). Alike where giac's particular solution has no
+/// homogeneous part and its basis is ordered as ours.
+#[test]
+fn right_sides() {
+    check(&[
+        Case("diff(Y, x, x) - 3*diff(Y, x) + 2*Y - exp(x)", "x", 2, false),
+        Case("diff(Y, x, x) + 4*Y - sin(x)", "x", 2, true),
+        Case("diff(Y, x, x) - x", "x", 2, false),
+        Case("diff(Y, x, x) - Y - x^2", "x", 2, false),
+        Case("diff(Y, x, x) + Y - cos(x)", "x", 2, false),
+        Case("diff(Y, x, x) + Y - x*exp(x)", "x", 2, true),
+        Case("diff(Y, x, x) - 2*diff(Y, x) + Y - exp(x)", "x", 2, false),
+        Case("diff(Y, x, x) + Y - sin(x) - x", "x", 2, false),
+        Case("diff(Y, x, x) + Y - tan(x)", "x", 2, false),
+    ]);
+}
