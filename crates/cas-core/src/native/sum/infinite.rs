@@ -13,10 +13,10 @@
 //!   `|c| < 1`; exponential, `r = c/(k + 1)`, `t(a) a!/c^a (e^c −
 //!   Σ_{j<a} c^j/j!)`; logarithmic, `r = c k/(k + 1)` from `a ≥ 1`,
 //!   `t(a) a/c^a (−ln(1 − c) − Σ_{1≤j<a} c^j/j)` for `−1 ≤ c < 1`, and the
-//!   harmonic series' infinity for `c = 1`; `c/k^(2m)` from `a ≥ 1`, `c`
-//!   times `ζ(2m) = (−1)^(m+1) B_{2m} (2π)^(2m)/(2 (2m)!)` by Bernoulli
-//!   numbers less the terms before `a`, and `c (−1)^k/k^(2m)` with
-//!   `−(1 − 2^(1−2m)) ζ(2m)`. Odd powers stay, where giac has `Zeta(3)`.
+//!   harmonic series' infinity for `c = 1`; `c/k^s` from `a ≥ 1`, `s ≥ 2`,
+//!   `c` times `Zeta[s]` less the terms before `a`, and `c (−1)^k/k^s` with
+//!   `−(1 − 2^(1−s)) Zeta[s]` (CAS-245): exact for an even `s`, `Zeta[3]`
+//!   for an odd one, as giac's.
 //! - A hypergeometric antidifference `T` (Gosper's, CAS-225):
 //!   `lim_{n→∞} T(n) − T(a)`, when `Limit` finds it.
 //! - A sum term by term, each term's sum found or left: finite sums add,
@@ -387,27 +387,23 @@ fn power_term(t: &Expr, k: &Expr) -> Option<(Expr, i64, bool)> {
     Some((Expr::call(Symbol::TIMES, c), s?, alternating))
 }
 
-/// `Σ_{k≥start} c/k^(2m)`, or with `(−1)^k`: `c` times `ζ(2m)` (or
-/// `−(1 − 2^(1−2m)) ζ(2m)`) less the terms before `start`; `None` for
+/// `Σ_{k≥start} c/k^s`, `s ≥ 2`, or with `(−1)^k`: `c` times `Zeta[s]` (or
+/// `−(1 − 2^(1−s)) Zeta[s]`) less the terms before `start`, `Zeta[s]` exact
+/// for an even `s` and staying for an odd one (CAS-245); `None` for
 /// another term.
 fn zeta(ev: &mut Eval<'_>, t: &Expr, k: &Expr, start: i64) -> Result<Option<Expr>, EvalError> {
     let Some((c, s, alternating)) = power_term(t, k) else {
         return Ok(None);
     };
-    if s < 2 || s % 2 != 0 || s > MAX_ZETA || start < 1 {
+    if !(2..=MAX_ZETA).contains(&s) || start < 1 {
         return Ok(None);
     }
     let exponent = u64::try_from(s).expect("a small power");
-    let b = bernoulli(usize::try_from(s).expect("a small index"));
-    // ζ(2m) = (−1)^(m+1) B_{2m} 2^(2m−1) π^(2m) / (2m)!.
-    let mut coefficient = &b * &Rational::new(Integer::from(2).pow(exponent - 1), factorial(s));
-    if (s / 2) % 2 == 0 {
-        coefficient = -coefficient;
-    }
+    let mut value = Expr::call(Symbol::ZETA, [Expr::from(s)]);
     if alternating {
-        // −(1 − 2^(1−2m)).
+        // −(1 − 2^(1−s)).
         let half = Rational::new(Integer::ONE, Integer::from(2).pow(exponent - 1));
-        coefficient = &coefficient * &(&half - &Rational::ONE);
+        value = Expr::from(&half - &Rational::ONE) * value;
     }
     let mut head = Rational::ZERO;
     for j in 1..start {
@@ -415,25 +411,5 @@ fn zeta(ev: &mut Eval<'_>, t: &Expr, k: &Expr, start: i64) -> Result<Option<Expr
         let term = Rational::new(Integer::from(sign), Integer::from(j).pow(exponent));
         head = &head + &term;
     }
-    let value = Expr::from(coefficient) * Expr::from(Symbol::PI).pow(s) - Expr::from(head);
-    Ok(Some(ev.eval(&(c * value))?))
-}
-
-/// The Bernoulli number `B_n`, `B_1 = −1/2`: `B_m = −Σ_{j<m} C(m + 1, j)
-/// B_j / (m + 1)`.
-fn bernoulli(n: usize) -> Rational {
-    let mut b = vec![Rational::ONE];
-    for m in 1..=n {
-        let mut binomial = Integer::ONE;
-        let mut total = Rational::ZERO;
-        for (j, bj) in b.iter().enumerate() {
-            // C(m + 1, j).
-            if j > 0 {
-                binomial = (&binomial * &Integer::from(m + 2 - j)).div_exact(&Integer::from(j));
-            }
-            total = &total + &(&Rational::from(binomial.clone()) * bj);
-        }
-        b.push(-&(&total / &Rational::from(Integer::from(m + 1))));
-    }
-    b.swap_remove(n)
+    Ok(Some(ev.eval(&(c * (value - Expr::from(head))))?))
 }

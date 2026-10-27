@@ -38,6 +38,7 @@ mod tests;
 
 use super::{Ball, Mag};
 
+pub use gamma::bernoulli;
 pub(super) use tables::clear as clear_tables;
 
 /// The highest working precision served by the tables, and the lowest by

@@ -400,9 +400,12 @@ fn infinite_sums() {
         .eval(&found.substitute(&[(read("m"), Expr::from(5))]))
         .unwrap();
     assert_eq!(at, read("1/16"), "{found:?}");
+    // Odd zeta values, as giac's Zeta(3) (CAS-245).
+    check_values(&[
+        ("Sum[Power[k, -3], k, 1, Infinity]", "Zeta[3]"),
+        ("Sum[Power[k, -5], k, 2, Infinity]", "Plus[-1, Zeta[5]]"),
+    ]);
     check_stays(&[
-        // Odd zeta values, as giac's Zeta(3).
-        "Sum[Power[k, -3], k, 1, Infinity]",
         // No limit: giac's undef.
         "Sum[Power[-1, k], k, 0, Infinity]",
         // A pole at k = 0.

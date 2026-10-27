@@ -144,10 +144,9 @@ fn infinite_sums() {
         "sum((-1/2)^k,k,0,inf)",
         "sum(k,k,1,inf)",
         "sum(-1,k,1,inf)",
+        // Odd zeta values, giac's Zeta(3) (CAS-245).
+        "sum(1/k^3,k,1,inf)",
     ]);
-    // Odd zeta values stay, where giac has Zeta(3).
-    let stays = ours("sum(1/k^3,k,1,inf)").unwrap();
-    assert_eq!(stays.head(), Some(&Expr::from(Symbol::SUM)), "{stays:?}");
 }
 
 /// Symbolic products (CAS-227). Factorials in `m` or `a`, fractions at

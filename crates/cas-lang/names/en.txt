@@ -57,6 +57,7 @@ Max: max
 Min: min
 Gamma: Gamma
 Beta: Beta
+Zeta: Zeta
 Sqrt: sqrt
 Factorial: factorial
 Pi: pi

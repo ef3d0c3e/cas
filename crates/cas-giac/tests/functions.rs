@@ -233,3 +233,27 @@ fn gamma_and_beta() {
         "Beta(2.5,1.5)",
     ]);
 }
+
+/// `Zeta` (CAS-245). giac's `Zeta(1)` is `+infinity`; here the pole is
+/// `ComplexInfinity`: the unit tests'.
+#[test]
+fn zeta() {
+    check(&[
+        "Zeta(2)",
+        "Zeta(4)",
+        "Zeta(6)",
+        "Zeta(0)",
+        "Zeta(-1)",
+        "Zeta(-2)",
+        "Zeta(-3)",
+        "Zeta(-5)",
+        "Zeta(3)",
+        "Zeta(3.0)",
+        "Zeta(0.5)",
+        "Zeta(-1.5)",
+        "Zeta(2.5)",
+        "Zeta(1.5)",
+        "sum(1/k^3,k,1,inf)",
+        "sum(1/k^5,k,2,inf)",
+    ]);
+}

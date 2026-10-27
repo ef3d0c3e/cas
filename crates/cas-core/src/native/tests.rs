@@ -670,6 +670,40 @@ fn gamma_and_beta() {
     }
 }
 
+/// `Zeta` (CAS-245).
+#[test]
+fn zeta_values() {
+    check(&[
+        ("Zeta[2]", "Times[1/6, Power[Pi, 2]]"),
+        ("Zeta[4]", "Times[1/90, Power[Pi, 4]]"),
+        ("Zeta[6]", "Times[1/945, Power[Pi, 6]]"),
+        ("Zeta[0]", "-1/2"),
+        ("Zeta[-1]", "-1/12"),
+        ("Zeta[-2]", "0"),
+        ("Zeta[-3]", "1/120"),
+        ("Zeta[-5]", "-1/252"),
+        ("Zeta[1]", "ComplexInfinity"),
+        ("Zeta[3]", "Zeta[3]"),
+        ("Zeta[1/2]", "Zeta[1/2]"),
+        ("Zeta[x]", "Zeta[x]"),
+    ]);
+    let ctx = Context::new();
+    for (left, right) in [
+        (
+            "N[Zeta[3]]",
+            "12020569031595942853997/10000000000000000000000",
+        ),
+        ("N[Zeta[2]]", "N[Times[1/6, Power[Pi, 2]]]"),
+        (
+            "N[Zeta[-3/2]]",
+            "-254852018898330359495/10000000000000000000000",
+        ),
+    ] {
+        let gap = format!("Less[Abs[Plus[{left}, Times[-1, {right}]]], 1/1000000000000000]");
+        assert_eq!(ctx.eval(&read(&gap)).unwrap(), read("True"), "{left}");
+    }
+}
+
 /// `Limits::number_bits` bounds the factorials computed, by estimate.
 #[test]
 fn factorials_stay_within_the_number_bits() {

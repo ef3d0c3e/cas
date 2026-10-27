@@ -38,6 +38,7 @@ mod special;
 mod structure;
 mod sum;
 mod trig;
+mod zeta;
 
 pub(crate) use numeric::approximation;
 
@@ -88,6 +89,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::MIN, rounding::extremum),
         (Symbol::GAMMA, factorial::gamma),
         (Symbol::BETA, factorial::beta),
+        (Symbol::ZETA, zeta::zeta),
         (Symbol::DIRECTED_INFINITY, arith::directed_infinity),
         (Symbol::EQUAL, logic::equal_native),
         (Symbol::UNEQUAL, logic::unequal),

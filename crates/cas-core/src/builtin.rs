@@ -86,6 +86,7 @@ builtins! {
     // Special functions (CAS-DOC-15 §6–§8).
     GAMMA = "Gamma" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     BETA = "Beta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    ZETA = "Zeta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     SQRT = "Sqrt" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     FACTORIAL = "Factorial" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     // Calculus (CAS-DOC-4 §8): the derivative, as system rules, and the
