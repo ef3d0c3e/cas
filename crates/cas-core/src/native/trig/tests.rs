@@ -2,7 +2,7 @@
 //! are the plain ones, and their values against their arguments' at a
 //! point.
 
-use crate::{Context, Expr, Symbol};
+use crate::{Context, Expr, Symbol, View};
 
 fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
@@ -23,8 +23,9 @@ fn check(cases: &[(&str, &str)]) {
 }
 
 /// Each rewriting `f[e]` has the value of `e` at `x = 2/9`, `y = 7/3`:
-/// within 10⁻¹⁰ by `N`, as the exponential forms of real values are
-/// complex balls, which `==` does not tell apart from real ones.
+/// each part of the difference within 10⁻¹⁰ by `N`, as the exponential
+/// forms of real values are complex balls, which `==` does not tell apart
+/// from real ones, and the modulus of a complex ball about 0 is unbounded.
 fn check_values(f: &str, inputs: &[&str]) {
     let ctx = Context::new();
     let point = [(read("x"), read("2/9")), (read("y"), read("7/3"))];
@@ -32,15 +33,18 @@ fn check_values(f: &str, inputs: &[&str]) {
     for input in inputs {
         let e = ctx.eval(&read(input)).unwrap();
         let rewritten = ctx.eval(&read(&format!("{f}[{input}]"))).unwrap();
-        let gap = Expr::call(
-            Symbol::N,
-            [Expr::call(
-                Symbol::ABS,
-                [(e - rewritten.clone()).substitute(&point)],
-            )],
-        );
-        let close = Expr::call(Symbol::LESS, [gap, read("1/10000000000")]);
-        if ctx.eval(&close).unwrap().as_symbol() != Some(Symbol::TRUE) {
+        let difference = (e - rewritten.clone()).substitute(&point);
+        let difference = ctx.eval(&Expr::call(Symbol::N, [difference])).unwrap();
+        let parts = match difference.view() {
+            View::ComplexBall(z) => vec![Expr::from(z.re().clone()), Expr::from(z.im().clone())],
+            _ => vec![difference],
+        };
+        let close = parts.into_iter().all(|p| {
+            let gap = Expr::call(Symbol::ABS, [p]);
+            let less = Expr::call(Symbol::LESS, [gap, read("1/10000000000")]);
+            ctx.eval(&less).unwrap().as_symbol() == Some(Symbol::TRUE)
+        });
+        if !close {
             wrong.push(format!("{f}[{input}]: {rewritten:?}"));
         }
     }

@@ -3,7 +3,7 @@
 //! point. giac's forms are not this CAS's (`sin(x)*cos(x)` is
 //! `tan(x)/(tan(x)^2+1)` there), only their values are.
 
-use cas_core::{Context, Expr, Symbol};
+use cas_core::{Context, Expr, Symbol, View};
 use cas_giac::{Giac, ours};
 
 /// The shared library, or `None` with a note: the checks skip.
@@ -32,9 +32,19 @@ fn holds(ctx: &Context, proposition: &Expr) -> bool {
     ctx.eval(proposition).ok().and_then(|e| e.as_symbol()) == Some(Symbol::TRUE)
 }
 
+/// The parts of a number, a complex ball's real and imaginary ones apart:
+/// the modulus of a complex ball about 0 is unbounded.
+fn parts(e: &Expr) -> Vec<Expr> {
+    match e.view() {
+        View::ComplexBall(z) => vec![Expr::from(z.re().clone()), Expr::from(z.im().clone())],
+        _ => vec![e.clone()],
+    }
+}
+
 /// Whether two values are one: lists part by part, the same, equal by `==`,
-/// or equal by `==` or within 10⁻¹⁰ once approximated at [`POINT`]: the
-/// values of `trig2exp` are complex balls, which `==` does not tell apart.
+/// or equal by `==` or with each part of their difference within 10⁻¹⁰
+/// once approximated at [`POINT`]: the values of `trig2exp` are complex
+/// balls, which `==` does not tell apart.
 fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     let list = Expr::from(Symbol::LIST);
     if a.head() == Some(&list) && b.head() == Some(&list) {
@@ -54,12 +64,14 @@ fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
             .ok()
     };
     let close = |a: &Expr, b: &Expr| {
-        let gap = Expr::call(
-            Symbol::N,
-            [Expr::call(Symbol::ABS, [a.clone() - b.clone()])],
-        );
+        let Ok(difference) = ctx.eval(&(a.clone() - b.clone())) else {
+            return false;
+        };
         let tolerance = Expr::from(1) / Expr::from(10_000_000_000_i64);
-        holds(ctx, &Expr::call(Symbol::LESS, [gap, tolerance]))
+        parts(&difference).into_iter().all(|p| {
+            let gap = Expr::call(Symbol::ABS, [p]);
+            holds(ctx, &Expr::call(Symbol::LESS, [gap, tolerance.clone()]))
+        })
     };
     match (at(a), at(b)) {
         (Some(a), Some(b)) => a == b || equal(&a, &b) || close(&a, &b),
