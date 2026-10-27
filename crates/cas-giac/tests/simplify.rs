@@ -107,3 +107,21 @@ fn exponentials_and_logarithms() {
         "simplify(ln(8)/ln(2))",
     ]);
 }
+
+/// Compositions with the inverse functions, in evaluation (CAS-231).
+#[test]
+fn compositions() {
+    check(&[
+        "sin(asin(x))",
+        "cos(asin(x))",
+        "tan(asin(x))",
+        "sin(acos(x))",
+        "cos(acos(x))",
+        "tan(acos(x))",
+        "sin(atan(x))",
+        "cos(atan(x))",
+        "tan(atan(x))",
+        "ln(exp(x))",
+        "ln(exp(2))",
+    ]);
+}

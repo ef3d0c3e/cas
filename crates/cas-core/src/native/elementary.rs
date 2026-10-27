@@ -19,7 +19,8 @@ use crate::trace::Warning;
 
 type Native = Result<Option<Expr>, EvalError>;
 
-/// `f[x]` at a special value of an exact `x` ([`special::value`]), or for a
+/// `f[x]` at a special value of an exact `x` ([`special::value`]), of an
+/// inverse function's value or the other way ([`special::composition`]), or for a
 /// ball `x`: `real` of a real ball, `complex` of a complex one or where the
 /// real function has no value.
 fn elementary(
@@ -32,7 +33,7 @@ fn elementary(
         return Ok(None);
     };
     if let Some(f) = e.head().and_then(Expr::as_symbol)
-        && let Some(v) = special::value(f, x)
+        && let Some(v) = special::value(f, x).or_else(|| special::composition(ev.context(), f, x))
     {
         return Ok(Some(v));
     }

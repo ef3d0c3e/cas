@@ -143,3 +143,57 @@ fn what_stays() {
         assert_eq!(e.head(), read(input).head(), "{input}: {e:?}");
     }
 }
+
+/// Compositions with the inverse functions (CAS-231), as giac evaluates
+/// them.
+#[test]
+fn compositions() {
+    check(&[
+        ("Sin[ArcSin[x]]", "x"),
+        (
+            "Cos[ArcSin[x]]",
+            "Power[Plus[1, Times[-1, Power[x, 2]]], 1/2]",
+        ),
+        (
+            "Tan[ArcSin[x]]",
+            "Times[x, Power[Plus[1, Times[-1, Power[x, 2]]], -1/2]]",
+        ),
+        (
+            "Sin[ArcCos[x]]",
+            "Power[Plus[1, Times[-1, Power[x, 2]]], 1/2]",
+        ),
+        ("Cos[ArcCos[x]]", "x"),
+        (
+            "Tan[ArcCos[x]]",
+            "Times[Power[x, -1], Power[Plus[1, Times[-1, Power[x, 2]]], 1/2]]",
+        ),
+        (
+            "Sin[ArcTan[x]]",
+            "Times[x, Power[Plus[1, Power[x, 2]], -1/2]]",
+        ),
+        ("Cos[ArcTan[x]]", "Power[Plus[1, Power[x, 2]], -1/2]"),
+        ("Tan[ArcTan[x]]", "x"),
+        ("Sin[ArcSin[1/3]]", "1/3"),
+        // Log of Exp for a real argument: x is real in the Real domain.
+        ("Log[Exp[x]]", "x"),
+        ("Log[Power[E, x]]", "x"),
+        ("Log[Exp[Times[I, x]]]", "Log[Exp[Times[I, x]]]"),
+        // The other order only in the principal range.
+        ("ArcSin[Sin[x]]", "ArcSin[Sin[x]]"),
+    ]);
+    let mut ctx = Context::new();
+    ctx.set_domain(crate::Domain::Complex);
+    assert_eq!(ctx.eval(&read("Log[Exp[x]]")).unwrap(), read("Log[Exp[x]]"));
+    let inside = Context::new().assuming(read("And[Greater[x, -1], Less[x, 1]]"));
+    let positive = Context::new().assuming(read("And[Greater[x, 0], Less[x, 3]]"));
+    for (ctx, input, expected) in [
+        (&inside, "ArcSin[Sin[x]]", "x"),
+        (&inside, "ArcTan[Tan[x]]", "x"),
+        (&inside, "ArcCos[Cos[x]]", "ArcCos[Cos[x]]"),
+        (&positive, "ArcCos[Cos[x]]", "x"),
+        (&positive, "ArcSin[Sin[x]]", "ArcSin[Sin[x]]"),
+    ] {
+        let found = ctx.eval(&read(input)).unwrap();
+        assert_eq!(found, ctx.eval(&read(expected)).unwrap(), "{input}");
+    }
+}

@@ -15,6 +15,15 @@
 //!
 //! Other exact arguments stay as they are, as giac's `sin(1)` and
 //! `sin(pi/5)` would not in radicals of this table.
+//!
+//! Compositions with the inverse functions ([`composition`], CAS-DOC-14 §5,
+//! CAS-231), as giac evaluates them: `Sin`, `Cos` and `Tan` of `ArcSin`,
+//! `ArcCos` and `ArcTan` for every argument (`Cos[ArcSin[x]]` is
+//! `Sqrt[1 − x^2]`), `Log` of `Exp[u]` or `E^u` for a real `u`, and
+//! `ArcSin`, `ArcCos` and `ArcTan` of `Sin`, `Cos` and `Tan` for an
+//! argument the assumptions put in the principal range: within
+//! `[−157/100, 157/100]`, inside `(−π/2, π/2)`, for `ArcSin` and `ArcTan`,
+//! and `[0, 314/100]` for `ArcCos`.
 
 #![allow(
     clippy::many_single_char_names,
@@ -23,6 +32,8 @@
 
 use cas_num::{Integer, Rational};
 
+use crate::assume::{Set, Truth, element, range};
+use crate::context::Context;
 use crate::expr::Expr;
 use crate::symbol::Symbol;
 
@@ -291,6 +302,43 @@ pub(super) fn value(f: Symbol, x: &Expr) -> Option<Expr> {
             Some(r) => Some(pi_times(r)),
             None => negated(x).map(|y| -call(f, y)),
         },
+        _ => None,
+    }
+}
+
+/// `f[x]` for `x` an inverse function's value, or the other way (the
+/// module's compositions); `None` to leave it to the rest of the native.
+pub(super) fn composition(ctx: &Context, f: Symbol, x: &Expr) -> Option<Expr> {
+    let real = |u: &Expr| element(ctx, u, Set::Reals) == Truth::True;
+    if f == Symbol::LOG
+        && let (Some(Symbol::POWER), [b, u]) = (x.head().and_then(Expr::as_symbol), x.args())
+    {
+        return (b.as_symbol() == Some(Symbol::E) && real(u)).then(|| u.clone());
+    }
+    let (Some(g), [u]) = (x.head().and_then(Expr::as_symbol), x.args()) else {
+        return None;
+    };
+    // √(1 ± u²).
+    let root = |sign: i64| (Expr::from(1) + Expr::from(sign) * u.pow(2)).pow(Expr::from(q(1, 2)));
+    let within = |low: Rational, high: Rational| match range(ctx, u).interval() {
+        Some((Some(l), Some(h))) => *l >= low && *h <= high,
+        _ => false,
+    };
+    let half_pi = || within(q(-157, 100), q(157, 100));
+    match (f, g) {
+        (Symbol::SIN, Symbol::ARC_SIN)
+        | (Symbol::COS, Symbol::ARC_COS)
+        | (Symbol::TAN, Symbol::ARC_TAN) => Some(u.clone()),
+        (Symbol::COS, Symbol::ARC_SIN) | (Symbol::SIN, Symbol::ARC_COS) => Some(root(-1)),
+        (Symbol::TAN, Symbol::ARC_SIN) => Some(u.clone() / root(-1)),
+        (Symbol::TAN, Symbol::ARC_COS) => Some(root(-1) / u.clone()),
+        (Symbol::SIN, Symbol::ARC_TAN) => Some(u.clone() / root(1)),
+        (Symbol::COS, Symbol::ARC_TAN) => Some(root(1).pow(-1)),
+        (Symbol::LOG, Symbol::EXP) => real(u).then(|| u.clone()),
+        (Symbol::ARC_SIN, Symbol::SIN) | (Symbol::ARC_TAN, Symbol::TAN) => {
+            half_pi().then(|| u.clone())
+        }
+        (Symbol::ARC_COS, Symbol::COS) => within(q(0, 1), q(314, 100)).then(|| u.clone()),
         _ => None,
     }
 }
