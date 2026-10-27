@@ -7,8 +7,8 @@
 //!   The powers `m^(−σ)` are exponentials only at the primes, products of
 //!   the smaller ones elsewhere; `1 − 2^(1−σ)` is `−expm1((1 − σ) log 2)`,
 //!   whose relative accuracy holds next to the pole.
-//! - `σ` above the precision: `1 + [0, 3·2^(−σ)]`, `Σ_{k≥2} k^(−σ) ≤
-//!   2^(−σ) (1 + 2/(σ − 1))`.
+//! - `σ` above the precision: `1 + [0, 3·2^(−min(σ, wp + 64))]`, `Σ_{k≥2}
+//!   k^(−σ) ≤ 2^(−σ) (1 + 2/(σ − 1))`.
 //! - `s < 1/2`: the functional equation `ζ(s) = 2^s π^(s−1) sin(πs/2) Γ(1 −
 //!   s) ζ(1 − s)`, the factors but the sine and `ζ(1 − s)` as one
 //!   exponential of their logarithms (CAS-242's `log Γ`).
@@ -160,12 +160,10 @@ impl Ball {
             if m.is_zero() {
                 return Ball::exact(Float::from(-1i64).mul_2exp(&-Integer::ONE));
             }
-            if m.is_negative() {
-                let q = m.to_rational();
-                let half = &q / &Rational::from(Integer::from(2));
-                if half.is_integer() {
-                    return Ball::ZERO;
-                }
+            // The trivial zeros: an even integer's lowest bit is 2 or above,
+            // found without a rational, which a huge one has not (CAS-249).
+            if m.is_negative() && *m.exponent() > Integer::from(m.bit_length()) {
+                return Ball::ZERO;
             }
         }
         let wp = working(prec);
@@ -180,11 +178,13 @@ impl Ball {
             let large =
                 exponent(&lo) > 64 || lo.to_rational() > Rational::from(Integer::from(wp + 4));
             if large {
-                // 2^(−⌊lo⌋), the exponent capped where it would be huge.
-                let e = if exponent(&lo) > 40 {
-                    Integer::from(1i64 << 40)
+                // 2^(−⌊lo⌋), the exponent at most wp + 64: still a bound, and
+                // one a rational holds (3·2^(−2^40) was not, CAS-249).
+                let cap = Integer::from(wp + 64);
+                let e = if exponent(&lo) > 64 {
+                    cap
                 } else {
-                    lo.to_rational().floor()
+                    lo.to_rational().floor().min(cap)
                 };
                 let bound = Mag::from_integer(&Integer::from(3)).mul(&Mag::power_of_two(&-e));
                 return one().add_error(&bound).round_to_accuracy(prec);

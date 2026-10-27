@@ -98,6 +98,11 @@ fn exact_values() {
     // Above the precision: 1 to within 2^-σ.
     let big = Ball::exact(Float::from(5000i64)).zeta(100);
     assert!(big.contains(&Float::from(1i64)) && big.rel_accuracy_bits() >= 97);
+    // Huge arguments, without rationals (CAS-249): a trivial zero of 2^40
+    // bits, and a radius a rational holds past 2^47.
+    let huge = Float::from(1i64).mul_2exp(&Integer::from(1i64 << 40));
+    assert_eq!(Ball::exact(huge.neg()).zeta(64), Ball::ZERO);
+    check(&Float::from(1i64).mul_2exp(&Integer::from(47i64)), 2).unwrap();
 }
 
 #[test]
@@ -137,8 +142,14 @@ fn radii() {
 
 proptest! {
     #[test]
-    fn against_mpfr(x in dyadic_with(2, -30..=8), prec in prop_oneof![2u64..120, 120u64..500]) {
+    fn against_mpfr(
+        x in dyadic_with(2, 0..=0),
+        top in -30i64..=12,
+        prec in prop_oneof![2u64..120, 120u64..500],
+    ) {
+        // Exponents up to 12: |ζ| within MPFR's range at the negative ones.
         let x = x.to_ours();
+        let x = x.mul_2exp(&(&Integer::from(top) - x.exponent()));
         let one = Float::from(1i64);
         let half = one.mul_2exp(&-Integer::ONE);
         if x == one || x == half {
