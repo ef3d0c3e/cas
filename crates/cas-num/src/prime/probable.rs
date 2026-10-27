@@ -1,4 +1,5 @@
-//! Miller–Rabin, the strong Lucas test, Baillie–PSW and `next_prime`.
+//! Miller–Rabin, the strong Lucas test, Baillie–PSW, `next_prime` and
+//! `previous_prime`.
 #![allow(
     clippy::many_single_char_names,
     reason = "the algorithms use the textbook names (n, d, s, q, u, v, k)"
@@ -79,6 +80,43 @@ impl Natural {
             c += 2u64;
         }
         c
+    }
+
+    /// The greatest prime below `self`, `None` below 3. Above 2^64 it is a
+    /// probable prime in the sense of [`Natural::primality`], and so is every
+    /// candidate it passes over composite.
+    #[must_use]
+    pub fn previous_prime(&self) -> Option<Natural> {
+        if let Ok(n) = u64::try_from(self) {
+            return previous_prime_u64(n).map(Natural::from);
+        }
+        // The greatest odd value below self; primality decides below 2^64
+        // too, should the search cross it.
+        let below = self - 1u64;
+        let mut c = if below.bit(0) { below } else { below - 1u64 };
+        while !c.primality().is_probable_prime() {
+            c -= 2u64;
+        }
+        Some(c)
+    }
+}
+
+/// The greatest prime below `n`, `None` for `n ≤ 2`.
+fn previous_prime_u64(n: u64) -> Option<u64> {
+    match n {
+        0..=2 => None,
+        3 => Some(2),
+        _ => {
+            // The greatest odd value below n, at least 3, which is prime.
+            let mut c = (n - 1) | 1;
+            if c >= n {
+                c -= 2;
+            }
+            while !is_prime_u64(c) {
+                c -= 2;
+            }
+            Some(c)
+        }
     }
 }
 

@@ -26,6 +26,7 @@ mod linear;
 mod logic;
 mod matrix;
 mod number;
+mod number_theory;
 mod numeric;
 mod parts;
 mod polynomial;
@@ -169,6 +170,9 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::SERIES, series::series),
         (Symbol::LIMIT, limit::limit),
         (Symbol::DSOLVE, dsolve::dsolve),
+        (Symbol::PRIME_Q, number_theory::prime_q),
+        (Symbol::NEXT_PRIME, number_theory::next_prime),
+        (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),

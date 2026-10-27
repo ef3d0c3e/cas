@@ -128,6 +128,10 @@ builtins! {
     SUM = "Sum" [PROTECTED];
     PRODUCT = "Product" [PROTECTED];
     BINOMIAL = "Binomial" [LISTABLE, PROTECTED];
+    // Number theory (CAS-DOC-17).
+    PRIME_Q = "PrimeQ" [LISTABLE, PROTECTED];
+    NEXT_PRIME = "NextPrime" [LISTABLE, PROTECTED];
+    PREVIOUS_PRIME = "PreviousPrime" [LISTABLE, PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

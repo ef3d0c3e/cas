@@ -90,6 +90,10 @@ Limit: limit
 OrderSize: order_size
 # Differential equations (CAS-DOC-16, CAS-259).
 DSolve: desolve
+# Number theory (CAS-DOC-17, CAS-267 to CAS-271).
+PrimeQ: isprime
+NextPrime: nextprime
+PreviousPrime: prevprime
 # Equations (CAS-DOC-11, CAS-210, CAS-214).
 Solve: solve
 CSolve: csolve

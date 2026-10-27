@@ -85,6 +85,21 @@ proptest! {
     fn next_prime(n in strategy::natural_up_to(3)) {
         prop_assert_eq!(n.to_natural().next_prime().to_rug(), n.to_rug().next_prime());
     }
+
+    /// A prime below `n` with none between: GMP's next prime after it is
+    /// at least `n` (CAS-267).
+    #[test]
+    fn previous_prime(n in strategy::natural_up_to(3)) {
+        let (n, ng) = (n.to_natural(), n.to_rug());
+        match n.previous_prime() {
+            None => prop_assert!(ng < 3),
+            Some(p) => {
+                let pg = p.to_rug();
+                prop_assert!(pg < ng && gmp_is_prime(&pg));
+                prop_assert!(pg.next_prime() >= ng);
+            }
+        }
+    }
 }
 
 #[test]
@@ -113,6 +128,35 @@ fn word_boundaries() {
         let n = Natural::power_of_two(64) + k;
         assert_eq!(n.primality(), expected(&n.to_rug()), "2^64 + {k}");
     }
+}
+
+#[test]
+fn previous_prime_edges() {
+    for n in 0..3u64 {
+        assert_eq!(Natural::from(n).previous_prime(), None, "{n}");
+    }
+    assert_eq!(
+        Natural::from(3u64).previous_prime(),
+        Some(Natural::from(2u64))
+    );
+    assert_eq!(
+        Natural::from(4u64).previous_prime(),
+        Some(Natural::from(3u64))
+    );
+    assert_eq!(
+        Natural::from(100u64).previous_prime(),
+        Some(Natural::from(97u64))
+    );
+    // Across 2^64: the last prime below it is 2^64 - 59, the first above
+    // 2^64 + 13.
+    let last = Natural::from(u64::MAX - 58);
+    let first = Natural::power_of_two(64) + 13u64;
+    assert_eq!(first.previous_prime(), Some(last.clone()));
+    assert_eq!(
+        Natural::power_of_two(64).previous_prime(),
+        Some(last.clone())
+    );
+    assert_eq!((&first + 1u64).previous_prime(), Some(first));
 }
 
 #[test]

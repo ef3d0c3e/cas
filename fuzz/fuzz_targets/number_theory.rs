@@ -1,5 +1,5 @@
-//! Roots, modular arithmetic, CRT, Jacobi symbols, primality and
-//! factorisation against GMP.
+//! Roots, modular arithmetic, CRT, Jacobi symbols, primality, factorisation
+//! and the previous prime against GMP.
 #![no_main]
 
 use arbitrary::Unstructured;
@@ -11,7 +11,7 @@ use libfuzzer_sys::fuzz_target;
 fuzz_target!(|data: &[u8]| {
     let mut u = Unstructured::new(data);
     let (Ok(op), Ok((a, ag)), Ok((m, mg))) = (
-        u.int_in_range(0u8..=8),
+        u.int_in_range(0u8..=9),
         natural(&mut u, 200),
         natural(&mut u, 160),
     ) else {
@@ -131,6 +131,23 @@ fuzz_target!(|data: &[u8]| {
             for x in f.factors() {
                 let prime = gmp(x.base()).is_probably_prime(30) != rug::integer::IsPrime::No;
                 check("factor label", x.primality().is_probable_prime(), prime);
+            }
+        }
+        9 => {
+            // The previous prime (CAS-267): a prime below `a` with none
+            // between, by GMP's next prime after it.
+            if a.limb_len() > 3 {
+                return;
+            }
+            match a.previous_prime() {
+                None => assert!(a < Natural::from(3u64), "no previous prime"),
+                Some(p) => {
+                    let pg = gmp(&p);
+                    assert!(pg < ag, "previous prime not below");
+                    let prime = pg.is_probably_prime(30) != rug::integer::IsPrime::No;
+                    check("previous prime", prime, true);
+                    assert!(pg.next_prime() >= ag, "a prime between");
+                }
             }
         }
         _ => {
