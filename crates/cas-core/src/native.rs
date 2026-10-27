@@ -14,6 +14,7 @@
 
 mod arith;
 mod ball;
+mod dsolve;
 mod elementary;
 mod erf;
 mod factorial;
@@ -167,6 +168,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::INTEGRATE, integrate::integrate),
         (Symbol::SERIES, series::series),
         (Symbol::LIMIT, limit::limit),
+        (Symbol::DSOLVE, dsolve::dsolve),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),

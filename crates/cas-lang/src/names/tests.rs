@@ -35,7 +35,8 @@ fn english_names() {
         ("integrate", Target::Builtin(Symbol::INTEGRATE)),
         ("sum", Target::Builtin(Symbol::SUM)),
         ("simplify", Target::Builtin(Symbol::SIMPLIFY)),
-        ("desolve", planned("DSolve")),
+        ("desolve", Target::Builtin(Symbol::DSOLVE)),
+        ("laplace", planned("LaplaceTransform")),
         ("evalf", Target::Builtin(Symbol::N)),
         ("approx", Target::Builtin(Symbol::N)),
         ("asin", Target::Builtin(Symbol::ARC_SIN)),
@@ -55,7 +56,10 @@ fn english_names() {
         assert!(names.is_reserved(name));
     }
     assert_eq!(names.spelling(&Target::Builtin(Symbol::LOG)), Some("ln"));
-    assert_eq!(names.spelling(&planned("DSolve")), Some("desolve"));
+    assert_eq!(
+        names.spelling(&planned("LaplaceTransform")),
+        Some("laplace")
+    );
     assert_eq!(
         names.spelling(&Target::Builtin(Symbol::INTEGRATE)),
         Some("integrate")
@@ -136,7 +140,7 @@ const TEST_LOCALE: &str = "
 Sin: sinus
 Log: logn ln
 D: deriver derivee
-DSolve: resoudre
+LaplaceTransform: transformee
 
 [syntax]
 call: appel
@@ -159,8 +163,14 @@ fn locales() {
     assert_eq!(names.spelling(&Target::Builtin(Symbol::LOG)), Some("logn"));
     assert_eq!(names.target("derivee"), Some(&Target::Builtin(Symbol::D)));
     assert_eq!(names.spelling(&Target::Builtin(Symbol::D)), Some("deriver"));
-    assert_eq!(names.target("resoudre"), Some(&planned("DSolve")));
-    assert_eq!(names.spelling(&planned("DSolve")), Some("resoudre"));
+    assert_eq!(
+        names.target("transformee"),
+        Some(&planned("LaplaceTransform"))
+    );
+    assert_eq!(
+        names.spelling(&planned("LaplaceTransform")),
+        Some("transformee")
+    );
     assert_eq!(
         names.target("appel"),
         Some(&Target::Syntax(SyntaxForm::Call))

@@ -88,6 +88,8 @@ Integrate: integrate int
 Series: series taylor
 Limit: limit
 OrderSize: order_size
+# Differential equations (CAS-DOC-16, CAS-259).
+DSolve: desolve
 # Equations (CAS-DOC-11, CAS-210, CAS-214).
 Solve: solve
 CSolve: csolve
@@ -153,8 +155,9 @@ FactorList: factors
 FactorSquareFree: sqrfree
 
 [planned]
-# Differential equations.
-DSolve: desolve
+# Laplace transforms, which CAS-DOC-16 leaves to a later area.
+LaplaceTransform: laplace
+InverseLaplaceTransform: ilaplace
 
 [constants]
 imaginary: i

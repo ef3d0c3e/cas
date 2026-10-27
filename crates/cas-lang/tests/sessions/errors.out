@@ -25,8 +25,8 @@ warning at 12:1 `two(x + 1)`: the number 2 applied as a function in call(2, 1 + 
 > sin x
 error at 13:1 `sin`: sin takes its argument in parentheses: sin(x)
   fix: `sin(x)`
-> desolve(x)
-error at 14:1 `desolve(x)`: desolve is not available yet
+> laplace(x)
+error at 14:1 `laplace(x)`: laplace is not available yet
 > f(x) := x
 > f(1, 2)
 warning at 16:1 `f(1, 2)`: no definition of f matches f(1, 2)

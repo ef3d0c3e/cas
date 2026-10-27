@@ -101,6 +101,8 @@ builtins! {
     SERIES = "Series" [PROTECTED];
     LIMIT = "Limit" [PROTECTED];
     ORDER_SIZE = "OrderSize" [PROTECTED];
+    // Differential equations (CAS-DOC-16).
+    DSOLVE = "DSolve" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];
