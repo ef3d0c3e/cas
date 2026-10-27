@@ -7,7 +7,8 @@ fn read(text: &str) -> Expr {
 
 /// Where residuals are evaluated: the variables and the constants.
 const POINT: &str = "List[Rule[x, 2/9], Rule[t, 5/7], Rule[a, 3/4], \
-                     Rule[c_0, 7/5], Rule[c_1, -2/3], Rule[c_2, 5/11]]";
+                     Rule[c_0, 7/5], Rule[c_1, -2/3], Rule[c_2, 5/11], \
+                     Rule[c_3, 3/13], Rule[c_4, -9/7], Rule[c_5, 4/3]]";
 
 /// `DSolve[template = 0, y[v]]`, `Y` standing for `y[v]` in the template,
 /// and the template at the answer: 0 at [`POINT`]. The answer, and its
@@ -35,7 +36,9 @@ fn general(template: &str, v: &str, order: usize) -> Expr {
         // Each part apart: the modulus of a complex ball about 0 is
         // unbounded.
         let residual = template.replace('Y', &format!("{branch:?}"));
-        let value = format!("N[ReplaceAll[{residual}, {POINT}]]");
+        // Expanded first: Times[-1, Plus[…]] is not distributed, which
+        // leaves integrals that stay standing where they would cancel.
+        let value = format!("N[ReplaceAll[Expand[{residual}], {POINT}]]");
         for part in ["Re", "Im"] {
             let at = format!("Less[Abs[{part}[{value}]], 1/10000000000]");
             assert_eq!(

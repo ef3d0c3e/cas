@@ -19,13 +19,16 @@ fn giac() -> Option<&'static Giac> {
 
 /// The symbols' values where answers are compared, the constants among
 /// them.
-const POINT: [(&str, i64, i64); 6] = [
+const POINT: [(&str, i64, i64); 9] = [
     ("x", 2, 9),
     ("t", 5, 7),
     ("a", 3, 4),
     ("c_0", 7, 5),
     ("c_1", -2, 3),
     ("c_2", 5, 11),
+    ("c_3", 3, 13),
+    ("c_4", -9, 7),
+    ("c_5", 4, 3),
 ];
 
 /// Whether `proposition` evaluates to `True`.
@@ -55,13 +58,16 @@ fn close(ctx: &Context, a: &Expr, b: &Expr) -> bool {
 }
 
 /// [`POINT`] with `c_0 < x`, where `(x − c_0)²/4` solves `y′ = √y`.
-const RIGHT_OF_C0: [(&str, i64, i64); 6] = [
+const RIGHT_OF_C0: [(&str, i64, i64); 9] = [
     ("x", 2, 9),
     ("t", 5, 7),
     ("a", 3, 4),
     ("c_0", -7, 5),
     ("c_1", -2, 3),
     ("c_2", 5, 11),
+    ("c_3", 3, 13),
+    ("c_4", -9, 7),
+    ("c_5", 4, 3),
 ];
 
 /// `e` approximated at `point`.
@@ -124,8 +130,10 @@ fn check_at(cases: &[Case], point: &[(&str, i64, i64)]) {
         };
         let satisfies = |branch: &Expr| {
             print(branch, Names::english()).is_ok_and(|text| {
+                // Expanded: an integral that stays cancels only once the
+                // negated sums are distributed.
                 let residual = template.replace('Y', &format!("({text})"));
-                ours(&residual)
+                ours(&format!("expand({residual})"))
                     .ok()
                     .and_then(|r| at(&ctx, &r, point))
                     .is_some_and(|r| close(&ctx, &r, &Expr::from(0)))
