@@ -85,6 +85,8 @@ Eigenvectors: eigenvects egv
 Sum: sum
 Product: product mul
 Binomial: binomial comb
+# Simplification (CAS-DOC-14, CAS-229).
+Simplify: simplify
 # A ball, `ball(c, r)` (CAS-DOC-5 §6.5, CAS-83), and back to fractions
 # (D4, CAS-148).
 Ball: ball
@@ -120,8 +122,8 @@ FactorList: factors
 FactorSquareFree: sqrfree
 
 [planned]
-# Calculus, algebra and numerics (CAS-DOC-1, CAS-DOC-4 §1 and §8, CAS-DOC-5).
-Simplify: simplify
+# Differential equations.
+DSolve: desolve
 
 [constants]
 imaginary: i

@@ -30,6 +30,7 @@ mod procedure;
 mod radical;
 mod replace;
 mod series;
+mod simplify;
 mod solve;
 mod special;
 mod structure;
@@ -155,6 +156,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         ),
         (Symbol::EIGENVALUES, matrix::eigenvalues),
         (Symbol::EIGENVECTORS, matrix::eigenvectors),
+        (Symbol::SIMPLIFY, simplify::simplify),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),

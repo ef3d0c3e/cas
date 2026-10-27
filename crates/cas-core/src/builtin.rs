@@ -93,6 +93,8 @@ builtins! {
     SUM = "Sum" [PROTECTED];
     PRODUCT = "Product" [PROTECTED];
     BINOMIAL = "Binomial" [LISTABLE, PROTECTED];
+    // Simplification (CAS-DOC-14).
+    SIMPLIFY = "Simplify" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

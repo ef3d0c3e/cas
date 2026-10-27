@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 87] = [
+const BUILTINS: [&str; 88] = [
     "Plus",
     "Times",
     "Power",
@@ -133,6 +133,8 @@ const BUILTINS: [&str; 87] = [
     "Sum",
     "Product",
     "Binomial",
+    // Simplification (CAS-229).
+    "Simplify",
 ];
 
 /// Builtins that apply something to parts, only in the expression
