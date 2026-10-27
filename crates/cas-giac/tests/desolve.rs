@@ -166,3 +166,21 @@ fn first_order_nonlinear() {
         Case("(3*x^2 + Y) + (x + 2*Y)*diff(Y, x)", "x", 1, false),
     ]);
 }
+
+/// Linear equations with constant coefficients (CAS-261). Alike where giac
+/// orders the basis as the roots are here; it reverses a double root's and
+/// some real ones', and writes `y⁗ = y` with combined constants.
+#[test]
+fn constant_coefficients() {
+    check(&[
+        Case("diff(Y, x, x) + Y", "x", 2, true),
+        Case("diff(Y, x, x) + 2*diff(Y, x) + Y", "x", 2, false),
+        Case("diff(Y, x, x) + diff(Y, x) + Y", "x", 2, true),
+        Case("diff(Y, x, x, x) - Y", "x", 3, true),
+        Case("diff(Y, x, x) - Y", "x", 2, false),
+        Case("diff(Y, x, x, x, x) - Y", "x", 4, false),
+        Case("diff(Y, x, x) + a^2*Y", "x", 2, false),
+        Case("diff(Y, x, x) - a*Y", "x", 2, true),
+        Case("diff(Y, x, x) + diff(Y, x)", "x", 2, true),
+    ]);
+}

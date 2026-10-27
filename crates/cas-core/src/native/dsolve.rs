@@ -59,7 +59,7 @@ fn solve(ev: &mut Eval<'_>, e: &Expr, ode: &Ode, x: &Expr) -> Result<Option<Expr
         if let [a0, a1] = a.as_slice() {
             return first_order_linear(ev, x, a0, a1, &f, &constants[0]).map(Some);
         }
-        return Ok(None);
+        return linear::constant_coefficients(ev, e, &a, &f, x, &constants);
     }
     if ode.order == 1 {
         return first::nonlinear(ev, ode, x, &constants[0]);
@@ -278,6 +278,7 @@ fn logarithm_multiple(t: &Expr) -> Option<(Expr, Expr)> {
 }
 
 mod first;
+mod linear;
 
 #[cfg(test)]
 mod tests;

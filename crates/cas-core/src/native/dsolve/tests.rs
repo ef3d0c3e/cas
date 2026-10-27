@@ -145,6 +145,48 @@ fn first_order_nonlinear() {
     assert_eq!(found, expected);
 }
 
+/// Linear equations with constant coefficients (CAS-261): the basis from
+/// the characteristic roots, real forms of conjugate pairs.
+#[test]
+fn constant_coefficients() {
+    let cases = [
+        ("Plus[D[Y, x, x], Y]", 2),
+        ("Plus[D[Y, x, x], Times[2, D[Y, x]], Y]", 2),
+        ("Plus[D[Y, x, x], D[Y, x], Y]", 2),
+        ("Plus[D[Y, x, x, x], Times[-1, Y]]", 3),
+        ("Plus[D[Y, x, x], Times[-1, Y]]", 2),
+        ("Plus[D[Y, x, x, x, x], Times[-1, Y]]", 4),
+        ("Plus[D[Y, x, x], Times[Power[a, 2], Y]]", 2),
+        ("Plus[D[Y, x, x], Times[-1, a, Y]]", 2),
+        ("Plus[D[Y, x, x], D[Y, x]]", 2),
+        ("D[Y, x, x]", 2),
+        (
+            "Plus[D[Y, x, x, x], Times[-3, D[Y, x, x]], Times[3, D[Y, x]], Times[-1, Y]]",
+            3,
+        ),
+    ];
+    for (template, order) in cases {
+        general(template, "x", order);
+    }
+    let ctx = Context::new();
+    for (input, expected) in [
+        (
+            "DSolve[Equation[Plus[D[y[x], x, x], y[x]], 0], y[x]]",
+            "Plus[Times[c_0, Cos[x]], Times[c_1, Sin[x]]]",
+        ),
+        (
+            "DSolve[Equation[D[y[x], x, x], 0], y[x]]",
+            "Plus[c_0, Times[c_1, x]]",
+        ),
+    ] {
+        assert_eq!(
+            format!("{:?}", ctx.eval(&read(input)).unwrap()),
+            expected,
+            "{input}"
+        );
+    }
+}
+
 /// What no method solves, or what is not an equation in `y`, stays.
 #[test]
 fn stays() {
