@@ -315,10 +315,13 @@ fn errors_leave_statements_out() {
         ("[x, e] := l", &[("e", E::ReservedName("e".into()))]),
         ("purge(pi)", &[("pi", E::ReservedName("pi".into()))]),
         (
-            "sum(x^2, x)",
-            &[("sum(x^2, x)", E::NotAvailable("sum".into()))],
+            "simplify(x^2)",
+            &[("simplify(x^2)", E::NotAvailable("simplify".into()))],
         ),
-        ("y := sum", &[("sum", E::NotAvailable("sum".into()))]),
+        (
+            "y := simplify",
+            &[("simplify", E::NotAvailable("simplify".into()))],
+        ),
         ("x :: integer", &[("x :: integer", E::TypeOutsidePattern)]),
         (
             "f(n :: natural) := 1",
