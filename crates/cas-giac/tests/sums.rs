@@ -14,13 +14,15 @@ fn giac() -> Option<&'static Giac> {
     giac
 }
 
-/// The symbols' values where answers are compared.
+/// The symbols' values where answers are compared: `n` an integer, for
+/// giac's factorials in it (`binomial(n,2)` is `n!/(2 (n-2)!)`), which
+/// have no value at a fraction here.
 const POINT: [(&str, i64, i64); 6] = [
     ("a", 3, 7),
     ("b", 5, 11),
     ("c", -2, 13),
     ("m", 4, 3),
-    ("n", 17, 5),
+    ("n", 17, 1),
     ("x", 2, 9),
 ];
 

@@ -44,6 +44,11 @@ fn next(e: &Expr, k: &Expr) -> Expr {
     e.substitute(&[(k.clone(), k.clone() + Expr::from(1))])
 }
 
+/// `u(k + 1) − u(k)`, expanded: evaluation alone leaves `2 + k − (1 + k)`.
+fn step(ev: &mut Eval<'_>, u: &Expr, k: &Expr) -> Result<Expr, EvalError> {
+    ev.eval(&Expr::call(Symbol::EXPAND, [next(u, k) - u.clone()]))
+}
+
 /// Whether `e` is a rational function of `k`: `k` only through sums,
 /// products and integer powers.
 fn rational_in(e: &Expr, k: &Expr) -> bool {
@@ -77,13 +82,11 @@ pub(super) fn ratio(ev: &mut Eval<'_>, t: &Expr, k: &Expr) -> Result<Option<Expr
             }
             Some(Expr::call(Symbol::TIMES, ratios))
         }
-        (Some(Symbol::POWER), [b, u]) if !b.contains(k) => {
-            Some(b.clone().pow(next(u, k) - u.clone()))
-        }
+        (Some(Symbol::POWER), [b, u]) if !b.contains(k) => Some(b.clone().pow(step(ev, u, k)?)),
         (Some(Symbol::POWER), [b, n]) if n.as_i64().is_some() => {
             ratio(ev, b, k)?.map(|r| r.pow(n.clone()))
         }
-        (Some(Symbol::EXP), [u]) => Some(Expr::call(Symbol::EXP, [next(u, k) - u.clone()])),
+        (Some(Symbol::EXP), [u]) => Some(Expr::call(Symbol::EXP, [step(ev, u, k)?])),
         (Some(Symbol::FACTORIAL), [u]) => factorial_ratio(ev, u, k)?,
         (Some(Symbol::BINOMIAL), [u, v]) => {
             let w = ev.eval(&(u.clone() - v.clone()))?;
@@ -110,7 +113,7 @@ fn factorial_ratio(ev: &mut Eval<'_>, u: &Expr, k: &Expr) -> Result<Option<Expr>
     if !rational_in(u, k) {
         return Ok(None);
     }
-    let slope = ev.eval(&(next(u, k) - u.clone()))?;
+    let slope = step(ev, u, k)?;
     let Some(alpha) = slope.as_i64().filter(|a| a.unsigned_abs() <= 64) else {
         return Ok(None);
     };
@@ -141,7 +144,8 @@ pub(super) fn antidifference(
     };
     let r = ev.eval(&Expr::call(Symbol::TOGETHER, [r]))?;
     let h = Expr::from(Symbol::new("Sum$h"));
-    let Some(p) = convert(ev, e, &[r, h.clone()], false)? else {
+    // k with them, a generator even where the ratio is free of it (2^k).
+    let Some(p) = convert(ev, e, &[r, h.clone(), k.clone()], false)? else {
         return Ok(None);
     };
     let (Some(kv), Some(hv)) = (p.variable(k), p.variable(&h)) else {
@@ -173,8 +177,13 @@ pub(super) fn antidifference(
     let Some(x) = solved(ev, e, &p, &[&a, &b1, &c], k, d)? else {
         return Ok(None);
     };
+    // Together, c against the factors of t: k 2^k has T = (k − 2)/k · k 2^k,
+    // which at k = 0 would be 0/0.
     let fraction = p.polynomial_expr(&b1) * x / p.polynomial_expr(&c);
-    Ok(Some(fraction * t.clone()))
+    Ok(Some(ev.eval(&Expr::call(
+        Symbol::TOGETHER,
+        [fraction * t.clone()],
+    ))?))
 }
 
 /// The Gosper–Petkovšek form `(a, b, c)` of `num/den` in `kv`, the shift
@@ -314,13 +323,17 @@ fn solved(
     let unknowns: Vec<Expr> = (0..=d)
         .map(|i| Expr::from(Symbol::new(&format!("Sum$x{i}"))))
         .collect();
+    // No at^0, which at = 0 would make 0^0.
     let x_at = |at: &Expr| -> Expr {
         Expr::call(
             Symbol::PLUS,
             unknowns
                 .iter()
                 .enumerate()
-                .map(|(i, u)| u.clone() * at.clone().pow(i64::try_from(i).expect("a small degree")))
+                .map(|(i, u)| match i {
+                    0 => u.clone(),
+                    _ => u.clone() * at.clone().pow(i64::try_from(i).expect("a small degree")),
+                })
                 .collect::<Vec<_>>(),
         )
     };
