@@ -38,7 +38,7 @@ use cas_poly::SparseRing;
 
 use super::super::approximation;
 use super::super::polynomial::{convert, factored};
-use super::{MAX_TERMS, gosper};
+use super::gosper;
 use crate::assume::{Sign, sign_of};
 use crate::context::EvalError;
 use crate::eval::Eval;
@@ -48,6 +48,11 @@ use crate::symbol::Symbol;
 
 /// The highest `2m` of `ζ(2m)` written out.
 const MAX_ZETA: i64 = 64;
+
+/// The largest integer start of a known series but the geometric one: the
+/// terms before it are subtracted exactly, and those of `1/k^64` have
+/// denominators of `64 log₂ lcm(1, …, a)` bits.
+const MAX_START: i64 = 256;
 
 /// The sum of a series, when found.
 #[derive(Clone, Debug, PartialEq)]
@@ -291,7 +296,7 @@ fn below_one(ev: &mut Eval<'_>, x: &Expr) -> Result<bool, EvalError> {
 
 /// The known series of §4 for the term `t`; `None` for another.
 fn known(ev: &mut Eval<'_>, t: &Expr, k: &Expr, a: &Expr) -> Result<Option<Total>, EvalError> {
-    let start = a.as_i64().filter(|s| (0..=MAX_TERMS).contains(s));
+    let start = a.as_i64().filter(|s| (0..=MAX_START).contains(s));
     if let Some(start) = start
         && let Some(total) = zeta(ev, t, k, start)?
     {
