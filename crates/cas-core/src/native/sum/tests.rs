@@ -101,9 +101,112 @@ fn what_stays() {
             "Sum[Plus[k, Factorial[k]], k, 0, n]",
             "Plus[Times[1/2, n, Plus[1, n]], Sum[Factorial[k], k, 0, n]]",
         ),
-        ("Product[k, k, 1, n]", "Product[k, k, 1, n]"),
+        (
+            "Product[Factorial[k], k, 1, n]",
+            "Product[Factorial[k], k, 1, n]",
+        ),
         ("Product[c, k, 1, n]", "Power[c, n]"),
     ]);
+}
+
+/// Symbolic products (CAS-227): factor by factor, rational functions by
+/// factorials, powers by sums.
+#[test]
+fn symbolic_products() {
+    check(&[
+        ("Product[k, k, 1, n]", "Factorial[n]"),
+        (
+            "Product[k, k, m, n]",
+            "Times[Factorial[n], Power[Factorial[Plus[-1, m]], -1]]",
+        ),
+        (
+            "Product[Times[2, k], k, 1, n]",
+            "Times[Power[2, n], Factorial[n]]",
+        ),
+        ("Product[Power[k, 2], k, 1, n]", "Power[Factorial[n], 2]"),
+        ("Product[Power[k, -1], k, 1, n]", "Power[Factorial[n], -1]"),
+        ("Product[3, k, 1, n]", "Power[3, n]"),
+        (
+            "Product[Plus[k, 2], k, 1, n]",
+            "Times[1/2, Factorial[Plus[2, n]]]",
+        ),
+        (
+            "Product[Plus[k, a], k, 1, n]",
+            "Times[Factorial[Plus[a, n]], Power[Factorial[a], -1]]",
+        ),
+        (
+            "Product[Times[-1, k], k, 1, n]",
+            "Times[Power[-1, n], Factorial[n]]",
+        ),
+        (
+            "Product[Times[x, k], k, 1, n]",
+            "Times[Power[x, n], Factorial[n]]",
+        ),
+        // Shifts a whole number apart: one factorial, or none.
+        (
+            "Product[Times[Plus[k, 1], Power[k, -1]], k, 1, n]",
+            "Plus[1, n]",
+        ),
+        (
+            "Product[Times[k, Power[Plus[k, 1], -1]], k, 1, n]",
+            "Power[Plus[1, n], -1]",
+        ),
+        // A zero factor in the range, as giac's product(k,k,0,n).
+        ("Product[k, k, 0, n]", "0"),
+        ("Product[Plus[k, -3], k, 1, n]", "0"),
+        // c^g(k) as c^Σg.
+        (
+            "Product[Power[2, k], k, 1, n]",
+            "Power[2, Times[1/2, n, Plus[1, n]]]",
+        ),
+    ]);
+    check_closed_products(&[
+        ("Plus[1, Times[-1, Power[k, -2]]]", 2),
+        ("Plus[Times[2, k], 1]", 1),
+        ("Times[k, Power[2, k]]", 1),
+        ("Power[Plus[k, 1/2], 2]", 0),
+        ("Times[Power[Plus[k, 1], 2], Power[k, -2]]", 1),
+    ]);
+    check(&[
+        // An irreducible quadratic, and a pole at k = 0, stay.
+        (
+            "Product[Plus[Power[k, 2], 1], k, 1, n]",
+            "Product[Plus[Power[k, 2], 1], k, 1, n]",
+        ),
+        (
+            "Product[Power[k, -1], k, 0, n]",
+            "Product[Power[k, -1], k, 0, n]",
+        ),
+    ]);
+}
+
+/// The closed form of `Product[t, k, a, n]` at `n = 6` is the product of
+/// its terms, written out.
+fn check_closed_products(cases: &[(&str, i64)]) {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for &(t, a) in cases {
+        let closed = ctx
+            .eval(&read(&format!("Product[{t}, k, {a}, n]")))
+            .unwrap();
+        if closed.contains(&Expr::from(Symbol::PRODUCT)) {
+            wrong.push(format!("{t}: no closed form, {closed:?}"));
+            continue;
+        }
+        let at = ctx
+            .eval(&closed.substitute(&[(read("n"), Expr::from(6))]))
+            .unwrap();
+        let terms = ctx
+            .eval(&read(&format!("Product[{t}, k, {a}, 6]")))
+            .unwrap();
+        let difference = ctx
+            .eval(&Expr::call(Symbol::TOGETHER, [at - terms]))
+            .unwrap();
+        if difference != Expr::from(0) {
+            wrong.push(format!("{t}: {closed:?} is off by {difference:?} at 6"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
 #[test]

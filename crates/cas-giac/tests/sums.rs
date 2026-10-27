@@ -149,3 +149,42 @@ fn infinite_sums() {
     let stays = ours("sum(1/k^3,k,1,inf)").unwrap();
     assert_eq!(stays.head(), Some(&Expr::from(Symbol::SUM)), "{stays:?}");
 }
+
+/// Symbolic products (CAS-227). Factorials in `m` or `a`, fractions at
+/// [`POINT`], have no value here: those are the unit tests'.
+#[test]
+fn products() {
+    check(&[
+        "product(k,k,1,n)",
+        "product(2*k,k,1,n)",
+        "product((k+1)/k,k,1,n)",
+        "product(k^2,k,1,n)",
+        "product(3,k,1,n)",
+        "product(k+2,k,1,n)",
+        "product(k,k,0,n)",
+        "product(k,k,3,n)",
+        "product(2*k+1,k,1,n)",
+        "product(k+1/2,k,1,n)",
+        "product(k/(k+1),k,1,n)",
+        "product(1-1/k^2,k,2,n)",
+        "product(k^2-1,k,2,n)",
+        "product(1+1/k,k,1,n)",
+        "product((k+1)^2/k^2,k,1,n)",
+        "product(x*k,k,1,n)",
+        "product(c,k,1,n)",
+        "product(k-3,k,1,n)",
+        "product(1/k,k,1,n)",
+        "product(k^3,k,1,n)",
+        "product(-k,k,1,n)",
+    ]);
+    // giac leaves these: c^g(k) is c^Σg here.
+    let ctx = Context::new();
+    for (input, expected) in [
+        ("product(2^k,k,1,n)", "2^(n*(n+1)/2)"),
+        ("product(exp(k),k,1,n)", "exp(n*(n+1)/2)"),
+        ("product(k*2^k,k,1,n)", "n!*2^(n*(n+1)/2)"),
+    ] {
+        let (found, expected) = (ours(input).unwrap(), ours(expected).unwrap());
+        assert!(same(&ctx, &found, &expected), "{input}: {found:?}");
+    }
+}

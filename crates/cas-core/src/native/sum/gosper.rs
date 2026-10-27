@@ -51,7 +51,7 @@ fn step(ev: &mut Eval<'_>, u: &Expr, k: &Expr) -> Result<Expr, EvalError> {
 
 /// Whether `e` is a rational function of `k`: `k` only through sums,
 /// products and integer powers.
-fn rational_in(e: &Expr, k: &Expr) -> bool {
+pub(super) fn rational_in(e: &Expr, k: &Expr) -> bool {
     if e == k || !e.contains(k) {
         return true;
     }

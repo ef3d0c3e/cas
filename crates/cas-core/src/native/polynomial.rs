@@ -1283,10 +1283,15 @@ impl<E: Coefficient + PartialEq> Powers<E> {
         }
     }
 
+    /// The constant `c` of `c ∏ fᵢ^eᵢ`, built.
+    pub(super) fn constant(&self) -> Expr {
+        self.numerator.over(&self.denominator)
+    }
+
     /// `c ∏ fᵢ^eᵢ`, built.
     fn expr(&self, p: &Polynomials) -> Expr {
         let mut parts = Vec::with_capacity(self.factors.len() + 1);
-        let constant = self.numerator.over(&self.denominator);
+        let constant = self.constant();
         if constant != Expr::from(1) {
             parts.push(constant);
         }

@@ -15,7 +15,8 @@
 //!   `k 2^k` and `1/(k (k + 1))`; the terms without a closed form stay
 //!   under one `Sum`, and when none has one the call stays, as giac's
 //!   `sum(k!,k,0,n)`. A product of a factor
-//!   free of `k` is its power; another stays (CAS-227).
+//!   free of `k` is its power; another goes factor by factor, rational
+//!   functions of `k` by factorials ([`product`], CAS-227).
 //! - A sum with an infinite bound, `Infinity` or `-Infinity`: by limits,
 //!   divergence and known series ([`infinite`], CAS-226).
 //!
@@ -173,7 +174,10 @@ fn symbolic(
         }));
     }
     if kind == Kind::Product {
-        return Ok(None);
+        if infinite::infinity(a).is_some() || infinite::infinity(b).is_some() {
+            return Ok(None);
+        }
+        return product::product(ev, e, f, k, a, b);
     }
     let terms: Vec<Expr> = match f.head().and_then(Expr::as_symbol) {
         Some(Symbol::PLUS) => f.args().to_vec(),
@@ -364,5 +368,6 @@ fn stirling(n: usize) -> Vec<Vec<Integer>> {
 
 mod gosper;
 mod infinite;
+mod product;
 #[cfg(test)]
 mod tests;
