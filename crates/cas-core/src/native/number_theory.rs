@@ -18,7 +18,21 @@
 //!   `[-1, 1, …]` first for a negative `n`. `Divisors[n]` (`idivis`): the
 //!   positive divisors of `|n|`, ascending, at most 2^20 of them.
 //!   `EulerPhi[n]` (`euler`): `n Π (1 − 1/p)`, `φ(0) = 0`; negatives stay.
+//! - Modular arithmetic (CAS-269). `PowerMod[a, b, m]` (`powmod`): `a^b mod
+//!   m` in `[0, |m|)`, a negative `b` through the inverse of `a`, which must
+//!   exist; giac answers that inverse in the symmetric range (`powmod(3,-1,7)`
+//!   is −2, 5 here). `ExtendedGCD[a, b]` (`iegcd`, `igcdex`): `{u, v, d}`
+//!   with `u a + v b = d = gcd(a, b)`, GMP's cofactors, as giac's.
+//!   `ChineseRemainder[{a₁, m₁}, …]` (`ichinrem`): `{c, M}`, `M` the moduli's
+//!   least common multiple and `c` in `[0, M)`, moduli not coprime allowed
+//!   where the residues agree; none stays, with giac's "no integer solution".
 
+#![allow(
+    clippy::many_single_char_names,
+    reason = "the textbook names: a^b mod m, u a + v b = d, c ≡ a (mod m)"
+)]
+
+use cas_num::modular::crt;
 use cas_num::{Factorization, Integer, Natural};
 
 use crate::context::EvalError;
@@ -230,6 +244,72 @@ pub(super) fn euler_phi(ev: &mut Eval<'_>, e: &Expr) -> Native {
         acc * &x.base().pow(x.exponent() - 1) * &(x.base() - 1u64)
     });
     Ok(Some(Expr::from(Integer::from(phi))))
+}
+
+/// The integer arguments of `e`, all of them; `None` when one is not.
+fn integer_arguments(e: &Expr) -> Option<Vec<Integer>> {
+    e.args().iter().map(Expr::to_integer).collect()
+}
+
+/// `PowerMod[a, b, m]`.
+pub(super) fn power_mod(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some([a, b, m]) = integer_arguments(e).and_then(|v| <[Integer; 3]>::try_from(v).ok())
+    else {
+        return Ok(None);
+    };
+    if m.is_zero() {
+        return refuse(ev, e, "modulus 0");
+    }
+    match a.pow_mod(&b, &m) {
+        Some(r) => Ok(Some(Expr::from(r))),
+        None => refuse(ev, e, "not invertible"),
+    }
+}
+
+/// `ExtendedGCD[a, b]`.
+pub(super) fn extended_gcd(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some([a, b]) = integer_arguments(e).and_then(|v| <[Integer; 2]>::try_from(v).ok()) else {
+        return Ok(None);
+    };
+    let (g, s, t) = a.gcd_ext(&b);
+    Ok(Some(Expr::call(
+        Symbol::LIST,
+        [Expr::from(s), Expr::from(t), Expr::from(g)],
+    )))
+}
+
+/// `ChineseRemainder[{a₁, m₁}, {a₂, m₂}, …]`.
+pub(super) fn chinese_remainder(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let list = Expr::from(Symbol::LIST);
+    let mut pairs = Vec::with_capacity(e.args().len());
+    for pair in e.args() {
+        let (true, [a, m]) = (pair.head() == Some(&list), pair.args()) else {
+            return Ok(None);
+        };
+        let (Some(a), Some(m)) = (a.to_integer(), m.to_integer()) else {
+            return Ok(None);
+        };
+        if m.is_zero() {
+            return refuse(ev, e, "modulus 0");
+        }
+        // a's residue in [0, |m|), as a natural.
+        let residue = magnitude(&a.div_rem_euclid(&m).1);
+        pairs.push((residue, magnitude(&m)));
+    }
+    let Some((first, rest)) = pairs.split_first() else {
+        return Ok(None);
+    };
+    let (mut x, mut l) = first.clone();
+    for (a, m) in rest {
+        let Some((y, k)) = crt(&x, &l, a, m) else {
+            return refuse(ev, e, "no integer solution");
+        };
+        (x, l) = (y, k);
+    }
+    Ok(Some(Expr::call(
+        Symbol::LIST,
+        [Expr::from(Integer::from(x)), Expr::from(Integer::from(l))],
+    )))
 }
 
 #[cfg(test)]

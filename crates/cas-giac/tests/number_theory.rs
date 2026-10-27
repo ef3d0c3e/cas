@@ -101,3 +101,44 @@ fn held_factorisations() {
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+/// Modular arithmetic (CAS-269). `powmod` by its residue: giac answers an
+/// inverse in the symmetric range, −2 for 3⁻¹ mod 7, which is 5 here.
+#[test]
+fn modular_arithmetic() {
+    check(&[
+        "iegcd(12,18)",
+        "igcdex(12,18)",
+        "iegcd(0,5)",
+        "iegcd(-4,6)",
+        "ichinrem([2,3],[3,5])",
+        "ichinrem([2,3],[3,5],[2,7])",
+    ]);
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, m) in [
+        ("powmod(3,100,7)", 7),
+        ("powmod(3,-1,7)", 7),
+        ("powmod(2,10,-7)", 7),
+        ("powmod(0,0,5)", 5),
+        ("powmod(2,3,1)", 1),
+    ] {
+        let (theirs, ours) = (giac.value(input), ours(input));
+        let residue = match (&theirs, &ours) {
+            (Ok(t), Ok(o)) => ctx
+                .eval(&Expr::call(
+                    Symbol::REMAINDER,
+                    [o.clone() - t.clone(), Expr::from(m)],
+                ))
+                .ok(),
+            _ => None,
+        };
+        if residue != Some(Expr::from(0)) {
+            wrong.push(format!("{input}: ours {ours:?}, giac's {theirs:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}

@@ -136,6 +136,9 @@ builtins! {
     INTEGER_FACTOR_LIST = "IntegerFactorList" [LISTABLE, PROTECTED];
     DIVISORS = "Divisors" [LISTABLE, PROTECTED];
     EULER_PHI = "EulerPhi" [LISTABLE, PROTECTED];
+    POWER_MOD = "PowerMod" [LISTABLE, PROTECTED];
+    EXTENDED_GCD = "ExtendedGCD" [PROTECTED];
+    CHINESE_REMAINDER = "ChineseRemainder" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

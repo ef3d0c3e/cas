@@ -91,3 +91,32 @@ fn factorisation() {
         ctx.eval(&read("Power[2, 999]")).unwrap()
     );
 }
+
+/// Modular arithmetic (CAS-269).
+#[test]
+fn modular_arithmetic() {
+    check(&[
+        ("PowerMod[3, 100, 7]", "4"),
+        ("PowerMod[3, -1, 7]", "5"),
+        ("PowerMod[2, 10, -7]", "2"),
+        ("PowerMod[0, 0, 5]", "1"),
+        ("PowerMod[2, 3, 1]", "0"),
+        ("PowerMod[6, -1, 9]", "PowerMod[6, -1, 9]"),
+        ("PowerMod[2, 3, 0]", "PowerMod[2, 3, 0]"),
+        ("PowerMod[List[2, 3], 2, 5]", "List[4, 4]"),
+        ("ExtendedGCD[12, 18]", "List[-1, 1, 6]"),
+        ("ExtendedGCD[0, 5]", "List[0, 1, 5]"),
+        ("ExtendedGCD[-4, 6]", "List[1, 1, 2]"),
+        ("ChineseRemainder[List[2, 3], List[3, 5]]", "List[8, 15]"),
+        (
+            "ChineseRemainder[List[2, 3], List[3, 5], List[2, 7]]",
+            "List[23, 105]",
+        ),
+        ("ChineseRemainder[List[2, 4], List[4, 6]]", "List[10, 12]"),
+        ("ChineseRemainder[List[-1, 4]]", "List[3, 4]"),
+        (
+            "ChineseRemainder[List[1, 4], List[2, 6]]",
+            "ChineseRemainder[List[1, 4], List[2, 6]]",
+        ),
+    ]);
+}

@@ -98,6 +98,9 @@ IntegerFactor: ifactor
 IntegerFactorList: ifactors
 Divisors: idivis
 EulerPhi: euler
+PowerMod: powmod
+ExtendedGCD: iegcd igcdex
+ChineseRemainder: ichinrem
 # Equations (CAS-DOC-11, CAS-210, CAS-214).
 Solve: solve
 CSolve: csolve
