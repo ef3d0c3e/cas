@@ -55,10 +55,11 @@ fn primes() {
 fn factorisation() {
     check(&[
         (
+            // The canonical order of products, numbers first.
             "IntegerFactor[360]",
-            "Hold[Times[Power[2, 3], Power[3, 2], 5]]",
+            "Hold[Times[5, Power[2, 3], Power[3, 2]]]",
         ),
-        ("IntegerFactor[-12]", "Hold[Times[-1, Power[2, 2], 3]]"),
+        ("IntegerFactor[-12]", "Hold[Times[-1, 3, Power[2, 2]]]"),
         ("IntegerFactor[8]", "Hold[Power[2, 3]]"),
         ("IntegerFactor[-8]", "Hold[Times[-1, Power[2, 3]]]"),
         ("IntegerFactor[7]", "7"),
@@ -103,7 +104,8 @@ fn modular_arithmetic() {
         ("PowerMod[2, 3, 1]", "0"),
         ("PowerMod[6, -1, 9]", "PowerMod[6, -1, 9]"),
         ("PowerMod[2, 3, 0]", "PowerMod[2, 3, 0]"),
-        ("PowerMod[List[2, 3], 2, 5]", "List[4, 4]"),
+        // Listable, lists of one length (CAS-DOC-4 O8).
+        ("PowerMod[List[2, 3], List[2, 2], List[5, 5]]", "List[4, 4]"),
         ("ExtendedGCD[12, 18]", "List[-1, 1, 6]"),
         ("ExtendedGCD[0, 5]", "List[0, 1, 5]"),
         ("ExtendedGCD[-4, 6]", "List[1, 1, 2]"),

@@ -11,9 +11,10 @@
 //!   Pollard's rho, whose effort shrinks as `(128/bits)²` above 128 bits so
 //!   that a call stays within about a second; a composite it leaves
 //!   unsplit leaves the call, with a warning. `IntegerFactor[n]`
-//!   (`ifactor`) is the product that does not multiply out, `Hold[2^3 3^2
-//!   5]` for 360 (giac's `2^3*3^2*5` stays, a product of integers evaluates
-//!   here), the sign in front; a prime, 0 and ±1 are themselves.
+//!   (`ifactor`) is the product that does not multiply out, held in the
+//!   canonical order of products, numbers first: `hold(5*2^3*3^2)` for 360
+//!   (giac's `2^3*3^2*5` stays, a product of integers evaluates here), the
+//!   sign in front; a prime, 0 and ±1 are themselves.
 //!   `IntegerFactorList[n]` (`ifactors`): giac's flat list `[p₁, e₁, …]`,
 //!   `[-1, 1, …]` first for a negative `n`. `Divisors[n]` (`idivis`): the
 //!   positive divisors of `|n|`, ascending, at most 2^20 of them.
