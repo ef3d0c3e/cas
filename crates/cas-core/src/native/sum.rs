@@ -10,9 +10,11 @@
 //!   the loop to add or multiply (`sum(k,k,1,10)` is `55`).
 //! - Otherwise a sum by linearity: a term free of `k` times the number of
 //!   terms, a factor free of `k` out of a product, a sum term by term; a
-//!   polynomial in `k` by its antidifference ([`antidifference`]); the
-//!   terms without a closed form stay under one `Sum`, and when none has
-//!   one the call stays, as giac's `sum(k!,k,0,n)`. A product of a factor
+//!   polynomial in `k` by its antidifference ([`antidifference`]); a
+//!   hypergeometric term by Gosper's algorithm ([`gosper`], CAS-225), as
+//!   `k 2^k` and `1/(k (k + 1))`; the terms without a closed form stay
+//!   under one `Sum`, and when none has one the call stays, as giac's
+//!   `sum(k!,k,0,n)`. A product of a factor
 //!   free of `k` is its power; another stays (CAS-227).
 //!
 //! Each call that computes takes one step, `"sum"` or `"product"`.
@@ -215,7 +217,16 @@ fn term_sum(
             }));
         }
     }
-    antidifference(ev, e, term, k, a, b)
+    if let Some(sum) = antidifference(ev, e, term, k, a, b)? {
+        return Ok(Some(sum));
+    }
+    // A hypergeometric term, by Gosper's algorithm: T(b + 1) − T(a).
+    let Some(t) = gosper::antidifference(ev, e, term, k)? else {
+        return Ok(None);
+    };
+    let upper = t.substitute(&[(k.clone(), b.clone() + Expr::from(1))]);
+    let lower = t.substitute(&[(k.clone(), a.clone())]);
+    Ok(Some(ev.eval(&(upper - lower))?))
 }
 
 /// The sum from `a` to `b` of `p`, a polynomial in `k` whose other
@@ -342,5 +353,6 @@ fn stirling(n: usize) -> Vec<Vec<Integer>> {
     s
 }
 
+mod gosper;
 #[cfg(test)]
 mod tests;

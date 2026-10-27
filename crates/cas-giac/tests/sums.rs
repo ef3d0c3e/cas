@@ -87,3 +87,25 @@ fn polynomial_sums() {
         "sum(k!,k,0,n)",
     ]);
 }
+
+/// Binomials and hypergeometric terms by Gosper's algorithm (CAS-225).
+#[test]
+fn hypergeometric_sums() {
+    check(&[
+        "binomial(5,2)",
+        "comb(5,2)",
+        "binomial(n,2)",
+        "binomial(-3,2)",
+        "sum(2^k,k,0,n)",
+        "sum(x^k,k,0,n)",
+        "sum(k*2^k,k,0,n)",
+        "sum(k^2*2^k,k,0,n)",
+        "sum((k+1)*2^k,k,0,n-1)",
+        "sum(1/(k*(k+1)),k,1,n)",
+        "sum(k/(k+1)!,k,0,n)",
+        "sum(1/((2*k-1)*(2*k+1)),k,1,n)",
+        "sum(1/(k*(k+1)*(k+2)),k,1,n)",
+        "sum(1/(k^2-1),k,2,n)",
+        "sum(k*k!,k,0,n)",
+    ]);
+}

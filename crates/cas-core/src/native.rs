@@ -157,6 +157,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::EIGENVECTORS, matrix::eigenvectors),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
+        (Symbol::BINOMIAL, factorial::binomial),
         (Symbol::FACTOR_RATIONAL, polynomial::factor_rational),
         (Symbol::FACTOR_LIST, polynomial::factor_list),
         (Symbol::FACTOR_SQUARE_FREE, polynomial::factor_square_free),

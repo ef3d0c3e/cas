@@ -80,3 +80,57 @@ pub(super) fn factorial(ev: &mut Eval<'_>, e: &Expr) -> Native {
         &[Expr::from(coefficient), sqrt_pi],
     )))
 }
+
+/// The most factors `Binomial[n, k]` multiplies out for a symbolic `n`.
+const MAX_BINOMIAL_FACTORS: u64 = 1000;
+
+/// `Binomial[n, k]`, Xcas's `binomial` and `comb` (CAS-DOC-13 §1,
+/// CAS-225): for an integer `k`, `n (n − 1) ⋯ (n − k + 1) / k!`, 0 for a
+/// negative `k`:
+///
+/// - a rational `n`, exactly: `binomial(5,2)` is `10`, and the product
+///   vanishes for an integer `0 ≤ n < k`; an estimate past
+///   `Limits::number_bits` stays;
+/// - another `n`, the product built, up to 1000 factors, as giac's
+///   `binomial(n,2)` is `n!/(2*(n-2)!)`, here `n (n − 1)/2`.
+///
+/// Anything else stays.
+pub(super) fn binomial(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [n, k] = e.args() else {
+        return Ok(None);
+    };
+    let Some(k) = k.as_i64() else {
+        return Ok(None);
+    };
+    if k < 0 {
+        return Ok(Some(Expr::from(0)));
+    }
+    let k = k.unsigned_abs();
+    if let Some(n) = n.to_rational() {
+        // About k times the bits of n, and those of k! over it.
+        let bits = n.numer().bit_length().max(n.denom().bit_length()).max(1);
+        if k.saturating_mul(bits) > ev.context().limits().number_bits {
+            return Ok(None);
+        }
+        let mut value = Rational::ONE;
+        for i in 0..k {
+            let factor =
+                &(&n - &Rational::from(Integer::from(i))) / &Rational::from(Integer::from(i + 1));
+            value = &value * &factor;
+            if value.is_zero() {
+                break;
+            }
+        }
+        return Ok(Some(Expr::from(value)));
+    }
+    if k > MAX_BINOMIAL_FACTORS {
+        return Ok(None);
+    }
+    let factors: Vec<Expr> = (0..k)
+        .map(|i| n.clone() - Expr::from(i64::try_from(i).expect("a small count")))
+        .collect();
+    let denominator = Expr::from(Integer::from(Natural::factorial(k)));
+    Ok(Some(
+        Expr::apply(&Symbol::TIMES.into(), &factors) / denominator,
+    ))
+}
