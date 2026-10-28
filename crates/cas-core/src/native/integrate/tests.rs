@@ -667,6 +667,49 @@ fn derivative_agrees(ctx: &Context, f: &Expr, found: &Expr) -> bool {
     })
 }
 
+/// An exponential times a sine or cosine at resonance, `α² + γ² = 0`
+/// (CAS-DOC-25 §6, CAS-318), where the two-term formula divided by 0:
+/// definite integrals by value, antiderivatives by their derivatives.
+#[test]
+fn resonance() {
+    let ctx = Context::new();
+    check_values(
+        &ctx,
+        &[
+            (
+                "Integrate[Times[Exp[Times[I, x]], Cos[x]], x, 0, Times[2, Pi]]",
+                "Pi",
+            ),
+            (
+                "Integrate[Times[Exp[Times[I, x]], Sin[x]], x, 0, Times[2, Pi]]",
+                "Times[I, Pi]",
+            ),
+            (
+                "Integrate[Times[Power[E, Times[-1, I, x]], Cos[x]], x, 0, Pi]",
+                "Times[1/2, Pi]",
+            ),
+        ],
+    );
+    let mut wrong = Vec::new();
+    for f in [
+        "Times[Exp[Times[I, x]], Cos[x]]",
+        "Times[Exp[Times[Complex[0, -2], x]], Sin[Times[2, x]]]",
+        "Times[Exp[Plus[1, Times[I, x]]], Cos[Plus[x, 2]]]",
+    ] {
+        let f = read(f);
+        let found = ctx
+            .eval(&Expr::call(
+                Symbol::INTEGRATE,
+                [f.clone(), Expr::symbol("x")],
+            ))
+            .unwrap();
+        if found.contains(&Expr::from(Symbol::INTEGRATE)) || !derivative_agrees(&ctx, &f, &found) {
+            wrong.push(format!("{f:?}: {found:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 /// The heuristics of CAS-199, on giac's cases: what integrates whole, its
 /// derivative the integrand at three points; giac's forms where they are
 /// this CAS's.

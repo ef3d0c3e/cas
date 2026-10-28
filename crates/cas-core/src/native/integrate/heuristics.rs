@@ -5,7 +5,11 @@
 //! - an exponential times a sine or cosine of linear arguments, from the
 //!   two-term system: with `u′ = α` and `v′ = γ`,
 //!   `∫ e^u sin v = e^u (α sin v − γ cos v)/(α² + γ²)`, giac's
-//!   `exp(x)*(-1/2*cos(x)+1/2*sin(x))`;
+//!   `exp(x)*(-1/2*cos(x)+1/2*sin(x))`; at resonance, `α² + γ² = 0`, by
+//!   `e^u sin v = (e^(u+iv) − e^(u−iv))/(2i)` and `e^u cos v = (e^(u+iv) +
+//!   e^(u−iv))/2`, the exponential whose exponent is constant integrating
+//!   to `x` times its value (CAS-DOC-25 §6, CAS-318): `∫ e^(ix) cos x =
+//!   e^(2ix)/(4i) + x/2`;
 //! - a polynomial `P` times an exponential, sine or cosine of a linear
 //!   argument, by parts until `P` is gone, the tabular form:
 //!   `∫ P e^u = e^u Σ (−1)^k P^(k)/α^(k+1)`;
@@ -55,7 +59,7 @@ pub(super) fn integral(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr, depth: u
     } else {
         vec![f.clone()]
     };
-    if let Some(g) = exponential_trigonometric(&factors, x) {
+    if let Some(g) = exponential_trigonometric(ev, &factors, x)? {
         return Ok(Some(g));
     }
     if let Some(g) = tabular(ev, e, &factors, x)? {
@@ -113,25 +117,77 @@ fn power(e: &Expr, k: usize) -> Expr {
     e.pow(i64::try_from(k).expect("a degree in memory"))
 }
 
+/// The exponent `w` of an exponential `t = e^w`: `u` of `Exp[u]` and
+/// `E^u`, `u ln c` of `c^u`.
+fn exponent(t: &Expr) -> Option<Expr> {
+    match (t.head()?.as_symbol()?, t.args()) {
+        (Symbol::EXP, [u]) => Some(u.clone()),
+        (Symbol::POWER, [c, u]) if c.as_symbol() == Some(Symbol::E) => Some(u.clone()),
+        (Symbol::POWER, [c, u]) => Some(u.clone() * call(Symbol::LOG, c.clone())),
+        _ => None,
+    }
+}
+
 /// `∫ e^u sin v` and `∫ e^u cos v` (the module's first rule).
-fn exponential_trigonometric(factors: &[Expr], x: &Expr) -> Option<Expr> {
+fn exponential_trigonometric(ev: &mut Eval<'_>, factors: &[Expr], x: &Expr) -> Found {
     let [s, t] = factors else {
-        return None;
+        return Ok(None);
     };
     let (exp, trig) = if exponential(s, x).is_some() {
         (s, t)
     } else {
         (t, s)
     };
-    let alpha = exponential(exp, x)?;
-    let (sine, v, gamma) = trigonometric(trig, x)?;
+    let (Some(alpha), Some((sine, v, gamma))) = (exponential(exp, x), trigonometric(trig, x))
+    else {
+        return Ok(None);
+    };
+    let denominator = ev.eval(&(alpha.pow(2) + gamma.pow(2)))?;
+    if denominator == Expr::from(0) {
+        let Some(w) = exponent(exp) else {
+            return Ok(None);
+        };
+        return resonant(ev, &w, sine, &v, x).map(Some);
+    }
     let (sin, cos) = (call(Symbol::SIN, v.clone()), call(Symbol::COS, v));
     let numerator = if sine {
-        alpha.clone() * sin - gamma.clone() * cos
+        alpha * sin - gamma * cos
     } else {
-        alpha.clone() * cos + gamma.clone() * sin
+        alpha * cos + gamma * sin
     };
-    Some(exp.clone() * numerator / (alpha.pow(2) + gamma.pow(2)))
+    Ok(Some(exp.clone() * numerator / denominator))
+}
+
+/// `∫ e^w sin v` or `∫ e^w cos v` at resonance (the module's first rule):
+/// `(e^(w+iv) ∓ e^(w−iv))/(2i)` or `/2`, each exponential `e^z` by its
+/// slope `z′`, `x e^z` for `z′ = 0`.
+fn resonant(
+    ev: &mut Eval<'_>,
+    w: &Expr,
+    sine: bool,
+    v: &Expr,
+    x: &Expr,
+) -> Result<Expr, EvalError> {
+    let i = Expr::from(Symbol::I);
+    let mut terms = Vec::with_capacity(2);
+    for sign in [1, -1] {
+        let z = ev.eval(&(w.clone() + Expr::from(sign) * i.clone() * v.clone()))?;
+        let rate = ev.eval(&Expr::call(Symbol::D, [z.clone(), x.clone()]))?;
+        let e = call(Symbol::EXP, z);
+        let integral = if rate == Expr::from(0) {
+            x.clone() * e
+        } else {
+            e / rate
+        };
+        // cos v = (e^(iv) + e^(−iv))/2, sin v = (e^(iv) − e^(−iv))/(2i).
+        let weight = if sine {
+            Expr::from(sign) / (Expr::from(2) * i.clone())
+        } else {
+            Expr::from(1) / Expr::from(2)
+        };
+        terms.push(weight * integral);
+    }
+    Ok(terms.into_iter().sum())
 }
 
 /// `∫ P t` for a polynomial `P` in `x` over ℚ of degree 1 at least and an
