@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 242] = [
+const BUILTINS: [&str; 246] = [
     "Plus",
     "Times",
     "Power",
@@ -298,6 +298,11 @@ const BUILTINS: [&str; 242] = [
     "Zeta",
     "Erf",
     "Erfc",
+    // The exponential, sine, cosine and logarithmic integrals (CAS-354).
+    "ExpIntegralEi",
+    "SinIntegral",
+    "CosIntegral",
+    "LogIntegral",
     // The step and the delta (CAS-273).
     "HeavisideTheta",
     "DiracDelta",

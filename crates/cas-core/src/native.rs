@@ -17,6 +17,7 @@ mod ball;
 mod dsolve;
 mod elementary;
 mod erf;
+mod expint;
 mod factorial;
 mod fourier;
 mod groebner;
@@ -108,6 +109,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::ZETA, zeta::zeta),
         (Symbol::ERF, erf::erf),
         (Symbol::ERFC, erf::erf),
+        (Symbol::EXP_INTEGRAL_EI, expint::integral),
+        (Symbol::SIN_INTEGRAL, expint::integral),
+        (Symbol::COS_INTEGRAL, expint::integral),
+        (Symbol::LOG_INTEGRAL, expint::log_integral),
         (Symbol::HEAVISIDE_THETA, step::heaviside),
         (Symbol::DIRAC_DELTA, step::dirac),
         (Symbol::DIRECTED_INFINITY, arith::directed_infinity),

@@ -150,7 +150,9 @@ pub(super) fn parts(ctx: &Context, z: &Expr) -> Option<(Expr, Expr)> {
             | Symbol::TANH
             | Symbol::ARC_SINH
             | Symbol::ERF
-            | Symbol::ERFC,
+            | Symbol::ERFC
+            | Symbol::EXP_INTEGRAL_EI
+            | Symbol::SIN_INTEGRAL,
             [u],
         ) if element(ctx, u, Set::Reals) == Truth::True => Some((z.clone(), zero())),
         _ => None,

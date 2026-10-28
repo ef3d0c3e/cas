@@ -60,6 +60,12 @@ Beta: Beta
 Zeta: Zeta
 Erf: erf
 Erfc: erfc
+# The exponential, sine, cosine and logarithmic integrals (CAS-DOC-31,
+# CAS-354).
+ExpIntegralEi: Ei
+SinIntegral: Si
+CosIntegral: Ci
+LogIntegral: Li
 # The inverse of erf (CAS-DOC-23, CAS-302), which Xcas lacks.
 InverseErf: erfinv
 HeavisideTheta: Heaviside

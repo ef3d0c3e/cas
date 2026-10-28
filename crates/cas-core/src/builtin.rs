@@ -89,6 +89,13 @@ builtins! {
     ZETA = "Zeta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     ERF = "Erf" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     ERFC = "Erfc" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    // The exponential, sine, cosine and logarithmic integrals (CAS-DOC-31
+    // §3.1), Xcas's `Ei`, `Si`, `Ci` and `Li`; `LogIntegral` is rewritten
+    // as `ExpIntegralEi` of the logarithm on evaluation.
+    EXP_INTEGRAL_EI = "ExpIntegralEi" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    SIN_INTEGRAL = "SinIntegral" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    COS_INTEGRAL = "CosIntegral" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    LOG_INTEGRAL = "LogIntegral" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     // The step and the delta (CAS-DOC-18 §2).
     HEAVISIDE_THETA = "HeavisideTheta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     DIRAC_DELTA = "DiracDelta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];

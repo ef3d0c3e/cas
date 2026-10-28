@@ -14,7 +14,8 @@
 //! - powers: `f^n` with `n` free of `x`, `E^g`, and `f^g` in general;
 //! - the chain rule for `Sin`, `Cos`, `Tan`, `ArcSin`, `ArcCos`, `ArcTan`,
 //!   the hyperbolic `Sinh` … `ArcTanh` (CAS-DOC-15 §2), `Erf` and `Erfc`
-//!   (§8), `HeavisideTheta` (CAS-DOC-18 §2), `Exp` and `Log`, from a table,
+//!   (§8), `ExpIntegralEi`, `SinIntegral` and `CosIntegral` (CAS-DOC-31
+//!   §3.1), `HeavisideTheta` (CAS-DOC-18 §2), `Exp` and `Log`, from a table,
 //!   and `Abs`, whose derivative is
 //!   `Abs[f] / f` times `f′`, giac's `abs(x)/x`, so that the logarithms of
 //!   absolute values integrals give differentiate back (CAS-DOC-9);
@@ -156,6 +157,22 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "D/Erfc",
             "Erfc[Pattern[f, Blank[]]]",
             "Times[-2, Power[Pi, -1/2], Power[E, Times[-1, Power[f, 2]]], D[f, x]]",
+        ),
+        // The exponential, sine and cosine integrals (CAS-DOC-31 §3.1).
+        d(
+            "D/ExpIntegralEi",
+            "ExpIntegralEi[Pattern[f, Blank[]]]",
+            "Times[Power[E, f], Power[f, -1], D[f, x]]",
+        ),
+        d(
+            "D/SinIntegral",
+            "SinIntegral[Pattern[f, Blank[]]]",
+            "Times[Sin[f], Power[f, -1], D[f, x]]",
+        ),
+        d(
+            "D/CosIntegral",
+            "CosIntegral[Pattern[f, Blank[]]]",
+            "Times[Cos[f], Power[f, -1], D[f, x]]",
         ),
         // The step's derivative is the delta (CAS-DOC-18 §2).
         d(
