@@ -57,15 +57,16 @@ fn forms() {
             ],
         );
     }
-    // Everywhere: past ±1 too.
+    // Off the cuts: past −1 the evaluator's `ArcSin[-u] = -ArcSin[u]`
+    // takes the other side of the cut than the balls do (CAS-406).
     for f in ["ArcCosToArcSin", "ArcSinToArcCos"] {
         check_values(
             f,
             &[
                 "ArcSin[x]",
                 "ArcCos[Times[-1, x]]",
-                "Plus[ArcSin[y], Times[2, ArcCos[y]]]",
-                "ArcCos[Times[-1, y]]",
+                "Plus[ArcSin[Times[1/3, y]], Times[2, ArcCos[Times[1/3, y]]]]",
+                "ArcCos[Times[-1/3, y]]",
             ],
         );
     }

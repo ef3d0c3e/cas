@@ -38,11 +38,16 @@ fn forms() {
             "TrigCollect[Plus[1, Sin[x], Cos[x]]]",
             "Plus[1, Times[Power[2, 1/2], Cos[Plus[x, Times[-1/4, Pi]]]]]",
         ),
-        // What stays: a coefficient not known real, or with the angle's
-        // symbol; angles apart; one function alone.
+        // A symbol is real in the Real domain, the default.
         (
             "TrigCollect[Plus[Times[a, Sin[x]], Cos[x]]]",
-            "Plus[Times[a, Sin[x]], Cos[x]]",
+            "Times[Power[Plus[1, Power[a, 2]], 1/2], Cos[Plus[x, Times[-1, ArcTan[a]]]]]",
+        ),
+        // What stays: a coefficient with the angle's symbol; angles apart;
+        // one function alone.
+        (
+            "TrigCollect[Plus[Times[x, Sin[x]], Cos[x]]]",
+            "Plus[Times[x, Sin[x]], Cos[x]]",
         ),
         (
             "TrigCollect[Plus[Sin[Plus[1, x]], Cos[x]]]",

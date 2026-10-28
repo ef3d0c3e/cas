@@ -10,8 +10,9 @@
 //! - `Exp[a + i b] = e^a cos b + i e^a sin b`, and `E^` the same;
 //! - `Log[z] = ln|z| + i Arg z`;
 //! - `z^n` for an integer `|n| ≤` [`MAX_POWER`] by products, through the
-//!   conjugate for a negative one; other powers `z^(c + i d)` by their
-//!   modulus `|z|^c e^(−d Arg z)` and angle `c Arg z + d ln|z|`;
+//!   conjugate for a negative one; an odd root of a real, real in the Real
+//!   domain (O7); other powers `z^(c + i d)` by their modulus `|z|^c e^(−d
+//!   Arg z)` and angle `c Arg z + d ln|z|`;
 //! - `Sin`, `Cos`, `Sinh` and `Cosh` by the addition formulas, `Tan[a + i
 //!   b] = (sin 2a + i sinh 2b)/(cos 2a + cosh 2b)` and `Tanh[a + i b] =
 //!   (sinh 2a + i sin 2b)/(cosh 2a + cos 2b)`;
@@ -39,7 +40,7 @@
 use cas_num::{Integer, Rational};
 
 use super::{factors, head, terms};
-use crate::assume::{Set, Truth, element};
+use crate::assume::{Domain, Set, Truth, element};
 use crate::context::{Context, EvalError};
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
@@ -171,6 +172,24 @@ fn general_power((a, b): &Parts, (c, d): &Parts) -> Parts {
     )
 }
 
+/// The parts of `z = b^n`, built.
+fn power(ctx: &Context, z: &Expr, b: &Expr, n: &Expr) -> Parts {
+    if let Some(k) = n.as_i64().filter(|n| n.abs() <= MAX_POWER) {
+        return integer_power(&parts(ctx, b), k);
+    }
+    let base = parts(ctx, b);
+    // An odd root of a real is real in the Real domain (O7).
+    let odd_root = ctx.domain() == Domain::Real
+        && is_zero(&base.1)
+        && n.to_rational()
+            .is_some_and(|q| q.denom().unsigned_abs().bit(0));
+    if odd_root {
+        (z.clone(), zero())
+    } else {
+        general_power(&base, &parts(ctx, n))
+    }
+}
+
 /// `f(a + i b)` for the circular and hyperbolic functions, built.
 fn trigonometric(f: Symbol, (a, b): &Parts) -> Option<Parts> {
     let g = |h: Symbol, u: &Expr| call(h, u.clone());
@@ -223,6 +242,20 @@ fn parts(ctx: &Context, z: &Expr) -> Parts {
     if z.as_symbol() == Some(Symbol::I) {
         return (zero(), Expr::from(1));
     }
+    // The parts themselves before the test of reality, as `Abs[x + i y]` is
+    // real but expands.
+    if let (Some(f @ (Symbol::ABS | Symbol::RE | Symbol::IM | Symbol::CONJUGATE)), [w]) =
+        (head(z), z.args())
+    {
+        let (a, b) = parts(ctx, w);
+        return match f {
+            Symbol::ABS if is_zero(&b) => (call(Symbol::ABS, a), zero()),
+            Symbol::ABS => ((a.pow(2) + b.pow(2)).pow(half()), zero()),
+            Symbol::RE => (a, zero()),
+            Symbol::IM => (b, zero()),
+            _ => (a, -b),
+        };
+    }
     if element(ctx, z, Set::Reals) == Truth::True {
         return (z.clone(), zero());
     }
@@ -239,26 +272,9 @@ fn parts(ctx: &Context, z: &Expr) -> Parts {
             times(&acc, &parts(ctx, f))
         }),
         (Symbol::POWER, [b, n]) if b.as_symbol() == Some(Symbol::E) => exp(&parts(ctx, n)),
-        (Symbol::POWER, [b, n]) => match n.as_i64().filter(|n| n.abs() <= MAX_POWER) {
-            Some(k) => integer_power(&parts(ctx, b), k),
-            None => general_power(&parts(ctx, b), &parts(ctx, n)),
-        },
+        (Symbol::POWER, [b, n]) => power(ctx, z, b, n),
         (Symbol::EXP, [u]) => exp(&parts(ctx, u)),
         (Symbol::LOG, [w]) => log(&parts(ctx, w)),
-        (Symbol::ABS, [w]) => {
-            let (a, b) = parts(ctx, w);
-            if is_zero(&b) {
-                (call(Symbol::ABS, a), zero())
-            } else {
-                ((a.pow(2) + b.pow(2)).pow(half()), zero())
-            }
-        }
-        (Symbol::RE, [w]) => (parts(ctx, w).0, zero()),
-        (Symbol::IM, [w]) => (parts(ctx, w).1, zero()),
-        (Symbol::CONJUGATE, [w]) => {
-            let (a, b) = parts(ctx, w);
-            (a, -b)
-        }
         (Symbol::ARG, [_]) => (z.clone(), zero()),
         (g, [u]) => trigonometric(g, &parts(ctx, u)).unwrap_or_else(opaque),
         _ => opaque(),

@@ -315,10 +315,22 @@ fn combined(ts: &[Expr]) -> Option<Expr> {
             .iter()
             .map(|(r, b, _)| b.pow(Expr::from(r * &scale)))
             .collect();
-        let coefficient = Expr::from(sign / Rational::from(d));
-        out.push(coefficient * c * log(product(argument)));
+        let coefficient = sign / Rational::from(d);
+        let mut factors = Vec::new();
+        if coefficient != Rational::ONE {
+            factors.push(Expr::from(coefficient));
+        }
+        if c != Expr::from(1) {
+            factors.push(c);
+        }
+        factors.push(log(product(argument)));
+        out.push(product(factors));
     }
-    changed.then(|| Expr::call(Symbol::PLUS, out))
+    // A term alone is itself, for the sum it is in to meet it.
+    changed.then(|| match out.len() {
+        1 => out.pop().expect("one term"),
+        _ => Expr::call(Symbol::PLUS, out),
+    })
 }
 
 /// `LogCombine`'s rule: at sums, and at a product that is one log term.

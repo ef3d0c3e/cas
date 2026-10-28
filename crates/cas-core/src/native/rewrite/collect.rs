@@ -1,5 +1,6 @@
 //! `TrigCollect` (CAS-DOC-36 §5, CAS-399), giac's `tcollect`: the argument
-//! linearized by `TrigReduce` (CAS-DOC-14 §7), then in each sum `a sin u +
+//! linearized by `TrigReduce` (CAS-DOC-14 §7) and expanded, as `TrigReduce`
+//! leaves `−(1/2 − cos(2x)/2)` undistributed, then in each sum `a sin u +
 //! b cos u` as `R cos(u − φ)`, with `R = √(a² + b²)` and `φ = Arg(b + i
 //! a)`, where `a` and `b` are real by the domain or the assumptions and
 //! free of `u`'s symbols. `Arg` gives the exact angle where it has one:
@@ -96,7 +97,8 @@ fn collected(ctx: &Context, sum: &Expr) -> Option<Expr> {
 /// `x` linearized, with its sums' pairs of a sine and a cosine of one angle
 /// collected, built.
 pub(super) fn collect(ev: &mut Eval<'_>, x: &Expr) -> Result<Expr, EvalError> {
-    let linear = reduce(ev, x)?;
+    let reduced = reduce(ev, x)?;
+    let linear = ev.eval(&Expr::call(Symbol::EXPAND, [reduced]))?;
     let ctx = ev.context();
     Ok(linear.map_bottom_up(|part| match head(part) {
         Some(Symbol::PLUS) => collected(ctx, part).unwrap_or_else(|| part.clone()),
