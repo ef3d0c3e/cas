@@ -273,7 +273,7 @@ fn ascending(ev: &Eval<'_>, a: &Expr, b: &Expr) -> Option<bool> {
 
 /// `Some(true)` for `+∞`, `Some(false)` for `−∞`, `None` for a finite
 /// bound.
-fn end(e: &Expr) -> Option<bool> {
+pub(super) fn end(e: &Expr) -> Option<bool> {
     if !infinite(e) || e.contains(&Expr::from(Symbol::COMPLEX_INFINITY)) {
         return None;
     }
@@ -410,7 +410,7 @@ fn warn(ev: &mut Eval<'_>, message: &'static str, e: &Expr) {
 }
 
 /// Whether `e` has an infinity in it, as `-Infinity`.
-fn infinite(e: &Expr) -> bool {
+pub(super) fn infinite(e: &Expr) -> bool {
     [
         Symbol::INFINITY,
         Symbol::DIRECTED_INFINITY,

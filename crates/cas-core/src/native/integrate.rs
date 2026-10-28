@@ -35,8 +35,12 @@
 //! `F(b) − F(a)` where the integrand is shown continuous between the bounds,
 //! and so the antiderivative `F` (CAS-198, `definite`); an improper one, by
 //! the limits of `F` at the bounds and at rational poles inside (CAS-207),
-//! or it stays, with a warning. Each call that rewrites takes one step,
-//! `"Integrate"`, whose identity `D[F, x] = f` `Trace::verify` checks.
+//! or it stays, with a warning. Where the integrand has `Abs[u]`, `Sign[u]`
+//! or `HeavisideTheta[u]`, the interval splits at the zeros of `u` between
+//! the bounds, and on each piece `Abs[u]` is `±u`, `Sign[u]` is `±1` and
+//! `HeavisideTheta[u]` is 1 or 0 (CAS-316, `piecewise`). Each call that
+//! rewrites takes one step, `"Integrate"`, whose identity `D[F, x] = f`
+//! `Trace::verify` checks.
 
 #![allow(
     clippy::many_single_char_names,
@@ -99,6 +103,15 @@ pub(super) fn integrate(ev: &mut Eval<'_>, e: &Expr) -> Native {
         _ => None,
     } {
         sifted
+    } else if let Some(split) = match bounds {
+        // `Abs`, `Sign` and `HeavisideTheta` split the interval
+        // (CAS-DOC-25 §5).
+        Some(bounds) if !piecewise::switches(f, x).is_empty() => {
+            piecewise::integral(ev, e, f, x, bounds)?
+        }
+        _ => None,
+    } {
+        split
     } else {
         let Some(antiderivative) = integral(ev, e, f, x)? else {
             return Ok(None);
@@ -668,5 +681,6 @@ fn rational_function(
 
 mod definite;
 mod heuristics;
+mod piecewise;
 #[cfg(test)]
 mod tests;

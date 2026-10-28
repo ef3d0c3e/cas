@@ -490,6 +490,79 @@ fn definite_integrals() {
     );
 }
 
+/// Piecewise integrands (CAS-DOC-25 §5, CAS-316): split at the zeros of
+/// the arguments of `Abs`, `Sign` and `HeavisideTheta` between the bounds,
+/// linear or polynomial, rational or in radicals; infinite bounds; symbolic
+/// zeros and bounds ordered by the assumptions.
+#[test]
+fn piecewise_integrals() {
+    let ctx = Context::new();
+    check_values(
+        &ctx,
+        &[
+            ("Integrate[Abs[x], x, -1, 2]", "5/2"),
+            ("Integrate[Abs[x], x, 2, -1]", "-5/2"),
+            ("Integrate[Abs[x], x, 1, 2]", "3/2"),
+            ("Integrate[Sign[x], x, -1, 2]", "1"),
+            ("Integrate[HeavisideTheta[x], x, -1, 2]", "2"),
+            ("Integrate[HeavisideTheta[Plus[x, -1]], x, 0, 3]", "2"),
+            ("Integrate[Times[x, Abs[x]], x, -1, 1]", "0"),
+            ("Integrate[Abs[Plus[1, Times[-2, x]]], x, 0, 1]", "1/2"),
+            ("Integrate[Abs[Plus[-1, Power[x, 2]]], x, -2, 2]", "4"),
+            (
+                "Integrate[Abs[Plus[-2, Power[x, 2]]], x, 0, 2]",
+                "Plus[-4/3, Times[8/3, Power[2, 1/2]]]",
+            ),
+            (
+                "Integrate[Times[Sign[x], Cos[x]], x, Times[-1, Pi], Pi]",
+                "0",
+            ),
+            (
+                "Integrate[Times[Abs[x], Cos[x]], x, Times[-1, Pi], Pi]",
+                "-4",
+            ),
+            (
+                "Integrate[Exp[Times[-1, Abs[x]]], x, Times[-1, Infinity], Infinity]",
+                "2",
+            ),
+            (
+                "Integrate[Times[HeavisideTheta[x], Exp[Times[-1, x]]], x, Times[-1, Infinity], Infinity]",
+                "1",
+            ),
+        ],
+    );
+    let between = ctx.assuming(read("And[Greater[c, 0], Less[c, 1]]"));
+    check_values(
+        &between,
+        &[(
+            "Integrate[Abs[Plus[x, Times[-1, c]]], x, 0, 1]",
+            "Plus[Times[1/2, Power[c, 2]], Times[1/2, Power[Plus[1, Times[-1, c]], 2]]]",
+        )],
+    );
+    let period = ctx.assuming(read("Greater[T, 0]"));
+    check_values(
+        &period,
+        &[
+            ("Integrate[Sign[x], x, Times[-1/2, T], Times[1/2, T]]", "0"),
+            (
+                "Integrate[Abs[x], x, Times[-1/2, T], Times[1/2, T]]",
+                "Times[1/4, Power[T, 2]]",
+            ),
+        ],
+    );
+    // An unknown order (c and 0), a cubic factor with a real root, and a
+    // complex zero leave the integral.
+    for input in [
+        "Integrate[Abs[Plus[x, Times[-1, c]]], x, 0, 1]",
+        "Integrate[Abs[Plus[-2, Power[x, 3]]], x, 0, 2]",
+        "Integrate[Abs[Plus[x, I]], x, 0, 1]",
+    ] {
+        let e = read(input);
+        let found = ctx.eval(&e).unwrap();
+        assert_eq!(found.head(), e.head(), "{input}: {found:?}");
+    }
+}
+
 /// What stays of improper integrals and those not shown proper, each with
 /// its warning: parts diverging to both signs, where giac answers the
 /// principal value; poles inside that are not split; bounds that may lie
