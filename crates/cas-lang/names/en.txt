@@ -92,6 +92,8 @@ Limit: limit
 OrderSize: order_size
 # Differential equations (CAS-DOC-16, CAS-259).
 DSolve: desolve
+# Laplace transforms (CAS-DOC-18, CAS-274, CAS-275).
+LaplaceTransform: laplace
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime
@@ -173,8 +175,7 @@ FactorList: factors
 FactorSquareFree: sqrfree
 
 [planned]
-# Laplace transforms, which CAS-DOC-16 leaves to a later area.
-LaplaceTransform: laplace
+# Laplace transforms' inverse (CAS-275).
 InverseLaplaceTransform: ilaplace
 
 [constants]

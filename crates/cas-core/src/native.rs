@@ -21,6 +21,7 @@ mod factorial;
 mod index;
 mod integer;
 mod integrate;
+mod laplace;
 mod limit;
 mod linear;
 mod logic;
@@ -173,6 +174,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::SERIES, series::series),
         (Symbol::LIMIT, limit::limit),
         (Symbol::DSOLVE, dsolve::dsolve),
+        (Symbol::LAPLACE_TRANSFORM, laplace::laplace_transform),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),

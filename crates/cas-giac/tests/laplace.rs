@@ -100,3 +100,33 @@ fn heaviside_and_dirac() {
         "integrate(Dirac(x),x,-1,1)",
     ]);
 }
+
+/// The transform (CAS-274). giac's `laplace(t^(1/2),t,s)` is 0 and its
+/// transforms of derivatives stay as integrals: the unit tests'.
+#[test]
+fn transforms() {
+    check(&[
+        "laplace(1,t,s)",
+        "laplace(t^3,t,s)",
+        "laplace(exp(-2*t),t,s)",
+        "laplace(sin(3*t),t,s)",
+        "laplace(cos(3*t),t,s)",
+        "laplace(t*exp(t),t,s)",
+        "laplace(exp(t)*sin(t),t,s)",
+        "laplace(sinh(2*t),t,s)",
+        "laplace(cosh(t),t,s)",
+        "laplace(t*sin(t),t,s)",
+        "laplace(a*t+b,t,s)",
+        "laplace(sin(t)^2,t,s)",
+        "laplace(t^n,t,s)",
+        "laplace(exp(a*t),t,s)",
+        "laplace(Heaviside(t-1),t,s)",
+        "laplace(Dirac(t-2),t,s)",
+        "laplace(t*Heaviside(t-1),t,s)",
+        "laplace(sin(t-1)*Heaviside(t-1),t,s)",
+        "laplace(exp(-t)*t^2,t,s)",
+        "laplace(t*cos(2*t),t,s)",
+        "laplace(1)",
+        "laplace(exp(-x))",
+    ]);
+}

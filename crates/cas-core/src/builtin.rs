@@ -106,6 +106,8 @@ builtins! {
     ORDER_SIZE = "OrderSize" [PROTECTED];
     // Differential equations (CAS-DOC-16).
     DSOLVE = "DSolve" [PROTECTED];
+    // Laplace transforms (CAS-DOC-18).
+    LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];
