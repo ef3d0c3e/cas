@@ -3,15 +3,16 @@
 //! properties (every generator reduces to 0 by it, and so does every
 //! S-polynomial of two of its elements; each element is monic, and no term
 //! of one is divisible by another's leading monomial), and the basis of the
-//! basis is itself, the reduced basis being unique. A budget of division
-//! steps bounds each input.
+//! basis is itself, the reduced basis being unique. Limits on the work and
+//! on the coefficients bound each input (CAS-291).
 #![no_main]
-
-use std::cell::Cell;
 
 use arbitrary::Unstructured;
 use cas_num::{Integer, Rational};
-use cas_poly::{Cancel, Distributed, MonomialOrder, groebner_basis, groebner_reduce, s_polynomial};
+use cas_poly::{
+    Distributed, GroebnerLimits, MonomialOrder, Never, groebner_basis, groebner_reduce,
+    s_polynomial,
+};
 use libfuzzer_sys::fuzz_target;
 
 /// At most this many generators, of this many terms, each exponent at most
@@ -19,25 +20,12 @@ use libfuzzer_sys::fuzz_target;
 const MAX_GENERATORS: usize = 4;
 const MAX_TERMS: usize = 4;
 
-/// The division steps a computation may take.
-const BUDGET: u64 = 200_000;
-
-/// Counts the polls, and cancels past [`BUDGET`].
-struct Budget(Cell<u64>);
-
-impl Budget {
-    fn new() -> Self {
-        Budget(Cell::new(0))
-    }
-}
-
-impl Cancel for Budget {
-    fn cancelled(&self) -> bool {
-        let n = self.0.get() + 1;
-        self.0.set(n);
-        n > BUDGET
-    }
-}
+/// What a computation may do: a step budget let one input run for minutes,
+/// a division step merging thousands of terms with growing coefficients.
+const LIMITS: GroebnerLimits = GroebnerLimits {
+    work: 1 << 20,
+    coefficient_bits: 1 << 12,
+};
 
 fn poly(
     u: &mut Unstructured<'_>,
@@ -68,13 +56,18 @@ fn run(u: &mut Unstructured<'_>) -> arbitrary::Result<()> {
     let generators = (0..count)
         .map(|_| poly(u, n, order))
         .collect::<arbitrary::Result<Vec<_>>>()?;
-    // Past the budget or the bounds: nothing to check.
-    let Ok(basis) = groebner_basis(&generators, order, &Budget::new()) else {
+    // Past the limits or the bounds: nothing to check.
+    let Ok(basis) = groebner_basis(&generators, order, LIMITS, &Never) else {
         return Ok(());
     };
-    let budget = Budget::new();
+    // The divisions share the work of one computation.
+    let checks = generators.len() + basis.len() * basis.len() / 2;
+    let share = GroebnerLimits {
+        work: LIMITS.work / u64::try_from(checks.max(1)).unwrap_or(u64::MAX),
+        ..LIMITS
+    };
     let reduces_to_zero =
-        |p: &Distributed| groebner_reduce(p, &basis, order, &budget).map(|r| r.is_zero());
+        |p: &Distributed| groebner_reduce(p, &basis, order, share, &Never).map(|r| r.is_zero());
     for g in &generators {
         match reduces_to_zero(g) {
             Ok(zero) => assert!(zero, "{g:?} by {basis:?}"),
@@ -101,7 +94,7 @@ fn run(u: &mut Unstructured<'_>) -> arbitrary::Result<()> {
             }
         }
     }
-    if let Ok(again) = groebner_basis(&basis, order, &Budget::new()) {
+    if let Ok(again) = groebner_basis(&basis, order, LIMITS, &Never) {
         assert_eq!(again, basis, "the basis of {basis:?}");
     }
     Ok(())

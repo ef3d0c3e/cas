@@ -4,7 +4,8 @@
 use cas_num::{Integer, Rational};
 
 use super::{
-    Distributed, GroebnerError, MonomialOrder, groebner_basis, groebner_reduce, s_polynomial,
+    Distributed, GroebnerError, GroebnerLimits, MonomialOrder, groebner_basis, groebner_reduce,
+    s_polynomial,
 };
 use crate::cancel::Never;
 
@@ -26,10 +27,12 @@ fn poly(terms: &[(&[u64], i64)], order: MonomialOrder) -> Distributed {
 /// so does each S-polynomial of two of its elements, each element is monic
 /// and no term of one is divisible by another's leading monomial.
 fn basis(polys: &[Distributed], order: MonomialOrder) -> Vec<Distributed> {
-    let g = groebner_basis(polys, order, &Never).unwrap();
+    let g = groebner_basis(polys, order, GroebnerLimits::NONE, &Never).unwrap();
     for p in polys {
         assert!(
-            groebner_reduce(p, &g, order, &Never).unwrap().is_zero(),
+            groebner_reduce(p, &g, order, GroebnerLimits::NONE, &Never)
+                .unwrap()
+                .is_zero(),
             "{p:?} by {g:?}"
         );
     }
@@ -39,7 +42,9 @@ fn basis(polys: &[Distributed], order: MonomialOrder) -> Vec<Distributed> {
             if i < j {
                 let s = s_polynomial(a, b, order);
                 assert!(
-                    groebner_reduce(&s, &g, order, &Never).unwrap().is_zero(),
+                    groebner_reduce(&s, &g, order, GroebnerLimits::NONE, &Never)
+                        .unwrap()
+                        .is_zero(),
                     "S({a:?}, {b:?})"
                 );
             }
@@ -60,6 +65,15 @@ fn basis(polys: &[Distributed], order: MonomialOrder) -> Vec<Distributed> {
 /// The basis, each element primitive over ℤ, as `poly` writes them.
 fn primitive(g: &[Distributed]) -> Vec<Distributed> {
     g.iter().map(Distributed::primitive).collect()
+}
+
+/// Cyclic-3: x + y + z, xy + yz + zx, xyz − 1 under `Lex`.
+fn cyclic() -> [Distributed; 3] {
+    [
+        poly(&[(&[1, 0, 0], 1), (&[0, 1, 0], 1), (&[0, 0, 1], 1)], Lex),
+        poly(&[(&[1, 1, 0], 1), (&[0, 1, 1], 1), (&[1, 0, 1], 1)], Lex),
+        poly(&[(&[1, 1, 1], 1), (&[0, 0, 0], -1)], Lex),
+    ]
 }
 
 #[test]
@@ -88,9 +102,16 @@ fn division() {
     let f = poly(&[(&[2, 1], 1), (&[1, 2], 1), (&[0, 2], 1)], Lex);
     let f1 = poly(&[(&[1, 1], 1), (&[0, 0], -1)], Lex);
     let f2 = poly(&[(&[0, 2], 1), (&[0, 0], -1)], Lex);
-    let r = groebner_reduce(&f, &[f1.clone(), f2.clone()], Lex, &Never).unwrap();
+    let r = groebner_reduce(
+        &f,
+        &[f1.clone(), f2.clone()],
+        Lex,
+        GroebnerLimits::NONE,
+        &Never,
+    )
+    .unwrap();
     assert_eq!(r, poly(&[(&[1, 0], 1), (&[0, 1], 1), (&[0, 0], 1)], Lex));
-    let r = groebner_reduce(&f, &[f2, f1], Lex, &Never).unwrap();
+    let r = groebner_reduce(&f, &[f2, f1], Lex, GroebnerLimits::NONE, &Never).unwrap();
     assert_eq!(r, poly(&[(&[1, 0], 2), (&[0, 0], 1)], Lex));
     // Exact remainders: x³ + y² by [2y² − 1, x − y] is y/2 + 1/2, giac's.
     let order = DegRevLex;
@@ -100,7 +121,7 @@ fn division() {
         poly(&[(&[1, 0], 1), (&[0, 1], -1)], order),
     ];
     assert_eq!(
-        groebner_reduce(&p, &divisors, order, &Never).unwrap(),
+        groebner_reduce(&p, &divisors, order, GroebnerLimits::NONE, &Never).unwrap(),
         Distributed::new(vec![(vec![0, 1], q(1, 2)), (vec![0, 0], q(1, 2))], order)
     );
 }
@@ -161,13 +182,8 @@ fn bases() {
         ]
     );
     // Cyclic-3: z³ − 1, y² + yz + z², x + y + z, giac's.
-    let cyclic = [
-        poly(&[(&[1, 0, 0], 1), (&[0, 1, 0], 1), (&[0, 0, 1], 1)], Lex),
-        poly(&[(&[1, 1, 0], 1), (&[0, 1, 1], 1), (&[1, 0, 1], 1)], Lex),
-        poly(&[(&[1, 1, 1], 1), (&[0, 0, 0], -1)], Lex),
-    ];
     assert_eq!(
-        primitive(&basis(&cyclic, Lex)),
+        primitive(&basis(&cyclic(), Lex)),
         [
             poly(&[(&[0, 0, 3], 1), (&[0, 0, 0], -1)], Lex),
             poly(&[(&[0, 2, 0], 1), (&[0, 1, 1], 1), (&[0, 0, 2], 1)], Lex),
@@ -199,7 +215,10 @@ fn edges() {
     assert_eq!(basis(&polys, Lex), std::slice::from_ref(&one));
     assert_eq!(basis(std::slice::from_ref(&one), Lex), [one]);
     assert_eq!(basis(&[Distributed::new(Vec::new(), Lex)], Lex), []);
-    assert_eq!(groebner_basis(&[], Lex, &Never).unwrap(), []);
+    assert_eq!(
+        groebner_basis(&[], Lex, GroebnerLimits::NONE, &Never).unwrap(),
+        []
+    );
     // x − 1/2 and y: giac's [2*x-1, y].
     let polys = [
         Distributed::new(
@@ -218,7 +237,50 @@ fn edges() {
     // An exponent past the bound.
     let huge = poly(&[(&[super::MAX_EXPONENT + 1], 1)], Lex);
     assert_eq!(
-        groebner_basis(&[huge], Lex, &Never),
+        groebner_basis(&[huge], Lex, GroebnerLimits::NONE, &Never),
         Err(GroebnerError::TooLarge)
+    );
+}
+
+/// Past the limits a caller sets, the work or the bits of a coefficient,
+/// a computation stops (CAS-291): the fuzz target's step budget let one
+/// input run for minutes.
+#[test]
+fn limits() {
+    let little = GroebnerLimits {
+        work: 8,
+        coefficient_bits: u64::MAX,
+    };
+    assert_eq!(
+        groebner_basis(&cyclic(), Lex, little, &Never),
+        Err(GroebnerError::TooLarge)
+    );
+    // x²y + xy² + y² by xy − 1: the first step makes two coefficients.
+    let f = poly(&[(&[2, 1], 1), (&[1, 2], 1), (&[0, 2], 1)], Lex);
+    let divisor = poly(&[(&[1, 1], 1), (&[0, 0], -1)], Lex);
+    let once = GroebnerLimits { work: 1, ..little };
+    assert_eq!(
+        groebner_reduce(&f, &[divisor], Lex, once, &Never),
+        Err(GroebnerError::TooLarge)
+    );
+    // 3x − 1, 5y − x: y − 1/15 has a denominator of 4 bits.
+    let polys = [
+        poly(&[(&[1, 0], 3), (&[0, 0], -1)], Lex),
+        poly(&[(&[0, 1], 5), (&[1, 0], -1)], Lex),
+    ];
+    let bits = |coefficient_bits| GroebnerLimits {
+        work: u64::MAX,
+        coefficient_bits,
+    };
+    assert_eq!(
+        groebner_basis(&polys, Lex, bits(3), &Never),
+        Err(GroebnerError::TooLarge)
+    );
+    assert_eq!(
+        primitive(&groebner_basis(&polys, Lex, bits(4), &Never).unwrap()),
+        [
+            poly(&[(&[0, 1], 15), (&[0, 0], -1)], Lex),
+            poly(&[(&[1, 0], 3), (&[0, 0], -1)], Lex),
+        ]
     );
 }

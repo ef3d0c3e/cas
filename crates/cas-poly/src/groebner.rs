@@ -2,7 +2,8 @@
 //! ℚ\[x₁, …, xₙ\] under the lexicographic, graded lexicographic and graded
 //! reverse lexicographic orders, by Buchberger's algorithm with the
 //! criteria in Gebauer and Möller's installation \[GM88\], and the
-//! remainders of division by lists of polynomials.
+//! remainders of division by lists of polynomials, within the limits a
+//! caller sets on their work (CAS-291).
 //! `doc/algorithms/groebner.md` describes the algorithms.
 
 #![allow(
@@ -13,11 +14,12 @@
 #[cfg(test)]
 mod tests;
 
+use std::cell::Cell;
 use std::cmp::Ordering;
 
 use cas_num::{Integer, Rational};
 
-use crate::cancel::{Cancel, Cancelled};
+use crate::cancel::{Cancel, Never};
 
 /// A monomial order, `x₁ > x₂ > … > xₙ`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -80,13 +82,16 @@ fn disjoint(a: &[u64], b: &[u64]) -> bool {
     a.iter().zip(b).all(|(x, y)| *x == 0 || *y == 0)
 }
 
+/// A term: an exponent vector and a non-zero coefficient.
+type Term = (Vec<u64>, Rational);
+
 /// A polynomial of ℚ\[x₁, …, xₙ\] in distributed form: its terms in
 /// decreasing order of their monomials under one [`MonomialOrder`], each an
 /// exponent vector and a non-zero rational coefficient. The operations take
 /// the order, which must be the one the terms were sorted by.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
 pub struct Distributed {
-    terms: Vec<(Vec<u64>, Rational)>,
+    terms: Vec<Term>,
 }
 
 impl Distributed {
@@ -95,7 +100,7 @@ impl Distributed {
     #[must_use]
     pub fn new(mut terms: Vec<(Vec<u64>, Rational)>, order: MonomialOrder) -> Distributed {
         terms.sort_by(|(a, _), (b, _)| order.cmp(b, a));
-        let mut out: Vec<(Vec<u64>, Rational)> = Vec::with_capacity(terms.len());
+        let mut out: Vec<Term> = Vec::with_capacity(terms.len());
         for (m, c) in terms {
             match out.last_mut() {
                 Some((last, sum)) if *last == m => *sum = &*sum + &c,
@@ -141,21 +146,22 @@ impl Distributed {
             .unwrap_or(0)
     }
 
-    /// `self` over its leading coefficient.
-    fn monic(self) -> Distributed {
+    /// `self` over its leading coefficient, each coefficient made counted.
+    fn monic(self, work: &Work<'_>) -> Result<Distributed, GroebnerError> {
         let Some((_, c)) = self.lead() else {
-            return self;
+            return Ok(self);
         };
         if c.is_one() {
-            return self;
+            return Ok(self);
         }
         let inverse = c.recip();
-        let terms = self
-            .terms
-            .into_iter()
-            .map(|(m, d)| (m, &d * &inverse))
-            .collect();
-        Distributed { terms }
+        let mut terms = Vec::with_capacity(self.terms.len());
+        for (m, d) in self.terms {
+            let scaled = &d * &inverse;
+            work.made(&scaled)?;
+            terms.push((m, scaled));
+        }
+        Ok(Distributed { terms })
     }
 
     /// `self` times the rational that makes its coefficients coprime
@@ -184,62 +190,139 @@ impl Distributed {
             .collect();
         Distributed { terms }
     }
-
-    /// `self` times the monomial `m`, which keeps the order.
-    fn shifted(&self, m: &[u64]) -> Distributed {
-        let terms = self
-            .terms
-            .iter()
-            .map(|(t, c)| (product(t, m), c.clone()))
-            .collect();
-        Distributed { terms }
-    }
-
-    /// `self − c x^m g`, merging.
-    fn sub_mul(
-        &self,
-        c: &Rational,
-        m: &[u64],
-        g: &Distributed,
-        order: MonomialOrder,
-    ) -> Distributed {
-        let other: Vec<(Vec<u64>, Rational)> = g
-            .terms
-            .iter()
-            .map(|(t, d)| (product(t, m), -(c * d)))
-            .collect();
-        let mut out = Vec::with_capacity(self.terms.len() + other.len());
-        let (mut i, mut j) = (0, 0);
-        while i < self.terms.len() && j < other.len() {
-            let ((a, x), (b, y)) = (&self.terms[i], &other[j]);
-            match order.cmp(a, b) {
-                Ordering::Greater => {
-                    out.push((a.clone(), x.clone()));
-                    i += 1;
-                }
-                Ordering::Less => {
-                    out.push((b.clone(), y.clone()));
-                    j += 1;
-                }
-                Ordering::Equal => {
-                    let sum = x + y;
-                    if !sum.is_zero() {
-                        out.push((a.clone(), sum));
-                    }
-                    i += 1;
-                    j += 1;
-                }
-            }
-        }
-        out.extend_from_slice(&self.terms[i..]);
-        out.extend_from_slice(&other[j..]);
-        Distributed { terms: out }
-    }
 }
 
 /// The leading monomial of a polynomial known not to be 0.
 fn leading(p: &Distributed) -> &[u64] {
     p.terms.first().map_or(&[], |(m, _)| m.as_slice())
+}
+
+/// The limits a caller sets on a computation (CAS-291): past either, it
+/// stops with [`GroebnerError::TooLarge`]. A count of division steps
+/// bounded no time: a step merges the whole remainder, thousands of terms
+/// in a lexicographic basis, and the coefficients grow without bound.
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub struct GroebnerLimits {
+    /// The work: each coefficient a computation makes or copies, in its
+    /// divisions and S-polynomials, counts 1 and 1 more for each 64 bits of
+    /// its numerator and denominator; each critical pair it forms or goes
+    /// through, and each term it moves to a remainder, counts 1.
+    pub work: u64,
+    /// The bits of a coefficient's numerator or denominator.
+    pub coefficient_bits: u64,
+}
+
+impl GroebnerLimits {
+    /// No limits: only the fixed bounds ([`MAX_ELEMENTS`],
+    /// [`MAX_REDUCTIONS`], [`MAX_EXPONENT`]) and the [`Cancel`] stop a
+    /// computation.
+    pub const NONE: GroebnerLimits = GroebnerLimits {
+        work: u64::MAX,
+        coefficient_bits: u64::MAX,
+    };
+}
+
+/// What a computation has left of its [`GroebnerLimits`], and the
+/// [`Cancel`] it polls at each division step.
+struct Work<'a> {
+    cancel: &'a dyn Cancel,
+    left: Cell<u64>,
+    coefficient_bits: u64,
+}
+
+impl<'a> Work<'a> {
+    fn new(limits: GroebnerLimits, cancel: &'a dyn Cancel) -> Work<'a> {
+        Work {
+            cancel,
+            left: Cell::new(limits.work),
+            coefficient_bits: limits.coefficient_bits,
+        }
+    }
+
+    /// One more division step.
+    fn step(&self) -> Result<(), GroebnerError> {
+        if self.cancel.cancelled() {
+            return Err(GroebnerError::Cancelled);
+        }
+        Ok(())
+    }
+
+    /// `units` more of the work.
+    fn spend(&self, units: usize) -> Result<(), GroebnerError> {
+        let units = u64::try_from(units).unwrap_or(u64::MAX);
+        let left = self.left.get();
+        if units > left {
+            return Err(GroebnerError::TooLarge);
+        }
+        self.left.set(left - units);
+        Ok(())
+    }
+
+    /// A coefficient made or copied, within the bound on its bits.
+    fn made(&self, c: &Rational) -> Result<(), GroebnerError> {
+        let (n, d) = (c.numer().bit_length(), c.denom().bit_length());
+        if n.max(d) > self.coefficient_bits {
+            return Err(GroebnerError::TooLarge);
+        }
+        self.spend(usize::try_from(1 + (n + d) / 64).unwrap_or(usize::MAX))
+    }
+}
+
+/// `terms − c x^m g`, merged, `terms` sorted under `order`.
+fn sub_mul(
+    terms: &[Term],
+    c: &Rational,
+    m: &[u64],
+    g: &Distributed,
+    order: MonomialOrder,
+    work: &Work<'_>,
+) -> Result<Vec<Term>, GroebnerError> {
+    let mut other = Vec::with_capacity(g.terms.len());
+    for (t, d) in &g.terms {
+        let cd = -(c * d);
+        work.made(&cd)?;
+        other.push((product(t, m), cd));
+    }
+    let mut out = Vec::with_capacity(terms.len() + other.len());
+    let mut theirs = other.into_iter().peekable();
+    for (a, x) in terms {
+        // The greater terms of the multiple first, then a like one added.
+        while let Some(term) = theirs.next_if(|(b, _)| order.cmp(a, b).is_lt()) {
+            out.push(term);
+        }
+        if let Some((_, y)) = theirs.next_if(|(b, _)| b == a) {
+            let sum = x + &y;
+            work.made(&sum)?;
+            if !sum.is_zero() {
+                out.push((a.clone(), sum));
+            }
+        } else {
+            work.made(x)?;
+            out.push((a.clone(), x.clone()));
+        }
+    }
+    out.extend(theirs);
+    Ok(out)
+}
+
+/// [`s_polynomial`], each coefficient made counted.
+fn s_poly(
+    f: &Distributed,
+    g: &Distributed,
+    order: MonomialOrder,
+    work: &Work<'_>,
+) -> Result<Distributed, GroebnerError> {
+    let ((fm, fc), (gm, gc)) = (f.lead().expect("non-zero"), g.lead().expect("non-zero"));
+    let l = lcm(fm, gm);
+    let shift = quotient(&l, fm);
+    let mut scaled = Vec::with_capacity(f.terms.len());
+    for (m, c) in &f.terms {
+        let c = c / fc;
+        work.made(&c)?;
+        scaled.push((product(m, &shift), c));
+    }
+    let terms = sub_mul(&scaled, &gc.recip(), &quotient(&l, gm), g, order, work)?;
+    Ok(Distributed { terms })
 }
 
 /// The S-polynomial of `f` and `g`, both non-zero: each times the monomial
@@ -251,17 +334,7 @@ fn leading(p: &Distributed) -> &[u64] {
 /// If `f` or `g` is 0.
 #[must_use]
 pub fn s_polynomial(f: &Distributed, g: &Distributed, order: MonomialOrder) -> Distributed {
-    let ((fm, fc), (gm, gc)) = (f.lead().expect("non-zero"), g.lead().expect("non-zero"));
-    let l = lcm(fm, gm);
-    let lifted = f.shifted(&quotient(&l, fm));
-    let scaled = Distributed {
-        terms: lifted
-            .terms
-            .into_iter()
-            .map(|(m, c)| (m, &c / fc))
-            .collect(),
-    };
-    scaled.sub_mul(&gc.recip(), &quotient(&l, gm), g, order)
+    s_poly(f, g, order, &Work::new(GroebnerLimits::NONE, &Never)).expect("no limits")
 }
 
 /// The remainder of `p` divided by `divisors` under `order` (CAS-DOC-21
@@ -271,15 +344,17 @@ pub fn s_polynomial(f: &Distributed, g: &Distributed, order: MonomialOrder) -> D
 ///
 /// # Errors
 ///
-/// [`Cancelled`] when `cancel` says so.
+/// [`GroebnerError::Cancelled`] when `cancel` says so, and
+/// [`GroebnerError::TooLarge`] past the `limits`.
 pub fn groebner_reduce(
     p: &Distributed,
     divisors: &[Distributed],
     order: MonomialOrder,
+    limits: GroebnerLimits,
     cancel: &dyn Cancel,
-) -> Result<Distributed, Cancelled> {
+) -> Result<Distributed, GroebnerError> {
     let divisors: Vec<&Distributed> = divisors.iter().filter(|g| !g.is_zero()).collect();
-    remainder(p, &divisors, order, cancel)
+    remainder(p, &divisors, order, &Work::new(limits, cancel))
 }
 
 /// [`groebner_reduce`] by non-zero divisors.
@@ -287,44 +362,44 @@ fn remainder(
     p: &Distributed,
     divisors: &[&Distributed],
     order: MonomialOrder,
-    cancel: &dyn Cancel,
-) -> Result<Distributed, Cancelled> {
-    let mut rest = p.clone();
+    work: &Work<'_>,
+) -> Result<Distributed, GroebnerError> {
+    // What is left is `rest[done..]`: the terms before it went out, moved
+    // rather than removed from the front one by one.
+    let mut rest = p.terms.clone();
+    let mut done = 0;
     let mut out = Vec::new();
-    while let Some((m, c)) = rest.lead() {
-        if cancel.cancelled() {
-            return Err(Cancelled);
-        }
+    while let Some((m, c)) = rest.get(done) {
+        work.step()?;
         let divisor = divisors
             .iter()
             .find(|g| g.leading_monomial().is_some_and(|gm| divides(gm, m)));
-        match divisor {
-            Some(g) => {
-                let (gm, gc) = g.lead().expect("non-zero");
-                let (q, shift) = (c / gc, quotient(m, gm));
-                rest = rest.sub_mul(&q, &shift, g, order);
-            }
-            None => out.push(rest.terms.remove(0)),
+        if let Some(g) = divisor {
+            let (gm, gc) = g.lead().expect("non-zero");
+            let (q, shift) = (c / gc, quotient(m, gm));
+            rest = sub_mul(&rest[done..], &q, &shift, g, order, work)?;
+            done = 0;
+        } else {
+            work.spend(1)?;
+            out.push(std::mem::replace(
+                &mut rest[done],
+                (Vec::new(), Rational::ZERO),
+            ));
+            done += 1;
         }
     }
     Ok(Distributed { terms: out })
 }
 
-/// Why [`groebner_basis`] stopped.
+/// Why [`groebner_basis`] or [`groebner_reduce`] stopped.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum GroebnerError {
     /// The [`Cancel`] said so.
     Cancelled,
     /// Past the bounds of a computation: [`MAX_ELEMENTS`] polynomials,
-    /// [`MAX_REDUCTIONS`] S-polynomials, or an exponent past
-    /// [`MAX_EXPONENT`].
+    /// [`MAX_REDUCTIONS`] S-polynomials, an exponent past [`MAX_EXPONENT`],
+    /// or past its [`GroebnerLimits`].
     TooLarge,
-}
-
-impl From<Cancelled> for GroebnerError {
-    fn from(_: Cancelled) -> Self {
-        GroebnerError::Cancelled
-    }
 }
 
 /// The most polynomials a basis computation adds to its basis.
@@ -366,11 +441,12 @@ impl Buchberger {
     /// Adds `h`, reduced by the basis and not 0 nor a constant, made monic,
     /// with its pairs: Gebauer and Möller's update \[GM88\], as Becker and
     /// Weispfenning give it \[BW93, UPDATE\].
-    fn add(&mut self, h: Distributed) -> Result<(), GroebnerError> {
+    fn add(&mut self, h: Distributed, work: &Work<'_>) -> Result<(), GroebnerError> {
         if self.all.len() >= MAX_ELEMENTS || h.max_exponent() > MAX_EXPONENT {
             return Err(GroebnerError::TooLarge);
         }
-        self.all.push(h.monic());
+        work.spend(self.basis.len() + self.pairs.len())?;
+        self.all.push(h.monic(work)?);
         let h = self.all.len() - 1;
         let lh = self.lead(h).to_vec();
         // The new pairs, those whose lcm another's divides dropped, one of
@@ -429,12 +505,14 @@ impl Buchberger {
 /// # Errors
 ///
 /// [`GroebnerError::Cancelled`] when `cancel` says so, and
-/// [`GroebnerError::TooLarge`] past the bounds.
+/// [`GroebnerError::TooLarge`] past the bounds or the `limits`.
 pub fn groebner_basis(
     polys: &[Distributed],
     order: MonomialOrder,
+    limits: GroebnerLimits,
     cancel: &dyn Cancel,
 ) -> Result<Vec<Distributed>, GroebnerError> {
+    let work = Work::new(limits, cancel);
     let mut inputs: Vec<&Distributed> = polys.iter().filter(|p| !p.is_zero()).collect();
     if inputs.iter().any(|p| p.max_exponent() > MAX_EXPONENT) {
         return Err(GroebnerError::TooLarge);
@@ -452,34 +530,33 @@ pub fn groebner_basis(
         pairs: Vec::new(),
     };
     for p in inputs {
-        let h = remainder(p, &state.divisors(), order, cancel)?;
+        let h = remainder(p, &state.divisors(), order, &work)?;
         if h.is_constant() {
             return Ok(vec![one]);
         }
         if !h.is_zero() {
-            state.add(h)?;
+            state.add(h, &work)?;
         }
     }
     let mut reductions = 0;
     while !state.pairs.is_empty() {
-        if cancel.cancelled() {
-            return Err(GroebnerError::Cancelled);
-        }
+        work.step()?;
         reductions += 1;
         if reductions > MAX_REDUCTIONS {
             return Err(GroebnerError::TooLarge);
         }
+        work.spend(state.pairs.len())?;
         let k = (0..state.pairs.len())
             .min_by(|&a, &b| order.cmp(&state.pairs[a].lcm, &state.pairs[b].lcm))
             .unwrap_or(0);
         let pair = state.pairs.swap_remove(k);
-        let s = s_polynomial(&state.all[pair.i], &state.all[pair.j], state.order);
-        let h = remainder(&s, &state.divisors(), order, cancel)?;
+        let s = s_poly(&state.all[pair.i], &state.all[pair.j], state.order, &work)?;
+        let h = remainder(&s, &state.divisors(), order, &work)?;
         if h.is_constant() {
             return Ok(vec![one]);
         }
         if !h.is_zero() {
-            state.add(h)?;
+            state.add(h, &work)?;
         }
     }
     // The minimal basis, each element reduced by the others: its leading
@@ -494,9 +571,9 @@ pub fn groebner_basis(
                 .filter(|&(j, _)| j != i)
                 .map(|(_, g)| g)
                 .collect();
-            remainder(&basis[i], &others, order, cancel)?
+            remainder(&basis[i], &others, order, &work)?
         };
-        basis[i] = reduced.monic();
+        basis[i] = reduced.monic(&work)?;
     }
     Ok(basis)
 }

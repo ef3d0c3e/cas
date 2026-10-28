@@ -20,7 +20,7 @@ use cas_num::ball::Float;
 use cas_poly::{Distributed, GroebnerError, MonomialOrder, groebner_basis};
 
 use super::super::approximation;
-use super::super::groebner::{Budget, distributed, expression};
+use super::super::groebner::{distributed, expression, limits};
 use super::transcendental::holds;
 use super::{BITS, roots, sides};
 use crate::context::{Context, EvalError};
@@ -52,13 +52,16 @@ pub(super) fn system(
         residuals.push(f);
         polys.push(p);
     }
-    let budget = Budget::of(ev.context());
-    let basis = match groebner_basis(&polys, MonomialOrder::Lex, &budget) {
+    let ctx = ev.context();
+    let basis = match groebner_basis(
+        &polys,
+        MonomialOrder::Lex,
+        limits(ctx),
+        ctx.interrupt_flag(),
+    ) {
         Ok(basis) => basis,
-        Err(GroebnerError::Cancelled) if budget.interrupted() => {
-            return Err(EvalError::Interrupted);
-        }
-        Err(_) => return Ok(None),
+        Err(GroebnerError::Cancelled) => return Err(EvalError::Interrupted),
+        Err(GroebnerError::TooLarge) => return Ok(None),
     };
     let leads: Vec<&[u64]> = basis
         .iter()

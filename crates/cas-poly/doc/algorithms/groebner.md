@@ -82,6 +82,23 @@ an exponent past `MAX_EXPONENT` (products of monomials saturate rather than
 overflow, so such an exponent is noticed), with `GroebnerError`: an input
 whose basis runs away fails rather than exhausting the memory.
 
+The caller's `GroebnerLimits` bound its time (CAS-291):
+
+- **Work.** Each coefficient made or copied counts 1, plus 1 for each 64 bits
+  of its numerator and denominator. Each critical pair formed or gone
+  through counts 1, and so does each term moved to a remainder.
+- **Coefficient size.** A coefficient whose numerator or denominator has
+  more than `coefficient_bits` bits stops the computation.
+
+So time follows the work, whatever the sizes. A count of division steps did
+not bound it. One step merges the whole remainder with a multiple of a
+divisor, which can be thousands of terms in a lexicographic basis, and the
+rational coefficients grow without bound: the fuzz target ran for minutes on
+one input under a budget of 200 000 steps.
+
+The remainder keeps what is left as the tail of its term vector. The terms
+that no leading monomial divides move out without the vector shifting.
+
 ## Tests
 
 `src/groebner/tests.rs`: the orders on [CLO15, §2.2]'s examples; division
@@ -90,9 +107,10 @@ by both orders of the divisors and an exact rational remainder, giac's
 x²y − 2y² + x` [CLO15, §2.7] under `DegRevLex` and `Lex`, of the twisted
 cubic, of cyclic-3, of `x²y − 1, xy² − x`, giac's answers once primitive;
 the whole ring, the zero ideal, a rational coefficient, an exponent past the
-bound. Each basis is checked for the defining properties: every input
+bound; computations past each of the limits, a basis and a division past
+little work, and a basis whose coefficient needs one bit more than allowed. Each basis is checked for the defining properties: every input
 reduces to 0 by it, so does every S-polynomial of two of its elements, each
 element is monic and no term of one is divisible by another's leading
 monomial. The fuzz target `poly_groebner` checks the same properties on
-small random ideals in one to three variables under each order, within a
-budget of division steps.
+small random ideals in one to three variables under each order, within
+limits on the work and the coefficients.

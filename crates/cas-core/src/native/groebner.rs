@@ -16,15 +16,13 @@
 //!   the zero ideal.
 //! - `GroebnerReduce` is the exact remainder of the division by the list,
 //!   in its order: `y/2 + 1/2` for `x³ + y²` by `{2y² − 1, x − y}`, giac's.
-//! - Past the bounds of a computation, or past a budget of division steps
-//!   from the limit on terms ([`Budget`]), the call stays, with a warning.
-
-use std::cell::Cell;
-use std::sync::atomic::{AtomicBool, Ordering};
+//! - Past the bounds of a computation, or past its limits ([`limits`]): work
+//!   from the limit on terms and coefficients of the limit on numbers, the
+//!   call stays, with a warning.
 
 use cas_num::Rational;
 use cas_poly::{
-    Cancel, Cancelled, Distributed, GroebnerError, MAX_EXPONENT, MonomialOrder,
+    Distributed, GroebnerError, GroebnerLimits, MAX_EXPONENT, MonomialOrder,
     groebner_basis as basis_of, groebner_reduce as reduce_by,
 };
 
@@ -36,42 +34,21 @@ use crate::trace::Warning;
 
 type Native = Result<Option<Expr>, EvalError>;
 
-/// The division steps a computation may take for each term a polynomial
-/// builtin may make ([`Limits::terms`](crate::Limits)).
-const STEPS_PER_TERM: u64 = 64;
+/// The work a computation may do for each term a polynomial builtin's
+/// product may make ([`Limits::terms`](crate::Limits)).
+const WORK_PER_TERM: u64 = 64;
 
-/// What a computation polls: the session's interrupt, and a budget of
-/// division steps, [`STEPS_PER_TERM`] for each term the limits allow, so
-/// that it is bounded as the other polynomial builtins are (CAS-DOC-8 §15).
-/// Also `Solve`'s, for polynomial systems (CAS-289).
-pub(super) struct Budget<'a> {
-    interrupt: &'a AtomicBool,
-    left: Cell<u64>,
-}
-
-impl<'a> Budget<'a> {
-    pub(super) fn of(ctx: &'a Context) -> Budget<'a> {
-        let terms = u64::try_from(ctx.limits().terms).unwrap_or(u64::MAX);
-        Budget {
-            interrupt: ctx.interrupt_flag(),
-            left: Cell::new(terms.saturating_mul(STEPS_PER_TERM)),
-        }
-    }
-
-    /// Whether the computation stopped for the interrupt, not the budget.
-    pub(super) fn interrupted(&self) -> bool {
-        self.interrupt.load(Ordering::Relaxed)
-    }
-}
-
-impl Cancel for Budget<'_> {
-    fn cancelled(&self) -> bool {
-        let left = self.left.get();
-        if left == 0 || self.interrupted() {
-            return true;
-        }
-        self.left.set(left - 1);
-        false
+/// The limits of a computation (CAS-291): [`WORK_PER_TERM`] for each term
+/// the limits allow, so that it is bounded as the other polynomial builtins
+/// are (CAS-DOC-8 §15), and coefficients within `Limits::number_bits`, as
+/// those of their powers are (CAS-156). The session's interrupt is the
+/// computation's `Cancel`. Also `Solve`'s, for polynomial systems
+/// (CAS-289).
+pub(super) fn limits(ctx: &Context) -> GroebnerLimits {
+    let terms = u64::try_from(ctx.limits().terms).unwrap_or(u64::MAX);
+    GroebnerLimits {
+        work: terms.saturating_mul(WORK_PER_TERM),
+        coefficient_bits: ctx.limits().number_bits,
     }
 }
 
@@ -210,13 +187,11 @@ pub(super) fn groebner_basis(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some(polys) = list(ev, polys, &vars, order)? else {
         return Ok(None);
     };
-    let budget = Budget::of(ev.context());
-    let basis = match basis_of(&polys, order, &budget) {
+    let ctx = ev.context();
+    let basis = match basis_of(&polys, order, limits(ctx), ctx.interrupt_flag()) {
         Ok(basis) => basis,
-        Err(GroebnerError::Cancelled) if budget.interrupted() => {
-            return Err(EvalError::Interrupted);
-        }
-        Err(_) => return too_large(ev, e),
+        Err(GroebnerError::Cancelled) => return Err(EvalError::Interrupted),
+        Err(GroebnerError::TooLarge) => return too_large(ev, e),
     };
     let elements: Vec<Expr> = basis
         .iter()
@@ -244,11 +219,11 @@ pub(super) fn groebner_reduce(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some(divisors) = list(ev, polys, &vars, order)? else {
         return Ok(None);
     };
-    let budget = Budget::of(ev.context());
-    let remainder = match reduce_by(&p, &divisors, order, &budget) {
+    let ctx = ev.context();
+    let remainder = match reduce_by(&p, &divisors, order, limits(ctx), ctx.interrupt_flag()) {
         Ok(remainder) => remainder,
-        Err(Cancelled) if budget.interrupted() => return Err(EvalError::Interrupted),
-        Err(Cancelled) => return too_large(ev, e),
+        Err(GroebnerError::Cancelled) => return Err(EvalError::Interrupted),
+        Err(GroebnerError::TooLarge) => return too_large(ev, e),
     };
     let result = ev.eval(&expression(&remainder, &vars))?;
     ev.step("GroebnerReduce", e, &result);
