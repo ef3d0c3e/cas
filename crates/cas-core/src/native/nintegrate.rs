@@ -19,9 +19,13 @@
 //!      `n` of [`POINTS`] within the share, over the `ρ`s, sums
 //!      `h Σ w_k f(m + h x_k)`, the bound added to its radius;
 //!   2. the crude enclosure `2h f([m − h, m + h])` in the real mode, when
-//!      its radius is within the share: a jump or a kink, isolated in a
-//!      short segment;
-//!   3. otherwise the halves, within [`MAX_SEGMENTS`] segments and
+//!      its radius is within `ε √(2h/(b − a))`: a jump or a kink, isolated
+//!      in a short segment. A jump's segment encloses `2h [−1, 1]` times
+//!      the jump, which a share in proportion to `2h` would never accept;
+//!      the shares of `√(2h)` along the halves towards a point add up to a
+//!      few `ε`;
+//!   3. otherwise the halves, split exactly, so that segments go below the
+//!      working precision, within [`MAX_SEGMENTS`] segments and
 //!      [`MAX_EVALUATIONS`] evaluations; past them the call stays, with a
 //!      warning.
 //! - The result is the sum of the segments' balls, real where each is.
@@ -203,12 +207,18 @@ fn integral(
             total = total.add(&v, wp);
             continue;
         }
-        if let Some(v) = crude(tree, &lo, &hi, &share, wp) {
+        // A jump's segment encloses `width · [−1, 1]`: within a share of
+        // `√width`, it is accepted once short enough.
+        let crude_share = tolerance.mul(&width.div(&length).sqrt());
+        if let Some(v) = crude(tree, &lo, &hi, &crude_share, wp) {
             total = total.add(&v, wp);
             continue;
         }
-        let middle = Ball::exact(lo.add(&hi, wp).mid().clone()).mul_2exp(&-Integer::from(1));
-        let middle = Ball::exact(middle.mid().clone());
+        // Exactly, so that segments go below the working precision.
+        let Some(sum) = lo.mid().checked_add(hi.mid()) else {
+            return Ok(None);
+        };
+        let middle = Ball::exact(sum.mul_2exp(&-Integer::from(1)));
         work.push((middle.clone(), hi));
         work.push((lo, middle));
     }
