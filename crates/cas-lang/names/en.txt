@@ -110,6 +110,15 @@ FourierSinCoefficient: fourier_bn
 FourierCoefficient: fourier_cn
 # Certified numerical integration (CAS-DOC-26, CAS-324).
 NIntegrate: nInt romberg gaussquad
+# Interpolation and orthogonal polynomials (CAS-DOC-27, CAS-328 to CAS-331).
+InterpolatingPolynomial: lagrange interp
+Spline: spline
+ThieleInterpolation: thiele
+LegendreP: legendre
+HermiteH: hermite
+LaguerreL: laguerre
+ChebyshevT: tchebyshev1
+ChebyshevU: tchebyshev2
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime

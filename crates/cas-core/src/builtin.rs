@@ -122,6 +122,15 @@ builtins! {
     FOURIER_COEFFICIENT = "FourierCoefficient" [PROTECTED];
     // Certified numerical integration (CAS-DOC-26).
     NINTEGRATE = "NIntegrate" [PROTECTED];
+    // Interpolation and orthogonal polynomials (CAS-DOC-27).
+    INTERPOLATING_POLYNOMIAL = "InterpolatingPolynomial" [PROTECTED];
+    SPLINE = "Spline" [PROTECTED];
+    THIELE_INTERPOLATION = "ThieleInterpolation" [PROTECTED];
+    LEGENDRE_P = "LegendreP" [LISTABLE, PROTECTED];
+    HERMITE_H = "HermiteH" [LISTABLE, PROTECTED];
+    LAGUERRE_L = "LaguerreL" [LISTABLE, PROTECTED];
+    CHEBYSHEV_T = "ChebyshevT" [LISTABLE, PROTECTED];
+    CHEBYSHEV_U = "ChebyshevU" [LISTABLE, PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];

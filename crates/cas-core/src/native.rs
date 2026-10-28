@@ -23,6 +23,7 @@ mod groebner;
 mod index;
 mod integer;
 mod integrate;
+mod interpolation;
 mod laplace;
 mod limit;
 mod linear;
@@ -32,6 +33,7 @@ mod nintegrate;
 mod number;
 mod number_theory;
 mod numeric;
+mod orthogonal;
 mod parts;
 mod polynomial;
 mod procedure;
@@ -204,6 +206,20 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         ),
         (Symbol::FOURIER_COEFFICIENT, fourier::fourier_coefficient),
         (Symbol::NINTEGRATE, nintegrate::nintegrate),
+        (
+            Symbol::INTERPOLATING_POLYNOMIAL,
+            interpolation::interpolating_polynomial,
+        ),
+        (Symbol::SPLINE, interpolation::spline),
+        (
+            Symbol::THIELE_INTERPOLATION,
+            interpolation::thiele_interpolation,
+        ),
+        (Symbol::LEGENDRE_P, orthogonal::legendre_p),
+        (Symbol::HERMITE_H, orthogonal::hermite_h),
+        (Symbol::LAGUERRE_L, orthogonal::laguerre_l),
+        (Symbol::CHEBYSHEV_T, orthogonal::chebyshev_t),
+        (Symbol::CHEBYSHEV_U, orthogonal::chebyshev_u),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),
