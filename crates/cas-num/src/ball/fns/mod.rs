@@ -20,6 +20,7 @@
 )]
 
 mod atan;
+mod bessel;
 mod bitburst;
 mod erf;
 mod exp;
