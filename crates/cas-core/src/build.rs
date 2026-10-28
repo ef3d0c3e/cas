@@ -2,7 +2,8 @@
 //!
 //! Everything here is context-free (CAS-DOC-3, D1 and D3). Builtin heads get
 //! the cheap structural normalisation their fixed attributes call for: `Flat`
-//! heads are flattened and `Orderless` heads sorted into the canonical order.
+//! heads are flattened and `Orderless` heads sorted into the canonical order,
+//! the evaluator's, which keeps the lists of a `Times` in their order.
 //! Nothing is evaluated: `x + x` stays `Plus[x, x]` and `1 + 2` stays
 //! `Plus[1, 2]`.
 //!
@@ -86,10 +87,13 @@ fn normalized(head: &Expr, mut args: Vec<Expr>) -> Expr {
     if attributes.contains(Attributes::FLAT) && args.iter().any(|a| a.head() == Some(head)) {
         args = flatten(head, &args);
     }
-    if attributes.contains(Attributes::ORDERLESS) {
-        // Stable sort: operands that are already sorted (the usual case for
-        // `a + b`) are runs, merged in linear time.
-        args.sort();
+    // The evaluator's canonical order: in `Times`, lists after the other
+    // factors in their own order, as `*` does not commute on them (R13); a
+    // plain sort made `Q R` into `R Q` (CAS-344).
+    if attributes.contains(Attributes::ORDERLESS)
+        && let Some(sorted) = crate::eval::sort_arguments(head, &args)
+    {
+        args = sorted;
     }
     Expr::apply(head, &args)
 }
