@@ -27,7 +27,10 @@
 //!   together, as giac's `(-11*x+6)/(x-6)`. Where `φ_{k−1}` is constant on
 //!   the points left, the fraction ends at `a_{k−1}`: `1/x` through four of
 //!   its points, as giac answers, and a constant. Where it is so on some
-//!   of them only, the call stays.
+//!   of them only, the call stays. So does a fraction that misses a point
+//!   once put together, an unattainable point: through `(−1, 0)`,
+//!   `(−1/2, −9)` and `(2, −9)` it is `(t + 1)(−9)/(t + 1)`, which giac
+//!   answers as `-9` (found by the fuzz target).
 //!
 //! Lists of unequal lengths, a repeated abscissa (a division by 0), and
 //! for `Spline` abscissas not shown increasing, leave the call. Each call
@@ -233,6 +236,7 @@ pub(super) fn thiele_interpolation(ev: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(None);
     };
     let n = xs.len();
+    let ys_given = ys.clone();
     let mut phi = ys;
     let mut a = vec![phi[0].clone()];
     for k in 1..n {
@@ -260,6 +264,15 @@ pub(super) fn thiele_interpolation(ev: &mut Eval<'_>, e: &Expr) -> Native {
         r = a[k].clone() + (t.clone() - xs[k].clone()) / r;
     }
     let result = ev.eval(&Expr::call(Symbol::TOGETHER, [r]))?;
+    // Unattainable points: the fraction may lose a point when put
+    // together, as (t + 1)(−9)/(t + 1) through (−1, 0).
+    for (xi, yi) in xs.iter().zip(&ys_given) {
+        let value = ev.eval(&result.substitute(&[(t.clone(), xi.clone())]))?;
+        let gap = ev.eval(&Expr::call(Symbol::TOGETHER, [value - yi.clone()]))?;
+        if gap != Expr::from(0) {
+            return Ok(None);
+        }
+    }
     ev.step("ThieleInterpolation", e, &result);
     Ok(Some(result))
 }

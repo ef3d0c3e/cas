@@ -1,8 +1,8 @@
 //! Interpolation and orthogonal polynomials (CAS-DOC-27 §6, CAS-332), one
 //! check per input:
 //! - random rational points, distinct and increasing: the
-//!   `InterpolatingPolynomial` takes the values at them; Thiele's
-//!   interpolant does where it is finite, or stays; the pieces of a spline
+//!   `InterpolatingPolynomial` takes the values at them, and so does
+//!   Thiele's interpolant, or it stays; the pieces of a spline
 //!   of degree 1 to 4 meet their points, their derivatives of orders
 //!   `1 … d − 1` agree at the inner points, and giac's end conditions hold;
 //! - an orthogonal polynomial of a random degree up to 12 (Laguerre's with
@@ -82,11 +82,11 @@ fn points(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
     let input = call("ThieleInterpolation", vec![list(&xs), list(&ys), x()]);
     let r = eval(ctx, &input);
     if !r.contains(&Expr::from(Symbol::new("ThieleInterpolation"))) {
+        // The native checks its points, an unattainable one leaving the
+        // call (crash-9952273f), so each must be met.
         for (a, b) in xs.iter().zip(&ys) {
             let value = at(ctx, &r, a);
-            if value.to_rational().is_some() {
-                assert_eq!(value, Expr::from(b.clone()), "{input:?} = {r:?} at {a}");
-            }
+            assert_eq!(value, Expr::from(b.clone()), "{input:?} = {r:?} at {a}");
         }
     }
     let d = u.int_in_range(1..=4usize)?;

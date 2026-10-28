@@ -149,6 +149,8 @@ fn what_stays() {
         "Spline[List[0, 1, 1, 2], List[1, 2, 3, 4], x, 3]",
         "Spline[List[0, 1], List[1, 2], x, 0]",
         "ThieleInterpolation[List[1, 2, 3], List[1, 2, 1], x]",
+        // An unattainable point (crash-9952273f of the fuzz target).
+        "ThieleInterpolation[List[-1, -1/2, 2], List[0, -9, -9], x]",
     ] {
         let e = read(input);
         let found = ctx.eval(&e).unwrap();
