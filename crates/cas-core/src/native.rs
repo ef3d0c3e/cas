@@ -38,6 +38,7 @@ mod nintegrate;
 mod number;
 mod number_theory;
 mod numeric;
+mod optimization;
 mod orthogonal;
 mod parts;
 mod polygamma;
@@ -595,6 +596,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::EVOLUTE, vector::curves::evolute),
         (Symbol::ARC_LENGTH, vector::curves::arc_length),
         (Symbol::IMPLICIT_D, vector::implicit::implicit_d),
+        (Symbol::EXTREMA, optimization::extrema),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),
