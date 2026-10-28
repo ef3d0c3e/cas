@@ -126,11 +126,11 @@ builtins! {
     INTERPOLATING_POLYNOMIAL = "InterpolatingPolynomial" [PROTECTED];
     SPLINE = "Spline" [PROTECTED];
     THIELE_INTERPOLATION = "ThieleInterpolation" [PROTECTED];
-    LEGENDRE_P = "LegendreP" [LISTABLE, PROTECTED];
-    HERMITE_H = "HermiteH" [LISTABLE, PROTECTED];
-    LAGUERRE_L = "LaguerreL" [LISTABLE, PROTECTED];
-    CHEBYSHEV_T = "ChebyshevT" [LISTABLE, PROTECTED];
-    CHEBYSHEV_U = "ChebyshevU" [LISTABLE, PROTECTED];
+    LEGENDRE_P = "LegendreP" [PROTECTED];
+    HERMITE_H = "HermiteH" [PROTECTED];
+    LAGUERRE_L = "LaguerreL" [PROTECTED];
+    CHEBYSHEV_T = "ChebyshevT" [PROTECTED];
+    CHEBYSHEV_U = "ChebyshevU" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];

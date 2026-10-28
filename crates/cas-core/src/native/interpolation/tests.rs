@@ -127,11 +127,18 @@ fn thiele() {
             "ThieleInterpolation[List[1, 2], List[3, 5], t]",
             "Plus[1, Times[2, t]]",
         ),
+        // The fraction ends early: giac's 1/x, and a constant.
+        (
+            "ThieleInterpolation[List[1, 2, 3, 4], List[1, 1/2, 1/3, 1/4], x]",
+            "Power[x, -1]",
+        ),
+        ("ThieleInterpolation[List[1, 2, 3], List[5, 5, 5], x]", "5"),
     ]);
 }
 
 /// What stays: a repeated abscissa, lists of unequal lengths, abscissas
-/// not increasing, constant values for Thiele's differences, a degree 0.
+/// not increasing, Thiele's differences vanishing at some points only, a
+/// degree 0.
 #[test]
 fn what_stays() {
     let ctx = Context::new();
@@ -141,7 +148,7 @@ fn what_stays() {
         "Spline[List[0, 2, 1], List[1, 2, 3], x, 3]",
         "Spline[List[0, 1, 1, 2], List[1, 2, 3, 4], x, 3]",
         "Spline[List[0, 1], List[1, 2], x, 0]",
-        "ThieleInterpolation[List[1, 2, 3], List[5, 5, 5], x]",
+        "ThieleInterpolation[List[1, 2, 3], List[1, 2, 1], x]",
     ] {
         let e = read(input);
         let found = ctx.eval(&e).unwrap();

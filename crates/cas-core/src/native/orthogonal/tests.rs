@@ -55,10 +55,6 @@ fn polynomials() {
             "Plus[Times[8, Power[x, 3]], Times[-4, x]]",
         ),
         ("ChebyshevU[0, x]", "1"),
-        (
-            "LegendreP[List[1, 2], x]",
-            "List[x, Plus[Times[3/2, Power[x, 2]], -1/2]]",
-        ),
     ]);
 }
 

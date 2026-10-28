@@ -24,7 +24,10 @@
 //!   fraction `a_0 + (t − x_0)/(a_1 + (t − x_1)/(a_2 + …))`, its `a_k` the
 //!   inverse differences `φ_k(x_k)`, where `φ_0 = y` and
 //!   `φ_k(x_i) = (x_i − x_{k−1})/(φ_{k−1}(x_i) − φ_{k−1}(x_{k−1}))`; put
-//!   together, as giac's `(-11*x+6)/(x-6)`.
+//!   together, as giac's `(-11*x+6)/(x-6)`. Where `φ_{k−1}` is constant on
+//!   the points left, the fraction ends at `a_{k−1}`: `1/x` through four of
+//!   its points, as giac answers, and a constant. Where it is so on some
+//!   of them only, the call stays.
 //!
 //! Lists of unequal lengths, a repeated abscissa (a division by 0), and
 //! for `Spline` abscissas not shown increasing, leave the call. Each call
@@ -233,23 +236,27 @@ pub(super) fn thiele_interpolation(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let mut phi = ys;
     let mut a = vec![phi[0].clone()];
     for k in 1..n {
+        let mut denominators = Vec::with_capacity(n - k);
+        for value in &phi[k..] {
+            denominators.push(ev.eval(&(value.clone() - phi[k - 1].clone()))?);
+        }
+        let zero = Expr::from(0);
+        // All 0: φ_{k−1} is constant on the rest, and the fraction ends.
+        if denominators.iter().all(|d| *d == zero) {
+            break;
+        }
+        if denominators.contains(&zero) {
+            return Ok(None);
+        }
         let mut next = phi.clone();
-        for i in k..n {
-            let Some(v) = quotient(
-                ev,
-                &(xs[i].clone() - xs[k - 1].clone()),
-                &(phi[i].clone() - phi[k - 1].clone()),
-            )?
-            else {
-                return Ok(None);
-            };
-            next[i] = v;
+        for (i, d) in (k..n).zip(denominators) {
+            next[i] = ev.eval(&((xs[i].clone() - xs[k - 1].clone()) / d))?;
         }
         phi = next;
         a.push(phi[k].clone());
     }
-    let mut r = a[n - 1].clone();
-    for k in (0..n - 1).rev() {
+    let mut r = a[a.len() - 1].clone();
+    for k in (0..a.len() - 1).rev() {
         r = a[k].clone() + (t.clone() - xs[k].clone()) / r;
     }
     let result = ev.eval(&Expr::call(Symbol::TOGETHER, [r]))?;
