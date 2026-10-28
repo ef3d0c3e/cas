@@ -1,7 +1,7 @@
-> count := 0
+> total := 0
 = 0
-> bump() := begin count := count + 1 end
-error at 3:26 `count`: count may not be assigned yet here: a name assigned in a block is local to it, so a block cannot change a global
+> bump() := begin total := total + 1 end
+error at 3:26 `total`: total may not be assigned yet here: a name assigned in a block is local to it, so a block cannot change a global
 > f(n) := begin n := n + 1; n end
 error at 5:15 `n`: n is a parameter, which cannot be assigned: copy it into a local first, m := n
 > g(x) := begin h(y) := y; 1 end

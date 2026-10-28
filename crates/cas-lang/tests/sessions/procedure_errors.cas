@@ -1,6 +1,6 @@
 // A block cannot change a global (O5): caught when it is defined.
-count := 0
-bump() := begin count := count + 1 end
+total := 0
+bump() := begin total := total + 1 end
 // A parameter is not assigned; definitions stay at the top level.
 f(n) := begin n := n + 1; n end
 g(x) := begin h(y) := y; 1 end
