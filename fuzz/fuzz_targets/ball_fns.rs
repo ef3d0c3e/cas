@@ -1,4 +1,5 @@
-//! Real ball functions against MPFR (CAS-113). At the midpoint, both ends
+//! Real ball functions against MPFR (CAS-113, CAS-353 for `ei` and
+//! `digamma`). At the midpoint, both ends
 //! and an interior point of every input ball (every pair of them for
 //! `atan2` and `pow_ball`), the result must meet MPFR's bracket at
 //! `prec + 64` bits, and a point outside the domain or at a pole must make
@@ -27,7 +28,7 @@ macro_rules! mpfr {
     };
 }
 
-const UNARY: [(&str, Ours, Mpfr); 23] = [
+const UNARY: [(&str, Ours, Mpfr); 25] = [
     ("exp", Ball::exp, mpfr!(exp_ref)),
     ("expm1", Ball::expm1, mpfr!(exp_m1_ref)),
     ("log", Ball::log, mpfr!(ln_ref)),
@@ -51,6 +52,8 @@ const UNARY: [(&str, Ours, Mpfr); 23] = [
     ("zeta", Ball::zeta, mpfr!(zeta_ref)),
     ("erf", Ball::erf, mpfr!(erf_ref)),
     ("erfc", Ball::erfc, mpfr!(erfc_ref)),
+    ("ei", Ball::ei, mpfr!(eint_ref)),
+    ("digamma", Ball::digamma, mpfr!(digamma_ref)),
 ];
 
 /// `sin` and `cos` give `[0 ± 1]` for arguments of exponent above this
@@ -61,10 +64,11 @@ const HUGE_EXP: i64 = 1 << 16;
 /// top precision and the oracle alone would near the timeout: `zeta` took
 /// 21 s for `ζ(−63.5)` at 6264 bits, ours 0.45 s (CAS-251); `gamma` 11 s
 /// at the ends of a ball about 0 at 10552 bits, and `erfc` 33 s about 128 at
-/// 11105 bits (CAS-255). The unit tests take ours further.
+/// 11105 bits (CAS-255); `ei` and `digamma` (CAS-353) as `zeta`. The unit
+/// tests take ours further.
 fn max_precision(name: &str) -> u64 {
     match name {
-        "zeta" => 2048,
+        "zeta" | "ei" | "digamma" => 2048,
         "gamma" | "erf" | "erfc" => 4096,
         _ => u64::MAX,
     }
@@ -133,8 +137,9 @@ fn pole(name: &str, x: &Float) -> bool {
         "log" => x.is_zero(),
         "log1p" => at(-1),
         "atanh" => at(1) || at(-1),
-        // MPFR's gamma is ±∞ at ±0, NaN at the negative integers.
-        "gamma" => x.is_zero(),
+        // MPFR's gamma is ±∞ at ±0, NaN at the negative integers, and so
+        // is its digamma; its eint is −∞ at 0.
+        "gamma" | "digamma" | "ei" => x.is_zero(),
         "zeta" => at(1),
         _ => false,
     }

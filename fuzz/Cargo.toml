@@ -82,6 +82,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "special_fns"
+path = "fuzz_targets/special_fns.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "complex_fns"
 path = "fuzz_targets/complex_fns.rs"
 test = false
