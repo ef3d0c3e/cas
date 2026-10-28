@@ -17,7 +17,7 @@ use cas_num::Rational;
 use cas_num::ball::{Ball, ComplexBall};
 
 use super::number::{Infinity, Num};
-use super::rounding::real_sign;
+use super::rounding::real_sign_within;
 use crate::assume::{self, Set, Truth};
 use crate::context::{Context, EvalError};
 use crate::eval::Eval;
@@ -197,12 +197,19 @@ fn extended(e: &Expr) -> Option<Extended> {
     }
 }
 
+/// The bits [`approximated`] goes to at most, as Mathematica's
+/// `$MaxExtraPrecision` (50 digits) past machine precision: closer values
+/// are `N`'s to tell apart, raising the precision with its warnings
+/// (CAS-DOC-5 §9.4).
+const MAX_COMPARISON_BITS: u64 = 256;
+
 /// Whether `a head b` holds for exact numeric quantities, `head` a
 /// comparison, by the sign of `a − b` as `Sign` decides it, from
-/// approximations at increasing precision (CAS-285): `sqrt(2) < 3/2`, as
-/// giac's. `None` for other values, inexact balls (which [`ball_relation`]
-/// rules), complex values, and equal quantities in different forms, which
-/// no approximation tells apart (`ln(1/2)` and `-ln(2)`).
+/// approximations at increasing precision up to [`MAX_COMPARISON_BITS`]
+/// (CAS-285): `sqrt(2) < 3/2`, as giac's. `None` for other values, inexact
+/// balls (which [`ball_relation`] rules), complex values, values closer
+/// than the precision tells, and equal quantities in different forms,
+/// which no approximation tells apart (`ln(1/2)` and `-ln(2)`).
 fn approximated(
     ev: &mut Eval<'_>,
     head: Symbol,
@@ -214,7 +221,7 @@ fn approximated(
         return Ok(None);
     }
     let difference = ev.eval(&(a.clone() - b.clone()))?;
-    let Some(order) = real_sign(ev.context(), &difference) else {
+    let Some(order) = real_sign_within(ev.context(), &difference, MAX_COMPARISON_BITS) else {
         return Ok(None);
     };
     Ok(match head {

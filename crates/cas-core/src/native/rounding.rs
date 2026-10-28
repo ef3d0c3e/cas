@@ -65,6 +65,16 @@ fn ends(x: &Expr) -> Option<(Rational, Rational)> {
 fn decide<T>(
     ctx: &Context,
     x: &Expr,
+    decided: impl FnMut(&Rational, &Rational) -> Option<T>,
+) -> Option<T> {
+    decide_within(ctx, x, MAX_BITS, decided)
+}
+
+/// [`decide`] up to `max_bits`.
+fn decide_within<T>(
+    ctx: &Context,
+    x: &Expr,
+    max_bits: u64,
     mut decided: impl FnMut(&Rational, &Rational) -> Option<T>,
 ) -> Option<T> {
     if let Some(q) = x.to_rational() {
@@ -77,7 +87,7 @@ fn decide<T>(
         return None;
     }
     let mut bits = 64;
-    while bits <= MAX_BITS {
+    while bits <= max_bits {
         let value = approximation(ctx, x, bits).ok()?;
         if let Some(q) = value.to_rational() {
             return decided(&q, &q);
@@ -131,13 +141,18 @@ pub(super) fn round(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// The sign of a real `x`, from the assumptions, a ball or the
 /// approximation; also the step's and the delta's (CAS-273).
 pub(super) fn real_sign(ctx: &Context, x: &Expr) -> Option<Ordering> {
+    real_sign_within(ctx, x, MAX_BITS)
+}
+
+/// [`real_sign`], approximations up to `max_bits`.
+pub(super) fn real_sign_within(ctx: &Context, x: &Expr, max_bits: u64) -> Option<Ordering> {
     match sign_of(ctx, x) {
         Sign::Positive => return Some(Ordering::Greater),
         Sign::Negative => return Some(Ordering::Less),
         Sign::Zero => return Some(Ordering::Equal),
         _ => {}
     }
-    decide(ctx, x, |lo, hi| {
+    decide_within(ctx, x, max_bits, |lo, hi| {
         let (a, b) = (lo.cmp(&Rational::ZERO), hi.cmp(&Rational::ZERO));
         (a == b).then_some(a)
     })
