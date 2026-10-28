@@ -377,6 +377,10 @@ builtins! {
     // Potentials (CAS-DOC-37 §3).
     POTENTIAL = "Potential" [PROTECTED];
     VECTOR_POTENTIAL = "VectorPotential" [PROTECTED];
+    // Curves (CAS-DOC-37 §4).
+    CURVATURE = "Curvature" [PROTECTED];
+    FRENET = "Frenet" [PROTECTED];
+    EVOLUTE = "Evolute" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

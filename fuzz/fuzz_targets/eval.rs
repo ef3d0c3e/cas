@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 298] = [
+const BUILTINS: [&str; 301] = [
     "Plus",
     "Times",
     "Power",
@@ -371,6 +371,10 @@ const BUILTINS: [&str; 298] = [
     // Potentials (CAS-409).
     "Potential",
     "VectorPotential",
+    // Curves (CAS-410).
+    "Curvature",
+    "Frenet",
+    "Evolute",
 ];
 
 /// Builtins that apply something to parts, only in the expression

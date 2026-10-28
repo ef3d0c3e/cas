@@ -15,12 +15,14 @@
 //! symbol. The derivatives are `D`'s, evaluated with the answer.
 //!
 //! - [`potential`]: `Potential` and `VectorPotential` (§3).
+//! - [`curves`]: `Curvature`, `Frenet` and `Evolute` (§4).
 
 #![allow(
     clippy::many_single_char_names,
     reason = "the names of vector calculus: F = (p, q, r) in x, y and z"
 )]
 
+pub(super) mod curves;
 pub(super) mod potential;
 
 use crate::context::EvalError;
