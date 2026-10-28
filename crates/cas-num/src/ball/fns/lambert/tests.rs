@@ -262,3 +262,21 @@ fn huge_exponents() {
     let lower = Ball::exact(tiny.clone()).lambert_w(true, 64);
     assert!(lower.is_finite() && lower.mid().is_negative(), "{lower:?}");
 }
+
+/// Exponents near `2^60`, which an `f64` holds only to 128 (the
+/// `special_fns` fuzz target, CAS-368): the start from an `f64` of `e log 2`
+/// was 116 off the root, and Newton's steps of about 1 left 52 bits; the
+/// results have their bits, and `W e^W` holds `x`.
+#[test]
+fn far_out() {
+    for (s, lower) in [
+        ("0x0.b6b6b6ffffff3fb6p1152921504606846276", false),
+        ("-0x0.b6b6b6ffffff3fb6p-1152921504606846276", true),
+    ] {
+        let x = Float::from_hex(s).expect("a literal");
+        let w = Ball::exact(x.clone()).lambert_w(lower, 139);
+        assert!(w.is_finite() && w.rel_accuracy_bits() >= 136, "{s}: {w:?}");
+        let back = w.mul(&w.exp(256), 256);
+        assert!(back.contains(&x), "{s}: {w:?}, W e^W = {back:?}");
+    }
+}

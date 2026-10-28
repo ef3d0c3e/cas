@@ -5,8 +5,8 @@
 //! At an exact `x`:
 //!
 //! 1. A first approximation: `x` itself for a tiny `x` on branch 0; `L₁ −
-//!    L₂ + L₂/L₁` with `L₁ = log |x|` and `L₂ = log |L₁|` far out, from the
-//!    exponent where `f64` has no room; `−1 ± p − p²/3 + 11p³/72`, `p =
+//!    L₂ + L₂/L₁` with `L₁ = log |x|` and `L₂ = log |L₁|` far out, in balls
+//!    where `f64` has no room; `−1 ± p − p²/3 + 11p³/72`, `p =
 //!    √(2 (1 + e x))`, next to the branch point; polished by Newton's steps
 //!    in `f64` where it has room.
 //! 2. Newton's steps `w ← w − (w e^w − x)/(e^w (w + 1))` on the midpoint,
@@ -28,7 +28,7 @@
 //! falls short, which next to the branch point, where `f′ → 0`, it does.
 
 use std::cmp::Ordering;
-use std::f64::consts::{E, LN_2};
+use std::f64::consts::E;
 
 use super::{exponent, one, refined, upper, working};
 use crate::Integer;
@@ -61,6 +61,18 @@ fn far(ln_abs: f64) -> f64 {
     ln_abs - l2 + l2 / ln_abs
 }
 
+/// [`far`] in balls at 64 bits beyond the exponent `e` of `x`, `|e| > 1000`:
+/// within `L₂²/L₁²` of `W(x)`, from where Newton's steps converge. An `f64`
+/// of `e log 2` was off by up to `2^(log₂ e − 53)`, as much as 116 at `e ≈
+/// 2^60`, which those steps, about 1 each so far from the root, did not
+/// make up (CAS-368).
+fn far_out(x: &Float, e: i64) -> Float {
+    let p = 64 + u64::from(u64::BITS - e.unsigned_abs().leading_zeros());
+    let l1 = Ball::exact(x.abs()).log(p);
+    let l2 = l1.abs().log(p);
+    l1.sub(&l2, p).add(&l2.div(&l1, p), p).mid().clone()
+}
+
 /// Newton's steps in `f64` from `w`, while they are finite.
 fn polish(x: f64, mut w: f64) -> f64 {
     for _ in 0..32 {
@@ -78,7 +90,6 @@ fn polish(x: f64, mut w: f64) -> f64 {
 }
 
 /// A first approximation of `W(x)` on the branch.
-#[allow(clippy::cast_precision_loss, reason = "an estimate")]
 fn start(x: &Float, lower: bool) -> Float {
     let e = exponent(x);
     if !lower && e < -60 {
@@ -86,8 +97,7 @@ fn start(x: &Float, lower: bool) -> Float {
         return x.clone();
     }
     if e.unsigned_abs() > 1000 {
-        let ln_abs = e as f64 * LN_2;
-        return Float::from_f64(far(ln_abs)).expect("finite");
+        return far_out(x, e);
     }
     let xf = x.to_f64();
     let w = if xf < -0.25 {
