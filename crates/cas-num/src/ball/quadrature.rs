@@ -5,13 +5,18 @@
 //!
 //! - `P_n` and `P_n′` by the three-term recurrence
 //!   `(m + 1) P_{m+1} = (2m + 1) x P_m − m P_{m−1}`, stable on `[−1, 1]`,
-//!   and `P_n′ = n (x P_n − P_{n−1})/(x² − 1)`;
+//!   and `P_n′ = n (x P_n − P_{n−1})/(x² − 1)`. In ball arithmetic, which
+//!   sees no correlation between `P_m` and `P_{m−1}`, a radius grows by
+//!   `1 + √2` at each step, `2^(1.27n)` in all, for the rounding errors and
+//!   for the radius of `X` alike: the work runs at [`EXTRA`]`·n` bits more,
+//!   `2.6n`, so that `P_n′(X)` stays away from 0;
 //! - Newton's iteration on exact midpoints, from Tricomi's approximation
 //!   `(1 − (n − 1)/(8n³)) cos(π(4k − 1)/(4n + 2))` of the `k`-th largest
 //!   zero, at 64 bits and then twice as many each round;
 //! - the interval Newton test \[Moo66\]: every zero of `P_n` in `X = x̃ ± r`
 //!   is in `N = x̃ − P_n(x̃)/P_n′(X)`, so that `N ⊆ X` proves a zero in `N`,
-//!   the only one in `X` when `0 ∉ P_n′(X)`. The radius grows by `2⁴` up to
+//!   the only one in `X` when `0 ∉ P_n′(X)`. The radius starts at twice
+//!   the Newton step's ball `P_n(x̃)/P_n′(x̃)`, and grows by `2²` up to
 //!   [`ATTEMPTS`] times, then the precision doubles;
 //! - the zeros in `(0, 1)` only, each apart from the next, `⌊n/2⌋` of them,
 //!   as many as `P_n` has: their negatives are the others, and 0 is one for
@@ -40,6 +45,11 @@ pub const MAX_CACHED: usize = 64;
 
 /// The widenings of the radius at one precision before it doubles.
 const ATTEMPTS: u32 = 8;
+
+/// The extra bits per point of the rule, in tenths: `2.6n` bits pay for the
+/// radii's growth through the recurrence, `(1 + √2)^n` twice, at a node
+/// and over its ball.
+const EXTRA: u64 = 26;
 
 /// The precisions a zero is tried at, doubling: past them a rule is
 /// computed at twice the precision, which then always succeeds in practice.
@@ -116,12 +126,24 @@ fn initial(n: usize, k: usize) -> Float {
     Float::from_f64(x).expect("a finite approximation")
 }
 
+/// The working precision for `n` points at `prec` bits (the module's
+/// [`EXTRA`] bits).
+fn working(n: usize, prec: u64) -> u64 {
+    let n = u64::try_from(n).expect("a count in memory");
+    prec + 32 + (EXTRA * n).div_ceil(10)
+}
+
+/// An upper bound of `|b|`.
+fn upper(b: &Ball) -> Mag {
+    Mag::from_float(&b.mid().abs()).add(b.rad())
+}
+
 /// The `k`-th largest zero of `P_n` in a ball of radius about
 /// `2^(−prec)`, `k ≤ n/2`; `None` when the test fails at every precision
 /// tried.
 fn zero(n: usize, k: usize, prec: u64) -> Option<Ball> {
     let mut x = initial(n, k);
-    let mut target = prec + 32;
+    let mut target = working(n, prec);
     for _ in 0..ROUNDS {
         let mut wp = 64;
         loop {
@@ -136,10 +158,13 @@ fn zero(n: usize, k: usize, prec: u64) -> Option<Ball> {
             wp = (2 * wp).min(target);
         }
         let point = Ball::exact(x.clone());
-        let (p, _) = legendre(n, &point, target);
-        let mut exponent = 8 - i64::try_from(target).expect("a precision in memory");
+        let (p, d) = legendre(n, &point, target);
+        let floor = Mag::power_of_two(&-Integer::from(i64::try_from(target).ok()?));
+        let mut radius = upper(&p.div(&d, target))
+            .mul_2exp(&Integer::from(1))
+            .add(&floor);
         for _ in 0..ATTEMPTS {
-            let around = Ball::new(x.clone(), Mag::power_of_two(&Integer::from(exponent)));
+            let around = Ball::new(x.clone(), radius.clone());
             let (_, slope) = legendre(n, &around, target);
             if !slope.contains_rational(&Rational::ZERO) {
                 let newton = point.sub(&p.div(&slope, target), target);
@@ -147,7 +172,7 @@ fn zero(n: usize, k: usize, prec: u64) -> Option<Ball> {
                     return Some(newton);
                 }
             }
-            exponent += 4;
+            radius = radius.mul_2exp(&Integer::from(2));
         }
         target *= 2;
     }
@@ -155,7 +180,7 @@ fn zero(n: usize, k: usize, prec: u64) -> Option<Ball> {
 }
 
 fn compute(n: usize, prec: u64) -> Rule {
-    let wp = prec + 32;
+    let wp = working(n, prec);
     let mut positive: Vec<Ball> = Vec::with_capacity(n / 2);
     for k in 1..=n / 2 {
         let x = zero(n, k, prec)

@@ -22,6 +22,19 @@ approximations. The method is that of Arb's
 arithmetic, so at a ball `X` they enclose the values over `X`. The interval
 Newton test below uses that enclosure.
 
+The recurrence is stable in floating point, but ball arithmetic does not
+know that: it sees no correlation between `P_m` and `P_{m−1}`, and a radius
+grows by `1 + √2` at each step, `2^(1.27n)` over the recurrence.
+
+- At a node `x̃`, the rounding errors grow by that factor.
+- Over its ball `X`, the radius of `X` grows by it as well.
+
+The interval Newton test needs `P_n′(X)` away from 0, and that costs about
+twice the growth. So the work runs at `prec + 32 + 2.6n` bits. With only
+`prec + 32`, the zeros of `P_64` failed the test at every precision, since
+the ball of `N` and the one allowed for `X` grew together (CAS-322, found
+by CI).
+
 ## The zeros
 
 Only the zeros in `(0, 1)` are computed. Their negatives are the others,
@@ -34,18 +47,21 @@ and 0 is a zero for an odd `n`.
 2. **Validation.** This is the interval Newton test
    [[Moo66]](references.md#moo66). Every zero of `P_n` in `X = x̃ ± r` lies
    in `N = x̃ − P_n(x̃)/P_n′(X)`, so `N ⊆ X` proves a zero in `N`. When
-   `0 ∉ P_n′(X)`, it is the only zero in `X`. The radius `r` starts at
-   `2^(8 − prec − 32)` and grows by `2⁴` up to eight times. Past that, the
-   precision doubles, up to six times; a zero still not validated is a bug,
-   and panics.
+   `0 ∉ P_n′(X)`, it is the only zero in `X`.
+   - The radius `r` starts at twice the Newton step's ball,
+     `P_n(x̃)/P_n′(x̃)` at the exact node, plus `2^(−w)`, and grows by `2²`
+     up to eight times.
+   - Past that, the precision doubles, up to six times. A zero still not
+     validated is a bug, and panics.
 3. **Count.** Each zero must be positive and apart from the previous one.
    Then the `⌊n/2⌋` zeros found are distinct, and they are all of `P_n`'s
    positive zeros.
 
 ## The weights
 
-The weights are `2/((1 − x²) P_n′(x)²)` at the node balls, at `prec + 32`
-bits. Nodes and weights are then rounded to `prec` bits of accuracy.
+The weights are `2/((1 − x²) P_n′(x)²)` at the node balls, at the same
+working precision. Nodes and weights are then rounded to `prec` bits of
+accuracy.
 
 ## The cache
 
