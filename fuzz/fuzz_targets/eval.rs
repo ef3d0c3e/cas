@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 304] = [
+const BUILTINS: [&str; 308] = [
     "Plus",
     "Times",
     "Power",
@@ -380,6 +380,10 @@ const BUILTINS: [&str; 304] = [
     "ImplicitD",
     // Optimization (CAS-415).
     "Extrema",
+    "Minimize",
+    "Maximize",
+    "FMin",
+    "FMax",
 ];
 
 /// Builtins that apply something to parts, only in the expression

@@ -1,5 +1,5 @@
 //! Optimization (CAS-DOC-38): local extrema (§2, CAS-415), Xcas's
-//! `extrema`.
+//! `extrema`; [`global`] optima (§3).
 //!
 //! `Extrema[f, vars]` and `Extrema[f, constraints, vars]`:
 //!
@@ -25,6 +25,8 @@
 //!   variable, as lists in several. Signs are the assumptions' or the
 //!   balls'; one not decided leaves the point out, as giac reports a
 //!   saddle or an indeterminate point and leaves it out.
+
+pub(super) mod global;
 
 use std::cmp::Ordering;
 
