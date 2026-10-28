@@ -131,6 +131,25 @@ builtins! {
     LAGUERRE_L = "LaguerreL" [PROTECTED];
     CHEBYSHEV_T = "ChebyshevT" [PROTECTED];
     CHEBYSHEV_U = "ChebyshevU" [PROTECTED];
+    // List operations (CAS-DOC-28).
+    TABLE = "Table" [PROTECTED];
+    MAKE_LIST = "MakeList" [PROTECTED];
+    SORT = "Sort" [PROTECTED];
+    REVERSE = "Reverse" [PROTECTED];
+    ROTATE = "Rotate" [PROTECTED];
+    JOIN = "Join" [PROTECTED];
+    APPEND = "Append" [PROTECTED];
+    PREPEND = "Prepend" [PROTECTED];
+    FIRST = "First" [PROTECTED];
+    REST = "Rest" [PROTECTED];
+    FLATTEN = "Flatten" [PROTECTED];
+    DIMENSIONS = "Dimensions" [PROTECTED];
+    SELECT = "Select" [PROTECTED];
+    REJECT = "Reject" [PROTECTED];
+    COUNT = "Count" [PROTECTED];
+    MEMBER_INDEX = "MemberIndex" [PROTECTED];
+    ZIP = "Zip" [PROTECTED];
+    ACCUMULATE = "Accumulate" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];

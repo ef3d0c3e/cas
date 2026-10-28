@@ -27,6 +27,7 @@ mod interpolation;
 mod laplace;
 mod limit;
 mod linear;
+mod lists;
 mod logic;
 mod matrix;
 mod nintegrate;
@@ -220,6 +221,24 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::LAGUERRE_L, orthogonal::laguerre_l),
         (Symbol::CHEBYSHEV_T, orthogonal::chebyshev_t),
         (Symbol::CHEBYSHEV_U, orthogonal::chebyshev_u),
+        (Symbol::TABLE, lists::table),
+        (Symbol::MAKE_LIST, lists::make_list),
+        (Symbol::SORT, lists::sort),
+        (Symbol::REVERSE, lists::reverse),
+        (Symbol::ROTATE, lists::rotate),
+        (Symbol::JOIN, lists::join),
+        (Symbol::APPEND, lists::append),
+        (Symbol::PREPEND, lists::prepend),
+        (Symbol::FIRST, lists::first),
+        (Symbol::REST, lists::rest),
+        (Symbol::FLATTEN, lists::flatten),
+        (Symbol::DIMENSIONS, lists::dimensions),
+        (Symbol::SELECT, lists::select),
+        (Symbol::REJECT, lists::reject),
+        (Symbol::COUNT, lists::count),
+        (Symbol::MEMBER_INDEX, lists::member_index),
+        (Symbol::ZIP, lists::zip),
+        (Symbol::ACCUMULATE, lists::accumulate),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),

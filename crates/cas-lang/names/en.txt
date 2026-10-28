@@ -119,6 +119,25 @@ HermiteH: hermite
 LaguerreL: laguerre
 ChebyshevT: tchebyshev1
 ChebyshevU: tchebyshev2
+# List operations (CAS-DOC-28, CAS-334 to CAS-336).
+Table: seq
+MakeList: makelist
+Sort: sort
+Reverse: revlist reverse
+Rotate: rotate
+Join: concat
+Append: append
+Prepend: prepend
+First: head
+Rest: tail
+Flatten: flatten
+Dimensions: dim
+Select: select
+Reject: remove
+Count: count
+MemberIndex: member
+Zip: zip
+Accumulate: cumsum
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime

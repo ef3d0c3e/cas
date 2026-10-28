@@ -2,7 +2,9 @@
 //! products in an index, Xcas's `sum` and `product`.
 //!
 //! - `Sum[f, k, a, b]` and `Sum[f, Equation[k, Range[a, b]]]`, giac's
-//!   `sum(f, k, a, b)` and `sum(f, k=a..b)`; `Product` likewise.
+//!   `sum(f, k, a, b)` and `sum(f, k=a..b)`; `Product` likewise. `Sum[l]`
+//!   and `Product[l]` of one list are the sum and the product of its
+//!   elements, giac's `sum([1,2,3,a])` (CAS-DOC-28 §4).
 //! - Karr's convention: for `b = a − 1` the empty sum 0 and product 1; for
 //!   `b < a − 1`, `−Σ_{k=b+1}^{a−1}` and `1/Π_{k=b+1}^{a−1}`, as giac's
 //!   `sum(k,k,5,1)` is `-9`.
@@ -88,13 +90,19 @@ impl Kind {
     }
 }
 
-/// `Sum[f, k, a, b]`.
+/// `Sum[f, k, a, b]`, and `Sum[l]` of one list (CAS-DOC-28 §4).
 pub(super) fn sum(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    if let Some(total) = super::lists::of_list(e, Symbol::PLUS) {
+        return Ok(Some(total));
+    }
     definite(ev, e, Kind::Sum)
 }
 
-/// `Product[f, k, a, b]`.
+/// `Product[f, k, a, b]`, and `Product[l]` of one list.
 pub(super) fn product(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    if let Some(total) = super::lists::of_list(e, Symbol::TIMES) {
+        return Ok(Some(total));
+    }
     definite(ev, e, Kind::Product)
 }
 
