@@ -29,8 +29,10 @@
 //!   `PopulationCovariance` (`covariance`), `S_xy / Σ f` expanded, and
 //!   `Correlation` (`correlation`), `S_xy / √(S_xx S_yy)`, which is
 //!   `Indeterminate` for constant data (giac's `undef`).
+//! - The regressions (§5, CAS-297), least squares: [`regression`].
 
 mod order;
+pub(super) mod regression;
 
 use cas_num::Rational;
 
@@ -303,9 +305,10 @@ pub(super) fn third_quartile(ev: &mut Eval<'_>, e: &Expr) -> Native {
     quantile_of(ev, e, &quarters(3))
 }
 
-/// The two variables of `e[x, y]`, `e[x, y, f]`, `e[m]` or `e[m, f]`, `m` a
-/// matrix of two columns: samples of one length, with one frequencies.
-fn pairs(e: &Expr) -> Option<(Sample, Sample)> {
+/// The two variables of the arguments `[x, y]`, `[x, y, f]`, `[m]` or
+/// `[m, f]`, `m` a matrix of two columns: samples of one length, with one
+/// frequencies.
+fn pairs(args: &[Expr]) -> Option<(Sample, Sample)> {
     let two = |samples: Option<(Vec<Sample>, bool)>| match samples {
         Some((mut columns, true)) if columns.len() == 2 => {
             let y = columns.pop()?;
@@ -318,7 +321,7 @@ fn pairs(e: &Expr) -> Option<(Sample, Sample)> {
         Some((mut samples, false)) => samples.pop(),
         _ => None,
     };
-    match e.args() {
+    match args {
         [m] => two(samples(m, None)),
         [a, b] => two(samples(a, Some(b))).or_else(|| Some((one(a, None)?, one(b, None)?))),
         [x, y, f] => Some((one(x, Some(f))?, one(y, Some(f))?)),
@@ -330,7 +333,7 @@ fn pairs(e: &Expr) -> Option<(Sample, Sample)> {
 /// `S_xy`, `S_xx`, `S_yy` and `Σ f` of the variables of `e`; `None` when
 /// they are not two, or the frequencies sum to 0, with a warning.
 fn moments(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<[Expr; 4]>, EvalError> {
-    let Some((x, y)) = pairs(e) else {
+    let Some((x, y)) = pairs(e.args()) else {
         return Ok(None);
     };
     let Some((total, x_mean)) = total_and_mean(ev, e, &x)? else {

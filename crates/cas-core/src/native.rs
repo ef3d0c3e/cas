@@ -219,6 +219,26 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             statistics::population_covariance,
         ),
         (Symbol::CORRELATION, statistics::correlation),
+        (
+            Symbol::LINEAR_REGRESSION,
+            statistics::regression::linear_regression,
+        ),
+        (
+            Symbol::POLYNOMIAL_REGRESSION,
+            statistics::regression::polynomial_regression,
+        ),
+        (
+            Symbol::EXPONENTIAL_REGRESSION,
+            statistics::regression::exponential_regression,
+        ),
+        (
+            Symbol::LOGARITHMIC_REGRESSION,
+            statistics::regression::logarithmic_regression,
+        ),
+        (
+            Symbol::POWER_REGRESSION,
+            statistics::regression::power_regression,
+        ),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),

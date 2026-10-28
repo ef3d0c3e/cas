@@ -169,6 +169,14 @@ builtins! {
     // `correlation`.
     POPULATION_COVARIANCE = "PopulationCovariance" [PROTECTED];
     CORRELATION = "Correlation" [PROTECTED];
+    // Regressions: `linear_regression`, `polynomial_regression`,
+    // `exponential_regression`, `logarithmic_regression` and
+    // `power_regression`.
+    LINEAR_REGRESSION = "LinearRegression" [PROTECTED];
+    POLYNOMIAL_REGRESSION = "PolynomialRegression" [PROTECTED];
+    EXPONENTIAL_REGRESSION = "ExponentialRegression" [PROTECTED];
+    LOGARITHMIC_REGRESSION = "LogarithmicRegression" [PROTECTED];
+    POWER_REGRESSION = "PowerRegression" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

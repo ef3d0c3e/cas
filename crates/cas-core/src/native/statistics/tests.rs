@@ -257,3 +257,96 @@ fn two_variables() {
         "Correlation[x, y]",
     ]);
 }
+
+/// Linear and polynomial least squares, exact (CAS-297).
+#[test]
+fn linear_regressions() {
+    check(&[
+        (&format!("LinearRegression[{XS}, {YS}]"), "List[11/5, -1/2]"),
+        (&format!("LinearRegression[{PAIRS}]"), "List[11/5, -1/2]"),
+        ("LinearRegression[List[1, 2], List[3, 5]]", "List[2, 1]"),
+        (
+            "LinearRegression[List[1, 2, 3], List[a, b, c]]",
+            "List[Together[Times[1/2, Plus[c, Times[-1, a]]]], \
+             Plus[Times[4/3, a], Times[1/3, b], Times[-2/3, c]]]",
+        ),
+        // Constant abscissas: giac's `undef`.
+        (
+            "LinearRegression[List[1, 1, 1], List[1, 2, 3]]",
+            "List[Indeterminate, Indeterminate]",
+        ),
+        (
+            "PolynomialRegression[List[1, 2, 3, 4], List[1, 3, 2, 5], 1]",
+            "List[11/10, 0]",
+        ),
+        (
+            "PolynomialRegression[List[1, 2, 3, 4], List[1, 3, 2, 5], 2]",
+            "List[1/4, -3/20, 5/4]",
+        ),
+        (
+            "PolynomialRegression[List[0, 1, 2, 3], List[1, 2, 5, 11], 2]",
+            "List[5/4, -9/20, 21/20]",
+        ),
+        (
+            "PolynomialRegression[List[List[1, 1], List[2, 3], List[3, 2], List[4, 5]], 2]",
+            "List[1/4, -3/20, 5/4]",
+        ),
+        (
+            "PolynomialRegression[List[1, 2, 3], List[1, 4, 9], 0]",
+            "List[14/3]",
+        ),
+        // Through the points: x² + x + 1, an abscissa 0 among them.
+        (
+            "PolynomialRegression[List[0, 1, 2], List[1, 3, 7], 2]",
+            "List[1, 1, 1]",
+        ),
+    ]);
+    stays(&[
+        // As many coefficients as points or more; two distinct abscissas
+        // for three coefficients; a degree that is not a natural number.
+        "PolynomialRegression[List[1, 2, 3], List[1, 4, 9], 3]",
+        "PolynomialRegression[List[1, 1, 2], List[1, 2, 3], 2]",
+        "PolynomialRegression[List[1, 2], List[3, 4], -1]",
+        "PolynomialRegression[List[1, 2], List[3, 4], 1/2]",
+        // Frequencies are no part of a regression.
+        "LinearRegression[List[1, 2], List[3, 4], List[1, 1]]",
+        "LinearRegression[List[1, 2]]",
+    ]);
+}
+
+/// Regressions through logarithms, which exact data make exact (CAS-297).
+#[test]
+fn logarithmic_regressions() {
+    check(&[
+        (
+            "ExponentialRegression[List[0, 1, 2], List[3, 6, 12]]",
+            "List[2, 3]",
+        ),
+        (
+            "ExponentialRegression[List[1, 2, 3, 4], List[2, 4, 8, 16]]",
+            "List[2, 1]",
+        ),
+        (
+            "LogarithmicRegression[List[1, E, Power[E, 2]], List[1, 3, 5]]",
+            "List[2, 1]",
+        ),
+        (
+            "LogarithmicRegression[List[1, 2, 4], List[1, 3, 5]]",
+            "List[Times[2, Power[Log[2], -1]], 1]",
+        ),
+        (
+            "PowerRegression[List[1, 2, 4], List[3, 12, 48]]",
+            "List[2, 3]",
+        ),
+        (
+            "PowerRegression[List[1, 2, 3], List[2, 8, 18]]",
+            "List[2, 2]",
+        ),
+    ]);
+    stays(&[
+        "ExponentialRegression[List[1, 2], List[-1, 2]]",
+        "LogarithmicRegression[List[0, 1], List[1, 2]]",
+        "PowerRegression[List[1, 2], List[0, 1]]",
+        "ExponentialRegression[List[1, 2], List[a, 2]]",
+    ]);
+}

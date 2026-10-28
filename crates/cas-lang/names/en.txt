@@ -197,6 +197,12 @@ ThirdQuartile: quartile3
 # Two variables (CAS-296): giac's `covariance` is the population one.
 PopulationCovariance: covariance
 Correlation: correlation
+# Regressions (CAS-297).
+LinearRegression: linear_regression
+PolynomialRegression: polynomial_regression
+ExponentialRegression: exponential_regression
+LogarithmicRegression: logarithmic_regression
+PowerRegression: power_regression
 
 [planned]
 # Numerical solutions of differential equations (CAS-DOC-16), Xcas's

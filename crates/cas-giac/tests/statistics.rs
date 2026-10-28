@@ -171,3 +171,53 @@ fn two_variables() {
         "correlation([1,2,3],[2,4,6])",
     ]);
 }
+
+/// giac's answers to `[input]` and this CAS's to `input`, one value each:
+/// giac's regressions other than the polynomial one answer a sequence
+/// `a,b`, which brackets make a list.
+fn check_sequences(inputs: &[&str]) {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in inputs {
+        match (giac.value(&format!("[{input}]")), ours(input)) {
+            (Ok(theirs), Ok(ours)) if same_value(&ctx, &ours, &theirs) => {}
+            (theirs, ours) => wrong.push(format!("{input}: ours {ours:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Linear and polynomial regressions (CAS-297).
+#[test]
+fn linear_regressions() {
+    check_sequences(&[
+        "linear_regression([1,2,3,4],[2,4,5,9])",
+        "linear_regression([[1,2],[2,4],[3,5],[4,9]])",
+        "linear_regression([1,2],[3,5])",
+        "linear_regression([1,2,3],[a,b,c])",
+    ]);
+    check(&[
+        "polynomial_regression([1,2,3,4],[1,3,2,5],1)",
+        "polynomial_regression([1,2,3,4],[1,3,2,5],2)",
+        "polynomial_regression([0,1,2,3],[1,2,5,11],2)",
+        "polynomial_regression([[1,1],[2,3],[3,2],[4,5]],2)",
+        "polynomial_regression([1,2,3],[1,4,9],0)",
+    ]);
+}
+
+/// Regressions through logarithms (CAS-297).
+#[test]
+fn logarithmic_regressions() {
+    check_sequences(&[
+        "exponential_regression([0,1,2],[3,6,12])",
+        "exponential_regression([1,2,3,4],[2,4,8,16])",
+        "exponential_regression([1,2,3],[1,2,5])",
+        "logarithmic_regression([1,e,e^2],[1,3,5])",
+        "logarithmic_regression([1,2,4],[1,3,5])",
+        "power_regression([1,2,4],[3,12,48])",
+        "power_regression([1,2,3],[2,8,18])",
+    ]);
+}
