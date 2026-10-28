@@ -1422,3 +1422,53 @@ proptest! {
         prop_assert!(b.rad() <= back.rad(), "{} printed as {}", b, text);
     }
 }
+
+/// The set operators print infix, with parentheses where the reading
+/// would group otherwise (CAS-DOC-32 §3).
+#[test]
+fn set_operators() {
+    let (a, b, c) = (sym("a"), sym("b"), sym("c"));
+    let call = |s: Symbol, args: &[Expr]| Expr::call(s, args.to_vec());
+    check(&[
+        (call(Symbol::UNION, &[a.clone(), b.clone()]), "a union b"),
+        (
+            call(Symbol::INTERSECTION, &[a.clone(), b.clone(), c.clone()]),
+            "a intersect b intersect c",
+        ),
+        (
+            call(Symbol::COMPLEMENT, &[a.clone(), b.clone(), c.clone()]),
+            "a minus b minus c",
+        ),
+        (
+            call(
+                Symbol::UNION,
+                &[a.clone(), call(Symbol::COMPLEMENT, &[b.clone(), c.clone()])],
+            ),
+            "a union (b minus c)",
+        ),
+        (
+            call(
+                Symbol::COMPLEMENT,
+                &[call(Symbol::UNION, &[a.clone(), b.clone()]), c.clone()],
+            ),
+            "(a union b) minus c",
+        ),
+        (
+            call(
+                Symbol::UNION,
+                &[
+                    a.clone(),
+                    call(Symbol::INTERSECTION, &[b.clone(), c.clone()]),
+                ],
+            ),
+            "a union b intersect c",
+        ),
+        (
+            call(
+                Symbol::ELEMENT,
+                &[sym("x"), call(Symbol::UNION, &[a.clone(), b.clone()])],
+            ),
+            "x in a union b",
+        ),
+    ]);
+}

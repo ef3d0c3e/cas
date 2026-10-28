@@ -114,7 +114,7 @@ fn names_and_keywords() {
     // A combining accent stays in the name.
     check("e\u{301}", &[(K::Ident, "e\u{301}")]);
     let keywords = "if then elif else end for in do while begin return break continue \
-                    local when and or not";
+                    local when and or not union intersect minus";
     let kinds: Vec<_> = tokens(keywords).into_iter().map(|(k, _)| k).collect();
     assert_eq!(
         kinds,
@@ -137,6 +137,9 @@ fn names_and_keywords() {
             K::AndKw,
             K::OrKw,
             K::NotKw,
+            K::UnionKw,
+            K::IntersectKw,
+            K::MinusKw,
         ]
     );
     assert!(kinds.iter().all(|k| k.is_keyword()));
@@ -147,6 +150,19 @@ fn names_and_keywords() {
         &[(K::Ident, "If"), (K::Ident, "iff"), (K::Ident, "ends")],
     );
     check("x ∈ S", &[(K::Ident, "x"), (K::InKw, "∈"), (K::Ident, "S")]);
+    // The set operators (CAS-DOC-32 §3).
+    check(
+        "A ∪ B ∩ C ∖ D",
+        &[
+            (K::Ident, "A"),
+            (K::UnionKw, "∪"),
+            (K::Ident, "B"),
+            (K::IntersectKw, "∩"),
+            (K::Ident, "C"),
+            (K::MinusKw, "∖"),
+            (K::Ident, "D"),
+        ],
+    );
 }
 
 #[test]

@@ -17,15 +17,19 @@ mod bp {
     /// The operand of `not`: everything that binds tighter than `and`.
     pub(super) const NOT: u8 = 5;
     pub(super) const COMPARE: (u8, u8) = (7, 8);
-    pub(super) const RANGE: (u8, u8) = (9, 10);
-    pub(super) const SUM: (u8, u8) = (11, 12);
-    pub(super) const PRODUCT: (u8, u8) = (13, 14);
-    pub(super) const IMPLICIT: (u8, u8) = (15, 16);
+    /// `union` and `minus`, and tighter `intersect` (CAS-DOC-32 §3):
+    /// `x in A union B` tests the union, `1..3 union 5..7` unites ranges.
+    pub(super) const UNION: (u8, u8) = (9, 10);
+    pub(super) const INTERSECT: (u8, u8) = (11, 12);
+    pub(super) const RANGE: (u8, u8) = (13, 14);
+    pub(super) const SUM: (u8, u8) = (15, 16);
+    pub(super) const PRODUCT: (u8, u8) = (17, 18);
+    pub(super) const IMPLICIT: (u8, u8) = (19, 20);
     /// The operand of `-`, `+` and the roots: powers and postfix forms, not
     /// implicit products (`-2x` is `(-2)·x`).
-    pub(super) const PREFIX: u8 = 17;
+    pub(super) const PREFIX: u8 = 21;
     /// Right-associative: `2^3^2` is `2^(3^2)`.
-    pub(super) const POWER: (u8, u8) = (20, 19);
+    pub(super) const POWER: (u8, u8) = (24, 23);
 }
 
 /// The binding powers of the operators that make a
@@ -34,6 +38,8 @@ fn binary(kind: K) -> Option<(u8, u8)> {
     Some(match kind {
         K::OrKw => bp::OR,
         K::AndKw => bp::AND,
+        K::UnionKw | K::MinusKw => bp::UNION,
+        K::IntersectKw => bp::INTERSECT,
         K::Plus | K::Minus => bp::SUM,
         K::Star | K::Slash | K::DotStar | K::DotSlash => bp::PRODUCT,
         _ => return None,

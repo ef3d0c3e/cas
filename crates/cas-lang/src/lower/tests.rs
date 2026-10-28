@@ -133,6 +133,30 @@ fn comparisons_and_logic() {
     ]);
 }
 
+/// The set operators (CAS-DOC-32 §3): `union` and `minus` from the left,
+/// `intersect` tighter, all between the comparisons and the ranges.
+#[test]
+fn set_operators() {
+    check(&[
+        ("a union b", "Union[a, b]"),
+        ("a union b union c", "Union[a, b, c]"),
+        ("a ∪ b", "Union[a, b]"),
+        ("a intersect b ∩ c", "Intersection[a, b, c]"),
+        ("a minus b", "Complement[a, b]"),
+        ("a minus b minus c", "Complement[a, b, c]"),
+        ("a ∖ b", "Complement[a, b]"),
+        ("a union b minus c", "Complement[Union[a, b], c]"),
+        ("a minus b union c", "Union[Complement[a, b], c]"),
+        ("a union b intersect c", "Union[a, Intersection[b, c]]"),
+        ("x in a union b", "Element[x, Union[a, b]]"),
+        ("1..3 union 5..7", "Union[Range[1, 3], Range[5, 7]]"),
+        (
+            "{1, 2} union {2, 3}",
+            "Union[FiniteSet[1, 2], FiniteSet[2, 3]]",
+        ),
+    ]);
+}
+
 #[test]
 fn structure() {
     check(&[

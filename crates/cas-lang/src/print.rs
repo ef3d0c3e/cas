@@ -216,6 +216,9 @@ enum Prec {
     Not,
     /// `=` and the comparisons.
     Compare,
+    /// `union` and `minus` (CAS-DOC-32 §3).
+    Union,
+    Intersect,
     Range,
     Sum,
     /// Products and quotients, rationals among them.
@@ -293,6 +296,14 @@ fn form(e: &Expr) -> Form<'_> {
         (Symbol::AND, [_, _, ..]) if is_chain(args) => Form::Chain(args),
         (Symbol::AND, [_, _, ..]) => Form::Logical(args, " and ", Prec::And, Prec::Not),
         (Symbol::OR, [_, _, ..]) => Form::Logical(args, " or ", Prec::Or, Prec::And),
+        // The set operations, left-associative: the operands bind tighter.
+        (Symbol::UNION, [_, _, ..]) => Form::Logical(args, " union ", Prec::Union, Prec::Intersect),
+        (Symbol::COMPLEMENT, [_, _, ..]) => {
+            Form::Logical(args, " minus ", Prec::Union, Prec::Intersect)
+        }
+        (Symbol::INTERSECTION, [_, _, ..]) => {
+            Form::Logical(args, " intersect ", Prec::Intersect, Prec::Range)
+        }
         (Symbol::NOT, [p]) => Form::Not(p),
         (Symbol::RANGE, [a, b]) => Form::Range(a, b),
         (Symbol::LIST, _) => Form::Bracketed(args, '[', ']'),

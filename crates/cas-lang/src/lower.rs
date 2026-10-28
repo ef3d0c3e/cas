@@ -768,7 +768,7 @@ impl Lowerer<'_> {
         }
     }
 
-    /// `+`, `-`, `*`, `/` and the logical and element-wise operators: a run
+    /// `+`, `-`, `*`, `/`, the logical, element-wise and set operators: a run
     /// of one binding power is one node (CAS-164), whose operands are taken
     /// in a loop, so that a long one recurses no deeper than a short one.
     fn binary(&mut self, node: &SyntaxNode) -> Lowering {
@@ -788,17 +788,46 @@ impl Lowerer<'_> {
                 apply(Symbol::PLUS, terms, range)
             }
             Some(K::Star | K::Slash | K::DotStar | K::DotSlash) => self.products(node),
-            Some(op @ (K::AndKw | K::OrKw)) => {
-                let head = if op == K::AndKw {
-                    Symbol::AND
-                } else {
-                    Symbol::OR
+            Some(op @ (K::AndKw | K::OrKw | K::IntersectKw)) => {
+                let head = match op {
+                    K::AndKw => Symbol::AND,
+                    K::OrKw => Symbol::OR,
+                    _ => Symbol::INTERSECTION,
                 };
                 let operands = node.children().map(|n| self.expr(&n)).collect();
                 apply(head, operands, range)
             }
+            Some(K::UnionKw | K::MinusKw) => self.set_differences(node),
             _ => self.fail_silently(range),
         }
+    }
+
+    /// A run of `union` and `minus` (CAS-DOC-32 §3), folded from the left:
+    /// each run of `union` one `Union` with what came before, and each run
+    /// of `minus` one `Complement` of what came before: `A union B minus C`
+    /// is `(A ∪ B) ∖ C`.
+    fn set_differences(&mut self, node: &SyntaxNode) -> Lowering {
+        let operands: Vec<SyntaxNode> = node.children().collect();
+        let Some((first, rest)) = operands.split_first() else {
+            return self.fail_silently(range(node));
+        };
+        let pairs: Vec<(K, &SyntaxNode)> = operators(node).zip(rest).collect();
+        let start = range(first).start;
+        let mut value = self.expr(first);
+        for run in pairs.chunk_by(|a, b| a.0 == b.0) {
+            let (Some(&(op, _)), Some(&(_, last))) = (run.first(), run.last()) else {
+                continue;
+            };
+            let head = if op == K::UnionKw {
+                Symbol::UNION
+            } else {
+                Symbol::COMPLEMENT
+            };
+            let mut items = vec![value];
+            items.extend(run.iter().map(|&(_, operand)| self.expr(operand)));
+            value = apply(head, items, start..range(last).end);
+        }
+        value
     }
 
     /// A run of `*`, `/`, `.*` and `./`, folded from the left: `*` and `/`

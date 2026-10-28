@@ -83,6 +83,12 @@ syntax_kinds! {
     OrKw,
     /// `not`.
     NotKw,
+    /// `union`, `∪` (CAS-DOC-32 §3).
+    UnionKw,
+    /// `intersect`, `∩`.
+    IntersectKw,
+    /// `minus`, `∖`.
+    MinusKw,
 
     /// `+`.
     Plus,
@@ -246,10 +252,10 @@ impl SyntaxKind {
         )
     }
 
-    /// The keywords, `if` to `not`.
+    /// The keywords, `if` to `minus`.
     #[must_use]
     pub fn is_keyword(self) -> bool {
-        (SyntaxKind::IfKw..=SyntaxKind::NotKw).contains(&self)
+        (SyntaxKind::IfKw..=SyntaxKind::MinusKw).contains(&self)
     }
 
     /// Whether this is the kind of a token rather than of a node.
@@ -281,6 +287,9 @@ impl SyntaxKind {
             "and" => SyntaxKind::AndKw,
             "or" => SyntaxKind::OrKw,
             "not" => SyntaxKind::NotKw,
+            "union" => SyntaxKind::UnionKw,
+            "intersect" => SyntaxKind::IntersectKw,
+            "minus" => SyntaxKind::MinusKw,
             _ => return None,
         })
     }
@@ -312,6 +321,9 @@ impl SyntaxKind {
             SyntaxKind::AndKw => "`and`",
             SyntaxKind::OrKw => "`or`",
             SyntaxKind::NotKw => "`not`",
+            SyntaxKind::UnionKw => "`union`",
+            SyntaxKind::IntersectKw => "`intersect`",
+            SyntaxKind::MinusKw => "`minus`",
             SyntaxKind::Plus => "`+`",
             SyntaxKind::Minus => "`-`",
             SyntaxKind::Star => "`*`",
