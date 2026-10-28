@@ -1,9 +1,9 @@
 //! The Bessel and Airy functions of balls (CAS-DOC-34 §7, CAS-381), at
 //! arguments below `2^20` in size:
 //!
-//! - `J_n` and `Y_n` against MPFR's `jn` and `yn`, and `Ai` against its
-//!   `ai` (for `|x| ≤ 64`, where its series stays quick), at the points of
-//!   the ball;
+//! - `J_n` and `Y_n` against MPFR's `jn` and `yn`, where they stay quick
+//!   (`|x| ≤ 2^12` or `n²/2 < |x|`), and `Ai` against its `ai` (for `|x| ≤
+//!   64`), at the points of the ball;
 //! - `I_n` and `K_n` by their Wronskian `I_n K_(n+1) + I_(n+1) K_n = 1/x`,
 //!   and `Ai′`, `Bi` and `Bi′` by Airy's, `Ai Bi′ − Ai′ Bi = 1/π`, over
 //!   the whole ball;
@@ -117,6 +117,15 @@ fn against_mpfr(u: &mut Unstructured<'_>, x: &Ball, prec: u64, second: bool) -> 
         let Some(point) = to_mp(&p) else {
             continue;
         };
+        // MPFR's expansion needs n²/2 < |x| (its jyn_asympt.c); short of
+        // that it takes the series, about |x| terms at 1.44 |x| more bits,
+        // too slow past 2^12 for the fuzzer's minute: J_(−1024) at about
+        // −4.1·10⁵ timed out (CAS-381).
+        let size = point.to_f64().abs();
+        let square = (n * n) as f64;
+        if size > 4096.0 && square / 2.0 >= size {
+            continue;
+        }
         let oracle = bracket(prec, |bits, rnd| {
             if second {
                 MpFloat::with_val_round(bits, point.yn_ref(order), rnd).0

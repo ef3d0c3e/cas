@@ -253,6 +253,30 @@ fn far_arguments() {
     assert!(y.is_finite() && y.mid().is_negative(), "{y:?}");
 }
 
+/// The fuzz target `bessel_fns`'s timeout (CAS-381): the order −1024 at
+/// `x = −1647099/4`, `π·2^17` rounded to 21 bits, where MPFR's `jn` takes
+/// its series for minutes. Here Hankel's `J_0` and `J_1` start a forward
+/// recurrence: finite with `prec − 3` bits, `J_(−1024) = J_1024`, under the
+/// envelope `√(2/(π x))`, and the recurrence across 1022 to 1024 holds.
+#[test]
+fn largest_order_far_out() {
+    let x = exact(-411_774.75);
+    let prec = 89;
+    let j = x.bessel_j(-1024, prec);
+    assert!(j.is_finite() && j.rel_accuracy_bits() >= 86, "{j:?}");
+    assert!(j.overlaps(&x.bessel_j(1024, prec)), "{j:?}");
+    assert!(j.mid().to_f64().abs() < 1.0 / 400.0, "{j:?}");
+    let q = 128;
+    let (a, b, c) = (
+        x.bessel_j(1022, q),
+        x.bessel_j(1023, q),
+        x.bessel_j(1024, q),
+    );
+    let two_n = Ball::from_integer(&Integer::from(2046));
+    let (left, right) = (a.add(&c, q), two_n.mul(&b, q).div(&x, q));
+    assert!(left.overlaps(&right), "{left:?} against {right:?}");
+}
+
 proptest! {
     /// The recurrences: `C_(n−1) + C_(n+1) = (2n/x) C_n` for `J` and `Y`,
     /// `I_(n−1) − I_(n+1) = (2n/x) I_n` and `K_(n+1) − K_(n−1) = (2n/x)
