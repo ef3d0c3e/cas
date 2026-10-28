@@ -345,11 +345,35 @@ pub(in crate::native) fn bisected(
             Some(Ordering::Equal) => return approximation(ctx, &Expr::from(mid), bits).ok(),
             Some(s) if s == s_lo => lo = mid,
             Some(_) => hi = mid,
-            // Within rounding of 0: as narrow as `bits + 32` tells.
-            None => break,
+            // Within rounding of 0 at `mid`, which may come long before the
+            // interval is narrow: an exact root at a midpoint, as Student's
+            // t(2) inverse at 8/9 is 7/4, the third midpoint of `[1, 3]`
+            // (CAS-305). The root is within the resolution around `mid`
+            // when the signs there tell; otherwise the interval stands,
+            // as narrow as `bits + 32` tells.
+            None => {
+                let delta = resolution(&mid, bits);
+                let (below, above) = (&mid - &delta, &mid + &delta);
+                if sign(ctx, f, x, &below, bits + 32) == Some(s_lo)
+                    && sign(ctx, f, x, &above, bits + 32) == Some(s_lo.reverse())
+                {
+                    (lo, hi) = (below, above);
+                }
+                break;
+            }
         }
     }
     certified(ctx, f, x, &lo, &hi, bits)
+}
+
+/// Half the width [`narrow`] allows around `x`: `2^−(bits+1)` of `|x|`, or
+/// of `2^−bits` about 0.
+fn resolution(x: &Rational, bits: u64) -> Rational {
+    let two = Rational::from(Integer::from(2));
+    let exponent = i64::try_from(bits).unwrap_or(i64::MAX);
+    let floor = two.pow(-exponent);
+    let scale = x.abs().max(floor);
+    &scale * &two.pow(-exponent.saturating_add(1))
 }
 
 /// Whether `[lo, hi]` is within `bits` bits of its values, or of `2^−2bits`

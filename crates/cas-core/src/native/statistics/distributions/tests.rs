@@ -291,6 +291,11 @@ fn degrees_of_freedom() {
         // The cumulative function takes an inverse back.
         "Less[Abs[N[Plus[StudentTCDF[3, StudentTICDF[3, 9/10]], -9/10], 20]], Power[10, -12]]",
         "Less[Abs[N[Plus[ChiSquareCDF[5, ChiSquareICDF[5, 1/3]], -1/3], 20]], Power[10, -12]]",
+        // An exact root at a midpoint of the bisection: t(2) at 8/9 is 7/4,
+        // which the bisection of [1, 3] reaches third and could not sign;
+        // it gave the ball of [3/2, 2] (the fuzz target, CAS-305).
+        "Less[Abs[N[Plus[StudentTICDF[2, 8/9], -7/4], 20]], Power[10, -14]]",
+        "Less[Abs[N[Plus[StudentTICDF[2, 1/9], 7/4], 20]], Power[10, -14]]",
     ] {
         assert!(holds(&ctx, claim), "{claim}");
     }
