@@ -623,6 +623,14 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::PRIMITIVE_ROOT,
             number_theory::residues::primitive_root,
         ),
+        (
+            Symbol::CONTINUED_FRACTION,
+            number_theory::fractions::continued_fraction,
+        ),
+        (
+            Symbol::FROM_CONTINUED_FRACTION,
+            number_theory::fractions::from_continued_fraction,
+        ),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),
