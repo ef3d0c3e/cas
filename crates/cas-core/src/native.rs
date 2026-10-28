@@ -48,6 +48,7 @@ mod residue;
 mod rounding;
 mod rsolve;
 mod series;
+mod sets;
 mod simplify;
 mod solve;
 mod special;
@@ -117,6 +118,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::LOG_INTEGRAL, expint::log_integral),
         (Symbol::POLY_GAMMA, polygamma::polygamma),
         (Symbol::LAMBERT_W, lambert::lambert_w),
+        (Symbol::UNION, sets::union),
+        (Symbol::INTERSECTION, sets::intersection),
+        (Symbol::COMPLEMENT, sets::complement),
+        (Symbol::INCLUDED_Q, sets::included_q),
         (Symbol::HEAVISIDE_THETA, step::heaviside),
         (Symbol::DIRAC_DELTA, step::dirac),
         (Symbol::DIRECTED_INFINITY, arith::directed_infinity),

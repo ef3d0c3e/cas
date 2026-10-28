@@ -423,6 +423,12 @@ builtins! {
     UNAPPLY = "Unapply" [PROTECTED];
     RANGE = "Range" [PROTECTED];
     FINITE_SET = "FiniteSet" [ORDERLESS, PROTECTED];
+    // Set operations (CAS-DOC-32): giac's infix `union`, `intersect` and
+    // `minus`, and `is_included`.
+    UNION = "Union" [FLAT, ORDERLESS, PROTECTED];
+    INTERSECTION = "Intersection" [FLAT, ORDERLESS, PROTECTED];
+    COMPLEMENT = "Complement" [PROTECTED];
+    INCLUDED_Q = "IncludedQ" [PROTECTED];
     LENGTH = "Length" [PROTECTED];
     PART = "Part" [PROTECTED];
     MAP = "Map" [PROTECTED];

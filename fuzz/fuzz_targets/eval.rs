@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 249] = [
+const BUILTINS: [&str; 253] = [
     "Plus",
     "Times",
     "Power",
@@ -308,6 +308,11 @@ const BUILTINS: [&str; 249] = [
     "EulerGamma",
     // Lambert's W (CAS-356).
     "LambertW",
+    // Set operations (CAS-365).
+    "Union",
+    "Intersection",
+    "Complement",
+    "IncludedQ",
     // The step and the delta (CAS-273).
     "HeavisideTheta",
     "DiracDelta",

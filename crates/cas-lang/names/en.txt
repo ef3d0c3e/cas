@@ -71,6 +71,8 @@ LogIntegral: Li
 PolyGamma: Psi
 # Lambert's W on its branches 0 and −1 (CAS-DOC-31, CAS-356).
 LambertW: LambertW
+# Inclusion of sets, giac's order (CAS-DOC-32, CAS-365).
+IncludedQ: is_included
 # The inverse of erf (CAS-DOC-23, CAS-302), which Xcas lacks.
 InverseErf: erfinv
 HeavisideTheta: Heaviside
@@ -352,6 +354,9 @@ Integer Rational Real String Symbol
 ElementwiseTimes ElementwiseDivide ElementwisePower Equation Equal Unequal Less LessEqual
 Greater GreaterEqual Element And Or Not If Function Range FiniteSet At ReplaceAt
 Null DirectedInfinity
+# The set operations, written with `union`, `intersect` and `minus`
+# (CAS-DOC-32 §3).
+Union Intersection Complement
 # Predicates, structure and rules without a surface name. Xcas has none with
 # these meanings (its `has`, `op`, `part` and `apply` differ), and none is
 # needed yet (CAS-123); a ticket that needs one adds it.

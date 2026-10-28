@@ -358,13 +358,13 @@ pub(super) fn sign_predicate(ev: &mut Eval<'_>, e: &Expr) -> Native {
 }
 
 /// `Element[x, s]` for the number sets `Integers`, `Rationals`, `Reals` and
-/// `Complexes`.
+/// `Complexes`, and for finite sets and lists (CAS-DOC-32 §2).
 pub(super) fn element(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [x, s] = e.args() else {
         return Ok(None);
     };
     let Some(set) = Set::of(s) else {
-        return Ok(None);
+        return super::sets::element(ev, x, s);
     };
     Ok(decided(assume::element(ev.context(), x, set)).map(boolean))
 }
