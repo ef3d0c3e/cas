@@ -23,7 +23,8 @@
 //!   makes recurrences equations in `U` (CAS-DOC-24 §4).
 //!
 //! The answer is `Together`'s, as giac's `z/(z^2-2*z+1)`; what no rule
-//! transforms stays, where giac answers an unevaluated sum.
+//! transforms stays, where giac answers an unevaluated sum. The inverse is
+//! [`inverse`]'s (CAS-309).
 
 #![allow(
     clippy::many_single_char_names,
@@ -397,6 +398,10 @@ fn product(
     }
     transform(ev, &expanded, n, z)
 }
+
+mod inverse;
+
+pub(super) use inverse::inverse_z_transform;
 
 #[cfg(test)]
 mod tests;

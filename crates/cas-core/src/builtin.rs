@@ -112,6 +112,7 @@ builtins! {
     // Z-transforms and recurrences (CAS-DOC-24): Xcas's `ztrans` and
     // `Kronecker`.
     ZTRANSFORM = "ZTransform" [PROTECTED];
+    INVERSE_ZTRANSFORM = "InverseZTransform" [PROTECTED];
     KRONECKER_DELTA = "KroneckerDelta" [LISTABLE, PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.

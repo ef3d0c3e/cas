@@ -186,6 +186,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             laplace::inverse_laplace_transform,
         ),
         (Symbol::ZTRANSFORM, ztransform::z_transform),
+        (Symbol::INVERSE_ZTRANSFORM, ztransform::inverse_z_transform),
         (Symbol::KRONECKER_DELTA, ztransform::kronecker_delta),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),

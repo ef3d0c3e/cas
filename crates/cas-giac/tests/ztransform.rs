@@ -85,3 +85,46 @@ fn transforms() {
         "ztrans(2^n/n!,n,z)",
     ]);
 }
+
+/// Whether this CAS's sequence for each of `inputs`, giac expressions in
+/// `n`, is giac's at `n = 0 … 6`. giac puts in `n` itself, its
+/// `Heaviside(0)` being 1 where this CAS's is 1/2.
+fn check_sequences(inputs: &[&str]) {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in inputs {
+        let Ok(sequence) = ours(input) else {
+            wrong.push(format!("{input}: unreadable here"));
+            continue;
+        };
+        for k in 0..=6i64 {
+            let ours = ctx.eval(&sequence.substitute(&[(Expr::symbol("n"), Expr::from(k))]));
+            let theirs = giac.value(&format!("subst({input},n={k})"));
+            match (ours, theirs) {
+                (Ok(o), Ok(t)) if close(&ctx, &o, &t) => {}
+                (o, t) => wrong.push(format!("{input} at n = {k}: ours {o:?}, giac's {t:?}")),
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The inverse transform, by values (CAS-309).
+#[test]
+fn inverses() {
+    check_sequences(&[
+        "invztrans(z/(z-1),z,n)",
+        "invztrans(z/(z-1)^2,z,n)",
+        "invztrans(1/(z-2),z,n)",
+        "invztrans(z^2/((z-1)*(z-2)),z,n)",
+        "invztrans(z/(z^2+1),z,n)",
+        "invztrans(1,z,n)",
+        "invztrans(1/z,z,n)",
+        "invztrans((z^2+z)/(z-1)^3,z,n)",
+        "invztrans(z/(z-1/2),z,n)",
+        "invztrans((3*z^2-z)/((z-1)*(z+1/2)^2),z,n)",
+    ]);
+}
