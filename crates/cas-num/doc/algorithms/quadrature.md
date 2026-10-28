@@ -42,8 +42,11 @@ and 0 is a zero for an odd `n`.
 
 1. **Approximation.** The `k`-th largest zero starts from Tricomi's
    `(1 − (n − 1)/(8n³)) cos(π(4k − 1)/(4n + 2))`, in `f64`. Newton's
-   iteration then runs on exact midpoints, three steps at 64 bits and three
-   at each doubling, up to `prec + 32` bits.
+   iteration then runs on midpoints, three steps at 64 bits and three at
+   each doubling, up to the working precision. The step is the quotient of
+   the midpoints of `P_n(x̃)` and `P_n′(x̃)`. At 64 bits the ball of
+   `P_64′` is `2³²` wide and holds 0, so dividing by the ball itself gave
+   the indeterminate ball and a step to 0 (CAS-322, found by CI).
 2. **Validation.** This is the interval Newton test
    [[Moo66]](references.md#moo66). Every zero of `P_n` in `X = x̃ ± r` lies
    in `N = x̃ − P_n(x̃)/P_n′(X)`, so `N ⊆ X` proves a zero in `N`. When

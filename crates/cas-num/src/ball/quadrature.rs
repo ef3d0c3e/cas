@@ -10,9 +10,11 @@
 //!   `1 + √2` at each step, `2^(1.27n)` in all, for the rounding errors and
 //!   for the radius of `X` alike: the work runs at [`EXTRA`]`·n` bits more,
 //!   `2.6n`, so that `P_n′(X)` stays away from 0;
-//! - Newton's iteration on exact midpoints, from Tricomi's approximation
+//! - Newton's iteration on midpoints, from Tricomi's approximation
 //!   `(1 − (n − 1)/(8n³)) cos(π(4k − 1)/(4n + 2))` of the `k`-th largest
-//!   zero, at 64 bits and then twice as many each round;
+//!   zero, at 64 bits and then twice as many each round: the step is the
+//!   quotient of the midpoints of `P_n(x̃)` and `P_n′(x̃)`, whose balls are
+//!   wide at the low precisions, too wide to divide by;
 //! - the interval Newton test \[Moo66\]: every zero of `P_n` in `X = x̃ ± r`
 //!   is in `N = x̃ − P_n(x̃)/P_n′(X)`, so that `N ⊆ X` proves a zero in `N`,
 //!   the only one in `X` when `0 ∉ P_n′(X)`. The radius starts at twice
@@ -148,9 +150,15 @@ fn zero(n: usize, k: usize, prec: u64) -> Option<Ball> {
         let mut wp = 64;
         loop {
             for _ in 0..3 {
+                // On midpoints: at the low precisions the ball of `P_n′` is
+                // wide enough to hold 0, and the step would be indeterminate.
                 let point = Ball::exact(x.clone());
                 let (p, d) = legendre(n, &point, wp);
-                x = point.sub(&p.div(&d, wp), wp).mid().clone();
+                let step = Ball::exact(p.mid().clone()).div(&Ball::exact(d.mid().clone()), wp);
+                if !step.is_finite() {
+                    break;
+                }
+                x = point.sub(&step, wp).mid().clone();
             }
             if wp >= target {
                 break;
