@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 277] = [
+const BUILTINS: [&str; 284] = [
     "Plus",
     "Times",
     "Power",
@@ -345,6 +345,14 @@ const BUILTINS: [&str; 277] = [
     "TrigToTan",
     // giac's `tcollect` (CAS-399).
     "TrigCollect",
+    // Inverse trigonometric functions (CAS-400).
+    "ArcCosToArcSin",
+    "ArcSinToArcCos",
+    "ArcCosToArcTan",
+    "ArcSinToArcTan",
+    "ArcTanToArcCos",
+    "ArcTanToArcSin",
+    "ArcTrigToLog",
 ];
 
 /// Builtins that apply something to parts, only in the expression

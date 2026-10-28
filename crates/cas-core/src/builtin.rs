@@ -351,6 +351,14 @@ builtins! {
     TRIG_TO_TAN = "TrigToTan" [PROTECTED];
     // giac's `tcollect` (CAS-DOC-36 §5).
     TRIG_COLLECT = "TrigCollect" [PROTECTED];
+    // Inverse trigonometric functions (CAS-DOC-36 §6).
+    ARC_COS_TO_ARC_SIN = "ArcCosToArcSin" [PROTECTED];
+    ARC_SIN_TO_ARC_COS = "ArcSinToArcCos" [PROTECTED];
+    ARC_COS_TO_ARC_TAN = "ArcCosToArcTan" [PROTECTED];
+    ARC_SIN_TO_ARC_TAN = "ArcSinToArcTan" [PROTECTED];
+    ARC_TAN_TO_ARC_COS = "ArcTanToArcCos" [PROTECTED];
+    ARC_TAN_TO_ARC_SIN = "ArcTanToArcSin" [PROTECTED];
+    ARC_TRIG_TO_LOG = "ArcTrigToLog" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

@@ -14,9 +14,13 @@
 //! - [`pythagorean`]: `TrigToCos`, `TrigToSin` and `TrigToTan` (§4), which
 //!   take passes of their own, with evaluation between.
 //! - [`collect`]: `TrigCollect` (§5), after `TrigReduce`.
+//! - [`inverse`]: `ArcCosToArcSin`, `ArcSinToArcCos`, `ArcCosToArcTan`,
+//!   `ArcSinToArcTan`, `ArcTanToArcCos`, `ArcTanToArcSin` and
+//!   `ArcTrigToLog` (§6).
 
 mod collect;
 mod exponential;
+mod inverse;
 mod pythagorean;
 mod substitution;
 #[cfg(test)]
@@ -190,4 +194,39 @@ pub(super) fn trig_collect(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let result = collect::collect(ev, x)?;
     ev.step("TrigCollect", e, &result);
     Ok(Some(result))
+}
+
+/// `ArcCosToArcSin[x]`, Xcas's `acos2asin`.
+pub(super) fn arc_cos_to_arc_sin(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "ArcCosToArcSin", inverse::arc_cos_to_arc_sin)
+}
+
+/// `ArcSinToArcCos[x]`, Xcas's `asin2acos`.
+pub(super) fn arc_sin_to_arc_cos(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "ArcSinToArcCos", inverse::arc_sin_to_arc_cos)
+}
+
+/// `ArcCosToArcTan[x]`, Xcas's `acos2atan`.
+pub(super) fn arc_cos_to_arc_tan(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "ArcCosToArcTan", inverse::arc_cos_to_arc_tan)
+}
+
+/// `ArcSinToArcTan[x]`, Xcas's `asin2atan`.
+pub(super) fn arc_sin_to_arc_tan(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "ArcSinToArcTan", inverse::arc_sin_to_arc_tan)
+}
+
+/// `ArcTanToArcCos[x]`, Xcas's `atan2acos`.
+pub(super) fn arc_tan_to_arc_cos(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "ArcTanToArcCos", inverse::arc_tan_to_arc_cos)
+}
+
+/// `ArcTanToArcSin[x]`, Xcas's `atan2asin`.
+pub(super) fn arc_tan_to_arc_sin(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "ArcTanToArcSin", inverse::arc_tan_to_arc_sin)
+}
+
+/// `ArcTrigToLog[x]`, Xcas's `atrig2ln`.
+pub(super) fn arc_trig_to_log(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "ArcTrigToLog", inverse::arc_trig_to_log)
 }
