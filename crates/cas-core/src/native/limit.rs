@@ -238,6 +238,7 @@ fn leading(
     local: &Expr,
     t: &Expr,
 ) -> Result<Result<Option<Series>, Expr>, EvalError> {
+    let mut last = None;
     for order in ORDERS {
         let order = Rational::from(Integer::from(order));
         let s = match partial_expansion(ev, local, t, &order)? {
@@ -247,8 +248,11 @@ fn leading(
         if !s.coeffs.is_empty() || s.order() < order {
             return Ok(Ok(Some(s)));
         }
+        last = Some(s);
     }
-    Ok(Ok(None))
+    // No term to the largest order: `O(t^16)`, whose limit is 0
+    // (`Ei(x)` at `−∞`, `Erfc(x)` at `∞`).
+    Ok(Ok(last))
 }
 
 /// Whether `c` is told from 0: a number exactly, a numeric expression by
