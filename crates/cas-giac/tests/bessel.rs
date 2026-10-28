@@ -70,7 +70,6 @@ fn bessel_values() {
         "BesselY(2,3.5)",
         "BesselY(1,0.25)",
         "BesselY(4,30.0)",
-        "besselJ(2,1.0)",
     ]);
 }
 

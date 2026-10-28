@@ -334,11 +334,12 @@ RandomPolynomial: randpoly
 RandomPermutation: randperm shuffle
 RandomSample: sample
 
-# Bessel and Airy functions (CAS-DOC-34).
-BesselJ: BesselJ besselJ
-BesselY: BesselY besselY
-BesselI: BesselI besselI
-BesselK: BesselK besselK
+# Bessel and Airy functions (CAS-DOC-34), the order first; giac's
+# lowercase `besselJ(x, n)` takes the argument first and is not these.
+BesselJ: BesselJ
+BesselY: BesselY
+BesselI: BesselI
+BesselK: BesselK
 AiryAi: Airy_Ai
 AiryBi: Airy_Bi
 AiryAiPrime: Airy_Ai_prime
