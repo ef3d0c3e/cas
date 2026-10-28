@@ -402,7 +402,23 @@ fn laplace(
             ],
         ));
     }
-    let Some(found) = linear_system(ev, e, &equations, &transforms)? else {
+    // The forcing's delays, exponentials of s, as symbols while solving:
+    // in LinSolve's fractions they would leave the factors where the
+    // inverse transform finds them.
+    let mut delays: Vec<(Expr, Expr)> = Vec::new();
+    for part in equations.iter().flat_map(Expr::distinct) {
+        let exponential = match (part.head().and_then(Expr::as_symbol), part.args()) {
+            (Some(Symbol::POWER), [b, u]) => b.as_symbol() == Some(Symbol::E) && u.contains(&s),
+            (Some(Symbol::EXP), [u]) => u.contains(&s),
+            _ => false,
+        };
+        if exponential && !delays.iter().any(|(d, _)| d == part) {
+            let symbol = Expr::from(Symbol::new(&format!("DSolve$d{}", delays.len())));
+            delays.push((part.clone(), symbol));
+        }
+    }
+    let frozen: Vec<Expr> = equations.iter().map(|q| q.substitute(&delays)).collect();
+    let Some(found) = linear_system(ev, e, &frozen, &transforms)? else {
         return Ok(None);
     };
     let [values] = found.args() else {
@@ -411,8 +427,10 @@ fn laplace(
     if values.args().len() != n {
         return Ok(None);
     }
+    let thawed: Vec<(Expr, Expr)> = delays.into_iter().map(|(d, symbol)| (symbol, d)).collect();
     let mut components = Vec::with_capacity(n);
     for v in values.args() {
+        let v = &ev.eval(&v.substitute(&thawed))?;
         // Yⱼ = Hⱼ + Σ c Gⱼc, linear in the constants: Gⱼc its derivative in
         // c, which no difference leaves uncancelled; each part inverted.
         let zero: Vec<(Expr, Expr)> = constants
@@ -439,15 +457,16 @@ fn laplace(
     Ok(Some(components))
 }
 
-/// The inverse transform of `big_f` from `s` into `x`; `None` when it
-/// stays.
+/// The inverse transform of `big_f` from `s` into `x`, expanded first so
+/// that each delay is a factor of its terms; `None` when it stays.
 fn inverse(ev: &mut Eval<'_>, big_f: &Expr, s: &Expr, x: &Expr) -> Result<Option<Expr>, EvalError> {
     if *big_f == Expr::from(0) {
         return Ok(Some(Expr::from(0)));
     }
+    let expanded = ev.eval(&Expr::call(Symbol::EXPAND, [big_f.clone()]))?;
     let f = ev.eval(&Expr::call(
         Symbol::INVERSE_LAPLACE_TRANSFORM,
-        [big_f.clone(), s.clone(), x.clone()],
+        [expanded, s.clone(), x.clone()],
     ))?;
     Ok((!f.contains(&Expr::from(Symbol::INVERSE_LAPLACE_TRANSFORM))).then_some(f))
 }
