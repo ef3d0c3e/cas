@@ -225,19 +225,21 @@ fn integral(
     Ok(Some(total))
 }
 
-/// The middle and the half-length of `[lo, hi]`.
-fn middle_and_half(lo: &Ball, hi: &Ball, wp: u64) -> (Ball, Ball) {
+/// The middle and the half-length of `[lo, hi]`, exactly: a segment
+/// shorter than the working precision must not grow by its middle's
+/// rounding, or both halves of one around a jump would hold it.
+fn middle_and_half(lo: &Ball, hi: &Ball) -> Option<(Ball, Ball)> {
     let half = Integer::from(-1);
-    (
-        lo.add(hi, wp).mul_2exp(&half),
-        hi.sub(lo, wp).mul_2exp(&half),
-    )
+    Some((
+        Ball::exact(lo.mid().checked_add(hi.mid())?.mul_2exp(&half)),
+        Ball::exact(hi.mid().checked_sub(lo.mid())?.mul_2exp(&half)),
+    ))
 }
 
 /// `h Σ w_k f(m + h x_k)` for the `n`-point rule in the analytic mode of
 /// `tree`, which has no switch left; `None` where an evaluation fails.
 fn gauss_sum(tree: &Node, lo: &Ball, hi: &Ball, n: usize, wp: u64) -> Option<ComplexBall> {
-    let (m, h) = middle_and_half(lo, hi, wp);
+    let (m, h) = middle_and_half(lo, hi)?;
     let rule = gauss_legendre(n, wp);
     let mut sum = ComplexBall::ZERO;
     for (x, w) in rule.iter() {
@@ -258,7 +260,7 @@ fn gauss(
     wp: u64,
     budget: &mut Budget,
 ) -> Option<ComplexBall> {
-    let (m, h) = middle_and_half(lo, hi, wp);
+    let (m, h) = middle_and_half(lo, hi)?;
     let segment = ComplexBall::from_real(around(&m, &h));
     let resolved;
     let tree = if tree.has_switch() {
@@ -308,7 +310,7 @@ fn gauss(
 
 /// `2h f([lo, hi])` in the real mode, when its radius is within `share`.
 fn crude(tree: &Node, lo: &Ball, hi: &Ball, share: &Mag, wp: u64) -> Option<ComplexBall> {
-    let (m, h) = middle_and_half(lo, hi, wp);
+    let (m, h) = middle_and_half(lo, hi)?;
     let segment = ComplexBall::from_real(around(&m, &h));
     let value = tree.eval(&segment, Mode::Real, wp)?;
     let width = ComplexBall::from_real(hi.sub(lo, wp));
