@@ -18,6 +18,7 @@ mod dsolve;
 mod elementary;
 mod erf;
 mod factorial;
+mod groebner;
 mod index;
 mod integer;
 mod integrate;
@@ -170,6 +171,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::RESULTANT, polynomial::resultant),
         (Symbol::DISCRIMINANT, polynomial::discriminant),
         (Symbol::FACTOR, polynomial::factor),
+        (Symbol::GROEBNER_BASIS, groebner::groebner_basis),
+        (Symbol::GROEBNER_REDUCE, groebner::groebner_reduce),
         (Symbol::INTEGRATE, integrate::integrate),
         (Symbol::SERIES, series::series),
         (Symbol::LIMIT, limit::limit),

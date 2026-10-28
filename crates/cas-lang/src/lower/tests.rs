@@ -315,12 +315,12 @@ fn errors_leave_statements_out() {
         ("[x, e] := l", &[("e", E::ReservedName("e".into()))]),
         ("purge(pi)", &[("pi", E::ReservedName("pi".into()))]),
         (
-            "gbasis(x^2)",
-            &[("gbasis(x^2)", E::NotAvailable("gbasis".into()))],
+            "eliminate(x^2)",
+            &[("eliminate(x^2)", E::NotAvailable("eliminate".into()))],
         ),
         (
-            "y := gbasis",
-            &[("gbasis", E::NotAvailable("gbasis".into()))],
+            "y := eliminate",
+            &[("eliminate", E::NotAvailable("eliminate".into()))],
         ),
         ("x :: integer", &[("x :: integer", E::TypeOutsidePattern)]),
         (
