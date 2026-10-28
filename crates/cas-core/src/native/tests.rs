@@ -329,6 +329,39 @@ fn comparisons_and_predicates() {
     ]);
 }
 
+/// Exact numeric quantities compared by approximation, as giac's (CAS-285).
+#[test]
+fn exact_numeric_comparisons() {
+    check(&[
+        ("Less[Power[2, 1/2], 3/2]", "True"),
+        ("Greater[Power[2, 1/2], 3/2]", "False"),
+        ("Less[Log[2], Log[3]]", "True"),
+        (
+            "Greater[Plus[Power[2, 1/2], Power[3, 1/2]], Power[10, 1/2]]",
+            "False",
+        ),
+        (
+            "Less[Times[-1, Power[2, 1/2]], Times[1/2, Plus[-1, Times[-1, Power[2, 1/2]]]]]",
+            "True",
+        ),
+        ("LessEqual[Pi, 22/7]", "True"),
+        ("Greater[E, 19/7]", "True"),
+        ("Less[1, Power[2, 1/2], Power[3, 1/2], 2]", "True"),
+        ("Equal[Power[2, 1/2], 3/2]", "False"),
+        ("Unequal[Pi, 22/7]", "True"),
+        // Equal values in different forms: no approximation tells.
+        (
+            "Less[Log[1/2], Times[-1, Log[2]]]",
+            "Less[Log[1/2], Times[-1, Log[2]]]",
+        ),
+        // Complex values are not ordered.
+        (
+            "Less[Complex[0, 1], Power[2, 1/2]]",
+            "Less[Complex[0, 1], Power[2, 1/2]]",
+        ),
+    ]);
+}
+
 #[test]
 fn logic_and_conditionals() {
     check(&[

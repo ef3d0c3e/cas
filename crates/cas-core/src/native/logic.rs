@@ -5,7 +5,8 @@
 //! `-Infinity`, and on expressions that are structurally equal; on balls as
 //! [`ball_relation`] says; otherwise
 //! the assumptions and the number domain decide them when they can (`assume`,
-//! CAS-58), and they stay unevaluated when not. So do `Positive`,
+//! CAS-58), then, for exact numeric quantities, approximations
+//! ([`approximated`], CAS-285), and they stay unevaluated when not. So do `Positive`,
 //! `Negative`, `NonNegative`, `NonPositive` and `Element`. The type tests
 //! (`SameQ`, `FreeQ`, `IntegerQ` to `SymbolQ`) always decide; those of number
 //! sets are true of a value the assumptions put in the set.
@@ -16,6 +17,7 @@ use cas_num::Rational;
 use cas_num::ball::{Ball, ComplexBall};
 
 use super::number::{Infinity, Num};
+use super::rounding::real_sign;
 use crate::assume::{self, Set, Truth};
 use crate::context::{Context, EvalError};
 use crate::eval::Eval;
@@ -195,6 +197,37 @@ fn extended(e: &Expr) -> Option<Extended> {
     }
 }
 
+/// Whether `a head b` holds for exact numeric quantities, `head` a
+/// comparison, by the sign of `a − b` as `Sign` decides it, from
+/// approximations at increasing precision (CAS-285): `sqrt(2) < 3/2`, as
+/// giac's. `None` for other values, inexact balls (which [`ball_relation`]
+/// rules), complex values, and equal quantities in different forms, which
+/// no approximation tells apart (`ln(1/2)` and `-ln(2)`).
+fn approximated(
+    ev: &mut Eval<'_>,
+    head: Symbol,
+    a: &Expr,
+    b: &Expr,
+) -> Result<Option<bool>, EvalError> {
+    let exact = |e: &Expr| e.is_numeric() && !has_inexact_ball(e);
+    if !exact(a) || !exact(b) {
+        return Ok(None);
+    }
+    let difference = ev.eval(&(a.clone() - b.clone()))?;
+    let Some(order) = real_sign(ev.context(), &difference) else {
+        return Ok(None);
+    };
+    Ok(match head {
+        Symbol::LESS => Some(order.is_lt()),
+        Symbol::LESS_EQUAL => Some(order.is_le()),
+        Symbol::GREATER => Some(order.is_gt()),
+        Symbol::GREATER_EQUAL => Some(order.is_ge()),
+        Symbol::EQUAL => Some(order.is_eq()),
+        Symbol::UNEQUAL => Some(order.is_ne()),
+        _ => None,
+    })
+}
+
 /// `true` or `false` for a decided truth.
 fn decided(t: Truth) -> Option<bool> {
     match t {
@@ -215,7 +248,10 @@ fn chain(ev: &mut Eval<'_>, e: &Expr, test: impl Fn(&Expr, &Expr) -> Option<bool
     for w in e.args().windows(2) {
         let result = match test(&w[0], &w[1]) {
             Some(b) => Some(b),
-            None => decided(assume::relation(ev, head, &w[0], &w[1])?),
+            None => match decided(assume::relation(ev, head, &w[0], &w[1])?) {
+                Some(b) => Some(b),
+                None => approximated(ev, head, &w[0], &w[1])?,
+            },
         };
         match result {
             Some(false) => return Ok(Some(boolean(false))),
@@ -258,7 +294,11 @@ pub(super) fn unequal(ev: &mut Eval<'_>, e: &Expr) -> Native {
     if let Some(eq) = equal(a, b, ctx) {
         return Ok(Some(boolean(!eq)));
     }
-    let result = decided(assume::relation(ev, Symbol::UNEQUAL, a, b)?).map(boolean);
+    let result = match decided(assume::relation(ev, Symbol::UNEQUAL, a, b)?) {
+        Some(b) => Some(b),
+        None => approximated(ev, Symbol::UNEQUAL, a, b)?,
+    }
+    .map(boolean);
     if result.is_none() && ctx.strict_comparisons() && undecided_balls(a, b, ctx) {
         warn_undecided(ev, e);
     }
