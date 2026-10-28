@@ -381,6 +381,19 @@ fn complex_values() {
     assert!(z.re().contains_rational(&Rational::from(0)));
     assert!(z.im().contains_rational(&Rational::from(1)));
     assert_eq!(warnings, []);
+    // Nor to lower arithmetic's: `1 + (0 ± ε)i` times `√2` keeps the
+    // precision of the loop, where it kept 53 bits (CAS-290).
+    let (e, warnings) = eval(&format!(
+        "N[Times[Plus[1, Times[Complex[0, 1], {ZERO}]], Power[2, 1/2]], 30]"
+    ));
+    let z = complex_ball_of(&e);
+    let root = Mpfr::with_val(200, 2).sqrt();
+    assert!(contains_mpfr(z.re(), &root));
+    assert_eq!(
+        significant(&ball_decimal(z.re(), 53)),
+        mpfr_digits(&root, 30)
+    );
+    assert_eq!(warnings, []);
 }
 
 #[test]

@@ -64,30 +64,41 @@ pub(super) const EXACT_ONLY: Precision = Precision {
 /// know far more than it was computed to, as `7.5` plus a ball of `2^-10^11`
 /// knows `10^11` bits, and working at its accuracy would take that many.
 /// `None` without a ball.
+///
+/// A complex ball's accuracy is relative to its larger part, as `N`
+/// measures it. A ball around 0 has no relative accuracy, and its radius
+/// alone bounds the error it adds, so it is left out; with nothing else,
+/// the working precision applies, which is `N`'s inside its loop. Counted
+/// as 0 bits, such a ball made every operation it took part in run at
+/// [`MIN_BITS`], as `1 + (0 ± ε)i` after a cancellation did (CAS-290).
 fn ball_bits(operands: &[&Num], precision: Precision) -> Option<u64> {
     let mut inexact: Option<u64> = None;
     let mut exact: Option<u64> = None;
-    let mut see = |b: &Ball| {
-        if b.is_exact() {
-            exact = Some(exact.unwrap_or(0).max(b.mid().bit_length()));
-        } else {
-            let accuracy = u64::try_from(b.rel_accuracy_bits()).unwrap_or(0);
-            inexact = Some(inexact.map_or(accuracy, |p| p.min(accuracy)));
-        }
-    };
+    let mut around_zero = false;
     for n in operands {
-        match n {
-            Num::Ball(b) => see(b),
-            Num::ComplexBall(z) => {
-                see(z.re());
-                see(z.im());
+        let accuracy = match n {
+            Num::Real(_) | Num::Complex(_) => continue,
+            Num::Ball(b) if b.is_exact() => {
+                exact = Some(exact.unwrap_or(0).max(b.mid().bit_length()));
+                continue;
             }
-            Num::Real(_) | Num::Complex(_) => {}
+            Num::ComplexBall(z) if z.is_exact() => {
+                let longest = z.re().mid().bit_length().max(z.im().mid().bit_length());
+                exact = Some(exact.unwrap_or(0).max(longest));
+                continue;
+            }
+            Num::Ball(b) => b.rel_accuracy_bits(),
+            Num::ComplexBall(z) => z.rel_accuracy_bits(),
+        };
+        match u64::try_from(accuracy) {
+            Ok(bits) if bits > 0 => inexact = Some(inexact.map_or(bits, |p| p.min(bits))),
+            _ => around_zero = true,
         }
     }
     inexact
         .map(|bits| bits.max(MIN_BITS))
         .or(exact.map(|bits| bits.max(precision.working)))
+        .or(around_zero.then_some(precision.working))
         .map(|bits| bits.min(precision.most.max(MIN_BITS)))
 }
 
