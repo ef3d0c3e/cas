@@ -248,7 +248,7 @@ fn inverses() {
         read("DiracDelta[t]")
     );
     assert_eq!(
-        ctx.eval(&read("InverseLaplaceTransform[Power[Plus[s, 1], -1]]"))
+        ctx.eval(&read("InverseLaplaceTransform[Power[Plus[x, 1], -1]]"))
             .unwrap(),
         ctx.eval(&read("Power[E, Times[-1, x]]")).unwrap()
     );

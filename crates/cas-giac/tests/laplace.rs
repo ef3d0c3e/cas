@@ -102,7 +102,9 @@ fn heaviside_and_dirac() {
 }
 
 /// The transform (CAS-274). giac's `laplace(t^(1/2),t,s)` is 0 and its
-/// transforms of derivatives stay as integrals: the unit tests'.
+/// transforms of derivatives stay as integrals; the oracle's libgiac
+/// answers `laplace(t^n,t,s)` with `igamma(n+1, infinity)` and leaves
+/// `laplace(t*Heaviside(t-1),t,s)` an integral: the unit tests'.
 #[test]
 fn transforms() {
     check(&[
@@ -118,11 +120,9 @@ fn transforms() {
         "laplace(t*sin(t),t,s)",
         "laplace(a*t+b,t,s)",
         "laplace(sin(t)^2,t,s)",
-        "laplace(t^n,t,s)",
         "laplace(exp(a*t),t,s)",
         "laplace(Heaviside(t-1),t,s)",
         "laplace(Dirac(t-2),t,s)",
-        "laplace(t*Heaviside(t-1),t,s)",
         "laplace(sin(t-1)*Heaviside(t-1),t,s)",
         "laplace(exp(-t)*t^2,t,s)",
         "laplace(t*cos(2*t),t,s)",
