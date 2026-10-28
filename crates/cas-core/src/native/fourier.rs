@@ -9,6 +9,9 @@
 //!   real kernels, so that products of sines and cosines linearise
 //!   (CAS-199), and `c₀ = a₀`.
 //!
+//! The integrands `f` times a kernel are expanded, so that a sum integrates
+//! term by term.
+//!
 //! A numeric `n` is used as it is, an integer or not, as giac does. A
 //! symbolic `n` is taken as an integer: the integrals are evaluated in a
 //! scope that assumes `n ∈ ℤ`, so that `sin(nπ)` is 0 and `cos(nπ)` is
@@ -96,11 +99,12 @@ fn coefficient(ev: &mut Eval<'_>, e: &Expr, kind: Kind) -> Native {
     for assumption in assumptions {
         scope = Some(scope.as_ref().unwrap_or(ev.context()).assuming(assumption));
     }
+    // Expanded, so that a sum times the kernel integrates term by term.
     let integral = |kernel: Expr| {
         Expr::call(
             Symbol::INTEGRATE,
             [
-                f.clone() * kernel,
+                Expr::call(Symbol::EXPAND, [f.clone() * kernel]),
                 x.clone(),
                 a.clone(),
                 a.clone() + period.clone(),

@@ -155,6 +155,19 @@ fn other_functions() {
             "FourierSinCoefficient[x, x, T, n, a]",
             "Times[-1, T, Cos[Times[2, Pi, n, a, Power[T, -1]]], Power[Times[Pi, n], -1]]",
         ),
+        // A trigonometric polynomial, its products expanded.
+        (
+            "FourierCosCoefficient[Plus[1, Cos[x], Times[2, Sin[Times[2, x]]]], x, Times[2, Pi], 1, Times[-1, Pi]]",
+            "1",
+        ),
+        (
+            "FourierSinCoefficient[Plus[1, Cos[x], Times[2, Sin[Times[2, x]]]], x, Times[2, Pi], 2, Times[-1, Pi]]",
+            "2",
+        ),
+        (
+            "FourierCoefficient[Plus[1, Cos[x], Times[2, Sin[Times[2, x]]]], x, Times[2, Pi], 2]",
+            "Complex[0, -1]",
+        ),
         // Given n: 1/2, and resonance (CAS-318).
         (
             "FourierCosCoefficient[Power[Cos[x], 2], x, Times[2, Pi], 2, Times[-1, Pi]]",
