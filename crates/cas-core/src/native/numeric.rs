@@ -344,7 +344,7 @@ fn round(e: &Expr, bits: u64) -> Expr {
 }
 
 /// What `N` makes of an expression at `p` bits: balls for its exact numbers
-/// and for `Pi` and `E`, where they stand for values. That is in the
+/// and for `Pi`, `E` and `EulerGamma`, where they stand for values. That is in the
 /// arguments of numeric functions (the `NumericFunction` heads: arithmetic
 /// and the elementary functions), lists, comparisons, logic, `If` and
 /// equations, as in Xcas's `evalf`. Elsewhere numbers keep their exact
@@ -378,6 +378,7 @@ impl<'c> Numeric<'c> {
             View::Complex(z) => Expr::from(&ComplexBall::from_complex(z, p)),
             View::Symbol(Symbol::PI) => Expr::from(&Ball::const_pi(p)),
             View::Symbol(Symbol::E) => Expr::from(&Ball::const_e(p)),
+            View::Symbol(Symbol::EULER_GAMMA) => Expr::from(&Ball::const_euler(p)),
             View::Apply { head, args } if head.as_symbol() == Some(Symbol::INTEGRATE) => {
                 self.definite(args).unwrap_or_else(|| e.clone())
             }
@@ -469,6 +470,8 @@ fn kept(head: Option<Symbol>, i: usize, a: &Expr, args: &[Expr]) -> bool {
             a.as_symbol() == Some(Symbol::E) && !args.get(1).is_some_and(Expr::is_numeric)
         }
         (Some(Symbol::TIMES), _) => is_unit(a),
+        // The order of `PolyGamma` (CAS-DOC-31 §3.2).
+        (Some(Symbol::POLY_GAMMA), 1) => true,
         _ => false,
     }
 }

@@ -37,6 +37,7 @@ mod number_theory;
 mod numeric;
 mod orthogonal;
 mod parts;
+mod polygamma;
 mod polynomial;
 mod polytools;
 mod procedure;
@@ -113,6 +114,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::SIN_INTEGRAL, expint::integral),
         (Symbol::COS_INTEGRAL, expint::integral),
         (Symbol::LOG_INTEGRAL, expint::log_integral),
+        (Symbol::POLY_GAMMA, polygamma::polygamma),
         (Symbol::HEAVISIDE_THETA, step::heaviside),
         (Symbol::DIRAC_DELTA, step::dirac),
         (Symbol::DIRECTED_INFINITY, arith::directed_infinity),

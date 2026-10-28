@@ -777,6 +777,7 @@ fn symbol(ctx: &Context, s: Symbol) -> Range {
     match s {
         Symbol::PI => between((157, 50), (63, 20)),
         Symbol::E => between((271, 100), (68, 25)),
+        Symbol::EULER_GAMMA => between((577, 1000), (289, 500)),
         _ if s.is_builtin() => Range::unknown(),
         _ => match ctx.domain() {
             Domain::Real => Range::real(),
@@ -833,7 +834,7 @@ pub(crate) fn set(ctx: &Context, e: &Expr) -> Option<Set> {
     }
     let known = ctx.facts().sets.get(e).copied();
     let structural = match e.view() {
-        View::Symbol(Symbol::PI | Symbol::E) => Some(Set::Reals),
+        View::Symbol(Symbol::PI | Symbol::E | Symbol::EULER_GAMMA) => Some(Set::Reals),
         View::Symbol(s) if !s.is_builtin() => Some(match ctx.domain() {
             Domain::Real => Set::Reals,
             Domain::Complex => Set::Complexes,

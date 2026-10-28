@@ -96,6 +96,10 @@ builtins! {
     SIN_INTEGRAL = "SinIntegral" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     COS_INTEGRAL = "CosIntegral" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     LOG_INTEGRAL = "LogIntegral" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    // The digamma function and its derivatives (CAS-DOC-31 §3.2), Xcas's
+    // `Psi(x)` and `Psi(x, n)`, in giac's argument order: not listable, as
+    // the orthogonal polynomials, for `Psi([1,2], 1)`.
+    POLY_GAMMA = "PolyGamma" [NUMERIC_FUNCTION, PROTECTED];
     // The step and the delta (CAS-DOC-18 §2).
     HEAVISIDE_THETA = "HeavisideTheta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     DIRAC_DELTA = "DiracDelta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
@@ -295,6 +299,8 @@ builtins! {
     // Constants.
     PI = "Pi" [CONSTANT, PROTECTED];
     E = "E" [CONSTANT, PROTECTED];
+    // Euler's constant γ, Xcas's `euler_gamma` (CAS-DOC-31 §3.2).
+    EULER_GAMMA = "EulerGamma" [CONSTANT, PROTECTED];
     // The imaginary unit's symbol: it evaluates to the complex number
     // `0 + 1·I`, which the builder and the language produce directly
     // (CAS-51).

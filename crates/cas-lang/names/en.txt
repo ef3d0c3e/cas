@@ -66,6 +66,9 @@ ExpIntegralEi: Ei
 SinIntegral: Si
 CosIntegral: Ci
 LogIntegral: Li
+# The digamma function and its derivatives, giac's argument order
+# (CAS-DOC-31, CAS-355).
+PolyGamma: Psi
 # The inverse of erf (CAS-DOC-23, CAS-302), which Xcas lacks.
 InverseErf: erfinv
 HeavisideTheta: Heaviside
@@ -74,6 +77,8 @@ Sqrt: sqrt
 Factorial: factorial
 Pi: pi
 E: e
+# Euler's constant (CAS-DOC-31, CAS-355).
+EulerGamma: euler_gamma
 True: true
 False: false
 Indeterminate: undef

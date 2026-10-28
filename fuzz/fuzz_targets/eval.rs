@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 246] = [
+const BUILTINS: [&str; 248] = [
     "Plus",
     "Times",
     "Power",
@@ -303,6 +303,9 @@ const BUILTINS: [&str; 246] = [
     "SinIntegral",
     "CosIntegral",
     "LogIntegral",
+    // The polygamma functions and Euler's constant (CAS-355).
+    "PolyGamma",
+    "EulerGamma",
     // The step and the delta (CAS-273).
     "HeavisideTheta",
     "DiracDelta",

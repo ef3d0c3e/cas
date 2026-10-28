@@ -15,7 +15,8 @@
 //! - the chain rule for `Sin`, `Cos`, `Tan`, `ArcSin`, `ArcCos`, `ArcTan`,
 //!   the hyperbolic `Sinh` … `ArcTanh` (CAS-DOC-15 §2), `Erf` and `Erfc`
 //!   (§8), `ExpIntegralEi`, `SinIntegral` and `CosIntegral` (CAS-DOC-31
-//!   §3.1), `HeavisideTheta` (CAS-DOC-18 §2), `Exp` and `Log`, from a table,
+//!   §3.1), `PolyGamma`, `Gamma` and `Beta` (§3.2), `HeavisideTheta`
+//!   (CAS-DOC-18 §2), `Exp` and `Log`, from a table,
 //!   and `Abs`, whose derivative is
 //!   `Abs[f] / f` times `f′`, giac's `abs(x)/x`, so that the logarithms of
 //!   absolute values integrals give differentiate back (CAS-DOC-9);
@@ -173,6 +174,29 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "D/CosIntegral",
             "CosIntegral[Pattern[f, Blank[]]]",
             "Times[Cos[f], Power[f, -1], D[f, x]]",
+        ),
+        // The polygamma functions, and through them `Gamma` and `Beta`
+        // (CAS-DOC-31 §3.2).
+        d(
+            "D/PolyGamma",
+            "PolyGamma[Pattern[f, Blank[]]]",
+            "Times[PolyGamma[f, 1], D[f, x]]",
+        ),
+        d(
+            "D/PolyGamma/order",
+            "PolyGamma[Pattern[f, Blank[]], Pattern[n, Blank[]]]",
+            "Condition[Times[PolyGamma[f, Plus[n, 1]], D[f, x]], FreeQ[n, x]]",
+        ),
+        d(
+            "D/Gamma",
+            "Gamma[Pattern[f, Blank[]]]",
+            "Times[Gamma[f], PolyGamma[f], D[f, x]]",
+        ),
+        d(
+            "D/Beta",
+            "Beta[Pattern[a, Blank[]], Pattern[b, Blank[]]]",
+            "Times[Beta[a, b], Plus[Times[PolyGamma[a], D[a, x]], Times[PolyGamma[b], D[b, x]], \
+             Times[-1, PolyGamma[Plus[a, b]], Plus[D[a, x], D[b, x]]]]]",
         ),
         // The step's derivative is the delta (CAS-DOC-18 §2).
         d(
