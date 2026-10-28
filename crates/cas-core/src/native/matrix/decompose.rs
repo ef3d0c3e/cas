@@ -20,8 +20,8 @@
 //!   the variable given.
 //! - **`MatrixExp[A]`** (`expm`) and **`MatrixPower[A, n]`** (`matpow`):
 //!   `P f(J) P⁻¹`, `f` of a block the upper triangular Toeplitz matrix of
-//!   `f(λ), f′(λ), …, f^(m−1)(λ)/(m − 1)!`: `E^λ` times `1, 1, 1/2, …`, and
-//!   `λ^n` times `1, n/λ, C(n, 2)/λ², …`. A block at `λ = 0` of size `m`
+//!   `f(λ), f′(λ), …, f^(m−1)(λ)/(m − 1)!`: `Exp[λ]`, giac's `exp(λ)`,
+//!   times `1, 1, 1/2, …`, and `λ^n` times `1, n/λ, C(n, 2)/λ², …`. A block at `λ = 0` of size `m`
 //!   is 0 for `n ≥ m`, generic in `n`, which giac writes with `0^n`. An
 //!   integer `n` is `Power`'s. giac's `exp` of a square matrix is its
 //!   exponential, where this CAS's `Exp` of a list is entrywise: the
@@ -581,7 +581,7 @@ pub(in crate::native) fn matrix_exp(ev: &mut Eval<'_>, e: &Expr) -> Native {
     // e^λ / k!.
     let mut block = |ev: &mut Eval<'_>, lambda: &Expr, k: usize| -> Result<Expr, EvalError> {
         let factorial: i64 = (1..=i64::try_from(k).expect("small")).product();
-        ev.eval(&(Expr::from(Symbol::E).pow(lambda.clone()) / Expr::from(factorial)))
+        ev.eval(&(Expr::call(Symbol::EXP, [lambda.clone()]) / Expr::from(factorial)))
     };
     let (p, f) = assembled(ev, &chains, n, &mut block)?;
     let Some(result) = conjugated(ev, &p, &f)? else {

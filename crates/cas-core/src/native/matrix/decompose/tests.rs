@@ -187,7 +187,7 @@ fn functions() {
         ),
         (
             "MatrixExp[List[List[1, 0], List[0, 2]]]",
-            "List[List[E, 0], List[0, Power[E, 2]]]",
+            "List[List[Exp[1], 0], List[0, Exp[2]]]",
         ),
         (
             "MatrixExp[List[List[0, 1, 0], List[0, 0, 1], List[0, 0, 0]]]",
