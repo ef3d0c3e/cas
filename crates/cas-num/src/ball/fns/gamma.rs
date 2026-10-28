@@ -310,7 +310,7 @@ fn gamma_positive(y: &Ball, wp: u64) -> Ball {
 }
 
 /// Whether the ball meets 0 or a negative integer.
-fn meets_pole(x: &Ball) -> bool {
+pub(super) fn meets_pole(x: &Ball) -> bool {
     let m = x.mid();
     let Some(r) = x.rad().to_float() else {
         return true;

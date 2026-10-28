@@ -28,6 +28,7 @@ mod fixed;
 mod gamma;
 mod hyp;
 mod log;
+mod polygamma;
 mod pow;
 mod tables;
 mod trig;
@@ -79,4 +80,28 @@ fn factorial_lower(n: u64) -> Mag {
 /// The exact ball 1.
 fn one() -> Ball {
     Ball::from_integer(&crate::Integer::ONE)
+}
+
+/// `f` at the working precision of `prec` bits, and for an exact `b` again
+/// at more while the relative accuracy falls short of `prec`, up to `4 (wp +
+/// bits(b)) + 256` more: next to a zero of a function that is not known
+/// exactly, a fixed precision is only absolute (CAS-DOC-31 §2).
+fn refined(b: &Ball, prec: u64, f: impl Fn(u64) -> Ball) -> Ball {
+    let wp = working(prec);
+    let mut value = f(wp);
+    if !b.is_exact() {
+        return value;
+    }
+    let want = i64::try_from(prec).unwrap_or(i64::MAX).saturating_add(2);
+    let cap = 4 * (wp + b.mid().bit_length()) + 256;
+    let mut extra = 0u64;
+    while value.is_finite() && value.rel_accuracy_bits() < want && extra < cap {
+        let known = u64::try_from(value.rel_accuracy_bits().max(0)).unwrap_or(0);
+        let short = u64::try_from(want)
+            .unwrap_or(u64::MAX)
+            .saturating_sub(known);
+        extra = (2 * extra).max(short + 32).min(cap);
+        value = f(wp + extra);
+    }
+    value
 }

@@ -43,7 +43,7 @@
 use std::f64::consts::{LN_2, LOG2_E};
 
 use super::exp::HUGE_EXP;
-use super::{exponent, one, upper, working};
+use super::{exponent, one, refined, upper};
 use crate::Integer;
 use crate::ball::{Ball, Float, Mag, Round};
 
@@ -286,29 +286,6 @@ fn sin_cos_exact(x: &Float, wp: u64, cosine: bool) -> Ball {
     sin_cos_series(x, wp, cosine)
 }
 
-/// `f` at the exact midpoint of `b` at `wp` bits, and for an exact `b` again
-/// at more while its relative accuracy is short of `prec` bits.
-fn refined(b: &Ball, prec: u64, f: impl Fn(&Float, u64) -> Ball) -> Ball {
-    let wp = working(prec);
-    let x = b.mid();
-    let mut value = f(x, wp);
-    if !b.is_exact() {
-        return value;
-    }
-    let want = i64::try_from(prec).unwrap_or(i64::MAX).saturating_add(2);
-    let cap = 4 * (wp + x.bit_length()) + 256;
-    let mut extra = 0u64;
-    while value.is_finite() && value.rel_accuracy_bits() < want && extra < cap {
-        let known = u64::try_from(value.rel_accuracy_bits().max(0)).unwrap_or(0);
-        let short = u64::try_from(want)
-            .unwrap_or(u64::MAX)
-            .saturating_sub(known);
-        extra = (2 * extra).max(short + 32).min(cap);
-        value = f(x, wp + extra);
-    }
-    value
-}
-
 /// A lower bound of `|x|` over the ball, 0 where it meets 0.
 fn distance_to_zero(b: &Ball) -> Mag {
     Mag::from_float_lower(&b.mid().abs()).sub_lower(b.rad())
@@ -338,7 +315,7 @@ impl Ball {
         if !m.is_negative() && exponent(m) > HUGE_EXP {
             return Ball::INDETERMINATE;
         }
-        let value = refined(self, prec, ei_exact);
+        let value = refined(self, prec, |wp| ei_exact(m, wp));
         if self.is_exact() {
             return value.round_to_accuracy(prec);
         }
@@ -364,9 +341,10 @@ impl Ball {
         if !self.is_finite() {
             return Ball::INDETERMINATE;
         }
-        let value = refined(self, prec, |x, wp| {
-            let v = sin_cos_exact(&x.abs(), wp, false);
-            if x.is_negative() { v.neg() } else { v }
+        let m = self.mid();
+        let value = refined(self, prec, |wp| {
+            let v = sin_cos_exact(&m.abs(), wp, false);
+            if m.is_negative() { v.neg() } else { v }
         });
         // |sin x/x| ≤ min(1, 1/|x|).
         let distance = distance_to_zero(self);
@@ -393,7 +371,7 @@ impl Ball {
         if !self.is_finite() || self.mid().is_negative() || distance.is_zero() {
             return Ball::INDETERMINATE;
         }
-        let value = refined(self, prec, |x, wp| sin_cos_exact(x, wp, true));
+        let value = refined(self, prec, |wp| sin_cos_exact(self.mid(), wp, true));
         // |cos x/x| ≤ 1/|x|.
         value
             .add_error(&self.rad().div(&distance))
