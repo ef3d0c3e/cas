@@ -43,6 +43,7 @@ mod fns;
 mod hex;
 #[cfg(test)]
 mod huge_tests;
+mod jet;
 mod machine;
 mod mag;
 mod quadrature;
@@ -54,6 +55,7 @@ pub use consts::clear_constant_cache;
 pub use decimal::DecimalStyle;
 pub use float::{APPROX_ULPS, EXACT_BITS_MAX, Float, Round};
 pub use fns::{Airy, bernoulli};
+pub use jet::Jet;
 pub use machine::MachineBall;
 pub use mag::Mag;
 pub use quadrature::{MAX_CACHED, Rule, gauss_legendre};
