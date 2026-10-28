@@ -115,6 +115,8 @@ builtins! {
     INVERSE_ZTRANSFORM = "InverseZTransform" [PROTECTED];
     KRONECKER_DELTA = "KroneckerDelta" [LISTABLE, PROTECTED];
     RSOLVE = "RSolve" [PROTECTED];
+    // Residues and Fourier coefficients (CAS-DOC-25).
+    RESIDUE = "Residue" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];

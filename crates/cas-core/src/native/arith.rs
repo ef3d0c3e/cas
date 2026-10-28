@@ -572,9 +572,11 @@ fn merge_number_powers(factors: Vec<Expr>) -> Vec<Expr> {
 ///   `Limits::number_bits` bits (2²⁴ by default) stays unevaluated;
 /// - rational powers of rationals in canonical form ([`radical`]);
 /// - `x^0` is 1, `x^1` is `x`, `1^x` is 1;
-/// - `(b^p)^n` is `b^(p n)` and `(x y)^n` is `x^n y^n` for an integer `n`,
-///   the identities that hold for every complex `b`; for a positive
-///   rational `b`, `(b^p)^q` is `b^(p q)` for any real `q`;
+/// - `(b^p)^n` is `b^(p n)`, `(e^u)^n` is `e^(n u)` and `(x y)^n` is
+///   `x^n y^n` for an integer `n`, the identities that hold for every
+///   complex `b`; for a positive rational `b`, `(b^p)^q` is `b^(p q)` for
+///   any real `q`;
+/// - `E^u` with terms `iπk` in `u` by [`special::exponential`];
 /// - infinities: a direction to a positive integer power, 0 for a negative
 ///   power, `Indeterminate` for `Infinity^0`.
 pub(super) fn power(ev: &mut Eval<'_>, e: &Expr) -> Native {
@@ -639,10 +641,6 @@ fn scalar_power(ev: &mut Eval<'_>, b: &Expr, n: &Expr) -> Native {
     if Num::of(b).is_some_and(|b| b.is_one()) {
         return Ok(Some(Expr::from(1)));
     }
-    let integer = exponent
-        .as_ref()
-        .and_then(|n| n.real())
-        .filter(|n| n.is_integer());
     if let Some(i) = Infinity::of(b) {
         let Some(n) = exponent.as_ref().and_then(Num::real) else {
             return Ok(None);
@@ -668,44 +666,64 @@ fn scalar_power(ev: &mut Eval<'_>, b: &Expr, n: &Expr) -> Native {
     {
         return Ok(Some(factor * Expr::from(Symbol::E).pow(rest)));
     }
-    if let View::Apply { head, args } = b.view() {
-        match (head.as_symbol(), args) {
-            // `(b^p)^n`.
-            (Some(Symbol::POWER), [inner, p]) => {
-                let positive = inner.to_rational().is_some_and(|q| q.is_positive())
-                    && exponent.as_ref().is_some_and(|n| n.real().is_some())
-                    && p.to_rational().is_some();
-                if integer.is_some() || positive {
-                    let product = apply(Symbol::TIMES, &[p.clone(), n.clone()]);
-                    return Ok(Some(apply(Symbol::POWER, &[inner.clone(), product])));
-                }
-                if let Some(rewritten) = real_power_of_power(ev, inner, p, n, real_domain) {
-                    return Ok(Some(rewritten));
-                }
+    Ok(compound_power(ev, b, n, exponent.as_ref(), real_domain))
+}
+
+/// [`scalar_power`] of a power, an absolute value, an exponential or a
+/// product, by the identities for its exponent.
+#[allow(
+    clippy::many_single_char_names,
+    reason = "b^n, as written in mathematics"
+)]
+fn compound_power(
+    ev: &Eval<'_>,
+    b: &Expr,
+    n: &Expr,
+    exponent: Option<&Num>,
+    real_domain: bool,
+) -> Option<Expr> {
+    let integer = exponent.and_then(Num::real).filter(|n| n.is_integer());
+    let View::Apply { head, args } = b.view() else {
+        return None;
+    };
+    match (head.as_symbol(), args) {
+        // `(b^p)^n`.
+        (Some(Symbol::POWER), [inner, p]) => {
+            let positive = inner.to_rational().is_some_and(|q| q.is_positive())
+                && exponent.is_some_and(|n| n.real().is_some())
+                && p.to_rational().is_some();
+            if integer.is_some() || positive {
+                let product = apply(Symbol::TIMES, &[p.clone(), n.clone()]);
+                return Some(apply(Symbol::POWER, &[inner.clone(), product]));
             }
-            // `Abs[x]^n` is `x^n` for a real `x` and an even `n`.
-            (Some(Symbol::ABS), [inner])
-                if integer.as_ref().is_some_and(|n| {
-                    n.numer()
-                        .unsigned_abs()
-                        .trailing_zeros()
-                        .is_some_and(|t| t > 0)
-                }) && assume::element(ev.context(), inner, Set::Reals) == Truth::True =>
-            {
-                return Ok(Some(apply(Symbol::POWER, &[inner.clone(), n.clone()])));
-            }
-            // `(x y)^n`.
-            (Some(Symbol::TIMES), factors) if integer.is_some() => {
-                let powers: Vec<Expr> = factors
-                    .iter()
-                    .map(|f| apply(Symbol::POWER, &[f.clone(), n.clone()]))
-                    .collect();
-                return Ok(Some(apply(Symbol::TIMES, &powers)));
-            }
-            _ => {}
+            real_power_of_power(ev, inner, p, n, real_domain)
         }
+        // `Abs[x]^n` is `x^n` for a real `x` and an even `n`.
+        (Some(Symbol::ABS), [inner])
+            if integer.as_ref().is_some_and(|n| {
+                n.numer()
+                    .unsigned_abs()
+                    .trailing_zeros()
+                    .is_some_and(|t| t > 0)
+            }) && assume::element(ev.context(), inner, Set::Reals) == Truth::True =>
+        {
+            Some(apply(Symbol::POWER, &[inner.clone(), n.clone()]))
+        }
+        // `(e^u)^n` (CAS-DOC-25 §4): the powers of `e^(iπ/4)` meet §2.
+        (Some(Symbol::EXP), [u]) if integer.is_some() => {
+            let product = apply(Symbol::TIMES, &[n.clone(), u.clone()]);
+            Some(apply(Symbol::EXP, &[product]))
+        }
+        // `(x y)^n`.
+        (Some(Symbol::TIMES), factors) if integer.is_some() => {
+            let powers: Vec<Expr> = factors
+                .iter()
+                .map(|f| apply(Symbol::POWER, &[f.clone(), n.clone()]))
+                .collect();
+            Some(apply(Symbol::TIMES, &powers))
+        }
+        _ => None,
     }
-    Ok(None)
 }
 
 /// `(b^p)^q` for rationals `p` and `q`, when the assumptions allow
