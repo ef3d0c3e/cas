@@ -307,3 +307,18 @@ fn reflection_from_zero() {
         );
     }
 }
+
+/// A ball just above the pole −4, 2^-267 from it with a radius of
+/// 0.87·2^-267: finite, of the sign of `−6!/(x + 4)^7`, and holding the
+/// value at its midpoint (the `special_fns` target's harness took it for a
+/// pole, CAS-387).
+#[test]
+fn next_to_a_pole() {
+    let mid = Float::from(-4i64).add(&Float::from(1i64).mul_2exp(&Integer::from(-267)));
+    let r = Mag::from_float(&Float::from(0x3714_18f9i64).mul_2exp(&Integer::from(-297)));
+    let x = Ball::new(mid.clone(), r);
+    let value = x.polygamma(6, 236);
+    assert!(value.is_finite() && value.mid().is_negative(), "{value:?}");
+    let at_mid = Ball::exact(mid).polygamma(6, 236);
+    assert!(value.overlaps(&at_mid), "{value:?} against {at_mid:?}");
+}

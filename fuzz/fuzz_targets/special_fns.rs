@@ -147,23 +147,21 @@ fn sin_cos(u: &mut Unstructured<'_>, cosine: bool, x: &Ball, prec: u64) -> Resul
     Ok(())
 }
 
-/// Whether the ball meets 0 or a negative integer, from its ends rounded
-/// outward.
-fn meets_pole(x: &Ball) -> bool {
-    let Some(r) = x.rad().to_float() else {
-        return true;
-    };
-    let bits = x.mid().bit_length().max(62) + 2;
-    let lo = x.mid().sub_round(&r, bits, Round::Floor).0;
-    let hi = x.mid().add_round(&r, bits, Round::Ceil).0;
+/// Whether the ball meets 0 or a negative integer, from its exact ends;
+/// `None` where they are too long to form. Ends rounded outward told a
+/// pole a ball 2^-270 above −4 did not reach (CAS-387).
+fn meets_pole(x: &Ball) -> Option<bool> {
+    let r = x.rad().to_float()?;
+    let lo = x.mid().checked_sub(&r)?;
+    let hi = x.mid().checked_add(&r)?;
     if lo.sign() == Ordering::Greater {
-        return false;
+        return Some(false);
     }
     // lo ≤ 0: 0 is in the ball, or an integer lies in [lo, hi] below it.
     if hi.sign() != Ordering::Less {
-        return true;
+        return Some(true);
     }
-    ceil(&lo) <= floor(&hi)
+    Some(ceil(&lo) <= floor(&hi))
 }
 
 /// `⌊x⌋` for `x < 0`, without a rational below 1 in magnitude.
@@ -199,9 +197,13 @@ fn polygamma(u: &mut Unstructured<'_>, x: &Ball, prec: u64) -> Result<()> {
     if far(Some(x.mid().clone())) || far(r.clone()) {
         return Ok(());
     }
-    if meets_pole(x) {
-        assert_eq!(y, Ball::INDETERMINATE, "{}: a pole", what());
-        return Ok(());
+    match meets_pole(x) {
+        Some(true) => {
+            assert_eq!(y, Ball::INDETERMINATE, "{}: a pole", what());
+            return Ok(());
+        }
+        Some(false) => {}
+        None => return Ok(()),
     }
     if !y.is_finite() {
         // A ball whose radius rounding reaches a pole may be indeterminate;
