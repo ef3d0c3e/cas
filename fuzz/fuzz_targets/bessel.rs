@@ -7,8 +7,9 @@
 //!   `x Ai(a x)` or `Ai′(a x + b)`: its antiderivative, where found,
 //!   differentiates back to it at a point;
 //! - a series of the functions to order 4 at a regular point: its terms are
-//!   the function up to a remainder of order 5, which halving the step
-//!   divides by 24 at least;
+//!   the function up to a remainder of order 5, whose quotient by `h^5`
+//!   tends to a limit as the step `h` does, where a wrong coefficient makes
+//!   it grow;
 //! - Bessel's and Airy's equations with random parameters: `DSolve`'s
 //!   answer satisfies them at a point.
 #![no_main]
@@ -176,28 +177,43 @@ fn series(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
         vec![s.clone()]
     };
     let polynomial = Expr::call(Symbol::PLUS, terms);
-    let gap = |h: &Rational| -> Option<f64> {
+    // The remainder over h^5, a ball, at h, h/2 and h/8. It tends to the
+    // fifth coefficient: for a remainder c5 h^5 + c6 h^6, its value at h/8
+    // is 1.75 times that at h/2 less 0.75 times that at h, within 2.5 times
+    // the larger. A wrong coefficient of order k ≤ 4 makes it grow like
+    // h^(k−5), 4 times at least from h/2 to h/8. Ratios of the remainders
+    // alone mislead where the h^5 and h^6 terms nearly cancel: Bi′ at −1/2.
+    let normalized = |h: &Rational| -> Option<cas_num::ball::Ball> {
         let at = Expr::from(&point + h);
         let p = polynomial.substitute(&[(x(), at.clone())]);
         let value = f.substitute(&[(x(), at)]);
-        let difference = ctx
-            .eval(&Expr::call(Symbol::N, [p - value, Expr::from(30)]))
+        let quotient = (p - value) / Expr::from(h.clone()).pow(5);
+        let r = ctx
+            .eval(&Expr::call(Symbol::N, [quotient, Expr::from(40)]))
             .ok()?;
-        match difference.view() {
-            View::Ball(d) => Some(d.mid().to_f64().abs()),
+        match r.view() {
+            View::Ball(b) => Some(b.clone()),
             _ => None,
         }
     };
     let h = &reach / &q(16, 1);
-    let (Some(far), Some(close)) = (gap(&h), gap(&(&h / &q(2, 1)))) else {
+    let (Some(r1), Some(r2), Some(r8)) = (
+        normalized(&h),
+        normalized(&(&h / &q(2, 1))),
+        normalized(&(&h / &q(8, 1))),
+    ) else {
         return Ok(());
     };
-    if far > 1e-20 {
-        assert!(
-            close <= far / 24.0,
-            "Series[{f:?}] at {point:?}: {s:?} is {far} and {close} from the function"
-        );
+    // Below the precision the remainder tells nothing.
+    if r8.rel_accuracy_bits() < 8 {
+        return Ok(());
     }
+    let size = |b: &cas_num::ball::Ball| b.mid().to_f64().abs();
+    assert!(
+        size(&r8) <= 3.0 * size(&r1).max(size(&r2)),
+        "Series[{f:?}] at {point:?}: {s:?} is {r1:?}, {r2:?} and {r8:?} times h^5 from the \
+         function at h, h/2 and h/8, h = {h:?}"
+    );
     Ok(())
 }
 

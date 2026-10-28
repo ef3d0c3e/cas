@@ -163,6 +163,43 @@ fn regular_points_satisfy_the_equations() {
     }
 }
 
+/// The fuzz target `bessel`'s `Bi′` at −1/2 (CAS-386): the coefficients by
+/// `Bi″ = x Bi`, and the remainder at `h = 1/32` against Airy's power
+/// series in 60-digit decimals, `3.3637492563587428766…·10⁻¹²`, where the
+/// `h⁵` and `h⁶` terms nearly cancel.
+#[test]
+fn airy_bi_prime_at_minus_half() {
+    let (b, bp) = ("AiryBi[-1/2]", "AiryBiPrime[-1/2]");
+    let h = "Plus[1/2, x]";
+    check(&[(
+        "Series[AiryBiPrime[x], List[x, -1/2, 4]]",
+        &format!(
+            "Plus[{bp}, Times[-1/2, {b}, {h}], \
+             Times[Plus[Times[1/2, {b}], Times[-1/4, {bp}]], Power[{h}, 2]], \
+             Times[Plus[Times[1/24, {b}], Times[1/3, {bp}]], Power[{h}, 3]], \
+             Times[Plus[Times[-1/12, {b}], Times[1/96, {bp}]], Power[{h}, 4]], \
+             Times[Power[{h}, 5], OrderSize[{h}]]]"
+        ),
+    )]);
+    let ctx = Context::new();
+    let s = eval(&ctx, &read("Series[AiryBiPrime[x], List[x, -1/2, 4]]"));
+    let at = read("-15/32");
+    let gap = terms(&s).substitute(&[(Expr::symbol("x"), at.clone())])
+        - Expr::call(Symbol::AIRY_BI_PRIME, [at]);
+    let reference = read("33637492563587428766/10000000000000000000000000000000");
+    let within = Expr::call(
+        Symbol::LESS,
+        [
+            Expr::call(
+                Symbol::ABS,
+                [Expr::call(Symbol::N, [gap, Expr::from(40)]) - reference],
+            ),
+            read("1/1000000000000000000000000"),
+        ],
+    );
+    assert_eq!(eval(&ctx, &within).as_symbol(), Some(Symbol::TRUE), "{s:?}");
+}
+
 /// Limits at 0, through the logarithmic series, and at infinity.
 #[test]
 fn limits() {
