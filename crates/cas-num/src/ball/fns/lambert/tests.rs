@@ -231,18 +231,34 @@ proptest! {
     }
 }
 
-/// Arguments whose exponents are beyond `i64` (CAS-353): `W_(−1)` of a
-/// tiny negative `x` is about `log(−x)`, and `W_0` is about `x`.
+/// Arguments of exponents near and beyond `i64`'s (CAS-353): past `2^61`
+/// the estimates saturated and Newton's steps ran away, past `Float`'s exact
+/// bits (the `special_fns` fuzz target): a huge `x`, and a tiny one on branch
+/// −1, are indeterminate; a tiny one on branch 0 is `x` within `2x²`.
 #[test]
 fn huge_exponents() {
-    let far = Integer::from(1i64 << 62) * Integer::from(4);
-    let tiny = Float::from(-1i64).mul_2exp(&-far);
+    for far in [
+        Integer::from(1i64 << 62) * Integer::from(4),
+        Integer::from(1i64 << 62),
+    ] {
+        let huge = Float::from(1i64).mul_2exp(&far);
+        assert_eq!(Ball::exact(huge).lambert_w(false, 64), Ball::INDETERMINATE);
+        let tiny = Float::from(-1i64).mul_2exp(&-far.clone());
+        assert_eq!(
+            Ball::exact(tiny.clone()).lambert_w(true, 64),
+            Ball::INDETERMINATE
+        );
+        let principal = Ball::exact(tiny.clone()).lambert_w(false, 64);
+        assert!(
+            principal.is_finite() && principal.contains(&tiny),
+            "{principal:?}"
+        );
+        assert!(principal.rel_accuracy_bits() >= 61, "{principal:?}");
+    }
+    let near = Integer::from(1i64 << 40);
+    let big = Ball::exact(Float::from(1i64).mul_2exp(&near)).lambert_w(false, 64);
+    assert!(big.is_finite() && big.rel_accuracy_bits() >= 61, "{big:?}");
+    let tiny = Float::from(-1i64).mul_2exp(&-near);
     let lower = Ball::exact(tiny.clone()).lambert_w(true, 64);
     assert!(lower.is_finite() && lower.mid().is_negative(), "{lower:?}");
-    let principal = Ball::exact(tiny.clone()).lambert_w(false, 64);
-    assert!(principal.is_finite(), "{principal:?}");
-    assert!(
-        principal.contains(&tiny) || principal.rel_accuracy_bits() >= 61,
-        "{principal:?}"
-    );
 }

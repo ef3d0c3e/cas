@@ -20,7 +20,9 @@
 //!    quadruples until the balls decide, at most 64 times.
 //!
 //! A ball whose lower end is not shown above `−1/e`, or on branch −1 whose
-//! upper end is not shown below 0, is indeterminate. A ball with a radius
+//! upper end is not shown below 0, is indeterminate, and so are a huge `x`,
+//! of exponent past `2^61`, and a tiny one on branch −1; a tiny `x` on
+//! branch 0 is `x` within `2x²`. A ball with a radius
 //! has the hull of its ends' values, as `W` is monotone on each branch. An
 //! exact input is computed again at more bits while its relative accuracy
 //! falls short, which next to the branch point, where `f′ → 0`, it does.
@@ -128,7 +130,11 @@ fn newton(x: &Float, lower: bool, wp: u64) -> Float {
         let step = f.sub(&xb, q).div(&slope, q);
         if !step.is_finite() {
             let nudge = Float::from(1i64).mul_2exp(&-Integer::from(p / 2));
-            w = if lower { w.sub(&nudge) } else { w.add(&nudge) };
+            w = if lower {
+                w.sub_round(&nudge, q, Round::Nearest).0
+            } else {
+                w.add_round(&nudge, q, Round::Nearest).0
+            };
             continue;
         }
         let next = w.sub_round(step.mid(), q, Round::Nearest).0;
@@ -138,7 +144,9 @@ fn newton(x: &Float, lower: bool, wp: u64) -> Float {
             next < minus_one
         };
         w = if crossed {
-            w.add(&minus_one).mul_2exp(&-Integer::ONE)
+            w.add_round(&minus_one, q, Round::Nearest)
+                .0
+                .mul_2exp(&-Integer::ONE)
         } else {
             next
         };
@@ -199,8 +207,14 @@ fn certified(x: &Float, lower: bool, wp: u64) -> Ball {
             (Ordering::Less, Ordering::Greater)
         };
         if side(&lo, lo_clamped, below) && side(&hi, hi_clamped, above) {
-            let mid = lo.add(&hi).mul_2exp(&-Integer::ONE);
-            let rad = Mag::from_float(&hi.sub(&mid));
+            // The ball of [lo, hi], its ends rounded outward from the
+            // midpoint: exact sums across a wide gap would be long.
+            let mid = lo
+                .add_round(&hi, q, Round::Nearest)
+                .0
+                .mul_2exp(&-Integer::ONE);
+            let up = |a: &Float, b: &Float| Mag::from_float(&a.sub_round(b, 64, Round::Up).0);
+            let rad = std::cmp::max(up(&hi, &mid), up(&mid, &lo));
             return Ball::new(mid, rad);
         }
         eps = eps.mul_2exp(&Integer::from(2));
@@ -227,6 +241,22 @@ impl Ball {
             return Ball::INDETERMINATE;
         };
         let m = self.mid();
+        // Past 2^61 in exponent the estimates saturate and Newton's steps
+        // ran away: a huge x, or a tiny one on branch −1, is indeterminate;
+        // a tiny one on branch 0 is x within 2x², with |W′| ≤ 2.
+        let e = m.exponent();
+        let limit = Integer::from(1i64 << 61);
+        if *e > limit || (lower && *e < -limit.clone()) {
+            return Ball::INDETERMINATE;
+        }
+        if !m.is_zero() && *e < -limit {
+            let reach = Mag::from_float(m).add(self.rad());
+            let spread = self
+                .rad()
+                .mul_2exp(&Integer::ONE)
+                .add(&reach.mul(&reach).mul_2exp(&Integer::ONE));
+            return Ball::new(m.clone(), Mag::ZERO).add_error(&spread);
+        }
         let bits = m.bit_length().max(62) + 2;
         let lo = m.sub_round(&r, bits, Round::Floor).0;
         let hi = m.add_round(&r, bits, Round::Ceil).0;
