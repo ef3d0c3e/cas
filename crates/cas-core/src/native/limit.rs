@@ -33,7 +33,7 @@ use std::cmp::Ordering;
 use cas_num::{Integer, Rational};
 
 use super::approximation;
-use super::series::{Expander, Point, Series, decided_expansion, fresh, log_t};
+use super::series::{Expander, Point, Series, fresh, log_t, partial_expansion};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
@@ -196,7 +196,14 @@ fn one_side(
         Ok(None) => return Ok(Err(Failure::Unknown)),
         Err(c) => return Ok(Err(Failure::Undecided(c))),
     };
-    let c = series.coeffs[0].clone();
+    // No term below a positive order: the limit is 0 (CAS-DOC-31 §5).
+    let Some(c) = series.coeffs.first().cloned() else {
+        return Ok(if series.order().is_positive() {
+            Ok(Value::Finite(Expr::from(0)))
+        } else {
+            Err(Failure::Unknown)
+        });
+    };
     let q = Rational::new(
         Integer::from(series.valuation),
         Integer::from(series.ramification),
@@ -224,17 +231,20 @@ fn one_side(
 
 /// The series of `local` from its first nonzero term, to a few orders;
 /// `Err` with a coefficient that could not be told from 0 (CAS-DOC-25 §3).
+/// A series short of the order, as far as it goes, and without terms when
+/// it has none: `O(t^q)` (CAS-DOC-31 §5).
 fn leading(
     ev: &mut Eval<'_>,
     local: &Expr,
     t: &Expr,
 ) -> Result<Result<Option<Series>, Expr>, EvalError> {
     for order in ORDERS {
-        let s = match decided_expansion(ev, local, t, &Rational::from(Integer::from(order)))? {
+        let order = Rational::from(Integer::from(order));
+        let s = match partial_expansion(ev, local, t, &order)? {
             Ok(Some(s)) => s,
             other => return Ok(other),
         };
-        if !s.coeffs.is_empty() {
+        if !s.coeffs.is_empty() || s.order() < order {
             return Ok(Ok(Some(s)));
         }
     }
@@ -297,7 +307,9 @@ fn sign_near_zero(
     let Ok(Some(series)) = leading(ev, local, s)? else {
         return Ok(None);
     };
-    let c0 = series.coeffs[0].clone();
+    let Some(c0) = series.coeffs.first().cloned() else {
+        return Ok(None);
+    };
     if !c0.contains(&log_t()) {
         return Ok(Expander::new(ev, s.clone()).sign(&c0));
     }

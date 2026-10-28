@@ -18,7 +18,9 @@
 //!   and the addition formulas; `Tan` as `sin/cos`; `ArcTan`, `ArcSin` and
 //!   `ArcCos` as `f(g₀) + ∫ f′(g) g′` [BK78], the derivative and the
 //!   integral in `t`; the hyperbolic functions by `e^g` and `e^(−g)`, and
-//!   their inverses as `ArcTan` (CAS-DOC-15 §2);
+//!   their inverses as `ArcTan` (CAS-DOC-15 §2); the special functions
+//!   `Ei`, `Si`, `Ci`, `Erf`, `Erfc`, `Gamma`, `PolyGamma` and `LambertW`
+//!   ([`special`], CAS-DOC-31 §5);
 //! - an expression tree from its leaves, each node's series from its
 //!   children's to one target order; where a product with a pole or a
 //!   cancellation leaves less, the caller asks again with a larger target
@@ -740,32 +742,45 @@ impl<'a, 'e> Expander<'a, 'e> {
                 | Symbol::ARC_TANH
                 | Symbol::ABS,
                 [g],
-            ) => {
-                let Some(s) = self.expand(g, order)? else {
+            ) => self.elementary(head, g, order),
+            (
+                Symbol::EXP_INTEGRAL_EI
+                | Symbol::SIN_INTEGRAL
+                | Symbol::COS_INTEGRAL
+                | Symbol::ERF
+                | Symbol::ERFC
+                | Symbol::GAMMA
+                | Symbol::POLY_GAMMA
+                | Symbol::LAMBERT_W,
+                _,
+            ) => self.special(head, args, order),
+            _ => Ok(None),
+        }
+    }
+
+    /// `f(g)` for the elementary functions `f` of [`Expander::expand`].
+    fn elementary(&mut self, f: Symbol, g: &Expr, order: &Rational) -> Found {
+        let Some(s) = self.expand(g, order)? else {
+            return Ok(None);
+        };
+        match f {
+            Symbol::EXP => self.exp(&s),
+            Symbol::LOG => self.log(&s),
+            Symbol::SIN => self.sin_cos(&s, true),
+            Symbol::COS => self.sin_cos(&s, false),
+            Symbol::TAN => {
+                let (Some(sin), Some(cos)) = (self.sin_cos(&s, true)?, self.sin_cos(&s, false)?)
+                else {
                     return Ok(None);
                 };
-                match head {
-                    Symbol::EXP => self.exp(&s),
-                    Symbol::LOG => self.log(&s),
-                    Symbol::SIN => self.sin_cos(&s, true),
-                    Symbol::COS => self.sin_cos(&s, false),
-                    Symbol::TAN => {
-                        let (Some(sin), Some(cos)) =
-                            (self.sin_cos(&s, true)?, self.sin_cos(&s, false)?)
-                        else {
-                            return Ok(None);
-                        };
-                        let Some(sec) = self.power(&cos, &Expr::from(-1))? else {
-                            return Ok(None);
-                        };
-                        Ok(Some(self.mul(&sin, &sec)?))
-                    }
-                    Symbol::SINH | Symbol::COSH | Symbol::TANH => self.hyperbolic(head, &s),
-                    Symbol::ABS => self.abs(&s),
-                    _ => self.inverse(head, &s),
-                }
+                let Some(sec) = self.power(&cos, &Expr::from(-1))? else {
+                    return Ok(None);
+                };
+                Ok(Some(self.mul(&sin, &sec)?))
             }
-            _ => Ok(None),
+            Symbol::SINH | Symbol::COSH | Symbol::TANH => self.hyperbolic(f, &s),
+            Symbol::ABS => self.abs(&s),
+            _ => self.inverse(f, &s),
         }
     }
 
@@ -819,7 +834,30 @@ pub(crate) fn decided_expansion(
     t: &Expr,
     order: &Rational,
 ) -> Result<Result<Option<Series>, Expr>, EvalError> {
+    expansion_to(ev, f, t, order, false)
+}
+
+/// [`decided_expansion`], but a series short of `order` is returned as far
+/// as it goes (CAS-DOC-31 §5): `Si(g)` at a pole of `g` is known only to
+/// the order of the pole, which `Limit` can use.
+pub(crate) fn partial_expansion(
+    ev: &mut Eval<'_>,
+    f: &Expr,
+    t: &Expr,
+    order: &Rational,
+) -> Result<Result<Option<Series>, Expr>, EvalError> {
+    expansion_to(ev, f, t, order, true)
+}
+
+fn expansion_to(
+    ev: &mut Eval<'_>,
+    f: &Expr,
+    t: &Expr,
+    order: &Rational,
+    partial: bool,
+) -> Result<Result<Option<Series>, Expr>, EvalError> {
     let mut expander = Expander::new(ev, t.clone());
+    let mut best: Option<Series> = None;
     for extra in [0, 2, 4, 8, 16] {
         let wanted = order + &Rational::from(Integer::from(extra));
         let found = expander.expand(f, &wanted)?;
@@ -836,11 +874,15 @@ pub(crate) fn decided_expansion(
         if s.order() >= *order {
             return Ok(Ok(Some(s.truncated(order))));
         }
+        if best.as_ref().is_none_or(|b| s.order() > b.order()) {
+            best = Some(s);
+        }
     }
-    Ok(Ok(None))
+    Ok(Ok(if partial { best } else { None }))
 }
 
 mod builtin;
+mod special;
 #[cfg(test)]
 mod tests;
 
