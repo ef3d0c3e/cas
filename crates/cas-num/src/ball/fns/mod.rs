@@ -27,6 +27,7 @@ mod expint;
 mod fixed;
 mod gamma;
 mod hyp;
+mod lambert;
 mod log;
 mod polygamma;
 mod pow;
