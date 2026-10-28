@@ -2,8 +2,15 @@
 //! answers, read back with `Heaviside`, `Dirac` and `Gamma` named, are this
 //! CAS's by value at a point.
 
+use std::sync::{Mutex, PoisonError};
+
 use cas_core::{Context, Expr, Symbol, View};
 use cas_giac::{Giac, ours};
+
+/// Held by each check: giac's session, its assumptions among its state,
+/// is shared by the tests' threads, and `laplace(Heaviside(t-1),t,s)`
+/// stayed an integral after the others' calls (CAS-281).
+static SESSION: Mutex<()> = Mutex::new(());
 
 /// The shared library, or `None` with a note: the checks skip.
 fn giac() -> Option<&'static Giac> {
@@ -71,14 +78,17 @@ fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     }
 }
 
-/// giac's answers and this CAS's, the same by [`same`].
+/// giac's answers and this CAS's, the same by [`same`]: one check at a
+/// time, each of giac's answers from a new session.
 fn check(inputs: &[&str]) {
     let Some(giac) = giac() else {
         return;
     };
+    let _session = SESSION.lock().unwrap_or_else(PoisonError::into_inner);
     let ctx = Context::new();
     let mut wrong = Vec::new();
     for input in inputs {
+        giac.restart();
         match (giac.value(input), ours(input)) {
             (Ok(theirs), Ok(ours)) if same(&ctx, &ours, &theirs) => {}
             (theirs, ours) => wrong.push(format!("{input}: ours {ours:?}, giac's {theirs:?}")),
