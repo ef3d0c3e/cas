@@ -31,3 +31,9 @@ unreachable_pub = "warn"
 pedantic = { level = "warn", priority = -1 }
 # Its rewrite, `assert_ne!(v, [] as [T; 0])`, reads worse than the assert.
 assert_is_empty = "allow"
+
+# Tests run on CI only (AGENTS.md), optimized a little: unoptimized, the
+# ball functions' tests against MPFR took half an hour (CAS-299). Overflow
+# checks and debug assertions stay on.
+[profile.test]
+opt-level = 1
