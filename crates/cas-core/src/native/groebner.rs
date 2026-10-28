@@ -16,7 +16,11 @@
 //!   the zero ideal.
 //! - `GroebnerReduce` is the exact remainder of the division by the list,
 //!   in its order: `y/2 + 1/2` for `x³ + y²` by `{2y² − 1, x − y}`, giac's.
-//! - Past the bounds of a computation the call stays, with a warning.
+//! - Past the bounds of a computation, or past a budget of division steps
+//!   from the limit on terms ([`Budget`]), the call stays, with a warning.
+
+use std::cell::Cell;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use cas_num::Rational;
 use cas_poly::{
@@ -24,13 +28,61 @@ use cas_poly::{
     groebner_basis as basis_of, groebner_reduce as reduce_by,
 };
 
-use crate::context::EvalError;
+use crate::context::{Context, EvalError};
 use crate::eval::Eval;
 use crate::expr::Expr;
 use crate::symbol::Symbol;
 use crate::trace::Warning;
 
 type Native = Result<Option<Expr>, EvalError>;
+
+/// The division steps a computation may take for each term a polynomial
+/// builtin may make ([`Limits::terms`](crate::Limits)).
+const STEPS_PER_TERM: u64 = 64;
+
+/// What a computation polls: the session's interrupt, and a budget of
+/// division steps, [`STEPS_PER_TERM`] for each term the limits allow, so
+/// that it is bounded as the other polynomial builtins are (CAS-DOC-8 §15).
+/// Also `Solve`'s, for polynomial systems (CAS-289).
+pub(super) struct Budget<'a> {
+    interrupt: &'a AtomicBool,
+    left: Cell<u64>,
+}
+
+impl<'a> Budget<'a> {
+    pub(super) fn of(ctx: &'a Context) -> Budget<'a> {
+        let terms = u64::try_from(ctx.limits().terms).unwrap_or(u64::MAX);
+        Budget {
+            interrupt: ctx.interrupt_flag(),
+            left: Cell::new(terms.saturating_mul(STEPS_PER_TERM)),
+        }
+    }
+
+    /// Whether the computation stopped for the interrupt, not the budget.
+    pub(super) fn interrupted(&self) -> bool {
+        self.interrupt.load(Ordering::Relaxed)
+    }
+}
+
+impl Cancel for Budget<'_> {
+    fn cancelled(&self) -> bool {
+        let left = self.left.get();
+        if left == 0 || self.interrupted() {
+            return true;
+        }
+        self.left.set(left - 1);
+        false
+    }
+}
+
+/// Says that a computation went past its bounds, and leaves the call.
+fn too_large(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    ev.warn(Warning::Native {
+        message: "the Gröbner basis computation is past its bounds".into(),
+        expr: e.clone(),
+    });
+    Ok(None)
+}
 
 fn is_list(e: &Expr) -> bool {
     e.head() == Some(&Expr::from(Symbol::LIST))
@@ -158,17 +210,13 @@ pub(super) fn groebner_basis(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some(polys) = list(ev, polys, &vars, order)? else {
         return Ok(None);
     };
-    let cancel: &dyn Cancel = ev.context().interrupt_flag();
-    let basis = match basis_of(&polys, order, cancel) {
+    let budget = Budget::of(ev.context());
+    let basis = match basis_of(&polys, order, &budget) {
         Ok(basis) => basis,
-        Err(GroebnerError::Cancelled) => return Err(EvalError::Interrupted),
-        Err(GroebnerError::TooLarge) => {
-            ev.warn(Warning::Native {
-                message: "the Gröbner basis is past the bounds of a computation".into(),
-                expr: e.clone(),
-            });
-            return Ok(None);
+        Err(GroebnerError::Cancelled) if budget.interrupted() => {
+            return Err(EvalError::Interrupted);
         }
+        Err(_) => return too_large(ev, e),
     };
     let elements: Vec<Expr> = basis
         .iter()
@@ -196,9 +244,12 @@ pub(super) fn groebner_reduce(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some(divisors) = list(ev, polys, &vars, order)? else {
         return Ok(None);
     };
-    let cancel: &dyn Cancel = ev.context().interrupt_flag();
-    let remainder =
-        reduce_by(&p, &divisors, order, cancel).map_err(|Cancelled| EvalError::Interrupted)?;
+    let budget = Budget::of(ev.context());
+    let remainder = match reduce_by(&p, &divisors, order, &budget) {
+        Ok(remainder) => remainder,
+        Err(Cancelled) if budget.interrupted() => return Err(EvalError::Interrupted),
+        Err(Cancelled) => return too_large(ev, e),
+    };
     let result = ev.eval(&expression(&remainder, &vars))?;
     ev.step("GroebnerReduce", e, &result);
     Ok(Some(result))
