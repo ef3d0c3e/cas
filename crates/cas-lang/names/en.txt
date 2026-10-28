@@ -182,6 +182,12 @@ Eliminate: eliminate
 Lexicographic: plex
 DegreeLexicographic: tdeg
 DegreeReverseLexicographic: revlex
+# Statistics (CAS-DOC-22, CAS-294): giac's `variance` and `stddev` are the
+# population ones, `stddevp` the sample deviation.
+Mean: mean
+PopulationVariance: variance
+PopulationStandardDeviation: stddev
+StandardDeviation: stddevp
 
 [planned]
 # Numerical solutions of differential equations (CAS-DOC-16), Xcas's

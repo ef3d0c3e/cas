@@ -40,6 +40,7 @@ mod series;
 mod simplify;
 mod solve;
 mod special;
+mod statistics;
 mod step;
 mod structure;
 mod sum;
@@ -201,6 +202,13 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::BERNOULLI_B, number_theory::bernoulli_b),
         (Symbol::PRIME, number_theory::prime),
         (Symbol::PRIME_PI, number_theory::prime_pi_native),
+        (Symbol::MEAN, statistics::mean),
+        (Symbol::POPULATION_VARIANCE, statistics::population_variance),
+        (
+            Symbol::POPULATION_STANDARD_DEVIATION,
+            statistics::population_standard_deviation,
+        ),
+        (Symbol::STANDARD_DEVIATION, statistics::standard_deviation),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),

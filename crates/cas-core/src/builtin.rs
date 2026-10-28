@@ -150,6 +150,14 @@ builtins! {
     BERNOULLI_B = "BernoulliB" [LISTABLE, PROTECTED];
     PRIME = "Prime" [LISTABLE, PROTECTED];
     PRIME_PI = "PrimePi" [LISTABLE, PROTECTED];
+    // Statistics (CAS-DOC-22): Xcas's `mean`, `variance`, `stddev` and
+    // `stddevp`. giac's `variance` and `stddev` are the population ones and
+    // Mathematica's `Variance` and `StandardDeviation` the sample ones, hence
+    // the names; `stddevp` is the sample deviation.
+    MEAN = "Mean" [PROTECTED];
+    POPULATION_VARIANCE = "PopulationVariance" [PROTECTED];
+    POPULATION_STANDARD_DEVIATION = "PopulationStandardDeviation" [PROTECTED];
+    STANDARD_DEVIATION = "StandardDeviation" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

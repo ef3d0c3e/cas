@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 142] = [
+const BUILTINS: [&str; 146] = [
     "Plus",
     "Times",
     "Power",
@@ -109,6 +109,11 @@ const BUILTINS: [&str; 142] = [
     "GroebnerBasis",
     "GroebnerReduce",
     "Eliminate",
+    // Statistics (CAS-294).
+    "Mean",
+    "PopulationVariance",
+    "PopulationStandardDeviation",
+    "StandardDeviation",
     // Integrals (CAS-194), series and limits (CAS-203, CAS-205), and
     // equations (CAS-210, CAS-214).
     "Integrate",
