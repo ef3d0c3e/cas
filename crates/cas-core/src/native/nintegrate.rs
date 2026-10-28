@@ -124,14 +124,26 @@ pub(super) fn nintegrate(ev: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(None);
     };
     let prec = ev.context().working_precision();
-    let wp = prec + GUARD;
+    let Some(mut tree) = Node::compile(ev.context(), f, x, prec + GUARD) else {
+        return Ok(None);
+    };
+    // A jump's segment is accepted at a width near ε², `2^(−2p)`: the
+    // constants that place it, as the 1/3 of Sign[x − 1/3], need as many
+    // bits, or neither half of a segment around it tells its side.
+    let wp = if tree.has_switch() {
+        let wp = 2 * prec + GUARD;
+        let Some(finer) = Node::compile(ev.context(), f, x, wp) else {
+            return Ok(None);
+        };
+        tree = finer;
+        wp
+    } else {
+        prec + GUARD
+    };
     let (Some(a), Some(b)) = (bound(ev, a, wp), bound(ev, b, wp)) else {
         return Ok(None);
     };
-    let Some(tree) = Node::compile(ev.context(), f, x, wp) else {
-        return Ok(None);
-    };
-    let Some(value) = integral(&tree, &a, &b, prec, ev.context().interrupt_flag())? else {
+    let Some(value) = integral(&tree, &a, &b, prec, wp, ev.context().interrupt_flag())? else {
         ev.warn(Warning::Native {
             message: "the integral is not enclosed within the budget of segments".into(),
             expr: e.clone(),
@@ -159,9 +171,9 @@ fn integral(
     a: &Ball,
     b: &Ball,
     prec: u64,
+    wp: u64,
     interrupt: &AtomicBool,
 ) -> Result<Option<ComplexBall>, EvalError> {
-    let wp = prec + GUARD;
     let (lo, hi) = (Ball::exact(a.mid().clone()), Ball::exact(b.mid().clone()));
     let mut total = ComplexBall::ZERO;
     // The ends' radii: |∫ between an end and its midpoint| ≤ r sup |f|.
