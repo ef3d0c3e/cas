@@ -90,17 +90,21 @@ impl Expander<'_, '_> {
     }
 
     /// `c` with the order of `like`.
-    fn constant_like(c: &Expr, like: &Series) -> Series {
+    pub(super) fn constant_like(c: &Expr, like: &Series) -> Series {
         Self::constant(c, &like.order())
     }
 
-    fn minus(&mut self, a: &Series, b: &Series) -> Result<Series, EvalError> {
+    pub(super) fn minus(&mut self, a: &Series, b: &Series) -> Result<Series, EvalError> {
         let negated = self.scaled(&Expr::from(-1), b)?;
         self.add(a, &negated)
     }
 
     /// `Σ c_k h^k` by Horner's scheme, `h` of positive valuation.
-    fn compose(&mut self, coefficients: &[Expr], h: &Series) -> Result<Series, EvalError> {
+    pub(super) fn compose(
+        &mut self,
+        coefficients: &[Expr],
+        h: &Series,
+    ) -> Result<Series, EvalError> {
         let order = h.order();
         let Some((last, rest)) = coefficients.split_last() else {
             return Ok(Self::constant(&Expr::from(0), &order));
@@ -115,7 +119,7 @@ impl Expander<'_, '_> {
     }
 
     /// The sign of the leading coefficient of a normalized `s`.
-    fn leading_sign(&mut self, s: &Series) -> Option<Ordering> {
+    pub(super) fn leading_sign(&mut self, s: &Series) -> Option<Ordering> {
         let c = s.coeffs.first()?.clone();
         self.sign(&c)
     }

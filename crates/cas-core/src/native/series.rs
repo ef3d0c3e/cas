@@ -754,6 +754,17 @@ impl<'a, 'e> Expander<'a, 'e> {
                 | Symbol::LAMBERT_W,
                 _,
             ) => self.special(head, args, order),
+            (
+                Symbol::BESSEL_J
+                | Symbol::BESSEL_Y
+                | Symbol::BESSEL_I
+                | Symbol::BESSEL_K
+                | Symbol::AIRY_AI
+                | Symbol::AIRY_BI
+                | Symbol::AIRY_AI_PRIME
+                | Symbol::AIRY_BI_PRIME,
+                _,
+            ) => self.bessel(head, args, order),
             _ => Ok(None),
         }
     }
@@ -881,6 +892,7 @@ fn expansion_to(
     Ok(Ok(if partial { best } else { None }))
 }
 
+mod bessel;
 mod builtin;
 mod special;
 #[cfg(test)]
