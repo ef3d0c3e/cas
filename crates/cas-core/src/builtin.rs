@@ -114,6 +114,7 @@ builtins! {
     ZTRANSFORM = "ZTransform" [PROTECTED];
     INVERSE_ZTRANSFORM = "InverseZTransform" [PROTECTED];
     KRONECKER_DELTA = "KroneckerDelta" [LISTABLE, PROTECTED];
+    RSOLVE = "RSolve" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];

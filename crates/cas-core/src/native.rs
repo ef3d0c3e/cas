@@ -36,6 +36,7 @@ mod procedure;
 mod radical;
 mod replace;
 mod rounding;
+mod rsolve;
 mod series;
 mod simplify;
 mod solve;
@@ -188,6 +189,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::ZTRANSFORM, ztransform::z_transform),
         (Symbol::INVERSE_ZTRANSFORM, ztransform::inverse_z_transform),
         (Symbol::KRONECKER_DELTA, ztransform::kronecker_delta),
+        (Symbol::RSOLVE, rsolve::rsolve),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),

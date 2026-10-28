@@ -128,3 +128,46 @@ fn inverses() {
         "invztrans((3*z^2-z)/((z-1)*(z+1/2)^2),z,n)",
     ]);
 }
+
+/// Whether this CAS's `rsolve` answer `{u(n)}` to each of `inputs` is
+/// giac's `[u(n)]` at `n = 0 … 6`, giac putting in `n` itself.
+fn check_recurrences(inputs: &[&str]) {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in inputs {
+        let sequence = match ours(input) {
+            Ok(found) if found.args().len() == 1 => found.args()[0].clone(),
+            found => {
+                wrong.push(format!("{input}: ours {found:?}"));
+                continue;
+            }
+        };
+        for k in 0..=6i64 {
+            let ours = ctx.eval(&sequence.substitute(&[(Expr::symbol("n"), Expr::from(k))]));
+            let theirs = giac.value(&format!("subst(({input})[0],n={k})"));
+            match (ours, theirs) {
+                (Ok(o), Ok(t)) if close(&ctx, &o, &t) => {}
+                (o, t) => wrong.push(format!("{input} at n = {k}: ours {o:?}, giac's {t:?}")),
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Recurrences with their initial conditions (CAS-310).
+#[test]
+fn recurrences() {
+    check_recurrences(&[
+        "rsolve(u(n+1)=2*u(n)+1,u(n),u(0)=1)",
+        "rsolve(u(n+1)=2*u(n)+n,u(n),u(0)=1)",
+        "rsolve(u(n+2)-3*u(n+1)+2*u(n)=0,u(n),u(0)=1,u(1)=3)",
+        "rsolve(u(n+2)+u(n)=0,u(n),u(0)=1,u(1)=0)",
+        "rsolve(u(n+1)=u(n)*2+2^n,u(n),u(0)=0)",
+        "rsolve(u(n+1)=(n+1)*u(n),u(n),u(0)=1)",
+        "rsolve(u(n)=2*u(n-1)+1,u(n),u(0)=0)",
+        "rsolve(u(n+2)=u(n+1)+u(n),u(n),u(0)=0,u(1)=1)",
+    ]);
+}

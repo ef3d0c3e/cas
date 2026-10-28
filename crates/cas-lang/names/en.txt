@@ -101,6 +101,8 @@ InverseLaplaceTransform: ilaplace
 ZTransform: ztrans
 InverseZTransform: invztrans
 KroneckerDelta: Kronecker
+# Recurrences (CAS-DOC-24, CAS-310).
+RSolve: rsolve
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime

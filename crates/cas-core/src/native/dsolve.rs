@@ -166,7 +166,8 @@ fn derivative_symbol(k: usize) -> Expr {
 }
 
 /// The constants `c_0`, `c_1`, …, `count` of them, skipping names of `e`.
-fn constants(e: &Expr, count: usize) -> Vec<Expr> {
+/// Also `RSolve`'s (CAS-310).
+pub(super) fn constants(e: &Expr, count: usize) -> Vec<Expr> {
     (0u64..)
         .map(|k| Expr::from(Symbol::new(&format!("c_{k}"))))
         .filter(|c| !e.contains(c))

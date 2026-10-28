@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 191] = [
+const BUILTINS: [&str; 192] = [
     "Plus",
     "Times",
     "Power",
@@ -173,6 +173,7 @@ const BUILTINS: [&str; 191] = [
     "ZTransform",
     "InverseZTransform",
     "KroneckerDelta",
+    "RSolve",
     // Number theory (CAS-267 to CAS-271).
     "PrimeQ",
     "NextPrime",
