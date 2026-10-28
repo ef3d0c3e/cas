@@ -13,6 +13,9 @@
 //! - a polynomial `P` times an exponential, sine or cosine of a linear
 //!   argument, by parts until `P` is gone, the tabular form:
 //!   `∫ P e^u = e^u Σ (−1)^k P^(k)/α^(k+1)`;
+//! - the rules that give `Ei`, `Si`, `Ci` and `erf` (`special`, CAS-DOC-31
+//!   §4): Laurent polynomials times those functions, `x^m/log x`, and
+//!   polynomials times Gaussians;
 //! - derivative-divides: for a part `g` of `f`, `f/g′` with a fresh `u`
 //!   for `g` free of `x` is `q(u)`, and `∫ f` is `∫ q du` at `u = g`:
 //!   `2x exp(x²)` is `exp(u)` in `u = x²`, `1/(x ln x)` is `1/u` in
@@ -63,6 +66,9 @@ pub(super) fn integral(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr, depth: u
         return Ok(Some(g));
     }
     if let Some(g) = tabular(ev, e, &factors, x)? {
+        return Ok(Some(g));
+    }
+    if let Some(g) = super::special::integral(ev, e, &factors, x, depth)? {
         return Ok(Some(g));
     }
     if let Some(g) = substitution(ev, e, f, x, depth)? {

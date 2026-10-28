@@ -242,7 +242,7 @@ fn table(f: &Expr, x: &Expr) -> Option<Expr> {
     match (f.head()?.as_symbol()?, f.args()) {
         (Symbol::POWER, [u, n]) if !n.contains(x) => {
             let Some(a) = slope(u, x) else {
-                return quadratic(u, n, x);
+                return reciprocal_logarithm(u, n, x).or_else(|| quadratic(u, n, x));
             };
             if n.as_i64() == Some(-1) {
                 return Some(log_abs(u.clone()) / a);
@@ -283,8 +283,54 @@ fn table(f: &Expr, x: &Expr) -> Option<Expr> {
             Some(u.clone() * f.clone() / a)
         }
         (Symbol::DIRAC_DELTA, [u]) => Some(call(Symbol::HEAVISIDE_THETA, u.clone()) / slope(u, x)?),
+        // The special functions (CAS-DOC-31 §4), by parts: `u f(u) − ∫ u f′(u)`.
+        (Symbol::EXP_INTEGRAL_EI, [u]) => {
+            let a = slope(u, x)?;
+            Some((u.clone() * f.clone() - Expr::from(Symbol::E).pow(u.clone())) / a)
+        }
+        (Symbol::SIN_INTEGRAL, [u]) => {
+            let a = slope(u, x)?;
+            Some((u.clone() * f.clone() + call(Symbol::COS, u.clone())) / a)
+        }
+        (Symbol::COS_INTEGRAL, [u]) => {
+            let a = slope(u, x)?;
+            Some((u.clone() * f.clone() - call(Symbol::SIN, u.clone())) / a)
+        }
+        (Symbol::ERF | Symbol::ERFC, [u]) => {
+            let a = slope(u, x)?;
+            let gauss =
+                Expr::from(Symbol::E).pow(-u.pow(2)) / call(Symbol::SQRT, Expr::from(Symbol::PI));
+            let gauss = if f.head() == Some(&Expr::from(Symbol::ERF)) {
+                gauss
+            } else {
+                -gauss
+            };
+            Some((u.clone() * f.clone() + gauss) / a)
+        }
+        (Symbol::POLY_GAMMA, [u, m]) => {
+            let a = slope(u, x)?;
+            let m = m.as_i64().filter(|&m| m >= 1)?;
+            Some(Expr::call(Symbol::POLY_GAMMA, [u.clone(), Expr::from(m - 1)]) / a)
+        }
+        (Symbol::LAMBERT_W, [u, ..]) => {
+            let a = slope(u, x)?;
+            Some(u.clone() * (f.clone() - 1 + f.pow(-1)) / a)
+        }
         _ => None,
     }
+}
+
+/// `1/log(a x + b)`, `Ei(log(a x + b))/a` (CAS-DOC-31 §4), giac's `Li`
+/// written out.
+fn reciprocal_logarithm(u: &Expr, n: &Expr, x: &Expr) -> Option<Expr> {
+    if n.as_i64() != Some(-1) || u.head() != Some(&Expr::from(Symbol::LOG)) {
+        return None;
+    }
+    let [v] = u.args() else {
+        return None;
+    };
+    let a = slope(v, x)?;
+    Some(call(Symbol::EXP_INTEGRAL_EI, u.clone()) / a)
 }
 
 /// `q^n` with `q = α + β x²`, `α` and `β` rationals, as an arcsine for
@@ -682,5 +728,6 @@ fn rational_function(
 mod definite;
 mod heuristics;
 mod piecewise;
+mod special;
 #[cfg(test)]
 mod tests;
