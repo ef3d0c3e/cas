@@ -14,6 +14,12 @@
 //! `x > c`, `x >= c`, `a < x < b` (an `And` of two comparisons, printed as a
 //! chain, giac's `((x>a) and (x<b))`), a point `c` alone, `x` for the whole
 //! line; no interval, no element. What is not decided stays.
+//!
+//! Systems (CAS-278): a list or an `And` of conditions (a chain `a < x <= b`
+//! is one) intersects their sets, an `Or` unites them, a `Not` takes the
+//! complement; an equation among them is its real roots, points. Each set
+//! is disjoint intervals in increasing order, ends compared as the sign
+//! chart's points are.
 
 use std::cmp::Ordering;
 
@@ -24,9 +30,41 @@ use crate::eval::Eval;
 use crate::expr::Expr;
 use crate::symbol::Symbol;
 
-/// Whether `e` is an inequality `Solve` hands here.
+/// Whether `e` is an inequality `Solve` hands here: a comparison, or a
+/// list, `And`, `Or` or `Not` of conditions (equations among them) with
+/// at least one comparison (CAS-278).
 pub(super) fn is_inequality(e: &Expr) -> bool {
-    relation(e).is_some()
+    condition(e) && has_comparison(e)
+}
+
+/// Whether `e` is a condition on `x`: a comparison, an equation, `True`,
+/// `False`, or a connective of conditions.
+fn condition(e: &Expr) -> bool {
+    if relation(e).is_some() || equation(e).is_some() {
+        return true;
+    }
+    match e.as_symbol() {
+        Some(Symbol::TRUE | Symbol::FALSE) => return true,
+        Some(_) => return false,
+        None => {}
+    }
+    matches!(
+        e.head().and_then(Expr::as_symbol),
+        Some(Symbol::AND | Symbol::OR | Symbol::NOT | Symbol::LIST)
+    ) && e.args().iter().all(condition)
+}
+
+/// Whether a comparison occurs in the condition `e`.
+fn has_comparison(e: &Expr) -> bool {
+    relation(e).is_some() || (equation(e).is_none() && e.args().iter().any(has_comparison))
+}
+
+/// The sides of an equation, `Equation[l, r]` or `Equal[l, r]`.
+fn equation(e: &Expr) -> Option<(&Expr, &Expr)> {
+    match (e.head()?.as_symbol()?, e.args()) {
+        (Symbol::EQUATION | Symbol::EQUAL, [l, r]) => Some((l, r)),
+        _ => None,
+    }
 }
 
 /// The relation and the sides of a comparison other than an equation.
@@ -84,17 +122,247 @@ pub(super) fn solve(
     ev.eval(&Expr::call(Symbol::LIST, conditions)).map(Some)
 }
 
-/// The solution set of `ineq`, intervals in increasing order.
+/// The solution set of the condition `c`, intervals in increasing order:
+/// a comparison by its sign chart, an equation by its real roots, a list
+/// or `And` the intersection of its members', `Or` the union, `Not` the
+/// complement (CAS-278).
 fn set(
     ev: &mut Eval<'_>,
     e: &Expr,
-    ineq: &Expr,
+    c: &Expr,
     x: &Expr,
 ) -> Result<Option<Vec<Interval>>, EvalError> {
-    let Some((op, l, r)) = relation(ineq) else {
+    if let Some((op, l, r)) = relation(c) {
+        return one(ev, e, op, l, r, x);
+    }
+    if let Some((l, r)) = equation(c) {
+        return points(ev, e, l, r, x);
+    }
+    match c.as_symbol() {
+        Some(Symbol::TRUE) => return Ok(Some(vec![Interval { lo: None, hi: None }])),
+        Some(Symbol::FALSE) => return Ok(Some(Vec::new())),
+        _ => {}
+    }
+    let mut members = Vec::with_capacity(c.args().len());
+    for m in c.args() {
+        let Some(s) = set(ev, e, m, x)? else {
+            return Ok(None);
+        };
+        members.push(s);
+    }
+    match c.head().and_then(Expr::as_symbol) {
+        Some(Symbol::AND | Symbol::LIST) => {
+            let mut all = vec![Interval { lo: None, hi: None }];
+            for m in &members {
+                let Some(next) = intersection(ev, &all, m)? else {
+                    return Ok(None);
+                };
+                all = next;
+            }
+            Ok(Some(all))
+        }
+        Some(Symbol::OR) => union(ev, members.into_iter().flatten().collect()),
+        Some(Symbol::NOT) => match members.as_slice() {
+            [m] => Ok(Some(complement(m))),
+            _ => Ok(None),
+        },
+        _ => Ok(None),
+    }
+}
+
+/// The real roots of `l = r` as points.
+fn points(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    l: &Expr,
+    r: &Expr,
+    x: &Expr,
+) -> Result<Option<Vec<Interval>>, EvalError> {
+    let f = ev.eval(&(l.clone() - r.clone()))?;
+    let Some(found) = roots(ev, e, &f, x, true)? else {
         return Ok(None);
     };
-    one(ev, e, op, l, r, x)
+    if found.iter().any(|p| p.contains(x)) {
+        // f ≡ 0: every x.
+        return Ok(Some(vec![Interval { lo: None, hi: None }]));
+    }
+    let points = found
+        .into_iter()
+        .map(|p| Interval {
+            lo: Some(End {
+                at: p.clone(),
+                closed: true,
+            }),
+            hi: Some(End {
+                at: p,
+                closed: true,
+            }),
+        })
+        .collect();
+    union(ev, points)
+}
+
+/// Lower ends ordered: −∞ first; at one value, a closed end first.
+fn lower(
+    ev: &mut Eval<'_>,
+    a: Option<&End>,
+    b: Option<&End>,
+) -> Result<Option<Ordering>, EvalError> {
+    Ok(match (a, b) {
+        (None, None) => Some(Ordering::Equal),
+        (None, Some(_)) => Some(Ordering::Less),
+        (Some(_), None) => Some(Ordering::Greater),
+        (Some(a), Some(b)) => match compare(ev, &a.at, &b.at)? {
+            Some(Ordering::Equal) => Some(b.closed.cmp(&a.closed)),
+            other => other,
+        },
+    })
+}
+
+/// Upper ends ordered: +∞ last; at one value, an open end first.
+fn upper(
+    ev: &mut Eval<'_>,
+    a: Option<&End>,
+    b: Option<&End>,
+) -> Result<Option<Ordering>, EvalError> {
+    Ok(match (a, b) {
+        (None, None) => Some(Ordering::Equal),
+        (None, Some(_)) => Some(Ordering::Greater),
+        (Some(_), None) => Some(Ordering::Less),
+        (Some(a), Some(b)) => match compare(ev, &a.at, &b.at)? {
+            Some(Ordering::Equal) => Some(a.closed.cmp(&b.closed)),
+            other => other,
+        },
+    })
+}
+
+/// Whether the interval from `lo` to `hi` holds a point.
+fn nonempty(
+    ev: &mut Eval<'_>,
+    lo: Option<&End>,
+    hi: Option<&End>,
+) -> Result<Option<bool>, EvalError> {
+    let (Some(lo), Some(hi)) = (lo, hi) else {
+        return Ok(Some(true));
+    };
+    Ok(compare(ev, &lo.at, &hi.at)?.map(|o| match o {
+        Ordering::Less => true,
+        Ordering::Equal => lo.closed && hi.closed,
+        Ordering::Greater => false,
+    }))
+}
+
+/// `a ∩ b` of two sets of disjoint intervals in increasing order.
+fn intersection(
+    ev: &mut Eval<'_>,
+    a: &[Interval],
+    b: &[Interval],
+) -> Result<Option<Vec<Interval>>, EvalError> {
+    let mut out = Vec::new();
+    for p in a {
+        for q in b {
+            // The greater lower end and the lesser upper end.
+            let Some(lo_order) = lower(ev, p.lo.as_ref(), q.lo.as_ref())? else {
+                return Ok(None);
+            };
+            let lo = if lo_order == Ordering::Less {
+                &q.lo
+            } else {
+                &p.lo
+            };
+            let Some(hi_order) = upper(ev, p.hi.as_ref(), q.hi.as_ref())? else {
+                return Ok(None);
+            };
+            let hi = if hi_order == Ordering::Greater {
+                &q.hi
+            } else {
+                &p.hi
+            };
+            match nonempty(ev, lo.as_ref(), hi.as_ref())? {
+                Some(true) => out.push(Interval {
+                    lo: lo.clone(),
+                    hi: hi.clone(),
+                }),
+                Some(false) => {}
+                None => return Ok(None),
+            }
+        }
+    }
+    union(ev, out)
+}
+
+/// The union of intervals, sorted by their lower ends and joined where
+/// they overlap or meet at a point one of them holds.
+fn union(ev: &mut Eval<'_>, intervals: Vec<Interval>) -> Result<Option<Vec<Interval>>, EvalError> {
+    let mut sorted: Vec<Interval> = Vec::with_capacity(intervals.len());
+    for i in intervals {
+        // By insertion.
+        let mut at = sorted.len();
+        for (k, s) in sorted.iter().enumerate() {
+            match lower(ev, i.lo.as_ref(), s.lo.as_ref())? {
+                Some(Ordering::Less) => {
+                    at = k;
+                    break;
+                }
+                Some(_) => {}
+                None => return Ok(None),
+            }
+        }
+        sorted.insert(at, i);
+    }
+    let mut out: Vec<Interval> = Vec::with_capacity(sorted.len());
+    for i in sorted {
+        if let Some(last) = out.last_mut() {
+            let meets = match (&last.hi, &i.lo) {
+                (None, _) | (_, None) => true,
+                (Some(h), Some(l)) => match compare(ev, &l.at, &h.at)? {
+                    Some(Ordering::Less) => true,
+                    Some(Ordering::Equal) => h.closed || l.closed,
+                    Some(Ordering::Greater) => false,
+                    None => return Ok(None),
+                },
+            };
+            if meets {
+                let Some(order) = upper(ev, last.hi.as_ref(), i.hi.as_ref())? else {
+                    return Ok(None);
+                };
+                if order == Ordering::Less {
+                    last.hi = i.hi;
+                }
+                continue;
+            }
+        }
+        out.push(i);
+    }
+    Ok(Some(out))
+}
+
+/// The complement of a set of disjoint intervals in increasing order: the
+/// gaps between them, each end held where the interval's is not.
+fn complement(set: &[Interval]) -> Vec<Interval> {
+    let flip = |end: &End| End {
+        at: end.at.clone(),
+        closed: !end.closed,
+    };
+    let mut out = Vec::new();
+    // The gap's lower end, while one is open: `Some(None)` from −∞.
+    let mut lo: Option<Option<End>> = Some(None);
+    for i in set {
+        if let (Some(start), Some(end)) = (lo.take(), &i.lo) {
+            out.push(Interval {
+                lo: start,
+                hi: Some(flip(end)),
+            });
+        }
+        lo = i.hi.as_ref().map(|h| Some(flip(h)));
+    }
+    if let Some(start) = lo {
+        out.push(Interval {
+            lo: start,
+            hi: None,
+        });
+    }
+    out
 }
 
 /// `a`'s order against `b`, by their difference's sign.

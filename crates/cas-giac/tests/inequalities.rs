@@ -128,3 +128,19 @@ fn sign_charts() {
         "solve(x^4-5*x^2+4<0,x)",
     ]);
 }
+
+/// Systems and connectives (CAS-278).
+#[test]
+fn systems() {
+    check(&[
+        "solve([x>1,x<3],x)",
+        "solve(x^2-x>0 and x<5,x)",
+        "solve(x<-1 or x>2,x)",
+        "solve(-1<x<=3,x)",
+        "solve([x^2<9,x!=0],x)",
+        "solve(not(x>1),x)",
+        "solve([x>3,x<1],x)",
+        "solve(x^2>1 or x<0,x)",
+        "solve([x>=0,x^2=4],x)",
+    ]);
+}

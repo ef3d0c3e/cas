@@ -89,3 +89,56 @@ fn sign_charts() {
         &[("Greater[Times[a, x], 1]", "List[Less[x, Power[a, -1]]]")],
     );
 }
+
+/// Systems and connectives (CAS-278).
+#[test]
+fn systems() {
+    check(
+        &Context::new(),
+        &[
+            (
+                "List[Greater[x, 1], Less[x, 3]]",
+                "List[And[Less[1, x], Less[x, 3]]]",
+            ),
+            (
+                "And[Greater[Plus[Power[x, 2], Times[-1, x]], 0], Less[x, 5]]",
+                "List[Less[x, 0], And[Less[1, x], Less[x, 5]]]",
+            ),
+            (
+                "Or[Less[x, -1], Greater[x, 2]]",
+                "List[Less[x, -1], Greater[x, 2]]",
+            ),
+            (
+                "And[Less[-1, x], LessEqual[x, 3]]",
+                "List[And[Less[-1, x], LessEqual[x, 3]]]",
+            ),
+            (
+                "List[Less[Power[x, 2], 9], Unequal[x, 0]]",
+                "List[And[Less[-3, x], Less[x, 0]], And[Less[0, x], Less[x, 3]]]",
+            ),
+            ("Not[Greater[x, 1]]", "List[LessEqual[x, 1]]"),
+            ("List[Greater[x, 3], Less[x, 1]]", "List[]"),
+            (
+                "Or[Greater[Power[x, 2], 1], Less[x, 0]]",
+                "List[Less[x, 0], Greater[x, 1]]",
+            ),
+            ("List[GreaterEqual[x, 0], Equal[Power[x, 2], 4]]", "List[2]"),
+            // Intervals meeting at a point one holds join.
+            ("Or[LessEqual[x, 1], GreaterEqual[x, 1]]", "List[x]"),
+            (
+                "Or[Less[x, 1], Greater[x, 1]]",
+                "List[Less[x, 1], Greater[x, 1]]",
+            ),
+            ("Or[Less[x, 1], Equal[x, 1]]", "List[LessEqual[x, 1]]"),
+            ("Not[Unequal[x, 2]]", "List[2]"),
+            (
+                "Not[And[Less[0, x], LessEqual[x, 1]]]",
+                "List[LessEqual[x, 0], Greater[x, 1]]",
+            ),
+            ("List[Greater[x, 0], True]", "List[Greater[x, 0]]"),
+            ("Or[Greater[x, 0], False]", "List[Greater[x, 0]]"),
+            ("And[Greater[x, 1], Less[x, 1]]", "List[]"),
+            ("And[GreaterEqual[x, 1], LessEqual[x, 1]]", "List[1]"),
+        ],
+    );
+}
