@@ -8,22 +8,29 @@ fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
 }
 
-/// `(input, expected)`, both evaluated: within `10⁻³⁰` of each other, as
-/// numbers, so that `1/(2i)` and `−i/2` agree.
+/// Whether `a` and `b` agree to `10⁻²⁰`, real and imaginary parts apart,
+/// so that `1/(2i)` and `−i/2`, or `−e^(iπ/4)/4` and `−(1 + i)√2/8`, agree.
+fn close(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    let gap = Expr::call(Symbol::N, [a.clone() - b.clone(), Expr::from(30)]);
+    [Symbol::RE, Symbol::IM].into_iter().all(|part| {
+        let small = Expr::call(
+            Symbol::LESS,
+            [
+                Expr::call(Symbol::ABS, [Expr::call(part, [gap.clone()])]),
+                Expr::from(10).pow(-20),
+            ],
+        );
+        ctx.eval(&small).ok().and_then(|e| e.as_symbol()) == Some(Symbol::TRUE)
+    })
+}
+
+/// `(input, expected)`, both evaluated: the same number by [`close`].
 fn check(cases: &[(&str, &str)]) {
     let ctx = Context::new();
     let mut wrong = Vec::new();
     for (input, expected) in cases {
         let found = ctx.eval(&read(input)).unwrap();
-        let difference = Expr::call(Symbol::N, [found.clone() - read(expected), Expr::from(40)]);
-        let gap = Expr::call(
-            Symbol::LESS,
-            [
-                Expr::call(Symbol::ABS, [difference]),
-                Expr::from(10).pow(-30),
-            ],
-        );
-        if ctx.eval(&gap).unwrap().as_symbol() != Some(Symbol::TRUE) {
+        if !close(&ctx, &found, &read(expected)) {
             wrong.push(format!("{input}: {found:?}, expected {expected}"));
         }
     }

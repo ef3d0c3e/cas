@@ -322,3 +322,6 @@ pub(super) fn integral(
         -sum
     }))
 }
+
+#[cfg(test)]
+mod tests;
