@@ -307,7 +307,11 @@ impl Node {
                 if analytic && meets_ray(&v, 0, true, prec) {
                     return None;
                 }
-                v.pow(w, prec)
+                if !analytic && let Some(range) = rising_power(&v, w, prec) {
+                    range
+                } else {
+                    v.pow(w, prec)
+                }
             }
             Node::Exponential(b, g) => {
                 let v = b.eval(z, mode, prec)?;
@@ -326,6 +330,35 @@ impl Node {
         };
         value.is_finite().then_some(value)
     }
+}
+
+/// `v^w` for a real ball `v ≥ 0` that holds 0 and a real `w > 0`, in the
+/// real mode: `[0, (sup v)^w]`, the power rising on `[0, ∞)`, where
+/// `e^(w log v)` is indeterminate at 0, as `√x` over `[0, δ]` is.
+fn rising_power(v: &ComplexBall, w: &ComplexBall, prec: u64) -> Option<ComplexBall> {
+    if !v.is_real() || !w.is_real() || w.re().sign() != Some(Ordering::Greater) {
+        return None;
+    }
+    let base = v.re();
+    if !base.contains_rational(&Rational::ZERO) {
+        return None;
+    }
+    // The lower end must be 0 exactly or above: mid − rad ≥ 0, as at the
+    // segments' ends, which are exact.
+    let rad = base.rad().to_float()?;
+    if base.mid().checked_sub(&rad)?.is_negative() {
+        return None;
+    }
+    let top = Ball::exact(base.mid().checked_add(&rad)?);
+    let power = top.pow_ball(w.re(), prec);
+    if !power.is_finite() {
+        return None;
+    }
+    let half = Mag::from_float(&power.mid().abs())
+        .add(power.rad())
+        .mul_2exp(&Integer::from(-1));
+    let middle = half.to_float()?;
+    Some(ComplexBall::from_real(Ball::new(middle, half)))
 }
 
 /// `f(v)`, its cuts kept away from `v` when `analytic`.
