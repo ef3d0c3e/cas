@@ -579,3 +579,37 @@ fn found_by_proptest() {
         check_point(&b, &a, prec).unwrap();
     }
 }
+
+/// `(−16 − 16i)^29435` at 9940 bits, the `complex_fns` input whose oracle,
+/// MPC's `pow` of an exact dyadic result, timed out (CAS-362): ours holds
+/// the exact power, by Gaussian integers.
+#[test]
+fn pow_int_of_a_dyadic_point() {
+    let z = ComplexBall::new(
+        Ball::exact(Float::from(-16i64)),
+        Ball::exact(Float::from(-16i64)),
+    );
+    let w = z.pow_int(29435, 9940);
+    // (−16 − 16i)^n = (−16)^n (1 + i)^n by squaring in ℤ[i].
+    let (mut x, mut y) = (rug::Integer::from(1), rug::Integer::new());
+    let (mut p, mut q) = (rug::Integer::from(-16), rug::Integer::from(-16));
+    let mut rest = 29435u32;
+    while rest > 0 {
+        if rest & 1 == 1 {
+            let nx = rug::Integer::from(&x * &p) - rug::Integer::from(&y * &q);
+            let ny = rug::Integer::from(&x * &q) + rug::Integer::from(&y * &p);
+            (x, y) = (nx, ny);
+        }
+        rest >>= 1;
+        let np = rug::Integer::from(&p * &p) - rug::Integer::from(&q * &q);
+        let nq = rug::Integer::from(&p * &q) << 1u32;
+        (p, q) = (np, nq);
+    }
+    let holds = |b: &Ball, v: rug::Integer| {
+        let mid = b.mid().to_rational().to_rug();
+        let rad = b.rad().to_float().unwrap().to_rational().to_rug();
+        let v = rug::Rational::from(v);
+        rug::Rational::from(&mid - &rad) <= v && v <= rug::Rational::from(&mid + &rad)
+    };
+    assert!(holds(w.re(), x) && holds(w.im(), y), "{w:?}");
+}

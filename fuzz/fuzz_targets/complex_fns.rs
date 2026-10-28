@@ -6,7 +6,8 @@
 //! radii are within `2^(6 - prec)` of its larger part, the property tests'
 //! bound, for parts below `2^8`.
 //!
-//! The oracle is MPC's function where there is one and it can be trusted.
+//! The oracle is MPC's function where there is one and it can be trusted,
+//! and quick: `pow_int`'s is the exact power by Gaussian integers (CAS-362).
 //! MPC's `log` misses `log|z|` next to `|z| = 1` (see [`mpfr_log`]), so
 //! `log`, `log1p`, `pow` and `root` take the logarithm from MPFR instead:
 //! `log1p` of the exact `1 + z`, and `pow` and `root` as `exp(w log z)` far
@@ -70,6 +71,8 @@ enum Answer {
     Bracket([(Float, Float); 2]),
     /// An infinity or NaN: with the inputs' magnitudes below `2^20`, a pole.
     NonFinite,
+    /// No answer to check against.
+    Unknown,
 }
 
 fuzz_target!(|data: &[u8]| {
@@ -104,9 +107,7 @@ fn run(u: &mut Unstructured<'_>) -> Result<()> {
                 })
             } else {
                 let w = z.pow_int(n, prec);
-                let f = move |zm: &MpComplex, prec: u64| {
-                    mpc_bracket(prec, |p, r| MpComplex::with_val_round(p, zm.pow(n), r).0)
-                };
+                let f = move |zm: &MpComplex, prec: u64| power_oracle(zm, n, prec);
                 unary(u, "pow_int", &z, &w, prec, false, &f)
             }
         }
@@ -285,6 +286,100 @@ fn pi_oracle(z: &MpComplex, prec: u64, cos: bool) -> Answer {
     around(&v, &((size * grow) >> (p - 8)))
 }
 
+/// The most bits of an exact power the oracle computes.
+const MAX_EXACT_BITS: u64 = 1 << 22;
+
+/// `x 2^s` as a rational.
+fn scaled(x: rug::Integer, s: i64) -> rug::Rational {
+    let shift = u32::try_from(s.unsigned_abs()).expect("bounded");
+    if s >= 0 {
+        rug::Rational::from(x << shift)
+    } else {
+        rug::Rational::from((x, rug::Integer::from(1) << shift))
+    }
+}
+
+/// `z^n` for the exact point `z` by Gaussian integers (CAS-362): every power
+/// of a dyadic point is an exact dyadic, which MPC's `pow` rounds by raising
+/// its precision, 71 s for `(−16 − 16i)^29435` at 9940 bits. `Unknown` past
+/// [`MAX_EXACT_BITS`].
+fn power_oracle(zm: &MpComplex, n: i64, prec: u64) -> Answer {
+    let parts = |x: &MpFloat| -> Option<(rug::Integer, i64)> {
+        if x.is_zero() {
+            return Some((rug::Integer::new(), 0));
+        }
+        let (m, e) = x.to_integer_exp()?;
+        Some((m, i64::from(e)))
+    };
+    let (Some((a, ea)), Some((b, eb))) = (parts(zm.real()), parts(zm.imag())) else {
+        return Answer::Unknown;
+    };
+    let k = n.unsigned_abs();
+    if a == 0 && b == 0 {
+        return match n.cmp(&0) {
+            std::cmp::Ordering::Less => Answer::NonFinite,
+            std::cmp::Ordering::Equal => {
+                around(&MpComplex::with_val(64, (1, 0)), &MpFloat::new(64))
+            }
+            std::cmp::Ordering::Greater => around(&MpComplex::new(64), &MpFloat::new(64)),
+        };
+    }
+    // a + b i over the common exponent e.
+    let e = if a == 0 {
+        eb
+    } else if b == 0 {
+        ea
+    } else {
+        ea.min(eb)
+    };
+    let lift = |m: rug::Integer, at: i64| m << u32::try_from(at - e).expect("small");
+    let (a, b) = (lift(a, ea), lift(b, eb));
+    let bits = u64::from(a.significant_bits().max(b.significant_bits())) + 1;
+    if bits.saturating_mul(k) > MAX_EXACT_BITS
+        || e.unsigned_abs().saturating_mul(k) > MAX_EXACT_BITS
+    {
+        return Answer::Unknown;
+    }
+    // (a + b i)^k by squaring.
+    let (mut x, mut y) = (rug::Integer::from(1), rug::Integer::new());
+    let (mut p, mut q) = (a, b);
+    let mut rest = k;
+    while rest > 0 {
+        if rest & 1 == 1 {
+            let nx = rug::Integer::from(&x * &p) - rug::Integer::from(&y * &q);
+            let ny = rug::Integer::from(&x * &q) + rug::Integer::from(&y * &p);
+            (x, y) = (nx, ny);
+        }
+        rest >>= 1;
+        if rest > 0 {
+            let np = rug::Integer::from(&p * &p) - rug::Integer::from(&q * &q);
+            let nq = rug::Integer::from(&p * &q) << 1u32;
+            (p, q) = (np, nq);
+        }
+    }
+    let shift = e * i64::try_from(k).expect("small");
+    let (re, im) = if n >= 0 {
+        (scaled(x, shift), scaled(y, shift))
+    } else {
+        // 1/((x + y i) 2^s) = (x − y i)/((x² + y²) 2^s).
+        let d = rug::Integer::from(&x * &x) + rug::Integer::from(&y * &y);
+        let re = rug::Rational::from((x, d.clone())) * scaled(rug::Integer::from(1), -shift);
+        let im = rug::Rational::from((-y, d)) * scaled(rug::Integer::from(1), -shift);
+        (re, im)
+    };
+    let p = u32::try_from(prec + 192).expect("small precision");
+    let round = |v: &rug::Rational, r: Round| from_mp(&MpFloat::with_val_round(p, v, r).0);
+    match (
+        round(&re, Round::Down),
+        round(&re, Round::Up),
+        round(&im, Round::Down),
+        round(&im, Round::Up),
+    ) {
+        (Some(rl), Some(rh), Some(il), Some(ih)) => Answer::Bracket([(rl, rh), (il, ih)]),
+        _ => Answer::Unknown,
+    }
+}
+
 /// The principal `z^(1/n) = exp(log(z) / n)`, and 0 at 0.
 fn root_oracle(z: &MpComplex, prec: u64, n: u32) -> Answer {
     if z.real().is_zero() && z.imag().is_zero() {
@@ -312,6 +407,7 @@ fn check(w: &ComplexBall, answer: &Answer, what: impl Fn() -> String) {
             what()
         ),
         Answer::NonFinite => assert!(!w.is_finite(), "{}: a pole, but {w:?}", what()),
+        Answer::Unknown => {}
     }
 }
 
