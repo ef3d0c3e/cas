@@ -222,6 +222,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "lists"
+path = "fuzz_targets/lists.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "poly_integrate"
 path = "fuzz_targets/poly_integrate.rs"
 test = false
