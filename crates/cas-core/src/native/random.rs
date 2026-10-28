@@ -1,7 +1,7 @@
-//! Random numbers (CAS-DOC-33): Xcas's `srand`, `rand` and `randint`,
-//! drawn from the context's generator, xoshiro256\*\* ([`Generator`]),
-//! through [`Eval::draw`], so that a call that draws is evaluated again
-//! each time it is met (§2).
+//! Random numbers (CAS-DOC-33): Xcas's `srand`, `rand`, `randint` and
+//! the rest, drawn from the context's generator, xoshiro256\*\*
+//! ([`Generator`]), through [`Eval::draw`], so that a call that draws is
+//! evaluated again each time it is met (§2).
 //!
 //! - **The seed** (§1, CAS-370): `SeedRandom[n]` (`srand`, `randseed`)
 //!   seeds the generator with the integer `n` and gives `n`;
@@ -16,6 +16,10 @@
 //!   list `l`, and `Random[k, l]`, `k` of its elements at distinct places.
 //!   `RandomInteger[a, b]` (`randint`) is an integer between `a` and `b`,
 //!   both included, and `RandomInteger[n]` one between 1 and `n`.
+//!
+//! - **Variates** of the distributions (§4, CAS-372): [`variates`].
+//! - **Vectors, matrices and polynomials, permutations and samples** (§5,
+//!   §6, CAS-373): [`collections`].
 //!
 //! Integers are drawn by rejection below the width of their range, exact
 //! at any size; distinct ones by the first `k` swaps of a Fisher–Yates
@@ -263,6 +267,9 @@ pub(super) fn random_integer(ev: &mut Eval<'_>, e: &Expr) -> Native {
     };
     Ok(Some(Expr::from(between(ev, &a, &b))))
 }
+
+pub(super) mod collections;
+pub(super) mod variates;
 
 #[cfg(test)]
 mod tests;

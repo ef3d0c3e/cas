@@ -346,6 +346,12 @@ impl<'c> Eval<'c> {
         self.warned = self.warned.wrapping_add(1);
     }
 
+    /// How many warnings this call gave so far, kept or not: a native
+    /// compares it around an evaluation to tell whether that warned.
+    pub(crate) fn warnings_given(&self) -> u32 {
+        self.warned
+    }
+
     /// Draws from the context's generator of random numbers, which `f`
     /// takes (CAS-DOC-33 §2). The draw is counted: what is being evaluated
     /// is neither stamped nor memoised, so that it draws again when it is

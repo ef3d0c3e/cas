@@ -295,6 +295,22 @@ builtins! {
     SEED_RANDOM = "SeedRandom" [PROTECTED];
     RANDOM = "Random" [PROTECTED];
     RANDOM_INTEGER = "RandomInteger" [PROTECTED];
+    // Random variates of the distributions (CAS-DOC-33 §4).
+    RANDOM_NORMAL = "RandomNormal" [PROTECTED];
+    RANDOM_EXPONENTIAL = "RandomExponential" [PROTECTED];
+    RANDOM_BINOMIAL = "RandomBinomial" [PROTECTED];
+    RANDOM_POISSON = "RandomPoisson" [PROTECTED];
+    RANDOM_GEOMETRIC = "RandomGeometric" [PROTECTED];
+    RANDOM_CHI_SQUARE = "RandomChiSquare" [PROTECTED];
+    RANDOM_STUDENT_T = "RandomStudentT" [PROTECTED];
+    RANDOM_FISHER = "RandomFisher" [PROTECTED];
+    // Random vectors, matrices and polynomials, permutations and samples
+    // (CAS-DOC-33 §5, §6).
+    RANDOM_VECTOR = "RandomVector" [PROTECTED];
+    RANDOM_MATRIX = "RandomMatrix" [PROTECTED];
+    RANDOM_POLYNOMIAL = "RandomPolynomial" [PROTECTED];
+    RANDOM_PERMUTATION = "RandomPermutation" [PROTECTED];
+    RANDOM_SAMPLE = "RandomSample" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

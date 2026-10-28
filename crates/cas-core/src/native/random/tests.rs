@@ -1,6 +1,7 @@
-//! Tests of random numbers (CAS-370, CAS-371): seeds, draws taken anew
-//! wherever they are met, `Table`'s held body, verification, and the
-//! ranges of `Random` and `RandomInteger`.
+//! Tests of random numbers (CAS-370 to CAS-373): seeds, draws taken anew
+//! wherever they are met, `Table`'s held body, verification, the ranges of
+//! `Random` and `RandomInteger`, the variates' supports, vectors, matrices
+//! and polynomials, permutations and samples.
 
 use cas_num::random::Generator;
 use cas_num::{Integer, Rational};
@@ -129,14 +130,13 @@ fn table_holds_its_body() {
     );
 }
 
-/// The draws of `forms` from the seed 1, 200 of each, as rationals:
-/// numbers, or the elements of lists.
-fn draws(forms: &[&str]) -> Vec<Vec<Expr>> {
+/// The draws of `forms` from the seed 1, `times` of each.
+fn draws(forms: &[&str], times: usize) -> Vec<Vec<Expr>> {
     let ctx = Context::new();
     eval(&ctx, "SeedRandom[1]");
     forms
         .iter()
-        .map(|form| (0..200).map(|_| eval(&ctx, form)).collect())
+        .map(|form| (0..times).map(|_| eval(&ctx, form)).collect())
         .collect()
 }
 
@@ -148,7 +148,10 @@ fn integer_in(x: &Rational, low: i64, high: i64) -> bool {
 /// Reals: exact balls in `[0, 1)`, and between the ends given.
 #[test]
 fn real_ranges() {
-    let found = draws(&["Random[]", "Random[2, 5]", "Random[5, 2]", "Random[0, Pi]"]);
+    let found = draws(
+        &["Random[]", "Random[2, 5]", "Random[5, 2]", "Random[0, Pi]"],
+        200,
+    );
     for unit in &found[0] {
         let View::Ball(ball) = unit.view() else {
             panic!("{unit:?}: no ball");
@@ -173,14 +176,17 @@ fn real_ranges() {
 /// Integers: `[0, 6)`, each met; `(−6, 0]`; `randint`'s ranges.
 #[test]
 fn integer_ranges() {
-    let found = draws(&[
-        "Random[6]",
-        "Random[-6]",
-        "RandomInteger[6]",
-        "RandomInteger[-2, 2]",
-        "RandomInteger[2, -2]",
-        "RandomInteger[0]",
-    ]);
+    let found = draws(
+        &[
+            "Random[6]",
+            "Random[-6]",
+            "RandomInteger[6]",
+            "RandomInteger[-2, 2]",
+            "RandomInteger[2, -2]",
+            "RandomInteger[0]",
+        ],
+        200,
+    );
     let ranges = [(0, 5), (-5, 0), (1, 6), (-2, 2), (-2, 2), (0, 1)];
     for (drawn, (low, high)) in found.iter().zip(ranges) {
         let values: Vec<Rational> = drawn.iter().map(value).collect();
@@ -204,11 +210,14 @@ fn integer_ranges() {
 /// all of `1 … 49` is a permutation.
 #[test]
 fn choices() {
-    let found = draws(&[
-        "Random[3, 1, 49]",
-        "Random[List[a, b, c]]",
-        "Random[2, List[a, b, c, d]]",
-    ]);
+    let found = draws(
+        &[
+            "Random[3, 1, 49]",
+            "Random[List[a, b, c]]",
+            "Random[2, List[a, b, c, d]]",
+        ],
+        200,
+    );
     for lotto in &found[0] {
         let picked: Vec<Rational> = lotto.args().iter().map(value).collect();
         assert_eq!(picked.len(), 3, "{lotto:?}");
@@ -233,6 +242,126 @@ fn choices() {
     assert_eq!(sorted, expected);
 }
 
+/// Variates in their laws' supports (CAS-372): reals anywhere, reals
+/// from 0, integers in their supports.
+#[test]
+fn variates() {
+    let found = draws(
+        &[
+            "RandomNormal[]",
+            "RandomNormal[1, 2]",
+            "RandomStudentT[3]",
+            "RandomExponential[2]",
+            "RandomChiSquare[3]",
+            "RandomFisher[2, 3]",
+            "RandomBinomial[10, 1/2]",
+            "RandomPoisson[3]",
+            "RandomGeometric[1/3]",
+        ],
+        40,
+    );
+    for drawn in found[..6].iter().flatten() {
+        assert!(matches!(drawn.view(), View::Ball(_)), "{drawn:?}");
+    }
+    for drawn in found[3..6].iter().flatten() {
+        assert!(value(drawn) >= Rational::ZERO, "{drawn:?}");
+    }
+    for drawn in &found[6] {
+        assert!(integer_in(&value(drawn), 0, 10), "{drawn:?}");
+    }
+    for drawn in &found[7] {
+        let count = value(drawn);
+        assert!(count.is_integer() && count >= Rational::ZERO, "{drawn:?}");
+    }
+    for drawn in &found[8] {
+        let trials = value(drawn);
+        assert!(trials.is_integer() && trials >= Rational::ONE, "{drawn:?}");
+    }
+}
+
+/// Vectors, matrices and polynomials (CAS-373): giac's default entries in
+/// `[−99, 99]`, `[0, m)`, a range's reals, a law's variates; monic
+/// polynomials of the degree asked.
+#[test]
+fn vectors_matrices_polynomials() {
+    let ctx = Context::new();
+    let entries = |text: &str| -> Vec<Rational> {
+        let drawn = eval(&ctx, text);
+        drawn
+            .args()
+            .iter()
+            .flat_map(|row| {
+                if row.head() == Some(&Expr::from(Symbol::LIST)) {
+                    row.args().to_vec()
+                } else {
+                    vec![row.clone()]
+                }
+            })
+            .map(|x| value(&x))
+            .collect()
+    };
+    for (input, count, low, high) in [
+        ("RandomVector[5]", 5, -99, 99),
+        ("RandomVector[4, 6]", 4, 0, 5),
+        ("RandomVector[2, Binomial, 10, 1/2]", 2, 0, 10),
+        ("RandomMatrix[2, 3]", 6, -99, 99),
+        ("RandomMatrix[2]", 4, -99, 99),
+        ("RandomMatrix[2, 2, 6]", 4, 0, 5),
+    ] {
+        let found = entries(input);
+        assert_eq!(found.len(), count, "{input}");
+        for x in &found {
+            assert!(integer_in(x, low, high), "{input}: {x}");
+        }
+    }
+    for x in entries("RandomVector[3, Range[5, 7]]") {
+        assert!(q(5, 1) <= x && x <= q(7, 1), "{x}");
+    }
+    assert_eq!(entries("RandomVector[3, NormalPDF, 0, 1]").len(), 3);
+    assert_eq!(eval(&ctx, "RandomVector[0]"), read("List[]"));
+    assert_eq!(
+        eval(&ctx, "Dimensions[RandomMatrix[2, 3]]"),
+        read("List[2, 3]")
+    );
+    for (input, variable) in [
+        ("RandomPolynomial[3, x]", "x"),
+        ("RandomPolynomial[x, 3]", "x"),
+        ("RandomPolynomial[3]", "x"),
+        ("RandomPolynomial[3, y, 5]", "y"),
+    ] {
+        let p = eval(&ctx, input);
+        let degree = eval(&ctx, &format!("Exponent[{p:?}, {variable}]"));
+        assert_eq!(degree, Expr::from(3), "{input}: {p:?}");
+        let leading = eval(&ctx, &format!("Coefficient[{p:?}, {variable}, 3]"));
+        assert_eq!(leading, Expr::from(1), "{input}: {p:?}");
+    }
+    assert_eq!(eval(&ctx, "RandomPolynomial[0]"), Expr::from(1));
+}
+
+/// Permutations of `0 … n − 1` and of lists, and samples at distinct
+/// places (CAS-373).
+#[test]
+fn permutations_and_samples() {
+    let ctx = Context::new();
+    let sorted = |e: Expr| {
+        let mut items = e.args().to_vec();
+        items.sort();
+        items
+    };
+    for _ in 0..20 {
+        let order = sorted(eval(&ctx, "RandomPermutation[5]"));
+        let expected: Vec<Expr> = (0..5).map(Expr::from).collect();
+        assert_eq!(order, expected);
+        let letters = sorted(eval(&ctx, "RandomPermutation[List[a, b, c]]"));
+        assert_eq!(letters, read("List[a, b, c]").args());
+        let pair = eval(&ctx, "RandomSample[List[a, b, c, d], 2]");
+        assert_eq!(pair.args().len(), 2, "{pair:?}");
+        assert_ne!(pair.args()[0], pair.args()[1], "{pair:?}");
+    }
+    assert_eq!(eval(&ctx, "RandomPermutation[0]"), read("List[]"));
+    assert_eq!(eval(&ctx, "RandomSample[List[a, b], 0]"), read("List[]"));
+}
+
 /// What stays: no number, a range or a list too small for the count, an
 /// integer form given a non-integer.
 #[test]
@@ -251,6 +380,23 @@ fn what_stays() {
         "Random[1, 2, 3, 4]",
         "RandomInteger[1/2, 3]",
         "RandomInteger[x]",
+        "RandomBinomial[10, 2]",
+        "RandomExponential[-1]",
+        "RandomPoisson[0]",
+        "RandomNormal[0, -1]",
+        "RandomNormal[1]",
+        "RandomPoisson[x]",
+        "RandomVector[x]",
+        "RandomVector[-1]",
+        "RandomVector[3, 0]",
+        "RandomVector[3, f]",
+        "RandomMatrix[2, x]",
+        "RandomPolynomial[-1]",
+        "RandomPolynomial[2, 3]",
+        "RandomPermutation[-1]",
+        "RandomPermutation[x]",
+        "RandomSample[List[a, b], 3]",
+        "RandomSample[x, 1]",
     ] {
         let e = read(input);
         assert_eq!(eval(&ctx, input).head(), e.head(), "{input}");

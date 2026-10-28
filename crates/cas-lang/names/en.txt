@@ -320,6 +320,19 @@ FisherICDF: fisher_icdf
 SeedRandom: srand randseed
 Random: rand random
 RandomInteger: randint
+RandomNormal: randnorm randNorm
+RandomExponential: randexp
+RandomBinomial: randbinomial
+RandomPoisson: randpoisson
+RandomGeometric: randgeometric
+RandomChiSquare: randchisquare
+RandomStudentT: randstudent
+RandomFisher: randfisher
+RandomVector: randvector ranv
+RandomMatrix: randmatrix ranm
+RandomPolynomial: randpoly
+RandomPermutation: randperm shuffle
+RandomSample: sample
 
 [planned]
 # Numerical solutions of differential equations (CAS-DOC-16), Xcas's
