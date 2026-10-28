@@ -26,6 +26,11 @@
 //!
 //! A function of a series with a pole (`exp(1/t)`), of `t` in an unknown
 //! head, or a power by `t` of a series with a pole has no series here.
+//!
+//! A coefficient is 0 when `Together` makes it 0; a number it leaves is
+//! told from 0 by its ball at 128 bits, and one around 0 leaves the
+//! expansion undecided, with no series, rather than divided by
+//! (CAS-DOC-25 §3, CAS-314): `sin²1 + cos²1 − 1` is such a number.
 
 #![allow(
     clippy::many_single_char_names,
@@ -149,18 +154,29 @@ impl Series {
 pub(crate) struct Expander<'a, 'e> {
     ev: &'a mut Eval<'e>,
     t: Expr,
+    /// Whether a coefficient was taken as nonzero that its ball could not
+    /// tell from 0 ([`Expander::is_zero`]).
+    undecided: bool,
 }
 
 impl<'a, 'e> Expander<'a, 'e> {
     pub(crate) fn new(ev: &'a mut Eval<'e>, t: Expr) -> Expander<'a, 'e> {
-        Expander { ev, t }
+        Expander {
+            ev,
+            t,
+            undecided: false,
+        }
     }
 
     fn eval(&mut self, e: &Expr) -> Result<Expr, EvalError> {
         self.ev.eval(e)
     }
 
-    /// Whether `c` is 0, once evaluated or put over one denominator.
+    /// Whether `c` is 0, once evaluated or put over one denominator. A
+    /// number that `Together` leaves is told from 0 by its ball at 128
+    /// bits (CAS-DOC-25 §3): around 0, it is taken as nonzero and the
+    /// expansion is undecided. Coefficients with parameters are taken as
+    /// they are.
     pub(crate) fn is_zero(&mut self, c: &Expr) -> Result<bool, EvalError> {
         if *c == Expr::from(0) {
             return Ok(true);
@@ -168,7 +184,16 @@ impl<'a, 'e> Expander<'a, 'e> {
         if c.is_number() {
             return Ok(false);
         }
-        Ok(self.eval(&Expr::call(Symbol::TOGETHER, [c.clone()]))? == Expr::from(0))
+        if self.eval(&Expr::call(Symbol::TOGETHER, [c.clone()]))? == Expr::from(0) {
+            return Ok(true);
+        }
+        let around_zero = approximation(self.ev.context(), c, 128).is_ok_and(|v| match v.view() {
+            View::Ball(b) => b.contains_rational(&Rational::ZERO),
+            View::ComplexBall(z) => z.may_be_zero(),
+            _ => false,
+        });
+        self.undecided |= around_zero;
+        Ok(false)
     }
 
     /// `s` without its leading zero coefficients.
@@ -778,7 +803,8 @@ impl<'a, 'e> Expander<'a, 'e> {
 
 /// The series of `f` in `t` to the order `order`, asking the children for
 /// more where a pole or a cancellation leaves less (§2.5): `None` when `f`
-/// has none, or it is not reached.
+/// has none, it is not reached, or a coefficient could not be told from 0
+/// (CAS-DOC-25 §3).
 pub(crate) fn expansion(ev: &mut Eval<'_>, f: &Expr, t: &Expr, order: &Rational) -> Found {
     let mut expander = Expander::new(ev, t.clone());
     for extra in [0, 2, 4, 8, 16] {
@@ -787,6 +813,9 @@ pub(crate) fn expansion(ev: &mut Eval<'_>, f: &Expr, t: &Expr, order: &Rational)
             return Ok(None);
         };
         let s = expander.normalized(s)?;
+        if expander.undecided {
+            return Ok(None);
+        }
         if s.order() >= *order {
             return Ok(Some(s.truncated(order)));
         }

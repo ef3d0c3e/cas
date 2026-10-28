@@ -162,6 +162,29 @@ fn what_has_no_series() {
     assert_eq!(expand("f[t]", 3), None);
 }
 
+/// Coefficients told from 0 by their balls (CAS-DOC-25 §3, CAS-314):
+/// `sin²1 + cos²1 − 1`, which `Together` leaves, is around 0, so `1/(t +
+/// sin²1 + cos²1 − 1)` has no series, where it had a constant term; `√2 −
+/// 1` is away from 0, and a parameter is taken as nonzero.
+#[test]
+fn undecided_coefficients() {
+    let hidden = "Plus[Power[Sin[1], 2], Power[Cos[1], 2], -1]";
+    assert_eq!(expand(&format!("Power[Plus[t, {hidden}], -1]"), 2), None);
+    // log(sin²1 + cos²1) is another; log(sin²1 + cos²1 + 1) is not.
+    assert_eq!(expand(&format!("Log[Plus[t, {hidden}, 1]]"), 2), None);
+    assert_eq!(
+        expand(&format!("Log[Plus[t, {hidden}, 2]]"), 2).map(|s| s.valuation),
+        Some(0)
+    );
+    let root = expand("Power[Plus[t, Power[2, 1/2], -1], -1]", 2).unwrap();
+    assert_eq!(root.valuation, 0);
+    let parameter = expand("Power[Plus[t, a], -1]", 2).unwrap();
+    assert_eq!(parameter.valuation, 0);
+    let ctx = Context::new();
+    let call = read(&format!("Series[Power[Plus[x, {hidden}], -1], x, 0, 2]"));
+    assert_eq!(ctx.eval(&call).unwrap().head(), call.head());
+}
+
 /// `(input, expected)` in full form, both evaluated: the same expression.
 fn check_calls(cases: &[(&str, &str)]) {
     let ctx = Context::new();
