@@ -93,11 +93,12 @@ fn residues() {
     ]);
 }
 
-/// Whether two coefficients agree with `n` at 2 … 5, `T` at `5/2` and `a`
-/// at `1/3`: giac's symbolic answers are its generic ones, as this CAS's.
+/// Whether two coefficients agree with `n` at 2 … 5, the period `p` at
+/// `5/2` and `a` at `1/3`: giac's symbolic answers are its generic ones, as
+/// this CAS's. (A capital `T` would read as the symbol `$T`.)
 fn same_coefficient(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     ["2", "3", "4", "5"].iter().all(|&n| {
-        let values = [("n", n), ("T", "5/2"), ("a", "1/3")];
+        let values = [("n", n), ("p", "5/2"), ("a", "1/3")];
         close(ctx, &at(a, &values), &at(b, &values))
     })
 }
@@ -125,8 +126,8 @@ fn fourier_coefficients() {
         "fourier_cn(abs(x),x,2*pi,n,-pi)",
         "fourier_an(exp(x),x,2*pi,n,-pi)",
         "fourier_cn(exp(x),x,2*pi,n,-pi)",
-        "fourier_an(x^2,x,T,n,0)",
-        "fourier_bn(x,x,T,n,a)",
+        "fourier_an(x^2,x,p,n,0)",
+        "fourier_bn(x,x,p,n,a)",
         "fourier_an(cos(x)^2,x,2*pi,2,-pi)",
         "fourier_bn(x^3,x,2*pi,n,-pi)",
         "fourier_an(x,x,1,n,0)",
