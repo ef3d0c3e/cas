@@ -201,6 +201,56 @@ fn through_bessel(x: &Ball, wp: u64) -> Option<[Ball; 4]> {
     Some([ai, ai_prime, bi, bi_prime])
 }
 
+/// An upper bound of `|f′|` over the ball, `f` the function `which`, from
+/// the ball's ends and 0 alone. Below 0, by the energy `E = y′² − x y²` of
+/// `y″ = x y`, which falls as `x` grows (`E′ = −y²`): on `[a, 0]`, `y′² ≤
+/// E(a)` and `|x| y² ≤ E(a)`, so `|x y| ≤ √(|a| E(a))`. Above 0, by
+/// monotony: `Ai` and `|Ai′|` fall there, `Bi` and `Bi′` rise. A wide ball
+/// costs no more than its ends; the series over a ball that met 0 and
+/// reached `|x| = 7·10⁵` took minutes (CAS-420). `None` past
+/// [`MAX_EXPONENT`].
+fn slope(x: &Ball, which: Airy) -> Option<Mag> {
+    let r = x.rad().to_float()?;
+    let lo = x.mid().sub_round(&r, 64, Round::Floor).0;
+    let hi = x.mid().add_round(&r, 64, Round::Ceil).0;
+    if exponent(&lo) > MAX_EXPONENT || exponent(&hi) > MAX_EXPONENT {
+        return None;
+    }
+    let (y, dy) = match which {
+        Airy::Ai | Airy::AiPrime => (0, 1),
+        Airy::Bi | Airy::BiPrime => (2, 3),
+    };
+    let mut bound = Mag::ZERO;
+    if lo.is_negative() {
+        let a = Ball::exact(lo.clone());
+        let v = airy_at(&a, 64);
+        let square = |b: &Ball| b.mul(b, 64);
+        let energy = upper(&square(&v[dy]).sub(&a.mul(&square(&v[y]), 64), 64));
+        let part = match which {
+            Airy::Ai | Airy::Bi => energy.sqrt(),
+            Airy::AiPrime | Airy::BiPrime => Mag::from_float(&lo).mul(&energy).sqrt(),
+        };
+        bound = bound.max(part);
+    }
+    if !hi.is_negative() && !hi.is_zero() {
+        let p = if lo.is_negative() {
+            Ball::ZERO
+        } else {
+            Ball::exact(lo)
+        };
+        let (low, high) = (airy_at(&p, 64), airy_at(&Ball::exact(hi.clone()), 64));
+        let far = Mag::from_float(&hi);
+        let part = match which {
+            Airy::Ai => upper(&low[1]),
+            Airy::AiPrime => far.mul(&upper(&low[0])),
+            Airy::Bi => upper(&high[3]),
+            Airy::BiPrime => far.mul(&upper(&high[2])),
+        };
+        bound = bound.max(part);
+    }
+    Some(bound)
+}
+
 /// `[Ai, Ai′, Bi, Bi′]` at `x`, at about `wp` bits.
 fn airy_at(x: &Ball, wp: u64) -> [Ball; 4] {
     let ax = magnitude(x);
@@ -231,16 +281,12 @@ impl Ball {
         if self.is_exact() {
             return refined(self, prec, |wp| airy_at(self, wp)[i].clone()).round_to_accuracy(prec);
         }
+        // The derivative over the ball: Ai′, x Ai, Bi′, x Bi.
+        let Some(slope) = slope(self, which) else {
+            return Ball::INDETERMINATE;
+        };
         let middle = Ball::exact(self.mid().clone());
         let value = airy_at(&middle, working(prec))[i].clone();
-        // The derivative over the ball: Ai′, x Ai, Bi′, x Bi.
-        let crude = airy_at(self, 64);
-        let slope = match which {
-            Airy::Ai => upper(&crude[1]),
-            Airy::AiPrime => upper(&self.mul(&crude[0], 64)),
-            Airy::Bi => upper(&crude[3]),
-            Airy::BiPrime => upper(&self.mul(&crude[2], 64)),
-        };
         value
             .add_error(&self.rad().mul(&slope))
             .round_to_accuracy(prec)

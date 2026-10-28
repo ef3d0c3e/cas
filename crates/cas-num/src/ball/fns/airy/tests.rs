@@ -111,6 +111,39 @@ fn wronskian() {
 
 /// A ball holds the values at its ends; past the exponent bound,
 /// indeterminate.
+/// The fuzz target `bessel_fns`'s timeout (CAS-420): the ball of midpoint
+/// 0 and radius `758134843·2^−10`, about `7.4·10⁵`, at 49 bits. The four
+/// functions are finite, their balls hold the values at points inside, and
+/// Airy's Wronskian holds over the ball.
+#[test]
+fn wide_ball_meeting_zero() {
+    let radius = Mag::from_float(&Float::from_integer_exp(
+        &Integer::from(758_134_843),
+        &Integer::from(-10),
+    ));
+    let x = Ball::new(Float::ZERO, radius);
+    let prec = 49;
+    let values = [Airy::Ai, Airy::AiPrime, Airy::Bi, Airy::BiPrime].map(|w| x.airy(w, prec));
+    for (w, y) in [Airy::Ai, Airy::AiPrime, Airy::Bi, Airy::BiPrime]
+        .iter()
+        .zip(&values)
+    {
+        assert!(y.is_finite(), "{w:?}: {y:?}");
+        for p in [-700_000.0, -1.5, 0.0, 2.0, 700_000.0] {
+            let inside = exact(p).airy(*w, 64);
+            assert!(
+                y.overlaps(&inside),
+                "{w:?} at {p}: {inside:?} outside {y:?}"
+            );
+        }
+    }
+    let q = 128;
+    let [ai, aip, bi, bip] = values;
+    let w = ai.mul(&bip, q).sub(&aip.mul(&bi, q), q);
+    let expected = Ball::from_integer(&Integer::ONE).div(&Ball::const_pi(q), q);
+    assert!(w.overlaps(&expected), "the Wronskian is {w:?}");
+}
+
 #[test]
 fn radii_and_bounds() {
     let r = 2f64.powi(-20);
