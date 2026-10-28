@@ -13,6 +13,21 @@
 //!   so that `mean([x, y], [p, 1 − p])` is an expected value. Frequencies
 //!   whose sum is 0, or 1 for the sample deviation, leave the call, with a
 //!   warning (giac's `undef`).
+//! - The order statistics (§4, CAS-295), of real values that comparisons
+//!   tell apart ([`order`]), with non-negative real frequencies:
+//!   `Median[l]`, `Median[l, f]` (`median`), the value at which the
+//!   cumulative frequency passes half the total, or the half-sum of the
+//!   two values around it when it reaches half exactly (giac answers the
+//!   lower one); `Quantile[l, p]`, `Quantile[l, f, p]` (`quantile`), for
+//!   `0 ≤ p ≤ 1` the smallest value whose cumulative frequency is at least
+//!   `p Σ f`, `x₍⌈np⌉₎` without frequencies and the minimum for `p = 0`
+//!   (giac: `undef` at 0 and 1); `Quartiles` (`quartiles`), `{min, Q(1/4),
+//!   median, Q(3/4), max}`, and `FirstQuartile` (`quartile1`) and
+//!   `ThirdQuartile` (`quartile3`).
+
+mod order;
+
+use cas_num::Rational;
 
 use crate::context::EvalError;
 use crate::eval::Eval;
@@ -92,23 +107,20 @@ fn samples(l: &Expr, f: Option<&Expr>) -> Option<(Vec<Sample>, bool)> {
     Some((columns, true))
 }
 
-/// A statistic of one sample; `None` leaves the call.
-type Statistic = fn(&mut Eval<'_>, &Expr, &Sample) -> Native;
-
-/// `statistic` of the data of `e[l]` or `e[l, f]`: of a list, its value; of
-/// a matrix, the list of its columns'.
-fn of_data(ev: &mut Eval<'_>, e: &Expr, statistic: Statistic) -> Native {
-    let (l, f) = match e.args() {
-        [l] => (l, None),
-        [l, f] => (l, Some(f)),
-        _ => return Ok(None),
-    };
+/// `statistic` of the data `l` with the frequencies `f`: of a list, its
+/// value; of a matrix, the list of its columns'. `None` leaves the call.
+fn of_samples(
+    ev: &mut Eval<'_>,
+    l: &Expr,
+    f: Option<&Expr>,
+    mut statistic: impl FnMut(&mut Eval<'_>, &Sample) -> Native,
+) -> Native {
     let Some((samples, columns)) = samples(l, f) else {
         return Ok(None);
     };
     let mut values = Vec::with_capacity(samples.len());
     for s in &samples {
-        let Some(v) = statistic(ev, e, s)? else {
+        let Some(v) = statistic(ev, s)? else {
             return Ok(None);
         };
         values.push(v);
@@ -118,6 +130,20 @@ fn of_data(ev: &mut Eval<'_>, e: &Expr, statistic: Statistic) -> Native {
     } else {
         values.swap_remove(0)
     }))
+}
+
+/// A statistic of one sample, given the call for its warnings; `None`
+/// leaves the call.
+type Statistic = fn(&mut Eval<'_>, &Expr, &Sample) -> Native;
+
+/// `statistic` of the data of `e[l]` or `e[l, f]`.
+fn of_data(ev: &mut Eval<'_>, e: &Expr, statistic: Statistic) -> Native {
+    let (l, f) = match e.args() {
+        [l] => (l, None),
+        [l, f] => (l, Some(f)),
+        _ => return Ok(None),
+    };
+    of_samples(ev, l, f, |ev, s| statistic(ev, e, s))
 }
 
 /// `Σ f`, evaluated, and `x̄`; `None` when `Σ f` is 0, with a warning.
@@ -192,6 +218,84 @@ pub(super) fn population_standard_deviation(ev: &mut Eval<'_>, e: &Expr) -> Nati
 /// `StandardDeviation[l]`, `StandardDeviation[l, f]`: the sample deviation.
 pub(super) fn standard_deviation(ev: &mut Eval<'_>, e: &Expr) -> Native {
     of_data(ev, e, standard_deviation_of)
+}
+
+/// `Median[l]`, `Median[l, f]`.
+pub(super) fn median(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    of_data(ev, e, |ev, _, s| {
+        let Some(sorted) = order::Sorted::of(ev, s)? else {
+            return Ok(None);
+        };
+        sorted.median(ev)
+    })
+}
+
+/// `Quantile[l, p]`, `Quantile[l, f, p]`.
+pub(super) fn quantile(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let (l, f, p) = match e.args() {
+        [l, p] => (l, None, p),
+        [l, f, p] => (l, Some(f), p),
+        _ => return Ok(None),
+    };
+    if !order::is_fraction(ev, p)? {
+        return Ok(None);
+    }
+    quantile_of_samples(ev, l, f, p)
+}
+
+/// The quantile `p` of the data `l` with the frequencies `f`.
+fn quantile_of_samples(ev: &mut Eval<'_>, l: &Expr, f: Option<&Expr>, p: &Expr) -> Native {
+    of_samples(ev, l, f, |ev, s| {
+        let Some(sorted) = order::Sorted::of(ev, s)? else {
+            return Ok(None);
+        };
+        sorted.quantile(ev, p)
+    })
+}
+
+/// The quantile `p` of the data of `e[l]` or `e[l, f]`.
+fn quantile_of(ev: &mut Eval<'_>, e: &Expr, p: &Expr) -> Native {
+    match e.args() {
+        [l] => quantile_of_samples(ev, l, None, p),
+        [l, f] => quantile_of_samples(ev, l, Some(f), p),
+        _ => Ok(None),
+    }
+}
+
+/// `Quartiles[l]`, `Quartiles[l, f]`: `{min, Q(1/4), median, Q(3/4), max}`.
+pub(super) fn quartiles(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    of_data(ev, e, |ev, _, s| {
+        let Some(sorted) = order::Sorted::of(ev, s)? else {
+            return Ok(None);
+        };
+        let (Some(first), Some(median), Some(third)) = (
+            sorted.quantile(ev, &quarters(1))?,
+            sorted.median(ev)?,
+            sorted.quantile(ev, &quarters(3))?,
+        ) else {
+            return Ok(None);
+        };
+        let (min, max) = sorted.ends();
+        Ok(Some(Expr::call(
+            Symbol::LIST,
+            [min, first, median, third, max],
+        )))
+    })
+}
+
+/// `k/4`.
+fn quarters(k: i64) -> Expr {
+    Expr::from(Rational::new(k.into(), 4.into()))
+}
+
+/// `FirstQuartile[l]`, `FirstQuartile[l, f]`: `Q(1/4)`.
+pub(super) fn first_quartile(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    quantile_of(ev, e, &quarters(1))
+}
+
+/// `ThirdQuartile[l]`, `ThirdQuartile[l, f]`: `Q(3/4)`.
+pub(super) fn third_quartile(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    quantile_of(ev, e, &quarters(3))
 }
 
 #[cfg(test)]

@@ -188,6 +188,12 @@ Mean: mean
 PopulationVariance: variance
 PopulationStandardDeviation: stddev
 StandardDeviation: stddevp
+# Its order statistics (CAS-295).
+Median: median
+Quantile: quantile
+Quartiles: quartiles
+FirstQuartile: quartile1
+ThirdQuartile: quartile3
 
 [planned]
 # Numerical solutions of differential equations (CAS-DOC-16), Xcas's

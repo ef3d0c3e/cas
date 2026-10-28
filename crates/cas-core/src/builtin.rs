@@ -158,6 +158,13 @@ builtins! {
     POPULATION_VARIANCE = "PopulationVariance" [PROTECTED];
     POPULATION_STANDARD_DEVIATION = "PopulationStandardDeviation" [PROTECTED];
     STANDARD_DEVIATION = "StandardDeviation" [PROTECTED];
+    // Its order statistics: `median`, `quantile`, `quartiles`, `quartile1`
+    // and `quartile3`.
+    MEDIAN = "Median" [PROTECTED];
+    QUANTILE = "Quantile" [PROTECTED];
+    QUARTILES = "Quartiles" [PROTECTED];
+    FIRST_QUARTILE = "FirstQuartile" [PROTECTED];
+    THIRD_QUARTILE = "ThirdQuartile" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

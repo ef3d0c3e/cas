@@ -132,3 +132,77 @@ fn what_stays() {
         "StandardDeviation[List[1, 2], List[1/2, 1/2]]",
     ]);
 }
+
+/// Medians: the middle value, or the half-sum of the two middle values
+/// where giac answers the lower one; with frequencies, by the cumulative
+/// frequency (CAS-295).
+#[test]
+fn medians() {
+    check(&[
+        ("Median[List[3, 1, 2]]", "2"),
+        ("Median[List[4, 1, 3, 2]]", "5/2"),
+        ("Median[List[1, 2, 3, 5, 10, 4]]", "7/2"),
+        ("Median[List[2, 1, 2, 1]]", "3/2"),
+        (&format!("Median[{ONE_TO_FOUR}, {WEIGHTS}]"), "4"),
+        // Half the total reached exactly at 2; a zero frequency left out.
+        ("Median[List[1, 2, 3], List[0, 1, 1]]", "5/2"),
+        ("Median[List[1, 2, 3], List[1, 0, 0]]", "1"),
+        ("Median[List[1, 2], List[1/3, 2/3]]", "2"),
+        ("Median[List[Power[2, 1/2], 1, Pi]]", "Power[2, 1/2]"),
+        (&format!("Median[{MATRIX}]"), "List[3, 4]"),
+    ]);
+}
+
+/// Quantiles, `x₍⌈np⌉₎`, the minimum and maximum at 0 and 1 where giac
+/// answers `undef`; quartiles (CAS-295).
+#[test]
+fn quantiles() {
+    let ten = "List[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]";
+    check(&[
+        (&format!("Quantile[{ten}, 1/4]"), "3"),
+        (&format!("Quantile[{ten}, 0]"), "1"),
+        (&format!("Quantile[{ten}, 1]"), "10"),
+        (&format!("Quantile[{ten}, 95/100]"), "10"),
+        (&format!("Quantile[{ten}, 1/10]"), "1"),
+        (&format!("Quantile[{ten}, 11/100]"), "2"),
+        (&format!("Quantile[{ten}, Decimal[25, -2]]"), "3"),
+        ("Quantile[List[3, 1, 2], List[1, 2, 1], 1/4]", "1"),
+        ("Quantile[List[1, 2, 3, 4, 5, 6, 7, 8], 1/3]", "3"),
+        ("Quantile[List[Power[2, 1/2], 1, Pi], 1/3]", "1"),
+        (&format!("Quartiles[{ten}]"), "List[1, 3, 11/2, 8, 10]"),
+        (
+            "Quartiles[List[1, 2, 3, 4, 5, 6, 7, 8]]",
+            "List[1, 2, 9/2, 6, 8]",
+        ),
+        ("Quartiles[List[3, 1, 2]]", "List[1, 1, 2, 3, 3]"),
+        (
+            &format!("Quartiles[{MATRIX}]"),
+            "List[List[1, 1, 3, 5, 5], List[2, 2, 4, 7, 7]]",
+        ),
+        (&format!("FirstQuartile[{ten}]"), "3"),
+        (&format!("ThirdQuartile[{ten}]"), "8"),
+        ("ThirdQuartile[List[1, 5, 2, 8, 4]]", "5"),
+        (
+            "FirstQuartile[List[1, 2, 3, 4, 5, 6, 7, 8], List[1, 1, 1, 1, 1, 1, 1, 1]]",
+            "2",
+        ),
+    ]);
+}
+
+/// Values that comparisons do not order, frequencies that are not
+/// non-negative numbers, fractions outside `[0, 1]` (CAS-295).
+#[test]
+fn unordered_stays() {
+    stays(&[
+        "Median[List[x, 1, 2]]",
+        "Median[List[1, 2], List[1, -1]]",
+        "Median[List[1, 2], List[0, 0]]",
+        "Median[List[1, 2], List[a, 1]]",
+        "Quantile[List[1, 2], 3/2]",
+        "Quantile[List[1, 2], -1/2]",
+        "Quantile[List[1, 2], p]",
+        "Quantile[List[1, 2]]",
+        "Quartiles[List[x, y]]",
+        "FirstQuartile[List[]]",
+    ]);
+}
