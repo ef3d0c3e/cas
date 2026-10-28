@@ -283,3 +283,10 @@ path = "fuzz_targets/random.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "bessel_fns"
+path = "fuzz_targets/bessel_fns.rs"
+test = false
+doc = false
+bench = false
