@@ -44,6 +44,8 @@
     reason = "the textbook names: a^b mod m, u a + v b = d, c ≡ a (mod m)"
 )]
 
+pub(super) mod residues;
+
 use cas_num::ball::bernoulli;
 use cas_num::modular::crt;
 use cas_num::{Factorization, Integer, Natural, nth_prime, prime_pi};

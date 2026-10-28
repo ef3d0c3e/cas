@@ -602,6 +602,19 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::F_MIN, optimization::global::f_min),
         (Symbol::F_MAX, optimization::global::f_max),
         (Symbol::LP_SOLVE, optimization::lpsolve::lp_solve),
+        (
+            Symbol::QUOTIENT_REMAINDER,
+            number_theory::residues::quotient_remainder,
+        ),
+        (
+            Symbol::SYMMETRIC_MOD,
+            number_theory::residues::symmetric_mod,
+        ),
+        (
+            Symbol::PSEUDOPRIME_Q,
+            number_theory::residues::pseudoprime_q,
+        ),
+        (Symbol::CYCLOTOMIC, number_theory::residues::cyclotomic),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),

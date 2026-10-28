@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 309] = [
+const BUILTINS: [&str; 313] = [
     "Plus",
     "Times",
     "Power",
@@ -385,6 +385,11 @@ const BUILTINS: [&str; 309] = [
     "FMin",
     "FMax",
     "LPSolve",
+    // Number theory II (CAS-422).
+    "QuotientRemainder",
+    "SymmetricMod",
+    "PseudoprimeQ",
+    "Cyclotomic",
 ];
 
 /// Builtins that apply something to parts, only in the expression
