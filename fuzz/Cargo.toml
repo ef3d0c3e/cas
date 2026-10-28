@@ -325,3 +325,10 @@ path = "fuzz_targets/vector_calculus.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "optimization"
+path = "fuzz_targets/optimization.rs"
+test = false
+doc = false
+bench = false
