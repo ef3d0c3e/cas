@@ -116,6 +116,9 @@ fn solving(ev: &mut Eval<'_>, e: &Expr, complex: bool) -> Native {
         system(ev, e, eqn, x.args(), complex)?
     } else if x.as_symbol().is_none() {
         None
+    } else if !complex && inequality::is_inequality(eqn) {
+        // Inequalities (CAS-DOC-19): sets of intervals.
+        inequality::solve(ev, e, eqn, x)?
     } else if is_list(eqn) {
         in_one_unknown(ev, e, eqn.args(), x, complex)?
     } else {
@@ -788,6 +791,7 @@ fn numeric_order((a_re, a_im): &(Float, Float), (b_re, b_im): &(Float, Float)) -
 }
 
 mod fsolve;
+mod inequality;
 mod linear;
 mod nonlinear;
 mod radicals;
