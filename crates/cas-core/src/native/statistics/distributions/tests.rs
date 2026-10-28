@@ -276,19 +276,21 @@ fn degrees_of_freedom() {
         ("ChiSquareICDF[2, 0]", "0"),
         ("FisherICDF[2, 3, 1]", "Infinity"),
     ]);
+    // Outside `N` a ball beside an exact irrational, `Log[2]` or `Pi` in a
+    // closed form, stays a sum: the claims compare under `N`.
     let ctx = Context::new();
     for claim in [
         // t(0.95, 3) = 2.353363434801826…, and its mirror.
         "Less[Abs[Plus[StudentTICDF[3, 95/100], Times[-2353363434801826, Power[10, -15]]]], Power[10, -12]]",
         "Less[Abs[Plus[StudentTICDF[3, 5/100], Times[2353363434801826, Power[10, -15]]]], Power[10, -12]]",
         // χ²(2) is E(1/2): its median is 2 ln 2.
-        "Less[Abs[Plus[ChiSquareICDF[2, 1/2], Times[-2, Log[2]]]], Power[10, -13]]",
+        "Less[Abs[N[Plus[ChiSquareICDF[2, 1/2], Times[-2, Log[2]]], 20]], Power[10, -13]]",
         // F(2, 3)'s median is (3/2)(2^(2/3) − 1).
-        "Less[Abs[Plus[FisherICDF[2, 3, 1/2], Times[-3/2, Plus[Power[2, 2/3], -1]]]], \
+        "Less[Abs[N[Plus[FisherICDF[2, 3, 1/2], Times[-3/2, Plus[Power[2, 2/3], -1]]], 20]], \
          Power[10, -13]]",
         // The cumulative function takes an inverse back.
-        "Less[Abs[Plus[StudentTCDF[3, StudentTICDF[3, 9/10]], -9/10]], Power[10, -12]]",
-        "Less[Abs[Plus[ChiSquareCDF[5, ChiSquareICDF[5, 1/3]], -1/3]], Power[10, -12]]",
+        "Less[Abs[N[Plus[StudentTCDF[3, StudentTICDF[3, 9/10]], -9/10], 20]], Power[10, -12]]",
+        "Less[Abs[N[Plus[ChiSquareCDF[5, ChiSquareICDF[5, 1/3]], -1/3], 20]], Power[10, -12]]",
     ] {
         assert!(holds(&ctx, claim), "{claim}");
     }
