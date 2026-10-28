@@ -311,3 +311,10 @@ path = "fuzz_targets/ndsolve.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "rewrite"
+path = "fuzz_targets/rewrite.rs"
+test = false
+doc = false
+bench = false
