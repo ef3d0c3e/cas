@@ -25,6 +25,7 @@ mod index;
 mod integer;
 mod integrate;
 mod interpolation;
+mod lambert;
 mod laplace;
 mod limit;
 mod linear;
@@ -115,6 +116,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::COS_INTEGRAL, expint::integral),
         (Symbol::LOG_INTEGRAL, expint::log_integral),
         (Symbol::POLY_GAMMA, polygamma::polygamma),
+        (Symbol::LAMBERT_W, lambert::lambert_w),
         (Symbol::HEAVISIDE_THETA, step::heaviside),
         (Symbol::DIRAC_DELTA, step::dirac),
         (Symbol::DIRECTED_INFINITY, arith::directed_infinity),

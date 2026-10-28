@@ -100,6 +100,9 @@ builtins! {
     // `Psi(x)` and `Psi(x, n)`, in giac's argument order: not listable, as
     // the orthogonal polynomials, for `Psi([1,2], 1)`.
     POLY_GAMMA = "PolyGamma" [NUMERIC_FUNCTION, PROTECTED];
+    // Lambert's W on its branches 0 and −1 (CAS-DOC-31 §3.3), Xcas's
+    // `LambertW(x)` and `LambertW(x, k)`; not listable, as `PolyGamma`.
+    LAMBERT_W = "LambertW" [NUMERIC_FUNCTION, PROTECTED];
     // The step and the delta (CAS-DOC-18 §2).
     HEAVISIDE_THETA = "HeavisideTheta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     DIRAC_DELTA = "DiracDelta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];

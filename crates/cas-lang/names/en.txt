@@ -69,6 +69,8 @@ LogIntegral: Li
 # The digamma function and its derivatives, giac's argument order
 # (CAS-DOC-31, CAS-355).
 PolyGamma: Psi
+# Lambert's W on its branches 0 and −1 (CAS-DOC-31, CAS-356).
+LambertW: LambertW
 # The inverse of erf (CAS-DOC-23, CAS-302), which Xcas lacks.
 InverseErf: erfinv
 HeavisideTheta: Heaviside

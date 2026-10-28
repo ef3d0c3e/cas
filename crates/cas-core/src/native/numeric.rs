@@ -470,8 +470,9 @@ fn kept(head: Option<Symbol>, i: usize, a: &Expr, args: &[Expr]) -> bool {
             a.as_symbol() == Some(Symbol::E) && !args.get(1).is_some_and(Expr::is_numeric)
         }
         (Some(Symbol::TIMES), _) => is_unit(a),
-        // The order of `PolyGamma` (CAS-DOC-31 §3.2).
-        (Some(Symbol::POLY_GAMMA), 1) => true,
+        // The order of `PolyGamma` and the branch of `LambertW` (CAS-DOC-31
+        // §3.2, §3.3).
+        (Some(Symbol::POLY_GAMMA | Symbol::LAMBERT_W), 1) => true,
         _ => false,
     }
 }

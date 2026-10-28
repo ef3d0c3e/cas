@@ -576,7 +576,8 @@ fn merge_number_powers(factors: Vec<Expr>) -> Vec<Expr> {
 ///   the identities that hold for every complex `b`, and `(e^u)^n` is
 ///   `e^(n u)` where that is no exponential; for a positive rational `b`,
 ///   `(b^p)^q` is `b^(p q)` for any real `q`;
-/// - `E^u` with terms `iπk` in `u` by [`special::exponential`];
+/// - `E^u` with terms `iπk` in `u` by [`special::exponential`], and
+///   `E^(k LambertW[z])` as `(z/LambertW[z])^k` (CAS-DOC-31 §3.3);
 /// - infinities: a direction to a positive integer power, 0 for a negative
 ///   power, `Indeterminate` for `Infinity^0`.
 pub(super) fn power(ev: &mut Eval<'_>, e: &Expr) -> Native {
@@ -659,6 +660,12 @@ fn scalar_power(ev: &mut Eval<'_>, b: &Expr, n: &Expr) -> Native {
                 _ => None,
             }
         });
+    }
+    // `E^(k W(z)) = (z/W(z))^k` (CAS-DOC-31 §3.3).
+    if b.as_symbol() == Some(Symbol::E)
+        && let Some(value) = super::lambert::exponential(n)
+    {
+        return Ok(Some(value));
     }
     // `E^(iπ)` and the like (CAS-DOC-25 §2).
     if b.as_symbol() == Some(Symbol::E)

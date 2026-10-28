@@ -15,9 +15,9 @@
 //! - the chain rule for `Sin`, `Cos`, `Tan`, `ArcSin`, `ArcCos`, `ArcTan`,
 //!   the hyperbolic `Sinh` … `ArcTanh` (CAS-DOC-15 §2), `Erf` and `Erfc`
 //!   (§8), `ExpIntegralEi`, `SinIntegral` and `CosIntegral` (CAS-DOC-31
-//!   §3.1), `PolyGamma`, `Gamma` and `Beta` (§3.2), `HeavisideTheta`
-//!   (CAS-DOC-18 §2), `Exp` and `Log`, from a table,
-//!   and `Abs`, whose derivative is
+//!   §3.1), `PolyGamma`, `Gamma` and `Beta` (§3.2), `LambertW` (§3.3),
+//!   `HeavisideTheta` (CAS-DOC-18 §2), `Exp` and `Log`, from a table, and
+//!   `Abs`, whose derivative is
 //!   `Abs[f] / f` times `f′`, giac's `abs(x)/x`, so that the logarithms of
 //!   absolute values integrals give differentiate back (CAS-DOC-9);
 //! - a function the table does not know: `Derivative[1][g][u] D[u, x]`, and
@@ -197,6 +197,18 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "Beta[Pattern[a, Blank[]], Pattern[b, Blank[]]]",
             "Times[Beta[a, b], Plus[Times[PolyGamma[a], D[a, x]], Times[PolyGamma[b], D[b, x]], \
              Times[-1, PolyGamma[Plus[a, b]], Plus[D[a, x], D[b, x]]]]]",
+        ),
+        // Lambert's W, giac's form (CAS-DOC-31 §3.3).
+        d(
+            "D/LambertW",
+            "LambertW[Pattern[f, Blank[]]]",
+            "Times[LambertW[f], Power[f, -1], Power[Plus[1, LambertW[f]], -1], D[f, x]]",
+        ),
+        d(
+            "D/LambertW/branch",
+            "LambertW[Pattern[f, Blank[]], Pattern[k, Blank[]]]",
+            "Condition[Times[LambertW[f, k], Power[f, -1], Power[Plus[1, LambertW[f, k]], -1], \
+             D[f, x]], FreeQ[k, x]]",
         ),
         // The step's derivative is the delta (CAS-DOC-18 §2).
         d(

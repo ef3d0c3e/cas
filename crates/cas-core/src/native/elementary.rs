@@ -57,6 +57,12 @@ fn elementary(
 }
 
 pub(super) fn exp(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    // `Exp[k W(z)] = (z/W(z))^k` (CAS-DOC-31 §3.3).
+    if let [x] = e.args()
+        && let Some(value) = super::lambert::exponential(x)
+    {
+        return Ok(Some(value));
+    }
     elementary(ev, e, Ball::exp, ComplexBall::exp)
 }
 
