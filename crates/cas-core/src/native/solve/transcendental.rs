@@ -21,8 +21,11 @@
 //!   came from, kept when its value is 0 exactly or its ball holds 0, or
 //!   when parameters leave it unknown: `√(x + 1) = x − 1` gives `3`, not
 //!   `0`.
-//! - Otherwise, as `x eˣ = 1` (giac's `LambertW`) or `sin x = cos x`, the
-//!   call stays.
+//! - **Lambert's W**: with the unknown alone and one exponential `g =
+//!   e^(c x + d)`, a numerator `(α x + β) g + γ` or `(α x + β) + γ g` is
+//!   `y e^y = z` in `y = c (x + β/α)`, solved by `LambertW` on its branches 0
+//!   and −1 (CAS-DOC-31 §7): `x eˣ = 1` is `LambertW(1)`, as giac's.
+//! - Otherwise, as `sin x = cos x`, the call stays.
 
 use std::cmp::Ordering;
 
@@ -66,7 +69,118 @@ pub(super) fn roots(
     {
         return Ok(Some(found));
     }
+    if let (true, [j]) = (alone, others)
+        && let Some(found) = lambert(ev, goal, p, *j)?
+    {
+        return Ok(Some(found));
+    }
     radicals(ev, goal, f, p, others, depth)
+}
+
+/// `(α x + β) g + γ = 0` or `(α x + β) + γ g = 0` for `g = e^(c x + d)`,
+/// `α` and `γ` not 0 (CAS-DOC-31 §7): with `y = c (x + β/α)` it is `y e^y =
+/// z`, so `x = W_k(z)/c − β/α`. The branches: 0 for `z ≥ −1/e` and also
+/// −1 first for `−1/e < z < 0` in the reals, none below `−1/e`; both in the
+/// Complex domain, and for a `z` of unknown sign, as giac's
+/// `solve(x*exp(x)=y,x)`. `None` for another shape.
+fn lambert(ev: &mut Eval<'_>, goal: &Goal<'_>, p: &Polynomials, j: usize) -> Found {
+    let x = goal.x;
+    let g = &p.generators()[j];
+    let u = match (g.head().and_then(Expr::as_symbol), g.args()) {
+        (Some(Symbol::POWER), [b, u]) if b.as_symbol() == Some(Symbol::E) => u.clone(),
+        (Some(Symbol::EXP), [u]) => u.clone(),
+        _ => return Ok(None),
+    };
+    let coefficient = |e: &Expr, v: &Expr, k: i64| {
+        Expr::call(Symbol::COEFFICIENT, [e.clone(), v.clone(), Expr::from(k)])
+    };
+    let degree = |e: &Expr, v: &Expr| Expr::call(Symbol::EXPONENT, [e.clone(), v.clone()]);
+    if ev.eval(&degree(&u, x))?.as_i64() != Some(1) {
+        return Ok(None);
+    }
+    let (c, d) = (
+        ev.eval(&coefficient(&u, x, 1))?,
+        ev.eval(&coefficient(&u, x, 0))?,
+    );
+    if c.contains(x) || d.contains(x) {
+        return Ok(None);
+    }
+    // The numerator in x and a fresh symbol for g.
+    let fresh_g = Expr::from(Symbol::new("Solve$g"));
+    let built = p.fraction_expr(&p.fractions()[0]);
+    if built.contains(&fresh_g) {
+        return Ok(None);
+    }
+    let together = Expr::call(
+        Symbol::TOGETHER,
+        [built.substitute(&[(g.clone(), fresh_g.clone())])],
+    );
+    let n = ev.eval(&Expr::call(Symbol::NUMERATOR, [together]))?;
+    for v in [&fresh_g, x] {
+        if ev.eval(&degree(&n, v))?.as_i64().is_none_or(|d| d > 1) {
+            return Ok(None);
+        }
+    }
+    let mut a = [
+        [Expr::from(0), Expr::from(0)],
+        [Expr::from(0), Expr::from(0)],
+    ];
+    for (i, row) in a.iter_mut().enumerate() {
+        let in_g = ev.eval(&coefficient(
+            &n,
+            &fresh_g,
+            i64::try_from(i).expect("0 or 1"),
+        ))?;
+        for (k, slot) in row.iter_mut().enumerate() {
+            *slot = ev.eval(&coefficient(&in_g, x, i64::try_from(k).expect("0 or 1")))?;
+            if slot.contains(x) || slot.contains(&fresh_g) {
+                return Ok(None);
+            }
+        }
+    }
+    // a[i][k] is the coefficient of g^i x^k.
+    let zero = Expr::from(0);
+    let (alpha, beta, gamma, sign) = if a[1][1] != zero && a[0][1] == zero {
+        (a[1][1].clone(), a[1][0].clone(), a[0][0].clone(), 1)
+    } else if a[1][1] == zero && a[0][1] != zero && a[1][0] != zero {
+        (a[0][1].clone(), a[0][0].clone(), a[1][0].clone(), -1)
+    } else {
+        return Ok(None);
+    };
+    if gamma == zero {
+        return Ok(None);
+    }
+    // e^(±(c x + d)): the second shape divides by g.
+    let (c, d) = if sign == 1 { (c, d) } else { (-c, -d) };
+    let shift = beta / alpha.clone();
+    let z = ev.eval(
+        &(-gamma * c.clone() / alpha * Expr::from(Symbol::E).pow(c.clone() * shift.clone() - d)),
+    )?;
+    let branches: Vec<i64> = if goal.real {
+        let past = ev.eval(&(z.clone() + Expr::from(Symbol::E).pow(-1)))?;
+        match (real_sign(ev, &z)?, real_sign(ev, &past)?) {
+            (_, Some(Ordering::Less)) => Vec::new(),
+            (_, Some(Ordering::Equal)) | (Some(Ordering::Greater | Ordering::Equal), _) => vec![0],
+            // Ascending, as giac's: W_(−1) < W_0.
+            (Some(Ordering::Less), Some(Ordering::Greater)) => vec![-1, 0],
+            _ => vec![0, -1],
+        }
+    } else {
+        vec![0, -1]
+    };
+    let mut found = Vec::new();
+    for k in branches {
+        let w = if k == 0 {
+            Expr::call(Symbol::LAMBERT_W, [z.clone()])
+        } else {
+            Expr::call(Symbol::LAMBERT_W, [z.clone(), Expr::from(k)])
+        };
+        let root = ev.eval(&(w / c.clone() - shift.clone()))?;
+        if !found.contains(&root) {
+            found.push(root);
+        }
+    }
+    Ok(Some(found))
 }
 
 /// The fresh unknown of a substitution `depth` steps in.

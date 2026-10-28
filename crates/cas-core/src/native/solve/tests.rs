@@ -247,11 +247,7 @@ fn what_stays() {
             "Solve[Plus[-1, Times[-1, x], Power[x, 65]], x]",
             "Solve[Plus[-1, Times[-1, x], Power[x, 65]], x]",
         ),
-        // x e^x = 1, giac's LambertW; sin x = cos x.
-        (
-            "Solve[Equation[Times[x, Exp[x]], 1], x]",
-            "Solve[Equation[Times[x, Exp[x]], 1], x]",
-        ),
+        // sin x = cos x.
         (
             "Solve[Equation[Sin[x], Cos[x]], x]",
             "Solve[Equation[Sin[x], Cos[x]], x]",
@@ -765,6 +761,40 @@ fn polynomial_systems() {
             "CSolve[List[Equation[Plus[Power[x, 2], Power[y, 2]], -1], Equation[x, y]], List[x, y]]",
             "List[List[Times[1/2, I, Power[2, 1/2]], Times[1/2, I, Power[2, 1/2]]], \
              List[Times[-1/2, I, Power[2, 1/2]], Times[-1/2, I, Power[2, 1/2]]]]",
+        ),
+    ]);
+}
+
+/// Lambert's W (CAS-DOC-31 §7): giac's `solve(x*exp(x)=1,x)`,
+/// `solve(x*exp(x)=y,x)`, `solve((x+1)*exp(x)=2,x)`, `solve(x=exp(-x),x)`,
+/// `solve(x*exp(x)=-1/4,x)` and `solve(x*exp(x)=-1,x)`.
+#[test]
+fn lambert() {
+    check(&[
+        (
+            "Solve[Equation[Times[x, Exp[x]], 1], x]",
+            "List[LambertW[1]]",
+        ),
+        (
+            "Solve[Equation[Times[x, Exp[x]], y], x]",
+            "List[LambertW[y], LambertW[y, -1]]",
+        ),
+        (
+            "Solve[Equation[Times[Plus[1, x], Exp[x]], 2], x]",
+            "List[Plus[-1, LambertW[Times[2, E]]]]",
+        ),
+        (
+            "Solve[Equation[x, Exp[Times[-1, x]]], x]",
+            "List[LambertW[1]]",
+        ),
+        (
+            "Solve[Equation[Times[x, Exp[x]], -1/4], x]",
+            "List[LambertW[-1/4, -1], LambertW[-1/4]]",
+        ),
+        ("Solve[Equation[Times[x, Exp[x]], -1], x]", "List[]"),
+        (
+            "CSolve[Equation[Times[x, Exp[x]], -1], x]",
+            "List[LambertW[-1], LambertW[-1, -1]]",
         ),
     ]);
 }
