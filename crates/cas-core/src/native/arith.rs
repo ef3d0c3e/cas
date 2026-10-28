@@ -576,8 +576,9 @@ fn merge_number_powers(factors: Vec<Expr>) -> Vec<Expr> {
 ///   the identities that hold for every complex `b`, and `(e^u)^n` is
 ///   `e^(n u)` where that is no exponential; for a positive rational `b`,
 ///   `(b^p)^q` is `b^(p q)` for any real `q`;
-/// - `E^u` with terms `iπk` in `u` by [`special::exponential`], and
-///   `E^(k LambertW[z])` as `(z/LambertW[z])^k` (CAS-DOC-31 §3.3);
+/// - `E^u` with terms `iπk` in `u` by [`special::exponential`],
+///   `E^(k LambertW[z])` as `(z/LambertW[z])^k` (CAS-DOC-31 §3.3), and
+///   `E^(k Log[u])` as `u^k` for an integer `k`;
 /// - infinities: a direction to a positive integer power, 0 for a negative
 ///   power, `Indeterminate` for `Infinity^0`.
 pub(super) fn power(ev: &mut Eval<'_>, e: &Expr) -> Native {
@@ -661,11 +662,16 @@ fn scalar_power(ev: &mut Eval<'_>, b: &Expr, n: &Expr) -> Native {
             }
         });
     }
-    // `E^(k W(z)) = (z/W(z))^k` (CAS-DOC-31 §3.3).
-    if b.as_symbol() == Some(Symbol::E)
-        && let Some(value) = super::lambert::exponential(n)
-    {
-        return Ok(Some(value));
+    // `E^(k W(z)) = (z/W(z))^k` (CAS-DOC-31 §3.3), and `E^(k Log[u]) = u^k`
+    // for an integer `k`, as `Exp[Log[u]]` is `u`: `D[Ei[Log[x]], x]` is
+    // `1/Log[x]`.
+    if b.as_symbol() == Some(Symbol::E) {
+        if let Some(value) = super::lambert::exponential(n) {
+            return Ok(Some(value));
+        }
+        if let Some(value) = logarithm_power(n) {
+            return Ok(Some(value));
+        }
     }
     // `E^(iπ)` and the like (CAS-DOC-25 §2).
     if b.as_symbol() == Some(Symbol::E)
@@ -690,6 +696,22 @@ fn scalar_power(ev: &mut Eval<'_>, b: &Expr, n: &Expr) -> Native {
         }
     }
     Ok(compound_power(ev, b, n, exponent.as_ref(), real_domain))
+}
+
+/// `u^k` for `n = k Log[u]`, `k` an integer.
+fn logarithm_power(n: &Expr) -> Option<Expr> {
+    let is_log = |l: &Expr| l.head() == Some(&Expr::from(Symbol::LOG)) && l.args().len() == 1;
+    if is_log(n) {
+        return Some(n.args()[0].clone());
+    }
+    let [k, l] = n.args() else {
+        return None;
+    };
+    if n.head() != Some(&Expr::from(Symbol::TIMES)) || !is_log(l) {
+        return None;
+    }
+    let k = k.as_i64()?;
+    Some(l.args()[0].pow(k))
 }
 
 /// [`scalar_power`] of a power, an absolute value or a product, by the

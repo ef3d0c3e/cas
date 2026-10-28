@@ -63,6 +63,24 @@ fn ball_of(e: &Expr) -> (Ball, Option<Ball>) {
     }
 }
 
+/// giac's decimal, a ball widened by its last two digits: 40 digits are
+/// below 150 bits.
+fn reference(digits: &str) -> Ball {
+    let ball = Ball::from_decimal(digits, 400).unwrap();
+    let significant = digits
+        .split(['e', 'E'])
+        .next()
+        .unwrap_or("")
+        .chars()
+        .filter(char::is_ascii_digit)
+        .skip_while(|&c| c == '0')
+        .count();
+    let width = i64::try_from(significant).unwrap_or(0) - 2;
+    let scale = Ball::from_decimal(&format!("1e-{width}"), 64).unwrap();
+    let error = ball.abs().mul(&scale, 64);
+    ball.add_error(&cas_num::ball::Mag::from_float(error.mid()).add(error.rad()))
+}
+
 /// `N` of each function at 150 bits meets giac's 50 digits.
 #[test]
 fn numbers() {
@@ -97,15 +115,14 @@ fn numbers() {
         let found = ctx.eval(&read(&format!("N[{input}]"))).unwrap();
         let (b, im) = ball_of(&found);
         assert!(im.is_none(), "{input}: {found:?}");
-        let want = Ball::from_decimal(digits, 200).unwrap();
+        let want = reference(digits);
         assert!(b.overlaps(&want), "{input}: {b:?} against {digits}");
         assert!(b.rel_accuracy_bits() >= 140, "{input}: {b:?}");
     }
     // Ci(-1) = Ci(1) + iπ.
     let found = ctx.eval(&read("N[CosIntegral[-1]]")).unwrap();
     let (re, im) = ball_of(&found);
-    let want =
-        Ball::from_decimal("0.33740392290096813466264620388915076999757803258573", 200).unwrap();
+    let want = reference("0.33740392290096813466264620388915076999757803258573");
     assert!(re.overlaps(&want), "{found:?}");
     assert!(im.unwrap().overlaps(&Ball::const_pi(200)), "{found:?}");
     // A ball meeting the pole stays indeterminate, with a warning.
