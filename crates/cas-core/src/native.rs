@@ -33,6 +33,7 @@ mod linear;
 mod lists;
 mod logic;
 mod matrix;
+mod ndsolve;
 mod nintegrate;
 mod number;
 mod number_theory;
@@ -120,6 +121,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::LOG_INTEGRAL, expint::log_integral),
         (Symbol::POLY_GAMMA, polygamma::polygamma),
         (Symbol::LAMBERT_W, lambert::lambert_w),
+        (Symbol::NDSOLVE, ndsolve::ndsolve),
         (Symbol::BESSEL_J, bessel::bessel),
         (Symbol::BESSEL_Y, bessel::bessel),
         (Symbol::BESSEL_I, bessel::bessel),

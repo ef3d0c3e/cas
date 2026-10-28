@@ -345,10 +345,11 @@ AiryBi: Airy_Bi
 AiryAiPrime: Airy_Ai_prime
 AiryBiPrime: Airy_Bi_prime
 
-[planned]
-# Numerical solutions of differential equations (CAS-DOC-16), Xcas's
-# `odesolve`, a later area.
+# Numerical solutions of differential equations (CAS-DOC-35), Xcas's
+# `odesolve`.
 NDSolve: odesolve
+
+[planned]
 
 [constants]
 imaginary: i

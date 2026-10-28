@@ -130,6 +130,8 @@ builtins! {
     ORDER_SIZE = "OrderSize" [PROTECTED];
     // Differential equations (CAS-DOC-16).
     DSOLVE = "DSolve" [PROTECTED];
+    // Numerical solutions of initial value problems (CAS-DOC-35).
+    NDSOLVE = "NDSolve" [PROTECTED];
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];
