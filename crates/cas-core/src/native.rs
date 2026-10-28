@@ -593,6 +593,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::CURVATURE, vector::curves::curvature),
         (Symbol::FRENET, vector::curves::frenet),
         (Symbol::EVOLUTE, vector::curves::evolute),
+        (Symbol::ARC_LENGTH, vector::curves::arc_length),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),

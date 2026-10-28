@@ -15,7 +15,7 @@
 //! symbol. The derivatives are `D`'s, evaluated with the answer.
 //!
 //! - [`potential`]: `Potential` and `VectorPotential` (§3).
-//! - [`curves`]: `Curvature`, `Frenet` and `Evolute` (§4).
+//! - [`curves`]: `Curvature`, `Frenet`, `Evolute` and `ArcLength` (§4).
 
 #![allow(
     clippy::many_single_char_names,

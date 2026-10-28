@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 301] = [
+const BUILTINS: [&str; 302] = [
     "Plus",
     "Times",
     "Power",
@@ -375,6 +375,7 @@ const BUILTINS: [&str; 301] = [
     "Curvature",
     "Frenet",
     "Evolute",
+    "ArcLength",
 ];
 
 /// Builtins that apply something to parts, only in the expression

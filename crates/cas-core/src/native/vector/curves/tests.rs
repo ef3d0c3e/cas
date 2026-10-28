@@ -1,7 +1,7 @@
 //! Tests of the curves (CAS-410): giac's examples, circles and helices, and
 //! what stays.
 
-use crate::{Context, Expr};
+use crate::{Context, Expr, Symbol};
 
 fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
@@ -88,4 +88,48 @@ fn frames() {
         ("Curvature[List[t, t], 1]", "Curvature[List[t, t], 1]"),
         ("Evolute[List[t, t, t], t]", "Evolute[List[t, t, t], t]"),
     ]);
+}
+
+/// Arc lengths against their closed forms, by value: the parabola's has an
+/// inverse hyperbolic sine, giac's `1/4*(2*sqrt(5)-ln(sqrt(5)-2))`.
+#[test]
+fn arc_lengths() {
+    let ctx = Context::new();
+    for (input, expected) in [
+        (
+            "ArcLength[Power[x, 2], x, 0, 1]",
+            "Plus[Times[1/2, Power[5, 1/2]], Times[1/4, ArcSinh[2]]]",
+        ),
+        (
+            "ArcLength[List[t, Power[t, 2]], t, 1, 2]",
+            "Plus[Power[17, 1/2], Times[1/4, ArcSinh[4]], \
+             Times[-1/2, Power[5, 1/2]], Times[-1/4, ArcSinh[2]]]",
+        ),
+        ("ArcLength[List[Cos[t], Sin[t]], t, 0, Pi]", "Pi"),
+        (
+            "ArcLength[List[Cos[t], Sin[t], t], t, 0, 1]",
+            "Power[2, 1/2]",
+        ),
+        (
+            "ArcLength[List[Plus[1, Times[2, t]], Times[3, t]], t, 0, 2]",
+            "Times[2, Power[13, 1/2]]",
+        ),
+    ] {
+        let difference = read(input) - read(expected);
+        let n = ctx
+            .eval(&Expr::call(Symbol::N, [difference, Expr::from(30)]))
+            .unwrap();
+        let within = Expr::call(
+            Symbol::LESS,
+            [
+                Expr::call(Symbol::ABS, [n.clone()]),
+                read("1/100000000000000000000"),
+            ],
+        );
+        assert_eq!(
+            ctx.eval(&within).unwrap().as_symbol(),
+            Some(Symbol::TRUE),
+            "{input}: {n:?}"
+        );
+    }
 }

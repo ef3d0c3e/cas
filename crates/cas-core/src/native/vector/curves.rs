@@ -12,6 +12,9 @@
 //!   torsion `τ = ((C′ × C″)·C‴)/|C′ × C″|²`.
 //! - `Evolute[C, t]`: in the plane, the centres of curvature, `C + (x′² +
 //!   y′²)/(x′y″ − y′x″) (−y′, x′)`, made `Together`.
+//! - `ArcLength[C, t, a, b]` (CAS-411), giac's `arcLen`: `∫_a^b |C′(t)| dt`,
+//!   the speed made `Simplify` first, so that a circle's is a number; the
+//!   integral as `Integrate` finds it, or as it stays.
 //! - A third argument `t0`: the answer at `t = t0`, evaluated.
 //!
 //! The curvature and the torsion are made `Simplify`: a circle's is a
@@ -195,6 +198,23 @@ pub(in crate::native) fn evolute(ev: &mut Eval<'_>, e: &Expr) -> Native {
         .collect();
     let result = list(centre);
     ev.step("evolute", e, &result);
+    Ok(Some(result))
+}
+
+/// `ArcLength[C, t, a, b]`.
+pub(in crate::native) fn arc_length(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [c, t, a, b] = e.args() else {
+        return Ok(None);
+    };
+    let Some([_, d1, _, _]) = curve(ev, c, t)? else {
+        return Ok(None);
+    };
+    let speed = ev.eval(&Expr::call(Symbol::SIMPLIFY, [dot(&d1, &d1).pow(half())]))?;
+    let result = ev.eval(&Expr::call(
+        Symbol::INTEGRATE,
+        [speed, t.clone(), a.clone(), b.clone()],
+    ))?;
+    ev.step("arcLen", e, &result);
     Ok(Some(result))
 }
 
