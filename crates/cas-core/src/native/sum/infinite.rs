@@ -18,7 +18,8 @@
 //!   `−(1 − 2^(1−s)) Zeta[s]` (CAS-245): exact for an even `s`, `Zeta[3]`
 //!   for an odd one, as giac's.
 //! - A hypergeometric antidifference `T` (Gosper's, CAS-225):
-//!   `lim_{n→∞} T(n) − T(a)`, when `Limit` finds it.
+//!   `lim_{n→∞} T(n) − T(a)`, when `Limit` finds it; without one, a
+//!   convergent rational function by `PolyGamma` (CAS-DOC-31 §6).
 //! - A sum term by term, each term's sum found or left: finite sums add,
 //!   with the others under one `Sum`; infinities of one sign, with only
 //!   finite sums beside them, are that infinity.
@@ -210,7 +211,8 @@ fn term(
         return Ok(Some(total));
     }
     let Some(antidifference) = gosper::antidifference(ev, e, t, k)? else {
-        return Ok(None);
+        // A rational function by `PolyGamma` (CAS-DOC-31 §6).
+        return Ok(super::rational::infinite(ev, t, k, a)?.map(Total::Finite));
     };
     let Some(end) = limit(ev, &antidifference, k)? else {
         return Ok(None);

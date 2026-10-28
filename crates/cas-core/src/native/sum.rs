@@ -14,7 +14,9 @@
 //!   terms, a factor free of `k` out of a product, a sum term by term; a
 //!   polynomial in `k` by its antidifference ([`antidifference`]); a
 //!   hypergeometric term by Gosper's algorithm ([`gosper`], CAS-225), as
-//!   `k 2^k` and `1/(k (k + 1))`; the terms without a closed form stay
+//!   `k 2^k` and `1/(k (k + 1))`; a rational function that has none by
+//!   `PolyGamma` ([`rational`], CAS-DOC-31 §6), as `1/k`; the terms without
+//!   a closed form stay
 //!   under one `Sum`, and when none has one the call stays, as giac's
 //!   `sum(k!,k,0,n)`. A product of a factor
 //!   free of `k` is its power; another goes factor by factor, rational
@@ -241,9 +243,10 @@ fn term_sum(
     if let Some(sum) = antidifference(ev, e, term, k, a, b)? {
         return Ok(Some(sum));
     }
-    // A hypergeometric term, by Gosper's algorithm: T(b + 1) − T(a).
+    // A hypergeometric term, by Gosper's algorithm: T(b + 1) − T(a); else
+    // a rational function by `PolyGamma` (CAS-DOC-31 §6).
     let Some(t) = gosper::antidifference(ev, e, term, k)? else {
-        return Ok(None);
+        return rational::finite(ev, e, term, k, a, b);
     };
     let upper = t.substitute(&[(k.clone(), b.clone() + Expr::from(1))]);
     let lower = t.substitute(&[(k.clone(), a.clone())]);
@@ -377,5 +380,6 @@ fn stirling(n: usize) -> Vec<Vec<Integer>> {
 mod gosper;
 mod infinite;
 mod product;
+mod rational;
 #[cfg(test)]
 mod tests;
