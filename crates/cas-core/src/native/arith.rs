@@ -10,7 +10,7 @@ use cas_num::Rational;
 
 use super::linear;
 use super::number::{EXACT_ONLY, Infinity, Num, Precision};
-use super::radical;
+use super::{radical, special};
 use crate::assume::{self, Domain, Set, Sign, Truth};
 use crate::context::{Context, EvalError};
 use crate::eval::{Eval, is_list_like, sort_arguments};
@@ -661,6 +661,12 @@ fn scalar_power(ev: &mut Eval<'_>, b: &Expr, n: &Expr) -> Native {
                 _ => None,
             }
         });
+    }
+    // `E^(iπ)` and the like (CAS-DOC-25 §2).
+    if b.as_symbol() == Some(Symbol::E)
+        && let Some((factor, rest)) = special::exponential(ev.context(), n)
+    {
+        return Ok(Some(factor * Expr::from(Symbol::E).pow(rest)));
     }
     if let View::Apply { head, args } = b.view() {
         match (head.as_symbol(), args) {

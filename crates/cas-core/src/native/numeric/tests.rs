@@ -375,8 +375,9 @@ fn complex_values() {
         assert!(contains_mpfr(z.im(), &Mpfr::with_val(100, Constant::Pi)));
     }
     // Complex accuracy is that of the larger part: an inexact 0 beside 1
-    // is no reason to raise the precision.
-    let (e, warnings) = eval("N[Exp[Times[Complex[0, 1/2], Pi]], 20]");
+    // is no reason to raise the precision. (`π` as a ball: `e^(iπ/2)` is
+    // `i` exactly, CAS-313.)
+    let (e, warnings) = eval("N[Exp[Times[Complex[0, 1/2], N[Pi, 40]]], 20]");
     let z = complex_ball_of(&e);
     assert!(z.re().contains_rational(&Rational::from(0)));
     assert!(z.im().contains_rational(&Rational::from(1)));

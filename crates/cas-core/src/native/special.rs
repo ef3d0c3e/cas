@@ -30,6 +30,14 @@
 //! argument the assumptions put in the principal range: within
 //! `[−157/100, 157/100]`, inside `(−π/2, π/2)`, for `ArcSin` and `ArcTan`,
 //! and `[0, 314/100]` for `ArcCos`.
+//!
+//! Integer multiples of `π` ([`periodic`], CAS-DOC-25 §2, CAS-313), where
+//! the assumptions tell that `k` is an integer: `sin(kπ + y)` is
+//! `(−1)^k sin y`, `cos(kπ + y)` is `(−1)^k cos y` and `tan(kπ + y)` is
+//! `tan y`, even coefficients dropped and odd ones reduced (`(−1)^(3n)` is
+//! `(−1)^n`); in the exponent of `Exp` and `E^u` ([`exponential`]), `iπk`
+//! for a half-integer or such a `k`: `e^(iπ)` is `−1`, `e^(iπ/2)` is `i`,
+//! `e^(x + 2iπn)` is `e^x`. Other multiples stay, as `e^(iπ/3)`.
 
 #![allow(
     clippy::many_single_char_names,
@@ -437,6 +445,175 @@ pub(super) fn composition(ctx: &Context, f: Symbol, x: &Expr) -> Option<Expr> {
         (Symbol::ARC_COS, Symbol::COS) => within(q(0, 1), q(314, 100)).then(|| u.clone()),
         _ => None,
     }
+}
+
+/// `t/π`, or `t/(iπ)` when `imaginary`, for a term `t` with the factor
+/// `π` (and a pure imaginary coefficient when `imaginary`); `None` for
+/// another term.
+fn over_pi(t: &Expr, imaginary: bool) -> Option<Expr> {
+    let factors: &[Expr] = match (t.head().and_then(Expr::as_symbol), t.args()) {
+        (Some(Symbol::TIMES), args) => args,
+        _ => std::slice::from_ref(t),
+    };
+    let i = factors
+        .iter()
+        .position(|f| f.as_symbol() == Some(Symbol::PI))?;
+    let mut unit = !imaginary;
+    let mut rest: Vec<Expr> = Vec::with_capacity(factors.len());
+    for f in factors[..i].iter().chain(&factors[i + 1..]) {
+        match f.view() {
+            View::Complex(z) if !unit && z.re().is_zero() => {
+                unit = true;
+                if *z.im() != Rational::ONE {
+                    rest.push(Expr::from(z.im().clone()));
+                }
+            }
+            View::Symbol(Symbol::I) if !unit => unit = true,
+            View::Complex(_) | View::Symbol(Symbol::I) => return None,
+            _ => rest.push(f.clone()),
+        }
+    }
+    unit.then(|| match rest.len() {
+        0 => Expr::from(1),
+        1 => rest.pop().expect("one"),
+        _ => Expr::call(Symbol::TIMES, rest),
+    })
+}
+
+/// An argument as `π (q + Σ k) + Σ rest`, with `iπ` for `π` when
+/// imaginary: a rational `q`, terms `k` known integers, and the other terms.
+struct Turns {
+    q: Rational,
+    integers: Vec<Expr>,
+    rest: Vec<Expr>,
+}
+
+impl Turns {
+    fn of(ctx: &Context, x: &Expr, imaginary: bool) -> Turns {
+        let terms: &[Expr] = match x.head().and_then(Expr::as_symbol) {
+            Some(Symbol::PLUS) => x.args(),
+            _ => std::slice::from_ref(x),
+        };
+        let mut turns = Turns {
+            q: Rational::ZERO,
+            integers: Vec::new(),
+            rest: Vec::new(),
+        };
+        for t in terms {
+            match over_pi(t, imaginary) {
+                Some(m) => match m.to_rational() {
+                    Some(r) => turns.q = &turns.q + &r,
+                    None if element(ctx, &m, Set::Integers) == Truth::True => {
+                        turns.integers.push(m);
+                    }
+                    None => turns.rest.push(t.clone()),
+                },
+                None => turns.rest.push(t.clone()),
+            }
+        }
+        turns
+    }
+
+    /// `(−1)^(Σ k)`, `None` for 1: the terms with an even coefficient
+    /// dropped, an odd one reduced to 1 where the rest is an integer.
+    fn sign(&self, ctx: &Context) -> Option<Expr> {
+        let mut odd: Vec<Expr> = Vec::new();
+        for k in &self.integers {
+            let (c, rest) = match k.args() {
+                [c, rest @ ..] if k.head() == Some(&Expr::from(Symbol::TIMES)) => {
+                    match c.to_rational().filter(Rational::is_integer) {
+                        Some(c) => (c, rest),
+                        None => (Rational::ONE, k.args()),
+                    }
+                }
+                _ => (Rational::ONE, std::slice::from_ref(k)),
+            };
+            if c.numer()
+                .unsigned_abs()
+                .trailing_zeros()
+                .is_none_or(|t| t > 0)
+            {
+                continue;
+            }
+            let m = match rest {
+                [m] => m.clone(),
+                _ => Expr::call(Symbol::TIMES, rest.to_vec()),
+            };
+            odd.push(if element(ctx, &m, Set::Integers) == Truth::True {
+                m
+            } else {
+                k.clone()
+            });
+        }
+        match odd.len() {
+            0 => None,
+            1 => Some(Expr::from(-1).pow(odd.pop().expect("one"))),
+            _ => Some(Expr::from(-1).pow(Expr::call(Symbol::PLUS, odd))),
+        }
+    }
+}
+
+fn sum(mut terms: Vec<Expr>) -> Expr {
+    match terms.len() {
+        0 => Expr::from(0),
+        1 => terms.pop().expect("one"),
+        _ => Expr::call(Symbol::PLUS, terms),
+    }
+}
+
+/// `Sin`, `Cos` or `Tan` of `x` with terms `kπ`, `k` known an integer
+/// (CAS-DOC-25 §2): `(−1)^k` out of `Sin` and `Cos`, nothing out of `Tan`;
+/// `Exp` of `x` by [`exponential`]; `None` without such a term.
+pub(super) fn periodic(ctx: &Context, f: Symbol, x: &Expr) -> Option<Expr> {
+    if f == Symbol::EXP {
+        let (factor, rest) = exponential(ctx, x)?;
+        return Some(factor * call(Symbol::EXP, rest));
+    }
+    if !matches!(f, Symbol::SIN | Symbol::COS | Symbol::TAN) {
+        return None;
+    }
+    let turns = Turns::of(ctx, x, false);
+    if turns.integers.is_empty() {
+        return None;
+    }
+    let sign = turns.sign(ctx);
+    let mut terms = turns.rest;
+    if !turns.q.is_zero() {
+        terms.push(pi_times(turns.q));
+    }
+    let g = call(f, sum(terms));
+    Some(match sign {
+        Some(s) if f != Symbol::TAN => s * g,
+        _ => g,
+    })
+}
+
+/// `e^u` as `c e^v` (CAS-DOC-25 §2), for the terms `iπk` of `u` with `k` a
+/// half-integer or known an integer: `c = i^(2q) (−1)^(Σ k)` and `v` the
+/// rest of `u`; `None` without such a term.
+pub(super) fn exponential(ctx: &Context, u: &Expr) -> Option<(Expr, Expr)> {
+    let turns = Turns::of(ctx, u, true);
+    let twice = &turns.q * &Rational::from(Integer::from(2));
+    let quarter_turns = twice.is_integer() && !turns.q.is_zero();
+    if turns.integers.is_empty() && !quarter_turns {
+        return None;
+    }
+    let sign = turns.sign(ctx);
+    let mut rest = turns.rest;
+    let mut factor = sign.unwrap_or_else(|| Expr::from(1));
+    if quarter_turns {
+        let (_, k) = twice.numer().div_rem_euclid(&Integer::from(4));
+        let unit = match k.to_i64() {
+            Some(0) => Expr::from(1),
+            Some(1) => Expr::from(Symbol::I),
+            Some(2) => Expr::from(-1),
+            _ => -Expr::from(Symbol::I),
+        };
+        factor = unit * factor;
+    } else if !turns.q.is_zero() {
+        rest.push(Expr::from(Symbol::I) * pi_times(turns.q));
+    }
+    Some((factor, sum(rest)))
 }
 
 #[cfg(test)]

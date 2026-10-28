@@ -281,3 +281,74 @@ fn reciprocal_functions() {
         ("ArcCot[x]", "ArcTan[Power[x, -1]]"),
     ]);
 }
+
+/// Integer multiples of `π` where the assumptions tell an integer, and of
+/// `iπ` in exponentials (CAS-DOC-25 §2, CAS-313).
+#[test]
+fn integer_multiples_of_pi() {
+    let integers = Context::new().assuming(read("And[Element[n, Integers], Element[m, Integers]]"));
+    let mut wrong = Vec::new();
+    for (input, expected) in [
+        ("Sin[Times[n, Pi]]", "0"),
+        ("Cos[Times[n, Pi]]", "Power[-1, n]"),
+        ("Cos[Times[-1, n, Pi]]", "Power[-1, n]"),
+        ("Cos[Times[2, n, Pi]]", "1"),
+        ("Cos[Times[3, n, Pi]]", "Power[-1, n]"),
+        ("Tan[Times[n, Pi]]", "0"),
+        ("Sin[Plus[x, Times[2, n, Pi]]]", "Sin[x]"),
+        ("Cos[Plus[x, Times[n, Pi]]]", "Times[Power[-1, n], Cos[x]]"),
+        ("Tan[Plus[x, Times[n, Pi]]]", "Tan[x]"),
+        ("Cos[Plus[Times[n, Pi], Times[1/2, Pi]]]", "0"),
+        ("Sin[Plus[Times[n, Pi], Times[1/2, Pi]]]", "Power[-1, n]"),
+        (
+            "Sin[Plus[Times[n, Pi], Times[1/3, Pi]]]",
+            "Times[Power[-1, n], Times[1/2, Power[3, 1/2]]]",
+        ),
+        ("Cos[Times[Pi, Plus[n, m]]]", "Power[-1, Plus[m, n]]"),
+        ("Cos[Plus[Times[n, Pi], Times[2, m, Pi]]]", "Power[-1, n]"),
+        ("Exp[Times[Complex[0, 2], n, Pi]]", "1"),
+        ("Exp[Times[Complex[0, 1], n, Pi]]", "Power[-1, n]"),
+        (
+            "Power[E, Plus[x, Times[Complex[0, 1], n, Pi]]]",
+            "Times[Power[-1, n], Power[E, x]]",
+        ),
+        (
+            "Exp[Plus[Times[Complex[0, 1], n, Pi], Times[Complex[0, 1/2], Pi]]]",
+            "Times[I, Power[-1, n]]",
+        ),
+    ] {
+        let found = integers.eval(&read(input)).unwrap();
+        let expected = integers.eval(&read(expected)).unwrap();
+        if found != expected {
+            wrong.push(format!("{input}: {found:?}, expected {expected:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    // Exponentials at quarter turns, whatever the assumptions.
+    check(&[
+        ("Exp[Times[Complex[0, 1], Pi]]", "-1"),
+        ("Power[E, Times[Complex[0, 1], Pi]]", "-1"),
+        ("Exp[Times[Complex[0, 1/2], Pi]]", "I"),
+        ("Power[E, Times[Complex[0, 3/2], Pi]]", "Times[-1, I]"),
+        ("Exp[Times[Complex[0, -2], Pi]]", "1"),
+        ("Exp[Plus[x, Times[Complex[0, 2], Pi]]]", "Exp[x]"),
+        (
+            "Power[E, Plus[1, Times[Complex[0, 1], Pi]]]",
+            "Times[-1, E]",
+        ),
+    ]);
+    // What stays: no integer known, other multiples, half turns of `Sin`.
+    let ctx = Context::new();
+    for (ctx, input) in [
+        (&ctx, "Sin[Times[n, Pi]]"),
+        (&ctx, "Exp[Times[Complex[0, 1], n, Pi]]"),
+        (&ctx, "Exp[Times[Complex[0, 1/3], Pi]]"),
+        (&ctx, "Power[E, Times[Complex[0, 1/4], Pi]]"),
+        (&integers, "Sin[Times[1/2, n, Pi]]"),
+        (&integers, "Sin[Times[n, x, Pi]]"),
+        (&integers, "Exp[Times[n, Pi]]"),
+    ] {
+        let e = ctx.eval(&read(input)).unwrap();
+        assert_eq!(e.head(), read(input).head(), "{input}: {e:?}");
+    }
+}
