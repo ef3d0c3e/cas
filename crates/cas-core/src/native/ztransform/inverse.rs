@@ -218,7 +218,12 @@ fn rational(
                 let Some((re, im)) = parts(ev.context(), &p) else {
                     return Ok(None);
                 };
-                let rho = Expr::call(Symbol::ABS, [root.clone()]);
+                // ρ by its parts: `Abs` leaves `|1/2 + i√3/2|`.
+                let Some((x, y)) = parts(ev.context(), &root) else {
+                    return Ok(None);
+                };
+                let square = Expr::call(Symbol::EXPAND, [x.pow(2) + y.pow(2)]);
+                let rho = ev.eval(&Expr::call(Symbol::SQRT, [square]))?;
                 let theta = Expr::call(Symbol::ARG, [root.clone()]);
                 let angle = n * theta;
                 let wave = re * Expr::call(Symbol::COS, [angle.clone()])

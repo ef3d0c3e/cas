@@ -445,9 +445,12 @@ fn first_order(ev: &mut Eval<'_>, e: &Expr, p: &Problem) -> Result<Option<Vec<Ex
     let b = ev.eval(&(-(rest / &alpha)))?;
     let j = Expr::from(Symbol::new("RSolve$j"));
     let at = |x: &Expr, k: &Expr| x.substitute(&[(p.n.clone(), k.clone())]);
-    let range = |top: Expr| Expr::call(Symbol::LIST, [j.clone(), Expr::from(0), top]);
+    // `Product[f, j, 0, top]`, as `Sum`'s forms: giac's `product(f, j, 0, top)`.
     let product = |ev: &mut Eval<'_>, top: Expr| {
-        ev.eval(&Expr::call(Symbol::PRODUCT, [at(&a, &j), range(top)]))
+        ev.eval(&Expr::call(
+            Symbol::PRODUCT,
+            [at(&a, &j), j.clone(), Expr::from(0), top],
+        ))
     };
     let big_p = product(ev, &p.n - 1)?;
     if big_p.contains(&Expr::from(Symbol::PRODUCT)) {
@@ -460,7 +463,7 @@ fn first_order(ev: &mut Eval<'_>, e: &Expr, p: &Problem) -> Result<Option<Vec<Ex
         let next_p = big_p.substitute(&[(p.n.clone(), &j + 1)]);
         let s = ev.eval(&Expr::call(
             Symbol::SUM,
-            [at(&b, &j) / next_p, range(&p.n - 1)],
+            [at(&b, &j) / next_p, j.clone(), Expr::from(0), &p.n - 1],
         ))?;
         if s.contains(&Expr::from(Symbol::SUM)) {
             return Ok(None);

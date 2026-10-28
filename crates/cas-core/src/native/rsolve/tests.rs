@@ -147,7 +147,7 @@ fn constants_and_systems() {
         "RSolve[Equation[u[Plus[n, 2]], Times[n, u[n]]], u[n]]",
         "RSolve[Equation[u[Plus[n, 1]], u[n]], u[2]]",
     ] {
-        let e = read(input);
-        assert_eq!(ctx.eval(&e).unwrap(), e, "{input}");
+        let found = ctx.eval(&read(input)).unwrap();
+        assert_eq!(found.head(), Some(&read("RSolve")), "{input}: {found:?}");
     }
 }

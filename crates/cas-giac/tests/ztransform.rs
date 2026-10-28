@@ -118,7 +118,9 @@ fn inverses() {
     check_sequences(&[
         "invztrans(z/(z-1),z,n)",
         "invztrans(z/(z-1)^2,z,n)",
-        "invztrans(1/(z-2),z,n)",
+        // Not `invztrans(1/(z-2),z,n)`: giac's `2^n/2*Heaviside(n-1)` is
+        // 1/2 at n = 1, its libgiac's Heaviside(0) being 1/2, where the
+        // sequence is 1 (z⁻¹ / (1 − 2/z) = Σ_{n≥1} 2ⁿ⁻¹ z⁻ⁿ).
         "invztrans(z^2/((z-1)*(z-2)),z,n)",
         "invztrans(z/(z^2+1),z,n)",
         "invztrans(1,z,n)",

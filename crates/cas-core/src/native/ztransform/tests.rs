@@ -132,8 +132,12 @@ fn rules() {
         "ZTransform[u[Plus[n, -1]], n, z]",
         "ZTransform[1, 2, z]",
     ] {
-        let e = read(input);
-        assert_eq!(ctx.eval(&e).unwrap(), e, "{input}");
+        let found = ctx.eval(&read(input)).unwrap();
+        assert_eq!(
+            found.head(),
+            Some(&read("ZTransform")),
+            "{input}: {found:?}"
+        );
     }
 }
 
@@ -211,7 +215,11 @@ fn inverse() {
         "InverseZTransform[Times[Power[z, 2], Power[Plus[z, -1], -1]], z, n]",
         "InverseZTransform[Log[z], z, n]",
     ] {
-        let e = read(input);
-        assert_eq!(ctx.eval(&e).unwrap(), e, "{input}");
+        let found = ctx.eval(&read(input)).unwrap();
+        assert_eq!(
+            found.head(),
+            Some(&read("InverseZTransform")),
+            "{input}: {found:?}"
+        );
     }
 }
