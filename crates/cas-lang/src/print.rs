@@ -910,11 +910,11 @@ impl<'a> Printer<'a> {
                 Ok(())
             }
             Form::Relation(a, op, b) => {
-                self.operand(a, Prec::Range, false)?;
+                self.operand(a, Prec::Union, false)?;
                 self.relation(op, b)
             }
             Form::Chain(tests) => {
-                self.operand(&tests[0].args()[0], Prec::Range, false)?;
+                self.operand(&tests[0].args()[0], Prec::Union, false)?;
                 for t in tests {
                     let op = t.head().and_then(Expr::as_symbol).and_then(relation);
                     self.relation(op.expect("a comparison"), &t.args()[1])?;
@@ -1023,7 +1023,7 @@ impl<'a> Printer<'a> {
         self.out.push(' ');
         self.out.push_str(op);
         self.out.push(' ');
-        self.operand(b, Prec::Range, false)
+        self.operand(b, Prec::Union, false)
     }
 
     fn comma_separated(&mut self, items: &[Expr]) -> Result<(), PrintError> {
