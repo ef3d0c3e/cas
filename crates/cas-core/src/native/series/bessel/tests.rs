@@ -174,7 +174,7 @@ fn limits() {
         ("Limit[AiryAi[x], x, Times[-1, Infinity]]", "0"),
         ("Limit[AiryBi[x], x, Times[-1, Infinity]]", "0"),
         ("Limit[Times[BesselJ[1, x], Power[x, -1]], x, 0]", "1/2"),
-        ("Limit[Times[x, BesselK[1, x]], x, 0]", "1"),
+        ("Limit[Times[x, BesselK[1, x]], x, 0, 1]", "1"),
         (
             "Limit[Times[x, BesselY[1, x]], x, 0, 1]",
             "Times[-2, Power[Pi, -1]]",

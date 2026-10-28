@@ -84,7 +84,7 @@ pub(super) fn special(
         return Ok(None);
     }
     // n² = −constant, n a natural number.
-    let Some(n_square) = (-constant).to_integer() else {
+    let Some(n_square) = ev.eval(&-constant)?.to_integer() else {
         return Ok(None);
     };
     if n_square.is_negative() {

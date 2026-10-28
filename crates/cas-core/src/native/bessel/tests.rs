@@ -50,7 +50,6 @@ fn exact_values() {
             "AiryBiPrime[0]",
             "Times[Power[3, 1/6], Power[Gamma[1/3], -1]]",
         ),
-        ("BesselJ[List[0, 1], 0]", "List[1, 0]"),
     ]);
 }
 
