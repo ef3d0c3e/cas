@@ -103,6 +103,16 @@ builtins! {
     // Lambert's W on its branches 0 and −1 (CAS-DOC-31 §3.3), Xcas's
     // `LambertW(x)` and `LambertW(x, k)`; not listable, as `PolyGamma`.
     LAMBERT_W = "LambertW" [NUMERIC_FUNCTION, PROTECTED];
+    // The Bessel and Airy functions (CAS-DOC-34 §3), the order first, as
+    // giac's.
+    BESSEL_J = "BesselJ" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    BESSEL_Y = "BesselY" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    BESSEL_I = "BesselI" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    BESSEL_K = "BesselK" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    AIRY_AI = "AiryAi" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    AIRY_BI = "AiryBi" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    AIRY_AI_PRIME = "AiryAiPrime" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    AIRY_BI_PRIME = "AiryBiPrime" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     // The step and the delta (CAS-DOC-18 §2).
     HEAVISIDE_THETA = "HeavisideTheta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     DIRAC_DELTA = "DiracDelta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];

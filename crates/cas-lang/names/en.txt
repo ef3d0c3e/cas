@@ -334,6 +334,16 @@ RandomPolynomial: randpoly
 RandomPermutation: randperm shuffle
 RandomSample: sample
 
+# Bessel and Airy functions (CAS-DOC-34).
+BesselJ: BesselJ besselJ
+BesselY: BesselY besselY
+BesselI: BesselI besselI
+BesselK: BesselK besselK
+AiryAi: Airy_Ai
+AiryBi: Airy_Bi
+AiryAiPrime: Airy_Ai_prime
+AiryBiPrime: Airy_Bi_prime
+
 [planned]
 # Numerical solutions of differential equations (CAS-DOC-16), Xcas's
 # `odesolve`, a later area.

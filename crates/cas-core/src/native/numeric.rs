@@ -471,8 +471,11 @@ fn kept(head: Option<Symbol>, i: usize, a: &Expr, args: &[Expr]) -> bool {
         }
         (Some(Symbol::TIMES), _) => is_unit(a),
         // The order of `PolyGamma` and the branch of `LambertW` (CAS-DOC-31
-        // §3.2, §3.3).
-        (Some(Symbol::POLY_GAMMA | Symbol::LAMBERT_W), 1) => true,
+        // §3.2, §3.3), and the order of the Bessel functions (CAS-DOC-34 §3).
+        (Some(Symbol::POLY_GAMMA | Symbol::LAMBERT_W), 1)
+        | (Some(Symbol::BESSEL_J | Symbol::BESSEL_Y | Symbol::BESSEL_I | Symbol::BESSEL_K), 0) => {
+            true
+        }
         _ => false,
     }
 }

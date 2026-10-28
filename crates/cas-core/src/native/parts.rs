@@ -152,9 +152,20 @@ pub(super) fn parts(ctx: &Context, z: &Expr) -> Option<(Expr, Expr)> {
             | Symbol::ERF
             | Symbol::ERFC
             | Symbol::EXP_INTEGRAL_EI
-            | Symbol::SIN_INTEGRAL,
+            | Symbol::SIN_INTEGRAL
+            | Symbol::AIRY_AI
+            | Symbol::AIRY_BI
+            | Symbol::AIRY_AI_PRIME
+            | Symbol::AIRY_BI_PRIME,
             [u],
         ) if element(ctx, u, Set::Reals) == Truth::True => Some((z.clone(), zero())),
+        // J and I of an integer order are real for real arguments
+        // (CAS-DOC-34 §3).
+        (Symbol::BESSEL_J | Symbol::BESSEL_I, [n, u])
+            if n.to_integer().is_some() && element(ctx, u, Set::Reals) == Truth::True =>
+        {
+            Some((z.clone(), zero()))
+        }
         _ => None,
     }
 }

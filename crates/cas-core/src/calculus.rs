@@ -16,6 +16,7 @@
 //!   the hyperbolic `Sinh` … `ArcTanh` (CAS-DOC-15 §2), `Erf` and `Erfc`
 //!   (§8), `ExpIntegralEi`, `SinIntegral` and `CosIntegral` (CAS-DOC-31
 //!   §3.1), `PolyGamma`, `Gamma` and `Beta` (§3.2), `LambertW` (§3.3),
+//!   the Bessel and Airy functions (CAS-DOC-34 §4),
 //!   `HeavisideTheta` (CAS-DOC-18 §2), `Exp` and `Log`, from a table, and
 //!   `Abs`, whose derivative is
 //!   `Abs[f] / f` times `f′`, giac's `abs(x)/x`, so that the logarithms of
@@ -209,6 +210,51 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "LambertW[Pattern[f, Blank[]], Pattern[k, Blank[]]]",
             "Condition[Times[LambertW[f, k], Power[f, -1], Power[Plus[1, LambertW[f, k]], -1], \
              D[f, x]], FreeQ[k, x]]",
+        ),
+        // The Bessel and Airy functions (CAS-DOC-34 §4).
+        d(
+            "D/BesselJ",
+            "BesselJ[Pattern[n, Blank[]], Pattern[f, Blank[]]]",
+            "Condition[Times[1/2, Plus[BesselJ[Plus[n, -1], f], Times[-1, BesselJ[Plus[n, 1], f]]], \
+             D[f, x]], FreeQ[n, x]]",
+        ),
+        d(
+            "D/BesselY",
+            "BesselY[Pattern[n, Blank[]], Pattern[f, Blank[]]]",
+            "Condition[Times[1/2, Plus[BesselY[Plus[n, -1], f], Times[-1, BesselY[Plus[n, 1], f]]], \
+             D[f, x]], FreeQ[n, x]]",
+        ),
+        d(
+            "D/BesselI",
+            "BesselI[Pattern[n, Blank[]], Pattern[f, Blank[]]]",
+            "Condition[Times[1/2, Plus[BesselI[Plus[n, -1], f], BesselI[Plus[n, 1], f]], D[f, x]], \
+             FreeQ[n, x]]",
+        ),
+        d(
+            "D/BesselK",
+            "BesselK[Pattern[n, Blank[]], Pattern[f, Blank[]]]",
+            "Condition[Times[-1/2, Plus[BesselK[Plus[n, -1], f], BesselK[Plus[n, 1], f]], D[f, x]], \
+             FreeQ[n, x]]",
+        ),
+        d(
+            "D/AiryAi",
+            "AiryAi[Pattern[f, Blank[]]]",
+            "Times[AiryAiPrime[f], D[f, x]]",
+        ),
+        d(
+            "D/AiryAiPrime",
+            "AiryAiPrime[Pattern[f, Blank[]]]",
+            "Times[f, AiryAi[f], D[f, x]]",
+        ),
+        d(
+            "D/AiryBi",
+            "AiryBi[Pattern[f, Blank[]]]",
+            "Times[AiryBiPrime[f], D[f, x]]",
+        ),
+        d(
+            "D/AiryBiPrime",
+            "AiryBiPrime[Pattern[f, Blank[]]]",
+            "Times[f, AiryBi[f], D[f, x]]",
         ),
         // The step's derivative is the delta (CAS-DOC-18 §2).
         d(

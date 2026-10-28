@@ -14,6 +14,7 @@
 
 mod arith;
 mod ball;
+mod bessel;
 mod dsolve;
 mod elementary;
 mod erf;
@@ -119,6 +120,14 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::LOG_INTEGRAL, expint::log_integral),
         (Symbol::POLY_GAMMA, polygamma::polygamma),
         (Symbol::LAMBERT_W, lambert::lambert_w),
+        (Symbol::BESSEL_J, bessel::bessel),
+        (Symbol::BESSEL_Y, bessel::bessel),
+        (Symbol::BESSEL_I, bessel::bessel),
+        (Symbol::BESSEL_K, bessel::bessel),
+        (Symbol::AIRY_AI, bessel::airy),
+        (Symbol::AIRY_BI, bessel::airy),
+        (Symbol::AIRY_AI_PRIME, bessel::airy),
+        (Symbol::AIRY_BI_PRIME, bessel::airy),
         (Symbol::UNION, sets::union),
         (Symbol::INTERSECTION, sets::intersection),
         (Symbol::COMPLEMENT, sets::complement),
