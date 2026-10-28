@@ -20,6 +20,8 @@
 //!   the call. What no method solves stays, with a warning.
 //! - `DSolve[{eq, conditions…}, y[x]]` fixes the constants by the
 //!   conditions ([`conditions`], §8).
+//! - `DSolve[{eq₁, …}, {y₁[x], …}]`, a list of unknowns, is a system
+//!   ([`system`], CAS-DOC-20).
 //!
 //! Each call that solves takes one step, `"DSolve"`.
 
@@ -31,26 +33,15 @@ use crate::trace::Warning;
 
 type Native = Result<Option<Expr>, EvalError>;
 
-/// `DSolve[eq, y[x]]`, `DSolve[eq, x, y]` or `DSolve[eq, y]`.
+/// `DSolve[eq, y[x]]`, `DSolve[eq, x, y]` or `DSolve[eq, y]`; with a list
+/// of unknowns, a system ([`system`], CAS-DOC-20).
 pub(super) fn dsolve(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    let Some((eq, y, x)) = problem(e) else {
+    let solution = if let Some(problem) = system::problem(e) {
+        system::solve(ev, e, &problem)?
+    } else if let Some((eq, y, x)) = problem(e) {
+        one(ev, e, eq, &y, &x)?
+    } else {
         return Ok(None);
-    };
-    // Conditions come in a list after the equation (§8).
-    let (eq, conditions) = match (eq.head() == Some(&Expr::from(Symbol::LIST)), eq.args()) {
-        (true, [first, rest @ ..]) => (first.clone(), rest.to_vec()),
-        (true, []) => return Ok(None),
-        _ => (eq, Vec::new()),
-    };
-    let solution = match Ode::of(ev, &eq, &y, &x)? {
-        Some(ode) => match solve(ev, e, &ode, &x)? {
-            Some(general) if !conditions.is_empty() => {
-                let constants = constants(e, ode.order);
-                conditions::apply(ev, e, &general, &conditions, &y, &x, &constants)?
-            }
-            general => general,
-        },
-        None => None,
     };
     let Some(solution) = solution else {
         ev.warn(Warning::Native {
@@ -61,6 +52,33 @@ pub(super) fn dsolve(ev: &mut Eval<'_>, e: &Expr) -> Native {
     };
     ev.step("DSolve", e, &solution);
     Ok(Some(solution))
+}
+
+/// The solution of one equation `eq`, or of `{eq, conditions…}`, for `y`
+/// of `x`; `None` when it is not solved here.
+fn one(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    eq: Expr,
+    y: &Expr,
+    x: &Expr,
+) -> Result<Option<Expr>, EvalError> {
+    // Conditions come in a list after the equation (§8).
+    let (eq, conditions) = match (eq.head() == Some(&Expr::from(Symbol::LIST)), eq.args()) {
+        (true, [first, rest @ ..]) => (first.clone(), rest.to_vec()),
+        (true, []) => return Ok(None),
+        _ => (eq, Vec::new()),
+    };
+    let Some(ode) = Ode::of(ev, &eq, y, x)? else {
+        return Ok(None);
+    };
+    match solve(ev, e, &ode, x)? {
+        Some(general) if !conditions.is_empty() => {
+            let constants = constants(e, ode.order);
+            conditions::apply(ev, e, &general, &conditions, y, x, &constants)
+        }
+        general => Ok(general),
+    }
 }
 
 /// The general solution of `ode`, by the first method of §4–§7 that applies.
@@ -310,6 +328,7 @@ mod first;
 mod linear;
 mod particular;
 mod reduced;
+mod system;
 
 #[cfg(test)]
 mod tests;
