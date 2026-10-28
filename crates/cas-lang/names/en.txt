@@ -259,6 +259,12 @@ Combine: combine
 TranscendentalSimplify: tsimplify
 SignToHeaviside: sign2Heaviside
 HeavisideToSign: Heaviside2sign
+# Vector calculus (CAS-DOC-37): the differential operators (CAS-408).
+Grad: grad
+Divergence: divergence
+Curl: curl
+Laplacian: laplacian
+Hessian: hessian
 # A ball, `ball(c, r)` (CAS-DOC-5 §6.5, CAS-83), and back to fractions
 # (D4, CAS-148).
 Ball: ball

@@ -61,6 +61,7 @@ mod step;
 mod structure;
 mod sum;
 mod trig;
+mod vector;
 mod zeta;
 mod ztransform;
 
@@ -579,6 +580,11 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         ),
         (Symbol::SIGN_TO_HEAVISIDE, rewrite::sign_to_heaviside),
         (Symbol::HEAVISIDE_TO_SIGN, rewrite::heaviside_to_sign),
+        (Symbol::GRAD, vector::grad),
+        (Symbol::DIVERGENCE, vector::divergence),
+        (Symbol::CURL, vector::curl),
+        (Symbol::LAPLACIAN, vector::laplacian),
+        (Symbol::HESSIAN, vector::hessian),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),

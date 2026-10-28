@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 291] = [
+const BUILTINS: [&str; 296] = [
     "Plus",
     "Times",
     "Power",
@@ -362,6 +362,12 @@ const BUILTINS: [&str; 291] = [
     "TranscendentalSimplify",
     "SignToHeaviside",
     "HeavisideToSign",
+    // Vector calculus (CAS-408).
+    "Grad",
+    "Divergence",
+    "Curl",
+    "Laplacian",
+    "Hessian",
 ];
 
 /// Builtins that apply something to parts, only in the expression

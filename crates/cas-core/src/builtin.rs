@@ -368,6 +368,12 @@ builtins! {
     TRANSCENDENTAL_SIMPLIFY = "TranscendentalSimplify" [PROTECTED];
     SIGN_TO_HEAVISIDE = "SignToHeaviside" [PROTECTED];
     HEAVISIDE_TO_SIGN = "HeavisideToSign" [PROTECTED];
+    // Vector calculus (CAS-DOC-37): the differential operators (§2).
+    GRAD = "Grad" [PROTECTED];
+    DIVERGENCE = "Divergence" [PROTECTED];
+    CURL = "Curl" [PROTECTED];
+    LAPLACIAN = "Laplacian" [PROTECTED];
+    HESSIAN = "Hessian" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];
