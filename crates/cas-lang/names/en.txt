@@ -105,6 +105,9 @@ KroneckerDelta: Kronecker
 RSolve: rsolve
 # Residues and Fourier coefficients (CAS-DOC-25, CAS-315, CAS-319).
 Residue: residue
+FourierCosCoefficient: fourier_an
+FourierSinCoefficient: fourier_bn
+FourierCoefficient: fourier_cn
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime

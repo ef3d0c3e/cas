@@ -18,6 +18,7 @@ mod dsolve;
 mod elementary;
 mod erf;
 mod factorial;
+mod fourier;
 mod groebner;
 mod index;
 mod integer;
@@ -192,6 +193,15 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::KRONECKER_DELTA, ztransform::kronecker_delta),
         (Symbol::RSOLVE, rsolve::rsolve),
         (Symbol::RESIDUE, residue::residue),
+        (
+            Symbol::FOURIER_COS_COEFFICIENT,
+            fourier::fourier_cos_coefficient,
+        ),
+        (
+            Symbol::FOURIER_SIN_COEFFICIENT,
+            fourier::fourier_sin_coefficient,
+        ),
+        (Symbol::FOURIER_COEFFICIENT, fourier::fourier_coefficient),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),

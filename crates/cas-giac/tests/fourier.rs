@@ -92,3 +92,55 @@ fn residues() {
         "residue(exp(a*z)/(z^2+1),z,i)",
     ]);
 }
+
+/// Whether two coefficients agree with `n` at 2 … 5, `T` at `5/2` and `a`
+/// at `1/3`: giac's symbolic answers are its generic ones, as this CAS's.
+fn same_coefficient(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    ["2", "3", "4", "5"].iter().all(|&n| {
+        let values = [("n", n), ("T", "5/2"), ("a", "1/3")];
+        close(ctx, &at(a, &values), &at(b, &values))
+    })
+}
+
+/// Fourier coefficients (CAS-319): polynomials, `abs` and `sign`,
+/// exponentials, other periods and starts, `n = 0` and given `n`.
+#[test]
+fn fourier_coefficients() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in [
+        "fourier_an(x^2,x,2*pi,n,-pi)",
+        "fourier_bn(x,x,2*pi,n,-pi)",
+        "fourier_cn(x,x,2*pi,n,-pi)",
+        "fourier_an(x^2,x,2*pi,0,-pi)",
+        "fourier_cn(x^2,x,2*pi,0,-pi)",
+        "fourier_an(x^2,x,2*pi,3,-pi)",
+        "fourier_an(x^2,x,2*pi,-2,-pi)",
+        "fourier_an(x^2,x,2*pi,n)",
+        "fourier_an(abs(x),x,2*pi,n,-pi)",
+        "fourier_bn(sign(x),x,2*pi,n,-pi)",
+        "fourier_cn(abs(x),x,2*pi,n,-pi)",
+        "fourier_an(exp(x),x,2*pi,n,-pi)",
+        "fourier_cn(exp(x),x,2*pi,n,-pi)",
+        "fourier_an(x^2,x,T,n,0)",
+        "fourier_bn(x,x,T,n,a)",
+        "fourier_an(cos(x)^2,x,2*pi,2,-pi)",
+        "fourier_bn(x^3,x,2*pi,n,-pi)",
+        "fourier_an(x,x,1,n,0)",
+        "fourier_bn(x,x,1,n,0)",
+        "fourier_cn(x,x,1,n,0)",
+        "fourier_an(exp(-x),x,2,n,0)",
+        "fourier_bn(x,x,2*pi,1/2,-pi)",
+        "fourier_cn(cos(x),x,2*pi,1,-pi)",
+        "fourier_bn(x^2,x,2*pi,0,-pi)",
+    ] {
+        match (giac.value(input), ours(input)) {
+            (Ok(theirs), Ok(ours)) if same_coefficient(&ctx, &ours, &theirs) => {}
+            (theirs, ours) => wrong.push(format!("{input}: ours {ours:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
