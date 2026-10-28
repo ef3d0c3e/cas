@@ -404,26 +404,34 @@ fn add(terms: &mut Vec<Term>, (c, k, angle): Term) {
 /// `x` with `Sin`, `Cos`, `Tan` and the hyperbolic `Sinh`, `Cosh`, `Tanh`
 /// as exponentials, built.
 pub(super) fn to_exp(x: &Expr) -> Expr {
-    x.map_bottom_up(|part| {
-        let (Some(f), [u]) = (part.head().and_then(Expr::as_symbol), part.args()) else {
-            return part.clone();
-        };
-        // e^(±iu) for the circular functions, e^(±u) for the hyperbolic.
-        let circular = matches!(f, Symbol::SIN | Symbol::COS | Symbol::TAN);
-        let hyperbolic = matches!(f, Symbol::SINH | Symbol::COSH | Symbol::TANH);
-        if !circular && !hyperbolic {
-            return part.clone();
-        }
-        let v = if circular { i() * u.clone() } else { u.clone() };
-        let plus = Expr::call(Symbol::EXP, [v.clone()]);
-        let minus = Expr::call(Symbol::EXP, [-v]);
-        match f {
-            Symbol::SIN => (plus - minus) / (Expr::from(2) * i()),
-            Symbol::COS | Symbol::COSH => (plus + minus) / Expr::from(2),
-            Symbol::TAN => -i() * (plus.clone() - minus.clone()) / (plus + minus),
-            Symbol::SINH => (plus - minus) / Expr::from(2),
-            _ => (plus.clone() - minus.clone()) / (plus + minus),
-        }
+    x.map_bottom_up(|part| exponential_form(part, true).unwrap_or_else(|| part.clone()))
+}
+
+/// `part` as exponentials if it is `Sinh`, `Cosh` or `Tanh`, or, when
+/// `circular`, `Sin`, `Cos` or `Tan`, built.
+pub(super) fn exponential_form(part: &Expr, circular: bool) -> Option<Expr> {
+    let (Some(f), [u]) = (part.head().and_then(Expr::as_symbol), part.args()) else {
+        return None;
+    };
+    // e^(±iu) for the circular functions, e^(±u) for the hyperbolic.
+    let trigonometric = circular && matches!(f, Symbol::SIN | Symbol::COS | Symbol::TAN);
+    let hyperbolic = matches!(f, Symbol::SINH | Symbol::COSH | Symbol::TANH);
+    if !trigonometric && !hyperbolic {
+        return None;
+    }
+    let v = if trigonometric {
+        i() * u.clone()
+    } else {
+        u.clone()
+    };
+    let plus = Expr::call(Symbol::EXP, [v.clone()]);
+    let minus = Expr::call(Symbol::EXP, [-v]);
+    Some(match f {
+        Symbol::SIN => (plus - minus) / (Expr::from(2) * i()),
+        Symbol::COS | Symbol::COSH => (plus + minus) / Expr::from(2),
+        Symbol::TAN => -i() * (plus.clone() - minus.clone()) / (plus + minus),
+        Symbol::SINH => (plus - minus) / Expr::from(2),
+        _ => (plus.clone() - minus.clone()) / (plus + minus),
     })
 }
 

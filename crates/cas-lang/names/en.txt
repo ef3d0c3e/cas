@@ -220,6 +220,14 @@ TrigExpand: texpand trigexpand
 TrigReduce: tlin
 TrigToExp: trig2exp
 ExpToTrig: exp2trig
+# Rewriting forms (CAS-DOC-36): exponentials, powers and logarithms
+# (CAS-396).
+HyperbolicToExp: hyp2exp
+ExpToPower: exp2pow
+PowerToExp: pow2exp
+ExpExpand: expexpand
+LogExpand: lnexpand
+LogCombine: lncollect
 # A ball, `ball(c, r)` (CAS-DOC-5 §6.5, CAS-83), and back to fractions
 # (D4, CAS-148).
 Ball: ball

@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 260] = [
+const BUILTINS: [&str; 266] = [
     "Plus",
     "Times",
     "Power",
@@ -324,6 +324,13 @@ const BUILTINS: [&str; 260] = [
     "AiryBi",
     "AiryAiPrime",
     "AiryBiPrime",
+    // Exponentials, powers and logarithms rewritten (CAS-396).
+    "HyperbolicToExp",
+    "ExpToPower",
+    "PowerToExp",
+    "ExpExpand",
+    "LogExpand",
+    "LogCombine",
 ];
 
 /// Builtins that apply something to parts, only in the expression

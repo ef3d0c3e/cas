@@ -329,6 +329,14 @@ builtins! {
     TRIG_REDUCE = "TrigReduce" [PROTECTED];
     TRIG_TO_EXP = "TrigToExp" [PROTECTED];
     EXP_TO_TRIG = "ExpToTrig" [PROTECTED];
+    // Rewriting forms (CAS-DOC-36): exponentials, powers and logarithms
+    // (§2).
+    HYPERBOLIC_TO_EXP = "HyperbolicToExp" [PROTECTED];
+    EXP_TO_POWER = "ExpToPower" [PROTECTED];
+    POWER_TO_EXP = "PowerToExp" [PROTECTED];
+    EXP_EXPAND = "ExpExpand" [PROTECTED];
+    LOG_EXPAND = "LogExpand" [PROTECTED];
+    LOG_COMBINE = "LogCombine" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

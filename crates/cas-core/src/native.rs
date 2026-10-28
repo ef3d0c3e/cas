@@ -48,6 +48,7 @@ mod radical;
 mod random;
 mod replace;
 mod residue;
+mod rewrite;
 mod rounding;
 mod rsolve;
 mod series;
@@ -538,6 +539,12 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::TRIG_REDUCE, trig::trig_reduce),
         (Symbol::TRIG_TO_EXP, trig::trig_to_exp),
         (Symbol::EXP_TO_TRIG, trig::exp_to_trig),
+        (Symbol::HYPERBOLIC_TO_EXP, rewrite::hyperbolic_to_exp),
+        (Symbol::EXP_TO_POWER, rewrite::exp_to_power),
+        (Symbol::POWER_TO_EXP, rewrite::power_to_exp),
+        (Symbol::EXP_EXPAND, rewrite::exp_expand),
+        (Symbol::LOG_EXPAND, rewrite::log_expand),
+        (Symbol::LOG_COMBINE, rewrite::log_combine),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),
