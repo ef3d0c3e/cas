@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 158] = [
+const BUILTINS: [&str; 169] = [
     "Plus",
     "Times",
     "Power",
@@ -126,6 +126,18 @@ const BUILTINS: [&str; 158] = [
     "ExponentialRegression",
     "LogarithmicRegression",
     "PowerRegression",
+    // Discrete distributions (CAS-301).
+    "BinomialCDF",
+    "BinomialICDF",
+    "PoissonPDF",
+    "PoissonCDF",
+    "PoissonICDF",
+    "GeometricPDF",
+    "GeometricCDF",
+    "GeometricICDF",
+    "NegativeBinomialPDF",
+    "NegativeBinomialCDF",
+    "NegativeBinomialICDF",
     // Integrals (CAS-194), series and limits (CAS-203, CAS-205), and
     // equations (CAS-210, CAS-214).
     "Integrate",

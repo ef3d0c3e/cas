@@ -30,7 +30,9 @@
 //!   `Correlation` (`correlation`), `S_xy / √(S_xx S_yy)`, which is
 //!   `Indeterminate` for constant data (giac's `undef`).
 //! - The regressions (§5, CAS-297), least squares: [`regression`].
+//! - Probability distributions (CAS-DOC-23): [`distributions`].
 
+pub(super) mod distributions;
 mod order;
 pub(super) mod regression;
 

@@ -103,7 +103,8 @@ const MAX_BINOMIAL_FACTORS: u64 = 1000;
 /// Anything else stays.
 pub(super) fn binomial(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [n, k] = e.args() else {
-        return Ok(None);
+        // Xcas's `binomial(n, p, k)`, the binomial distribution's mass.
+        return super::statistics::distributions::discrete::binomial_mass(ev, e);
     };
     let Some(k) = k.as_i64() else {
         return Ok(None);

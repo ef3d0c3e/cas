@@ -203,6 +203,19 @@ PolynomialRegression: polynomial_regression
 ExponentialRegression: exponential_regression
 LogarithmicRegression: logarithmic_regression
 PowerRegression: power_regression
+# Discrete distributions (CAS-DOC-23, CAS-301); the binomial's mass is
+# `binomial`'s three-argument form.
+BinomialCDF: binomial_cdf
+BinomialICDF: binomial_icdf
+PoissonPDF: poisson
+PoissonCDF: poisson_cdf
+PoissonICDF: poisson_icdf
+GeometricPDF: geometric
+GeometricCDF: geometric_cdf
+GeometricICDF: geometric_icdf
+NegativeBinomialPDF: negbinomial
+NegativeBinomialCDF: negbinomial_cdf
+NegativeBinomialICDF: negbinomial_icdf
 
 [planned]
 # Numerical solutions of differential equations (CAS-DOC-16), Xcas's

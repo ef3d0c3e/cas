@@ -177,6 +177,19 @@ builtins! {
     EXPONENTIAL_REGRESSION = "ExponentialRegression" [PROTECTED];
     LOGARITHMIC_REGRESSION = "LogarithmicRegression" [PROTECTED];
     POWER_REGRESSION = "PowerRegression" [PROTECTED];
+    // Discrete distributions (CAS-DOC-23 §2): the binomial's mass is
+    // `Binomial`'s three-argument form, Xcas's `binomial(n, p, k)`.
+    BINOMIAL_CDF = "BinomialCDF" [PROTECTED];
+    BINOMIAL_ICDF = "BinomialICDF" [PROTECTED];
+    POISSON_PDF = "PoissonPDF" [PROTECTED];
+    POISSON_CDF = "PoissonCDF" [PROTECTED];
+    POISSON_ICDF = "PoissonICDF" [PROTECTED];
+    GEOMETRIC_PDF = "GeometricPDF" [PROTECTED];
+    GEOMETRIC_CDF = "GeometricCDF" [PROTECTED];
+    GEOMETRIC_ICDF = "GeometricICDF" [PROTECTED];
+    NEGATIVE_BINOMIAL_PDF = "NegativeBinomialPDF" [PROTECTED];
+    NEGATIVE_BINOMIAL_CDF = "NegativeBinomialCDF" [PROTECTED];
+    NEGATIVE_BINOMIAL_ICDF = "NegativeBinomialICDF" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];
