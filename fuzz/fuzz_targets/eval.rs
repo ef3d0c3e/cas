@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 196] = [
+const BUILTINS: [&str; 197] = [
     "Plus",
     "Times",
     "Power",
@@ -178,6 +178,7 @@ const BUILTINS: [&str; 196] = [
     "FourierCosCoefficient",
     "FourierSinCoefficient",
     "FourierCoefficient",
+    "NIntegrate",
     // Number theory (CAS-267 to CAS-271).
     "PrimeQ",
     "NextPrime",

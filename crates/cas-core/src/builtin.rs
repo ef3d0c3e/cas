@@ -120,6 +120,8 @@ builtins! {
     FOURIER_COS_COEFFICIENT = "FourierCosCoefficient" [PROTECTED];
     FOURIER_SIN_COEFFICIENT = "FourierSinCoefficient" [PROTECTED];
     FOURIER_COEFFICIENT = "FourierCoefficient" [PROTECTED];
+    // Certified numerical integration (CAS-DOC-26).
+    NINTEGRATE = "NIntegrate" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];

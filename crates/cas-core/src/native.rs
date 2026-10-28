@@ -28,6 +28,7 @@ mod limit;
 mod linear;
 mod logic;
 mod matrix;
+mod nintegrate;
 mod number;
 mod number_theory;
 mod numeric;
@@ -202,6 +203,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             fourier::fourier_sin_coefficient,
         ),
         (Symbol::FOURIER_COEFFICIENT, fourier::fourier_coefficient),
+        (Symbol::NINTEGRATE, nintegrate::nintegrate),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),

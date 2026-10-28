@@ -108,6 +108,8 @@ Residue: residue
 FourierCosCoefficient: fourier_an
 FourierSinCoefficient: fourier_bn
 FourierCoefficient: fourier_cn
+# Certified numerical integration (CAS-DOC-26, CAS-324).
+NIntegrate: nInt romberg gaussquad
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime
