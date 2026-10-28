@@ -208,6 +208,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "nintegrate"
+path = "fuzz_targets/nintegrate.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "poly_integrate"
 path = "fuzz_targets/poly_integrate.rs"
 test = false
