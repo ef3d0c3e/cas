@@ -94,6 +94,7 @@ OrderSize: order_size
 DSolve: desolve
 # Laplace transforms (CAS-DOC-18, CAS-274, CAS-275).
 LaplaceTransform: laplace
+InverseLaplaceTransform: ilaplace
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime
@@ -175,8 +176,8 @@ FactorList: factors
 FactorSquareFree: sqrfree
 
 [planned]
-# Laplace transforms' inverse (CAS-275).
-InverseLaplaceTransform: ilaplace
+# Gröbner bases, a later area.
+GroebnerBasis: gbasis
 
 [constants]
 imaginary: i

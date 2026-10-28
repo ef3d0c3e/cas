@@ -130,3 +130,28 @@ fn transforms() {
         "laplace(exp(-x))",
     ]);
 }
+
+/// The inverse (CAS-275). giac's `ilaplace(1/sqrt(s),s,t)` is wrong: the
+/// unit tests'.
+#[test]
+fn inverses() {
+    check(&[
+        "ilaplace(1/s,s,t)",
+        "ilaplace(1/s^2,s,t)",
+        "ilaplace(1/(s+2),s,t)",
+        "ilaplace(3/(s^2+9),s,t)",
+        "ilaplace(s/(s^2+9),s,t)",
+        "ilaplace(1/(s^2-2*s+2),s,t)",
+        "ilaplace(1/((s+1)*(s+2)),s,t)",
+        "ilaplace((s+1)/(s^2+2*s+5),s,t)",
+        "ilaplace(1/(s^2*(s+1)),s,t)",
+        "ilaplace(1/(s-1)^3,s,t)",
+        "ilaplace(exp(-2*s)/s,s,t)",
+        "ilaplace(s/(s^2+1)^2,s,t)",
+        "ilaplace(1/(s^3+1),s,t)",
+        "ilaplace(1/(s^4-1),s,t)",
+        "ilaplace(exp(-s)/(s^2+1),s,t)",
+        "ilaplace(1/(s-a),s,t)",
+        "ilaplace((2*s+3)/(s^2+4*s+13),s,t)",
+    ]);
+}

@@ -132,3 +132,124 @@ fn derivatives() {
     let stays = read("LaplaceTransform[Power[E, Power[t, 2]], t, s]");
     assert_eq!(ctx.eval(&stays).unwrap(), stays);
 }
+
+/// `(input, expected)` in full form, equal by value at `t = 13/5`,
+/// `a = 3/4`, each part apart.
+fn check_values(cases: &[(&str, &str)]) {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, expected) in cases {
+        let found = ctx.eval(&read(input)).unwrap();
+        let gap = format!(
+            "N[ReplaceAll[Plus[{found:?}, Times[-1, {expected}]], \
+             List[Rule[t, 13/5], Rule[a, 3/4]]]]"
+        );
+        let close = ["Re", "Im"].iter().all(|part| {
+            let test = format!("Less[Abs[{part}[{gap}]], 1/10000000000]");
+            ctx.eval(&read(&test)).unwrap() == read("True")
+        });
+        if !close {
+            wrong.push(format!("{input}: {found:?}, expected {expected}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The inverse (CAS-275): giac's table, by value.
+#[test]
+fn inverses() {
+    check_values(&[
+        ("InverseLaplaceTransform[Power[s, -1], s, t]", "1"),
+        ("InverseLaplaceTransform[Power[s, -2], s, t]", "t"),
+        (
+            "InverseLaplaceTransform[Power[Plus[s, 2], -1], s, t]",
+            "Power[E, Times[-2, t]]",
+        ),
+        (
+            "InverseLaplaceTransform[Times[3, Power[Plus[Power[s, 2], 9], -1]], s, t]",
+            "Sin[Times[3, t]]",
+        ),
+        (
+            "InverseLaplaceTransform[Times[s, Power[Plus[Power[s, 2], 9], -1]], s, t]",
+            "Cos[Times[3, t]]",
+        ),
+        (
+            "InverseLaplaceTransform[Power[Plus[Power[s, 2], Times[-2, s], 2], -1], s, t]",
+            "Times[Power[E, t], Sin[t]]",
+        ),
+        (
+            "InverseLaplaceTransform[Power[Times[Plus[s, 1], Plus[s, 2]], -1], s, t]",
+            "Plus[Power[E, Times[-1, t]], Times[-1, Power[E, Times[-2, t]]]]",
+        ),
+        (
+            "InverseLaplaceTransform[Times[Plus[s, 1], Power[Plus[Power[s, 2], Times[2, s], 5], -1]], s, t]",
+            "Times[Power[E, Times[-1, t]], Cos[Times[2, t]]]",
+        ),
+        (
+            "InverseLaplaceTransform[Power[Times[Power[s, 2], Plus[s, 1]], -1], s, t]",
+            "Plus[t, -1, Power[E, Times[-1, t]]]",
+        ),
+        (
+            "InverseLaplaceTransform[Power[Plus[s, -1], -3], s, t]",
+            "Times[1/2, Power[t, 2], Power[E, t]]",
+        ),
+        (
+            "InverseLaplaceTransform[Times[Power[E, Times[-2, s]], Power[s, -1]], s, t]",
+            "HeavisideTheta[Plus[t, -2]]",
+        ),
+        (
+            "InverseLaplaceTransform[Times[s, Power[Plus[Power[s, 2], 1], -2]], s, t]",
+            "Times[1/2, t, Sin[t]]",
+        ),
+        (
+            "InverseLaplaceTransform[Power[Plus[Power[s, 4], -1], -1], s, t]",
+            "Plus[Times[1/4, Power[E, t]], Times[-1/4, Power[E, Times[-1, t]]], Times[-1/2, Sin[t]]]",
+        ),
+        (
+            "InverseLaplaceTransform[Times[Power[E, Times[-1, s]], Power[Plus[Power[s, 2], 1], -1]], s, t]",
+            "Times[Sin[Plus[t, -1]], HeavisideTheta[Plus[t, -1]]]",
+        ),
+        (
+            "InverseLaplaceTransform[Power[Plus[s, Times[-1, a]], -1], s, t]",
+            "Power[E, Times[a, t]]",
+        ),
+        (
+            "InverseLaplaceTransform[Times[Plus[Times[2, s], 3], Power[Plus[Power[s, 2], Times[4, s], 13], -1]], s, t]",
+            "Times[Power[E, Times[-2, t]], Plus[Times[2, Cos[Times[3, t]]], Times[-1/3, Sin[Times[3, t]]]]]",
+        ),
+        (
+            "InverseLaplaceTransform[Power[Plus[Power[s, 3], 1], -1], s, t]",
+            "Plus[Times[1/3, Power[E, Times[-1, t]]], \
+             Times[-1/3, Cos[Times[1/2, Power[3, 1/2], t]], Power[E, Times[1/2, t]]], \
+             Times[Power[3, -1/2], Sin[Times[1/2, Power[3, 1/2], t]], Power[E, Times[1/2, t]]]]",
+        ),
+        // giac's is wrong.
+        (
+            "InverseLaplaceTransform[Power[s, -1/2], s, t]",
+            "Power[Times[Pi, t], -1/2]",
+        ),
+        // Round trips.
+        (
+            "InverseLaplaceTransform[LaplaceTransform[Power[t, 2], t, s], s, t]",
+            "Power[t, 2]",
+        ),
+        (
+            "InverseLaplaceTransform[LaplaceTransform[Times[Power[E, Times[-1, t]], Cos[t]], t, s], s, t]",
+            "Times[Power[E, Times[-1, t]], Cos[t]]",
+        ),
+        (
+            "InverseLaplaceTransform[LaplaceTransform[Times[t, Power[E, Times[2, t]]], t, s], s, t]",
+            "Times[t, Power[E, Times[2, t]]]",
+        ),
+    ]);
+    let ctx = Context::new();
+    assert_eq!(
+        ctx.eval(&read("InverseLaplaceTransform[1, s, t]")).unwrap(),
+        read("DiracDelta[t]")
+    );
+    assert_eq!(
+        ctx.eval(&read("InverseLaplaceTransform[Power[Plus[s, 1], -1]]"))
+            .unwrap(),
+        ctx.eval(&read("Power[E, Times[-1, x]]")).unwrap()
+    );
+}

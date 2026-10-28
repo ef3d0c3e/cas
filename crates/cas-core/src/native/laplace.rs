@@ -380,5 +380,9 @@ fn product(
     transform(ev, &expanded, t, s)
 }
 
+mod inverse;
+
+pub(super) use inverse::inverse_laplace_transform;
+
 #[cfg(test)]
 mod tests;
