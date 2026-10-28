@@ -15,8 +15,18 @@
 //!   − 1` in ℤ[x], each in one pass over the coefficients; the coefficients
 //!   from the highest, giac's `[1,0,-1,0,1]` for `n = 12`. `Cyclotomic[n,
 //!   x]` is `Φ_n(x)`.
+//! - `MultiplicativeOrder[a, n]` (`znorder`, CAS-423): the least `k ≥ 1`
+//!   with `a^k ≡ 1 (mod n)`, a divisor of Carmichael's `λ(n)`: each prime
+//!   `q` of `λ(n)` divided out while the power stays 1. 0 when `gcd(a, n) >
+//!   1`, as giac's; `n ≥ 1`.
+//! - `PrimitiveRoot[n]` (`znprimroot`): for `n` 2, 4, `p^k` or `2 p^k`, `p`
+//!   an odd prime, the least `g` coprime to `n` with `g^(φ(n)/q) ≢ 1` for
+//!   each prime `q` of `φ(n)`; 0 for 1, as giac's; `Indeterminate` for
+//!   another `n`, giac's `undef`. giac answers `g % n`, a residue.
+//!
+//! A number cas-num does not factor fully leaves the call.
 
-use cas_num::Integer;
+use cas_num::{Integer, Natural};
 
 use crate::context::EvalError;
 use crate::eval::Eval;
@@ -167,6 +177,127 @@ pub(in crate::native) fn cyclotomic(_: &mut Eval<'_>, e: &Expr) -> Native {
                 .map(|(k, c)| Expr::from(c) * x.pow(i64::try_from(k).expect("small"))),
         ),
     }))
+}
+
+/// `n`'s factorization, primes and exponents; `None` when not complete.
+fn factorization(n: &Natural) -> Option<Vec<(Integer, u64)>> {
+    let f = n.factor();
+    f.is_complete().then(|| {
+        f.factors()
+            .iter()
+            .map(|p| (Integer::from(p.base().clone()), p.exponent()))
+            .collect()
+    })
+}
+
+/// Carmichael's `λ(n)` from `n`'s factorization.
+fn carmichael(factors: &[(Integer, u64)]) -> Integer {
+    let two = Integer::from(2);
+    factors.iter().fold(Integer::ONE, |acc, (p, k)| {
+        let k = *k;
+        let part = if *p == two {
+            match k {
+                1 => Integer::ONE,
+                2 => two.clone(),
+                _ => two.pow(k - 2),
+            }
+        } else {
+            &(p - &Integer::ONE) * &p.pow(k - 1)
+        };
+        acc.lcm(&part)
+    })
+}
+
+/// `a^e mod n`, `n ≥ 1`, `e ≥ 0`.
+fn power(a: &Integer, e: &Integer, n: &Integer) -> Integer {
+    a.pow_mod(e, n).expect("a nonnegative exponent")
+}
+
+/// `MultiplicativeOrder[a, n]`.
+pub(in crate::native) fn multiplicative_order(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [a, n] = e.args() else {
+        return Ok(None);
+    };
+    let (Some(a), Some(n)) = (a.to_integer(), n.to_integer()) else {
+        return Ok(None);
+    };
+    if n < Integer::ONE {
+        return Ok(None);
+    }
+    if a.gcd(&n) != Integer::ONE {
+        return Ok(Some(Expr::from(0)));
+    }
+    let Some(factors) = factorization(&n.unsigned_abs()) else {
+        return Ok(None);
+    };
+    let lambda = carmichael(&factors);
+    let Some(primes) = factorization(&lambda.unsigned_abs()) else {
+        return Ok(None);
+    };
+    let mut order = lambda;
+    for (q, _) in primes {
+        loop {
+            let (part, rest) = order.div_rem_euclid(&q);
+            if !rest.is_zero() || power(&a, &part, &n) != Integer::ONE % &n {
+                break;
+            }
+            order = part;
+        }
+    }
+    Ok(Some(Expr::from(order)))
+}
+
+/// `PrimitiveRoot[n]`.
+pub(in crate::native) fn primitive_root(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [n] = e.args() else {
+        return Ok(None);
+    };
+    let Some(n) = n.to_integer() else {
+        return Ok(None);
+    };
+    if n < Integer::ONE {
+        return Ok(None);
+    }
+    let small = n.to_i64();
+    match small {
+        Some(1) => return Ok(Some(Expr::from(0))),
+        Some(2) => return Ok(Some(Expr::from(1))),
+        Some(4) => return Ok(Some(Expr::from(3))),
+        _ => {}
+    }
+    let Some(factors) = factorization(&n.unsigned_abs()) else {
+        return Ok(None);
+    };
+    // p^k or 2 p^k, p odd.
+    let two = Integer::from(2);
+    let odd: Vec<&(Integer, u64)> = factors.iter().filter(|(p, _)| *p != two).collect();
+    let twos = factors
+        .iter()
+        .find(|(p, _)| *p == two)
+        .map_or(0, |(_, k)| *k);
+    let [(p, k)] = odd.as_slice() else {
+        return Ok(Some(Expr::from(Symbol::INDETERMINATE)));
+    };
+    if twos > 1 {
+        return Ok(Some(Expr::from(Symbol::INDETERMINATE)));
+    }
+    let phi = &(p - &Integer::ONE) * &p.pow(*k - 1);
+    let Some(primes) = factorization(&phi.unsigned_abs()) else {
+        return Ok(None);
+    };
+    let one = Integer::ONE;
+    let mut g = two;
+    while g < n {
+        let primitive = g.gcd(&n) == one
+            && primes
+                .iter()
+                .all(|(q, _)| power(&g, &phi.div_exact(q), &n) != one);
+        if primitive {
+            return Ok(Some(Expr::from(g)));
+        }
+        g = &g + &one;
+    }
+    Ok(None)
 }
 
 #[cfg(test)]

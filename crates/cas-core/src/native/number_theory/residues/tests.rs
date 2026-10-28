@@ -66,3 +66,29 @@ fn cyclotomic_polynomials() {
     let twos: Vec<usize> = (0..49).filter(|&k| coefficients[k] == -2).collect();
     assert_eq!(twos, [7, 41]);
 }
+
+/// Orders and primitive roots against brute force in Python (CAS-423).
+#[test]
+fn orders_and_roots() {
+    check(&[
+        ("MultiplicativeOrder[17, 23]", "22"),
+        ("MultiplicativeOrder[2, 7]", "3"),
+        ("MultiplicativeOrder[10, 7]", "6"),
+        ("MultiplicativeOrder[-1, 7]", "2"),
+        ("MultiplicativeOrder[3, 9]", "0"),
+        ("MultiplicativeOrder[5, 1]", "1"),
+        ("MultiplicativeOrder[2, 8191]", "13"),
+        // 2 has order 61 modulo Mersenne's prime 2^61 − 1.
+        ("MultiplicativeOrder[2, Plus[Power[2, 61], -1]]", "61"),
+        ("PrimitiveRoot[23]", "5"),
+        ("PrimitiveRoot[25]", "2"),
+        ("PrimitiveRoot[18]", "5"),
+        ("PrimitiveRoot[41]", "6"),
+        ("PrimitiveRoot[9]", "2"),
+        ("PrimitiveRoot[1]", "0"),
+        ("PrimitiveRoot[2]", "1"),
+        ("PrimitiveRoot[4]", "3"),
+        ("PrimitiveRoot[8]", "Indeterminate"),
+        ("PrimitiveRoot[15]", "Indeterminate"),
+    ]);
+}

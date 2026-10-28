@@ -615,6 +615,14 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             number_theory::residues::pseudoprime_q,
         ),
         (Symbol::CYCLOTOMIC, number_theory::residues::cyclotomic),
+        (
+            Symbol::MULTIPLICATIVE_ORDER,
+            number_theory::residues::multiplicative_order,
+        ),
+        (
+            Symbol::PRIMITIVE_ROOT,
+            number_theory::residues::primitive_root,
+        ),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),

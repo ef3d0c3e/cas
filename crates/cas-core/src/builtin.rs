@@ -396,6 +396,8 @@ builtins! {
     SYMMETRIC_MOD = "SymmetricMod" [PROTECTED];
     PSEUDOPRIME_Q = "PseudoprimeQ" [PROTECTED];
     CYCLOTOMIC = "Cyclotomic" [PROTECTED];
+    MULTIPLICATIVE_ORDER = "MultiplicativeOrder" [PROTECTED];
+    PRIMITIVE_ROOT = "PrimitiveRoot" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];
