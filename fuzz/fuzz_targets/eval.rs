@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 179] = [
+const BUILTINS: [&str; 188] = [
     "Plus",
     "Times",
     "Power",
@@ -148,6 +148,15 @@ const BUILTINS: [&str; 179] = [
     "UniformPDF",
     "UniformCDF",
     "UniformICDF",
+    "StudentTPDF",
+    "StudentTCDF",
+    "StudentTICDF",
+    "ChiSquarePDF",
+    "ChiSquareCDF",
+    "ChiSquareICDF",
+    "FisherPDF",
+    "FisherCDF",
+    "FisherICDF",
     // Integrals (CAS-194), series and limits (CAS-203, CAS-205), and
     // equations (CAS-210, CAS-214).
     "Integrate",

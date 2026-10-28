@@ -156,3 +156,53 @@ fn elementary_continuous() {
     ]);
     check_doubles(&["normald_icdf(0,1,0.975)", "normald_icdf(0.975)"]);
 }
+
+/// giac's doubles, asked for by `theirs`, against this CAS's exact
+/// answers to `ours`.
+fn check_double_pairs(pairs: &[(&str, &str)]) {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, theirs) in pairs {
+        match (giac.value(theirs), ours(input)) {
+            (Ok(t), Ok(o)) if near_double(&ctx, &o, &t) => {}
+            (t, o) => wrong.push(format!("{input}: ours {o:?}, giac's {theirs} {t:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Student, χ² and Fisher: densities exactly, cumulative probabilities and
+/// inverses against giac's doubles (CAS-304).
+#[test]
+fn degrees_of_freedom() {
+    check(&[
+        "student(3,1)",
+        "student(1,x)",
+        "chisquare(2,1)",
+        "chisquare(4,2)",
+        "fisher(2,4,1)",
+        "fisher(2,3,1)",
+    ]);
+    check_doubles(&[
+        "student_cdf(3,1)",
+        "student_cdf(4,1)",
+        "student_cdf(1,1)",
+        "student_cdf(3,1,2)",
+        "chisquare_cdf(2,1)",
+        "chisquare_cdf(3,1)",
+        "chisquare_cdf(4,2)",
+        "chisquare_cdf(2,1,3)",
+        "student_icdf(3,0.95)",
+        "chisquare_icdf(2,0.5)",
+        "fisher_icdf(2,3,0.5)",
+    ]);
+    // giac leaves Fisher's cumulative as an incomplete Beta, which evalf
+    // takes.
+    check_double_pairs(&[
+        ("fisher_cdf(2,4,1)", "evalf(fisher_cdf(2,4,1))"),
+        ("fisher_cdf(2,3,1)", "evalf(fisher_cdf(2,3,1))"),
+    ]);
+}

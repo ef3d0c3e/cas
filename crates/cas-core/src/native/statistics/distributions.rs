@@ -8,6 +8,9 @@
 //!   `InverseErf` ([`inversion`], §3, §5, CAS-302).
 //! - The normal, exponential and uniform distributions ([`continuous`], §3,
 //!   CAS-303).
+//! - Student's t, χ² and Fisher's F ([`degrees`], §4, CAS-304), through the
+//!   closed forms of the regularized incomplete gamma and beta functions
+//!   at integer and half-integer parameters ([`incomplete`]).
 //!
 //! A parameter that is a number must be valid (a probability in `[0, 1]`,
 //! a rate above 0, a natural count), as comparisons decide; otherwise the
@@ -16,7 +19,9 @@
 //! expressions, and the inverses as calls.
 
 pub(in crate::native) mod continuous;
+pub(in crate::native) mod degrees;
 pub(in crate::native) mod discrete;
+mod incomplete;
 pub(in crate::native) mod inversion;
 
 use std::cmp::Ordering;

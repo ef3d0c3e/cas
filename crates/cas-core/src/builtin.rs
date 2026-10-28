@@ -203,6 +203,16 @@ builtins! {
     UNIFORM_PDF = "UniformPDF" [PROTECTED];
     UNIFORM_CDF = "UniformCDF" [PROTECTED];
     UNIFORM_ICDF = "UniformICDF" [PROTECTED];
+    // Distributions with degrees of freedom (CAS-DOC-23 §4).
+    STUDENT_T_PDF = "StudentTPDF" [PROTECTED];
+    STUDENT_T_CDF = "StudentTCDF" [PROTECTED];
+    STUDENT_T_ICDF = "StudentTICDF" [PROTECTED];
+    CHI_SQUARE_PDF = "ChiSquarePDF" [PROTECTED];
+    CHI_SQUARE_CDF = "ChiSquareCDF" [PROTECTED];
+    CHI_SQUARE_ICDF = "ChiSquareICDF" [PROTECTED];
+    FISHER_PDF = "FisherPDF" [PROTECTED];
+    FISHER_CDF = "FisherCDF" [PROTECTED];
+    FISHER_ICDF = "FisherICDF" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

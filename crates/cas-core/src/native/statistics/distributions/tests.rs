@@ -244,3 +244,59 @@ fn exponential_and_uniform() {
         "UniformICDF[0, 2, 2]",
     ]);
 }
+
+/// Student, χ² and Fisher: exact densities and cumulative probabilities,
+/// certified inverses (CAS-304).
+#[test]
+fn degrees_of_freedom() {
+    check(&[
+        ("StudentTCDF[1, 1]", "3/4"),
+        ("StudentTCDF[1, -1]", "1/4"),
+        ("StudentTCDF[3, 0]", "1/2"),
+        (
+            "StudentTCDF[3, 1]",
+            "Plus[2/3, Times[1/4, Power[3, 1/2], Power[Pi, -1]]]",
+        ),
+        ("StudentTCDF[3, Infinity]", "1"),
+        ("ChiSquareCDF[4, 2]", "Plus[1, Times[-2, Power[E, -1]]]"),
+        ("ChiSquareCDF[2, 2]", "Plus[1, Times[-1, Power[E, -1]]]"),
+        ("ChiSquareCDF[3, -1]", "0"),
+        ("FisherCDF[2, 4, 1]", "5/9"),
+        ("FisherCDF[2, 4, 0]", "0"),
+        ("FisherPDF[2, 4, 1]", "8/27"),
+        ("ChiSquarePDF[2, 1]", "Times[1/2, Power[E, -1/2]]"),
+        ("ChiSquarePDF[4, 2]", "Times[1/2, Power[E, -1]]"),
+        ("ChiSquarePDF[3, -1]", "0"),
+        (
+            "StudentTPDF[1, x]",
+            "Times[Power[Pi, -1], Power[Plus[1, Power[x, 2]], -1]]",
+        ),
+        ("StudentTICDF[3, 1/2]", "0"),
+        ("StudentTICDF[3, 0]", "Times[-1, Infinity]"),
+        ("ChiSquareICDF[2, 0]", "0"),
+        ("FisherICDF[2, 3, 1]", "Infinity"),
+    ]);
+    let ctx = Context::new();
+    for claim in [
+        // t(0.95, 3) = 2.353363434801826…, and its mirror.
+        "Less[Abs[Plus[StudentTICDF[3, 95/100], -2353363434801826/10^15]], Power[10, -12]]",
+        "Less[Abs[Plus[StudentTICDF[3, 5/100], 2353363434801826/10^15]], Power[10, -12]]",
+        // χ²(2) is E(1/2): its median is 2 ln 2.
+        "Less[Abs[Plus[ChiSquareICDF[2, 1/2], Times[-2, Log[2]]]], Power[10, -13]]",
+        // F(2, 3)'s median is (3/2)(2^(2/3) − 1).
+        "Less[Abs[Plus[FisherICDF[2, 3, 1/2], Times[-3/2, Plus[Power[2, 2/3], -1]]]], \
+         Power[10, -13]]",
+        // The cumulative function takes an inverse back.
+        "Less[Abs[Plus[StudentTCDF[3, StudentTICDF[3, 9/10]], -9/10]], Power[10, -12]]",
+        "Less[Abs[Plus[ChiSquareCDF[5, ChiSquareICDF[5, 1/3]], -1/3]], Power[10, -12]]",
+    ] {
+        assert!(holds(&ctx, claim), "{claim}");
+    }
+    stays(&[
+        "StudentTPDF[0, 1]",
+        "StudentTPDF[-1, 1]",
+        "StudentTPDF[5/2, 1]",
+        "ChiSquareCDF[2, x]",
+        "FisherICDF[2, 3, 3/2]",
+    ]);
+}

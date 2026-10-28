@@ -228,6 +228,16 @@ ExponentialICDF: exponentiald_icdf
 UniformPDF: uniformd
 UniformCDF: uniformd_cdf
 UniformICDF: uniformd_icdf
+# Distributions with degrees of freedom (CAS-DOC-23, CAS-304).
+StudentTPDF: student
+StudentTCDF: student_cdf
+StudentTICDF: student_icdf
+ChiSquarePDF: chisquare
+ChiSquareCDF: chisquare_cdf
+ChiSquareICDF: chisquare_icdf
+FisherPDF: fisher
+FisherCDF: fisher_cdf
+FisherICDF: fisher_icdf
 
 [planned]
 # Numerical solutions of differential equations (CAS-DOC-16), Xcas's

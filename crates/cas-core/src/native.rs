@@ -323,6 +323,42 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::UNIFORM_ICDF,
             statistics::distributions::continuous::uniform_icdf,
         ),
+        (
+            Symbol::STUDENT_T_PDF,
+            statistics::distributions::degrees::student_pdf,
+        ),
+        (
+            Symbol::STUDENT_T_CDF,
+            statistics::distributions::degrees::student_cdf,
+        ),
+        (
+            Symbol::STUDENT_T_ICDF,
+            statistics::distributions::degrees::student_icdf,
+        ),
+        (
+            Symbol::CHI_SQUARE_PDF,
+            statistics::distributions::degrees::chi_square_pdf,
+        ),
+        (
+            Symbol::CHI_SQUARE_CDF,
+            statistics::distributions::degrees::chi_square_cdf,
+        ),
+        (
+            Symbol::CHI_SQUARE_ICDF,
+            statistics::distributions::degrees::chi_square_icdf,
+        ),
+        (
+            Symbol::FISHER_PDF,
+            statistics::distributions::degrees::fisher_pdf,
+        ),
+        (
+            Symbol::FISHER_CDF,
+            statistics::distributions::degrees::fisher_cdf,
+        ),
+        (
+            Symbol::FISHER_ICDF,
+            statistics::distributions::degrees::fisher_icdf,
+        ),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),
