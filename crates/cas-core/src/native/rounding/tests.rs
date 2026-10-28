@@ -92,3 +92,19 @@ fn extrema() {
     let large = Context::new().assuming(read("Greater[x, 2]"));
     check(&large, &[("Max[x, 1]", "x"), ("Min[x, 1]", "1")]);
 }
+
+/// Values whose balls are too long to write exactly, `2` to a huge power
+/// (the `lang_session` fuzz target): they stay rather than panic.
+#[test]
+fn huge_balls() {
+    let ctx = Context::new();
+    for input in [
+        "Floor[Power[2, 3777777777777]]",
+        "Sign[Plus[-7, Power[2, 3777777777777]]]",
+        "Max[7, Power[2, 3777777777777]]",
+        "Greater[Power[2, 3777777777777], 7]",
+        "Round[Power[Ball[3, 0], 377777777]]",
+    ] {
+        assert!(ctx.eval(&read(input)).is_ok(), "{input}");
+    }
+}

@@ -50,11 +50,18 @@ impl Rounding {
     }
 }
 
-/// The ends of a real ball, exactly; `None` for an infinite one.
+/// The ends of a real ball, exactly; `None` for an infinite one, or one too
+/// long to write exactly: an exponent past `2^20` in magnitude, as of a
+/// decimal or `2` to a huge power (the `lang_session` fuzz target's
+/// `2^3777777777777 > 7`, past `Float`'s exact bits).
 fn ends(x: &Expr) -> Option<(Rational, Rational)> {
     let View::Ball(b) = x.view() else {
         return None;
     };
+    let short = |e: &Integer| e.to_i64().is_some_and(|e| e.unsigned_abs() <= 1 << 20);
+    if !short(b.mid().exponent()) || (!b.rad().is_zero() && !short(b.rad().exponent())) {
+        return None;
+    }
     let mid = b.mid().to_rational();
     let rad = b.rad().to_float()?.to_rational();
     Some((&mid - &rad, &mid + &rad))
