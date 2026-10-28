@@ -24,6 +24,11 @@
 //!   (giac: `undef` at 0 and 1); `Quartiles` (`quartiles`), `{min, Q(1/4),
 //!   median, Q(3/4), max}`, and `FirstQuartile` (`quartile1`) and
 //!   `ThirdQuartile` (`quartile3`).
+//! - Two variables (§3, CAS-296), as `[x, y]`, `[x, y, f]`, or a matrix of
+//!   two columns `[m]` or `[m, f]`, with `S_xy = Σ f (x − x̄)(y − ȳ)`:
+//!   `PopulationCovariance` (`covariance`), `S_xy / Σ f` expanded, and
+//!   `Correlation` (`correlation`), `S_xy / √(S_xx S_yy)`, which is
+//!   `Indeterminate` for constant data (giac's `undef`).
 
 mod order;
 
@@ -296,6 +301,80 @@ pub(super) fn first_quartile(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// `ThirdQuartile[l]`, `ThirdQuartile[l, f]`: `Q(3/4)`.
 pub(super) fn third_quartile(ev: &mut Eval<'_>, e: &Expr) -> Native {
     quantile_of(ev, e, &quarters(3))
+}
+
+/// The two variables of `e[x, y]`, `e[x, y, f]`, `e[m]` or `e[m, f]`, `m` a
+/// matrix of two columns: samples of one length, with one frequencies.
+fn pairs(e: &Expr) -> Option<(Sample, Sample)> {
+    let two = |samples: Option<(Vec<Sample>, bool)>| match samples {
+        Some((mut columns, true)) if columns.len() == 2 => {
+            let y = columns.pop()?;
+            let x = columns.pop()?;
+            Some((x, y))
+        }
+        _ => None,
+    };
+    let one = |l: &Expr, f: Option<&Expr>| match samples(l, f) {
+        Some((mut samples, false)) => samples.pop(),
+        _ => None,
+    };
+    match e.args() {
+        [m] => two(samples(m, None)),
+        [a, b] => two(samples(a, Some(b))).or_else(|| Some((one(a, None)?, one(b, None)?))),
+        [x, y, f] => Some((one(x, Some(f))?, one(y, Some(f))?)),
+        _ => None,
+    }
+    .filter(|(x, y)| x.values.len() == y.values.len())
+}
+
+/// `S_xy`, `S_xx`, `S_yy` and `Σ f` of the variables of `e`; `None` when
+/// they are not two, or the frequencies sum to 0, with a warning.
+fn moments(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<[Expr; 4]>, EvalError> {
+    let Some((x, y)) = pairs(e) else {
+        return Ok(None);
+    };
+    let Some((total, x_mean)) = total_and_mean(ev, e, &x)? else {
+        return Ok(None);
+    };
+    let Some((_, y_mean)) = total_and_mean(ev, e, &y)? else {
+        return Ok(None);
+    };
+    let deviations =
+        |s: &Sample, mean: &Expr| -> Vec<Expr> { s.values.iter().map(|v| v - mean).collect() };
+    let (dx, dy) = (deviations(&x, &x_mean), deviations(&y, &y_mean));
+    let sum = |a: &[Expr], b: &[Expr]| {
+        let terms = a.iter().zip(b).enumerate().map(|(i, (u, v))| {
+            let product = u * v;
+            match &x.frequencies {
+                Some(f) => &f[i] * product,
+                None => product,
+            }
+        });
+        Expr::call(
+            Symbol::EXPAND,
+            [Expr::call(Symbol::PLUS, terms.collect::<Vec<_>>())],
+        )
+    };
+    let (xy, xx, yy) = (sum(&dx, &dy), sum(&dx, &dx), sum(&dy, &dy));
+    Ok(Some([ev.eval(&xy)?, ev.eval(&xx)?, ev.eval(&yy)?, total]))
+}
+
+/// `PopulationCovariance[x, y]` and its other forms: `S_xy / Σ f`.
+pub(super) fn population_covariance(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some([xy, _, _, total]) = moments(ev, e)? else {
+        return Ok(None);
+    };
+    let covariance = Expr::call(Symbol::EXPAND, [xy / total]);
+    Ok(Some(ev.eval(&covariance)?))
+}
+
+/// `Correlation[x, y]` and its other forms: `S_xy / √(S_xx S_yy)`.
+pub(super) fn correlation(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some([xy, xx, yy, _]) = moments(ev, e)? else {
+        return Ok(None);
+    };
+    let root = Expr::call(Symbol::SQRT, [xx * yy]);
+    Ok(Some(ev.eval(&(xy / root))?))
 }
 
 #[cfg(test)]

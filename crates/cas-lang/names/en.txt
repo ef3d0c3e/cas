@@ -194,6 +194,9 @@ Quantile: quantile
 Quartiles: quartiles
 FirstQuartile: quartile1
 ThirdQuartile: quartile3
+# Two variables (CAS-296): giac's `covariance` is the population one.
+PopulationCovariance: covariance
+Correlation: correlation
 
 [planned]
 # Numerical solutions of differential equations (CAS-DOC-16), Xcas's

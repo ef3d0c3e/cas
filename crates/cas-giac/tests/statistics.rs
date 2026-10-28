@@ -156,3 +156,18 @@ fn quartiles() {
         },
     );
 }
+
+/// Population covariances and correlations (CAS-296).
+#[test]
+fn two_variables() {
+    check(&[
+        "covariance([1,2,3,4],[2,4,5,9])",
+        "covariance([1,2,3,4],[2,4,5,9],[1,1,2,1])",
+        "covariance([[1,2],[2,4],[3,5],[4,9]])",
+        "covariance([1,2,3],[a,b,c])",
+        "correlation([1,2,3,4],[2,4,5,9])",
+        "correlation([1,2,3,4],[2,4,5,9],[1,1,2,1])",
+        "correlation([[1,2],[2,4],[3,5],[4,9]])",
+        "correlation([1,2,3],[2,4,6])",
+    ]);
+}

@@ -206,3 +206,54 @@ fn unordered_stays() {
         "FirstQuartile[List[]]",
     ]);
 }
+
+const XS: &str = "List[1, 2, 3, 4]";
+const YS: &str = "List[2, 4, 5, 9]";
+const PAIRS: &str = "List[List[1, 2], List[2, 4], List[3, 5], List[4, 9]]";
+const PAIR_WEIGHTS: &str = "List[1, 1, 2, 1]";
+
+/// Population covariances and correlations, of two lists or a matrix of
+/// pairs, with frequencies or not (CAS-296).
+#[test]
+fn two_variables() {
+    check(&[
+        (&format!("PopulationCovariance[{XS}, {YS}]"), "11/4"),
+        (
+            &format!("PopulationCovariance[{XS}, {YS}, {PAIR_WEIGHTS}]"),
+            "11/5",
+        ),
+        (&format!("PopulationCovariance[{PAIRS}]"), "11/4"),
+        (
+            &format!("PopulationCovariance[{PAIRS}, {PAIR_WEIGHTS}]"),
+            "11/5",
+        ),
+        (&format!("PopulationCovariance[{XS}, {XS}]"), "5/4"),
+        (
+            "PopulationCovariance[List[1, 2, 3], List[a, b, c]]",
+            "Plus[Times[-1/3, a], Times[1/3, c]]",
+        ),
+        (
+            &format!("Correlation[{XS}, {YS}]"),
+            "Times[11, Power[130, -1/2]]",
+        ),
+        (
+            &format!("Correlation[{XS}, {YS}, {PAIR_WEIGHTS}]"),
+            "Times[11/26, Power[5, 1/2]]",
+        ),
+        (
+            &format!("Correlation[{PAIRS}]"),
+            "Times[11, Power[130, -1/2]]",
+        ),
+        ("Correlation[List[1, 2, 3], List[2, 4, 6]]", "1"),
+        ("Correlation[List[1, 2, 3], List[3, 2, 1]]", "-1"),
+        // Constant data: 0/0, giac's `undef`.
+        ("Correlation[List[1, 1, 1], List[2, 4, 6]]", "Indeterminate"),
+    ]);
+    stays(&[
+        "PopulationCovariance[List[1, 2], List[1]]",
+        "PopulationCovariance[List[List[1, 2, 3], List[4, 5, 6]]]",
+        "PopulationCovariance[List[1, 2]]",
+        "PopulationCovariance[List[1, 2], List[3, 4], List[1, -1]]",
+        "Correlation[x, y]",
+    ]);
+}

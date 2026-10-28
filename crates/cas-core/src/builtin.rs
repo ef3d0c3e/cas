@@ -165,6 +165,10 @@ builtins! {
     QUARTILES = "Quartiles" [PROTECTED];
     FIRST_QUARTILE = "FirstQuartile" [PROTECTED];
     THIRD_QUARTILE = "ThirdQuartile" [PROTECTED];
+    // Two variables: `covariance`, the population one as giac's, and
+    // `correlation`.
+    POPULATION_COVARIANCE = "PopulationCovariance" [PROTECTED];
+    CORRELATION = "Correlation" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

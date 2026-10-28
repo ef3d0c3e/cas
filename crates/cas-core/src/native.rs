@@ -214,6 +214,11 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::QUARTILES, statistics::quartiles),
         (Symbol::FIRST_QUARTILE, statistics::first_quartile),
         (Symbol::THIRD_QUARTILE, statistics::third_quartile),
+        (
+            Symbol::POPULATION_COVARIANCE,
+            statistics::population_covariance,
+        ),
+        (Symbol::CORRELATION, statistics::correlation),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),
