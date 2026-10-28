@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 276] = [
+const BUILTINS: [&str; 277] = [
     "Plus",
     "Times",
     "Power",
@@ -343,6 +343,8 @@ const BUILTINS: [&str; 276] = [
     "TrigToCos",
     "TrigToSin",
     "TrigToTan",
+    // giac's `tcollect` (CAS-399).
+    "TrigCollect",
 ];
 
 /// Builtins that apply something to parts, only in the expression

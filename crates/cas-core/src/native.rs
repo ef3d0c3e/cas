@@ -558,6 +558,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::TRIG_TO_COS, rewrite::trig_to_cos),
         (Symbol::TRIG_TO_SIN, rewrite::trig_to_sin),
         (Symbol::TRIG_TO_TAN, rewrite::trig_to_tan),
+        (Symbol::TRIG_COLLECT, rewrite::trig_collect),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),

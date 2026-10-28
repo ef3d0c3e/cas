@@ -13,7 +13,9 @@
 //!   `SinToCosTan`, `CosToSinTan`, `TanToSinCos2` and `TanToCosSin2` (§3).
 //! - [`pythagorean`]: `TrigToCos`, `TrigToSin` and `TrigToTan` (§4), which
 //!   take passes of their own, with evaluation between.
+//! - [`collect`]: `TrigCollect` (§5), after `TrigReduce`.
 
+mod collect;
 mod exponential;
 mod pythagorean;
 mod substitution;
@@ -178,4 +180,14 @@ pub(super) fn trig_to_sin(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// `TrigToTan[x]`, Xcas's `trigtan`.
 pub(super) fn trig_to_tan(ev: &mut Eval<'_>, e: &Expr) -> Native {
     pythagorean_form(ev, e, "TrigToTan", pythagorean::Favoured::Tan)
+}
+
+/// `TrigCollect[x]`, Xcas's `tcollect`.
+pub(super) fn trig_collect(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    let result = collect::collect(ev, x)?;
+    ev.step("TrigCollect", e, &result);
+    Ok(Some(result))
 }

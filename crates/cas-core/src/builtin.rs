@@ -349,6 +349,8 @@ builtins! {
     TRIG_TO_COS = "TrigToCos" [PROTECTED];
     TRIG_TO_SIN = "TrigToSin" [PROTECTED];
     TRIG_TO_TAN = "TrigToTan" [PROTECTED];
+    // giac's `tcollect` (CAS-DOC-36 §5).
+    TRIG_COLLECT = "TrigCollect" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];
