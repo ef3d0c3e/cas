@@ -89,6 +89,9 @@ builtins! {
     ZETA = "Zeta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     ERF = "Erf" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     ERFC = "Erfc" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    // The step and the delta (CAS-DOC-18 §2).
+    HEAVISIDE_THETA = "HeavisideTheta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    DIRAC_DELTA = "DiracDelta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     SQRT = "Sqrt" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     FACTORIAL = "Factorial" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     // Calculus (CAS-DOC-4 §8): the derivative, as system rules, and the

@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 135] = [
+const BUILTINS: [&str; 137] = [
     "Plus",
     "Times",
     "Power",
@@ -189,6 +189,9 @@ const BUILTINS: [&str; 135] = [
     "Zeta",
     "Erf",
     "Erfc",
+    // The step and the delta (CAS-273).
+    "HeavisideTheta",
+    "DiracDelta",
 ];
 
 /// Builtins that apply something to parts, only in the expression

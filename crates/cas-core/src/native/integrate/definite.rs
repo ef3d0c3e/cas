@@ -206,6 +206,52 @@ pub(super) fn integral(
     Ok(Some(if ascending { value } else { -value }))
 }
 
+/// `∫ₐᵇ g(x) DiracDelta[α x + β] dx` for one delta at a linear argument
+/// (CAS-DOC-18 §2, CAS-273): `g(x₀)/|α|` at `x₀ = −β/α` strictly between the
+/// bounds, 0 outside them, the sign of reversed bounds; `None` at an end,
+/// when undecided, or for another integrand.
+pub(super) fn sifting(
+    ev: &mut Eval<'_>,
+    f: &Expr,
+    x: &Expr,
+    [a, b]: [&Expr; 2],
+) -> Result<Option<Expr>, EvalError> {
+    let delta = Expr::from(Symbol::DIRAC_DELTA);
+    let factors = if f.head() == Some(&Expr::from(Symbol::TIMES)) {
+        f.args().to_vec()
+    } else {
+        vec![f.clone()]
+    };
+    let (deltas, rest): (Vec<Expr>, Vec<Expr>) =
+        factors.into_iter().partition(|g| g.head() == Some(&delta));
+    let ([d], false) = (deltas.as_slice(), rest.iter().any(|g| g.contains(&delta))) else {
+        return Ok(None);
+    };
+    let [u] = d.args() else {
+        return Ok(None);
+    };
+    let alpha = ev.eval(&Expr::call(Symbol::D, [u.clone(), x.clone()]))?;
+    if alpha.contains(x) || alpha == Expr::from(0) {
+        return Ok(None);
+    }
+    let beta = ev.eval(&u.substitute(&[(x.clone(), Expr::from(0))]))?;
+    let x0 = ev.eval(&(-(beta / alpha.clone())))?;
+    let Some(up) = ascending(ev, a, b) else {
+        return Ok(None);
+    };
+    let (lo, hi) = if up { (a, b) } else { (b, a) };
+    let value = match (ascending(ev, lo, &x0), ascending(ev, &x0, hi)) {
+        (Some(true), Some(true)) => {
+            let g = Expr::call(Symbol::TIMES, rest).substitute(&[(x.clone(), x0)]);
+            g / Expr::call(Symbol::ABS, [alpha])
+        }
+        (Some(false), _) | (_, Some(false)) => Expr::from(0),
+        _ => return Ok(None),
+    };
+    let signed = if up { value } else { -value };
+    ev.eval(&signed).map(Some)
+}
+
 /// Whether `a < b` surely, `a > b` surely, or `None`.
 fn ascending(ev: &Eval<'_>, a: &Expr, b: &Expr) -> Option<bool> {
     match (end(a), end(b)) {

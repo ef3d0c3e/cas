@@ -91,6 +91,14 @@ pub(super) fn integrate(ev: &mut Eval<'_>, e: &Expr) -> Native {
                 Expr::call(Symbol::INTEGRATE, args.clone())
             }),
         )
+    } else if let Some(sifted) = match bounds {
+        // A delta in a definite integral sifts (CAS-DOC-18 §2).
+        Some(bounds) if f.contains(&Expr::from(Symbol::DIRAC_DELTA)) => {
+            definite::sifting(ev, f, x, bounds)?
+        }
+        _ => None,
+    } {
+        sifted
     } else {
         let Some(antiderivative) = integral(ev, e, f, x)? else {
             return Ok(None);
@@ -256,6 +264,12 @@ fn table(f: &Expr, x: &Expr) -> Option<Expr> {
             let a = slope(u, x)?;
             Some((u.clone() * f.clone() - u.clone()) / a)
         }
+        // The step and the delta (CAS-DOC-18 §2): u θ(u), and θ(u).
+        (Symbol::HEAVISIDE_THETA, [u]) => {
+            let a = slope(u, x)?;
+            Some(u.clone() * f.clone() / a)
+        }
+        (Symbol::DIRAC_DELTA, [u]) => Some(call(Symbol::HEAVISIDE_THETA, u.clone()) / slope(u, x)?),
         _ => None,
     }
 }

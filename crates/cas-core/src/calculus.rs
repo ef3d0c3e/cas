@@ -14,7 +14,8 @@
 //! - powers: `f^n` with `n` free of `x`, `E^g`, and `f^g` in general;
 //! - the chain rule for `Sin`, `Cos`, `Tan`, `ArcSin`, `ArcCos`, `ArcTan`,
 //!   the hyperbolic `Sinh` … `ArcTanh` (CAS-DOC-15 §2), `Erf` and `Erfc`
-//!   (§8), `Exp` and `Log`, from a table, and `Abs`, whose derivative is
+//!   (§8), `HeavisideTheta` (CAS-DOC-18 §2), `Exp` and `Log`, from a table,
+//!   and `Abs`, whose derivative is
 //!   `Abs[f] / f` times `f′`, giac's `abs(x)/x`, so that the logarithms of
 //!   absolute values integrals give differentiate back (CAS-DOC-9);
 //! - a function the table does not know: `Derivative[1][g][u] D[u, x]`, and
@@ -155,6 +156,12 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "D/Erfc",
             "Erfc[Pattern[f, Blank[]]]",
             "Times[-2, Power[Pi, -1/2], Power[E, Times[-1, Power[f, 2]]], D[f, x]]",
+        ),
+        // The step's derivative is the delta (CAS-DOC-18 §2).
+        d(
+            "D/HeavisideTheta",
+            "HeavisideTheta[Pattern[f, Blank[]]]",
+            "Times[DiracDelta[f], D[f, x]]",
         ),
         d(
             "D/Exp",

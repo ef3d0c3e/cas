@@ -38,6 +38,7 @@ mod series;
 mod simplify;
 mod solve;
 mod special;
+mod step;
 mod structure;
 mod sum;
 mod trig;
@@ -95,6 +96,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::ZETA, zeta::zeta),
         (Symbol::ERF, erf::erf),
         (Symbol::ERFC, erf::erf),
+        (Symbol::HEAVISIDE_THETA, step::heaviside),
+        (Symbol::DIRAC_DELTA, step::dirac),
         (Symbol::DIRECTED_INFINITY, arith::directed_infinity),
         (Symbol::EQUAL, logic::equal_native),
         (Symbol::UNEQUAL, logic::unequal),

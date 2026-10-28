@@ -129,8 +129,8 @@ pub(super) fn round(ev: &mut Eval<'_>, e: &Expr) -> Native {
 }
 
 /// The sign of a real `x`, from the assumptions, a ball or the
-/// approximation.
-fn real_sign(ctx: &Context, x: &Expr) -> Option<Ordering> {
+/// approximation; also the step's and the delta's (CAS-273).
+pub(super) fn real_sign(ctx: &Context, x: &Expr) -> Option<Ordering> {
     match sign_of(ctx, x) {
         Sign::Positive => return Some(Ordering::Greater),
         Sign::Negative => return Some(Ordering::Less),
