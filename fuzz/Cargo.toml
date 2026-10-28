@@ -269,3 +269,10 @@ path = "fuzz_targets/special.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "sets"
+path = "fuzz_targets/sets.rs"
+test = false
+doc = false
+bench = false
