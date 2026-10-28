@@ -304,3 +304,10 @@ path = "fuzz_targets/jets.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "ndsolve"
+path = "fuzz_targets/ndsolve.rs"
+test = false
+doc = false
+bench = false
