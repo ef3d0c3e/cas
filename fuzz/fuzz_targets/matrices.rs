@@ -21,10 +21,10 @@ fn call(head: &str, args: Vec<Expr>) -> Expr {
     Expr::call(Symbol::new(head), args)
 }
 
-/// The matrix product: `Times`, as `Dot` of two matrices is their inner
-/// product.
+/// The matrix product: `Times` applied as given, its factors in their
+/// order (`Dot` of two matrices is their inner product).
 fn dot(a: &Expr, b: &Expr) -> Expr {
-    Expr::call(Symbol::TIMES, [a.clone(), b.clone()])
+    Expr::apply(&Symbol::TIMES.into(), &[a.clone(), b.clone()])
 }
 
 fn matrix(rows: &[Vec<i64>]) -> Expr {

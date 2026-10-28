@@ -20,7 +20,7 @@
 //!   the variable given.
 //! - **`MatrixExp[A]`** (`expm`) and **`MatrixPower[A, n]`** (`matpow`):
 //!   `P f(J) P⁻¹`, `f` of a block the upper triangular Toeplitz matrix of
-//!   `f(λ), f′(λ), …, f^(m−1)(λ)/(m − 1)!`: `e^λ` times `1, 1, 1/2, …`, and
+//!   `f(λ), f′(λ), …, f^(m−1)(λ)/(m − 1)!`: `E^λ` times `1, 1, 1/2, …`, and
 //!   `λ^n` times `1, n/λ, C(n, 2)/λ², …`. A block at `λ = 0` of size `m`
 //!   is 0 for `n ≥ m`, generic in `n`, which giac writes with `0^n`. An
 //!   integer `n` is `Power`'s. giac's `exp` of a square matrix is its
@@ -340,10 +340,16 @@ fn eigenvalues(ev: &mut Eval<'_>, a: &Expr) -> Result<Option<Vec<(Expr, usize)>>
     Ok(Some(distinct))
 }
 
-/// The product of matrices, or of a matrix and a vector: `Times`, as `Dot`
-/// of two matrices is their inner product, giac's `dot`.
+/// `Times[a, b, …]` applied as given: a product of matrices, which `Times`
+/// keeps in its order once its operands are lists, and `Dot` does not
+/// multiply (`Dot` of two matrices is their inner product, giac's `dot`).
+fn times(factors: &[Expr]) -> Expr {
+    Expr::apply(&Symbol::TIMES.into(), factors)
+}
+
+/// The product of matrices, or of a matrix and a vector.
 fn product(ev: &mut Eval<'_>, a: &Expr, b: &Expr) -> Result<Expr, EvalError> {
-    ev.eval(&Expr::call(Symbol::TIMES, [a.clone(), b.clone()]))
+    ev.eval(&times(&[a.clone(), b.clone()]))
 }
 
 /// The basis of the kernel of `m`, as vectors.
@@ -415,7 +421,15 @@ fn chains(ev: &mut Eval<'_>, a: &Expr, n: usize) -> Result<Option<Chains>, EvalE
                     return Ok(None);
                 };
                 if r > current {
-                    // A new chain of length `size`, eigenvector first.
+                    // A new chain of length `size`, eigenvector first, its
+                    // top's first nonzero entry positive where it is a
+                    // number: giac's P of jordan([[1,1],[0,1]]) is I, where
+                    // the kernels' vectors are −e₁ and −e₂.
+                    let v = if leads_negative(&v) {
+                        ev.eval(&-v.clone())?
+                    } else {
+                        v.clone()
+                    };
                     let mut chain = vec![v.clone()];
                     for _ in 1..size {
                         let next = product(ev, &b, chain.last().expect("one"))?;
@@ -432,6 +446,15 @@ fn chains(ev: &mut Eval<'_>, a: &Expr, n: usize) -> Result<Option<Chains>, EvalE
     }
     let count: usize = all.iter().map(|(_, c)| c.len()).sum();
     Ok((count == n).then_some(all))
+}
+
+/// Whether the first nonzero entry of a vector is a negative number.
+fn leads_negative(v: &Expr) -> bool {
+    v.args()
+        .iter()
+        .find(|x| **x != Expr::from(0))
+        .and_then(Expr::to_rational)
+        .is_some_and(|q| q.is_negative())
 }
 
 /// The square matrix argument, `n ≤ MAX_SIZE`.
@@ -530,7 +553,7 @@ fn conjugated(ev: &mut Eval<'_>, p: &Expr, f: &Expr) -> Result<Option<Expr>, Eva
     if inverse.head() == Some(&Expr::from(Symbol::INVERSE)) {
         return Ok(None);
     }
-    let product = ev.eval(&Expr::call(Symbol::TIMES, [p.clone(), f.clone(), inverse]))?;
+    let product = ev.eval(&times(&[p.clone(), f.clone(), inverse]))?;
     let Some(r) = rows(&product) else {
         return Ok(None);
     };
@@ -558,7 +581,7 @@ pub(in crate::native) fn matrix_exp(ev: &mut Eval<'_>, e: &Expr) -> Native {
     // e^λ / k!.
     let mut block = |ev: &mut Eval<'_>, lambda: &Expr, k: usize| -> Result<Expr, EvalError> {
         let factorial: i64 = (1..=i64::try_from(k).expect("small")).product();
-        ev.eval(&(Expr::call(Symbol::EXP, [lambda.clone()]) / Expr::from(factorial)))
+        ev.eval(&(Expr::from(Symbol::E).pow(lambda.clone()) / Expr::from(factorial)))
     };
     let (p, f) = assembled(ev, &chains, n, &mut block)?;
     let Some(result) = conjugated(ev, &p, &f)? else {

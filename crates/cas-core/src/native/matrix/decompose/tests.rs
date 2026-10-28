@@ -12,10 +12,10 @@ fn eval(ctx: &Context, e: &Expr) -> Expr {
     ctx.eval(e).unwrap_or_else(|err| panic!("{e:?}: {err}"))
 }
 
-/// The matrix product: `Times`, as `Dot` of two matrices is their inner
-/// product.
+/// The matrix product: `Times` applied as given, its factors in their
+/// order (`Dot` of two matrices is their inner product).
 fn dot(a: &Expr, b: &Expr) -> Expr {
-    Expr::call(Symbol::TIMES, [a.clone(), b.clone()])
+    Expr::apply(&Symbol::TIMES.into(), &[a.clone(), b.clone()])
 }
 
 /// Whether two matrices are equal entry by entry once put together.
