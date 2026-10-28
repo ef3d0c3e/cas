@@ -117,6 +117,27 @@ fn exact_values() {
     assert!(tiny.mid().sub(&half).abs() <= Float::from(1i64).mul_2exp(&Integer::from(-40i64)));
 }
 
+/// Exact arguments of more than 64 bits next to 1/2: the ends rounded to
+/// 64 bits made `1/2 − 2^−66` straddle 1/2, indeterminate (CAS-280).
+#[test]
+fn next_to_one_half() {
+    let bit = |e: i64| Float::from(1i64).mul_2exp(&Integer::from(e));
+    let half = bit(-1);
+    let mut wrong = Vec::new();
+    for x in [
+        half.sub(&bit(-66)),
+        half.add(&bit(-66)),
+        half.sub(&bit(-200)),
+    ] {
+        for prec in [2, 53] {
+            if let Err(e) = check(&x, prec) {
+                wrong.push(e);
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 #[test]
 fn the_pole() {
     assert_eq!(Ball::exact(Float::from(1i64)).zeta(64), Ball::INDETERMINATE);

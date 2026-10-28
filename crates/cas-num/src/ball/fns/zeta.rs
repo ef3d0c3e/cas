@@ -168,8 +168,12 @@ impl Ball {
         let Some(r) = self.rad().to_float() else {
             return Ball::INDETERMINATE;
         };
-        let lo = m.sub_round(&r, 64, Round::Floor).0;
-        let hi = m.add_round(&r, 64, Round::Ceil).0;
+        // The ends to the midpoint's bits and more, an exact ball's its
+        // midpoint: rounded to 64 bits, the exact 1/2 − 2^−66 straddled 1/2
+        // (CAS-280).
+        let bits = m.bit_length().max(62) + 2;
+        let lo = m.sub_round(&r, bits, Round::Floor).0;
+        let hi = m.add_round(&r, bits, Round::Ceil).0;
         let half = Float::from(1i64).mul_2exp(&-Integer::ONE);
         let value = if lo.cmp(&half) != Ordering::Less {
             // Above the precision: 1 + [0, 3·2^(−lo)].
