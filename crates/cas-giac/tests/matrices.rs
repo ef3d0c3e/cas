@@ -1,7 +1,8 @@
 //! Matrix decompositions and functions against giac (CAS-DOC-30 §5,
 //! CAS-PLAN-24): entries compared after `Together` of the difference.
 //! `jordan` only where giac's change of basis is this CAS's; `exp` of a
-//! matrix is `expm` here, giac's `exp`.
+//! matrix is `expm` here, giac's `exp`. giac's `lu`, `qr` and `jordan`
+//! return sequences, read in brackets as lists.
 
 use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
@@ -38,13 +39,13 @@ fn matrices() {
     let ctx = Context::new();
     let mut wrong = Vec::new();
     for (input, theirs_input) in [
-        ("lu([[1,2],[3,4]])", "lu([[1,2],[3,4]])"),
-        ("lu([[0,1],[1,1]])", "lu([[0,1],[1,1]])"),
-        ("qr([[3,0],[4,5]])", "qr([[3,0],[4,5]])"),
-        ("qr([[1,1],[1,0],[0,1]])", "qr([[1,1],[1,0],[0,1]])"),
+        ("lu([[1,2],[3,4]])", "[lu([[1,2],[3,4]])]"),
+        ("lu([[0,1],[1,1]])", "[lu([[0,1],[1,1]])]"),
+        ("qr([[3,0],[4,5]])", "[qr([[3,0],[4,5]])]"),
+        ("qr([[1,1],[1,0],[0,1]])", "[qr([[1,1],[1,0],[0,1]])]"),
         ("cholesky([[4,2],[2,3]])", "cholesky([[4,2],[2,3]])"),
         ("cholesky([[2,1],[1,2]])", "cholesky([[2,1],[1,2]])"),
-        ("jordan([[1,1],[0,1]])", "jordan([[1,1],[0,1]])"),
+        ("jordan([[1,1],[0,1]])", "[jordan([[1,1],[0,1]])]"),
         ("pmin([[1,1],[0,1]],x)", "pmin([[1,1],[0,1]],x)"),
         ("expm([[0,1],[0,0]])", "exp([[0,1],[0,0]])"),
         ("expm([[1,0],[0,2]])", "exp([[1,0],[0,2]])"),

@@ -160,16 +160,17 @@ pub(in crate::native) fn lu_decomposition(ev: &mut Eval<'_>, e: &Expr) -> Native
         if i != k {
             u.swap(i, k);
             p.swap(i, k);
-            for j in 0..k {
-                let t = l[i][j].clone();
-                l[i][j] = std::mem::replace(&mut l[k][j], t);
-            }
+            // The multipliers so far, before column k, go with their rows;
+            // the pivot's row `i` is below `k`.
+            let (top, bottom) = l.split_at_mut(i);
+            top[k][..k].swap_with_slice(&mut bottom[0][..k]);
         }
         for i in k + 1..n {
             let factor = simplified(ev, u[i][k].clone() / u[k][k].clone())?;
             l[i][k] = factor.clone();
-            for j in k..n {
-                u[i][j] = simplified(ev, u[i][j].clone() - factor.clone() * u[k][j].clone())?;
+            let (top, bottom) = u.split_at_mut(i);
+            for (x, y) in bottom[0][k..].iter_mut().zip(&top[k][k..]) {
+                *x = simplified(ev, x.clone() - factor.clone() * y.clone())?;
             }
         }
     }
@@ -208,18 +209,20 @@ pub(in crate::native) fn qr_decomposition(ev: &mut Eval<'_>, e: &Expr) -> Native
     }
     let column = |j: usize| -> Vec<Expr> { a.iter().map(|r| r[j].clone()).collect() };
     let mut q: Vec<Vec<Expr>> = Vec::with_capacity(n);
-    let mut r = vec![vec![Expr::from(0); n]; n];
+    // R by columns, transposed at the end.
+    let mut r_columns: Matrix = Vec::with_capacity(n);
     for j in 0..n {
         let aj = column(j);
         let mut v = aj.clone();
-        for (i, qi) in q.iter().enumerate() {
-            let Some(rij) = inner(ev, qi, &aj)? else {
+        let mut rj = vec![Expr::from(0); n];
+        for (rij, qi) in rj.iter_mut().zip(&q) {
+            let Some(value) = inner(ev, qi, &aj)? else {
                 return Ok(None);
             };
             for (vk, qk) in v.iter_mut().zip(qi) {
-                *vk = simplified(ev, vk.clone() - rij.clone() * qk.clone())?;
+                *vk = simplified(ev, vk.clone() - value.clone() * qk.clone())?;
             }
-            r[i][j] = rij;
+            *rij = value;
         }
         let Some(square) = inner(ev, &v, &v)? else {
             return Ok(None);
@@ -240,11 +243,15 @@ pub(in crate::native) fn qr_decomposition(ev: &mut Eval<'_>, e: &Expr) -> Native
         for vk in v {
             qj.push(simplified(ev, vk / norm.clone())?);
         }
-        r[j][j] = norm;
+        rj[j] = norm;
+        r_columns.push(rj);
         q.push(qj);
     }
     let q_rows: Matrix = (0..m)
         .map(|i| q.iter().map(|c| c[i].clone()).collect())
+        .collect();
+    let r: Matrix = (0..n)
+        .map(|i| r_columns.iter().map(|c| c[i].clone()).collect())
         .collect();
     let result = list(vec![matrix(q_rows), matrix(r)]);
     ev.step("qr", e, &result);
@@ -273,9 +280,9 @@ pub(in crate::native) fn cholesky_decomposition(ev: &mut Eval<'_>, e: &Expr) -> 
     if a[0].len() != n {
         return Ok(None);
     }
-    for i in 0..n {
-        for j in 0..i {
-            if is_zero(ev, &(a[i][j].clone() - a[j][i].clone()))? != Some(true) {
+    for (i, row) in a.iter().enumerate() {
+        for (j, x) in row.iter().enumerate().take(i) {
+            if is_zero(ev, &(x.clone() - a[j][i].clone()))? != Some(true) {
                 warn(ev, "the matrix is not symmetric", e);
                 return Ok(None);
             }
@@ -333,8 +340,10 @@ fn eigenvalues(ev: &mut Eval<'_>, a: &Expr) -> Result<Option<Vec<(Expr, usize)>>
     Ok(Some(distinct))
 }
 
+/// The product of matrices, or of a matrix and a vector: `Times`, as `Dot`
+/// of two matrices is their inner product, giac's `dot`.
 fn product(ev: &mut Eval<'_>, a: &Expr, b: &Expr) -> Result<Expr, EvalError> {
-    ev.eval(&Expr::call(Symbol::DOT, [a.clone(), b.clone()]))
+    ev.eval(&Expr::call(Symbol::TIMES, [a.clone(), b.clone()]))
 }
 
 /// The basis of the kernel of `m`, as vectors.
@@ -521,10 +530,7 @@ fn conjugated(ev: &mut Eval<'_>, p: &Expr, f: &Expr) -> Result<Option<Expr>, Eva
     if inverse.head() == Some(&Expr::from(Symbol::INVERSE)) {
         return Ok(None);
     }
-    let product = ev.eval(&Expr::call(
-        Symbol::DOT,
-        [Expr::call(Symbol::DOT, [p.clone(), f.clone()]), inverse],
-    ))?;
+    let product = ev.eval(&Expr::call(Symbol::TIMES, [p.clone(), f.clone(), inverse]))?;
     let Some(r) = rows(&product) else {
         return Ok(None);
     };
