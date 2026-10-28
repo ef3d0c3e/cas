@@ -142,3 +142,79 @@ fn systems() {
         ],
     );
 }
+
+/// Absolute values, radicals, exponentials and logarithms (CAS-279).
+#[test]
+fn functions() {
+    check(
+        &Context::new(),
+        &[
+            (
+                "Less[Abs[Plus[x, -1]], 2]",
+                "List[And[Less[-1, x], Less[x, 3]]]",
+            ),
+            (
+                "Greater[Abs[Plus[x, -1]], 2]",
+                "List[Less[x, -1], Greater[x, 3]]",
+            ),
+            ("Greater[Exp[x], 1]", "List[Greater[x, 0]]"),
+            ("Less[Log[x], 1]", "List[And[Less[0, x], Less[x, Exp[1]]]]"),
+            ("Greater[Log[x], 0]", "List[Greater[x, 1]]"),
+            (
+                "Less[Power[x, 1/2], 2]",
+                "List[And[LessEqual[0, x], Less[x, 4]]]",
+            ),
+            (
+                "GreaterEqual[Power[Plus[x, -1], 1/2], 1]",
+                "List[GreaterEqual[x, 2]]",
+            ),
+            (
+                "LessEqual[Abs[x], Power[x, 2]]",
+                "List[LessEqual[x, -1], 0, GreaterEqual[x, 1]]",
+            ),
+            // giac's domain for odd roots too.
+            (
+                "Less[Power[x, 1/3], 2]",
+                "List[And[LessEqual[0, x], Less[x, 8]]]",
+            ),
+            (
+                "Greater[Power[x, -1/2], 1]",
+                "List[And[Less[0, x], Less[x, 1]]]",
+            ),
+            (
+                "Less[Plus[Abs[Plus[x, -1]], Abs[Plus[x, 1]]], 4]",
+                "List[And[Less[-2, x], Less[x, 2]]]",
+            ),
+            (
+                "Greater[Power[x, 1/2], x]",
+                "List[And[Less[0, x], Less[x, 1]]]",
+            ),
+            (
+                "Greater[Power[Plus[x, 2], 1/2], x]",
+                "List[And[LessEqual[-2, x], Less[x, 2]]]",
+            ),
+            (
+                "Less[Log[Plus[Power[x, 2], -1]], 0]",
+                "List[And[Less[Times[-1, Power[2, 1/2]], x], Less[x, -1]], \
+                 And[Less[1, x], Less[x, Power[2, 1/2]]]]",
+            ),
+            (
+                "Less[Plus[Power[x, 1/2], Power[Plus[x, -1], 1/2]], 3]",
+                "List[And[LessEqual[1, x], Less[x, 25/9]]]",
+            ),
+            ("GreaterEqual[Abs[x], 0]", "List[x]"),
+            ("Greater[Times[x, Exp[x]], 0]", "List[Greater[x, 0]]"),
+            // |x| − x is 0 along x ≥ 0.
+            ("Greater[Abs[x], x]", "List[Less[x, 0]]"),
+            ("GreaterEqual[Abs[x], x]", "List[x]"),
+            (
+                "List[Equal[Abs[x], x], Less[x, 5]]",
+                "List[And[LessEqual[0, x], Less[x, 5]]]",
+            ),
+            // exp(1/x) jumps at 0.
+            ("Greater[Exp[Power[x, -1]], 1]", "List[Greater[x, 0]]"),
+            // Periodic: stays.
+            ("Greater[Sin[x], 0]", "Solve[Greater[Sin[x], 0], x]"),
+        ],
+    );
+}

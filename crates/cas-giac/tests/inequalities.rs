@@ -144,3 +144,32 @@ fn systems() {
         "solve([x>=0,x^2=4],x)",
     ]);
 }
+
+/// Absolute values, radicals, exponentials and logarithms (CAS-279).
+#[test]
+fn functions() {
+    check(&[
+        "solve(abs(x-1)<2,x)",
+        "solve(abs(x-1)>2,x)",
+        "solve(exp(x)>1,x)",
+        "solve(ln(x)<1,x)",
+        "solve(sqrt(x)<2,x)",
+        "solve(sqrt(x-1)>=1,x)",
+        "solve(abs(x)<=x^2,x)",
+        "solve(x^(1/3)<2,x)",
+        "solve(1/sqrt(x)>1,x)",
+        "solve(abs(x-1)+abs(x+1)<4,x)",
+        "solve(ln(x)>0,x)",
+        "solve(exp(-x)<2,x)",
+        "solve(sqrt(x)>x,x)",
+        "solve(sqrt(4-x^2)>=1,x)",
+        "solve(ln(x^2-1)<0,x)",
+        "solve(abs(2*x-3)<=1,x)",
+        "solve(x*exp(x)>0,x)",
+        "solve(sqrt(x+2)>x,x)",
+        "solve(exp(x)-2>0,x)",
+        "solve(2^x>8,x)",
+        "solve(abs(x^2-4)<3,x)",
+        "solve(sqrt(x)+sqrt(x-1)<3,x)",
+    ]);
+}

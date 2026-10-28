@@ -17,9 +17,19 @@
 //!
 //! Systems (CAS-278): a list or an `And` of conditions (a chain `a < x <= b`
 //! is one) intersects their sets, an `Or` unites them, a `Not` takes the
-//! complement; an equation among them is its real roots, points. Each set
-//! is disjoint intervals in increasing order, ends compared as the sign
+//! complement; an equation among them is charted as `f = 0`. Each set is
+//! disjoint intervals in increasing order, ends compared as the sign
 //! chart's points are.
+//!
+//! Functions (CAS-279): absolute values, powers, exponentials and
+//! logarithms of `x`, nothing periodic. Radicands (`u >= 0`, `u > 0` under
+//! a negative power) and logarithms' arguments (`u > 0`) make a domain,
+//! itself solved so, whose ends are cuts of the chart, where `f` is
+//! evaluated, and outside of which nothing holds. The poles of functions'
+//! arguments are poles of the chart (`exp(1/x)` at 0). Zeros: of a
+//! product, its factors'; with absolute values, piecewise between the
+//! zeros and poles of their arguments, which are cuts; else `Solve`'s,
+//! radicals and inversions of functions (CAS-213) among them.
 
 use std::cmp::Ordering;
 
@@ -82,14 +92,16 @@ fn relation(e: &Expr) -> Option<(Symbol, &Expr, &Expr)> {
     }
 }
 
-/// Whether a sign satisfies the relation `op` against 0.
+/// Whether a sign satisfies the relation `op` against 0, an equation's
+/// `Equal` among them.
 fn holds(op: Symbol, sign: Ordering) -> bool {
     match op {
         Symbol::LESS => sign == Ordering::Less,
         Symbol::LESS_EQUAL => sign != Ordering::Greater,
         Symbol::GREATER => sign == Ordering::Greater,
         Symbol::GREATER_EQUAL => sign != Ordering::Less,
-        _ => sign != Ordering::Equal,
+        Symbol::UNEQUAL => sign != Ordering::Equal,
+        _ => sign == Ordering::Equal,
     }
 }
 
@@ -123,9 +135,9 @@ pub(super) fn solve(
 }
 
 /// The solution set of the condition `c`, intervals in increasing order:
-/// a comparison by its sign chart, an equation by its real roots, a list
-/// or `And` the intersection of its members', `Or` the union, `Not` the
-/// complement (CAS-278).
+/// a comparison or an equation by its sign chart, a list or `And` the
+/// intersection of its members', `Or` the union, `Not` the complement
+/// (CAS-278).
 fn set(
     ev: &mut Eval<'_>,
     e: &Expr,
@@ -136,7 +148,7 @@ fn set(
         return one(ev, e, op, l, r, x);
     }
     if let Some((l, r)) = equation(c) {
-        return points(ev, e, l, r, x);
+        return one(ev, e, Symbol::EQUAL, l, r, x);
     }
     match c.as_symbol() {
         Some(Symbol::TRUE) => return Ok(Some(vec![Interval { lo: None, hi: None }])),
@@ -168,38 +180,6 @@ fn set(
         },
         _ => Ok(None),
     }
-}
-
-/// The real roots of `l = r` as points.
-fn points(
-    ev: &mut Eval<'_>,
-    e: &Expr,
-    l: &Expr,
-    r: &Expr,
-    x: &Expr,
-) -> Result<Option<Vec<Interval>>, EvalError> {
-    let f = ev.eval(&(l.clone() - r.clone()))?;
-    let Some(found) = roots(ev, e, &f, x, true)? else {
-        return Ok(None);
-    };
-    if found.iter().any(|p| p.contains(x)) {
-        // f ≡ 0: every x.
-        return Ok(Some(vec![Interval { lo: None, hi: None }]));
-    }
-    let points = found
-        .into_iter()
-        .map(|p| Interval {
-            lo: Some(End {
-                at: p.clone(),
-                closed: true,
-            }),
-            hi: Some(End {
-                at: p,
-                closed: true,
-            }),
-        })
-        .collect();
-    union(ev, points)
 }
 
 /// Lower ends ordered: −∞ first; at one value, a closed end first.
@@ -383,7 +363,26 @@ fn sign_at(ev: &mut Eval<'_>, f: &Expr, x: &Expr, p: &Expr) -> Result<Option<Ord
     Ok(real_sign(ev.context(), &value))
 }
 
-/// The solutions of `l op r` by a sign chart.
+/// What a point of a sign chart is, by precedence where points meet: a
+/// cut, where `f` is evaluated (an end of the domain, a kink of an absolute
+/// value); a zero of `f`; a pole, of `f` or of a function's argument.
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum Kind {
+    Cut,
+    Zero,
+    Pole,
+}
+
+/// The real zeros of an expression in `x`, and the cuts where its sign may
+/// change besides, each maybe repeated.
+#[derive(Default)]
+struct Crossings {
+    zeros: Vec<Expr>,
+    cuts: Vec<Expr>,
+}
+
+/// The solutions of `l op r`, `op` a comparison or `Equal`, by a sign
+/// chart.
 fn one(
     ev: &mut Eval<'_>,
     e: &Expr,
@@ -392,86 +391,377 @@ fn one(
     r: &Expr,
     x: &Expr,
 ) -> Result<Option<Vec<Interval>>, EvalError> {
-    let f = ev.eval(&Expr::call(Symbol::TOGETHER, [l.clone() - r.clone()]))?;
-    let whole = || vec![Interval { lo: None, hi: None }];
-    if !f.contains(x) {
-        return Ok(
-            real_sign(ev.context(), &f).map(|s| if holds(op, s) { whole() } else { Vec::new() })
-        );
+    if !charted(l, x) || !charted(r, x) {
+        return Ok(None);
     }
-    let n = ev.eval(&Expr::call(Symbol::NUMERATOR, [f.clone()]))?;
-    let d = ev.eval(&Expr::call(Symbol::DENOMINATOR, [f.clone()]))?;
-    // The critical points: zeros, then poles.
-    let Some(zeros) = roots(ev, e, &n, x, true)? else {
+    let Some(domain) = domain(ev, e, l, r, x)? else {
         return Ok(None);
     };
-    let poles = if d.contains(x) {
-        let Some(p) = roots(ev, e, &d, x, true)? else {
-            return Ok(None);
-        };
-        p
-    } else {
-        Vec::new()
+    let Some(singular) = singular(ev, e, l, r, x)? else {
+        return Ok(None);
+    };
+    let f = ev.eval(&Expr::call(Symbol::TOGETHER, [l.clone() - r.clone()]))?;
+    let n = ev.eval(&Expr::call(Symbol::NUMERATOR, [f.clone()]))?;
+    let d = ev.eval(&Expr::call(Symbol::DENOMINATOR, [f.clone()]))?;
+    let Some(above) = crossings(ev, e, &n, x)? else {
+        return Ok(None);
+    };
+    let Some(below) = crossings(ev, e, &d, x)? else {
+        return Ok(None);
     };
     // A root that is `x` itself: every x, as for f ≡ 0, which `Together`
     // already took.
-    if zeros.iter().chain(&poles).any(|p| p.contains(x)) {
+    if above
+        .zeros
+        .iter()
+        .chain(&below.zeros)
+        .any(|p| p.contains(x))
+    {
         return Ok(None);
     }
-    let mut points: Vec<(Expr, bool)> = Vec::new();
-    for (p, zero) in zeros
-        .into_iter()
-        .map(|p| (p, true))
-        .chain(poles.into_iter().map(|p| (p, false)))
-    {
-        // Sorted by insertion, equal points merged (a pole wins).
-        let mut at = points.len();
-        for (i, (q, q_zero)) in points.iter_mut().enumerate() {
+    let ends: Vec<Expr> = domain
+        .iter()
+        .flat_map(|i| [&i.lo, &i.hi])
+        .flatten()
+        .map(|end| end.at.clone())
+        .collect();
+    let all = (above.zeros.into_iter().map(|p| (p, Kind::Zero)))
+        .chain(
+            below
+                .zeros
+                .into_iter()
+                .chain(singular)
+                .map(|p| (p, Kind::Pole)),
+        )
+        .chain(
+            above
+                .cuts
+                .into_iter()
+                .chain(below.cuts)
+                .chain(ends)
+                .map(|p| (p, Kind::Cut)),
+        );
+    let Some(points) = sorted(ev, all)? else {
+        return Ok(None);
+    };
+    // Whether each piece holds, outside the domain never, else by `f`'s
+    // sign at a point of it: piece i lies below point i.
+    let mut pieces = Vec::with_capacity(points.len() + 1);
+    for i in 0..=points.len() {
+        let test = between(
+            i.checked_sub(1).map(|j| &points[j].0),
+            points.get(i).map(|(p, _)| p),
+        );
+        let holding = match member(ev, &domain, &test)? {
+            Some(true) => sign_at(ev, &f, x, &test)?.map(|s| holds(op, s)),
+            other => other,
+        };
+        let Some(holding) = holding else {
+            return Ok(None);
+        };
+        pieces.push(holding);
+    }
+    // And each point: a pole never, a zero where `op` admits equality, a
+    // cut by `f`'s sign there; outside the domain never.
+    let mut held = Vec::with_capacity(points.len());
+    for (p, kind) in &points {
+        let holding = match kind {
+            Kind::Pole => Some(false),
+            _ => match member(ev, &domain, p)? {
+                Some(true) if *kind == Kind::Zero => Some(holds(op, Ordering::Equal)),
+                Some(true) => sign_at(ev, &f, x, p)?.map(|s| holds(op, s)),
+                other => other,
+            },
+        };
+        let Some(holding) = holding else {
+            return Ok(None);
+        };
+        held.push(holding);
+    }
+    let points: Vec<Expr> = points.into_iter().map(|(p, _)| p).collect();
+    Ok(Some(join(&points, &pieces, &held)))
+}
+
+/// Whether the sign chart applies to `e` (CAS-279): every part of it in
+/// `x` a sum, a product, a power, an absolute value, an exponential or a
+/// logarithm, continuous where defined. Periodic functions are not.
+fn charted(e: &Expr, x: &Expr) -> bool {
+    e.distinct().all(|s| {
+        s == x
+            || !s.contains(x)
+            || matches!(
+                (s.head().and_then(Expr::as_symbol), s.args()),
+                (Some(Symbol::PLUS | Symbol::TIMES), _)
+                    | (Some(Symbol::POWER), [_, _])
+                    | (Some(Symbol::ABS | Symbol::EXP | Symbol::LOG), [_])
+            )
+    })
+}
+
+/// Where `l` and `r` are real (CAS-279): a power `u^q` of something in
+/// `x`, `q` a rational but no integer, needs `u >= 0`, `u > 0` for
+/// `q < 0`, as giac's `x^(1/3)` too; a logarithm `log(u)` needs `u > 0`.
+/// The whole line when nothing does.
+fn domain(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    l: &Expr,
+    r: &Expr,
+    x: &Expr,
+) -> Result<Option<Vec<Interval>>, EvalError> {
+    let mut conditions: Vec<Expr> = Vec::new();
+    for s in l.distinct().chain(r.distinct()) {
+        let condition = match (s.head().and_then(Expr::as_symbol), s.args()) {
+            (Some(Symbol::POWER), [u, q]) if u.contains(x) => match q.to_rational() {
+                Some(q) if !q.is_integer() => {
+                    let op = if q.is_negative() {
+                        Symbol::GREATER
+                    } else {
+                        Symbol::GREATER_EQUAL
+                    };
+                    Expr::call(op, [u.clone(), Expr::from(0)])
+                }
+                _ => continue,
+            },
+            (Some(Symbol::LOG), [u]) if u.contains(x) => {
+                Expr::call(Symbol::GREATER, [u.clone(), Expr::from(0)])
+            }
+            _ => continue,
+        };
+        if !conditions.contains(&condition) {
+            conditions.push(condition);
+        }
+    }
+    if conditions.is_empty() {
+        return Ok(Some(vec![Interval { lo: None, hi: None }]));
+    }
+    set(ev, e, &Expr::call(Symbol::AND, conditions), x)
+}
+
+/// The poles of `l`, of `r` and of their functions' arguments (CAS-279),
+/// where the sign may change without a zero: `exp(1/x)` at 0.
+fn singular(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    l: &Expr,
+    r: &Expr,
+    x: &Expr,
+) -> Result<Option<Vec<Expr>>, EvalError> {
+    let mut arguments: Vec<&Expr> = vec![l, r];
+    for s in l.distinct().chain(r.distinct()) {
+        match (s.head().and_then(Expr::as_symbol), s.args()) {
+            (Some(Symbol::ABS | Symbol::EXP | Symbol::LOG), [u]) => arguments.push(u),
+            (Some(Symbol::POWER), [b, q]) if !q.to_rational().is_some_and(|q| q.is_integer()) => {
+                arguments.extend([b, q]);
+            }
+            _ => {}
+        }
+    }
+    let mut poles = Vec::new();
+    for u in arguments {
+        if !u.contains(x) {
+            continue;
+        }
+        let together = ev.eval(&Expr::call(Symbol::TOGETHER, [u.clone()]))?;
+        let d = ev.eval(&Expr::call(Symbol::DENOMINATOR, [together]))?;
+        let Some(c) = crossings(ev, e, &d, x)? else {
+            return Ok(None);
+        };
+        poles.extend(c.zeros);
+    }
+    Ok(Some(poles))
+}
+
+/// The crossings of `f` in `x` (CAS-279): of a product, its factors'; of
+/// `u^q` with `q > 0` and of `|u|`, `u`'s; of an exponential, none; with
+/// absolute values of something in `x` in it, by [`piecewise`]; else the
+/// roots `Solve` finds. `None` when they are not found.
+fn crossings(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    f: &Expr,
+    x: &Expr,
+) -> Result<Option<Crossings>, EvalError> {
+    if !f.contains(x) {
+        return Ok(Some(Crossings::default()));
+    }
+    match (f.head().and_then(Expr::as_symbol), f.args()) {
+        (Some(Symbol::TIMES), factors) => {
+            let mut all = Crossings::default();
+            for g in factors {
+                let Some(c) = crossings(ev, e, g, x)? else {
+                    return Ok(None);
+                };
+                all.zeros.extend(c.zeros);
+                all.cuts.extend(c.cuts);
+            }
+            return Ok(Some(all));
+        }
+        (Some(Symbol::POWER), [u, q]) if q.to_rational().is_some_and(|q| q.is_positive()) => {
+            return crossings(ev, e, u, x);
+        }
+        (Some(Symbol::ABS), [u]) => return crossings(ev, e, u, x),
+        (Some(Symbol::EXP), [_]) => return Ok(Some(Crossings::default())),
+        _ => {}
+    }
+    if f.distinct().any(|s| absolute(s, x).is_some()) {
+        return piecewise(ev, e, f, x);
+    }
+    Ok(roots(ev, e, f, x, true)?.map(|zeros| Crossings {
+        zeros,
+        cuts: Vec::new(),
+    }))
+}
+
+/// The argument of `|u|`, `u` in `x`.
+fn absolute<'a>(s: &'a Expr, x: &Expr) -> Option<&'a Expr> {
+    match (s.head()?.as_symbol()?, s.args()) {
+        (Symbol::ABS, [u]) if u.contains(x) => Some(u),
+        _ => None,
+    }
+}
+
+/// The crossings of `f`, which holds absolute values of expressions in
+/// `x`: the zeros and poles of their arguments cut the line, and on each
+/// piece, each `|u|` taken as `u` or `−u` by `u`'s sign at a point of it,
+/// `f`'s zeros inside the piece are `f`'s. The cuts are crossings too, as
+/// `f` may be 0 along a piece (`|x| − x` for `x > 0`).
+fn piecewise(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    f: &Expr,
+    x: &Expr,
+) -> Result<Option<Crossings>, EvalError> {
+    let arguments: Vec<Expr> = f
+        .distinct()
+        .filter_map(|s| absolute(s, x))
+        .cloned()
+        .collect();
+    let mut cuts = Vec::new();
+    for u in arguments {
+        let u = ev.eval(&Expr::call(Symbol::TOGETHER, [u]))?;
+        for part in [Symbol::NUMERATOR, Symbol::DENOMINATOR] {
+            let p = ev.eval(&Expr::call(part, [u.clone()]))?;
+            let Some(c) = crossings(ev, e, &p, x)? else {
+                return Ok(None);
+            };
+            cuts.extend(c.zeros.into_iter().chain(c.cuts));
+        }
+    }
+    let Some(cuts) = sorted(ev, cuts.into_iter().map(|c| (c, Kind::Cut)))? else {
+        return Ok(None);
+    };
+    let cuts: Vec<Expr> = cuts.into_iter().map(|(c, _)| c).collect();
+    let mut zeros = Vec::new();
+    for i in 0..=cuts.len() {
+        let (lo, hi) = (i.checked_sub(1).map(|j| &cuts[j]), cuts.get(i));
+        let test = between(lo, hi);
+        // The outermost absolute values first, until none is left.
+        let mut g = f.clone();
+        loop {
+            let found: Vec<Expr> = g
+                .distinct()
+                .filter(|s| absolute(s, x).is_some())
+                .cloned()
+                .collect();
+            if found.is_empty() {
+                break;
+            }
+            let mut rules = Vec::with_capacity(found.len());
+            for a in found {
+                let u = a.args()[0].clone();
+                let Some(sign) = sign_at(ev, &u, x, &test)? else {
+                    return Ok(None);
+                };
+                rules.push((a, if sign == Ordering::Less { -u } else { u }));
+            }
+            g = g.substitute(&rules);
+        }
+        let g = ev.eval(&g)?;
+        if g.distinct().any(|s| absolute(s, x).is_some()) {
+            return Ok(None);
+        }
+        let Some(c) = crossings(ev, e, &g, x)? else {
+            return Ok(None);
+        };
+        for z in c.zeros {
+            let after = match lo {
+                Some(lo) => compare(ev, lo, &z)?,
+                None => Some(Ordering::Less),
+            };
+            let before = match hi {
+                Some(hi) => compare(ev, &z, hi)?,
+                None => Some(Ordering::Less),
+            };
+            match (after, before) {
+                (Some(Ordering::Less), Some(Ordering::Less)) => zeros.push(z),
+                (Some(_), Some(_)) => {}
+                _ => return Ok(None),
+            }
+        }
+    }
+    Ok(Some(Crossings { zeros, cuts }))
+}
+
+/// `points` in increasing order, equal ones merged into the greatest kind;
+/// `None` when an order is not decided.
+fn sorted(
+    ev: &mut Eval<'_>,
+    points: impl IntoIterator<Item = (Expr, Kind)>,
+) -> Result<Option<Vec<(Expr, Kind)>>, EvalError> {
+    let mut out: Vec<(Expr, Kind)> = Vec::new();
+    for (p, kind) in points {
+        // By insertion.
+        let mut at = Some(out.len());
+        for (i, (q, q_kind)) in out.iter_mut().enumerate() {
             match compare(ev, &p, q)? {
                 Some(Ordering::Less) => {
-                    at = i;
+                    at = Some(i);
                     break;
                 }
                 Some(Ordering::Equal) => {
-                    *q_zero = *q_zero && zero;
-                    at = usize::MAX;
+                    *q_kind = (*q_kind).max(kind);
+                    at = None;
                     break;
                 }
                 Some(Ordering::Greater) => {}
                 None => return Ok(None),
             }
         }
-        if at != usize::MAX {
-            points.insert(at, (p, zero));
+        if let Some(at) = at {
+            out.insert(at, (p, kind));
         }
     }
-    // Whether each piece, and each point, holds: piece i lies below point i.
-    let mut pieces = Vec::with_capacity(points.len() + 1);
-    for i in 0..=points.len() {
-        let test = match (
-            i.checked_sub(1).map(|j| &points[j].0),
-            points.get(i).map(|(p, _)| p),
-        ) {
-            (None, None) => Expr::from(0),
-            (None, Some(hi)) => hi.clone() - Expr::from(1),
-            (Some(lo), None) => lo.clone() + Expr::from(1),
-            (Some(lo), Some(hi)) => (lo.clone() + hi.clone()) / Expr::from(2),
-        };
-        let Some(sign) = sign_at(ev, &f, x, &test)? else {
-            return Ok(None);
-        };
-        pieces.push(holds(op, sign));
+    Ok(Some(out))
+}
+
+/// A point of the open piece from `lo` to `hi`, `None` infinite: the
+/// midpoint, or the end ∓ 1, or 0.
+fn between(lo: Option<&Expr>, hi: Option<&Expr>) -> Expr {
+    match (lo, hi) {
+        (None, None) => Expr::from(0),
+        (None, Some(hi)) => hi.clone() - Expr::from(1),
+        (Some(lo), None) => lo.clone() + Expr::from(1),
+        (Some(lo), Some(hi)) => (lo.clone() + hi.clone()) / Expr::from(2),
     }
-    let held: Vec<bool> = points
-        .iter()
-        .map(|&(_, zero)| zero && holds(op, Ordering::Equal))
-        .collect();
-    Ok(Some(join(&points, &pieces, &held)))
+}
+
+/// Whether the point `p` lies in `set`.
+fn member(ev: &mut Eval<'_>, set: &[Interval], p: &Expr) -> Result<Option<bool>, EvalError> {
+    let end = Some(End {
+        at: p.clone(),
+        closed: true,
+    });
+    let point = [Interval {
+        lo: end.clone(),
+        hi: end,
+    }];
+    Ok(intersection(ev, set, &point)?.map(|s| !s.is_empty()))
 }
 
 /// The intervals of the pieces and points that hold, adjacent ones joined:
 /// piece `i` lies between point `i − 1` and point `i`.
-fn join(points: &[(Expr, bool)], pieces: &[bool], held: &[bool]) -> Vec<Interval> {
+fn join(points: &[Expr], pieces: &[bool], held: &[bool]) -> Vec<Interval> {
     let mut out = Vec::new();
     let mut lo: Option<Option<End>> = None;
     // Along the line: piece 0, point 0, piece 1, …, point k−1, piece k.
@@ -479,7 +769,7 @@ fn join(points: &[(Expr, bool)], pieces: &[bool], held: &[bool]) -> Vec<Interval
         if pieces[i] {
             if lo.is_none() {
                 lo = Some(i.checked_sub(1).map(|j| End {
-                    at: points[j].0.clone(),
+                    at: points[j].clone(),
                     closed: false,
                 }));
             }
@@ -487,12 +777,12 @@ fn join(points: &[(Expr, bool)], pieces: &[bool], held: &[bool]) -> Vec<Interval
             out.push(Interval {
                 lo: start,
                 hi: Some(End {
-                    at: points[i - 1].0.clone(),
+                    at: points[i - 1].clone(),
                     closed: held[i - 1],
                 }),
             });
         }
-        let Some((p, _)) = points.get(i) else {
+        let Some(p) = points.get(i) else {
             break;
         };
         if held[i] {
