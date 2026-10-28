@@ -256,7 +256,7 @@ fn cumulative(ev: &mut Eval<'_>, e: &Expr, kind: Kind) -> Native {
             let (Some(high), Some(low)) = (d.cumulative_at(ev, b)?, d.cumulative_at(ev, a)?) else {
                 return Ok(None);
             };
-            let difference = ev.eval(&(high - low))?;
+            let difference = ev.eval(&Expr::call(Symbol::EXPAND, [high - low]))?;
             Ok(Some(match compare(ev, &difference, &Expr::from(0))? {
                 Some(Ordering::Less) => Expr::from(0),
                 _ => difference,

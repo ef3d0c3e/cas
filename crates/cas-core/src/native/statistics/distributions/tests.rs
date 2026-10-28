@@ -74,14 +74,14 @@ fn binomial() {
 #[test]
 fn poisson() {
     check(&[
-        ("PoissonPDF[2, 3]", "Times[4/3, Power[E, -2]]"),
+        ("PoissonPDF[2, 3]", "Times[4/3, Exp[-2]]"),
         ("PoissonPDF[2, -1]", "0"),
         (
             "PoissonPDF[2, k]",
-            "Times[Power[E, -2], Power[2, k], Power[Factorial[k], -1]]",
+            "Times[Exp[-2], Power[2, k], Power[Factorial[k], -1]]",
         ),
-        ("PoissonCDF[2, 3]", "Times[19/3, Power[E, -2]]"),
-        ("PoissonCDF[1, 1, 2]", "Times[3/2, Power[E, -1]]"),
+        ("PoissonCDF[2, 3]", "Times[19/3, Exp[-2]]"),
+        ("PoissonCDF[1, 1, 2]", "Times[3/2, Exp[-1]]"),
         ("PoissonCDF[1, -1]", "0"),
         ("PoissonICDF[2, 1/2]", "2"),
         ("PoissonICDF[1/2, 9/10]", "1"),
@@ -165,7 +165,7 @@ fn inverse_erf() {
         "Less[Abs[Plus[Erf[InverseErf[Decimal[9, -1]]], Times[-1, Decimal[9, -1]]]], \
          Power[10, -14]]",
         // erfinv(1/2) = 0.476936276204469873381…
-        "Less[Abs[Plus[N[InverseErf[1/2], 30], Times[-1, 47693627620446987338/10^20]]], \
+        "Less[Abs[Plus[N[InverseErf[1/2], 30], Times[-1, Times[47693627620446987338, Power[10, -20]]]]], \
          Power[10, -19]]",
     ] {
         assert!(holds(&ctx, claim), "{claim}");
@@ -201,7 +201,7 @@ fn normal() {
     ]);
     let ctx = Context::new();
     // The 97.5% quantile, 1.959963984540054…
-    let claim = "Less[Abs[Plus[N[NormalICDF[39/40], 30], -1959963984540054/10^15]], \
+    let claim = "Less[Abs[Plus[N[NormalICDF[39/40], 30], Times[-1959963984540054, Power[10, -15]]]], \
                  Power[10, -14]]";
     assert!(holds(&ctx, claim), "{claim}");
     stays(&[
@@ -216,13 +216,13 @@ fn normal() {
 #[test]
 fn exponential_and_uniform() {
     check(&[
-        ("ExponentialPDF[2, 1]", "Times[2, Power[E, -2]]"),
+        ("ExponentialPDF[2, 1]", "Times[2, Exp[-2]]"),
         ("ExponentialPDF[2, -1]", "0"),
         ("ExponentialPDF[l, x]", "Times[l, Exp[Times[-1, l, x]]]"),
-        ("ExponentialCDF[2, 1]", "Plus[1, Times[-1, Power[E, -2]]]"),
+        ("ExponentialCDF[2, 1]", "Plus[1, Times[-1, Exp[-2]]]"),
         (
             "ExponentialCDF[2, 1, 3]",
-            "Plus[Power[E, -2], Times[-1, Power[E, -6]]]",
+            "Plus[Exp[-2], Times[-1, Exp[-6]]]",
         ),
         ("ExponentialCDF[2, -1]", "0"),
         ("ExponentialICDF[2, 1/2]", "Times[-1/2, Log[1/2]]"),
@@ -258,14 +258,14 @@ fn degrees_of_freedom() {
             "Plus[2/3, Times[1/4, Power[3, 1/2], Power[Pi, -1]]]",
         ),
         ("StudentTCDF[3, Infinity]", "1"),
-        ("ChiSquareCDF[4, 2]", "Plus[1, Times[-2, Power[E, -1]]]"),
-        ("ChiSquareCDF[2, 2]", "Plus[1, Times[-1, Power[E, -1]]]"),
+        ("ChiSquareCDF[4, 2]", "Plus[1, Times[-2, Exp[-1]]]"),
+        ("ChiSquareCDF[2, 2]", "Plus[1, Times[-1, Exp[-1]]]"),
         ("ChiSquareCDF[3, -1]", "0"),
         ("FisherCDF[2, 4, 1]", "5/9"),
         ("FisherCDF[2, 4, 0]", "0"),
         ("FisherPDF[2, 4, 1]", "8/27"),
-        ("ChiSquarePDF[2, 1]", "Times[1/2, Power[E, -1/2]]"),
-        ("ChiSquarePDF[4, 2]", "Times[1/2, Power[E, -1]]"),
+        ("ChiSquarePDF[2, 1]", "Times[1/2, Exp[-1/2]]"),
+        ("ChiSquarePDF[4, 2]", "Times[1/2, Exp[-1]]"),
         ("ChiSquarePDF[3, -1]", "0"),
         (
             "StudentTPDF[1, x]",
@@ -279,8 +279,8 @@ fn degrees_of_freedom() {
     let ctx = Context::new();
     for claim in [
         // t(0.95, 3) = 2.353363434801826…, and its mirror.
-        "Less[Abs[Plus[StudentTICDF[3, 95/100], -2353363434801826/10^15]], Power[10, -12]]",
-        "Less[Abs[Plus[StudentTICDF[3, 5/100], 2353363434801826/10^15]], Power[10, -12]]",
+        "Less[Abs[Plus[StudentTICDF[3, 95/100], Times[-2353363434801826, Power[10, -15]]]], Power[10, -12]]",
+        "Less[Abs[Plus[StudentTICDF[3, 5/100], Times[2353363434801826, Power[10, -15]]]], Power[10, -12]]",
         // χ²(2) is E(1/2): its median is 2 ln 2.
         "Less[Abs[Plus[ChiSquareICDF[2, 1/2], Times[-2, Log[2]]]], Power[10, -13]]",
         // F(2, 3)'s median is (3/2)(2^(2/3) − 1).

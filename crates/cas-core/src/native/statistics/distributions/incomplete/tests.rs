@@ -49,14 +49,14 @@ fn gamma() {
     same(
         &ctx,
         &lower_gamma(4, &Expr::from(1)).unwrap(),
-        "Plus[1, Times[-2, Power[E, -1]]]",
+        "Plus[1, Times[-2, Exp[-1]]]",
     );
     // P(3/2, 1/2) = erf(1/√2) − √(2/π) e^(−1/2): χ²(3) at 1.
     let half = read("1/2");
     assert!(near(
         &ctx,
         &lower_gamma(3, &half).unwrap(),
-        "Plus[Erf[Power[2, -1/2]], Times[-1, Power[Times[2, Power[Pi, -1]], 1/2], Power[E, -1/2]]]",
+        "Plus[Erf[Power[2, -1/2]], Times[-1, Power[Times[2, Power[Pi, -1]], 1/2], Exp[-1/2]]]",
     ));
     assert_eq!(lower_gamma(0, &x), None);
 }
