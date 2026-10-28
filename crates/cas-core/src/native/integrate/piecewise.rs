@@ -17,7 +17,9 @@
 //! 0, and the pieces integrate as before (CAS-198, CAS-207): the integral
 //! is their sum. Two points are ordered by their infinities, else by the
 //! sign of their difference under the assumptions, else by its ball, so
-//! that 0 lies between `−T/2` and `T/2` for `T > 0`. Another argument, an
+//! that 0 lies between `−T/2` and `T/2` for `T > 0`. Differences, middles
+//! and the values there are expanded, so that the assumptions see them as
+//! linear in their symbols: `(1 + c)/2 − c` is `1/2 − c/2`. Another argument, an
 //! order or a sign that none of these tells, or a piece that stays leaves
 //! the integral, the piece with its warning.
 
@@ -81,6 +83,12 @@ fn sign(ev: &Eval<'_>, v: &Expr) -> Option<Ordering> {
     }
 }
 
+/// `e` under `Expand`: `(1 + c)/2 − c` is `1/2 − c/2`, linear in `c` for
+/// the assumptions to tell its sign.
+fn expanded(e: Expr) -> Expr {
+    Expr::call(Symbol::EXPAND, [e])
+}
+
 /// How `p` compares with `q` on the extended real line: by their
 /// infinities, else by the sign of `q − p`; `None` when it is not told.
 fn order(ev: &mut Eval<'_>, p: &Expr, q: &Expr) -> Result<Option<Ordering>, EvalError> {
@@ -91,7 +99,7 @@ fn order(ev: &mut Eval<'_>, p: &Expr, q: &Expr) -> Result<Option<Ordering>, Eval
         (None, None) if infinite(p) || infinite(q) => return Ok(None),
         (None, None) => {}
     }
-    let difference = ev.eval(&(q.clone() - p.clone()))?;
+    let difference = ev.eval(&expanded(q.clone() - p.clone()))?;
     Ok(sign(ev, &difference).map(Ordering::reverse))
 }
 
@@ -287,11 +295,11 @@ pub(super) fn integral(
             (_, Some(true)) => p.clone() + Expr::from(1),
             _ => (p.clone() + q.clone()) / Expr::from(2),
         };
-        let middle = ev.eval(&middle)?;
+        let middle = ev.eval(&expanded(middle))?;
         let mut rules = Vec::with_capacity(switches.len());
         for s in &switches {
             let u = &s.args()[0];
-            let value = ev.eval(&u.substitute(&[(x.clone(), middle.clone())]))?;
+            let value = ev.eval(&expanded(u.substitute(&[(x.clone(), middle.clone())])))?;
             let positive = match sign(ev, &value) {
                 Some(Ordering::Greater) => true,
                 Some(Ordering::Less) => false,
