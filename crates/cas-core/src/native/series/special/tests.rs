@@ -128,7 +128,7 @@ fn definite_integrals() {
         ),
         (
             "Integrate[Power[E, Times[-1/2, Power[x, 2]]], List[x, Times[-1, Infinity], Infinity]]",
-            "Power[Times[2, Pi], 1/2]",
+            "Times[Power[2, 1/2], Power[Pi, 1/2]]",
         ),
         (
             "Integrate[Times[Power[E, Times[-1, x]], Power[x, -1]], List[x, 1, Infinity]]",
