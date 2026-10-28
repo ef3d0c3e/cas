@@ -572,6 +572,13 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::MULTIPLY_COMPLEX_CONJUGATE,
             rewrite::multiply_complex_conjugate,
         ),
+        (Symbol::COMBINE, rewrite::combine),
+        (
+            Symbol::TRANSCENDENTAL_SIMPLIFY,
+            rewrite::transcendental_simplify,
+        ),
+        (Symbol::SIGN_TO_HEAVISIDE, rewrite::sign_to_heaviside),
+        (Symbol::HEAVISIDE_TO_SIGN, rewrite::heaviside_to_sign),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),

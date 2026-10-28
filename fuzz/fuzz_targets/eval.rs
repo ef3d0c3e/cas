@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 287] = [
+const BUILTINS: [&str; 291] = [
     "Plus",
     "Times",
     "Power",
@@ -357,6 +357,11 @@ const BUILTINS: [&str; 287] = [
     "ComplexExpand",
     "MultiplyConjugate",
     "MultiplyComplexConjugate",
+    // Combinations and the Heaviside forms (CAS-402).
+    "Combine",
+    "TranscendentalSimplify",
+    "SignToHeaviside",
+    "HeavisideToSign",
 ];
 
 /// Builtins that apply something to parts, only in the expression

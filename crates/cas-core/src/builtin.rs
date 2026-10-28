@@ -363,6 +363,11 @@ builtins! {
     COMPLEX_EXPAND = "ComplexExpand" [PROTECTED];
     MULTIPLY_CONJUGATE = "MultiplyConjugate" [PROTECTED];
     MULTIPLY_COMPLEX_CONJUGATE = "MultiplyComplexConjugate" [PROTECTED];
+    // Combinations and the Heaviside forms (CAS-DOC-36 §8).
+    COMBINE = "Combine" [PROTECTED];
+    TRANSCENDENTAL_SIMPLIFY = "TranscendentalSimplify" [PROTECTED];
+    SIGN_TO_HEAVISIDE = "SignToHeaviside" [PROTECTED];
+    HEAVISIDE_TO_SIGN = "HeavisideToSign" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

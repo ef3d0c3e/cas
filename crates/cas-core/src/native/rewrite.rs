@@ -19,8 +19,13 @@
 //!   `ArcTrigToLog` (§6).
 //! - [`complex`]: `ComplexExpand`, `MultiplyConjugate` and
 //!   `MultiplyComplexConjugate` (§7), on the whole expression.
+//! - [`combination`]: `Combine`'s rule for exponentials,
+//!   `TranscendentalSimplify`, `SignToHeaviside` and `HeavisideToSign`
+//!   (§8); `Combine` with `ln` is `LogCombine`'s rule, and with `trig`,
+//!   `sin` or `cos` `TrigReduce`.
 
 mod collect;
+mod combination;
 mod complex;
 mod exponential;
 mod inverse;
@@ -46,6 +51,13 @@ fn rewrite(ev: &mut Eval<'_>, e: &Expr, name: &'static str, rule: Rule) -> Nativ
     let [x] = e.args() else {
         return Ok(None);
     };
+    let result = apply(ev, x, rule)?;
+    ev.step(name, e, &result);
+    Ok(Some(result))
+}
+
+/// `x` with `rule` applied to each part from the leaves up, built.
+fn apply(ev: &mut Eval<'_>, x: &Expr, rule: Rule) -> Result<Expr, EvalError> {
     let mut failure = None;
     let result = x.map_bottom_up(|part| {
         if failure.is_some() {
@@ -60,11 +72,10 @@ fn rewrite(ev: &mut Eval<'_>, e: &Expr, name: &'static str, rule: Rule) -> Nativ
             }
         }
     });
-    if let Some(error) = failure {
-        return Err(error);
+    match failure {
+        Some(error) => Err(error),
+        None => Ok(result),
     }
-    ev.step(name, e, &result);
-    Ok(Some(result))
 }
 
 /// `x` with `form` applied to it, or to each entry of a list or relation,
@@ -294,4 +305,44 @@ pub(super) fn multiply_complex_conjugate(ev: &mut Eval<'_>, e: &Expr) -> Native 
         "MultiplyComplexConjugate",
         &mut complex::multiply_complex_conjugate,
     )
+}
+
+/// `Combine[x, f]`, Xcas's `combine`: by `LogCombine`'s rule for `ln`,
+/// exponentials merged for `exp`, `TrigReduce` for `trig`, `sin` or `cos`;
+/// another `f` leaves the call.
+pub(super) fn combine(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x, f] = e.args() else {
+        return Ok(None);
+    };
+    let result = match f.as_symbol() {
+        Some(Symbol::LOG) => apply(ev, x, exponential::log_combine)?,
+        Some(Symbol::EXP) => apply(ev, x, combination::exp_combine)?,
+        Some(Symbol::SIN | Symbol::COS) => crate::native::trig::reduce(ev, x)?,
+        Some(s) if *f == Expr::symbol("trig") && !s.is_builtin() => {
+            crate::native::trig::reduce(ev, x)?
+        }
+        _ => return Ok(None),
+    };
+    ev.step("Combine", e, &result);
+    Ok(Some(result))
+}
+
+/// `TranscendentalSimplify[x]`, Xcas's `tsimplify`.
+pub(super) fn transcendental_simplify(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    whole(
+        ev,
+        e,
+        "TranscendentalSimplify",
+        &mut combination::transcendental_simplify,
+    )
+}
+
+/// `SignToHeaviside[x]`, Xcas's `sign2Heaviside`.
+pub(super) fn sign_to_heaviside(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "SignToHeaviside", combination::sign_to_heaviside)
+}
+
+/// `HeavisideToSign[x]`, Xcas's `Heaviside2sign`.
+pub(super) fn heaviside_to_sign(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "HeavisideToSign", combination::heaviside_to_sign)
 }
