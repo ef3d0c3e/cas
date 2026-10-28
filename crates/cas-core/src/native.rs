@@ -43,6 +43,7 @@ mod polynomial;
 mod polytools;
 mod procedure;
 mod radical;
+mod random;
 mod replace;
 mod residue;
 mod rounding;
@@ -472,6 +473,9 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::FISHER_ICDF,
             statistics::distributions::degrees::fisher_icdf,
         ),
+        (Symbol::SEED_RANDOM, random::seed_random),
+        (Symbol::RANDOM, random::random),
+        (Symbol::RANDOM_INTEGER, random::random_integer),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),

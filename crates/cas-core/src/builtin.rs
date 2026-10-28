@@ -145,8 +145,9 @@ builtins! {
     LAGUERRE_L = "LaguerreL" [PROTECTED];
     CHEBYSHEV_T = "ChebyshevT" [PROTECTED];
     CHEBYSHEV_U = "ChebyshevU" [PROTECTED];
-    // List operations (CAS-DOC-28).
-    TABLE = "Table" [PROTECTED];
+    // List operations (CAS-DOC-28). `Table` holds its body, evaluated at
+    // each value of the index (CAS-DOC-33 §2).
+    TABLE = "Table" [HOLD_ALL, PROTECTED];
     MAKE_LIST = "MakeList" [PROTECTED];
     SORT = "Sort" [PROTECTED];
     REVERSE = "Reverse" [PROTECTED];
@@ -289,6 +290,11 @@ builtins! {
     FISHER_PDF = "FisherPDF" [PROTECTED];
     FISHER_CDF = "FisherCDF" [PROTECTED];
     FISHER_ICDF = "FisherICDF" [PROTECTED];
+    // Random numbers (CAS-DOC-33): the generator's seed, and uniform
+    // numbers.
+    SEED_RANDOM = "SeedRandom" [PROTECTED];
+    RANDOM = "Random" [PROTECTED];
+    RANDOM_INTEGER = "RandomInteger" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

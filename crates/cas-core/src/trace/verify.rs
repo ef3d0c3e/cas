@@ -31,6 +31,11 @@
 //! of its arguments, not their values, so its value at a point is not its
 //! value there (`GCD[x^2 - 1, x - 1]` is `x - 1`, `GCD[5/4, 1/2]` is
 //! `1/4`).
+//!
+//! So is a step whose evaluation draws a random number (CAS-DOC-33 §2):
+//! evaluated again, `Random[]` is another number. The points are drawn
+//! from a generator of the verification's own, so that checking leaves the
+//! context's sequence as it was.
 
 use cas_num::ball::Ball;
 use foldhash::fast::FixedState;
@@ -147,6 +152,7 @@ impl Trace {
         let mut limits = ctx.limits();
         limits.number_bits = limits.number_bits.min(NUMBER_BITS);
         ctx.set_limits(limits);
+        ctx.detach_random();
         let ctx = &ctx;
         let mut verification = Verification {
             wrong: None,
@@ -218,6 +224,8 @@ fn claim(ctx: &Context, step: &Step) -> Option<(Expr, Expr)> {
 }
 
 fn check(ctx: &Context, step: &Step) -> Outcome {
+    // The context's random draws so far: a side that draws tells nothing.
+    let taken = ctx.random().draws;
     let Some((before, after)) = claim(ctx, step) else {
         return Outcome::Unchecked;
     };
@@ -259,6 +267,9 @@ fn check(ctx: &Context, step: &Step) -> Outcome {
             (Value::Other(b), Value::Other(a)) if a == b => (Value::Other(b), Value::Other(a)),
             (b, a) => (approximate(ctx, b), approximate(ctx, a)),
         };
+        if ctx.random().draws != taken {
+            return Outcome::Unchecked;
+        }
         match sides {
             (Value::Exact(b), Value::Exact(a)) if a != b => {
                 return Outcome::Differs(point, b, a);

@@ -3,8 +3,10 @@
 use std::fmt;
 use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, PoisonError};
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
+use cas_num::Integer;
+use cas_num::random::Generator;
 use foldhash::fast::FixedState;
 use hashbrown::HashMap;
 
@@ -47,6 +49,29 @@ pub struct Context {
     /// The fixpoints of this state whose evaluation warned, with their
     /// warnings; shared with the clones of the same state.
     warned: Arc<WarnedFixpoints>,
+    /// The generator of random numbers (CAS-DOC-33 §1), not part of the
+    /// state either: shared by the clones of this context and the contexts
+    /// made from it, so that drawing changes no id.
+    random: Arc<Mutex<Random>>,
+}
+
+/// A context's generator of random numbers, and the draws it gave, which
+/// [`Trace::verify`](crate::Trace::verify) compares around an evaluation
+/// (CAS-DOC-33 §2).
+#[derive(Clone, Debug)]
+pub(crate) struct Random {
+    pub(crate) generator: Generator,
+    pub(crate) draws: u64,
+}
+
+impl Default for Random {
+    /// The generator of a new context, from the seed 0.
+    fn default() -> Random {
+        Random {
+            generator: Generator::seeded(&Integer::ZERO),
+            draws: 0,
+        }
+    }
 }
 
 /// The bit of a stamp that marks a fixpoint whose evaluation warned
@@ -159,6 +184,7 @@ impl Default for Context {
             id: StateId::fresh(),
             interrupt: None,
             warned: Arc::default(),
+            random: Arc::default(),
         }
     }
 }
@@ -531,6 +557,25 @@ impl Context {
         self.interrupt.as_ref().map_or(&NEVER, |i| &i.0)
     }
 
+    /// Seeds the generator of random numbers (CAS-DOC-33 §1), which this
+    /// context shares with its clones and the contexts made from it: the
+    /// draws that follow are those of `seed`, as after `SeedRandom[seed]`.
+    pub fn seed_random(&self, seed: &Integer) {
+        self.random().generator = Generator::seeded(seed);
+    }
+
+    /// The generator of random numbers, locked.
+    pub(crate) fn random(&self) -> MutexGuard<'_, Random> {
+        self.random.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// A generator of this context's own from now on, at the state of the
+    /// one it shared: its draws leave the other's sequence as it was.
+    pub(crate) fn detach_random(&mut self) {
+        let copy = self.random().clone();
+        self.random = Arc::new(Mutex::new(copy));
+    }
+
     /// Sets what symbols without facts range over (CAS-DOC-4 §7.1).
     pub fn set_domain(&mut self, domain: Domain) {
         self.state_mut().domain = domain;
@@ -651,6 +696,7 @@ impl fmt::Debug for Context {
                 "interrupted",
                 &self.interrupt.as_ref().map(Interrupt::is_interrupted),
             )
+            .field("random", &self.random)
             .finish()
     }
 }

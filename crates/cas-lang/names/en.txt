@@ -316,6 +316,11 @@ FisherPDF: fisher
 FisherCDF: fisher_cdf
 FisherICDF: fisher_icdf
 
+# Random numbers (CAS-DOC-33).
+SeedRandom: srand randseed
+Random: rand random
+RandomInteger: randint
+
 [planned]
 # Numerical solutions of differential equations (CAS-DOC-16), Xcas's
 # `odesolve`, a later area.

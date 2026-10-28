@@ -22,7 +22,9 @@
 //! 7. A change in step 5 or 6 goes back to step 1, counted against
 //!    [`Limits::iterations`]. Otherwise the expression is a fixpoint: it is
 //!    stamped, so evaluating it again in this state is O(1), and memoised
-//!    for the rest of the call.
+//!    for the rest of the call. An evaluation that drew a random number
+//!    ([`Eval::draw`], CAS-DOC-33 §2) is neither: evaluated again, it draws
+//!    again, so that `{Random[], Random[]}` holds two numbers.
 //!
 //! The evaluator is recursive. Each nested evaluation counts against
 //! [`Limits::recursion`], which stops it before the stack runs out as long
@@ -49,6 +51,7 @@ use std::mem::ManuallyDrop;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 
+use cas_num::random::Generator;
 use foldhash::fast::FixedState;
 use hashbrown::{HashMap, HashSet};
 
@@ -78,7 +81,8 @@ const STACK_RESERVE: usize = 256 << 10;
 /// It receives the application after normalisation and returns its rewrite,
 /// or `None` when it does not apply. It must be deterministic in the state
 /// and its input and change nothing visible, since the result is stamped
-/// and memoised. It may evaluate parts with [`Eval::eval`].
+/// and memoised, but for the draws it takes through [`Eval::draw`]. It may
+/// evaluate parts with [`Eval::eval`].
 pub type NativeFn = fn(&mut Eval<'_>, &Expr) -> Result<Option<Expr>, EvalError>;
 
 /// One call of [`Context::eval`]: what native functions receive to evaluate
@@ -106,6 +110,9 @@ pub struct Eval<'c> {
     /// [`Eval::warned_hit`]: [`WARNED`], the bit of fixpoints that warned,
     /// until this call memoises a part that warned, and 0 from then on.
     warned_bound: u64,
+    /// How many random draws were taken ([`Eval::draw`]): an evaluation
+    /// during which it rose is neither stamped nor memoised.
+    draws: u64,
     /// What they were, from the first one on.
     warnings: WarnedSlot,
 }
@@ -204,6 +211,7 @@ impl<'c> Eval<'c> {
             recording: None,
             warned: 0,
             warned_bound: WARNED,
+            draws: 0,
             warnings: WarnedSlot::default(),
         }
     }
@@ -249,6 +257,8 @@ impl<'c> Eval<'c> {
         let mut nested = Eval::new(context, self.recursion - self.depth);
         nested.caches = self.caches;
         let result = nested.part::<false>(e);
+        // Its draws are this call's: what asked for it is not memoised.
+        self.draws = self.draws.wrapping_add(nested.draws);
         let mut warnings: Vec<Warning> = Vec::new();
         if let Some(warned) = nested.warnings.0.take() {
             let mut seen: HashSet<Warning, FixedState> = HashSet::default();
@@ -334,6 +344,17 @@ impl<'c> Eval<'c> {
             .given
             .push((depth, warning));
         self.warned = self.warned.wrapping_add(1);
+    }
+
+    /// Draws from the context's generator of random numbers, which `f`
+    /// takes (CAS-DOC-33 §2). The draw is counted: what is being evaluated
+    /// is neither stamped nor memoised, so that it draws again when it is
+    /// met again. `f` cannot evaluate, which would lock the generator twice.
+    pub fn draw<T>(&mut self, f: impl FnOnce(&mut Generator) -> T) -> T {
+        self.draws = self.draws.wrapping_add(1);
+        let mut random = self.context.random();
+        random.draws = random.draws.wrapping_add(1);
+        f(&mut random.generator)
     }
 
     /// What rewrote the subject of the attempt in progress, for the trace.
@@ -457,6 +478,7 @@ impl<'c> Eval<'c> {
     fn evaluate<const TRACED: bool>(&mut self, input: &Expr) -> Result<Expr, EvalError> {
         let first = if TRACED { self.trace_next_id() } else { 0 };
         let warned = self.warned;
+        let draws = self.draws;
         let mut e = input.clone();
         // The nodes passed on the way, memoised with the result.
         let mut passed = Vec::new();
@@ -516,7 +538,7 @@ impl<'c> Eval<'c> {
                 }
             }
         };
-        if self.caches {
+        if self.caches && self.draws == draws {
             if self.warned == warned {
                 if fixpoint {
                     self.context.mark_fixpoint(&result);

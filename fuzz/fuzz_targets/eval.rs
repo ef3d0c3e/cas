@@ -12,8 +12,8 @@
 //! evaluator has no budget per call (CAS-DOC-4 R8). So a right-hand side
 //! applies a user head at most once and passes none as an argument, and
 //! has none of the natives that apply something to each part (`Map`,
-//! `Apply`, `ReplaceAll`, `Function`, and `Unapply`, which makes one); the
-//! expression evaluated may. It
+//! `Apply`, `ReplaceAll`, `Function`, `Table`, and `Unapply`, which makes
+//! one); the expression evaluated may. It
 //! uses each pattern variable at most once, and a rule on a `Flat` head
 //! has no tests or conditions (see [`pattern`]).
 #![no_main]
@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 253] = [
+const BUILTINS: [&str; 252] = [
     "Plus",
     "Times",
     "Power",
@@ -187,7 +187,6 @@ const BUILTINS: [&str; 253] = [
     "LaguerreL",
     "ChebyshevT",
     "ChebyshevU",
-    "Table",
     "MakeList",
     "Sort",
     "Reverse",
@@ -319,10 +318,11 @@ const BUILTINS: [&str; 253] = [
 ];
 
 /// Builtins that apply something to parts, only in the expression
-/// evaluated, and `Unapply`, which makes a `Function`. Not
-/// `ReplaceRepeated`: a rule that matches what it makes, such as an integer
-/// becoming `-3 + y`, grows the expression at each of its rounds.
-const APPLYING: [&str; 5] = ["Map", "Apply", "ReplaceAll", "MatchQ", "Unapply"];
+/// evaluated: `Table` among them, which evaluates its held body at each
+/// value of its index (CAS-370), and `Unapply`, which makes a `Function`.
+/// Not `ReplaceRepeated`: a rule that matches what it makes, such as an
+/// integer becoming `-3 + y`, grows the expression at each of its rounds.
+const APPLYING: [&str; 6] = ["Map", "Apply", "ReplaceAll", "MatchQ", "Unapply", "Table"];
 
 /// The names pattern variables take.
 const VARIABLES: [&str; 3] = ["n", "m", "s"];
@@ -420,6 +420,13 @@ fn expr(u: &mut Unstructured<'_>, depth: u8, room: &mut Room) -> Result<Expr> {
         9 if room.applying => {
             let head = *u.choose(&APPLYING)?;
             let subject = expr(u, depth - 1, room)?;
+            if head == "Table" {
+                // The body at a few values of an index.
+                let index = sym(u.choose(&["x", "y", "u"])?);
+                let from = Expr::from(i64::from(u.int_in_range(-2i8..=2)?));
+                let to = Expr::from(i64::from(u.int_in_range(-2i8..=3)?));
+                return Ok(apply(head, &[subject, index, from, to]));
+            }
             let second = match head {
                 "Map" | "Apply" => sym(u.choose(&HEADS)?),
                 "MatchQ" => pattern(u, depth - 1, true)?,

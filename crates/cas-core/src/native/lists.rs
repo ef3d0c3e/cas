@@ -2,11 +2,16 @@
 //! `Length`, `Part`, `Map` and `Apply` (CAS-DOC-4 §6.1):
 //!
 //! - **Building**: `Table[f, k, a, b]`, `Table[f, k, a, b, s]` and
-//!   `Table[f, k == a .. b]` (`seq`), `f` evaluated with `k` symbolic and
-//!   then at each `k = a + js` within `b`, `s` 1 by default and negative to
-//!   count down; `MakeList[g, a, b, s]` (`makelist`) applies `g`. The
-//!   bounds and the step are rationals, `s ≠ 0`, with at most
-//!   [`MAX_ELEMENTS`] elements.
+//!   `Table[f, k == a .. b]` (`seq`), `f` evaluated at each `k = a + js`
+//!   within `b`, `s` 1 by default and negative to count down;
+//!   `MakeList[g, a, b, s]` (`makelist`) applies `g`. The bounds and the
+//!   step are rationals, `s ≠ 0`, with at most [`MAX_ELEMENTS`] elements.
+//!   `Table` holds its arguments, as giac's `seq` does (CAS-DOC-33 §2,
+//!   CAS-370): `f` is evaluated anew at each value, so that `seq(rand(), k,
+//!   1, 3)` draws three numbers and `seq(int(x^k, x), k, -1, 1)` integrates
+//!   `x^-1` as it is, and an index with a value is bound anew. A value that
+//!   still holds `k`, as `f`'s where `f` has the value `k^2`, has it put in
+//!   again, giac's binding of the index.
 //! - **Reordering**: `Sort[l]` (`sort`) puts the real numbers first, by
 //!   value (their balls, overlapping ones in their order), and the rest in
 //!   the canonical order; `Sort[l, p]` sorts by `p(u, v)`, true when `u`
@@ -83,39 +88,63 @@ fn values(a: &Expr, b: &Expr, s: &Expr) -> Option<Vec<Expr>> {
     Some(out)
 }
 
-/// The index, its values and the summand of `Table`'s forms.
-fn table_parts(e: &Expr) -> Option<(&Expr, &Expr, Vec<Expr>)> {
+/// `k = a .. b` as its parts: the index and the ends.
+fn index_range(spec: &Expr) -> Option<(&Expr, &Expr, &Expr)> {
+    let (Some(Symbol::EQUATION | Symbol::EQUAL), [k, range]) =
+        (spec.head().and_then(Expr::as_symbol), spec.args())
+    else {
+        return None;
+    };
+    let (Some(Symbol::RANGE), [a, b]) = (range.head().and_then(Expr::as_symbol), range.args())
+    else {
+        return None;
+    };
+    Some((k, a, b))
+}
+
+/// The summand, the index and its values of `Table`'s forms, held: the
+/// bounds and the step evaluated here, and the range of `Table[f, r]`
+/// when `r` is no `k = a .. b` as written.
+fn table_parts(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<(Expr, Expr, Vec<Expr>)>, EvalError> {
     let one = Expr::from(1);
     let (f, k, a, b, s) = match e.args() {
-        [f, k, a, b] => (f, k, a, b, &one),
-        [f, k, a, b, s] => (f, k, a, b, s),
+        [f, k, a, b] => (f.clone(), k.clone(), a.clone(), b.clone(), one),
+        [f, k, a, b, s] => (f.clone(), k.clone(), a.clone(), b.clone(), s.clone()),
         [f, spec] | [f, spec, _] => {
-            let (Some(Symbol::EQUATION | Symbol::EQUAL), [k, range]) =
-                (spec.head().and_then(Expr::as_symbol), spec.args())
-            else {
-                return None;
+            let evaluated;
+            let spec = if index_range(spec).is_some() {
+                spec
+            } else {
+                evaluated = ev.eval(spec)?;
+                &evaluated
             };
-            let (Some(Symbol::RANGE), [a, b]) =
-                (range.head().and_then(Expr::as_symbol), range.args())
-            else {
-                return None;
+            let Some((k, a, b)) = index_range(spec) else {
+                return Ok(None);
             };
-            let s = e.args().get(2).unwrap_or(&one);
-            (f, k, a, b, s)
+            let s = e.args().get(2).cloned().unwrap_or(one);
+            (f.clone(), k.clone(), a.clone(), b.clone(), s)
         }
-        _ => return None,
+        _ => return Ok(None),
     };
-    k.as_symbol()?;
-    Some((f, k, values(a, b, s)?))
+    if k.as_symbol().is_none() {
+        return Ok(None);
+    }
+    let (a, b, s) = (ev.eval(&a)?, ev.eval(&b)?, ev.eval(&s)?);
+    Ok(values(&a, &b, &s).map(|values| (f, k, values)))
 }
 
 pub(super) fn table(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    let Some((f, k, values)) = table_parts(e) else {
+    let Some((f, k, values)) = table_parts(ev, e)? else {
         return Ok(None);
     };
     let mut items = Vec::with_capacity(values.len());
     for v in values {
-        items.push(ev.eval(&f.substitute(&[(k.clone(), v)]))?);
+        let at = [(k.clone(), v)];
+        let mut item = ev.eval(&f.substitute(&at))?;
+        if item.contains(&k) {
+            item = ev.eval(&item.substitute(&at))?;
+        }
+        items.push(item);
     }
     Ok(Some(list(items)))
 }
