@@ -99,6 +99,58 @@ fn remainders() {
     );
 }
 
+/// Whether two lists of polynomials generate one ideal: the reduced basis
+/// of giac's, under `revlex` in the symbols of both in canonical order, as
+/// `Eliminate` orders them, is ours. giac mostly eliminates by resultants,
+/// which it says "may reduce further", and normalizes nothing (CAS-292).
+fn same_ideal(ctx: &Context, ours: &Expr, theirs: &Expr) -> bool {
+    let mut symbols: Vec<Symbol> = [ours, theirs]
+        .iter()
+        .flat_map(|e| e.symbols())
+        .filter(|s| !s.is_builtin())
+        .collect();
+    symbols.sort_by_cached_key(|&s| Expr::from(s));
+    symbols.dedup();
+    if symbols.is_empty() {
+        return ours == theirs;
+    }
+    let vars = Expr::call(Symbol::LIST, symbols.into_iter().map(Expr::from));
+    let basis = Expr::call(Symbol::GROEBNER_BASIS, [theirs.clone(), vars]);
+    ctx.eval(&basis).is_ok_and(|b| same_basis(ctx, ours, &b))
+}
+
+/// Elimination ideals (CAS-292).
+#[test]
+fn eliminations() {
+    check(
+        &[
+            "eliminate([x=t^2,y=t^3],t)",
+            "eliminate([x=t^2,y=t^3],[t])",
+            "eliminate(x=t^2,t)",
+            "eliminate([x^2+y^2+z^2=1,x+y+z=0,x*y=z],[z])",
+            "eliminate([x^2+y^2+z^2=1,x+y+z=0,x*y=z],[y,z])",
+            "eliminate([x+y=1,x-y=3],[y])",
+            "eliminate([x+y=1,x+y=2],[y])",
+            "eliminate([x*y-1,x^2-2],[x])",
+            "eliminate([x=a*t,y=b*t^2],t)",
+            "eliminate([x+y+z,x*y+y*z+z*x,x*y*z-1],[x,y])",
+            "eliminate([x^2-y,y^2-z],[y])",
+            "eliminate([x-y,y-z],[x,y,z])",
+            "eliminate([x^2-1],[y])",
+            "eliminate([x^2+1,y-x],[x])",
+            "eliminate([x^2+y^2-1,x-y,x+z],[x])",
+            "eliminate([x*y-1,y*z-1,x*z-1],[x])",
+            "eliminate([x^3-y,x^2-z],[x])",
+            "eliminate([u=x+y,v=x*y,x-y=1],[x,y])",
+            "eliminate([x-t,y-t^2,z-t^3],t)",
+            "eliminate([x=u*v,y=u^2,z=v^2],[u,v])",
+            "eliminate([x^2+y^2=r^2,y=m*x],[y])",
+            "eliminate([a*x+b,c*x+d],x)",
+        ],
+        same_ideal,
+    );
+}
+
 /// Whether two numbers agree to 10⁻²⁰, real and imaginary parts apart.
 fn close(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     let gap = Expr::call(Symbol::N, [a.clone() - b.clone(), Expr::from(30)]);

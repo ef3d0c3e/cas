@@ -257,11 +257,12 @@ builtins! {
     FACTOR_RATIONAL = "FactorRational" [LISTABLE, PROTECTED];
     FACTOR_LIST = "FactorList" [LISTABLE, PROTECTED];
     FACTOR_SQUARE_FREE = "FactorSquareFree" [LISTABLE, PROTECTED];
-    // Gröbner bases (CAS-DOC-21): Xcas's `gbasis` and `greduce`, and the
-    // monomial orders, Mathematica's `MonomialOrder` values: `plex`,
-    // `tdeg` and `revlex`.
+    // Gröbner bases (CAS-DOC-21): Xcas's `gbasis`, `greduce` and
+    // `eliminate`, and the monomial orders, Mathematica's `MonomialOrder`
+    // values: `plex`, `tdeg` and `revlex`.
     GROEBNER_BASIS = "GroebnerBasis" [PROTECTED];
     GROEBNER_REDUCE = "GroebnerReduce" [PROTECTED];
+    ELIMINATE = "Eliminate" [PROTECTED];
     LEXICOGRAPHIC = "Lexicographic" [PROTECTED];
     DEGREE_LEXICOGRAPHIC = "DegreeLexicographic" [PROTECTED];
     DEGREE_REVERSE_LEXICOGRAPHIC = "DegreeReverseLexicographic" [PROTECTED];

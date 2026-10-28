@@ -315,12 +315,12 @@ fn errors_leave_statements_out() {
         ("[x, e] := l", &[("e", E::ReservedName("e".into()))]),
         ("purge(pi)", &[("pi", E::ReservedName("pi".into()))]),
         (
-            "eliminate(x^2)",
-            &[("eliminate(x^2)", E::NotAvailable("eliminate".into()))],
+            "odesolve(x^2)",
+            &[("odesolve(x^2)", E::NotAvailable("odesolve".into()))],
         ),
         (
-            "y := eliminate",
-            &[("eliminate", E::NotAvailable("eliminate".into()))],
+            "y := odesolve",
+            &[("odesolve", E::NotAvailable("odesolve".into()))],
         ),
         ("x :: integer", &[("x :: integer", E::TypeOutsidePattern)]),
         (

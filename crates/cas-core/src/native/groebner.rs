@@ -16,6 +16,11 @@
 //!   the zero ideal.
 //! - `GroebnerReduce` is the exact remainder of the division by the list,
 //!   in its order: `y/2 + 1/2` for `x³ + y²` by `{2y² − 1, x − y}`, giac's.
+//! - `Eliminate[{p₁, …}, {t₁, …}]`, or with one symbol `t`, Xcas's
+//!   `eliminate` (CAS-292): the elimination ideal with respect to the `tᵢ`
+//!   in the input's other symbols, in canonical order, as `GroebnerBasis`
+//!   gives it under `revlex`: `{x³ − y²}` for `x = t², y = t³`; `{}` when
+//!   no relation is left, `{1}` for inconsistent equations.
 //! - Past the bounds of a computation, or past its limits ([`limits`]): work
 //!   from the limit on terms and coefficients of the limit on numbers, the
 //!   call stays, with a warning.
@@ -59,6 +64,31 @@ fn too_large(ev: &mut Eval<'_>, e: &Expr) -> Native {
         expr: e.clone(),
     });
     Ok(None)
+}
+
+/// The reduced basis of `polys` under `order`; `None` past the bounds or
+/// the limits, with a warning on `e`.
+fn reduced_basis(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    polys: &[Distributed],
+    order: MonomialOrder,
+) -> Result<Option<Vec<Distributed>>, EvalError> {
+    let ctx = ev.context();
+    match basis_of(polys, order, limits(ctx), ctx.interrupt_flag()) {
+        Ok(basis) => Ok(Some(basis)),
+        Err(GroebnerError::Cancelled) => Err(EvalError::Interrupted),
+        Err(GroebnerError::TooLarge) => too_large(ev, e).map(|_| None),
+    }
+}
+
+/// The list of the elements of `basis`, each primitive, in `vars`.
+fn basis_list(ev: &mut Eval<'_>, basis: &[Distributed], vars: &[Expr]) -> Result<Expr, EvalError> {
+    let elements: Vec<Expr> = basis
+        .iter()
+        .map(|g| expression(&g.primitive(), vars))
+        .collect();
+    ev.eval(&Expr::call(Symbol::LIST, elements))
 }
 
 fn is_list(e: &Expr) -> bool {
@@ -187,17 +217,10 @@ pub(super) fn groebner_basis(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some(polys) = list(ev, polys, &vars, order)? else {
         return Ok(None);
     };
-    let ctx = ev.context();
-    let basis = match basis_of(&polys, order, limits(ctx), ctx.interrupt_flag()) {
-        Ok(basis) => basis,
-        Err(GroebnerError::Cancelled) => return Err(EvalError::Interrupted),
-        Err(GroebnerError::TooLarge) => return too_large(ev, e),
+    let Some(basis) = reduced_basis(ev, e, &polys, order)? else {
+        return Ok(None);
     };
-    let elements: Vec<Expr> = basis
-        .iter()
-        .map(|g| expression(&g.primitive(), &vars))
-        .collect();
-    let result = ev.eval(&Expr::call(Symbol::LIST, elements))?;
+    let result = basis_list(ev, &basis, &vars)?;
     ev.step("GroebnerBasis", e, &result);
     Ok(Some(result))
 }
@@ -227,6 +250,69 @@ pub(super) fn groebner_reduce(ev: &mut Eval<'_>, e: &Expr) -> Native {
     };
     let result = ev.eval(&expression(&remainder, &vars))?;
     ev.step("GroebnerReduce", e, &result);
+    Ok(Some(result))
+}
+
+/// `Eliminate[{p₁, …}, {t₁, …}]`, `Eliminate[{…}, t]`, or of one
+/// polynomial or equation: the elimination ideal with respect to the `tᵢ`,
+/// in the other symbols of the input, `x₁ > x₂ > …` in canonical order.
+///
+/// The elements free of the `tᵢ` of a `plex` basis in which they are the
+/// greatest variables generate it \[CLO15, §3.1, Theorem 2\]. The answer
+/// is its reduced basis under `revlex`, as `GroebnerBasis` gives it, which
+/// is canonical. giac's answers are mostly resultants, which it says "may
+/// reduce further", and not normalized (`[2*x-4]`).
+pub(super) fn eliminate(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [polys, vars] = e.args() else {
+        return Ok(None);
+    };
+    let one = |x: &Expr| Expr::call(Symbol::LIST, [x.clone()]);
+    let vars = if vars.as_symbol().is_some() {
+        one(vars)
+    } else {
+        vars.clone()
+    };
+    let polys = if is_list(polys) {
+        polys.clone()
+    } else {
+        one(polys)
+    };
+    let Some(eliminated) = variables(&vars) else {
+        return Ok(None);
+    };
+    let others: Vec<Expr> = polys
+        .symbols()
+        .into_iter()
+        .filter(|s| !s.is_builtin())
+        .map(Expr::from)
+        .filter(|v| !eliminated.contains(v))
+        .collect();
+    let all = [eliminated.as_slice(), &others].concat();
+    let Some(polys) = list(ev, &polys, &all, MonomialOrder::Lex)? else {
+        return Ok(None);
+    };
+    let Some(basis) = reduced_basis(ev, e, &polys, MonomialOrder::Lex)? else {
+        return Ok(None);
+    };
+    // The elements free of the `tᵢ`, without their exponents.
+    let k = eliminated.len();
+    let ideal: Vec<Distributed> = basis
+        .iter()
+        .filter(|g| {
+            g.terms()
+                .iter()
+                .all(|(m, _)| m[..k].iter().all(|&d| d == 0))
+        })
+        .map(|g| {
+            let terms = g.terms().iter().map(|(m, c)| (m[k..].to_vec(), c.clone()));
+            Distributed::new(terms.collect(), MonomialOrder::DegRevLex)
+        })
+        .collect();
+    let Some(reduced) = reduced_basis(ev, e, &ideal, MonomialOrder::DegRevLex)? else {
+        return Ok(None);
+    };
+    let result = basis_list(ev, &reduced, &others)?;
+    ev.step("Eliminate", e, &result);
     Ok(Some(result))
 }
 

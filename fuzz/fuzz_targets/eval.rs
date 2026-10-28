@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 141] = [
+const BUILTINS: [&str; 142] = [
     "Plus",
     "Times",
     "Power",
@@ -105,9 +105,10 @@ const BUILTINS: [&str; 141] = [
     "FactorRational",
     "FactorList",
     "FactorSquareFree",
-    // Gröbner bases (CAS-288).
+    // Gröbner bases (CAS-288) and elimination (CAS-292).
     "GroebnerBasis",
     "GroebnerReduce",
+    "Eliminate",
     // Integrals (CAS-194), series and limits (CAS-203, CAS-205), and
     // equations (CAS-210, CAS-214).
     "Integrate",

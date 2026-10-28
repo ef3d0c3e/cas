@@ -174,18 +174,19 @@ Factor: factor
 FactorRational: collect
 FactorList: factors
 FactorSquareFree: sqrfree
-# Gröbner bases (CAS-DOC-21, CAS-288): Xcas's `gbasis` and `greduce`, and
-# the monomial orders `plex`, `tdeg` and `revlex`.
+# Gröbner bases (CAS-DOC-21, CAS-288, CAS-292): Xcas's `gbasis`, `greduce`
+# and `eliminate`, and the monomial orders `plex`, `tdeg` and `revlex`.
 GroebnerBasis: gbasis
 GroebnerReduce: greduce
+Eliminate: eliminate
 Lexicographic: plex
 DegreeLexicographic: tdeg
 DegreeReverseLexicographic: revlex
 
 [planned]
-# The elimination of variables by lexicographic Gröbner bases (CAS-DOC-21),
-# giac's `eliminate`, a later ticket.
-Eliminate: eliminate
+# Numerical solutions of differential equations (CAS-DOC-16), Xcas's
+# `odesolve`, a later area.
+NDSolve: odesolve
 
 [constants]
 imaginary: i

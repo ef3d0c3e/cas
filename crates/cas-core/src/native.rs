@@ -173,6 +173,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::FACTOR, polynomial::factor),
         (Symbol::GROEBNER_BASIS, groebner::groebner_basis),
         (Symbol::GROEBNER_REDUCE, groebner::groebner_reduce),
+        (Symbol::ELIMINATE, groebner::eliminate),
         (Symbol::INTEGRATE, integrate::integrate),
         (Symbol::SERIES, series::series),
         (Symbol::LIMIT, limit::limit),
