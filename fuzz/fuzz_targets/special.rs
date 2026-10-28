@@ -8,8 +8,9 @@
 //! - a rational summand of terms `c/(k + s)^j`, `s ≥ 0`, put together: its
 //!   sum from 1 to `n` is the direct sum at `n = 1 … 8`, by balls;
 //! - a series of `Ei`, `Si`, `Ci`, `Erf`, `PolyGamma`, `Gamma` or
-//!   `LambertW` to the order 4: its terms are the function `2^-6` away
-//!   from the point, within `2^-27` of its size.
+//!   `LambertW` to the order 4: its terms are the function up to a
+//!   remainder of order 5, which halving the step a sixteenth of the way to
+//!   the nearest singularity divides by 24 at least.
 #![no_main]
 
 use arbitrary::{Result, Unstructured};
@@ -152,26 +153,36 @@ fn sums(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
 }
 
 fn series(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
-    // The function and a point where its series is known.
-    let a = Expr::from(q(u.int_in_range(1..=12)?, 4));
-    let (f, point) = match u.int_in_range(0u8..=7)? {
-        0 => (call("ExpIntegralEi", vec![x()]), a),
-        1 => (call("SinIntegral", vec![x()]), Expr::from(small(u)?)),
-        2 => (call("CosIntegral", vec![x()]), a),
-        3 => (call("Erf", vec![x()]), Expr::from(small(u)?)),
+    // The function, a point where its series is known, and the distance
+    // from it to the nearest singularity, at most 1/2.
+    let a = q(u.int_in_range(1..=12)?, 4);
+    let half = q(1, 2);
+    let near = |r: Rational| if r < half { r } else { half.clone() };
+    let (f, point, reach) = match u.int_in_range(0u8..=7)? {
+        0 => (call("ExpIntegralEi", vec![x()]), a.clone(), near(a)),
+        1 => (call("SinIntegral", vec![x()]), small(u)?, half.clone()),
+        2 => (call("CosIntegral", vec![x()]), a.clone(), near(a)),
+        3 => (call("Erf", vec![x()]), small(u)?, half.clone()),
         4 => (
             call(
                 "PolyGamma",
                 vec![x(), Expr::from(u.int_in_range(0..=2i64)?)],
             ),
-            a,
+            a.clone(),
+            near(a),
         ),
-        5 => (call("Gamma", vec![x()]), a),
-        6 => (
-            call("LambertW", vec![x()]),
-            Expr::from(q(u.int_in_range(0..=8)?, 4)),
+        5 => (call("Gamma", vec![x()]), a.clone(), near(a)),
+        6 => {
+            // W's branch point −1/e, past −3/8.
+            let b = q(u.int_in_range(0..=8)?, 4);
+            let reach = near(&b + &q(3, 8));
+            (call("LambertW", vec![x()]), b, reach)
+        }
+        _ => (
+            call("ExpIntegralEi", vec![x()]),
+            Rational::ZERO,
+            half.clone(),
         ),
-        _ => (call("ExpIntegralEi", vec![x()]), Expr::from(0)),
     };
     let s = eval(
         ctx,
@@ -179,14 +190,17 @@ fn series(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
             Symbol::SERIES,
             [
                 f.clone(),
-                Expr::call(Symbol::LIST, [x(), point.clone(), Expr::from(4)]),
+                Expr::call(
+                    Symbol::LIST,
+                    [x(), Expr::from(point.clone()), Expr::from(4)],
+                ),
             ],
         ),
     );
     if s.head() == Some(&Expr::from(Symbol::SERIES)) {
         return Ok(());
     }
-    // The terms without the remainder, at x = a + 2^-6, against f there.
+    // The terms without the remainder.
     let order_size = Symbol::new("OrderSize");
     let rest = |e: &Expr| e.contains(&Expr::from(order_size));
     let terms: Vec<Expr> = if s.head() == Some(&Expr::from(Symbol::PLUS)) {
@@ -196,32 +210,32 @@ fn series(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
     } else {
         vec![s.clone()]
     };
-    let at = eval(ctx, &(point + Expr::from(q(1, 64))));
-    let p = Expr::call(Symbol::PLUS, terms).substitute(&[(x(), at.clone())]);
-    let value = f.substitute(&[(x(), at)]);
-    let difference = ctx
-        .eval(&Expr::call(Symbol::N, [p - value.clone(), Expr::from(30)]))
-        .ok();
-    let size = ctx
-        .eval(&Expr::call(
-            Symbol::N,
-            [Expr::call(Symbol::ABS, [value]), Expr::from(30)],
-        ))
-        .ok();
-    let (Some(difference), Some(size)) = (difference, size) else {
+    let polynomial = Expr::call(Symbol::PLUS, terms);
+    // |f − terms| at x = a + h, h a sixteenth of the reach, as a float.
+    let gap = |h: &Rational| -> Option<f64> {
+        let at = Expr::from(&point + h);
+        let p = polynomial.substitute(&[(x(), at.clone())]);
+        let value = f.substitute(&[(x(), at)]);
+        let difference = ctx
+            .eval(&Expr::call(Symbol::N, [p - value, Expr::from(30)]))
+            .ok()?;
+        match difference.view() {
+            View::Ball(d) => Some(d.mid().to_f64().abs()),
+            _ => None,
+        }
+    };
+    let h = &reach / &q(16, 1);
+    let (Some(far), Some(close)) = (gap(&h), gap(&(&h / &q(2, 1)))) else {
         return Ok(());
     };
-    let (View::Ball(d), View::Ball(v)) = (difference.view(), size.view()) else {
-        return Ok(());
-    };
-    // |difference| ≤ 2^-27 (1 + |f|).
-    let bound = (v.mid().to_f64().abs() + 1.0) * 2f64.powi(-27);
-    let gap = d.mid().to_f64().abs();
-    assert!(
-        gap <= bound,
-        "Series[{f:?}] at {:?}: {s:?} is {gap} from the function",
-        x()
-    );
+    // The remainder of order 5: halving h divides it by about 32, where a
+    // wrong term of order 4 or less divides it by 16 at most.
+    if far > 1e-20 {
+        assert!(
+            close <= far / 24.0,
+            "Series[{f:?}] at {point:?}: {s:?} is {far} and {close} from the function"
+        );
+    }
     Ok(())
 }
 
