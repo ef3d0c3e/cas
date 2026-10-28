@@ -123,3 +123,24 @@ fn what_stays() {
     assert_eq!(found.unwrap().head(), e.head());
     assert!(!report.warnings.is_empty());
 }
+
+/// `N` of an integral that `Integrate` leaves (CAS-DOC-26 §5): 40 digits
+/// of `∫₀¹ sin(sin x)`, which has no elementary antiderivative.
+#[test]
+fn n_of_integrals() {
+    let ctx = Context::new();
+    let symbolic = read("Integrate[Sin[Sin[x]], x, 0, 1]");
+    assert_eq!(ctx.eval(&symbolic).unwrap().head(), symbolic.head());
+    let found = ctx
+        .eval(&read("N[Integrate[Sin[Sin[x]], x, 0, 1], 40]"))
+        .unwrap();
+    let View::Ball(b) = found.view() else {
+        panic!("{found:?}");
+    };
+    assert!(b.overlaps(&reference("0.43060610312069060491237735524846578643360804")));
+    assert!(b.rel_accuracy_bits() >= 130, "{found:?}");
+    let list = ctx
+        .eval(&read("N[Integrate[Sin[Sin[x]], List[x, 0, 1]]]"))
+        .unwrap();
+    assert!(matches!(list.view(), View::Ball(_)), "{list:?}");
+}

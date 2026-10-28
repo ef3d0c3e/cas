@@ -4,7 +4,8 @@
 //!
 //! `e` is evaluated first, as any argument. Then, at `p` bits:
 //! - its exact numbers, and the constants `Pi` and `E`, where they stand for
-//!   values ([`Numeric`]), become balls of `p` bits;
+//!   values ([`Numeric`]), become balls of `p` bits, and a definite
+//!   `Integrate` that stayed becomes `NIntegrate` (CAS-DOC-26 §5);
 //! - that is evaluated in [`Context::numeric`], at the working precision
 //!   `p`, where comparisons of balls decide only what they prove;
 //! - the result is done when each of its balls knows the `t` bits of the
@@ -377,6 +378,9 @@ impl<'c> Numeric<'c> {
             View::Complex(z) => Expr::from(&ComplexBall::from_complex(z, p)),
             View::Symbol(Symbol::PI) => Expr::from(&Ball::const_pi(p)),
             View::Symbol(Symbol::E) => Expr::from(&Ball::const_e(p)),
+            View::Apply { head, args } if head.as_symbol() == Some(Symbol::INTEGRATE) => {
+                self.definite(args).unwrap_or_else(|| e.clone())
+            }
             View::Apply { head, args } if self.numeric_head(head) => {
                 if let Some(done) = self.memo.get(e) {
                     return done.clone();
@@ -403,6 +407,25 @@ impl<'c> Numeric<'c> {
             }
             _ => e.clone(),
         }
+    }
+
+    /// `Integrate[f, x, a, b]` or `Integrate[f, {x, a, b}]`, which stayed,
+    /// as `NIntegrate` between the bounds' values (CAS-DOC-26 §5); `None`
+    /// for another form.
+    fn definite(&mut self, args: &[Expr]) -> Option<Expr> {
+        let (f, x, a, b) = match args {
+            [f, x, a, b] => (f, x, a, b),
+            [f, list] if list.head() == Some(&Expr::from(Symbol::LIST)) => match list.args() {
+                [x, a, b] => (f, x, a, b),
+                _ => return None,
+            },
+            _ => return None,
+        };
+        x.as_symbol()?;
+        Some(Expr::call(
+            Symbol::NINTEGRATE,
+            [f.clone(), x.clone(), self.value(a), self.value(b)],
+        ))
     }
 
     /// Whether the arguments of `head` stand for values.
