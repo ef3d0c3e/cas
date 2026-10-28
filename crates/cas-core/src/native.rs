@@ -585,6 +585,11 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::CURL, vector::curl),
         (Symbol::LAPLACIAN, vector::laplacian),
         (Symbol::HESSIAN, vector::hessian),
+        (Symbol::POTENTIAL, vector::potential::potential),
+        (
+            Symbol::VECTOR_POTENTIAL,
+            vector::potential::vector_potential,
+        ),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),

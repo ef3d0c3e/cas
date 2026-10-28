@@ -265,6 +265,9 @@ Divergence: divergence
 Curl: curl
 Laplacian: laplacian
 Hessian: hessian
+# Potentials (CAS-DOC-37 §3, CAS-409).
+Potential: potential
+VectorPotential: vpotential
 # A ball, `ball(c, r)` (CAS-DOC-5 §6.5, CAS-83), and back to fractions
 # (D4, CAS-148).
 Ball: ball

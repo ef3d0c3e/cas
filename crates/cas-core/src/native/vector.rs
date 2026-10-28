@@ -13,11 +13,15 @@
 //! The variables are distinct symbols, as many as the field's entries.
 //! Otherwise the call stays, as `D`'s does for a variable that is not a
 //! symbol. The derivatives are `D`'s, evaluated with the answer.
+//!
+//! - [`potential`]: `Potential` and `VectorPotential` (§3).
 
 #![allow(
     clippy::many_single_char_names,
     reason = "the names of vector calculus: F = (p, q, r) in x, y and z"
 )]
+
+pub(super) mod potential;
 
 use crate::context::EvalError;
 use crate::eval::Eval;
