@@ -215,6 +215,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "interpolation"
+path = "fuzz_targets/interpolation.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "poly_integrate"
 path = "fuzz_targets/poly_integrate.rs"
 test = false
