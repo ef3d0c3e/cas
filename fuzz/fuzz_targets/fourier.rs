@@ -103,6 +103,8 @@ fn residues(u: &mut Unstructured<'_>) -> Result<()> {
             .map(|(k, c)| Expr::from(c.clone()) * z.pow(i64::try_from(k).expect("small")))
             .collect::<Vec<_>>(),
     );
+    // Evaluated, so that no z^0 meets z = 0.
+    let num = eval(&ctx, &num);
     let f = num.clone() / den.clone();
     let derivative = eval(&ctx, &Expr::call(Symbol::D, [den, z.clone()]));
     let mut total = Vec::new();
