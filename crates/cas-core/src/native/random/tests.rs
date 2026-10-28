@@ -362,6 +362,90 @@ fn permutations_and_samples() {
     assert_eq!(eval(&ctx, "RandomSample[List[a, b], 0]"), read("List[]"));
 }
 
+/// A draw in `f64`: a ball's midpoint, or a small integer.
+#[allow(clippy::cast_precision_loss, reason = "small integers")]
+fn float(e: &Expr) -> f64 {
+    match e.view() {
+        View::Ball(b) => b.mid().to_f64(),
+        _ => e
+            .as_i64()
+            .unwrap_or_else(|| panic!("{e:?}: no small number")) as f64,
+    }
+}
+
+/// `n` draws of `form` in one `Table`, from the seed 7, in `f64`.
+fn sample_of(form: &str, n: usize) -> Vec<f64> {
+    let ctx = Context::new();
+    eval(&ctx, "SeedRandom[7]");
+    let table = eval(&ctx, &format!("Table[{form}, k, 1, {n}]"));
+    table.args().iter().map(float).collect()
+}
+
+/// χ² of the counts of the integers `values`, from `low` on, against
+/// `cells` equal cells.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    clippy::cast_sign_loss,
+    reason = "small counts"
+)]
+fn chi_square(values: &[f64], low: f64, cells: usize) -> f64 {
+    let mut counts = vec![0u32; cells];
+    for v in values {
+        counts[(v - low) as usize] += 1;
+    }
+    let expected = values.len() as f64 / cells as f64;
+    counts
+        .iter()
+        .map(|&c| (f64::from(c) - expected).powi(2) / expected)
+        .sum()
+}
+
+/// χ² of 10⁴ draws of `rand(10)` and of `randint(6)` below its quantile
+/// of 10⁻⁶: 44.8 for 9 degrees of freedom, 35.9 for 5 (CAS-374).
+#[test]
+fn uniform_counts() {
+    let digits = sample_of("Random[10]", 10_000);
+    let found = chi_square(&digits, 0.0, 10);
+    assert!(found < 44.8, "χ² = {found}");
+    let dice = sample_of("RandomInteger[6]", 10_000);
+    let found = chi_square(&dice, 1.0, 6);
+    assert!(found < 35.9, "χ² = {found}");
+}
+
+/// The mean and the variance of `n` variates within 6 standard errors of
+/// the law's: `σ/√n` for the mean, `√((μ₄ − σ⁴)/n)` for the variance,
+/// `μ₄` the fourth central moment (CAS-374).
+#[test]
+#[allow(clippy::cast_precision_loss, reason = "small counts")]
+fn moments() {
+    // (form, draws, mean, variance, fourth central moment)
+    for (form, n, mean, variance, fourth) in [
+        ("RandomNormal[]", 10_000, 0.0, 1.0, 3.0),
+        ("RandomNormal[1, 2]", 10_000, 1.0, 4.0, 48.0),
+        ("RandomExponential[2]", 10_000, 0.5, 0.25, 9.0 / 16.0),
+        ("RandomPoisson[3]", 4_000, 3.0, 3.0, 3.0 + 27.0),
+        // n p q (1 + 3 (n − 2) p q) for n = 10, p = q = 1/2.
+        ("RandomBinomial[10, 1/2]", 4_000, 5.0, 2.5, 2.5 * 7.0),
+    ] {
+        let values = sample_of(form, n);
+        let count = n as f64;
+        let found_mean = values.iter().sum::<f64>() / count;
+        let found_variance =
+            values.iter().map(|v| (v - found_mean).powi(2)).sum::<f64>() / (count - 1.0);
+        let mean_error = (variance / count).sqrt();
+        let variance_error = ((fourth - variance * variance) / count).sqrt();
+        assert!(
+            (found_mean - mean).abs() < 6.0 * mean_error,
+            "{form}: mean {found_mean}"
+        );
+        assert!(
+            (found_variance - variance).abs() < 6.0 * variance_error,
+            "{form}: variance {found_variance}"
+        );
+    }
+}
+
 /// What stays: no number, a range or a list too small for the count, an
 /// integer form given a non-integer.
 #[test]

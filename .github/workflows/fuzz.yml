@@ -88,6 +88,7 @@ jobs:
           - matrices
           - special
           - sets
+          - random
     runs-on: ubuntu-latest
     timeout-minutes: 60
     defaults:
@@ -110,7 +111,7 @@ jobs:
         if: steps.want.outputs.run == 'true'
         run: |
           case '${{ matrix.target }}' in
-            ball_fns|special_fns|complex_fns|machine_fns|ball_consts|eval|poly_factor|poly_sparse|poly_gcd|poly_groebner|poly_integrate|poly_roots|statistics|distributions|recurrences|fourier|nintegrate|interpolation|lists|polytools|matrices|special|sets)
+            ball_fns|special_fns|complex_fns|machine_fns|ball_consts|eval|poly_factor|poly_sparse|poly_gcd|poly_groebner|poly_integrate|poly_roots|statistics|distributions|recurrences|fourier|nintegrate|interpolation|lists|polytools|matrices|special|sets|random)
               echo "group=assertions" >> "$GITHUB_OUTPUT"
               echo "flags=-O -a -s none" >> "$GITHUB_OUTPUT"
               echo "libfuzzer=-rss_limit_mb=2048 -malloc_limit_mb=1024 -timeout=60" >> "$GITHUB_OUTPUT"
