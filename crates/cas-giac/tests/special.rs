@@ -46,13 +46,37 @@ fn close(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     })
 }
 
+/// A series' terms and its remainder `x^m OrderSize[x]` apart: the
+/// remainder compared as it is, the terms by value, as `N` leaves
+/// `OrderSize` and the remainders of two forms do not cancel.
+fn remainder(e: &Expr) -> (Expr, Vec<Expr>) {
+    let order_size = Expr::from(Symbol::new("OrderSize"));
+    if !e.contains(&order_size) {
+        return (e.clone(), Vec::new());
+    }
+    let terms: Vec<Expr> = if e.head() == Some(&Expr::from(Symbol::PLUS)) {
+        e.args().to_vec()
+    } else {
+        vec![e.clone()]
+    };
+    let (rest, mut kept): (Vec<Expr>, Vec<Expr>) =
+        terms.into_iter().partition(|t| !t.contains(&order_size));
+    kept.sort();
+    (Expr::call(Symbol::PLUS, rest), kept)
+}
+
 /// Whether two values are one: lists part by part, the same, equal by `==`,
-/// or equal by `==` or close once approximated at [`POINT`].
+/// or equal by `==` or close once approximated at [`POINT`]; series by
+/// [`remainder`].
 fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     let list = Expr::from(Symbol::LIST);
     if a.head() == Some(&list) && b.head() == Some(&list) {
         return a.args().len() == b.args().len()
             && a.args().iter().zip(b.args()).all(|(a, b)| same(ctx, a, b));
+    }
+    let ((a_terms, a_rest), (b_terms, b_rest)) = (remainder(a), remainder(b));
+    if !a_rest.is_empty() || !b_rest.is_empty() {
+        return a_rest == b_rest && same(ctx, &a_terms, &b_terms);
     }
     let equal = |a: &Expr, b: &Expr| holds(ctx, &Expr::call(Symbol::EQUAL, [a.clone(), b.clone()]));
     if a == b || equal(a, b) {
