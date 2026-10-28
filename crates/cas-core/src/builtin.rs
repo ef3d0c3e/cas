@@ -337,6 +337,14 @@ builtins! {
     EXP_EXPAND = "ExpExpand" [PROTECTED];
     LOG_EXPAND = "LogExpand" [PROTECTED];
     LOG_COMBINE = "LogCombine" [PROTECTED];
+    // Trigonometric substitutions (CAS-DOC-36 §3).
+    HALF_TAN = "HalfTan" [PROTECTED];
+    HALF_TAN_HYPERBOLIC_TO_EXP = "HalfTanHyperbolicToExp" [PROTECTED];
+    TAN_TO_SIN_COS = "TanToSinCos" [PROTECTED];
+    SIN_TO_COS_TAN = "SinToCosTan" [PROTECTED];
+    COS_TO_SIN_TAN = "CosToSinTan" [PROTECTED];
+    TAN_TO_SIN_COS_2 = "TanToSinCos2" [PROTECTED];
+    TAN_TO_COS_SIN_2 = "TanToCosSin2" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

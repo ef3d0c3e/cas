@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 266] = [
+const BUILTINS: [&str; 273] = [
     "Plus",
     "Times",
     "Power",
@@ -331,6 +331,14 @@ const BUILTINS: [&str; 266] = [
     "ExpExpand",
     "LogExpand",
     "LogCombine",
+    // Trigonometric substitutions (CAS-397).
+    "HalfTan",
+    "HalfTanHyperbolicToExp",
+    "TanToSinCos",
+    "SinToCosTan",
+    "CosToSinTan",
+    "TanToSinCos2",
+    "TanToCosSin2",
 ];
 
 /// Builtins that apply something to parts, only in the expression

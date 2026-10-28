@@ -9,8 +9,11 @@
 //!
 //! - [`exponential`]: `HyperbolicToExp`, `ExpToPower`, `PowerToExp`,
 //!   `ExpExpand`, `LogExpand` and `LogCombine` (§2).
+//! - [`substitution`]: `HalfTan`, `HalfTanHyperbolicToExp`, `TanToSinCos`,
+//!   `SinToCosTan`, `CosToSinTan`, `TanToSinCos2` and `TanToCosSin2` (§3).
 
 mod exponential;
+mod substitution;
 #[cfg(test)]
 mod testing;
 
@@ -101,4 +104,44 @@ pub(super) fn log_expand(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// `LogCombine[x]`, Xcas's `lncollect`.
 pub(super) fn log_combine(ev: &mut Eval<'_>, e: &Expr) -> Native {
     rewrite(ev, e, "LogCombine", exponential::log_combine)
+}
+
+/// `HalfTan[x]`, Xcas's `halftan`.
+pub(super) fn half_tan(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "HalfTan", substitution::half_tan)
+}
+
+/// `HalfTanHyperbolicToExp[x]`, Xcas's `halftan_hyp2exp`.
+pub(super) fn half_tan_hyperbolic_to_exp(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(
+        ev,
+        e,
+        "HalfTanHyperbolicToExp",
+        substitution::half_tan_hyperbolic,
+    )
+}
+
+/// `TanToSinCos[x]`, Xcas's `tan2sincos`.
+pub(super) fn tan_to_sin_cos(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "TanToSinCos", substitution::tan_to_sin_cos)
+}
+
+/// `SinToCosTan[x]`, Xcas's `sin2costan`.
+pub(super) fn sin_to_cos_tan(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "SinToCosTan", substitution::sin_to_cos_tan)
+}
+
+/// `CosToSinTan[x]`, Xcas's `cos2sintan`.
+pub(super) fn cos_to_sin_tan(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "CosToSinTan", substitution::cos_to_sin_tan)
+}
+
+/// `TanToSinCos2[x]`, Xcas's `tan2sincos2`.
+pub(super) fn tan_to_sin_cos_2(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "TanToSinCos2", substitution::tan_to_sin_cos_2)
+}
+
+/// `TanToCosSin2[x]`, Xcas's `tan2cossin2`.
+pub(super) fn tan_to_cos_sin_2(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    rewrite(ev, e, "TanToCosSin2", substitution::tan_to_cos_sin_2)
 }
