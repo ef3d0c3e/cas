@@ -421,7 +421,7 @@ pub(super) fn infinite(e: &Expr) -> bool {
 }
 
 /// The ends of the ball of a real number `e`, at [`BITS`] bits.
-fn ball_ends(ev: &Eval<'_>, e: &Expr) -> Option<(Rational, Rational)> {
+pub(super) fn ball_ends(ev: &Eval<'_>, e: &Expr) -> Option<(Rational, Rational)> {
     let value = approximation(ev.context(), e, BITS).ok()?;
     let View::Ball(b) = value.view() else {
         return None;

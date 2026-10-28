@@ -563,6 +563,45 @@ fn piecewise_integrals() {
     }
 }
 
+/// Piecewise integrands with sines and cosines of linear arguments
+/// (CAS-DOC-25 §5, CAS-317): `|sin x|` over a period, the rectified
+/// sine's coefficients, a zero inside at `π`, a phase.
+#[test]
+fn periodic_switches() {
+    let ctx = Context::new();
+    check_values(
+        &ctx,
+        &[
+            ("Integrate[Abs[Sin[x]], x, 0, Times[2, Pi]]", "4"),
+            ("Integrate[Abs[Sin[x]], x, Times[-1, Pi], Pi]", "4"),
+            ("Integrate[Abs[Cos[x]], x, 0, Pi]", "2"),
+            ("Integrate[Sign[Sin[x]], x, 0, Times[2, Pi]]", "0"),
+            ("Integrate[Abs[Sin[x]], x, 0, 4]", "Plus[3, Cos[4]]"),
+            (
+                "Integrate[HeavisideTheta[Sin[x]], x, 0, Times[3, Pi]]",
+                "Times[2, Pi]",
+            ),
+            (
+                "Integrate[Times[Abs[Sin[x]], Cos[Times[2, x]]], x, Times[-1, Pi], Pi]",
+                "-4/3",
+            ),
+            ("Integrate[Abs[Sin[Times[2, x]]], x, 0, Pi]", "2"),
+            (
+                "Integrate[Abs[Cos[Plus[x, Times[1/3, Pi]]]], x, 0, Pi]",
+                "2",
+            ),
+        ],
+    );
+    for input in [
+        "Integrate[Abs[Sin[x]], x, 0, a]",
+        "Integrate[Abs[Sin[Times[a, x]]], x, 0, 1]",
+    ] {
+        let e = read(input);
+        let found = ctx.eval(&e).unwrap();
+        assert_eq!(found.head(), e.head(), "{input}: {found:?}");
+    }
+}
+
 /// What stays of improper integrals and those not shown proper, each with
 /// its warning: parts diverging to both signs, where giac answers the
 /// principal value; poles inside that are not split; bounds that may lie

@@ -6,7 +6,11 @@
 //! - `−β/α` for a linear `u = αx + β`, `α` and `β` free of `x`;
 //! - for a polynomial over ℚ of degree [`MAX_DEGREE`] at most, the roots of
 //!   its linear factors and the real ones of its quadratic factors, in
-//!   radicals; a factor of a higher degree must have no real root.
+//!   radicals; a factor of a higher degree must have no real root;
+//! - for `sin v` or `cos v`, `v = αx + β` with real numbers `α` and `β`,
+//!   between finite numeric bounds, the points where `v` is `kπ` or
+//!   `(k + 1/2)π`, [`MAX_POINTS`] at most (CAS-317): `|sin x|` over a
+//!   period.
 //!
 //! On each piece, the sign `σ` of `u` at its middle (`p ± 1` on an infinite
 //! piece) makes `Abs[u]` `σu`, `Sign[u]` `σ` and `HeavisideTheta[u]` 1 or
@@ -23,7 +27,7 @@ use cas_num::algebra::Rationals;
 use cas_num::{Integer, Rational};
 use cas_poly::DenseRing;
 
-use super::definite::{end, infinite};
+use super::definite::{ball_ends, end, infinite};
 use super::{polynomial, slope};
 use crate::assume::{Sign, sign_of};
 use crate::context::EvalError;
@@ -91,9 +95,21 @@ fn order(ev: &mut Eval<'_>, p: &Expr, q: &Expr) -> Result<Option<Ordering>, Eval
     Ok(sign(ev, &difference).map(Ordering::reverse))
 }
 
-/// The real zeros of `u` (the module's list), as exact points; `None` for
-/// another `u`, or a factor of a higher degree with a real root.
-fn zeros(ev: &mut Eval<'_>, e: &Expr, u: &Expr, x: &Expr) -> Result<Option<Vec<Expr>>, EvalError> {
+/// The real zeros of `u` (the module's list), as exact points, between
+/// the bounds `lo < hi` and maybe beyond; `None` for another `u`, or a
+/// factor of a higher degree with a real root.
+fn zeros(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    u: &Expr,
+    x: &Expr,
+    bounds: [&Expr; 2],
+) -> Result<Option<Vec<Expr>>, EvalError> {
+    if let (Some(h @ (Symbol::SIN | Symbol::COS)), [v]) =
+        (u.head().and_then(Expr::as_symbol), u.args())
+    {
+        return periodic_zeros(ev, h == Symbol::COS, v, x, bounds);
+    }
     if let Some(alpha) = slope(u, x) {
         let alpha = ev.eval(&alpha)?;
         if alpha == Expr::from(0) {
@@ -139,6 +155,57 @@ fn zeros(ev: &mut Eval<'_>, e: &Expr, u: &Expr, x: &Expr) -> Result<Option<Vec<E
     Ok(Some(roots))
 }
 
+/// The zeros `((k + s)π − β)/α` of `sin v` (`s = 0`), or of `cos v` (`s =
+/// 1/2`) when `cosine`, for `v = αx + β` with real numbers `α ≠ 0` and `β`
+/// and finite numeric bounds (CAS-317): for the integers `k` that may put
+/// them between the bounds, by the balls of `v/π` at the bounds, one more
+/// on each side, for [`points`] to sort out; `None` for another `v` or
+/// bounds, or more than [`MAX_POINTS`].
+fn periodic_zeros(
+    ev: &mut Eval<'_>,
+    cosine: bool,
+    v: &Expr,
+    x: &Expr,
+    bounds: [&Expr; 2],
+) -> Result<Option<Vec<Expr>>, EvalError> {
+    let Some(alpha) = slope(v, x) else {
+        return Ok(None);
+    };
+    let alpha = ev.eval(&alpha)?;
+    let beta = ev.eval(&v.substitute(&[(x.clone(), Expr::from(0))]))?;
+    let pi = Expr::from(Symbol::PI);
+    let mut ends = Vec::with_capacity(4);
+    for bound in bounds {
+        let turns = ev.eval(&((alpha.clone() * bound.clone() + beta.clone()) / pi.clone()))?;
+        let Some((low, high)) = ball_ends(ev, &turns) else {
+            return Ok(None);
+        };
+        ends.extend([low, high]);
+    }
+    let (Some(low), Some(high)) = (ends.iter().min(), ends.iter().max()) else {
+        return Ok(None);
+    };
+    let (Some(first), Some(last)) = (low.floor().to_i64(), high.ceil().to_i64()) else {
+        return Ok(None);
+    };
+    let (first, last) = (first.saturating_sub(1), last.saturating_add(1));
+    if alpha == Expr::from(0)
+        || last.saturating_sub(first) > i64::try_from(MAX_POINTS).expect("small")
+    {
+        return Ok(None);
+    }
+    let shift = Expr::from(Rational::new(
+        Integer::from(i64::from(cosine)),
+        Integer::from(2),
+    ));
+    let mut zeros = Vec::new();
+    for k in first..=last {
+        let z = ((Expr::from(k) + shift.clone()) * pi.clone() - beta.clone()) / alpha.clone();
+        zeros.push(ev.eval(&z)?);
+    }
+    Ok(Some(zeros))
+}
+
 /// The zeros of the switches' arguments strictly between `lo < hi`,
 /// ascending and distinct; `None` when one is not found or not placed.
 fn points(
@@ -150,7 +217,7 @@ fn points(
 ) -> Result<Option<Vec<Expr>>, EvalError> {
     let mut points: Vec<Expr> = Vec::new();
     for s in switches {
-        let Some(zeros) = zeros(ev, e, &s.args()[0], x)? else {
+        let Some(zeros) = zeros(ev, e, &s.args()[0], x, [lo, hi])? else {
             return Ok(None);
         };
         for z in zeros {
