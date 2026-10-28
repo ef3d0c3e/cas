@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 230] = [
+const BUILTINS: [&str; 242] = [
     "Plus",
     "Times",
     "Power",
@@ -212,6 +212,18 @@ const BUILTINS: [&str; 230] = [
     "Valuation",
     "CountRoots",
     "RealRoots",
+    "LUDecomposition",
+    "QRDecomposition",
+    "CholeskyDecomposition",
+    "JordanDecomposition",
+    "MinimalPolynomial",
+    "MatrixExp",
+    "MatrixPower",
+    "DiagonalMatrix",
+    "HilbertMatrix",
+    "VandermondeMatrix",
+    "Norm",
+    "FrobeniusNorm",
     // Number theory (CAS-267 to CAS-271).
     "PrimeQ",
     "NextPrime",

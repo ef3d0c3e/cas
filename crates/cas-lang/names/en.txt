@@ -146,6 +146,19 @@ TrailingCoefficient: tcoeff
 Valuation: valuation
 CountRoots: sturmab
 RealRoots: realroot
+# Matrix decompositions and functions (CAS-DOC-30, CAS-344 to CAS-347).
+LUDecomposition: lu
+QRDecomposition: qr
+CholeskyDecomposition: cholesky
+JordanDecomposition: jordan
+MinimalPolynomial: pmin
+MatrixExp: expm
+MatrixPower: matpow
+DiagonalMatrix: diag
+HilbertMatrix: hilbert
+VandermondeMatrix: vandermonde
+Norm: l2norm
+FrobeniusNorm: frobenius_norm
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime

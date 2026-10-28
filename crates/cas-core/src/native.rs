@@ -250,6 +250,39 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::VALUATION, polytools::valuation),
         (Symbol::COUNT_ROOTS, polytools::count_roots),
         (Symbol::REAL_ROOTS, polytools::real_roots),
+        (
+            Symbol::LU_DECOMPOSITION,
+            matrix::decompose::lu_decomposition,
+        ),
+        (
+            Symbol::QR_DECOMPOSITION,
+            matrix::decompose::qr_decomposition,
+        ),
+        (
+            Symbol::CHOLESKY_DECOMPOSITION,
+            matrix::decompose::cholesky_decomposition,
+        ),
+        (
+            Symbol::JORDAN_DECOMPOSITION,
+            matrix::decompose::jordan_decomposition,
+        ),
+        (
+            Symbol::MINIMAL_POLYNOMIAL,
+            matrix::decompose::minimal_polynomial,
+        ),
+        (Symbol::MATRIX_EXP, matrix::decompose::matrix_exp),
+        (Symbol::MATRIX_POWER, matrix::decompose::matrix_power),
+        (
+            Symbol::DIAGONAL_MATRIX,
+            matrix::constructors::diagonal_matrix,
+        ),
+        (Symbol::HILBERT_MATRIX, matrix::constructors::hilbert_matrix),
+        (
+            Symbol::VANDERMONDE_MATRIX,
+            matrix::constructors::vandermonde_matrix,
+        ),
+        (Symbol::NORM, matrix::constructors::norm),
+        (Symbol::FROBENIUS_NORM, matrix::constructors::frobenius_norm),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),

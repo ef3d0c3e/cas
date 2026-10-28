@@ -158,6 +158,19 @@ builtins! {
     VALUATION = "Valuation" [PROTECTED];
     COUNT_ROOTS = "CountRoots" [PROTECTED];
     REAL_ROOTS = "RealRoots" [PROTECTED];
+    // Matrix decompositions and functions (CAS-DOC-30).
+    LU_DECOMPOSITION = "LUDecomposition" [PROTECTED];
+    QR_DECOMPOSITION = "QRDecomposition" [PROTECTED];
+    CHOLESKY_DECOMPOSITION = "CholeskyDecomposition" [PROTECTED];
+    JORDAN_DECOMPOSITION = "JordanDecomposition" [PROTECTED];
+    MINIMAL_POLYNOMIAL = "MinimalPolynomial" [PROTECTED];
+    MATRIX_EXP = "MatrixExp" [PROTECTED];
+    MATRIX_POWER = "MatrixPower" [PROTECTED];
+    DIAGONAL_MATRIX = "DiagonalMatrix" [PROTECTED];
+    HILBERT_MATRIX = "HilbertMatrix" [PROTECTED];
+    VANDERMONDE_MATRIX = "VandermondeMatrix" [PROTECTED];
+    NORM = "Norm" [PROTECTED];
+    FROBENIUS_NORM = "FrobeniusNorm" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];

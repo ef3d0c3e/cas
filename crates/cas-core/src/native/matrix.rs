@@ -895,6 +895,8 @@ pub(super) fn eigenvalues(ev: &mut Eval<'_>, e: &Expr) -> Native {
     stepped(ev, "eigenvals", e, list(values))
 }
 
+pub(super) mod constructors;
+pub(super) mod decompose;
 mod eigen;
 mod elimination;
 #[cfg(test)]
