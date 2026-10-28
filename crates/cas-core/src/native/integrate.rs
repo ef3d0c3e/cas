@@ -632,7 +632,7 @@ fn terms_integrated<R: Numbers>(
 }
 
 /// `g` as a polynomial in `x` over ℚ, `None` when it is not one.
-fn polynomial(
+pub(super) fn polynomial(
     ev: &mut Eval<'_>,
     e: &Expr,
     g: &Expr,

@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 223] = [
+const BUILTINS: [&str; 230] = [
     "Plus",
     "Times",
     "Power",
@@ -205,6 +205,13 @@ const BUILTINS: [&str; 223] = [
     "MemberIndex",
     "Zip",
     "Accumulate",
+    "Apart",
+    "CoefficientList",
+    "FromCoefficients",
+    "TrailingCoefficient",
+    "Valuation",
+    "CountRoots",
+    "RealRoots",
     // Number theory (CAS-267 to CAS-271).
     "PrimeQ",
     "NextPrime",

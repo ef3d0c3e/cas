@@ -138,6 +138,14 @@ Count: count
 MemberIndex: member
 Zip: zip
 Accumulate: cumsum
+# Polynomial tools (CAS-DOC-29, CAS-339 to CAS-341).
+Apart: partfrac
+CoefficientList: symb2poly coeffs
+FromCoefficients: poly2symb
+TrailingCoefficient: tcoeff
+Valuation: valuation
+CountRoots: sturmab
+RealRoots: realroot
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime

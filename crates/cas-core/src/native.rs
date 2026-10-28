@@ -37,6 +37,7 @@ mod numeric;
 mod orthogonal;
 mod parts;
 mod polynomial;
+mod polytools;
 mod procedure;
 mod radical;
 mod replace;
@@ -239,6 +240,16 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::MEMBER_INDEX, lists::member_index),
         (Symbol::ZIP, lists::zip),
         (Symbol::ACCUMULATE, lists::accumulate),
+        (Symbol::APART, polytools::apart),
+        (Symbol::COEFFICIENT_LIST, polytools::coefficient_list),
+        (Symbol::FROM_COEFFICIENTS, polytools::from_coefficients),
+        (
+            Symbol::TRAILING_COEFFICIENT,
+            polytools::trailing_coefficient,
+        ),
+        (Symbol::VALUATION, polytools::valuation),
+        (Symbol::COUNT_ROOTS, polytools::count_roots),
+        (Symbol::REAL_ROOTS, polytools::real_roots),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),

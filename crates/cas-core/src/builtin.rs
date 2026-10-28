@@ -150,6 +150,14 @@ builtins! {
     MEMBER_INDEX = "MemberIndex" [PROTECTED];
     ZIP = "Zip" [PROTECTED];
     ACCUMULATE = "Accumulate" [PROTECTED];
+    // Polynomial tools (CAS-DOC-29).
+    APART = "Apart" [PROTECTED];
+    COEFFICIENT_LIST = "CoefficientList" [PROTECTED];
+    FROM_COEFFICIENTS = "FromCoefficients" [PROTECTED];
+    TRAILING_COEFFICIENT = "TrailingCoefficient" [PROTECTED];
+    VALUATION = "Valuation" [PROTECTED];
+    COUNT_ROOTS = "CountRoots" [PROTECTED];
+    REAL_ROOTS = "RealRoots" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];
