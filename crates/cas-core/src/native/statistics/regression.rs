@@ -14,11 +14,11 @@
 //!   `y = a ln x + b`; `PowerRegression` (`power_regression`), for
 //!   `y = b xᵃ`. They are the linear regressions of `ln y` on `x`, of `y`
 //!   on `ln x`, and of `ln y` on `ln x`. The logarithms of positive
-//!   rationals are expanded over their factors (`ln 12 = 2 ln 2 + ln 3`)
-//!   and the slope is put together, so that exact data give exact answers:
-//!   `exponential_regression([0,1,2],[3,6,12])` is `{2, 3}`, where giac
-//!   answers an expression of logarithms. A value that is not positive
-//!   under a logarithm leaves the call.
+//!   rationals are expanded over their factors (`ln 12 = 2 ln 2 + ln 3`),
+//!   the slope is put together, and `e^(c ln p)` is `p^c`, so that exact
+//!   data give exact answers: `exponential_regression([0,1,2],[3,6,12])` is
+//!   `{2, 3}`, where giac answers an expression of logarithms. A value that
+//!   is not positive under a logarithm leaves the call.
 
 use std::cmp::Ordering;
 
@@ -105,6 +105,39 @@ fn logs(ev: &mut Eval<'_>, values: &[Expr]) -> Result<Option<Vec<Expr>>, EvalErr
     Ok(Some(out))
 }
 
+/// `c ln p`, `ln p` among them: `(c, p)`.
+fn log_term(t: &Expr) -> Option<(Expr, Expr)> {
+    let is_log = |l: &Expr| l.head() == Some(&Expr::from(Symbol::LOG)) && l.args().len() == 1;
+    match t.args() {
+        [p] if is_log(t) => Some((Expr::from(1), p.clone())),
+        [c, l] if t.head() == Some(&Expr::from(Symbol::TIMES)) && c.is_number() && is_log(l) => {
+            Some((c.clone(), l.args()[0].clone()))
+        }
+        _ => None,
+    }
+}
+
+/// `e^x`, its exponent expanded and each term `c ln p` of it made `p^c`:
+/// `e^(ln 2 − ln 3)` is `2/3`, which evaluation leaves as it is.
+fn exp(ev: &mut Eval<'_>, x: &Expr) -> Result<Expr, EvalError> {
+    let x = ev.eval(&Expr::call(Symbol::EXPAND, [x.clone()]))?;
+    let terms = if x.head() == Some(&Expr::from(Symbol::PLUS)) {
+        x.args().to_vec()
+    } else {
+        vec![x]
+    };
+    let mut factors = Vec::with_capacity(terms.len() + 1);
+    let mut rest = Vec::new();
+    for t in terms {
+        match log_term(&t) {
+            Some((c, p)) => factors.push(p.pow(c)),
+            None => rest.push(t),
+        }
+    }
+    factors.push(Expr::call(Symbol::EXP, [Expr::call(Symbol::PLUS, rest)]));
+    ev.eval(&Expr::call(Symbol::TIMES, factors))
+}
+
 /// `{a, b}`, evaluated.
 fn pair(ev: &mut Eval<'_>, a: Expr, b: Expr) -> Native {
     Ok(Some(ev.eval(&Expr::call(Symbol::LIST, [a, b]))?))
@@ -128,11 +161,8 @@ pub(in super::super) fn exponential_regression(ev: &mut Eval<'_>, e: &Expr) -> N
         return Ok(None);
     };
     let (a, b) = line(ev, &xs, &ys)?;
-    pair(
-        ev,
-        Expr::call(Symbol::EXP, [a]),
-        Expr::call(Symbol::EXP, [b]),
-    )
+    let (a, b) = (exp(ev, &a)?, exp(ev, &b)?);
+    pair(ev, a, b)
 }
 
 /// `LogarithmicRegression[x, y]`, `LogarithmicRegression[m]`.
@@ -156,7 +186,8 @@ pub(in super::super) fn power_regression(ev: &mut Eval<'_>, e: &Expr) -> Native 
         return Ok(None);
     };
     let (a, b) = line(ev, &xs, &ys)?;
-    pair(ev, a, Expr::call(Symbol::EXP, [b]))
+    let b = exp(ev, &b)?;
+    pair(ev, a, b)
 }
 
 /// `x^p`, with `x⁰ = 1` for every `x`, 0 included.

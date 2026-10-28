@@ -342,6 +342,19 @@ fn logarithmic_regressions() {
             "PowerRegression[List[1, 2, 3], List[2, 8, 18]]",
             "List[2, 2]",
         ),
+        // e^(ln 2 − ln 3) as 2/3, e^(ln 2 / 2) as √2.
+        (
+            "ExponentialRegression[List[0, 1], List[2/3, 4/9]]",
+            "List[2/3, 2/3]",
+        ),
+        (
+            "PowerRegression[List[1, 2, 3], List[3/2, 6, 27/2]]",
+            "List[2, 3/2]",
+        ),
+        (
+            "ExponentialRegression[List[0, 2], List[1, 2]]",
+            "List[Power[2, 1/2], 1]",
+        ),
     ]);
     stays(&[
         "ExponentialRegression[List[1, 2], List[-1, 2]]",
