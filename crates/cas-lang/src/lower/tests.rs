@@ -338,14 +338,6 @@ fn errors_leave_statements_out() {
         ("i -> i^2", &[("i", E::ReservedName("i".into()))]),
         ("[x, e] := l", &[("e", E::ReservedName("e".into()))]),
         ("purge(pi)", &[("pi", E::ReservedName("pi".into()))]),
-        (
-            "odesolve(x^2)",
-            &[("odesolve(x^2)", E::NotAvailable("odesolve".into()))],
-        ),
-        (
-            "y := odesolve",
-            &[("odesolve", E::NotAvailable("odesolve".into()))],
-        ),
         ("x :: integer", &[("x :: integer", E::TypeOutsidePattern)]),
         (
             "f(n :: natural) := 1",
@@ -428,6 +420,31 @@ fn errors_leave_statements_out() {
         assert!(lowered(text).statements.is_empty(), "{text:?} is left out");
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// A planned name, reserved before its builtin exists, is not available
+/// to call or to read: `names/en.txt` may list none, so the test adds one.
+#[test]
+fn planned_names_are_not_available() {
+    let names = Names::with_planned("Pending: pending");
+    for (text, covered) in [
+        ("pending(x^2)", "pending(x^2)"),
+        ("y := pending", "pending"),
+    ] {
+        let lowered = lower(&parse(text), &names);
+        let errors: Vec<(&str, E)> = lowered
+            .diagnostics
+            .into_iter()
+            .filter(|d| d.severity == Severity::Error)
+            .map(|d| (&text[d.range], d.kind))
+            .collect();
+        assert_eq!(
+            errors,
+            [(covered, E::NotAvailable("pending".into()))],
+            "{text:?}"
+        );
+        assert!(lowered.statements.is_empty(), "{text:?} is left out");
+    }
 }
 
 /// Blocks, their statements and their locals (CAS-DOC-7 §8).

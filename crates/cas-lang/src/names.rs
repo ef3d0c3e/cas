@@ -163,6 +163,22 @@ impl Names {
         Ok(names)
     }
 
+    /// The English table with the `[planned]` entries of `text`, lines in
+    /// the format of `names/en.txt`: for the tests of planned names, which
+    /// `names/en.txt` may list none of.
+    ///
+    /// # Panics
+    ///
+    /// If the entries do not load.
+    #[cfg(test)]
+    pub(crate) fn with_planned(text: &str) -> Names {
+        let mut names = Names::english().clone();
+        if let Err(e) = names.load(&format!("[planned]\n{text}"), false) {
+            panic!("{text}: {e}");
+        }
+        names
+    }
+
     /// What `name` stands for, if the table reserves it. `name` is as
     /// [`name`](crate::name) gives it: `pi`, not `π`.
     #[must_use]

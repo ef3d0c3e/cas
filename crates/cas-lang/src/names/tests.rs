@@ -40,7 +40,7 @@ fn english_names() {
         ("gbasis", Target::Builtin(Symbol::GROEBNER_BASIS)),
         ("plex", Target::Builtin(Symbol::LEXICOGRAPHIC)),
         ("eliminate", Target::Builtin(Symbol::ELIMINATE)),
-        ("odesolve", planned("NDSolve")),
+        ("odesolve", Target::Builtin(Symbol::NDSOLVE)),
         ("evalf", Target::Builtin(Symbol::N)),
         ("approx", Target::Builtin(Symbol::N)),
         ("asin", Target::Builtin(Symbol::ARC_SIN)),
@@ -60,7 +60,10 @@ fn english_names() {
         assert!(names.is_reserved(name));
     }
     assert_eq!(names.spelling(&Target::Builtin(Symbol::LOG)), Some("ln"));
-    assert_eq!(names.spelling(&planned("NDSolve")), Some("odesolve"));
+    assert_eq!(
+        names.spelling(&Target::Builtin(Symbol::NDSOLVE)),
+        Some("odesolve")
+    );
     assert_eq!(
         names.spelling(&Target::Builtin(Symbol::INTEGRATE)),
         Some("integrate")
@@ -103,6 +106,18 @@ fn every_builtin_is_named_or_internal() {
     }
 }
 
+/// A planned name is reserved, and spelt as itself, before its builtin
+/// exists: `names/en.txt` may list none, so the test adds one.
+#[test]
+fn planned_names() {
+    let names = Names::with_planned("Pending: pending later");
+    check_round_trip(&names);
+    assert_eq!(names.target("pending"), Some(&planned("Pending")));
+    assert_eq!(names.target("later"), Some(&planned("Pending")));
+    assert!(names.is_reserved("later"));
+    assert_eq!(names.spelling(&planned("Pending")), Some("pending"));
+}
+
 /// A planned builtin moves to `[builtins]` when cas-core defines it; until
 /// then no builtin has its internal name.
 #[test]
@@ -135,8 +150,8 @@ fn check_round_trip(names: &Names) {
 }
 
 const TEST_LOCALE: &str = "
-# A test locale: new spellings for a defined, a planned and a syntax target,
-# a type, and an English name repeated to make it the spelling.
+# A test locale: new spellings for defined targets and a syntax target, a
+# type, and an English name repeated to make it the spelling.
 [builtins]
 Sin: sinus
 Log: logn ln
@@ -164,8 +179,14 @@ fn locales() {
     assert_eq!(names.spelling(&Target::Builtin(Symbol::LOG)), Some("logn"));
     assert_eq!(names.target("derivee"), Some(&Target::Builtin(Symbol::D)));
     assert_eq!(names.spelling(&Target::Builtin(Symbol::D)), Some("deriver"));
-    assert_eq!(names.target("resoudre_num"), Some(&planned("NDSolve")));
-    assert_eq!(names.spelling(&planned("NDSolve")), Some("resoudre_num"));
+    assert_eq!(
+        names.target("resoudre_num"),
+        Some(&Target::Builtin(Symbol::NDSOLVE))
+    );
+    assert_eq!(
+        names.spelling(&Target::Builtin(Symbol::NDSOLVE)),
+        Some("resoudre_num")
+    );
     assert_eq!(
         names.target("appel"),
         Some(&Target::Syntax(SyntaxForm::Call))
