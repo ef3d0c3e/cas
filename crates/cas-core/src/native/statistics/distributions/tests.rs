@@ -171,3 +171,76 @@ fn inverse_erf() {
         assert!(holds(&ctx, claim), "{claim}");
     }
 }
+
+/// The normal distribution, standard or not, its intervals by arity, and
+/// its inverse through `erfinv` (CAS-303).
+#[test]
+fn normal() {
+    check(&[
+        ("NormalPDF[0]", "Power[Times[2, Pi], -1/2]"),
+        (
+            "NormalPDF[1, 2, x]",
+            "Times[1/2, Power[Times[2, Pi], -1/2], \
+             Exp[Times[-1/2, Power[Times[1/2, Plus[x, -1]], 2]]]]",
+        ),
+        ("NormalCDF[0]", "1/2"),
+        ("NormalCDF[1]", "Times[1/2, Plus[1, Erf[Power[2, -1/2]]]]"),
+        ("NormalCDF[Infinity]", "1"),
+        ("NormalCDF[Times[-1, Infinity]]", "0"),
+        ("NormalCDF[-1, 1]", "Erf[Power[2, -1/2]]"),
+        ("NormalCDF[1, 2, 1]", "1/2"),
+        ("NormalCDF[1, 2, -1, 3]", "Erf[Power[2, -1/2]]"),
+        ("NormalICDF[1/2]", "0"),
+        ("NormalICDF[1, 2, 1/2]", "1"),
+        ("NormalICDF[0]", "Times[-1, Infinity]"),
+        ("NormalICDF[1]", "Infinity"),
+        (
+            "NormalICDF[39/40]",
+            "Times[Power[2, 1/2], InverseErf[19/20]]",
+        ),
+    ]);
+    let ctx = Context::new();
+    // The 97.5% quantile, 1.959963984540054…
+    let claim = "Less[Abs[Plus[N[NormalICDF[39/40], 30], -1959963984540054/10^15]], \
+                 Power[10, -14]]";
+    assert!(holds(&ctx, claim), "{claim}");
+    stays(&[
+        "NormalPDF[0, -1, 1]",
+        "NormalPDF[0, 0, 1]",
+        "NormalICDF[3/2]",
+        "NormalCDF[1, 2, 3, 4, 5]",
+    ]);
+}
+
+/// The exponential and uniform distributions, in closed form (CAS-303).
+#[test]
+fn exponential_and_uniform() {
+    check(&[
+        ("ExponentialPDF[2, 1]", "Times[2, Power[E, -2]]"),
+        ("ExponentialPDF[2, -1]", "0"),
+        ("ExponentialPDF[l, x]", "Times[l, Exp[Times[-1, l, x]]]"),
+        ("ExponentialCDF[2, 1]", "Plus[1, Times[-1, Power[E, -2]]]"),
+        (
+            "ExponentialCDF[2, 1, 3]",
+            "Plus[Power[E, -2], Times[-1, Power[E, -6]]]",
+        ),
+        ("ExponentialCDF[2, -1]", "0"),
+        ("ExponentialICDF[2, 1/2]", "Times[-1/2, Log[1/2]]"),
+        ("ExponentialICDF[2, 0]", "0"),
+        ("ExponentialICDF[2, 1]", "Infinity"),
+        ("UniformPDF[0, 2, 1]", "1/2"),
+        ("UniformPDF[0, 2, 3]", "0"),
+        ("UniformPDF[a, b, x]", "Power[Plus[b, Times[-1, a]], -1]"),
+        ("UniformCDF[0, 2, 1]", "1/2"),
+        ("UniformCDF[0, 2, 3]", "1"),
+        ("UniformCDF[0, 2, -1]", "0"),
+        ("UniformCDF[0, 2, 1/2, 3/2]", "1/2"),
+        ("UniformCDF[0, 2, 3/2, 1/2]", "0"),
+        ("UniformICDF[0, 2, 1/4]", "1/2"),
+    ]);
+    stays(&[
+        "ExponentialPDF[-2, 1]",
+        "UniformPDF[2, 0, 1]",
+        "UniformICDF[0, 2, 2]",
+    ]);
+}

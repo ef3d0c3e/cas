@@ -218,6 +218,16 @@ GeometricICDF: geometric_icdf
 NegativeBinomialPDF: negbinomial
 NegativeBinomialCDF: negbinomial_cdf
 NegativeBinomialICDF: negbinomial_icdf
+# Continuous distributions in closed form (CAS-DOC-23, CAS-303).
+NormalPDF: normald
+NormalCDF: normald_cdf
+NormalICDF: normald_icdf
+ExponentialPDF: exponentiald
+ExponentialCDF: exponentiald_cdf
+ExponentialICDF: exponentiald_icdf
+UniformPDF: uniformd
+UniformCDF: uniformd_cdf
+UniformICDF: uniformd_icdf
 
 [planned]
 # Numerical solutions of differential equations (CAS-DOC-16), Xcas's

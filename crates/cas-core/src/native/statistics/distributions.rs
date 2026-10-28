@@ -6,6 +6,8 @@
 //!   geometric and negative binomial.
 //! - The monotone inversion of continuous cumulative functions, and
 //!   `InverseErf` ([`inversion`], §3, §5, CAS-302).
+//! - The normal, exponential and uniform distributions ([`continuous`], §3,
+//!   CAS-303).
 //!
 //! A parameter that is a number must be valid (a probability in `[0, 1]`,
 //! a rate above 0, a natural count), as comparisons decide; otherwise the
@@ -13,6 +15,7 @@
 //! parameter leaves the masses and the finite cumulative sums as
 //! expressions, and the inverses as calls.
 
+pub(in crate::native) mod continuous;
 pub(in crate::native) mod discrete;
 pub(in crate::native) mod inversion;
 

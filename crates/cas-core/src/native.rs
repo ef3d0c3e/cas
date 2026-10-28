@@ -287,6 +287,42 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::INVERSE_ERF,
             statistics::distributions::inversion::inverse_erf,
         ),
+        (
+            Symbol::NORMAL_PDF,
+            statistics::distributions::continuous::normal_pdf,
+        ),
+        (
+            Symbol::NORMAL_CDF,
+            statistics::distributions::continuous::normal_cdf,
+        ),
+        (
+            Symbol::NORMAL_ICDF,
+            statistics::distributions::continuous::normal_icdf,
+        ),
+        (
+            Symbol::EXPONENTIAL_PDF,
+            statistics::distributions::continuous::exponential_pdf,
+        ),
+        (
+            Symbol::EXPONENTIAL_CDF,
+            statistics::distributions::continuous::exponential_cdf,
+        ),
+        (
+            Symbol::EXPONENTIAL_ICDF,
+            statistics::distributions::continuous::exponential_icdf,
+        ),
+        (
+            Symbol::UNIFORM_PDF,
+            statistics::distributions::continuous::uniform_pdf,
+        ),
+        (
+            Symbol::UNIFORM_CDF,
+            statistics::distributions::continuous::uniform_cdf,
+        ),
+        (
+            Symbol::UNIFORM_ICDF,
+            statistics::distributions::continuous::uniform_icdf,
+        ),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),

@@ -193,6 +193,16 @@ builtins! {
     // The inverse of `Erf`, for the normal distribution's inverse (CAS-DOC-23
     // §3); giac has none.
     INVERSE_ERF = "InverseErf" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    // Continuous distributions in closed form (CAS-DOC-23 §3).
+    NORMAL_PDF = "NormalPDF" [PROTECTED];
+    NORMAL_CDF = "NormalCDF" [PROTECTED];
+    NORMAL_ICDF = "NormalICDF" [PROTECTED];
+    EXPONENTIAL_PDF = "ExponentialPDF" [PROTECTED];
+    EXPONENTIAL_CDF = "ExponentialCDF" [PROTECTED];
+    EXPONENTIAL_ICDF = "ExponentialICDF" [PROTECTED];
+    UNIFORM_PDF = "UniformPDF" [PROTECTED];
+    UNIFORM_CDF = "UniformCDF" [PROTECTED];
+    UNIFORM_ICDF = "UniformICDF" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

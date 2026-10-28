@@ -17,13 +17,30 @@ fn giac() -> Option<&'static Giac> {
     giac
 }
 
-/// Whether two answers are one value: their difference expanded is 0, or
-/// `==` holds.
+/// Whether two numbers agree to 10⁻²⁰, real and imaginary parts apart.
+fn close(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    let gap = Expr::call(Symbol::N, [a.clone() - b.clone(), Expr::from(30)]);
+    [Symbol::RE, Symbol::IM].into_iter().all(|part| {
+        let small = Expr::call(
+            Symbol::LESS,
+            [
+                Expr::call(Symbol::ABS, [Expr::call(part, [gap.clone()])]),
+                Expr::from(10).pow(-20),
+            ],
+        );
+        ctx.eval(&small).ok().and_then(|e| e.as_symbol()) == Some(Symbol::TRUE)
+    })
+}
+
+/// Whether two answers are one value: their difference expanded is 0,
+/// `==` holds, or they agree to 10⁻²⁰ (equal values in different forms,
+/// `erf(sqrt(2)/2)` against `erf(2^(-1/2))`).
 fn same_value(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     let difference = Expr::call(Symbol::EXPAND, [a.clone() - b.clone()]);
     let equal = Expr::call(Symbol::EQUAL, [a.clone(), b.clone()]);
     ctx.eval(&difference).is_ok_and(|d| d == Expr::from(0))
         || ctx.eval(&equal).ok().and_then(|e| e.as_symbol()) == Some(Symbol::TRUE)
+        || close(ctx, a, b)
 }
 
 /// This CAS's answer to each `ours` input against giac's to its `theirs`.
@@ -116,4 +133,26 @@ fn poisson_decimals() {
         "poisson_cdf(1,2)",
         "poisson_cdf(1,1,2)",
     ]);
+}
+
+/// The normal, exponential and uniform distributions, giac's exact
+/// answers (CAS-303).
+#[test]
+fn elementary_continuous() {
+    check(&[
+        "normald(0,1,x)",
+        "normald(1/2)",
+        "normald_cdf(0,1,1)",
+        "normald_cdf(1)",
+        "normald_cdf(0,1,-1,1)",
+        "normald_cdf(1,2)",
+        "exponentiald(2,1)",
+        "exponentiald_cdf(2,1)",
+        "exponentiald_cdf(2,1,3)",
+        "exponentiald_icdf(2,1/2)",
+        "uniformd(0,2,1)",
+        "uniformd_cdf(0,2,1)",
+        "uniformd_icdf(0,2,1/4)",
+    ]);
+    check_doubles(&["normald_icdf(0,1,0.975)", "normald_icdf(0.975)"]);
 }
