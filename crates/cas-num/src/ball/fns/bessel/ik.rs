@@ -62,7 +62,7 @@ pub(super) fn i_exact(n: u64, x: &Float, wp: u64) -> Ball {
     let ax = x.abs();
     let order = Order::new(Rational::from(Integer::from(n)));
     let value = if magnitude(x) >= threshold(wp) {
-        i_expansion(&order, &ax, wp).unwrap_or_else(|| i_series(n, &ax, wp))
+        i_expansion(&order, &Ball::exact(ax.clone()), wp).unwrap_or_else(|| i_series(n, &ax, wp))
     } else {
         i_series(n, &ax, wp)
     };
@@ -138,7 +138,8 @@ pub(super) fn k_exact(n: u64, x: &Float, wp: u64) -> Ball {
         .then(|| {
             let zero = Order::new(Rational::from(Integer::ZERO));
             let one = Order::new(Rational::from(Integer::ONE));
-            Some((k_expansion(&zero, x, q)?, k_expansion(&one, x, q)?))
+            let xb = Ball::exact(x.clone());
+            Some((k_expansion(&zero, &xb, q)?, k_expansion(&one, &xb, q)?))
         })
         .flatten();
     let (k0, k1) = expanded.unwrap_or_else(|| k_series(x, q));

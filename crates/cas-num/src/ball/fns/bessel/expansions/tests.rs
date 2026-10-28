@@ -20,6 +20,10 @@ fn float(x: f64) -> Float {
     Float::from_f64(x).unwrap()
 }
 
+fn exact(x: f64) -> Ball {
+    Ball::exact(float(x))
+}
+
 /// `b` meets the bracket and, unless it is 0, has `prec - 8` bits.
 fn check(what: &str, b: &Ball, prec: u64, oracle: &Bracket) -> Result<(), String> {
     if !b.is_finite() {
@@ -90,7 +94,7 @@ fn half_integer_orders() {
             ),
         ];
         for ((p, d), j, y) in cases {
-            let (found_j, found_y) = hankel(&order(p, d), &xf, 128).unwrap();
+            let (found_j, found_y) = hankel(&order(p, d), &Ball::exact(xf.clone()), 128).unwrap();
             assert!(
                 found_j.overlaps(&j),
                 "J_{p}/{d}({x}): {found_j:?} against {j:?}"
@@ -100,18 +104,18 @@ fn half_integer_orders() {
                 "Y_{p}/{d}({x}): {found_y:?} against {y:?}"
             );
         }
-        let k_half = k_expansion(&order(1, 2), &xf, 128).unwrap();
+        let k_half = k_expansion(&order(1, 2), &Ball::exact(xf.clone()), 128).unwrap();
         assert!(k_half.overlaps(&decay), "K_1/2({x}): {k_half:?}");
-        let k_three = k_expansion(&order(3, 2), &xf, 128).unwrap();
+        let k_three = k_expansion(&order(3, 2), &Ball::exact(xf.clone()), 128).unwrap();
         let expected = decay.mul(&one.add(&inverse, q), q);
         assert!(k_three.overlaps(&expected), "K_3/2({x}): {k_three:?}");
         if x < 1e5 {
-            let i_half = i_expansion(&order(1, 2), &xf, 128).unwrap();
+            let i_half = i_expansion(&order(1, 2), &Ball::exact(xf.clone()), 128).unwrap();
             assert!(
                 i_half.overlaps(&root.mul(&sinh, q)),
                 "I_1/2({x}): {i_half:?}"
             );
-            let i_three = i_expansion(&order(3, 2), &xf, 128).unwrap();
+            let i_three = i_expansion(&order(3, 2), &Ball::exact(xf.clone()), 128).unwrap();
             let expected = root.mul(&cosh.sub(&sinh.mul(&inverse, q), q), q);
             assert!(i_three.overlaps(&expected), "I_3/2({x}): {i_three:?}");
         }
@@ -135,7 +139,8 @@ fn hankel_against_mpfr() {
             let xf = float(x);
             let xr = MpFloat::with_val(10_000, &xf.to_rational().to_rug());
             for n in [0i32, 1] {
-                let Some((j, y)) = hankel(&order(i64::from(n), 1), &xf, prec) else {
+                let Some((j, y)) = hankel(&order(i64::from(n), 1), &Ball::exact(xf.clone()), prec)
+                else {
                     wrong.push(format!("n = {n}, x = {x} at {prec}: no expansion"));
                     continue;
                 };
@@ -218,7 +223,7 @@ fn against_integrals() {
     ];
     let mut wrong = Vec::new();
     for ((p, q), x, value) in k_values {
-        let k = k_expansion(&order(p, q), &float(x), 128).unwrap();
+        let k = k_expansion(&order(p, q), &exact(x), 128).unwrap();
         if let Err(e) = check(&format!("K_{p}/{q}({x})"), &k, 128, &decimal(value)) {
             wrong.push(e);
         }
@@ -233,7 +238,7 @@ fn against_integrals() {
             "5.84475158839046828133517287252083704489777978998393e+24",
         ),
     ] {
-        let i = i_expansion(&order(n, 1), &float(60.0), 128).unwrap();
+        let i = i_expansion(&order(n, 1), &exact(60.0), 128).unwrap();
         if let Err(e) = check(&format!("I_{n}(60)"), &i, 128, &decimal(value)) {
             wrong.push(e);
         }
@@ -251,12 +256,12 @@ fn wronskian() {
         for x in [80.0, 150.5, 4000.0] {
             let xf = float(x);
             let (i0, i1) = (
-                i_expansion(&order(p, d), &xf, 128).unwrap(),
-                i_expansion(&order(next.0, next.1), &xf, 128).unwrap(),
+                i_expansion(&order(p, d), &Ball::exact(xf.clone()), 128).unwrap(),
+                i_expansion(&order(next.0, next.1), &Ball::exact(xf.clone()), 128).unwrap(),
             );
             let (k0, k1) = (
-                k_expansion(&order(p, d), &xf, 128).unwrap(),
-                k_expansion(&order(next.0, next.1), &xf, 128).unwrap(),
+                k_expansion(&order(p, d), &Ball::exact(xf.clone()), 128).unwrap(),
+                k_expansion(&order(next.0, next.1), &Ball::exact(xf.clone()), 128).unwrap(),
             );
             let w = i0.mul(&k1, q).add(&i1.mul(&k0, q), q);
             let expected = Ball::from_integer(&Integer::ONE).div(&Ball::exact(xf.clone()), q);
@@ -269,7 +274,7 @@ fn wronskian() {
 /// Below the threshold the terms grow before they reach the precision.
 #[test]
 fn small_arguments() {
-    assert!(hankel(&order(0, 1), &float(5.0), 128).is_none());
-    assert!(k_expansion(&order(0, 1), &float(5.0), 128).is_none());
-    assert!(i_expansion(&order(0, 1), &float(5.0), 128).is_none());
+    assert!(hankel(&order(0, 1), &exact(5.0), 128).is_none());
+    assert!(k_expansion(&order(0, 1), &exact(5.0), 128).is_none());
+    assert!(i_expansion(&order(0, 1), &exact(5.0), 128).is_none());
 }

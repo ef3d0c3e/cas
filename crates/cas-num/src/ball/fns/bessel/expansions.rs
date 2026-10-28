@@ -1,6 +1,7 @@
 //! The asymptotic expansions of the Bessel functions for large arguments
-//! (CAS-DOC-34 §2.1, §2.2, CAS-377), for a rational order `ν ≥ 0` and an
-//! exact `x > 0`, each with the remainder DLMF proves. With `a_0(ν) = 1` and
+//! (CAS-DOC-34 §2.1, §2.2, CAS-377), for a rational order `ν ≥ 0` and a
+//! ball `x > 0`, each with the remainder DLMF proves for every point of it,
+//! where ball arithmetic carries the radius. With `a_0(ν) = 1` and
 //! `a_(k+1)(ν) = a_k(ν) (4ν² − (2k + 1)²)/(8(k + 1))`:
 //!
 //! - **Hankel's** (DLMF 10.17.3, 10.17.4): `J_ν(x) = √(2/(πx)) (P cos ω −
@@ -31,7 +32,7 @@
 use std::f64::consts::{LN_2, LOG2_E};
 
 use super::super::{exponent, one, upper};
-use crate::ball::{Ball, Float, Mag};
+use crate::ball::{Ball, Mag};
 use crate::{Integer, Rational};
 
 /// The order `ν ≥ 0` of an expansion.
@@ -92,10 +93,10 @@ struct Terms<'o> {
 }
 
 impl<'o> Terms<'o> {
-    fn new(order: &'o Order, x: &Float, q: u64) -> Terms<'o> {
+    fn new(order: &'o Order, x: &Ball, q: u64) -> Terms<'o> {
         Terms {
             order,
-            x: Ball::exact(x.clone()),
+            x: x.clone(),
             q,
             k: 0,
             term: one(),
@@ -116,12 +117,13 @@ impl<'o> Terms<'o> {
     }
 }
 
-/// `|x|` in `f64`, saturated past its range.
-fn magnitude(x: &Float) -> f64 {
-    if exponent(x) > 1000 {
+/// `|x|` at the ball's midpoint in `f64`, saturated past its range.
+fn magnitude(x: &Ball) -> f64 {
+    let m = x.mid();
+    if exponent(m) > 1000 {
         return f64::INFINITY;
     }
-    x.to_f64().abs()
+    m.to_f64().abs()
 }
 
 /// The least `ℓ ≥ 1` with `ℓ ≥ bound`.
@@ -163,7 +165,7 @@ fn tiny(bits: u64) -> Mag {
 
 /// Hankel's `P` and `Q` at `x`, each with its remainder; `None` where the
 /// terms grow before they reach `2^-wp`.
-fn hankel_sums(order: &Order, x: &Float, wp: u64) -> Option<(Ball, Ball)> {
+fn hankel_sums(order: &Order, x: &Ball, wp: u64) -> Option<(Ball, Ball)> {
     let ax = magnitude(x);
     let q = wp + growth(order, ax) + 32;
     let small = tiny(wp + 16);
@@ -203,10 +205,10 @@ fn hankel_sums(order: &Order, x: &Float, wp: u64) -> Option<(Ball, Ball)> {
 
 /// `(J_ν(x), Y_ν(x))` by Hankel's expansion, at about `wp` bits; `None`
 /// where its terms grow before they reach them.
-pub(in crate::ball::fns) fn hankel(order: &Order, x: &Float, wp: u64) -> Option<(Ball, Ball)> {
+pub(in crate::ball::fns) fn hankel(order: &Order, x: &Ball, wp: u64) -> Option<(Ball, Ball)> {
     let (p, s) = hankel_sums(order, x, wp)?;
     let q = wp + 32;
-    let xb = Ball::exact(x.clone());
+    let xb = x.clone();
     let pi = Ball::const_pi(q);
     // ω = x − θ, θ = (ν/2 + 1/4) π: cos ω and sin ω from those of x and θ,
     // so that a large x is reduced once, exactly.
@@ -230,7 +232,7 @@ pub(in crate::ball::fns) fn hankel(order: &Order, x: &Float, wp: u64) -> Option<
 
 /// `K`'s sum `Σ_{k<ℓ} a_k/x^k` with its remainder; `None` where its terms
 /// grow before they reach `2^-wp`.
-fn k_sum(order: &Order, x: &Float, wp: u64, q: u64) -> Option<Ball> {
+fn k_sum(order: &Order, x: &Ball, wp: u64, q: u64) -> Option<Ball> {
     let ax = magnitude(x);
     let small = tiny(wp + 16);
     let least = at_least(order.approx() - 0.5);
@@ -250,10 +252,10 @@ fn k_sum(order: &Order, x: &Float, wp: u64, q: u64) -> Option<Ball> {
 
 /// `K_ν(x)` by its expansion, at about `wp` bits; `None` where its terms
 /// grow before they reach them.
-pub(in crate::ball::fns) fn k_expansion(order: &Order, x: &Float, wp: u64) -> Option<Ball> {
+pub(in crate::ball::fns) fn k_expansion(order: &Order, x: &Ball, wp: u64) -> Option<Ball> {
     let q = wp + growth(order, magnitude(x)) + 32;
     let sum = k_sum(order, x, wp, q)?;
-    let xb = Ball::exact(x.clone());
+    let xb = x.clone();
     // √(π/(2x)) e^(−x).
     let scale = Ball::const_pi(q)
         .div(&xb.mul_2exp(&Integer::ONE), q)
@@ -264,7 +266,7 @@ pub(in crate::ball::fns) fn k_expansion(order: &Order, x: &Float, wp: u64) -> Op
 
 /// `2 χ(ℓ) exp(|ν² − 1/4| π/(2x))` from above, with
 /// `χ(ℓ) < √(π (ℓ/2 + 1)) ≤ ℓ + 2`.
-fn i_factor(order: &Order, x: &Float, l: u64) -> Mag {
+fn i_factor(order: &Order, x: &Ball, l: u64) -> Mag {
     let chi = Mag::from_integer(&Integer::from(l + 2));
     // |ν² − 1/4| π/(2x) ≤ 2 |ν² − 1/4| / x.
     let nu = order.nu();
@@ -272,13 +274,13 @@ fn i_factor(order: &Order, x: &Float, l: u64) -> Mag {
     let exponent_bound = Mag::from_integer(&offset.numer().abs())
         .div(&Mag::from_integer_lower(offset.denom()))
         .mul_2exp(&Integer::ONE)
-        .div(&Mag::from_float_lower(x));
+        .div(&Mag::from_float_lower(x.mid()).sub_lower(x.rad()));
     chi.mul_2exp(&Integer::ONE).mul(&exponent_bound.exp())
 }
 
 /// `I_ν(x)` by its expansion, at about `wp` bits; `None` where its terms
 /// grow before they reach them.
-pub(in crate::ball::fns) fn i_expansion(order: &Order, x: &Float, wp: u64) -> Option<Ball> {
+pub(in crate::ball::fns) fn i_expansion(order: &Order, x: &Ball, wp: u64) -> Option<Ball> {
     let ax = magnitude(x);
     let q = wp + growth(order, ax) + 32;
     let small = tiny(wp + 16);
@@ -299,7 +301,7 @@ pub(in crate::ball::fns) fn i_expansion(order: &Order, x: &Float, wp: u64) -> Op
         terms.advance();
     }
     let sum = found?;
-    let xb = Ball::exact(x.clone());
+    let xb = x.clone();
     // e^x (2πx)^(−1/2).
     let scale = xb.exp(q).div(
         &Ball::const_pi(q)

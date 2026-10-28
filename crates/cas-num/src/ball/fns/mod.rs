@@ -19,6 +19,7 @@
     reason = "x, t, m, k, h, n, w, e as in the error analyses of the comments"
 )]
 
+mod airy;
 mod atan;
 mod bessel;
 mod bitburst;
@@ -43,6 +44,7 @@ mod tests;
 
 use super::{Ball, Mag};
 
+pub use airy::Airy;
 pub use gamma::bernoulli;
 pub(super) use tables::clear as clear_tables;
 

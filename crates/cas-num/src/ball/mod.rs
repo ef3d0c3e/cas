@@ -53,7 +53,7 @@ pub use complex::ComplexBall;
 pub use consts::clear_constant_cache;
 pub use decimal::DecimalStyle;
 pub use float::{APPROX_ULPS, EXACT_BITS_MAX, Float, Round};
-pub use fns::bernoulli;
+pub use fns::{Airy, bernoulli};
 pub use machine::MachineBall;
 pub use mag::Mag;
 pub use quadrature::{MAX_CACHED, Rule, gauss_legendre};

@@ -197,8 +197,9 @@ pub(super) fn forward(c0: Ball, c1: Ball, n: u64, x: &Float, q: u64, plus: bool)
 fn hankel_pairs(x: &Float, wp: u64) -> Option<(Ball, Ball, Ball, Ball)> {
     let zero = Order::new(crate::Rational::from(Integer::ZERO));
     let one = Order::new(crate::Rational::from(Integer::ONE));
-    let (j0, y0) = hankel(&zero, x, wp)?;
-    let (j1, y1) = hankel(&one, x, wp)?;
+    let x = Ball::exact(x.clone());
+    let (j0, y0) = hankel(&zero, &x, wp)?;
+    let (j1, y1) = hankel(&one, &x, wp)?;
     Some((j0, j1, y0, y1))
 }
 
