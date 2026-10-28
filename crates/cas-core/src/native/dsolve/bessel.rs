@@ -79,7 +79,11 @@ pub(super) fn special(
         coefficient(ev, 1)?,
         coefficient(ev, 0)?,
     );
-    let rebuilt = ev.eval(&(big_a.clone() * x.clone().pow(2) + constant.clone() - w.clone()))?;
+    // Expanded: `Times[-1, Plus[…]]` is not distributed.
+    let rebuilt = ev.eval(&Expr::call(
+        Symbol::EXPAND,
+        [big_a.clone() * x.clone().pow(2) + constant.clone() - w.clone()],
+    ))?;
     if linear != Expr::from(0) || rebuilt != Expr::from(0) || big_a.contains(x) {
         return Ok(None);
     }
