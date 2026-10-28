@@ -122,7 +122,7 @@ fn table_holds_its_body() {
     assert_eq!(eval(&with_f, "Table[f, k, 1, 3]"), read("List[1, 4, 9]"));
     assert_eq!(
         eval(&ctx, "Table[Integrate[Power[x, k], x], k, -1, 1]"),
-        eval(&ctx, "List[Log[x], x, Times[1/2, Power[x, 2]]]")
+        eval(&ctx, "List[Log[Abs[x]], x, Times[1/2, Power[x, 2]]]")
     );
     assert_eq!(
         eval(&ctx, "Table[k, Equation[k, Range[Plus[1, 1], 4]]]"),

@@ -4,7 +4,8 @@
 //! `randvector`, `randmatrix` and `randpoly`, named by their densities.
 //!
 //! A variate is the inverse cumulative function of its law (CAS-DOC-23) at
-//! a uniform `u` in `(0, 1)`, an exact ball: the inverse checks the
+//! a uniform `u` in `(0, 1)`, an exact ball, made one number by `N` where
+//! it keeps an exact factor, as the normal's `√2`: the inverse checks the
 //! parameters, and an invalid one leaves the call with its warning
 //! (`randbinomial(10, 2)`, where giac errs, and `randexp(-1)`, which giac
 //! makes negative); a symbol leaves it too. `u` is drawn again where it is
@@ -113,6 +114,11 @@ pub(in crate::native) fn variate(ev: &mut Eval<'_>, law: Law, parameters: &[Expr
         let warned = ev.warnings_given();
         let value = ev.eval(&Expr::apply(&inverse, &args))?;
         if !value.contains(&inverse) {
+            // The normal's inverse keeps √2 exact beside its ball: one
+            // number by `N`.
+            if !value.is_number() && value.is_numeric() {
+                return ev.eval(&Expr::call(Symbol::N, [value])).map(Some);
+            }
             return Ok(Some(value));
         }
         // Invalid parameters warn, and symbols stay: no draw tells more.
