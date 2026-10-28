@@ -12,7 +12,8 @@
 //!   a)`; `sin(b t)`, `cos(b t)`, `sinh(b t)`, `cosh(b t)` the classical
 //!   ones, a phase expanded first; `HeavisideTheta[t − c]` is `e^(−c s)/s`
 //!   and `DiracDelta[t − c]` `e^(−c s)` for `c ≥ 0` (`1/s` and 0 for `c <
-//!   0`).
+//!   0`); `J_n(b t)` and `I_n(b t)`, `(√(s² + b²) − s)^n/(b^n √(s² + b²))`
+//!   and `(s − √(s² − b²))^n/(b^n √(s² − b²))` (CAS-DOC-34 §5).
 //! - **Shifts**: `e^(a t) g(t)` is `G(s − a)`; `HeavisideTheta[t − c] g(t)`
 //!   is `e^(−c s) L[g(t + c)]` for `c ≥ 0`.
 //! - **Powers of `t`**: `tⁿ g(t)`, `n` a positive integer, is `(−1)ⁿ
@@ -197,6 +198,29 @@ fn elementary(ev: &mut Eval<'_>, f: &Expr, t: &Expr, s: &Expr) -> Result<Option<
                 Symbol::SINH => b.clone() / (s2 - square(&b)),
                 _ => s.clone() / (s2 - square(&b)),
             }))
+        }
+        // The Bessel functions of the first kind (CAS-DOC-34 §5):
+        // `(√(s² + b²) − s)^n/(b^n √(s² + b²))` and `(s − √(s² −
+        // b²))^n/(b^n √(s² − b²))`.
+        (Some(g @ (Symbol::BESSEL_J | Symbol::BESSEL_I)), [n, u]) => {
+            let Some(n) = n.as_i64().filter(|&n| n >= 0) else {
+                return Ok(None);
+            };
+            let Some((b, c)) = linear(ev, u, t)? else {
+                return Ok(None);
+            };
+            if c != Expr::from(0) {
+                return Ok(None);
+            }
+            let s2 = square(s);
+            let (root, top) = if g == Symbol::BESSEL_J {
+                let root = Expr::call(Symbol::SQRT, [s2 + square(&b)]);
+                (root.clone(), root - s.clone())
+            } else {
+                let root = Expr::call(Symbol::SQRT, [s2 - square(&b)]);
+                (root.clone(), s.clone() - root)
+            };
+            Ok(Some(top.pow(n) / (b.pow(n) * root)))
         }
         (Some(Symbol::HEAVISIDE_THETA), [u]) => {
             let Some(c) = step_at(ev, u, t)? else {

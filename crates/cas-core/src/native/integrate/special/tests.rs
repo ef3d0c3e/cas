@@ -206,3 +206,45 @@ fn stays() {
         );
     }
 }
+
+/// The Bessel and Airy functions (CAS-384): `C_1` of a linear argument,
+/// `x^(n+1) C_n(a x)` and `x^(1−n) C_n(a x)`, `x Ai(a x)`, and `Ai′`.
+#[test]
+fn bessel_functions() {
+    check(&[
+        ("BesselJ[1, x]", "Times[-1, BesselJ[0, x]]"),
+        (
+            "BesselI[1, Plus[Times[2, x], 1]]",
+            "Times[1/2, BesselI[0, Plus[Times[2, x], 1]]]",
+        ),
+        ("BesselK[1, x]", "Times[-1, BesselK[0, x]]"),
+        ("Times[x, BesselJ[0, x]]", "Times[x, BesselJ[1, x]]"),
+        (
+            "Times[Power[x, 2], BesselJ[1, Times[2, x]]]",
+            "Times[1/2, Power[x, 2], BesselJ[2, Times[2, x]]]",
+        ),
+        (
+            "Times[Power[x, -1], BesselJ[2, x]]",
+            "Times[-1, Power[x, -1], BesselJ[1, x]]",
+        ),
+        ("Times[x, BesselY[0, x]]", "Times[x, BesselY[1, x]]"),
+        ("Times[3, x, BesselK[0, x]]", "Times[-3, x, BesselK[1, x]]"),
+        (
+            "Times[x, BesselI[0, Times[3, x]]]",
+            "Times[1/3, x, BesselI[1, Times[3, x]]]",
+        ),
+        (
+            "Times[Power[x, -2], BesselI[3, x]]",
+            "Times[Power[x, -2], BesselI[2, x]]",
+        ),
+        ("Times[x, AiryAi[x]]", "AiryAiPrime[x]"),
+        (
+            "Times[x, AiryBi[Times[2, x]]]",
+            "Times[1/4, AiryBiPrime[Times[2, x]]]",
+        ),
+        (
+            "AiryBiPrime[Times[2, x]]",
+            "Times[1/2, AiryBi[Times[2, x]]]",
+        ),
+    ]);
+}

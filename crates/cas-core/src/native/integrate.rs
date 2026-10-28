@@ -316,6 +316,22 @@ fn table(f: &Expr, x: &Expr) -> Option<Expr> {
             let a = slope(u, x)?;
             Some(u.clone() * (f.clone() - 1 + f.pow(-1)) / a)
         }
+        // The Bessel and Airy functions (CAS-DOC-34 §5): `C_1′ = ∓C_0`, and
+        // `Ai′` and `Bi′` integrate to `Ai` and `Bi`.
+        (Symbol::BESSEL_J | Symbol::BESSEL_Y | Symbol::BESSEL_I | Symbol::BESSEL_K, [n, u])
+            if n.as_i64() == Some(1) =>
+        {
+            let a = slope(u, x)?;
+            let head = f.head()?.as_symbol()?;
+            let zero = Expr::call(head, [Expr::from(0), u.clone()]);
+            Some(if head == Symbol::BESSEL_I {
+                zero / a
+            } else {
+                -zero / a
+            })
+        }
+        (Symbol::AIRY_AI_PRIME, [u]) => Some(call(Symbol::AIRY_AI, u.clone()) / slope(u, x)?),
+        (Symbol::AIRY_BI_PRIME, [u]) => Some(call(Symbol::AIRY_BI, u.clone()) / slope(u, x)?),
         _ => None,
     }
 }

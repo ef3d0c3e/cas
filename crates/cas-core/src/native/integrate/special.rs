@@ -25,6 +25,13 @@
 //!   √π/(2√(−α)) e^(γ − β²/(4α)) erf(√(−α) (x + β/(2α)))`, and `P = A q′ +
 //!   R` by division, so that `∫ P e^q = A e^q − ∫ A′ e^q + R ∫ e^q`, down
 //!   the degrees of `A′`. A positive `α` stays: it needs `Erfi`.
+//! - **Bessel functions** (CAS-DOC-34 §5): `x^m C_n(a x)` for an integer
+//!   `n` and `m = n + 1` or `m = 1 − n`, by DLMF 10.6.5 and 10.29.4, `(d/dz)
+//!   (z^ν C_ν) = ±z^ν C_(ν−1)` and `(d/dz)(z^(−ν) C_ν) = ±z^(−ν) C_(ν+1)`:
+//!   `x^(n+1) C_(n+1)(a x)/a` for `J`, `Y` and `I` and its negative for `K`;
+//!   `−x^(1−n) C_(n−1)(a x)/a` for `J`, `Y` and `K` and its negative for
+//!   `I`. Airy's `x Ai(a x)` and `x Bi(a x)` are `Ai′(a x)/a²` and `Bi′(a
+//!   x)/a²`, by `Ai″(z) = z Ai(z)`.
 
 use cas_num::algebra::{Rationals, Ring};
 use cas_num::{Integer, Rational};
@@ -95,7 +102,97 @@ pub(super) fn integral(
     if let Some(g) = logarithmic(ev, factors, x)? {
         return Ok(Some(g));
     }
+    if let Some(g) = bessel(ev, factors, x)? {
+        return Ok(Some(g));
+    }
     gaussian(ev, e, factors, x)
+}
+
+/// `c x^m`, `c` free of `x` and `m` an integer: `(c, m)`.
+fn power_of_x(e: &Expr, x: &Expr) -> Option<(Expr, i64)> {
+    let single = |f: &Expr| -> Option<i64> {
+        if f == x {
+            return Some(1);
+        }
+        let (Some(Symbol::POWER), [b, m]) = (f.head().and_then(Expr::as_symbol), f.args()) else {
+            return None;
+        };
+        (b == x).then(|| m.as_i64()).flatten()
+    };
+    if !e.contains(x) {
+        return Some((e.clone(), 0));
+    }
+    if let Some(m) = single(e) {
+        return Some((Expr::from(1), m));
+    }
+    if e.head() != Some(&Expr::from(Symbol::TIMES)) {
+        return None;
+    }
+    let mut m = None;
+    let mut rest = Vec::new();
+    for f in e.args() {
+        match single(f) {
+            Some(k) if m.is_none() => m = Some(k),
+            _ if !f.contains(x) => rest.push(f.clone()),
+            _ => return None,
+        }
+    }
+    Some((Expr::call(Symbol::TIMES, rest), m?))
+}
+
+/// `a` of `u = a x`, `a` free of `x` and not 0.
+fn scale_of(ev: &mut Eval<'_>, u: &Expr, x: &Expr) -> Result<Option<Expr>, EvalError> {
+    let Some(a) = slope(u, x) else {
+        return Ok(None);
+    };
+    let rest = ev.eval(&(u.clone() - a.clone() * x.clone()))?;
+    Ok((rest == Expr::from(0)).then_some(a))
+}
+
+/// The Bessel rule (§ the module comment).
+fn bessel(ev: &mut Eval<'_>, factors: &[Expr], x: &Expr) -> Found {
+    for (i, t) in factors.iter().enumerate() {
+        let Some(head) = t.head().and_then(Expr::as_symbol) else {
+            continue;
+        };
+        let rest = others(factors, i);
+        let Some((c, m)) = power_of_x(&rest, x) else {
+            continue;
+        };
+        match (head, t.args()) {
+            (Symbol::BESSEL_J | Symbol::BESSEL_Y | Symbol::BESSEL_I | Symbol::BESSEL_K, [n, u]) => {
+                let Some(n) = n.as_i64() else {
+                    continue;
+                };
+                let Some(a) = scale_of(ev, u, x)? else {
+                    continue;
+                };
+                let at = |k: i64| Expr::call(head, [Expr::from(k), u.clone()]);
+                let (order, positive) = if m == n + 1 {
+                    (n + 1, head != Symbol::BESSEL_K)
+                } else if m == 1 - n {
+                    (n - 1, head == Symbol::BESSEL_I)
+                } else {
+                    continue;
+                };
+                let g = c * x.pow(m) * at(order) / a;
+                return Ok(Some(if positive { g } else { -g }));
+            }
+            (Symbol::AIRY_AI | Symbol::AIRY_BI, [u]) if m == 1 => {
+                let Some(a) = scale_of(ev, u, x)? else {
+                    continue;
+                };
+                let prime = if head == Symbol::AIRY_AI {
+                    Symbol::AIRY_AI_PRIME
+                } else {
+                    Symbol::AIRY_BI_PRIME
+                };
+                return Ok(Some(c * call(prime, u.clone()) / a.pow(2)));
+            }
+            _ => {}
+        }
+    }
+    Ok(None)
 }
 
 /// What is left of `factors` without the one at `i`: their product.

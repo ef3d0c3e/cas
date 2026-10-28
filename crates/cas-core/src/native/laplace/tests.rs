@@ -253,3 +253,25 @@ fn inverses() {
         ctx.eval(&read("Power[E, Times[-1, x]]")).unwrap()
     );
 }
+
+/// The Bessel functions of the first kind (CAS-384).
+#[test]
+fn bessel_functions() {
+    check(
+        &Context::new(),
+        &[
+            (
+                "LaplaceTransform[BesselJ[0, t], t, s]",
+                "Power[Plus[1, Power[s, 2]], -1/2]",
+            ),
+            (
+                "LaplaceTransform[BesselJ[1, Times[2, t]], t, s]",
+                "Times[1/2, Power[Plus[4, Power[s, 2]], -1/2], Plus[Power[Plus[4, Power[s, 2]], 1/2], Times[-1, s]]]",
+            ),
+            (
+                "LaplaceTransform[BesselI[0, Times[3, t]], t, s]",
+                "Power[Plus[-9, Power[s, 2]], -1/2]",
+            ),
+        ],
+    );
+}
