@@ -97,6 +97,9 @@ DSolve: desolve
 # Laplace transforms (CAS-DOC-18, CAS-274, CAS-275).
 LaplaceTransform: laplace
 InverseLaplaceTransform: ilaplace
+# Z-transforms and recurrences (CAS-DOC-24, CAS-308).
+ZTransform: ztrans
+KroneckerDelta: Kronecker
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime

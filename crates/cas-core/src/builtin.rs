@@ -109,6 +109,10 @@ builtins! {
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];
+    // Z-transforms and recurrences (CAS-DOC-24): Xcas's `ztrans` and
+    // `Kronecker`.
+    ZTRANSFORM = "ZTransform" [PROTECTED];
+    KRONECKER_DELTA = "KroneckerDelta" [LISTABLE, PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];

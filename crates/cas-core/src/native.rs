@@ -46,6 +46,7 @@ mod structure;
 mod sum;
 mod trig;
 mod zeta;
+mod ztransform;
 
 pub(crate) use numeric::approximation;
 
@@ -184,6 +185,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::INVERSE_LAPLACE_TRANSFORM,
             laplace::inverse_laplace_transform,
         ),
+        (Symbol::ZTRANSFORM, ztransform::z_transform),
+        (Symbol::KRONECKER_DELTA, ztransform::kronecker_delta),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),
