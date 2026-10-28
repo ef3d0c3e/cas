@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 317] = [
+const BUILTINS: [&str; 320] = [
     "Plus",
     "Times",
     "Power",
@@ -394,6 +394,9 @@ const BUILTINS: [&str; 317] = [
     "PrimitiveRoot",
     "ContinuedFraction",
     "FromContinuedFraction",
+    "IntegerSolveLinear",
+    "PrimeSumOfSquares",
+    "IntegerSolve",
 ];
 
 /// Builtins that apply something to parts, only in the expression

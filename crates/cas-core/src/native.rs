@@ -631,6 +631,18 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::FROM_CONTINUED_FRACTION,
             number_theory::fractions::from_continued_fraction,
         ),
+        (
+            Symbol::INTEGER_SOLVE_LINEAR,
+            number_theory::diophantine::integer_solve_linear,
+        ),
+        (
+            Symbol::PRIME_SUM_OF_SQUARES,
+            number_theory::diophantine::prime_sum_of_squares,
+        ),
+        (
+            Symbol::INTEGER_SOLVE,
+            number_theory::diophantine::integer_solve,
+        ),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),
