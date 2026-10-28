@@ -14,9 +14,13 @@ fn mpfr(x: &MpFloat, p: u32, r: MpRound) -> MpFloat {
     MpFloat::with_val_round(p, x.zeta_ref(), r).0
 }
 
-/// `x` as an MPFR float, exactly.
+/// `x` as an MPFR float, exactly, at the bits of its numerator, `x` being
+/// dyadic. MPFR's zeta works at its argument's precision: at 10 000 bits,
+/// these tests took half an hour (CAS-299).
 fn to_mp(x: &Float) -> MpFloat {
-    MpFloat::with_val(10_000, &x.to_rational().to_rug())
+    let q = x.to_rational();
+    let bits = u32::try_from(q.numer().bit_length().max(2)).expect("a short dyadic");
+    MpFloat::with_val(bits, &q.to_rug())
 }
 
 /// `ζ(x)` for an exact `x` at `prec` bits encloses MPFR's bracket and has
