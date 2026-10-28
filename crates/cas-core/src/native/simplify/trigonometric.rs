@@ -22,6 +22,7 @@ use super::evaluated;
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
+use crate::native::trig::{pythagorean, tan_out};
 use crate::symbol::Symbol;
 
 /// The trigonometric candidates of `e`, evaluated.
@@ -79,32 +80,6 @@ fn argument(e: &Expr, f: Symbol) -> Option<&Expr> {
         (Some(g), [u]) if g == f => Some(u),
         _ => None,
     }
-}
-
-/// `e` with `Tan[u]` as `Sin[u]/Cos[u]`, built.
-fn tan_out(e: &Expr) -> Expr {
-    e.map_bottom_up(|part| match argument(part, Symbol::TAN) {
-        Some(u) => {
-            Expr::call(Symbol::SIN, [u.clone()]) * Expr::call(Symbol::COS, [u.clone()]).pow(-1)
-        }
-        None => part.clone(),
-    })
-}
-
-/// `e` with `from[u]^n`, `|n| ≥ 2`, as `from[u]^(n mod 2) (1 −
-/// to[u]^2)^(n div 2)`, built.
-fn pythagorean(e: &Expr, from: Symbol, to: Symbol) -> Expr {
-    e.map_bottom_up(|part| {
-        let (Some(Symbol::POWER), [b, n]) = (part.head().and_then(Expr::as_symbol), part.args())
-        else {
-            return part.clone();
-        };
-        let (Some(u), Some(n)) = (argument(b, from), n.as_i64().filter(|n| n.abs() >= 2)) else {
-            return part.clone();
-        };
-        let square = Expr::from(1) - Expr::call(to, [u.clone()]).pow(2);
-        b.pow(n.rem_euclid(2)) * square.pow(n.div_euclid(2))
-    })
 }
 
 /// `e` with `Sin[u]^p Cos[u]^q`, `p` and `q` of opposite signs, in a

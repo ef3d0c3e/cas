@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 273] = [
+const BUILTINS: [&str; 276] = [
     "Plus",
     "Times",
     "Power",
@@ -339,6 +339,10 @@ const BUILTINS: [&str; 273] = [
     "CosToSinTan",
     "TanToSinCos2",
     "TanToCosSin2",
+    // Pythagorean forms (CAS-398).
+    "TrigToCos",
+    "TrigToSin",
+    "TrigToTan",
 ];
 
 /// Builtins that apply something to parts, only in the expression

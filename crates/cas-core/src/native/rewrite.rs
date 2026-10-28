@@ -11,8 +11,11 @@
 //!   `ExpExpand`, `LogExpand` and `LogCombine` (§2).
 //! - [`substitution`]: `HalfTan`, `HalfTanHyperbolicToExp`, `TanToSinCos`,
 //!   `SinToCosTan`, `CosToSinTan`, `TanToSinCos2` and `TanToCosSin2` (§3).
+//! - [`pythagorean`]: `TrigToCos`, `TrigToSin` and `TrigToTan` (§4), which
+//!   take passes of their own, with evaluation between.
 
 mod exponential;
+mod pythagorean;
 mod substitution;
 #[cfg(test)]
 mod testing;
@@ -144,4 +147,35 @@ pub(super) fn tan_to_sin_cos_2(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// `TanToCosSin2[x]`, Xcas's `tan2cossin2`.
 pub(super) fn tan_to_cos_sin_2(ev: &mut Eval<'_>, e: &Expr) -> Native {
     rewrite(ev, e, "TanToCosSin2", substitution::tan_to_cos_sin_2)
+}
+
+/// `e = f[x]` in the Pythagorean form favouring `favoured`, the step noted
+/// as `name`.
+fn pythagorean_form(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    name: &'static str,
+    favoured: pythagorean::Favoured,
+) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    let result = pythagorean::form(ev, x, favoured)?;
+    ev.step(name, e, &result);
+    Ok(Some(result))
+}
+
+/// `TrigToCos[x]`, Xcas's `trigcos`.
+pub(super) fn trig_to_cos(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    pythagorean_form(ev, e, "TrigToCos", pythagorean::Favoured::Cos)
+}
+
+/// `TrigToSin[x]`, Xcas's `trigsin`.
+pub(super) fn trig_to_sin(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    pythagorean_form(ev, e, "TrigToSin", pythagorean::Favoured::Sin)
+}
+
+/// `TrigToTan[x]`, Xcas's `trigtan`.
+pub(super) fn trig_to_tan(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    pythagorean_form(ev, e, "TrigToTan", pythagorean::Favoured::Tan)
 }

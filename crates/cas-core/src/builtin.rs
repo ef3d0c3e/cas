@@ -345,6 +345,10 @@ builtins! {
     COS_TO_SIN_TAN = "CosToSinTan" [PROTECTED];
     TAN_TO_SIN_COS_2 = "TanToSinCos2" [PROTECTED];
     TAN_TO_COS_SIN_2 = "TanToCosSin2" [PROTECTED];
+    // Pythagorean forms (CAS-DOC-36 §4).
+    TRIG_TO_COS = "TrigToCos" [PROTECTED];
+    TRIG_TO_SIN = "TrigToSin" [PROTECTED];
+    TRIG_TO_TAN = "TrigToTan" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

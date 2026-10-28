@@ -401,6 +401,39 @@ fn add(terms: &mut Vec<Term>, (c, k, angle): Term) {
     }
 }
 
+/// `f[u]`'s argument.
+fn argument(e: &Expr, f: Symbol) -> Option<&Expr> {
+    match (e.head().and_then(Expr::as_symbol), e.args()) {
+        (Some(g), [u]) if g == f => Some(u),
+        _ => None,
+    }
+}
+
+/// `e` with `Tan[u]` as `Sin[u]/Cos[u]`, built.
+pub(super) fn tan_out(e: &Expr) -> Expr {
+    e.map_bottom_up(|part| match argument(part, Symbol::TAN) {
+        Some(u) => sin(u.clone()) * cos(u.clone()).pow(-1),
+        None => part.clone(),
+    })
+}
+
+/// `e` with `from[u]^n`, `|n| ≥ 2`, as `from[u]^(n mod 2) (1 −
+/// to[u]^2)^(n div 2)`, the Pythagorean form `Simplify` tries (CAS-DOC-14
+/// §8), built.
+pub(super) fn pythagorean(e: &Expr, from: Symbol, to: Symbol) -> Expr {
+    e.map_bottom_up(|part| {
+        let (Some(Symbol::POWER), [b, n]) = (part.head().and_then(Expr::as_symbol), part.args())
+        else {
+            return part.clone();
+        };
+        let (Some(u), Some(n)) = (argument(b, from), n.as_i64().filter(|n| n.abs() >= 2)) else {
+            return part.clone();
+        };
+        let square = Expr::from(1) - Expr::call(to, [u.clone()]).pow(2);
+        b.pow(n.rem_euclid(2)) * square.pow(n.div_euclid(2))
+    })
+}
+
 /// `x` with `Sin`, `Cos`, `Tan` and the hyperbolic `Sinh`, `Cosh`, `Tanh`
 /// as exponentials, built.
 pub(super) fn to_exp(x: &Expr) -> Expr {
