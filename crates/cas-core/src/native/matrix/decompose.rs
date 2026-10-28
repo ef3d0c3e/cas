@@ -14,7 +14,9 @@
 //!   from the exact eigenvalues (`Eigenvalues`) and, for each `λ`, chains of
 //!   generalized eigenvectors from the kernels of `(A − λI)^k`, longest
 //!   first; `P` holds the chains, eigenvector first, and `J` a block per
-//!   chain.
+//!   chain. Kernels over ℚ take radicals as free generators: a
+//!   diagonalizable `A` whose eigenvalues have them takes its `P` from
+//!   `Eigenvectors`, over ℚ\[t\]/(q(t)), giac's `jordan([[1,2],[3,4]])`.
 //! - **`MinimalPolynomial[A]`** (`pmin`): `Π (x − λ)^(k_λ)`, `k_λ` the
 //!   longest chain of `λ`: giac's coefficient list, or the polynomial in
 //!   the variable given.
@@ -371,14 +373,63 @@ fn rank(ev: &mut Eval<'_>, vectors: &[Expr]) -> Result<Option<usize>, EvalError>
 }
 
 /// The Jordan chains of `a`: for each one, its eigenvalue and its vectors,
-/// eigenvector first; `None` where the eigenvalues or kernels fail.
+/// eigenvector first; `None` where the eigenvalues fail, or the kernels
+/// and [`diagonal`] both.
 fn chains(ev: &mut Eval<'_>, a: &Expr, n: usize) -> Result<Option<Chains>, EvalError> {
     let Some(values) = eigenvalues(ev, a)? else {
         return Ok(None);
     };
+    if let Some(all) = generalized(ev, a, n, &values)? {
+        return Ok(Some(all));
+    }
+    diagonal(ev, a, n, &values)
+}
+
+/// The chains of a diagonalizable `a`, one vector each, from the columns of
+/// `Eigenvectors`, which follow `Eigenvalues`: for eigenvalues with
+/// radicals, whose kernels [`generalized`] takes over ℚ with the radicals
+/// as free generators, where `Eigenvectors` takes them over ℚ\[t\]/(q(t))
+/// (CAS-222). Its warnings are dropped: the call stays without them.
+fn diagonal(
+    ev: &mut Eval<'_>,
+    a: &Expr,
+    n: usize,
+    values: &[(Expr, usize)],
+) -> Result<Option<Chains>, EvalError> {
+    let ctx = ev.context();
+    let vectors = ev
+        .eval_in(ctx, &Expr::call(Symbol::EIGENVECTORS, [a.clone()]))
+        .0?;
+    let Some(columns) = rows(&vectors).filter(|r| r.len() == n && r[0].len() == n) else {
+        return Ok(None);
+    };
+    let mut all = Vec::with_capacity(n);
+    for (lambda, multiplicity) in values {
+        for _ in 0..*multiplicity {
+            let j = all.len();
+            if j == n {
+                return Ok(None);
+            }
+            let v = list(columns.iter().map(|row| row[j].clone()).collect());
+            all.push((lambda.clone(), vec![v]));
+        }
+    }
+    Ok((all.len() == n).then_some(all))
+}
+
+/// The chains of `a` from the kernels of `(A − λI)^k` over the field of its
+/// entries, for each of the distinct `values`; `None` where a kernel or a
+/// rank fails, or the kernels fall short of a multiplicity.
+fn generalized(
+    ev: &mut Eval<'_>,
+    a: &Expr,
+    n: usize,
+    values: &[(Expr, usize)],
+) -> Result<Option<Chains>, EvalError> {
     let ident = matrix(identity(n));
     let mut all = Vec::new();
     for (lambda, multiplicity) in values {
+        let multiplicity = *multiplicity;
         let b = ev.eval(&(a.clone() - lambda.clone() * ident.clone()))?;
         // The kernels of B^k up to the multiplicity's dimension.
         let mut kernels: Vec<Vec<Expr>> = vec![Vec::new()];
