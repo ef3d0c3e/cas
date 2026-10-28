@@ -382,6 +382,8 @@ builtins! {
     FRENET = "Frenet" [PROTECTED];
     EVOLUTE = "Evolute" [PROTECTED];
     ARC_LENGTH = "ArcLength" [PROTECTED];
+    // Implicit differentiation (CAS-DOC-37 §5).
+    IMPLICIT_D = "ImplicitD" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

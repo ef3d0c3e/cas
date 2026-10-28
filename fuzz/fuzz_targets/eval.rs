@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 302] = [
+const BUILTINS: [&str; 303] = [
     "Plus",
     "Times",
     "Power",
@@ -376,6 +376,8 @@ const BUILTINS: [&str; 302] = [
     "Frenet",
     "Evolute",
     "ArcLength",
+    // Implicit differentiation (CAS-412).
+    "ImplicitD",
 ];
 
 /// Builtins that apply something to parts, only in the expression

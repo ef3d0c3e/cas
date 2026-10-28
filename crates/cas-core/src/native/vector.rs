@@ -16,6 +16,7 @@
 //!
 //! - [`potential`]: `Potential` and `VectorPotential` (§3).
 //! - [`curves`]: `Curvature`, `Frenet`, `Evolute` and `ArcLength` (§4).
+//! - [`implicit`]: `ImplicitD` (§5).
 
 #![allow(
     clippy::many_single_char_names,
@@ -23,6 +24,7 @@
 )]
 
 pub(super) mod curves;
+pub(super) mod implicit;
 pub(super) mod potential;
 
 use crate::context::EvalError;
