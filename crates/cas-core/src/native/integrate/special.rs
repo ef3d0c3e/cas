@@ -16,6 +16,8 @@
 //!   `cosh` through their exponentials. `∫ e^x (1 + x)/x²` is `2 Ei(x) −
 //!   e^x/x`, and `∫ cos(2x + 1)/x` is `cos 1 Ci(2x) − sin 1 Si(2x)`, where
 //!   giac writes half-angle tangents.
+//! - **Monomial arguments**: `F(c x^m)/x` for an integer `m ≥ 2` is `Ei(u)/m`,
+//!   `Si(u)/m` or `Ci(u)/m` in `u = c x^m`, giac's `int(exp(x^2)/x,x)`.
 //! - **Logarithms**: `x^m/log x` is `Ei((m + 1) log x)` for a rational `m ≠
 //!   −1`, giac's `int(x/ln(x),x)`.
 //! - **Gaussians**: `P e^q` for a polynomial `P` over ℚ and a quadratic
@@ -195,6 +197,43 @@ fn reciprocal_powers(
     this
 }
 
+/// `c x^m` for a monomial `u` with `m ≥ 2` an integer: `(c, m)`.
+fn monomial(u: &Expr, x: &Expr) -> Option<(Expr, i64)> {
+    let power = |p: &Expr| -> Option<i64> {
+        let (Some(Symbol::POWER), [b, m]) = (p.head().and_then(Expr::as_symbol), p.args()) else {
+            return None;
+        };
+        (b == x).then(|| m.as_i64()).flatten().filter(|&m| m >= 2)
+    };
+    if let Some(m) = power(u) {
+        return Some((Expr::from(1), m));
+    }
+    let [c, p] = u.args() else {
+        return None;
+    };
+    (u.head() == Some(&Expr::from(Symbol::TIMES)) && !c.contains(x))
+        .then(|| power(p))
+        .flatten()
+        .map(|m| (c.clone(), m))
+}
+
+/// `F(c x^m)/x`, `m ≥ 2`, as `u = c x^m` makes it `F(u)/(m u)`: `Ei(u)/m`,
+/// `Si(u)/m` or `Ci(u)/m`, giac's `int(exp(x^2)/x,x)`.
+fn monomial_argument(t: &Expr, rest: &Expr, x: &Expr) -> Option<Expr> {
+    if *rest != x.pow(-1) {
+        return None;
+    }
+    let (head, u) = match (t.head()?.as_symbol()?, t.args()) {
+        (Symbol::EXP, [u]) => (Symbol::EXP_INTEGRAL_EI, u),
+        (Symbol::POWER, [b, u]) if b.as_symbol() == Some(Symbol::E) => (Symbol::EXP_INTEGRAL_EI, u),
+        (Symbol::SIN, [u]) => (Symbol::SIN_INTEGRAL, u),
+        (Symbol::COS, [u]) => (Symbol::COS_INTEGRAL, u),
+        _ => return None,
+    };
+    let (_, m) = monomial(u, x)?;
+    Some(call(head, u.clone()) / Expr::from(m))
+}
+
 /// The Laurent rule (§ the module comment).
 fn laurent(ev: &mut Eval<'_>, e: &Expr, factors: &[Expr], x: &Expr, depth: u8) -> Found {
     for (i, t) in factors.iter().enumerate() {
@@ -202,6 +241,9 @@ fn laurent(ev: &mut Eval<'_>, e: &Expr, factors: &[Expr], x: &Expr, depth: u8) -
             continue;
         };
         let rest = others(factors, i);
+        if let Some(g) = monomial_argument(t, &rest, x) {
+            return Ok(Some(g));
+        }
         let Some((num, den)) = rational_function(ev, e, &rest, x)? else {
             continue;
         };
@@ -337,12 +379,18 @@ fn gaussian(ev: &mut Eval<'_>, e: &Expr, factors: &[Expr], x: &Expr) -> Found {
             continue;
         }
         let rest = others(factors, i);
-        let Some(p) = polynomial(ev, e, &rest, x)? else {
-            continue;
+        // The polynomial's coefficients, a lone e^q's being 1.
+        let coefficients: Vec<Expr> = if rest.contains(x) {
+            let Some(p) = polynomial(ev, e, &rest, x)? else {
+                continue;
+            };
+            if p.coeffs().len() > MAX_DEGREE {
+                continue;
+            }
+            p.coeffs().iter().map(|c| Expr::from(c.clone())).collect()
+        } else {
+            vec![rest]
         };
-        if p.coeffs().len() > MAX_DEGREE {
-            continue;
-        }
         let root = Expr::call(Symbol::SQRT, [-alpha.clone()]);
         let shift = beta.clone() / (Expr::from(2) * alpha.clone());
         let base = Expr::call(Symbol::SQRT, [Expr::from(Symbol::PI)])
@@ -353,7 +401,6 @@ fn gaussian(ev: &mut Eval<'_>, e: &Expr, factors: &[Expr], x: &Expr) -> Found {
         let base = ev.eval(&base)?;
         let exponential = t.clone();
         let derivative = [beta.clone(), Expr::from(2) * alpha.clone()];
-        let coefficients: Vec<Expr> = p.coeffs().iter().map(|c| Expr::from(c.clone())).collect();
         let g = reduced(ev, coefficients, &derivative, &exponential, &base, x)?;
         return Ok(Some(g));
     }
