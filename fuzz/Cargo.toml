@@ -297,3 +297,10 @@ path = "fuzz_targets/bessel.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "jets"
+path = "fuzz_targets/jets.rs"
+test = false
+doc = false
+bench = false
