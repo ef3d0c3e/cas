@@ -318,3 +318,10 @@ path = "fuzz_targets/rewrite.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "vector_calculus"
+path = "fuzz_targets/vector_calculus.rs"
+test = false
+doc = false
+bench = false
