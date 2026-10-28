@@ -154,9 +154,9 @@ impl Series {
 pub(crate) struct Expander<'a, 'e> {
     ev: &'a mut Eval<'e>,
     t: Expr,
-    /// Whether a coefficient was taken as nonzero that its ball could not
-    /// tell from 0 ([`Expander::is_zero`]).
-    undecided: bool,
+    /// The first coefficient taken as nonzero that its ball could not tell
+    /// from 0 ([`Expander::is_zero`]).
+    undecided: Option<Expr>,
 }
 
 impl<'a, 'e> Expander<'a, 'e> {
@@ -164,7 +164,7 @@ impl<'a, 'e> Expander<'a, 'e> {
         Expander {
             ev,
             t,
-            undecided: false,
+            undecided: None,
         }
     }
 
@@ -192,7 +192,9 @@ impl<'a, 'e> Expander<'a, 'e> {
             View::ComplexBall(z) => z.may_be_zero(),
             _ => false,
         });
-        self.undecided |= around_zero;
+        if around_zero && self.undecided.is_none() {
+            self.undecided = Some(c.clone());
+        }
         Ok(false)
     }
 
@@ -806,21 +808,36 @@ impl<'a, 'e> Expander<'a, 'e> {
 /// has none, it is not reached, or a coefficient could not be told from 0
 /// (CAS-DOC-25 §3).
 pub(crate) fn expansion(ev: &mut Eval<'_>, f: &Expr, t: &Expr, order: &Rational) -> Found {
+    Ok(decided_expansion(ev, f, t, order)?.unwrap_or(None))
+}
+
+/// [`expansion`], or `Err` with the first coefficient that could not be
+/// told from 0, for `Limit` to warn of (CAS-DOC-10 §6).
+pub(crate) fn decided_expansion(
+    ev: &mut Eval<'_>,
+    f: &Expr,
+    t: &Expr,
+    order: &Rational,
+) -> Result<Result<Option<Series>, Expr>, EvalError> {
     let mut expander = Expander::new(ev, t.clone());
     for extra in [0, 2, 4, 8, 16] {
         let wanted = order + &Rational::from(Integer::from(extra));
-        let Some(s) = expander.expand(f, &wanted)? else {
-            return Ok(None);
+        let found = expander.expand(f, &wanted)?;
+        if let Some(c) = expander.undecided.take() {
+            return Ok(Err(c));
+        }
+        let Some(s) = found else {
+            return Ok(Ok(None));
         };
         let s = expander.normalized(s)?;
-        if expander.undecided {
-            return Ok(None);
+        if let Some(c) = expander.undecided.take() {
+            return Ok(Err(c));
         }
         if s.order() >= *order {
-            return Ok(Some(s.truncated(order)));
+            return Ok(Ok(Some(s.truncated(order))));
         }
     }
-    Ok(None)
+    Ok(Ok(None))
 }
 
 mod builtin;

@@ -33,7 +33,7 @@ use std::cmp::Ordering;
 use cas_num::{Integer, Rational};
 
 use super::approximation;
-use super::series::{Expander, Point, Series, expansion, fresh, log_t};
+use super::series::{Expander, Point, Series, decided_expansion, fresh, log_t};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
@@ -191,8 +191,10 @@ fn one_side(
     t: &Expr,
     depth: u32,
 ) -> Result<Result<Value, Failure>, EvalError> {
-    let Some(series) = leading(ev, local, t)? else {
-        return Ok(Err(Failure::Unknown));
+    let series = match leading(ev, local, t)? {
+        Ok(Some(series)) => series,
+        Ok(None) => return Ok(Err(Failure::Unknown)),
+        Err(c) => return Ok(Err(Failure::Undecided(c))),
     };
     let c = series.coeffs[0].clone();
     let q = Rational::new(
@@ -220,17 +222,23 @@ fn one_side(
     }))
 }
 
-/// The series of `local` from its first nonzero term, to a few orders.
-fn leading(ev: &mut Eval<'_>, local: &Expr, t: &Expr) -> Result<Option<Series>, EvalError> {
+/// The series of `local` from its first nonzero term, to a few orders;
+/// `Err` with a coefficient that could not be told from 0 (CAS-DOC-25 §3).
+fn leading(
+    ev: &mut Eval<'_>,
+    local: &Expr,
+    t: &Expr,
+) -> Result<Result<Option<Series>, Expr>, EvalError> {
     for order in ORDERS {
-        let Some(s) = expansion(ev, local, t, &Rational::from(Integer::from(order)))? else {
-            return Ok(None);
+        let s = match decided_expansion(ev, local, t, &Rational::from(Integer::from(order)))? {
+            Ok(Some(s)) => s,
+            other => return Ok(other),
         };
         if !s.coeffs.is_empty() {
-            return Ok(Some(s));
+            return Ok(Ok(Some(s)));
         }
     }
-    Ok(None)
+    Ok(Ok(None))
 }
 
 /// Whether `c` is told from 0: a number exactly, a numeric expression by
@@ -286,7 +294,7 @@ fn sign_near_zero(
     s: &Expr,
     depth: u32,
 ) -> Result<Option<Ordering>, EvalError> {
-    let Some(series) = leading(ev, local, s)? else {
+    let Ok(Some(series)) = leading(ev, local, s)? else {
         return Ok(None);
     };
     let c0 = series.coeffs[0].clone();
