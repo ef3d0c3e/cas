@@ -28,6 +28,11 @@
 //!   (`squarefree`), and of factoring over ℤ and ℚ (`factor`): univariate
 //!   polynomials by Zassenhaus's algorithm, multivariate ones by Wang's; and
 //!   over ℚ(i) by Trager's norms.
+//! - [`Distributed`]: polynomials of ℚ\[x₁, …, xₙ\] in distributed form
+//!   under a [`MonomialOrder`], with their reduced Gröbner bases
+//!   ([`groebner_basis`], Buchberger's algorithm with Gebauer and Möller's
+//!   criteria) and the remainders of division by lists
+//!   ([`groebner_reduce`]).
 //! - [`Cancel`]: what long computations poll to stop early, with the
 //!   never-cancelled default [`Never`].
 //!
@@ -60,6 +65,7 @@ mod cancel;
 mod dense;
 mod factor;
 mod gcd;
+mod groebner;
 mod integrate;
 mod random;
 mod shared;
@@ -70,6 +76,10 @@ pub use cancel::{Cancel, Cancelled, Never};
 pub use dense::{Coefficients, Dense, DenseRing};
 pub use factor::{CharacteristicZero, FactorError, Factors};
 pub use gcd::{Cofactors, GcdDomain, GcdMethod};
+pub use groebner::{
+    Distributed, GroebnerError, MAX_ELEMENTS, MAX_EXPONENT, MAX_REDUCTIONS, MonomialOrder,
+    groebner_basis, groebner_reduce, s_polynomial,
+};
 pub use integrate::{Logarithm, Pair, Ratio, RationalIntegral, Surd};
 pub use shared::{
     GaussianRationalPoly, GaussianRationalPolys, Numerators, RationalPoly, RationalPolys, Shared,

@@ -47,5 +47,9 @@ the tickets. This documentation describes the code as it is.
   Rioboo's arctangents of polynomials; Sturm's count of real roots, on the
   line or between bounds (`src/sturm.rs`), for the absolute values of the
   logarithms and the poles of definite integrals.
+- [groebner.md](groebner.md): Gröbner bases (CAS-287, planned in
+  CAS-PLAN-15). Distributed polynomials over ℚ under lex, deglex and
+  degrevlex; division by lists; Buchberger's algorithm with the normal
+  strategy and Gebauer and Möller's criteria; reduced bases; the bounds.
 - [references.md](references.md): the bibliography. Chapters and doc
   comments cite it by key, as in "Kronecker substitution [Sch82]".

@@ -6,6 +6,16 @@ algorithm here is taken from, or is compared with, are listed.
 
 ## Books
 
+- <a id="bw93"></a>**[BW93]** Thomas Becker and Volker Weispfenning,
+  *Gröbner Bases: A Computational Approach to Commutative Algebra*, Graduate
+  Texts in Mathematics 141, Springer, 1993. §5.5, "Improved Algorithm":
+  procedure `UPDATE`, Gebauer and Möller's installation of Buchberger's
+  criteria, and `GRÖBNERNEW2`.
+- <a id="clo15"></a>**[CLO15]** David A. Cox, John Little and Donal
+  O'Shea, *Ideals, Varieties, and Algorithms*, 4th edition, Undergraduate
+  Texts in Mathematics, Springer, 2015. Chapter 2: §2.2, monomial orders
+  (lex, grlex, grevlex); §2.3, the division algorithm in several variables;
+  §2.7, Buchberger's algorithm and reduced Gröbner bases.
 - <a id="coh93"></a>**[Coh93]** Henri Cohen, *A Course in Computational
   Algebraic Number Theory*, Graduate Texts in Mathematics 138, Springer,
   1993. §3.3, "The Sub-Resultant Algorithm": §3.3.1, "Description of the
@@ -55,6 +65,14 @@ algorithm here is taken from, or is compared with, are listed.
   algorithm and the theory of subresultants", *Journal of the ACM* 18 (4)
   (1971), 505–514. The subresultant remainder sequence, and why its
   divisions are exact.
+- <a id="buc65"></a>**[Buc65]** Bruno Buchberger, *Ein Algorithmus zum
+  Auffinden der Basiselemente des Restklassenringes nach einem
+  nulldimensionalen Polynomideal*, PhD thesis, Universität Innsbruck, 1965.
+  The algorithm of S-polynomials.
+- <a id="buc85"></a>**[Buc85]** Bruno Buchberger, "Gröbner bases: an
+  algorithmic method in polynomial ideal theory", in N. K. Bose (ed.),
+  *Multidimensional Systems Theory*, Reidel, 1985, 184–232. The normal
+  selection strategy, the least lcm first.
 - <a id="cgg89"></a>**[CGG89]** B. W. Char, K. O. Geddes and G. H. Gonnet,
   "GCDHEU: Heuristic polynomial GCD algorithm based on integer GCD
   computation", *Journal of Symbolic Computation* 7 (1989), 31–48; first in
@@ -76,6 +94,9 @@ algorithm here is taken from, or is compared with, are listed.
   programs for sparse polynomial multiplication", *ACM SIGSAM Bulletin* 37
   (1) (2003), 4–15, doi:10.1145/844076.844080. The benchmark `f (f + 1)` for
   `f = (1 + x + y + z + t)^20`.
+- <a id="gm88"></a>**[GM88]** Rüdiger Gebauer and H. Michael Möller, "On an
+  installation of Buchberger's algorithm", *Journal of Symbolic Computation*
+  6 (1988), 275–286. The criteria applied as pairs are made.
 - <a id="har09"></a>**[Har09]** David Harvey, "Faster polynomial
   multiplication via multipoint Kronecker substitution", *Journal of
   Symbolic Computation* 44 (10) (2009), 1502–1510; arXiv:0712.4046.
