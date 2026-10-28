@@ -129,6 +129,10 @@ or is checked against, are listed.
 - <a id="smi89"></a>**[Smi89]** David M. Smith, "Efficient multiple-precision
   evaluation of elementary functions", *Mathematics of Computation* 52 (185)
   (1989), 131–134. Concurrent (rectangular) summation of Taylor series.
+- <a id="tre08"></a>**[Tre08]** Lloyd N. Trefethen, "Is Gauss quadrature better
+  than Clenshaw–Curtis?", *SIAM Review* 50 (1) (2008), 67–87. The error bound
+  of Gauss–Legendre quadrature for functions analytic in a Bernstein ellipse,
+  as Fungrim's entries 47b181 and 545987 state it.
 - <a id="zim99"></a>**[Zim99]** Paul Zimmermann, "Karatsuba square root", INRIA
   Research Report RR-3805, 1999; Algorithm 1.12 of [BZ10]. The integer square
   root (`Natural::sqrt_rem`) behind the exact float square root and the

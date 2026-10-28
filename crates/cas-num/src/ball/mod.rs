@@ -26,6 +26,8 @@
 //!   path up to 53 bits; `None` sends the caller back to [`Ball`] (§5.4).
 //! - [`polynomial_roots`]: the roots of a square-free polynomial with exact
 //!   coefficients, each in a validated ball (CAS-211).
+//! - [`gauss_legendre`]: the nodes and weights of Gauss–Legendre rules in
+//!   validated balls, cached (CAS-DOC-26 §2).
 //!
 //! The algorithms, the tricks on top of them and their sources are
 //! documented in this crate's `doc/algorithms/`, after GMP's "Algorithms"
@@ -43,6 +45,7 @@ mod hex;
 mod huge_tests;
 mod machine;
 mod mag;
+mod quadrature;
 mod real;
 mod roots;
 
@@ -53,5 +56,6 @@ pub use float::{APPROX_ULPS, EXACT_BITS_MAX, Float, Round};
 pub use fns::bernoulli;
 pub use machine::MachineBall;
 pub use mag::Mag;
+pub use quadrature::{MAX_CACHED, Rule, gauss_legendre};
 pub use real::{Ball, RealBalls};
 pub use roots::polynomial_roots;

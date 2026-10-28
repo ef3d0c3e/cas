@@ -367,11 +367,12 @@ impl Ball {
     }
 }
 
-/// Frees the cached constants and the elementary functions' tables; the
-/// next request recomputes from scratch.
+/// Frees the cached constants, the elementary functions' tables and the
+/// quadrature rules; the next request recomputes from scratch.
 pub fn clear_constant_cache() {
     for cache in [&PI, &LOG2, &E_CACHE, &EULER, &CATALAN] {
         *cache.write().unwrap_or_else(PoisonError::into_inner) = empty();
     }
     super::fns::clear_tables();
+    super::quadrature::clear_rules();
 }

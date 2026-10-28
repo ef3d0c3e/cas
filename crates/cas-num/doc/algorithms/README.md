@@ -98,6 +98,7 @@ Every bound is also tested:
 | [functions.md](functions.md) | Real elementary functions: fixed-point series, `exp`, `log`, trigonometric and inverse, `pow`, `root`, hyperbolic, table and bit-burst cores |
 | [complex.md](complex.md) | Complex balls: arithmetic, elementary functions, branch cuts; Gaussian rationals |
 | [machine.md](machine.md) | `MachineBall`: `f64` balls, error-free transformations, double-double kernels and their budgets |
+| [quadrature.md](quadrature.md) | Gauss–Legendre nodes and weights in validated balls, and their cache |
 | [integers.md](integers.md) | Exact integer functions: the factorial |
 | [references.md](references.md) | Bibliography |
 
