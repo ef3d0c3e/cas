@@ -262,3 +262,10 @@ path = "fuzz_targets/poly_roots.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "special"
+path = "fuzz_targets/special.rs"
+test = false
+doc = false
+bench = false
