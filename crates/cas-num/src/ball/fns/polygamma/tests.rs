@@ -274,3 +274,36 @@ fn huge_exponents() {
     let b = Ball::exact(huge).polygamma(1, 64);
     assert!(b.is_finite() && !b.mid().is_negative(), "{b:?}");
 }
+
+/// Orders up to 256 just below 0, where the shift's terms cancel across
+/// the poles: `ψ^(236)(−62.5)` at 11 bits had −2 (the `special_fns` fuzz
+/// target, CAS-375). For even `m`, `Q_m(0) = 0` and `ψ^(m)(−n − 1/2) =
+/// ψ^(m)(n + 3/2)`; the recurrence ties the neighbours.
+#[test]
+fn reflection_from_zero() {
+    let half = |n: i64| Ball::exact(Float::from(2 * n + 1).mul_2exp(&-Integer::ONE));
+    for (m, prec) in [(236u64, 11u64), (236, 200), (255, 64), (2, 64), (0, 64)] {
+        let x = half(-63);
+        let value = x.polygamma(m, prec);
+        assert!(
+            value.is_finite() && value.rel_accuracy_bits() >= i64::try_from(prec).unwrap() - 3,
+            "ψ^({m})(−62.5) at {prec}: {value:?}"
+        );
+        if m % 2 == 0 {
+            let mirrored = half(63).polygamma(m, prec + 64);
+            assert!(value.overlaps(&mirrored), "{value:?} and {mirrored:?}");
+        }
+        let q = prec + 64;
+        let i = i64::try_from(m + 1).unwrap();
+        let factorial = Ball::from_integer(&Integer::from(crate::Natural::factorial(m)));
+        let mut step = factorial.div(&x.pow(i, q), q);
+        if m % 2 == 1 {
+            step = step.neg();
+        }
+        let next = half(-62).polygamma(m, prec);
+        assert!(
+            next.sub(&value, q).overlaps(&step),
+            "ψ^({m}) at −61.5 and −62.5"
+        );
+    }
+}

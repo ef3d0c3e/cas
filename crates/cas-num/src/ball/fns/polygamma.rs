@@ -15,9 +15,14 @@
 //!   the sign of the first term left out and at most its size. The ball
 //!   `z` adds its radius times `sup |ψ^(m+1)| = |ψ^(m+1)(lo)| ≤ (m + 1)!
 //!   (1/lo^(m+2) + 1/((m + 1) lo^(m+1)))`.
-//! - **Reflection** below −[`MAX_SHIFT`]: `ψ^(m)(x) = (−1)^m ψ^(m)(1 − x)
-//!   − π^(m+1) Q_m(cot πx)` (DLMF 5.15.6), with `Q_0(c) = c` and `Q_(m+1)(c)
-//!   = −(1 + c²) Q_m′(c)`, so that `d^m/dx^m cot(πx) = π^m Q_m(cot πx)`.
+//! - **Reflection** below 0: `ψ^(m)(x) = (−1)^m ψ^(m)(1 − x) − π^(m+1)
+//!   Q_m(cot πx)` (DLMF 5.15.6), with `Q_0(c) = c` and `Q_(m+1)(c) = −(1 +
+//!   c²) Q_m′(c)`, so that `d^m/dx^m cot(πx) = π^m Q_m(cot πx)`. The shift
+//!   from below 0 crosses the poles, where its terms `(x + k)^(−(m+1))`
+//!   change sign and cancel: about 1650 bits of them for `ψ^(236)(−62.5)`,
+//!   where `refined` stops far short (the `special_fns` fuzz target,
+//!   CAS-375). The shift from `1 − x > 1` adds terms of one sign, and `Q_m`,
+//!   even or odd with coefficients of one sign, cancels nothing either.
 //! - A ball meeting 0 or a negative integer is indeterminate, by
 //!   `Ball::gamma`'s test, and so is an order above [`MAX_ORDER`].
 //!
@@ -38,9 +43,6 @@ const MAX_TERMS: u64 = 600;
 
 /// The highest order `m`.
 const MAX_ORDER: u64 = 256;
-
-/// How far below 0 the shift alone serves; the reflection past it.
-const MAX_SHIFT: u64 = 64;
 
 /// `log2 n!`, an estimate.
 #[allow(clippy::cast_precision_loss, reason = "an estimate")]
@@ -187,8 +189,7 @@ fn at_large(z: &Ball, m: u64, wp: u64, k_terms: u64) -> Ball {
     core.add_error(&z.rad().mul(&slope(&lo, m)))
 }
 
-/// `ψ^(m)(x)` for a ball meeting no pole, at or above −[`MAX_SHIFT`], by
-/// the shift.
+/// `ψ^(m)(x)` for a ball meeting no pole, from 0 on, by the shift.
 fn shifted(x: &Ball, m: u64, wp: u64) -> Ball {
     let Some((steps, k_terms)) = plan(x.mid(), m, wp) else {
         return Ball::INDETERMINATE;
@@ -239,8 +240,7 @@ fn cot_polynomial(m: u64) -> Vec<Integer> {
     p
 }
 
-/// `ψ^(m)(x)` for a ball below −[`MAX_SHIFT`] meeting no pole, by the
-/// reflection.
+/// `ψ^(m)(x)` for a ball below 0 meeting no pole, by the reflection.
 fn reflected(x: &Ball, m: u64, wp: u64) -> Ball {
     // 1 − x to the bits of x's integer part and more, as ψ(1 − x) ≈ log|x|.
     let above = u64::try_from(exponent(x.mid()).max(0)).unwrap_or(0);
@@ -288,9 +288,8 @@ impl Ball {
             return Ball::INDETERMINATE;
         };
         let lo = self.mid().sub_round(&r, 64, Round::Floor).0;
-        let below = Float::from(-i64::try_from(MAX_SHIFT).expect("small"));
         let value = refined(self, prec, |wp| {
-            if lo < below {
+            if lo.is_negative() {
                 reflected(self, m, wp)
             } else {
                 shifted(self, m, wp)
