@@ -83,8 +83,10 @@ pub(in crate::native) fn invert(
 fn around(ctx: &Context, g: &Expr, x: &Expr, point: &Rational, bits: u64) -> Option<Expr> {
     let delta = resolution(point, bits);
     let (below, above) = (point - &delta, point + &delta);
-    let bracketed = sign(ctx, g, x, &below, bits) == Some(Ordering::Less)
-        && sign(ctx, g, x, &above, bits) == Some(Ordering::Greater);
+    // At the bisection's own precision: the values there are of the
+    // resolution's size.
+    let bracketed = sign(ctx, g, x, &below, bits + 32) == Some(Ordering::Less)
+        && sign(ctx, g, x, &above, bits + 32) == Some(Ordering::Greater);
     if bracketed {
         bisected(ctx, g, x, below, above, Ordering::Less, bits)
     } else {
