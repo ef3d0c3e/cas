@@ -17,6 +17,9 @@
 //!   constants, inverted part by part by `InverseLaplaceTransform`.
 //! - The answer is giac's for the matrix form `desolve(y'=A*y+b,y)`: the
 //!   list of the one solution, `{{v₁, …, vₙ}}`, each component expanded.
+//! - Conditions (§4, CAS-284): the unknowns and their derivatives at the
+//!   conditions' points, taken from the components, make linear equations
+//!   in the constants (`LinSolve`); no solution gives `{}`, as giac's `[]`.
 
 #![allow(
     clippy::many_single_char_names,
@@ -137,7 +140,7 @@ pub(super) fn solve(
     e: &Expr,
     problem: &Problem,
 ) -> Result<Option<Expr>, EvalError> {
-    if problem.equations.len() != problem.ys.len() || !problem.conditions.is_empty() {
+    if problem.equations.len() != problem.ys.len() {
         return Ok(None);
     }
     let Some(system) = Linear::of(ev, problem)? else {
@@ -145,7 +148,105 @@ pub(super) fn solve(
     };
     let count: usize = system.orders.iter().sum();
     let constants = constants(e, count);
-    laplace(ev, e, &system, &problem.x, &constants[..count])
+    let constants = &constants[..count];
+    let Some(components) = laplace(ev, e, &system, &problem.x, constants)? else {
+        return Ok(None);
+    };
+    if problem.conditions.is_empty() {
+        return Ok(Some(solution(components)));
+    }
+    fix(ev, e, &components, problem, constants)
+}
+
+/// `{{v₁, …, vₙ}}`.
+fn solution(components: Vec<Expr>) -> Expr {
+    Expr::call(Symbol::LIST, [Expr::call(Symbol::LIST, components)])
+}
+
+/// The general solution's `components` with their constants fixed by the
+/// conditions (§4); `{}` when no solution meets them; `None` when a
+/// condition is not one, at a point free of `x`.
+fn fix(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    components: &[Expr],
+    problem: &Problem,
+    constants: &[Expr],
+) -> Result<Option<Expr>, EvalError> {
+    let (ys, x) = (&problem.ys, &problem.x);
+    // The components' derivatives, as far as the conditions ask.
+    let mut derivatives: Vec<Vec<Expr>> = components.iter().map(|v| vec![v.clone()]).collect();
+    let mut equations = Vec::with_capacity(problem.conditions.len());
+    for condition in &problem.conditions {
+        let (Some(Symbol::EQUATION | Symbol::EQUAL), [l, r]) =
+            (condition.head().and_then(Expr::as_symbol), condition.args())
+        else {
+            return Ok(None);
+        };
+        for part in condition.distinct() {
+            let View::Apply { head, args: [_] } = part.view() else {
+                continue;
+            };
+            for (j, y) in ys.iter().enumerate() {
+                let Some(k) = (if head == y {
+                    Some(0)
+                } else {
+                    derivative_head(head, y)
+                }) else {
+                    continue;
+                };
+                while derivatives[j].len() <= k {
+                    let last = derivatives[j].last().expect("the component").clone();
+                    derivatives[j].push(ev.eval(&Expr::call(Symbol::D, [last, x.clone()]))?);
+                }
+            }
+        }
+        let at = (l.clone() - r.clone()).replace(|part| {
+            let View::Apply { head, args: [a] } = part.view() else {
+                return None;
+            };
+            ys.iter().enumerate().find_map(|(j, y)| {
+                let k = if head == y {
+                    0
+                } else {
+                    derivative_head(head, y)?
+                };
+                Some(derivatives[j][k].substitute(&[(x.clone(), a.clone())]))
+            })
+        });
+        if at.contains(x) || ys.iter().any(|y| at.contains(y)) {
+            return Ok(None);
+        }
+        let value = ev.eval(&at)?;
+        equations.push(Expr::call(Symbol::EQUATION, [value, Expr::from(0)]));
+    }
+    let used: Vec<Expr> = constants
+        .iter()
+        .filter(|c| components.iter().any(|v| v.contains(c)))
+        .cloned()
+        .collect();
+    if used.is_empty() {
+        return Ok(None);
+    }
+    let Some(found) = linear_system(ev, e, &equations, &used)? else {
+        return Ok(None);
+    };
+    match found.args() {
+        [] => Ok(Some(Expr::call(Symbol::LIST, Vec::<Expr>::new()))),
+        [values] if values.args().len() == used.len() => {
+            let rules: Vec<(Expr, Expr)> = used
+                .iter()
+                .cloned()
+                .zip(values.args().iter().cloned())
+                .collect();
+            let mut fixed = Vec::with_capacity(components.len());
+            for v in components {
+                fixed.push(ev.eval(&Expr::call(Symbol::EXPAND, [v.substitute(&rules)]))?);
+            }
+            Ok(Some(solution(fixed)))
+        }
+        _ => Ok(None),
+    }
 }
 
 /// A linear system with constant coefficients: equation `i` is
@@ -246,15 +347,15 @@ impl Linear {
     }
 }
 
-/// The general solution of `system` by Laplace transforms (§3), the
-/// initial values `constants`, in order.
+/// The components of the general solution of `system` by Laplace
+/// transforms (§3), the initial values `constants`, in order.
 fn laplace(
     ev: &mut Eval<'_>,
     e: &Expr,
     system: &Linear,
     x: &Expr,
     constants: &[Expr],
-) -> Result<Option<Expr>, EvalError> {
+) -> Result<Option<Vec<Expr>>, EvalError> {
     let n = system.orders.len();
     let s = Expr::from(Symbol::new("DSolve$s"));
     let transforms: Vec<Expr> = (0..n)
@@ -335,10 +436,7 @@ fn laplace(
             [Expr::call(Symbol::PLUS, terms)],
         ))?);
     }
-    Ok(Some(Expr::call(
-        Symbol::LIST,
-        [Expr::call(Symbol::LIST, components)],
-    )))
+    Ok(Some(components))
 }
 
 /// The inverse transform of `big_f` from `s` into `x`; `None` when it

@@ -264,3 +264,61 @@ fn stays() {
         );
     }
 }
+
+/// Conditions fix the constants (CAS-284).
+#[test]
+fn conditions() {
+    let ctx = Context::new();
+    let rotation = "Equation[D[y[x], x], z[x]], Equation[D[z[x], x], Times[-1, y[x]]]";
+    for (conditions, expected) in [
+        (
+            "Equation[y[0], 1], Equation[z[0], 0]",
+            "List[List[Cos[x], Times[-1, Sin[x]]]]",
+        ),
+        // Fewer conditions than constants: c_1 stays.
+        (
+            "Equation[y[0], 1]",
+            "List[List[Plus[Cos[x], Times[c_1, Sin[x]]], \
+             Plus[Times[c_1, Cos[x]], Times[-1, Sin[x]]]]]",
+        ),
+        // At another point.
+        (
+            "Equation[y[Times[1/2, Pi]], 1], Equation[z[Times[1/2, Pi]], 0]",
+            "List[List[Sin[x], Cos[x]]]",
+        ),
+        // None meets them.
+        ("Equation[y[0], 1], Equation[y[0], 2]", "List[]"),
+    ] {
+        let input = format!("DSolve[List[{rotation}, {conditions}], List[y[x], z[x]]]");
+        assert_eq!(
+            ctx.eval(&read(&input)).unwrap(),
+            ctx.eval(&read(expected)).unwrap(),
+            "{input}"
+        );
+    }
+    // A derivative's condition: y″ = −z, z′ = y with y(0) = 1, y′(0) = 0,
+    // z(0) = 2, giac's [1, 0, 2] for (y, y′, z).
+    let input = "DSolve[List[Equation[D[y[x], x, x], Times[-1, z[x]]], \
+                 Equation[D[z[x], x], y[x]], Equation[y[0], 1], \
+                 Equation[Derivative[1][y][0], 0], Equation[z[0], 2]], x, List[y, z]]";
+    let answer = ctx.eval(&read(input)).unwrap();
+    let [solution] = answer.args() else {
+        panic!("{input}: {answer:?}");
+    };
+    let [y, z] = solution.args() else {
+        panic!("{input}: {answer:?}");
+    };
+    for (value, expected) in [
+        (format!("ReplaceAll[{y:?}, Rule[x, 0]]"), "1"),
+        (format!("ReplaceAll[D[{y:?}, x], Rule[x, 0]]"), "0"),
+        (format!("ReplaceAll[{z:?}, Rule[x, 0]]"), "2"),
+        (format!("Expand[Plus[D[{y:?}, x, x], {z:?}]]"), "0"),
+        (format!("Expand[Plus[D[{z:?}, x], Times[-1, {y:?}]]]"), "0"),
+    ] {
+        assert_eq!(
+            ctx.eval(&read(&format!("Expand[{value}]"))).unwrap(),
+            read(expected),
+            "{input}: {answer:?}"
+        );
+    }
+}

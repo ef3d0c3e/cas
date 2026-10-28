@@ -205,3 +205,37 @@ fn constant_coefficients() {
         ),
     ]);
 }
+
+/// Conditions fix the constants (CAS-284).
+#[test]
+fn conditions() {
+    check(&[
+        Case(
+            "desolve([diff(y(x),x)=z(x),diff(z(x),x)=-y(x),y(0)=1,z(0)=0],[y(x),z(x)])",
+            "desolve([y'=[[0,1],[-1,0]]*y,y(0)=[1,0]],y)",
+            &[0, 1],
+        ),
+        Case(
+            "desolve([diff(y(x),x)=y(x)+z(x),diff(z(x),x)=y(x)-z(x),y(0)=2,z(0)=-1],[y(x),z(x)])",
+            "desolve([y'=[[1,1],[1,-1]]*y,y(0)=[2,-1]],y)",
+            &[0, 1],
+        ),
+        Case(
+            "desolve([diff(y(x),x)=2*y(x),diff(z(x),x)=3*z(x),y(1)=1,z(1)=1],[y(x),z(x)])",
+            "desolve([y'=[[2,0],[0,3]]*y,y(1)=[1,1]],y)",
+            &[0, 1],
+        ),
+        Case(
+            "desolve([diff(y(x),x)=z(x)+x,diff(z(x),x)=-y(x)+exp(x),y(0)=0,z(0)=1],[y(x),z(x)])",
+            "desolve([y'=[[0,1],[-1,0]]*y+[x,exp(x)],y(0)=[0,1]],y)",
+            &[0, 1],
+        ),
+        // y'' = -z, z' = y against Y = (y, y', z), y'(0) by subst.
+        Case(
+            "desolve([diff(y(x),x,x)=-z(x),diff(z(x),x)=y(x),y(0)=1,\
+             subst(diff(y(x),x),x=0)=0,z(0)=2],[y(x),z(x)])",
+            "desolve([y'=[[0,1,0],[0,0,-1],[1,0,0]]*y,y(0)=[1,0,2]],y)",
+            &[0, 2],
+        ),
+    ]);
+}
