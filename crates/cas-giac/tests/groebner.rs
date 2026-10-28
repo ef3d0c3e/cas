@@ -98,3 +98,52 @@ fn remainders() {
         same,
     );
 }
+
+/// Whether two numbers agree to 10⁻²⁰, real and imaginary parts apart.
+fn close(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    let gap = Expr::call(Symbol::N, [a.clone() - b.clone(), Expr::from(30)]);
+    [Symbol::RE, Symbol::IM].into_iter().all(|part| {
+        let small = Expr::call(
+            Symbol::LESS,
+            [
+                Expr::call(Symbol::ABS, [Expr::call(part, [gap.clone()])]),
+                Expr::from(10).pow(-20),
+            ],
+        );
+        ctx.eval(&small).ok().and_then(|e| e.as_symbol()) == Some(Symbol::TRUE)
+    })
+}
+
+/// Whether two answers are one set of tuples: as many, each of one close
+/// to one of the other's, value by value.
+fn same_tuples(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    let list = Expr::from(Symbol::LIST);
+    a.head() == Some(&list)
+        && b.head() == Some(&list)
+        && a.args().len() == b.args().len()
+        && a.args().iter().all(|s| {
+            b.args().iter().any(|t| {
+                s.args().len() == t.args().len()
+                    && s.args().iter().zip(t.args()).all(|(u, v)| close(ctx, u, v))
+            })
+        })
+}
+
+/// Polynomial systems by lexicographic bases (CAS-289), as sets of tuples.
+#[test]
+fn systems() {
+    check(
+        &[
+            "solve([x^2+y^2+z^2=1,x-y=0,y-z=0],[x,y,z])",
+            "solve([x*y=1,y*z=1,x*z=1],[x,y,z])",
+            "solve([x+y+z=1,x^2+y^2+z^2=1,x^3+y^3+z^3=1],[x,y,z])",
+            "solve([x^2-1,y^2-1,x-y],[x,y])",
+            "solve([x+y=1,x+y=2,x*y=3],[x,y])",
+            "solve([x+y+z=0,x*y+y*z+z*x=0,x*y*z=1],[x,y,z])",
+            "csolve([x+y+z=0,x*y+y*z+z*x=0,x*y*z=1],[x,y,z])",
+            "solve([x^2+y^2=2,x*y=1,x+z=0],[x,y,z])",
+            "solve([x^2+y+z=1,x+y^2+z=1,x+y+z^2=1],[x,y,z])",
+        ],
+        same_tuples,
+    );
+}

@@ -164,9 +164,12 @@ fn equation_roots(
 }
 
 /// `Solve[{eqns}, {x, y, …}]` (CAS-212): a linear system by [`linear`],
-/// `{{…}}` or `{}`; one equation in one unknown, its roots as tuples, as
-/// giac's `solve(x^2-1,[x])` is `[[1],[-1]]`. Anything else stays, as
-/// distinct symbols are wanted for the unknowns.
+/// `{{…}}` or `{}`; two polynomial equations in two unknowns by their
+/// resultant ([`nonlinear`]), and other polynomial systems by a
+/// lexicographic Gröbner basis ([`groebner`], CAS-289); one equation in
+/// one unknown, its roots as tuples, as giac's `solve(x^2-1,[x])` is
+/// `[[1],[-1]]`. Anything else stays, as distinct symbols are wanted for
+/// the unknowns.
 fn system(
     ev: &mut Eval<'_>,
     e: &Expr,
@@ -191,6 +194,11 @@ fn system(
     }
     let real = !complex && ev.context().domain() == Domain::Real;
     if let Some(solutions) = nonlinear::system(ev, e, &equations, unknowns, real)? {
+        return Ok(Some(solutions));
+    }
+    if unknowns.len() >= 2
+        && let Some(solutions) = groebner::system(ev, e, &equations, unknowns, real)?
+    {
         return Ok(Some(solutions));
     }
     let ([eqn], [x]) = (&equations[..], unknowns) else {
@@ -791,6 +799,7 @@ fn numeric_order((a_re, a_im): &(Float, Float), (b_re, b_im): &(Float, Float)) -
 }
 
 mod fsolve;
+mod groebner;
 mod inequality;
 mod linear;
 mod nonlinear;

@@ -59,8 +59,9 @@ fn variables(vars: &Expr) -> Option<Vec<Expr>> {
 
 /// `p`, or `l − r` for an equation, expanded, as a polynomial in `vars`
 /// with rational coefficients; `None` when it is not one, or an exponent is
-/// past the bound of a computation.
-fn distributed(
+/// past the bound of a computation. Also `Solve`'s, for polynomial systems
+/// (CAS-289).
+pub(super) fn distributed(
     ev: &mut Eval<'_>,
     p: &Expr,
     vars: &[Expr],
@@ -111,7 +112,7 @@ fn term(t: &Expr, vars: &[Expr]) -> Option<(Vec<u64>, Rational)> {
 }
 
 /// `g` as an expression in `vars`.
-fn expression(g: &Distributed, vars: &[Expr]) -> Expr {
+pub(super) fn expression(g: &Distributed, vars: &[Expr]) -> Expr {
     let terms = g.terms().iter().map(|(m, c)| {
         let mut factors = vec![Expr::from(c.clone())];
         for (v, &e) in vars.iter().zip(m) {
