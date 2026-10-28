@@ -359,6 +359,10 @@ builtins! {
     ARC_TAN_TO_ARC_COS = "ArcTanToArcCos" [PROTECTED];
     ARC_TAN_TO_ARC_SIN = "ArcTanToArcSin" [PROTECTED];
     ARC_TRIG_TO_LOG = "ArcTrigToLog" [PROTECTED];
+    // Complex parts (CAS-DOC-36 §7).
+    COMPLEX_EXPAND = "ComplexExpand" [PROTECTED];
+    MULTIPLY_CONJUGATE = "MultiplyConjugate" [PROTECTED];
+    MULTIPLY_COMPLEX_CONJUGATE = "MultiplyComplexConjugate" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

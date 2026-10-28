@@ -566,6 +566,12 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::ARC_TAN_TO_ARC_COS, rewrite::arc_tan_to_arc_cos),
         (Symbol::ARC_TAN_TO_ARC_SIN, rewrite::arc_tan_to_arc_sin),
         (Symbol::ARC_TRIG_TO_LOG, rewrite::arc_trig_to_log),
+        (Symbol::COMPLEX_EXPAND, rewrite::complex_expand),
+        (Symbol::MULTIPLY_CONJUGATE, rewrite::multiply_conjugate),
+        (
+            Symbol::MULTIPLY_COMPLEX_CONJUGATE,
+            rewrite::multiply_complex_conjugate,
+        ),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),

@@ -17,8 +17,11 @@
 //! - [`inverse`]: `ArcCosToArcSin`, `ArcSinToArcCos`, `ArcCosToArcTan`,
 //!   `ArcSinToArcTan`, `ArcTanToArcCos`, `ArcTanToArcSin` and
 //!   `ArcTrigToLog` (§6).
+//! - [`complex`]: `ComplexExpand`, `MultiplyConjugate` and
+//!   `MultiplyComplexConjugate` (§7), on the whole expression.
 
 mod collect;
+mod complex;
 mod exponential;
 mod inverse;
 mod pythagorean;
@@ -60,6 +63,51 @@ fn rewrite(ev: &mut Eval<'_>, e: &Expr, name: &'static str, rule: Rule) -> Nativ
     if let Some(error) = failure {
         return Err(error);
     }
+    ev.step(name, e, &result);
+    Ok(Some(result))
+}
+
+/// `x` with `form` applied to it, or to each entry of a list or relation,
+/// for the forms that take one expression whole.
+fn entrywise(
+    ev: &mut Eval<'_>,
+    x: &Expr,
+    form: &mut dyn FnMut(&mut Eval<'_>, &Expr) -> Result<Expr, EvalError>,
+) -> Result<Expr, EvalError> {
+    if let (
+        Some(
+            Symbol::LIST
+            | Symbol::EQUAL
+            | Symbol::UNEQUAL
+            | Symbol::LESS
+            | Symbol::LESS_EQUAL
+            | Symbol::GREATER
+            | Symbol::GREATER_EQUAL,
+        ),
+        Some(h),
+    ) = (head(x), x.head())
+    {
+        let entries = x
+            .args()
+            .iter()
+            .map(|a| entrywise(ev, a, form))
+            .collect::<Result<Vec<_>, _>>()?;
+        return Ok(Expr::apply(h, &entries));
+    }
+    form(ev, x)
+}
+
+/// `e = f[x]` with `form` applied entrywise, the step noted as `name`.
+fn whole(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    name: &'static str,
+    form: &mut dyn FnMut(&mut Eval<'_>, &Expr) -> Result<Expr, EvalError>,
+) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    let result = entrywise(ev, x, form)?;
     ev.step(name, e, &result);
     Ok(Some(result))
 }
@@ -163,12 +211,7 @@ fn pythagorean_form(
     name: &'static str,
     favoured: pythagorean::Favoured,
 ) -> Native {
-    let [x] = e.args() else {
-        return Ok(None);
-    };
-    let result = pythagorean::form(ev, x, favoured)?;
-    ev.step(name, e, &result);
-    Ok(Some(result))
+    whole(ev, e, name, &mut |ev, x| pythagorean::form(ev, x, favoured))
 }
 
 /// `TrigToCos[x]`, Xcas's `trigcos`.
@@ -229,4 +272,26 @@ pub(super) fn arc_tan_to_arc_sin(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// `ArcTrigToLog[x]`, Xcas's `atrig2ln`.
 pub(super) fn arc_trig_to_log(ev: &mut Eval<'_>, e: &Expr) -> Native {
     rewrite(ev, e, "ArcTrigToLog", inverse::arc_trig_to_log)
+}
+
+/// `ComplexExpand[x]`, Xcas's `evalc`.
+pub(super) fn complex_expand(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    whole(ev, e, "ComplexExpand", &mut complex::complex_expand)
+}
+
+/// `MultiplyConjugate[x]`, Xcas's `mult_conjugate`.
+pub(super) fn multiply_conjugate(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    whole(ev, e, "MultiplyConjugate", &mut |_, x| {
+        Ok(complex::multiply_conjugate(x))
+    })
+}
+
+/// `MultiplyComplexConjugate[x]`, Xcas's `mult_c_conjugate`.
+pub(super) fn multiply_complex_conjugate(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    whole(
+        ev,
+        e,
+        "MultiplyComplexConjugate",
+        &mut complex::multiply_complex_conjugate,
+    )
 }

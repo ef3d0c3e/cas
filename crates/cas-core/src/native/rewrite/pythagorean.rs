@@ -14,7 +14,7 @@
 //!   `tan(x)/(tan(x)^2+1)`.
 //!
 //! Lists and relations are rewritten entry by entry, as `Together` takes
-//! one expression.
+//! one expression (`entrywise`).
 
 use super::head;
 use crate::context::EvalError;
@@ -59,29 +59,9 @@ fn cos_powers(e: &Expr) -> Expr {
     })
 }
 
-/// `x` in the form that favours `favoured`, built: `Together` of it, or a
-/// list or relation of such.
+/// `x`, not a list or a relation, in the form that favours `favoured`:
+/// `Together` of it, built.
 pub(super) fn form(ev: &mut Eval<'_>, x: &Expr, favoured: Favoured) -> Result<Expr, EvalError> {
-    if let (
-        Some(
-            Symbol::LIST
-            | Symbol::EQUAL
-            | Symbol::UNEQUAL
-            | Symbol::LESS
-            | Symbol::LESS_EQUAL
-            | Symbol::GREATER
-            | Symbol::GREATER_EQUAL,
-        ),
-        Some(h),
-    ) = (head(x), x.head())
-    {
-        let entries = x
-            .args()
-            .iter()
-            .map(|a| form(ev, a, favoured))
-            .collect::<Result<Vec<_>, _>>()?;
-        return Ok(Expr::apply(h, &entries));
-    }
     let first = match favoured {
         Favoured::Cos | Favoured::Sin => tan_out(x),
         Favoured::Tan => sin_out(x),
