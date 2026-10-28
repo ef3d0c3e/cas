@@ -572,10 +572,10 @@ fn merge_number_powers(factors: Vec<Expr>) -> Vec<Expr> {
 ///   `Limits::number_bits` bits (2²⁴ by default) stays unevaluated;
 /// - rational powers of rationals in canonical form ([`radical`]);
 /// - `x^0` is 1, `x^1` is `x`, `1^x` is 1;
-/// - `(b^p)^n` is `b^(p n)`, `(e^u)^n` is `e^(n u)` and `(x y)^n` is
-///   `x^n y^n` for an integer `n`, the identities that hold for every
-///   complex `b`; for a positive rational `b`, `(b^p)^q` is `b^(p q)` for
-///   any real `q`;
+/// - `(b^p)^n` is `b^(p n)` and `(x y)^n` is `x^n y^n` for an integer `n`,
+///   the identities that hold for every complex `b`, and `(e^u)^n` is
+///   `e^(n u)` where that is no exponential; for a positive rational `b`,
+///   `(b^p)^q` is `b^(p q)` for any real `q`;
 /// - `E^u` with terms `iπk` in `u` by [`special::exponential`];
 /// - infinities: a direction to a positive integer power, 0 for a negative
 ///   power, `Indeterminate` for `Infinity^0`.
@@ -666,11 +666,27 @@ fn scalar_power(ev: &mut Eval<'_>, b: &Expr, n: &Expr) -> Native {
     {
         return Ok(Some(factor * Expr::from(Symbol::E).pow(rest)));
     }
+    // `(e^u)^n` where `e^(n u)` is no exponential (CAS-DOC-25 §4): the
+    // powers of `e^(iπ/4)` meet §2. Others stay, for products to cancel
+    // `e^u` and `(e^u)^(−1)`.
+    if let (Some(Symbol::EXP), [u]) = (b.head().and_then(Expr::as_symbol), b.args())
+        && exponent
+            .as_ref()
+            .and_then(Num::real)
+            .is_some_and(Rational::is_integer)
+    {
+        let product = ev.eval(&apply(Symbol::TIMES, &[n.clone(), u.clone()]))?;
+        if let Some((factor, rest)) = special::exponential(ev.context(), &product)
+            && rest == Expr::from(0)
+        {
+            return Ok(Some(factor));
+        }
+    }
     Ok(compound_power(ev, b, n, exponent.as_ref(), real_domain))
 }
 
-/// [`scalar_power`] of a power, an absolute value, an exponential or a
-/// product, by the identities for its exponent.
+/// [`scalar_power`] of a power, an absolute value or a product, by the
+/// identities for its exponent.
 #[allow(
     clippy::many_single_char_names,
     reason = "b^n, as written in mathematics"
@@ -708,11 +724,6 @@ fn compound_power(
             }) && assume::element(ev.context(), inner, Set::Reals) == Truth::True =>
         {
             Some(apply(Symbol::POWER, &[inner.clone(), n.clone()]))
-        }
-        // `(e^u)^n` (CAS-DOC-25 §4): the powers of `e^(iπ/4)` meet §2.
-        (Some(Symbol::EXP), [u]) if integer.is_some() => {
-            let product = apply(Symbol::TIMES, &[n.clone(), u.clone()]);
-            Some(apply(Symbol::EXP, &[product]))
         }
         // `(x y)^n`.
         (Some(Symbol::TIMES), factors) if integer.is_some() => {

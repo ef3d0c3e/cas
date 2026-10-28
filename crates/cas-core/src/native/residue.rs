@@ -1,7 +1,8 @@
 //! `Residue` (CAS-DOC-25 §4, CAS-315): Xcas's `residue(f, z, a)` and
 //! `residue(f, z = a)`, and Mathematica's `Residue[f, {z, a}]`, the
 //! coefficient of `(z − a)⁻¹` in the Laurent series of `f` at `a`, from the
-//! series engine (CAS-DOC-10) to the order 1: 0 where `f` is analytic. At
+//! series engine (CAS-DOC-10) to the orders of [`ORDERS`] in turn: 0 where
+//! `f` is analytic. At
 //! infinity, `Infinity` with any direction or `ComplexInfinity`, it is
 //! `−Res_{t=0} f(1/t)/t²`, Mathematica's sign: `Residue[1/z, z, Infinity]`
 //! is −1, where giac answers 1.
@@ -26,6 +27,11 @@ use crate::expr::Expr;
 use crate::symbol::Symbol;
 
 type Native = Result<Option<Expr>, EvalError>;
+
+/// The orders tried, each until a series shows: a denominator whose
+/// constant term cancels, `e^t − 1` or `1 + (i + t)²`, needs its terms past
+/// the one that cancels, as `Limit`'s leading terms.
+const ORDERS: [i64; 4] = [2, 4, 8, 16];
 
 /// Whether `a` is a point at infinity.
 fn infinite(a: &Expr) -> bool {
@@ -65,7 +71,14 @@ pub(super) fn residue(ev: &mut Eval<'_>, e: &Expr) -> Native {
         None => -(f.substitute(&[(z.clone(), t.pow(-1))]) * t.pow(-2)),
     };
     let local = ev.eval(&local)?;
-    let Some(s) = expansion(ev, &local, &t, &Rational::from(Integer::from(1)))? else {
+    let mut series = None;
+    for order in ORDERS {
+        series = expansion(ev, &local, &t, &Rational::from(Integer::from(order)))?;
+        if series.is_some() {
+            break;
+        }
+    }
+    let Some(s) = series else {
         return Ok(None);
     };
     if s.ramification != 1 || s.coeffs.iter().any(|c| c.contains(&log_t())) {
