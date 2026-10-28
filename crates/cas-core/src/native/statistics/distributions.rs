@@ -4,6 +4,8 @@
 //!
 //! - The discrete ones ([`discrete`], §2, CAS-301): binomial, Poisson,
 //!   geometric and negative binomial.
+//! - The monotone inversion of continuous cumulative functions, and
+//!   `InverseErf` ([`inversion`], §3, §5, CAS-302).
 //!
 //! A parameter that is a number must be valid (a probability in `[0, 1]`,
 //! a rate above 0, a natural count), as comparisons decide; otherwise the
@@ -12,6 +14,7 @@
 //! expressions, and the inverses as calls.
 
 pub(in crate::native) mod discrete;
+pub(in crate::native) mod inversion;
 
 use std::cmp::Ordering;
 

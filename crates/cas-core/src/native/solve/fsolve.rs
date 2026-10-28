@@ -281,8 +281,15 @@ fn value(ctx: &Context, f: &Expr, x: &Expr, q: &Expr, bits: u64) -> Option<Ball>
     }
 }
 
-/// The sign of `f` at the rational `q`, when its ball tells it.
-fn sign(ctx: &Context, f: &Expr, x: &Expr, q: &Rational, bits: u64) -> Option<Ordering> {
+/// The sign of `f` at the rational `q`, when its ball tells it. Also the
+/// monotone inversion's (CAS-302).
+pub(in crate::native) fn sign(
+    ctx: &Context,
+    f: &Expr,
+    x: &Expr,
+    q: &Rational,
+    bits: u64,
+) -> Option<Ordering> {
     value(ctx, f, x, &Expr::from(q.clone()), bits)?.sign()
 }
 
@@ -313,8 +320,9 @@ fn scanned(ctx: &Context, f: &Expr, x: &Expr, grid: &[Rational], bits: u64) -> V
 
 /// The root of `f` between `lo` and `hi`, where `f` has the sign `s_lo` at
 /// `lo` and the other one at `hi`, by bisection to `bits` bits: a ball, when
-/// `f` over the last interval is a finite ball.
-fn bisected(
+/// `f` over the last interval is a finite ball. Also the monotone
+/// inversion's (CAS-302).
+pub(in crate::native) fn bisected(
     ctx: &Context,
     f: &Expr,
     x: &Expr,

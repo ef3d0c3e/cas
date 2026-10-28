@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 169] = [
+const BUILTINS: [&str; 170] = [
     "Plus",
     "Times",
     "Power",
@@ -138,6 +138,7 @@ const BUILTINS: [&str; 169] = [
     "NegativeBinomialPDF",
     "NegativeBinomialCDF",
     "NegativeBinomialICDF",
+    "InverseErf",
     // Integrals (CAS-194), series and limits (CAS-203, CAS-205), and
     // equations (CAS-210, CAS-214).
     "Integrate",

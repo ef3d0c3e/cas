@@ -283,6 +283,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::NEGATIVE_BINOMIAL_ICDF,
             statistics::distributions::discrete::negative_binomial_icdf,
         ),
+        (
+            Symbol::INVERSE_ERF,
+            statistics::distributions::inversion::inverse_erf,
+        ),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),

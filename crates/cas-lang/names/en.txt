@@ -60,6 +60,8 @@ Beta: Beta
 Zeta: Zeta
 Erf: erf
 Erfc: erfc
+# The inverse of erf (CAS-DOC-23, CAS-302), which Xcas lacks.
+InverseErf: erfinv
 HeavisideTheta: Heaviside
 DiracDelta: Dirac
 Sqrt: sqrt

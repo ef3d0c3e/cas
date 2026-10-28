@@ -190,6 +190,9 @@ builtins! {
     NEGATIVE_BINOMIAL_PDF = "NegativeBinomialPDF" [PROTECTED];
     NEGATIVE_BINOMIAL_CDF = "NegativeBinomialCDF" [PROTECTED];
     NEGATIVE_BINOMIAL_ICDF = "NegativeBinomialICDF" [PROTECTED];
+    // The inverse of `Erf`, for the normal distribution's inverse (CAS-DOC-23
+    // §3); giac has none.
+    INVERSE_ERF = "InverseErf" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

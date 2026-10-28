@@ -137,3 +137,37 @@ fn discrete_stays() {
         "PoissonICDF[10000, 1/2]",
     ]);
 }
+
+/// Whether `claim` evaluates to `True`.
+fn holds(ctx: &Context, claim: &str) -> bool {
+    ctx.eval(&read(claim)).unwrap() == read("True")
+}
+
+/// `InverseErf`: its exact values, oddness, and balls that `Erf` takes
+/// back to their argument (CAS-302).
+#[test]
+fn inverse_erf() {
+    check(&[
+        ("InverseErf[0]", "0"),
+        ("InverseErf[1]", "Infinity"),
+        ("InverseErf[-1]", "Times[-1, Infinity]"),
+        ("InverseErf[-1/2]", "Times[-1, InverseErf[1/2]]"),
+        ("InverseErf[List[0, 1]]", "List[0, Infinity]"),
+    ]);
+    stays(&["InverseErf[1/2]", "InverseErf[2]", "InverseErf[x]"]);
+    let ctx = Context::new();
+    for claim in [
+        // To 30 digits, and erf takes them back.
+        "Less[Abs[Plus[Erf[N[InverseErf[1/2], 30]], -1/2]], Power[10, -28]]",
+        "Less[Abs[Plus[Erf[N[InverseErf[-99/100], 30]], 99/100]], Power[10, -28]]",
+        "Less[Abs[Plus[Erf[N[InverseErf[1/1000000], 30]], -1/1000000]], Power[10, -34]]",
+        // A decimal, at its precision.
+        "Less[Abs[Plus[Erf[InverseErf[Decimal[9, -1]]], Times[-1, Decimal[9, -1]]]], \
+         Power[10, -14]]",
+        // erfinv(1/2) = 0.476936276204469873381…
+        "Less[Abs[Plus[N[InverseErf[1/2], 30], Times[-1, 47693627620446987338/10^20]]], \
+         Power[10, -19]]",
+    ] {
+        assert!(holds(&ctx, claim), "{claim}");
+    }
+}

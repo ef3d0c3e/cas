@@ -798,7 +798,7 @@ fn numeric_order((a_re, a_im): &(Float, Float), (b_re, b_im): &(Float, Float)) -
     }
 }
 
-mod fsolve;
+pub(in crate::native) mod fsolve;
 mod groebner;
 mod inequality;
 mod linear;
