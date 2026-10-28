@@ -17,7 +17,7 @@ use std::cmp::Ordering;
 use cas_num::{Integer, Rational};
 
 use super::super::super::number::{Num, Precision};
-use super::super::super::solve::fsolve::{bisected, sign};
+use super::super::super::solve::fsolve::{bisected, resolution, sign};
 use super::super::super::special::negated;
 use crate::context::{Context, EvalError};
 use crate::eval::Eval;
@@ -48,30 +48,48 @@ pub(in crate::native) fn invert(
     };
     let two = Rational::from(Integer::from(2));
     for _ in 0..MAX_DOUBLINGS {
-        let below = sign(ctx, &g, x, &lo, bits)?;
-        let above = sign(ctx, &g, x, &hi, bits)?;
+        let below = sign(ctx, &g, x, &lo, bits);
+        let above = sign(ctx, &g, x, &hi, bits);
         match (below, above) {
-            (Ordering::Equal, _) => return Some(Expr::from(lo)),
-            (_, Ordering::Equal) => return Some(Expr::from(hi)),
-            (Ordering::Less, Ordering::Greater) => {
+            (Some(Ordering::Equal), _) => return Some(Expr::from(lo)),
+            (_, Some(Ordering::Equal)) => return Some(Expr::from(hi)),
+            (Some(Ordering::Less), Some(Ordering::Greater)) => {
                 return bisected(ctx, &g, x, lo, hi, Ordering::Less, bits);
             }
             // Too far left: the bracket moves right, twice as wide.
-            (Ordering::Less, Ordering::Less) => {
+            (Some(Ordering::Less), Some(Ordering::Less)) => {
                 let width = &hi - &lo;
                 lo = hi.clone();
                 hi = &hi + &(&width * &two);
             }
             // Too far right, where there is room.
-            (Ordering::Greater, Ordering::Greater) if low.is_none() => {
+            (Some(Ordering::Greater), Some(Ordering::Greater)) if low.is_none() => {
                 let width = &hi - &lo;
                 hi = lo.clone();
                 lo = &lo - &(&width * &two);
             }
+            // An end within rounding of the root, an exact root there:
+            // Cauchy's inverse at 3/4 is 1, the end of `[0, 1]` (CAS-306).
+            (None, _) => return around(ctx, &g, x, &lo, bits),
+            (_, None) => return around(ctx, &g, x, &hi, bits),
             _ => return None,
         }
     }
     None
+}
+
+/// The root of the increasing `g` within rounding of `point`, as the ball
+/// of the resolution around it, when the signs there bracket it.
+fn around(ctx: &Context, g: &Expr, x: &Expr, point: &Rational, bits: u64) -> Option<Expr> {
+    let delta = resolution(point, bits);
+    let (below, above) = (point - &delta, point + &delta);
+    let bracketed = sign(ctx, g, x, &below, bits) == Some(Ordering::Less)
+        && sign(ctx, g, x, &above, bits) == Some(Ordering::Greater);
+    if bracketed {
+        bisected(ctx, g, x, below, above, Ordering::Less, bits)
+    } else {
+        None
+    }
 }
 
 /// `InverseErf[y]`.

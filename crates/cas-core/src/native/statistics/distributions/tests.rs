@@ -296,6 +296,10 @@ fn degrees_of_freedom() {
         // it gave the ball of [3/2, 2] (the fuzz target, CAS-305).
         "Less[Abs[N[Plus[StudentTICDF[2, 8/9], -7/4], 20]], Power[10, -14]]",
         "Less[Abs[N[Plus[StudentTICDF[2, 1/9], 7/4], 20]], Power[10, -14]]",
+        // An exact root at the bracket's end: Cauchy's inverse at 3/4 is 1,
+        // the end of [0, 1], which stayed (the fuzz target, CAS-306).
+        "Less[Abs[N[Plus[StudentTICDF[1, 3/4], -1], 20]], Power[10, -14]]",
+        "Less[Abs[N[Plus[StudentTCDF[1, StudentTICDF[1, 3/4]], -3/4], 20]], Power[10, -12]]",
     ] {
         assert!(holds(&ctx, claim), "{claim}");
     }

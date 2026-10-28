@@ -367,8 +367,8 @@ pub(in crate::native) fn bisected(
 }
 
 /// Half the width [`narrow`] allows around `x`: `2^−(bits+1)` of `|x|`, or
-/// of `2^−bits` about 0.
-fn resolution(x: &Rational, bits: u64) -> Rational {
+/// of `2^−bits` about 0. Also the monotone inversion's (CAS-306).
+pub(in crate::native) fn resolution(x: &Rational, bits: u64) -> Rational {
     let two = Rational::from(Integer::from(2));
     let exponent = i64::try_from(bits).unwrap_or(i64::MAX);
     let floor = two.pow(-exponent);
