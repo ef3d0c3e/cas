@@ -226,7 +226,7 @@ fn brent(t: &Float, wp: u64, n: u64, steps: u64) -> Ball {
 #[allow(clippy::cast_precision_loss, reason = "an estimate")]
 fn log2_of(t: &Float) -> f64 {
     let e = exponent(t);
-    if e.abs() > 1000 {
+    if e.unsigned_abs() > 1000 {
         return e as f64;
     }
     t.to_f64().abs().log2()

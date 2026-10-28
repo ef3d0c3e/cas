@@ -230,3 +230,19 @@ proptest! {
         prop_assert!(side != Some(wrong_side), "W({:?}) = {:?} off its branch", x, w);
     }
 }
+
+/// Arguments whose exponents are beyond `i64` (CAS-353): `W_(−1)` of a
+/// tiny negative `x` is about `log(−x)`, and `W_0` is about `x`.
+#[test]
+fn huge_exponents() {
+    let far = Integer::from(1i64 << 62) * Integer::from(4);
+    let tiny = Float::from(-1i64).mul_2exp(&-far);
+    let lower = Ball::exact(tiny.clone()).lambert_w(true, 64);
+    assert!(lower.is_finite() && lower.mid().is_negative(), "{lower:?}");
+    let principal = Ball::exact(tiny.clone()).lambert_w(false, 64);
+    assert!(principal.is_finite(), "{principal:?}");
+    assert!(
+        principal.contains(&tiny) || principal.rel_accuracy_bits() >= 61,
+        "{principal:?}"
+    );
+}

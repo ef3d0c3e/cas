@@ -83,7 +83,7 @@ fn start(x: &Float, lower: bool) -> Float {
         // W(x) = x − x² + …
         return x.clone();
     }
-    if e.abs() > 1000 {
+    if e.unsigned_abs() > 1000 {
         let ln_abs = e as f64 * LN_2;
         return Float::from_f64(far(ln_abs)).expect("finite");
     }

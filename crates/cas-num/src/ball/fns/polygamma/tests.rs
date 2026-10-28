@@ -259,3 +259,18 @@ proptest! {
         prop_assert!(difference.overlaps(&step), "ψ^({})({:?}): {:?} against {:?}", m, b, difference, step);
     }
 }
+
+/// Arguments whose exponents are beyond `i64`: the plan's estimates
+/// saturate instead of overflowing (the `ball_fns` fuzz target, CAS-353).
+#[test]
+fn huge_exponents() {
+    let far = Integer::from(1i64 << 62) * Integer::from(4);
+    let tiny = Float::from(1i64).mul_2exp(&-far.clone());
+    // ψ(x) = −1/x − γ + O(x) next to 0.
+    let b = Ball::exact(tiny).digamma(64);
+    assert!(b.is_finite() && b.mid().is_negative(), "{b:?}");
+    assert!(*b.mid().exponent() > Integer::from(1i64 << 62), "{b:?}");
+    let huge = Float::from(1i64).mul_2exp(&far);
+    let b = Ball::exact(huge).polygamma(1, 64);
+    assert!(b.is_finite() && !b.mid().is_negative(), "{b:?}");
+}

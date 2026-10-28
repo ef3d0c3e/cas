@@ -74,7 +74,7 @@ fn terms(log2_z: f64, m: u64, target: u64) -> Option<u64> {
 #[allow(clippy::cast_precision_loss, reason = "an estimate")]
 fn log2_of(x: &Float) -> f64 {
     let e = exponent(x);
-    if e.abs() > 1000 {
+    if e.unsigned_abs() > 1000 {
         return e as f64;
     }
     x.to_f64().log2()

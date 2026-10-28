@@ -16,7 +16,7 @@
 use std::cmp::Ordering;
 
 use arbitrary::{Result, Unstructured};
-use cas_num::ball::{Ball, Float, Mag};
+use cas_num::ball::{Ball, Float, Mag, Round};
 use cas_num::{Integer, Natural};
 use cas_num_fuzz::ball::{Range, float, from_mp, meets, points, precision, radius, to_mp, warm_up};
 use libfuzzer_sys::fuzz_target;
@@ -49,7 +49,9 @@ fn run(u: &mut Unstructured<'_>) -> Result<()> {
 }
 
 fn exponent(x: &Float) -> i64 {
-    x.exponent().to_i64().unwrap_or(i64::MAX)
+    let e = x.exponent();
+    e.to_i64()
+        .unwrap_or(if e.is_negative() { i64::MIN } else { i64::MAX })
 }
 
 /// An exact input's result has `prec - 3` bits, or is 0.
@@ -145,31 +147,38 @@ fn sin_cos(u: &mut Unstructured<'_>, cosine: bool, x: &Ball, prec: u64) -> Resul
     Ok(())
 }
 
-/// Whether the ball meets 0 or a negative integer, from its ends.
+/// Whether the ball meets 0 or a negative integer, from its ends rounded
+/// outward.
 fn meets_pole(x: &Ball) -> bool {
     let Some(r) = x.rad().to_float() else {
         return true;
     };
-    let lo = x.mid().sub(&r);
-    let hi = x.mid().add(&r);
+    let bits = x.mid().bit_length().max(62) + 2;
+    let lo = x.mid().sub_round(&r, bits, Round::Floor).0;
+    let hi = x.mid().add_round(&r, bits, Round::Ceil).0;
     if lo.sign() == Ordering::Greater {
         return false;
     }
-    // An integer in [lo, min(hi, 0)].
-    let top = if hi.sign() == Ordering::Greater {
-        Float::ZERO
-    } else {
-        hi
-    };
-    let (ceil_lo, floor_top) = (ceil(&lo), floor(&top));
-    ceil_lo <= floor_top
+    // lo ≤ 0: 0 is in the ball, or an integer lies in [lo, hi] below it.
+    if hi.sign() != Ordering::Less {
+        return true;
+    }
+    ceil(&lo) <= floor(&hi)
 }
 
+/// `⌊x⌋` for `x < 0`, without a rational below 1 in magnitude.
 fn floor(x: &Float) -> Integer {
+    if exponent(x) <= 0 {
+        return Integer::from(-1);
+    }
     x.to_rational().floor()
 }
 
+/// `⌈x⌉` for `x ≤ 0`, likewise.
 fn ceil(x: &Float) -> Integer {
+    if x.is_zero() || exponent(x) <= 0 {
+        return Integer::ZERO;
+    }
     -(-x.to_rational()).floor()
 }
 
@@ -205,7 +214,8 @@ fn polygamma(u: &mut Unstructured<'_>, x: &Ball, prec: u64) -> Result<()> {
     if x.is_exact() {
         accurate(&y, prec, &what);
         // The recurrence, where x + 1 is short.
-        if exponent(x.mid()) < 2 * i64::try_from(prec).expect("small") + 64 {
+        let reach = 2 * i64::try_from(prec).expect("small") + 64;
+        if (-reach..reach).contains(&exponent(x.mid())) {
             let next = Ball::exact(x.mid().add(&Float::from(1i64))).polygamma(m, prec + 64);
             if next.is_finite() {
                 let q = prec + 64;
@@ -243,7 +253,8 @@ fn lambert(u: &mut Unstructured<'_>, x: &Ball, prec: u64) -> Result<()> {
     let Some(r) = x.rad().to_float() else {
         return Ok(());
     };
-    let hi = x.mid().add(&r);
+    let bits = x.mid().bit_length().max(62) + 2;
+    let hi = x.mid().add_round(&r, bits, Round::Ceil).0;
     // Below −6028/2^14 < −1/e, or on branch −1 from 0 up: outside the
     // domain.
     let below = Float::from(-6028i64).mul_2exp(&Integer::from(-14i64));
