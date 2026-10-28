@@ -390,6 +390,7 @@ builtins! {
     MAXIMIZE = "Maximize" [PROTECTED];
     F_MIN = "FMin" [PROTECTED];
     F_MAX = "FMax" [PROTECTED];
+    LP_SOLVE = "LPSolve" [PROTECTED];
     // Element-wise operators, next to `Times` and `Power` (CAS-DOC-4 §6.2).
     ELEMENTWISE_TIMES = "ElementwiseTimes" [FLAT, ONE_IDENTITY, LISTABLE, PROTECTED];
     ELEMENTWISE_DIVIDE = "ElementwiseDivide" [LISTABLE, PROTECTED];

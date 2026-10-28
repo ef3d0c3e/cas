@@ -601,6 +601,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::MAXIMIZE, optimization::global::maximize),
         (Symbol::F_MIN, optimization::global::f_min),
         (Symbol::F_MAX, optimization::global::f_max),
+        (Symbol::LP_SOLVE, optimization::lpsolve::lp_solve),
         (Symbol::SUM, sum::sum),
         (Symbol::PRODUCT, sum::product),
         (Symbol::BINOMIAL, factorial::binomial),

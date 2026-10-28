@@ -281,6 +281,7 @@ Minimize: minimize
 Maximize: maximize
 FMin: fMin
 FMax: fMax
+LPSolve: lpsolve
 # A ball, `ball(c, r)` (CAS-DOC-5 §6.5, CAS-83), and back to fractions
 # (D4, CAS-148).
 Ball: ball

@@ -1188,13 +1188,24 @@ impl Lowerer<'_> {
     }
 
     /// An argument of a call: `xs...` splices a variable-argument
-    /// parameter; in a pattern, `xs...` is one.
+    /// parameter; in a pattern, `xs...` is one. giac's option `assume = v`
+    /// of a call, as `lpsolve`'s `assume=integer`, is `Equation[Assume,
+    /// v]` (CAS-418): elsewhere `assume` is a misplaced form.
     fn argument(&mut self, node: &SyntaxNode) -> Lowering {
         if node.kind() == K::Spread {
             return self.spread(node);
         }
         if self.mode == Mode::Parameters {
             return self.parameter(node);
+        }
+        if node.kind() == K::Equation
+            && let [left, right] = node.children().collect::<Vec<_>>().as_slice()
+            && left.kind() == K::Name
+            && self.names.target(&name_of(left)) == Some(&Target::Syntax(SyntaxForm::Assume))
+        {
+            let side = (Expr::from(Symbol::ASSUME), Spans::leaf(range(left)));
+            let value = self.expr(right);
+            return apply(Symbol::EQUATION, vec![side, value], range(node));
         }
         self.expr(node)
     }

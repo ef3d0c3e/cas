@@ -422,6 +422,24 @@ fn errors_leave_statements_out() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// giac's option `assume = v` of a call is `Equation[Assume, v]`, as
+/// `lpsolve`'s `assume=integer` (CAS-418); elsewhere `assume` stays a
+/// misplaced form.
+#[test]
+fn assume_options() {
+    check(&[
+        (
+            "lpsolve(x, [x >= 1], assume = integer)",
+            "LPSolve[x, List[GreaterEqual[x, 1]], Equation[Assume, integer]]",
+        ),
+        ("f(assume = lp_binary)", "f[Equation[Assume, lp_binary]]"),
+    ]);
+    assert_eq!(
+        errors("y := assume"),
+        [("assume", E::MisplacedForm("assume".into()))]
+    );
+}
+
 /// A planned name, reserved before its builtin exists, is not available
 /// to call or to read: `names/en.txt` may list none, so the test adds one.
 #[test]

@@ -1,5 +1,6 @@
 //! Optimization (CAS-DOC-38): local extrema (§2, CAS-415), Xcas's
-//! `extrema`; [`global`] optima (§3).
+//! `extrema`; [`global`] optima (§3); linear programs ([`lpsolve`], by
+//! [`simplex`] and, with integers, [`integer`], §4).
 //!
 //! `Extrema[f, vars]` and `Extrema[f, constraints, vars]`:
 //!
@@ -27,6 +28,9 @@
 //!   saddle or an indeterminate point and leaves it out.
 
 pub(super) mod global;
+mod integer;
+pub(super) mod lpsolve;
+mod simplex;
 
 use std::cmp::Ordering;
 
