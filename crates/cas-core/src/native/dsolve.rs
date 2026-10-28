@@ -16,6 +16,8 @@
 //!   with `μ = e^(∫p dx)`, a logarithm of an absolute value in `∫p` taken
 //!   without it, since any constant multiple of `μ` serves (`y′ = 2y/x` is
 //!   `c_0 x²`, as giac's); a term `c ln u` of `∫p` makes `u^c` of `μ`.
+//! - Bessel's and Airy's equations ([`bessel`], CAS-DOC-34 §6), after the
+//!   linear methods.
 //! - The answer is expanded; the constants `c_0`, `c_1`, … skip the names of
 //!   the call. What no method solves stays, with a warning.
 //! - `DSolve[{eq, conditions…}, y[x]]` fixes the constants by the
@@ -92,6 +94,9 @@ fn solve(ev: &mut Eval<'_>, e: &Expr, ode: &Ode, x: &Expr) -> Result<Option<Expr
             return Ok(Some(y));
         }
         if let Some(y) = euler::euler(ev, e, &a, &f, x, &constants)? {
+            return Ok(Some(y));
+        }
+        if let Some(y) = bessel::special(ev, &a, &f, x, &constants)? {
             return Ok(Some(y));
         }
     } else if ode.order == 1 {
@@ -323,6 +328,7 @@ fn logarithm_multiple(t: &Expr) -> Option<(Expr, Expr)> {
     }
 }
 
+mod bessel;
 mod conditions;
 mod euler;
 mod first;

@@ -316,8 +316,6 @@ fn without_y() {
 fn stays() {
     let ctx = Context::new();
     for input in [
-        // Airy's equation.
-        "DSolve[Equation[D[y[x], x, x], Times[x, y[x]]], y[x]]",
         // y at another argument, or not differentiated.
         "DSolve[Equation[D[y[x], x], y[Plus[x, 1]]], y[x]]",
         "DSolve[Equation[y[x], x], y[x]]",
@@ -331,5 +329,42 @@ fn stays() {
             Some(&Expr::from(crate::symbol::Symbol::DSOLVE)),
             "{input}: {found:?}"
         );
+    }
+}
+
+/// Bessel's and Airy's equations (CAS-385): their solutions satisfy them,
+/// and two are giac-free forms: `c_0 Ai(x) + c_1 Bi(x)` and `c_0 J_1(x) +
+/// c_1 Y_1(x)`.
+#[test]
+fn bessel_and_airy() {
+    let cases = [
+        // Airy's y″ = k x y.
+        "Plus[D[Y, x, x], Times[-1, x, Y]]",
+        "Plus[D[Y, x, x], Times[-8, x, Y]]",
+        "Plus[D[Y, x, x], Times[x, Y]]",
+        // Bessel's, and the modified one.
+        "Plus[Times[Power[x, 2], D[Y, x, x]], Times[x, D[Y, x]], Times[Plus[Power[x, 2], -1], Y]]",
+        "Plus[Times[Power[x, 2], D[Y, x, x]], Times[x, D[Y, x]], \
+         Times[Plus[Times[4, Power[x, 2]], -9], Y]]",
+        "Plus[Times[Power[x, 2], D[Y, x, x]], Times[x, D[Y, x]], Times[-1, Plus[Power[x, 2], 4], Y]]",
+        "Plus[D[Y, x, x], Times[Power[x, -1], D[Y, x]], Y]",
+    ];
+    for template in cases {
+        general(template, "x", 2);
+    }
+    let ctx = Context::new();
+    for (input, expected) in [
+        (
+            "DSolve[Equation[D[y[x], x, x], Times[x, y[x]]], y[x]]",
+            "Plus[Times[c_0, AiryAi[x]], Times[c_1, AiryBi[x]]]",
+        ),
+        (
+            "DSolve[Equation[Plus[Times[Power[x, 2], D[y[x], x, x]], Times[x, D[y[x], x]], \
+             Times[Plus[Power[x, 2], -1], y[x]]], 0], y[x]]",
+            "Plus[Times[c_0, BesselJ[1, x]], Times[c_1, BesselY[1, x]]]",
+        ),
+    ] {
+        let found = ctx.eval(&read(input)).unwrap();
+        assert_eq!(found, ctx.eval(&read(expected)).unwrap(), "{input}");
     }
 }
