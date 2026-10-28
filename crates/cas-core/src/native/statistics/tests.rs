@@ -295,6 +295,9 @@ fn linear_regressions() {
             "PolynomialRegression[List[1, 2, 3], List[1, 4, 9], 0]",
             "List[14/3]",
         ),
+        // One point, degree 0: the fuzz target's first input, which the
+        // product of `Dot` refused as of different shapes (CAS-298).
+        ("PolynomialRegression[List[-50], List[-50], 0]", "List[-50]"),
         // Through the points: x² + x + 1, an abscissa 0 among them.
         (
             "PolynomialRegression[List[0, 1, 2], List[1, 3, 7], 2]",

@@ -24,6 +24,7 @@ use std::cmp::Ordering;
 
 use cas_num::Integer;
 
+use super::super::linear::dot;
 use super::super::matrix::inverse_of;
 use super::super::rounding::real_sign;
 use super::pairs;
@@ -234,10 +235,9 @@ pub(in super::super) fn polynomial_regression(ev: &mut Eval<'_>, e: &Expr) -> Na
     let Some(inverse) = inverse_of(ev, e, &normal)? else {
         return Ok(None);
     };
-    let solution = ev.eval(&Expr::call(
-        Symbol::DOT,
-        [inverse, Expr::call(Symbol::LIST, moments)],
-    ))?;
+    // The matrix product: `Dot` is Xcas's `dot`, of two vectors.
+    let product = dot(&inverse, &Expr::call(Symbol::LIST, moments))?;
+    let solution = ev.eval(&product)?;
     let coefficients: Vec<Expr> = solution
         .args()
         .iter()
