@@ -47,12 +47,42 @@ fn meets(ctx: &Context, answer: &Expr, x: &Expr, v: &Expr) -> Option<bool> {
     Some(any)
 }
 
+/// Whether two numbers are one value, to 40 digits.
+fn one_value(ctx: &Context, p: &Expr, q: &Expr) -> bool {
+    let gap = Expr::call(
+        Symbol::ABS,
+        [Expr::call(
+            Symbol::N,
+            [p.clone() - q.clone(), Expr::from(50)],
+        )],
+    );
+    let tiny = Expr::from(10).pow(-40);
+    ctx.eval(&Expr::call(Symbol::LESS, [gap, tiny]))
+        .ok()
+        .and_then(|e| e.as_symbol())
+        == Some(Symbol::TRUE)
+}
+
 /// Whether two answers are one set, sampled at the ends of both, the
-/// midpoints and beyond.
+/// midpoints and beyond. An end of one value in two forms takes the first
+/// in both answers: no comparison tells giac's `ln(8)/ln(2)` from this
+/// CAS's 3 at that point (CAS-279).
 fn same_set(ctx: &Context, a: &Expr, b: &Expr, x: &Expr) -> bool {
-    let mut points = Vec::new();
-    ends(a, x, &mut points);
-    ends(b, x, &mut points);
+    let mut found = Vec::new();
+    ends(a, x, &mut found);
+    ends(b, x, &mut found);
+    let mut points: Vec<Expr> = Vec::new();
+    let mut rules: Vec<(Expr, Expr)> = Vec::new();
+    for p in found {
+        if points.contains(&p) || rules.iter().any(|(q, _)| *q == p) {
+            continue;
+        }
+        match points.iter().find(|q| one_value(ctx, q, &p)) {
+            Some(q) => rules.push((p, q.clone())),
+            None => points.push(p),
+        }
+    }
+    let (a, b) = (&a.substitute(&rules), &b.substitute(&rules));
     // Sorted by their approximations.
     let mut valued: Vec<(f64, Expr)> = points
         .into_iter()
@@ -146,6 +176,8 @@ fn systems() {
 }
 
 /// Absolute values, radicals, exponentials and logarithms (CAS-279).
+/// giac's `x^(1/3)` is complex for a negative `x`, so `solve(x^(1/3)<2,x)`
+/// is `[0 <= x < 8]` there, `x < 8` here (O7): the unit tests'.
 #[test]
 fn functions() {
     check(&[
@@ -156,7 +188,6 @@ fn functions() {
         "solve(sqrt(x)<2,x)",
         "solve(sqrt(x-1)>=1,x)",
         "solve(abs(x)<=x^2,x)",
-        "solve(x^(1/3)<2,x)",
         "solve(1/sqrt(x)>1,x)",
         "solve(abs(x-1)+abs(x+1)<4,x)",
         "solve(ln(x)>0,x)",

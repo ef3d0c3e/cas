@@ -172,10 +172,11 @@ fn functions() {
                 "LessEqual[Abs[x], Power[x, 2]]",
                 "List[LessEqual[x, -1], 0, GreaterEqual[x, 1]]",
             ),
-            // giac's domain for odd roots too.
+            // Odd roots of negatives are real (O7): giac's [0 <= x < 8].
+            ("Less[Power[x, 1/3], 2]", "List[Less[x, 8]]"),
             (
-                "Less[Power[x, 1/3], 2]",
-                "List[And[LessEqual[0, x], Less[x, 8]]]",
+                "Greater[Power[x, 2/3], 1]",
+                "List[Less[x, -1], Greater[x, 1]]",
             ),
             (
                 "Greater[Power[x, -1/2], 1]",

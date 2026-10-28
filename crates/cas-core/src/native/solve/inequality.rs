@@ -22,8 +22,10 @@
 //! chart's points are.
 //!
 //! Functions (CAS-279): absolute values, powers, exponentials and
-//! logarithms of `x`, nothing periodic. Radicands (`u >= 0`, `u > 0` under
-//! a negative power) and logarithms' arguments (`u > 0`) make a domain,
+//! logarithms of `x`, nothing periodic. Radicands of even roots (`u >= 0`,
+//! `u > 0` under a negative power; odd roots of negatives are real, O7,
+//! but in the Complex domain) and logarithms' arguments (`u > 0`) make a
+//! domain,
 //! itself solved so, whose ends are cuts of the chart, where `f` is
 //! evaluated, and outside of which nothing holds. The poles of functions'
 //! arguments are poles of the chart (`exp(1/x)` at 0). Zeros: of a
@@ -35,6 +37,7 @@ use std::cmp::Ordering;
 
 use super::super::rounding::real_sign;
 use super::roots;
+use crate::assume::Domain;
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
@@ -500,8 +503,9 @@ fn charted(e: &Expr, x: &Expr) -> bool {
 
 /// Where `l` and `r` are real (CAS-279): a power `u^q` of something in
 /// `x`, `q` a rational but no integer, needs `u >= 0`, `u > 0` for
-/// `q < 0`, as giac's `x^(1/3)` too; a logarithm `log(u)` needs `u > 0`.
-/// The whole line when nothing does.
+/// `q < 0`, unless `q`'s denominator is odd in the Real domain, where odd
+/// roots of negatives are real (O7; giac's `x^(1/3)` is not); a logarithm
+/// `log(u)` needs `u > 0`. The whole line when nothing does.
 fn domain(
     ev: &mut Eval<'_>,
     e: &Expr,
@@ -509,11 +513,14 @@ fn domain(
     r: &Expr,
     x: &Expr,
 ) -> Result<Option<Vec<Interval>>, EvalError> {
+    let real = ev.context().domain() == Domain::Real;
     let mut conditions: Vec<Expr> = Vec::new();
     for s in l.distinct().chain(r.distinct()) {
         let condition = match (s.head().and_then(Expr::as_symbol), s.args()) {
             (Some(Symbol::POWER), [u, q]) if u.contains(x) => match q.to_rational() {
-                Some(q) if !q.is_integer() => {
+                // An odd root of a negative is real in the Real domain (O7).
+                Some(q) if q.is_integer() || real && q.denom().unsigned_abs().bit(0) => continue,
+                Some(q) => {
                     let op = if q.is_negative() {
                         Symbol::GREATER
                     } else {
@@ -521,7 +528,7 @@ fn domain(
                     };
                     Expr::call(op, [u.clone(), Expr::from(0)])
                 }
-                _ => continue,
+                None => continue,
             },
             (Some(Symbol::LOG), [u]) if u.contains(x) => {
                 Expr::call(Symbol::GREATER, [u.clone(), Expr::from(0)])
