@@ -36,6 +36,10 @@
 //!   parameters, in the order of the factors, `+√Δ` first.
 //! - `l − r` free of `x`: `{x}` when it is 0, every `x` a solution, as
 //!   giac's `solve(x=x,x)` is `[x]`; `{}` otherwise.
+//! - Before generators in `x` other than `x` go to `transcendental`, the
+//!   factors `e^u` and `exp(u)` of `l − r`, factored, for polynomials `u`
+//!   in `x`, go: they have neither zeros nor poles, so `x e^(−x²) = 0` is
+//!   `x = 0` (CAS-427).
 //!
 //! Systems (CAS-212): `Solve[{eqns}, {x, y, …}]` solves a linear system
 //! ([`linear`]), as a list of tuples, giac's `[[2,-1]]`; one equation in a
@@ -380,6 +384,9 @@ fn roots_at(
         .filter(|&j| Some(j) != k && p.generators()[j].contains(x))
         .collect();
     if !others.is_empty() {
+        if let Some(rest) = without_exponentials(ev, f, x)? {
+            return roots_at(ev, goal, &rest, depth);
+        }
         return transcendental::roots(ev, goal, f, &p, k.is_some(), &others, depth);
     }
     let Some(k) = k else {
@@ -406,6 +413,56 @@ fn roots_at(
             num,
             den,
         ),
+    }
+}
+
+/// `f`, factored, without its factors `e^u` and `exp(u)`, or powers of
+/// them, for polynomials `u` in `x`: they have neither zeros nor poles, so
+/// `x e^(−x²) = 0` is `x = 0` (CAS-427). `None` when it has none.
+fn without_exponentials(ev: &mut Eval<'_>, f: &Expr, x: &Expr) -> Result<Option<Expr>, EvalError> {
+    let times = |e: &Expr| e.head() == Some(&Expr::from(Symbol::TIMES));
+    let product = if times(f) {
+        f.clone()
+    } else {
+        ev.eval(&Expr::call(Symbol::FACTOR, [f.clone()]))?
+    };
+    if !times(&product) {
+        return Ok(None);
+    }
+    let (dropped, kept): (Vec<&Expr>, Vec<&Expr>) = product
+        .args()
+        .iter()
+        .partition(|g| exponential_of_polynomial(g, x));
+    if dropped.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(ev.eval(&Expr::call(
+        Symbol::TIMES,
+        kept.into_iter().cloned(),
+    ))?))
+}
+
+/// Whether `g` is `e^u` or `exp(u)`, or a power of one free of `x`, for a
+/// polynomial `u` in `x`.
+fn exponential_of_polynomial(g: &Expr, x: &Expr) -> bool {
+    match (g.head().and_then(Expr::as_symbol), g.args()) {
+        (Some(Symbol::POWER), [b, u]) if b.as_symbol() == Some(Symbol::E) => polynomial_in(u, x),
+        (Some(Symbol::EXP), [u]) => polynomial_in(u, x),
+        (Some(Symbol::POWER), [b, k]) if !k.contains(x) => exponential_of_polynomial(b, x),
+        _ => false,
+    }
+}
+
+/// Whether `u` is a polynomial in `x`: made of `x` and what is free of it
+/// by sums, products and natural powers.
+fn polynomial_in(u: &Expr, x: &Expr) -> bool {
+    if !u.contains(x) || u == x {
+        return true;
+    }
+    match (u.head().and_then(Expr::as_symbol), u.args()) {
+        (Some(Symbol::PLUS | Symbol::TIMES), args) => args.iter().all(|a| polynomial_in(a, x)),
+        (Some(Symbol::POWER), [b, n]) => n.as_i64().is_some_and(|n| n >= 0) && polynomial_in(b, x),
+        _ => false,
     }
 }
 

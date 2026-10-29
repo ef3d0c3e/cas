@@ -768,6 +768,27 @@ fn polynomial_systems() {
 /// Lambert's W (CAS-DOC-31 §7): giac's `solve(x*exp(x)=1,x)`,
 /// `solve(x*exp(x)=y,x)`, `solve((x+1)*exp(x)=2,x)`, `solve(x=exp(-x),x)`,
 /// `solve(x*exp(x)=-1/4,x)` and `solve(x*exp(x)=-1,x)`.
+/// Factors `e^u` of a polynomial `u` never vanish: they go (CAS-427).
+#[test]
+fn exponential_factors() {
+    check(&[
+        (
+            "Solve[Equation[Times[x, Power[E, Times[-1, Power[x, 2]]]], 0], x]",
+            "List[0]",
+        ),
+        (
+            "Solve[Equation[Plus[Power[E, Times[-1, Power[x, 2]]], \
+             Times[-2, Power[x, 2], Power[E, Times[-1, Power[x, 2]]]]], 0], x]",
+            "List[Times[-1/2, Power[2, 1/2]], Times[1/2, Power[2, 1/2]]]",
+        ),
+        (
+            "Solve[Equation[Times[Plus[x, -1], Exp[Power[x, 3]]], 0], x]",
+            "List[1]",
+        ),
+        ("Solve[Equation[Power[E, Power[x, 2]], 0], x]", "List[]"),
+    ]);
+}
+
 #[test]
 fn lambert() {
     check(&[
