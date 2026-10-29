@@ -36,6 +36,25 @@ pub(super) fn heaviside(ev: &mut Eval<'_>, e: &Expr) -> Native {
     }))
 }
 
+/// `UnitBox[x]`, the box: 1 for `|x| < 1/2`, 0 for `|x| > 1/2`, `1/2` at
+/// `±1/2`, the mean of its sides as `HeavisideTheta[0]` is (CAS-DOC-41
+/// §1); otherwise it stays.
+pub(super) fn unit_box(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    let half = Expr::from(Rational::new(Integer::ONE, Integer::from(2)));
+    let below = ev.eval(&(x.clone() + half.clone()))?;
+    let above = ev.eval(&(x.clone() - half.clone()))?;
+    let ctx = ev.context();
+    Ok(match (real_sign(ctx, &below), real_sign(ctx, &above)) {
+        (Some(Ordering::Less), _) | (_, Some(Ordering::Greater)) => Some(Expr::from(0)),
+        (Some(Ordering::Greater), Some(Ordering::Less)) => Some(Expr::from(1)),
+        (Some(Ordering::Equal), _) | (_, Some(Ordering::Equal)) => Some(half),
+        _ => None,
+    })
+}
+
 /// `DiracDelta[x]`.
 pub(super) fn dirac(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [x] = e.args() else {

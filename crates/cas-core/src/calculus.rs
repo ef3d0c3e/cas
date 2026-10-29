@@ -256,11 +256,17 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "AiryBiPrime[Pattern[f, Blank[]]]",
             "Times[f, AiryBi[f], D[f, x]]",
         ),
-        // The step's derivative is the delta (CAS-DOC-18 §2).
+        // The step's derivative is the delta (CAS-DOC-18 §2), and the
+        // box's two (CAS-DOC-41 §1).
         d(
             "D/HeavisideTheta",
             "HeavisideTheta[Pattern[f, Blank[]]]",
             "Times[DiracDelta[f], D[f, x]]",
+        ),
+        d(
+            "D/UnitBox",
+            "UnitBox[Pattern[f, Blank[]]]",
+            "Times[Plus[DiracDelta[Plus[f, 1/2]], Times[-1, DiracDelta[Plus[f, -1/2]]]], D[f, x]]",
         ),
         d(
             "D/Exp",

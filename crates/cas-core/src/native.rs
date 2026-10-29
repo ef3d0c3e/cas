@@ -21,6 +21,7 @@ mod erf;
 mod expint;
 mod factorial;
 mod fourier;
+mod fourier_transform;
 mod groebner;
 mod index;
 mod integer;
@@ -139,6 +140,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::INCLUDED_Q, sets::included_q),
         (Symbol::HEAVISIDE_THETA, step::heaviside),
         (Symbol::DIRAC_DELTA, step::dirac),
+        (Symbol::UNIT_BOX, step::unit_box),
         (Symbol::DIRECTED_INFINITY, arith::directed_infinity),
         (Symbol::EQUAL, logic::equal_native),
         (Symbol::UNEQUAL, logic::unequal),
@@ -218,6 +220,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::LIMIT, limit::limit),
         (Symbol::DSOLVE, dsolve::dsolve),
         (Symbol::LAPLACE_TRANSFORM, laplace::laplace_transform),
+        (
+            Symbol::FOURIER_TRANSFORM,
+            fourier_transform::fourier_transform,
+        ),
         (
             Symbol::INVERSE_LAPLACE_TRANSFORM,
             laplace::inverse_laplace_transform,

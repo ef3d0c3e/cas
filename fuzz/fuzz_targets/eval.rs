@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 320] = [
+const BUILTINS: [&str; 323] = [
     "Plus",
     "Times",
     "Power",
@@ -170,6 +170,10 @@ const BUILTINS: [&str; 320] = [
     // Laplace transforms (CAS-274).
     "LaplaceTransform",
     "InverseLaplaceTransform",
+    // Fourier transforms (CAS-DOC-41).
+    "FourierTransform",
+    "InverseFourierTransform",
+    "UnitBox",
     "ZTransform",
     "InverseZTransform",
     "KroneckerDelta",

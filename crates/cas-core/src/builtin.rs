@@ -116,6 +116,8 @@ builtins! {
     // The step and the delta (CAS-DOC-18 §2).
     HEAVISIDE_THETA = "HeavisideTheta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     DIRAC_DELTA = "DiracDelta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    // The box, giac's `rect` (CAS-DOC-41 §1).
+    UNIT_BOX = "UnitBox" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     SQRT = "Sqrt" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     FACTORIAL = "Factorial" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     // Calculus (CAS-DOC-4 §8): the derivative, as system rules, and the
@@ -135,6 +137,9 @@ builtins! {
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];
+    // Fourier transforms (CAS-DOC-41).
+    FOURIER_TRANSFORM = "FourierTransform" [PROTECTED];
+    INVERSE_FOURIER_TRANSFORM = "InverseFourierTransform" [PROTECTED];
     // Z-transforms and recurrences (CAS-DOC-24): Xcas's `ztrans` and
     // `Kronecker`.
     ZTRANSFORM = "ZTransform" [PROTECTED];
