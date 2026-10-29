@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 326] = [
+const BUILTINS: [&str; 327] = [
     "Plus",
     "Times",
     "Power",
@@ -178,6 +178,8 @@ const BUILTINS: [&str; 326] = [
     "HermiteDecomposition",
     "SmithDecomposition",
     "LatticeReduce",
+    // Modular arithmetic (CAS-DOC-43).
+    "Modular",
     "ZTransform",
     "InverseZTransform",
     "KroneckerDelta",

@@ -360,3 +360,10 @@ path = "fuzz_targets/integer_matrices.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "modular"
+path = "fuzz_targets/modular.rs"
+test = false
+doc = false
+bench = false
