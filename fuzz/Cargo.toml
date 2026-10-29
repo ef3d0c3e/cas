@@ -332,3 +332,10 @@ path = "fuzz_targets/optimization.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "diophantine"
+path = "fuzz_targets/diophantine.rs"
+test = false
+doc = false
+bench = false
