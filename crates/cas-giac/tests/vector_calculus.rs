@@ -124,7 +124,8 @@ fn vector_potentials() {
     }
 }
 
-/// Curves (CAS-410, CAS-411).
+/// Curves (CAS-410, CAS-411). giac's `frenet` answers a sequence, read as
+/// the list it makes in brackets.
 #[test]
 fn curves() {
     check(&[
@@ -135,14 +136,25 @@ fn curves() {
         "curvature([5*cos(t),5*sin(t)],t)",
         "curvature([3*exp(t/2)*cos(t),3*exp(t/2)*sin(t)],t)",
         "curvature([cos(t),sin(t),t],t,0)",
-        "frenet([t,t^2],t,1)",
-        "frenet([t,-t^2],t,1)",
-        "frenet([cos(t),sin(t),t],t,0)",
         "arcLen(t^2,t,1,2)",
         "arcLen([t,t^2],t,1,2)",
         "arcLen([cos(t),sin(t)],t,1,2)",
         "arcLen([cos(t),sin(t),t],t,0,1)",
     ]);
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    for input in [
+        "frenet([t,t^2],t,1)",
+        "frenet([t,-t^2],t,1)",
+        "frenet([cos(t),sin(t),t],t,0)",
+    ] {
+        match (giac.value(&format!("[{input}]")), ours(input)) {
+            (Ok(theirs), Ok(ours)) if same(&ctx, &ours, &theirs) => {}
+            (theirs, ours) => panic!("{input}: ours {ours:?}, giac's {theirs:?}"),
+        }
+    }
 }
 
 /// Implicit differentiation (CAS-412).
