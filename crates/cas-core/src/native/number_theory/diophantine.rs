@@ -10,21 +10,28 @@
 //!   Euclid's algorithm on `(p, x₀)` to the first remainder below `√p`.
 //! - `IntegerSolve[eqs]` and `IntegerSolve[eqs, vars]`, the variables the
 //!   equations' symbols in the order they first appear when not given:
-//!   - linear equations and systems with integer coefficients, by column
-//!     operations of determinant 1 to an echelon form `A U = H`, `x = U y`:
-//!     the pivots' `y` solved in turn, each an integer or no solution, the
-//!     others parameters `n_0, n_1, …`; with one parameter, the first
-//!     variable's constant put in `(−c/2, c/2]` and its parameter's
-//!     coefficient made positive, giac's `[x=-1+5*n_0,y=2-3*n_0]` for `3x +
-//!     5y = 7`. The answer is giac's list `{x = …, …}`, `{}` for none;
-//!   - `x y = n`: the pairs of divisors, both signs, giac's order;
+//!   - one equation `a x + b y = c`, `a b ≠ 0`: giac's `x = u + (b/g) n_0`,
+//!     `y = v − (a/g) n_0`, `u` in `(−|b/g|/2, |b/g|/2]`, so its
+//!     `[x=-1+5*_Z0,y=2-3*_Z0]` for `3x + 5y = 7` and `[x=1-2*_Z0,y=-_Z0]`
+//!     for `x − 2y = 1`;
+//!   - other linear equations and systems with integer coefficients, by
+//!     column operations of determinant 1 to an echelon form `A U = H`, `x =
+//!     U y`: the pivots' `y` solved in turn, each an integer or no solution,
+//!     the others parameters `n_0, n_1, …`; with one parameter, its first
+//!     nonzero coefficient made positive, `c`, and that variable's constant
+//!     put in `(−c/2, c/2]`. giac's own answers there have redundant
+//!     parameters, `isolve(2x+3y+5z=1)` three. The answer is giac's list `{x
+//!     = …, …}`, `{}` for none;
+//!   - `x y = n`: the pairs of divisors, both signs, giac's order, the
+//!     divisors to `√|n|` and their cofactors;
 //!   - `x² + y² = n`, `n ≤` [`MAX_SQUARES`]: every representation, `x` then
 //!     `y` ascending;
 //!   - Pell's `x² − D y² = 1`, `D > 0` not a square: `x + y √D = (x₁ + y₁
 //!     √D)^n`, `n` a natural parameter `n_0`, giac's form, from the
 //!     fundamental solution `(x₁, y₁)`, the convergent at the end of the
-//!     period of `√D`'s continued fraction (CAS-424), or of two periods
-//!     for an odd period;
+//!     period of `√D`'s continued fraction (CAS-424), where `Q` is 1, or of
+//!     two periods for an odd period; past [`MAX_PELL`] quotients the
+//!     equation stays;
 //!   - other equations stay.
 
 use cas_num::{Integer, Rational};
@@ -42,6 +49,9 @@ const MAX_SQUARES: i64 = 1 << 40;
 
 /// The largest `n` of `x y = n`.
 const MAX_PRODUCT: i64 = 1 << 40;
+
+/// The most quotients of `√D` for Pell's equation.
+const MAX_PELL: usize = 1 << 16;
 
 fn head(e: &Expr) -> Option<Symbol> {
     e.head().and_then(Expr::as_symbol)
@@ -261,40 +271,54 @@ fn linear_system(a: &[Vec<Integer>], b: &[Integer]) -> Option<Vec<(Integer, Vec<
     )
 }
 
-/// One parameter: the first variable's constant into `(−c/2, c/2]` and
-/// its coefficient made positive, `c` that coefficient's size.
+/// With one parameter, its first nonzero coefficient made positive, `c`,
+/// and that variable's constant put in `(−c/2, c/2]`.
 fn normalized(mut solution: Vec<(Integer, Vec<Integer>)>) -> Vec<(Integer, Vec<Integer>)> {
+    if solution.first().is_none_or(|(_, c)| c.len() != 1) {
+        return solution;
+    }
     let Some(first) = solution.iter().position(|(_, c)| !c[0].is_zero()) else {
         return solution;
     };
-    let c = solution[first].1[0].clone();
-    let size = Integer::from(c.unsigned_abs());
-    // Shift the parameter by k: constant − k c in (−|c|/2, |c|/2].
-    let k = Rational::new(solution[first].0.clone(), c.clone()).round();
-    for (constant, coefficients) in &mut solution {
-        *constant = &*constant - &(&k * &coefficients[0]);
-    }
-    let twice = &solution[first].0 + &solution[first].0;
-    if twice > size {
-        for (constant, coefficients) in &mut solution {
-            *constant = &*constant - &coefficients[0];
-        }
-    }
-    if c.is_negative() {
+    if solution[first].1[0].is_negative() {
         for (_, coefficients) in &mut solution {
             coefficients[0] = -coefficients[0].clone();
         }
     }
+    let c = solution[first].1[0].clone();
+    // The parameter shifted by k: constant − k c, the symmetric residue.
+    let (_, mut target) = solution[first].0.div_rem_euclid(&c);
+    if &target + &target > c {
+        target = &target - &c;
+    }
+    let k = (&solution[first].0 - &target).div_exact(&c);
+    for (constant, coefficients) in &mut solution {
+        *constant = &*constant - &(&k * &coefficients[0]);
+    }
     solution
+}
+
+/// `a x + b y = c`, `a b ≠ 0`: giac's `x = u + (b/g) n_0`, `y = v − (a/g)
+/// n_0`, `u` in `(−|b/g|/2, |b/g|/2]`; `None` when `g ∤ c`.
+fn two_variables(a: &Integer, b: &Integer, c: &Integer) -> Option<Vec<(Integer, Vec<Integer>)>> {
+    let (g, s, _) = a.gcd_ext(b);
+    let (k, rest) = c.div_rem_euclid(&g);
+    if !rest.is_zero() {
+        return None;
+    }
+    let (a1, b1) = (a.div_exact(&g), b.div_exact(&g));
+    // a1 u ≡ k (mod b1): u ≡ s k, as a1 s ≡ 1.
+    let size = Integer::from(b1.unsigned_abs());
+    let (_, mut u) = (&s * &k).div_rem_euclid(&size);
+    if &u + &u > size {
+        u = &u - &size;
+    }
+    let v = (&k - &(&a1 * &u)).div_exact(&b1);
+    Some(vec![(u, vec![b1]), (v, vec![-a1])])
 }
 
 /// The answer to a linear system.
 fn linear_answer(xs: &[Expr], solution: Vec<(Integer, Vec<Integer>)>) -> Expr {
-    let solution = if solution.first().is_some_and(|(_, c)| c.len() == 1) {
-        normalized(solution)
-    } else {
-        solution
-    };
     list(
         xs.iter()
             .zip(solution)
@@ -337,7 +361,9 @@ fn quadratic(
         (d(f, y), Rational::ONE),
         (f.clone(), Rational::ONE),
     ] {
-        let v = ev.eval(&e.substitute(&zero))?;
+        // The derivative taken before its variables are replaced.
+        let v = ev.eval(&e)?;
+        let v = ev.eval(&v.substitute(&zero))?;
         let Some(q) = v.to_rational() else {
             return Ok(None);
         };
@@ -358,23 +384,26 @@ fn quadratic(
     Ok((gap == Expr::from(0)).then_some([a, b, c, dx, dy, k]))
 }
 
-/// The fundamental solution of `x² − D y² = 1`.
-fn pell(d: &Integer) -> (Integer, Integer) {
-    // √D's quotients over two periods at most.
+/// The fundamental solution of `x² − D y² = 1`; `None` past [`MAX_PELL`]
+/// quotients.
+fn pell(d: &Integer) -> Option<(Integer, Integer)> {
+    // √D's quotients over two periods at most: the convergent `h/k` before
+    // a `Q` of 1 has `h² − D k² = ±1`, the end of a period.
     let (s, _) = d.sqrt_rem();
     let (mut p, mut q) = (Integer::ZERO, Integer::ONE);
     let (mut h, mut h0, mut k, mut k0) = (Integer::ONE, Integer::ZERO, Integer::ZERO, Integer::ONE);
-    loop {
+    for _ in 0..MAX_PELL {
         let a = Rational::new(&p + &s, q.clone()).floor();
         let (next_h, next_k) = (&(&a * &h) + &h0, &(&a * &k) + &k0);
         (h0, h, k0, k) = (h, next_h, k, next_k);
-        if &(&h * &h) - &(&(d * &k) * &k) == Integer::ONE {
-            return (h, k);
-        }
         let next = &(&a * &q) - &p;
         q = (d - &(&next * &next)).div_exact(&q);
         p = next;
+        if q == Integer::ONE && &(&h * &h) - &(&(d * &k) * &k) == Integer::ONE {
+            return Some((h, k));
+        }
     }
+    None
 }
 
 /// `x y = n`: the pairs of divisors, both signs; `None` past
@@ -387,17 +416,20 @@ fn products(x: &Expr, y: &Expr, c: &Integer, k: &Integer) -> Option<Expr> {
     let size = n
         .to_i64()
         .filter(|v| (1..=MAX_PRODUCT).contains(&v.abs()))?;
+    // |n|'s divisors ascending: those to √|n|, then their cofactors.
+    let m = size.abs();
+    let small: Vec<i64> = (1..=m.isqrt()).filter(|d| m % d == 0).collect();
+    let large = small.iter().rev().filter(|&&d| d * d != m).map(|d| m / d);
+    let divisors: Vec<i64> = small.iter().copied().chain(large).collect();
     let mut found = Vec::new();
     for sign in [1i64, -1] {
-        for d in 1..=size.abs() {
-            if size % d == 0 {
-                found.push(pair(
-                    x,
-                    y,
-                    Integer::from(sign * d),
-                    Integer::from(size / (sign * d)),
-                ));
-            }
+        for d in &divisors {
+            found.push(pair(
+                x,
+                y,
+                Integer::from(sign * d),
+                Integer::from(size / (sign * d)),
+            ));
         }
     }
     Some(list(found))
@@ -431,7 +463,7 @@ fn pell_answer(x: &Expr, y: &Expr, d: &Integer) -> Option<Expr> {
     if rest.is_zero() {
         return None;
     }
-    let (x1, y1) = pell(d);
+    let (x1, y1) = pell(d)?;
     let root = Expr::from(d.clone()).pow(Expr::from(Rational::new(Integer::ONE, Integer::from(2))));
     let plus = (Expr::from(x1.clone()) + Expr::from(y1.clone()) * root.clone()).pow(parameter(0));
     let minus = (Expr::from(x1) - Expr::from(y1) * root.clone()).pow(parameter(0));
@@ -496,8 +528,13 @@ pub(in crate::native) fn integer_solve(ev: &mut Eval<'_>, e: &Expr) -> Native {
     }
     if rows.len() == sides.len() {
         let (a, b): (Vec<Vec<Integer>>, Vec<Integer>) = rows.into_iter().unzip();
-        let result =
-            linear_system(&a, &b).map_or_else(|| list(Vec::new()), |s| linear_answer(&xs, s));
+        let solution = match (a.as_slice(), b.as_slice()) {
+            ([row], [c]) if row.len() == 2 && !row[0].is_zero() && !row[1].is_zero() => {
+                two_variables(&row[0], &row[1], c)
+            }
+            _ => linear_system(&a, &b).map(normalized),
+        };
+        let result = solution.map_or_else(|| list(Vec::new()), |s| linear_answer(&xs, s));
         ev.step("isolve", e, &result);
         return Ok(Some(result));
     }

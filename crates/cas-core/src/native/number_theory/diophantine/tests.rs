@@ -58,6 +58,18 @@ fn linear() {
             "IntegerSolve[List[Equation[Plus[x, y], 1], Equation[Plus[x, y], 2]]]",
             "List[]",
         ),
+        // One parameter from a system: its first coefficient positive, and
+        // x's constant in (−1, 1]: 1, not −1.
+        (
+            "IntegerSolve[List[Equation[Plus[Times[2, x], Times[4, y]], 2], Equation[z, 1]]]",
+            "List[Equation[x, Plus[1, Times[2, n_0]]], Equation[y, Times[-1, n_0]], \
+             Equation[z, 1]]",
+        ),
+        // giac's [x=_Z0,y=_Z0,z=1-2*_Z0].
+        (
+            "IntegerSolve[List[Equation[Plus[x, y, z], 1], Equation[Plus[x, Times[-1, y]], 0]]]",
+            "List[Equation[x, n_0], Equation[y, n_0], Equation[z, Plus[1, Times[-2, n_0]]]]",
+        ),
     ]);
     // 6x + 9y + 15z = 3 has two parameters; each instance satisfies it.
     let ctx = Context::new();
@@ -82,6 +94,48 @@ fn linear() {
     }
 }
 
+/// One equation in two variables: giac's answers, its `_Z0` written `n_0`.
+#[test]
+fn two_variables() {
+    check(&[
+        // [x=1-2*_Z0,y=-_Z0]: the coefficient b/g, its sign kept.
+        (
+            "IntegerSolve[Equation[Plus[x, Times[-2, y]], 1]]",
+            "List[Equation[x, Plus[1, Times[-2, n_0]]], Equation[y, Times[-1, n_0]]]",
+        ),
+        // [x=1+2*_Z0,y=-_Z0]: u = 1, the top of (−1, 1].
+        (
+            "IntegerSolve[Equation[Plus[x, Times[2, y]], 1]]",
+            "List[Equation[x, Plus[1, Times[2, n_0]]], Equation[y, Times[-1, n_0]]]",
+        ),
+        // [x=1+2*_Z0,y=1+_Z0]
+        (
+            "IntegerSolve[Equation[Plus[Times[-1, x], Times[2, y]], 1]]",
+            "List[Equation[x, Plus[1, Times[2, n_0]]], Equation[y, Plus[1, n_0]]]",
+        ),
+        // [x=-1-3*_Z0,y=-1-2*_Z0]
+        (
+            "IntegerSolve[Equation[Plus[Times[4, x], Times[-6, y]], 2]]",
+            "List[Equation[x, Plus[-1, Times[-3, n_0]]], Equation[y, Plus[-1, Times[-2, n_0]]]]",
+        ),
+        // [x=1-3*_Z0,y=-1+2*_Z0]
+        (
+            "IntegerSolve[Equation[Plus[Times[-4, x], Times[-6, y]], 2]]",
+            "List[Equation[x, Plus[1, Times[-3, n_0]]], Equation[y, Plus[-1, Times[2, n_0]]]]",
+        ),
+        // [x=1+3*_Z0,y=-2-7*_Z0]
+        (
+            "IntegerSolve[Equation[Plus[Times[7, x], Times[3, y]], 1]]",
+            "List[Equation[x, Plus[1, Times[3, n_0]]], Equation[y, Plus[-2, Times[-7, n_0]]]]",
+        ),
+        // [x=_Z0,y=5-_Z0]
+        (
+            "IntegerSolve[Equation[Plus[x, y], 5]]",
+            "List[Equation[x, n_0], Equation[y, Plus[5, Times[-1, n_0]]]]",
+        ),
+    ]);
+}
+
 #[test]
 fn nonlinear() {
     check(&[
@@ -91,6 +145,25 @@ fn nonlinear() {
              List[Equation[x, 3], Equation[y, 2]], List[Equation[x, 6], Equation[y, 1]], \
              List[Equation[x, -1], Equation[y, -6]], List[Equation[x, -2], Equation[y, -3]], \
              List[Equation[x, -3], Equation[y, -2]], List[Equation[x, -6], Equation[y, -1]]]",
+        ),
+        // giac's order: 36's root 6 once, then the cofactors; for −6,
+        // [x=1,y=-6] first and [x=-1,y=6] fifth.
+        ("Length[IntegerSolve[Equation[Times[x, y], 36]]]", "18"),
+        (
+            "Part[IntegerSolve[Equation[Times[x, y], 36]], 5]",
+            "List[Equation[x, 6], Equation[y, 6]]",
+        ),
+        (
+            "Part[IntegerSolve[Equation[Times[x, y], 36]], 6]",
+            "List[Equation[x, 9], Equation[y, 4]]",
+        ),
+        (
+            "Part[IntegerSolve[Equation[Times[x, y], -6]], 1]",
+            "List[Equation[x, 1], Equation[y, -6]]",
+        ),
+        (
+            "Part[IntegerSolve[Equation[Times[x, y], -6]], 5]",
+            "List[Equation[x, -1], Equation[y, 6]]",
         ),
         (
             "Length[IntegerSolve[Equation[Plus[Power[x, 2], Power[y, 2]], 25]]]",
@@ -106,9 +179,16 @@ fn nonlinear() {
         ),
     ]);
     // Pell: x² − 2y² = 1 from (3, 2), x² − 13 y² = 1 from (649, 180): at
-    // n_0 = 1 the fundamental solution, at 2 another.
+    // n_0 = 1 the fundamental solution, at 2 another. 61 and 109 have odd
+    // periods, 11 and 15; their solutions by Python's convergents.
     let ctx = Context::new();
-    for (d, first) in [(2, "List[3, 2]"), (13, "List[649, 180]"), (3, "List[2, 1]")] {
+    for (d, first) in [
+        (2, "List[3, 2]"),
+        (13, "List[649, 180]"),
+        (3, "List[2, 1]"),
+        (61, "List[1766319049, 226153980]"),
+        (109, "List[158070671986249, 15140424455100]"),
+    ] {
         let found = ctx
             .eval(&read(&format!(
                 "IntegerSolve[Equation[Plus[Power[x, 2], Times[-{d}, Power[y, 2]]], 1]]"
