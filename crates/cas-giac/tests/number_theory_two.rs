@@ -403,8 +403,11 @@ fn fractions() {
         let theirs = value(&format!("dfc2f({periodic})"));
         let ours = value(&format!("dfc2f(dfc({x}))"));
         let x = value(x);
-        assert_eq!(theirs, x, "{input}: giac's {periodic}");
-        assert_eq!(ours, x, "{input}: ours");
+        assert!(
+            same(&ctx, &theirs, &x),
+            "{input}: giac's {periodic} is {theirs:?}"
+        );
+        assert!(same(&ctx, &ours, &x), "{input}: ours {ours:?}");
     }
     for (input, n) in [("dfc(pi,6)", 6), ("dfc(exp(1),8)", 8)] {
         let theirs = giac.value(input).unwrap();
