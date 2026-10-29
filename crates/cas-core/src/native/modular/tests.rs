@@ -60,6 +60,28 @@ fn arithmetic() {
     ]);
 }
 
+/// Derivatives and substitutions of modular expressions (CAS-452).
+#[test]
+fn calculus() {
+    check(&[
+        // giac's diff((x^3+2*x) % 5,x), 3x^2 + 2.
+        (
+            "D[Modular[Plus[Power[x, 3], Times[2, x]], 5], x]",
+            "Modular[Plus[2, Times[3, Power[x, 2]]], 5]",
+        ),
+        // The p-th power's derivative vanishes.
+        ("D[Modular[Power[x, 5], 5], x]", "Modular[0, 5]"),
+        (
+            "ReplaceAll[Modular[Plus[Power[x, 2], 1], 7], Rule[x, 3]]",
+            "Modular[3, 7]",
+        ),
+        (
+            "ReplaceAll[Modular[Plus[Power[x, 2], 1], 7], Rule[x, Plus[y, 1]]]",
+            "Modular[Plus[2, Times[2, y], Power[y, 2]], 7]",
+        ),
+    ]);
+}
+
 #[test]
 fn expressions() {
     check(&[

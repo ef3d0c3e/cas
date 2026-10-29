@@ -263,6 +263,12 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "HeavisideTheta[Pattern[f, Blank[]]]",
             "Times[DiracDelta[f], D[f, x]]",
         ),
+        // A modular expression's derivative, in its modulus (CAS-DOC-43 §4).
+        d(
+            "D/Modular",
+            "Modular[Pattern[f, Blank[]], Pattern[n, Blank[]]]",
+            "Modular[D[f, x], n]",
+        ),
         d(
             "D/UnitBox",
             "UnitBox[Pattern[f, Blank[]]]",
