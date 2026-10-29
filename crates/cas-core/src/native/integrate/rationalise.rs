@@ -38,6 +38,20 @@ use crate::symbol::Symbol;
 
 type Found = Result<Option<Expr>, EvalError>;
 
+/// The largest power of the new variable a substitution may bring, and of
+/// a root's index: past it the rational function is left to be.
+const MAX_POWER: i64 = 32;
+
+/// Whether every integer power in `e` is at most [`MAX_POWER`] in size.
+fn small_powers(e: &Expr) -> bool {
+    !e.distinct().any(|part| {
+        head(part) == Some(Symbol::POWER)
+            && part.args()[1]
+                .to_rational()
+                .is_some_and(|n| n.abs() > Rational::from(Integer::from(MAX_POWER)))
+    })
+}
+
 fn head(e: &Expr) -> Option<Symbol> {
     e.head().and_then(Expr::as_symbol)
 }
@@ -138,6 +152,9 @@ fn in_powers(ev: &mut Eval<'_>, f: &Expr, x: &Expr, g: &Rational, u: &Expr) -> F
         // w is linear: its constant is its value at 0.
         let b = ev.eval(&w.substitute(&[(x.clone(), Expr::from(0))]))?;
         let k = &a / g;
+        if k.abs() > Rational::from(Integer::from(MAX_POWER)) {
+            return Ok(None);
+        }
         return Ok(Some(Expr::from(Symbol::E).pow(b) * u.pow(Expr::from(k))));
     }
     let Some(h) = f.head() else {
@@ -170,7 +187,7 @@ fn exponentials(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr, depth: u8) -> F
     }
     let g = gcd(&slopes);
     let u = fresh(depth);
-    if f.contains(&u) {
+    if f.contains(&u) || !small_powers(&f) {
         return Ok(None);
     }
     let Some(powers) = in_powers(ev, &f, x, &g, &u)? else {
@@ -335,7 +352,7 @@ fn trigonometric(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr, depth: u8) -> 
         return Ok(None);
     }
     let big_f = ev.eval(&in_sines(f, &v, &s, &c))?;
-    if big_f.contains(x) {
+    if big_f.contains(x) || !small_powers(&big_f) {
         return Ok(None);
     }
     let one = || Expr::from(1);
@@ -495,7 +512,7 @@ fn roots(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr, depth: u8) -> Found {
         return Ok(None);
     }
     let u = fresh(depth);
-    if f.contains(&u) {
+    if f.contains(&u) || !small_powers(f) {
         return Ok(None);
     }
     let slope = ev.eval(&Expr::call(Symbol::D, [base.clone(), x.clone()]))?;
@@ -504,6 +521,9 @@ fn roots(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr, depth: u8) -> Found {
         let n = powers
             .iter()
             .fold(Integer::ONE, |n, (_, r)| n.lcm(r.denom()));
+        if n > Integer::from(MAX_POWER) {
+            return Ok(None);
+        }
         let b0 = ev.eval(&base.substitute(&[(x.clone(), Expr::from(0))]))?;
         let n_expr = Expr::from(n.clone());
         let x_u = (u.pow(n_expr.clone()) - b0) / slope.clone();
