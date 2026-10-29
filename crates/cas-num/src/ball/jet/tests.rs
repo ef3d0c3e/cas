@@ -3,7 +3,7 @@
 //! their series, and identities.
 
 use super::Jet;
-use crate::ball::Ball;
+use crate::ball::{Ball, Float, Mag};
 use crate::{Integer, Rational};
 
 const PREC: u64 = 128;
@@ -23,13 +23,25 @@ fn factorial(k: usize) -> Ball {
     })
 }
 
-/// Each coefficient of `found` meets `expected`'s, and has 100 bits.
+/// Whether `b` lies within `2^-100` of 0.
+fn tiny(b: &Ball) -> bool {
+    let bound = Mag::from_float(&b.mid().abs()).add(b.rad());
+    bound <= Mag::from_float(&Float::from(1i64).mul_2exp(&Integer::from(-100i64)))
+}
+
+/// Each coefficient of `found` meets `expected`'s, and has 100 bits; one
+/// that should be 0, as `exp(log u)`'s past `u`, within `2^-100` of it, its
+/// midpoint the roundings' noise.
 fn agrees(what: &str, found: &Jet, expected: &[Ball]) {
     assert_eq!(found.len(), expected.len(), "{what}: lengths");
     for (k, (f, e)) in found.coeffs().iter().zip(expected).enumerate() {
         assert!(f.overlaps(e), "{what}: coefficient {k} is {f:?}, not {e:?}");
+        let zero = e.mid().is_zero() && e.rad().is_zero();
         assert!(
-            f.mid().is_zero() || f.rel_accuracy_bits() >= 100 || f.rad().is_zero(),
+            f.mid().is_zero()
+                || f.rel_accuracy_bits() >= 100
+                || f.rad().is_zero()
+                || (zero && tiny(f)),
             "{what}: coefficient {k} is {f:?}"
         );
     }
