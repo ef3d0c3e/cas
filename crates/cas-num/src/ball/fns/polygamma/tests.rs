@@ -50,14 +50,19 @@ fn digamma_bracket(x: &Float, prec: u64) -> Bracket {
 /// `ψ^(m)(x)` for `x = n/2`, an integer or a half-integer, from `ψ^(m)(1)
 /// = (−1)^(m+1) m! ζ(m + 1)` or `ψ^(m)(1/2) = (−1)^(m+1) m! (2^(m+1) − 1)
 /// ζ(m + 1)` and the recurrence `ψ^(m)(x + 1) = ψ^(m)(x) + (−1)^m m!/x^(m+1)`,
-/// in MPFR at `prec + 256` bits, bracketed by `2^-(prec + 64)` of it.
+/// in MPFR at `prec + 1024` bits, bracketed by `2^-(prec + 64)` of it: down
+/// from `1/2` to `−201/2` at `m = 40` the recurrence's terms reach `10^60`
+/// for a value near `10^-34`, about 312 bits cancelled. ψ^(40)(−201/2) is
+/// −1.36089989406219010931879837526408931391…·10⁻³⁴, by Hurwitz's sum
+/// `−40! Σ (203/2 + k)^−41` at 80 digits in Python, `ψ^(40)(−n − 1/2) =
+/// ψ^(40)(n + 3/2)` for an even order.
 #[allow(
     clippy::cast_possible_truncation,
     clippy::cast_possible_wrap,
     reason = "small test sizes"
 )]
 fn exact_bracket(n: i64, m: u32, prec: u64) -> Bracket {
-    let p = u32::try_from(prec).unwrap() + 256;
+    let p = u32::try_from(prec).unwrap() + 1024;
     let factorial = MpFloat::with_val(p, MpFloat::factorial(m));
     let zeta = MpFloat::with_val(p, MpFloat::with_val(p, m + 1).zeta());
     let half = n % 2 != 0;
