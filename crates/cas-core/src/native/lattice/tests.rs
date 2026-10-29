@@ -112,6 +112,18 @@ fn smith_forms() {
         "List[List[0, 0], List[0, 0]]",
         "List[List[0, 0], List[0, 0]]",
     );
+    // Entries equal to the corner up to sign: GMP's cofactors swapped the
+    // rows, and the clearing went round (CAS-455). d₁ = 9, the entries'
+    // gcd, and d₁ d₂ = 81, the 2 × 2 minors' (−81 and 0); giac's
+    // [[3,0],[0,6]].
+    check_smith(
+        "List[List[0, -9], List[-9, -9], List[-9, -9], List[-9, -9]]",
+        "List[List[9, 0], List[0, 9], List[0, 0], List[0, 0]]",
+    );
+    check_smith(
+        "List[List[3, 3], List[3, -3]]",
+        "List[List[3, 0], List[0, 6]]",
+    );
 }
 
 /// `LatticeReduce[B]` is a basis of the same lattice (equal Hermite forms

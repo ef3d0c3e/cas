@@ -97,8 +97,20 @@ fn combine_columns(m: &mut Matrix, c: usize, k: usize, [s, t, u, v]: [&Integer; 
     }
 }
 
-/// The unimodular `[s, t, −b/g, a/g]` taking `(a, b)` to `(g, 0)`.
+/// The unimodular `[s, t, −b/g, a/g]` taking `(a, b)` to `(g, 0)`. When
+/// `a` divides `b`, `s = ±1` and `t = 0`: `a`'s row stays but for its sign.
+/// GMP's cofactors for `|a| = |b|`, `s = 0` and `t = sgn b`, swapped the
+/// two, and Smith's clearing of a row and a column went round (CAS-455).
 fn step(a: &Integer, b: &Integer) -> [Integer; 4] {
+    if !a.is_zero() && b.div_rem_euclid(a).1.is_zero() {
+        let g = a.abs();
+        return [
+            a.div_exact(&g),
+            Integer::ZERO,
+            -b.div_exact(&g),
+            a.div_exact(&g),
+        ];
+    }
     let (g, s, t) = a.gcd_ext(b);
     [s, t, -b.div_exact(&g), a.div_exact(&g)]
 }
