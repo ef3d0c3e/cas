@@ -24,6 +24,7 @@ use cas_num_fuzz::ball::{
 };
 use libfuzzer_sys::fuzz_target;
 use rug::Float as MpFloat;
+use rug::float::Round as MpRound;
 
 /// The most bits fuzzed.
 const MAX_PRECISION: u64 = 2048;
@@ -126,12 +127,24 @@ fn against_mpfr(u: &mut Unstructured<'_>, x: &Ball, prec: u64, second: bool) -> 
         if size > 4096.0 && square / 2.0 >= size {
             continue;
         }
+        // MPFR 4.2.2's jn hands a negative order to its expansion, which
+        // reads it unsigned and gives up for the series at any size
+        // (CAS-430): it is asked for |n|, `C_(−n) = (−1)^n C_n`, rounded
+        // the other way when negated.
+        let flip = order < 0 && order % 2 != 0;
+        let size_order = order.abs();
         let oracle = bracket(prec, |bits, rnd| {
-            if second {
-                MpFloat::with_val_round(bits, point.yn_ref(order), rnd).0
+            let rnd = match (flip, rnd) {
+                (true, MpRound::Down) => MpRound::Up,
+                (true, MpRound::Up) => MpRound::Down,
+                _ => rnd,
+            };
+            let value = if second {
+                MpFloat::with_val_round(bits, point.yn_ref(size_order), rnd).0
             } else {
-                MpFloat::with_val_round(bits, point.jn_ref(order), rnd).0
-            }
+                MpFloat::with_val_round(bits, point.jn_ref(size_order), rnd).0
+            };
+            if flip { -value } else { value }
         });
         if let Oracle::Bracket(lo, hi) = oracle {
             assert!(

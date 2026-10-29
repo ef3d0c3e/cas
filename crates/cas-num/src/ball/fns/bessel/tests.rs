@@ -10,7 +10,7 @@ use rug::ops::Pow;
 
 use super::MAX_ORDER;
 use crate::Integer;
-use crate::ball::{Ball, Float};
+use crate::ball::{Ball, Float, Mag};
 use crate::testkit::ToRug;
 use crate::testkit::float::{Bracket, bracket, check_encloses, dyadic_with};
 
@@ -275,6 +275,29 @@ fn largest_order_far_out() {
     let two_n = Ball::from_integer(&Integer::from(2046));
     let (left, right) = (a.add(&c, q), two_n.mul(&b, q).div(&x, q));
     assert!(left.overlaps(&right), "{left:?} against {right:?}");
+}
+
+/// The fuzz target `bessel_fns`'s timeout (CAS-430): `J_(−12)` of the
+/// ball `0 ± 320748.1142578125`, whose ends MPFR's `jn` took to its series,
+/// as its expansion reads a negative order unsigned. At either end
+/// `J_(−12) = J_12`, against Python's Hankel expansion at 90 digits
+/// (giac's −0.0013942607073), and the ball's value holds it.
+#[test]
+fn negative_order_far_out() {
+    let end = float(320_748.114_257_812_5);
+    let reference: crate::Rational = "-139426070730140819687383090870494387896608120448887/\
+         100000000000000000000000000000000000000000000000000000"
+        .parse()
+        .unwrap();
+    let reference = Ball::from_rational(&reference, 256);
+    for x in [end.clone(), end.neg()] {
+        let j = Ball::exact(x).bessel_j(-12, 128);
+        assert!(j.is_finite() && j.rel_accuracy_bits() >= 125, "{j:?}");
+        assert!(j.overlaps(&reference), "{j:?} against {reference:?}");
+    }
+    let wide = Ball::new(Float::ZERO, Mag::from_float(&end));
+    let j = wide.bessel_j(-12, 232);
+    assert!(j.is_finite() && j.overlaps(&reference), "{j:?}");
 }
 
 proptest! {
