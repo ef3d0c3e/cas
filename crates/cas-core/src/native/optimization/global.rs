@@ -11,8 +11,10 @@
 //! - The candidates, by Karush, Kuhn and Tucker: for each set of
 //!   inequalities taken as equations, with the equations, at most as many
 //!   as the variables, the critical points of the Lagrangian (`Extrema`'s
-//!   `solutions`) that satisfy every inequality. That takes in the
-//!   interior's critical points, those of each face, and the corners.
+//!   `solutions`) that satisfy every inequality. A bound `x = c` among them
+//!   fixes `x` instead of taking a multiplier, so an interval's ends need
+//!   no system. That takes in the interior's critical points, those of
+//!   each face, and the corners.
 //! - The region must be bounded: every variable in a finite range, or a
 //!   constraint whose function is quadratic with a definite Hessian (a
 //!   disc, a ball, an ellipse); or the function quadratic with a definite
@@ -190,39 +192,109 @@ fn bounded(ev: &mut Eval<'_>, p: &Problem, maximum: bool) -> Result<bool, EvalEr
     Ok(false)
 }
 
+/// `h`, evaluated, as a bound `s (x_i − c)`, `s = ±1` and `c` free of the
+/// variables: `(i, c)`.
+fn bound(ev: &mut Eval<'_>, h: &Expr, xs: &[Expr]) -> Result<Option<(usize, Expr)>, EvalError> {
+    let mut slopes = Vec::with_capacity(xs.len());
+    for x in xs {
+        slopes.push(ev.eval(&d(h, x))?);
+    }
+    let one = Expr::from(1);
+    let minus_one = Expr::from(-1);
+    let zero = Expr::from(0);
+    let Some(i) = slopes.iter().position(|s| *s == one || *s == minus_one) else {
+        return Ok(None);
+    };
+    if slopes.iter().enumerate().any(|(j, s)| j != i && *s != zero) {
+        return Ok(None);
+    }
+    // c = x_i − h/s.
+    let c = ev.eval(&(xs[i].clone() - h.clone() / slopes[i].clone()))?;
+    Ok(xs.iter().all(|x| !c.contains(x)).then_some((i, c)))
+}
+
 /// The candidates, as tuples of the variables' values; `None` when a
-/// system stays.
+/// system stays. The active bounds fix their variables, the other active
+/// constraints get multipliers: giac's `maximize(sin(x),x=0..4)` needs no
+/// system in `x` and a multiplier.
 fn candidates(ev: &mut Eval<'_>, p: &Problem) -> Result<Option<Vec<Vec<Expr>>>, EvalError> {
     let xs: Vec<Expr> = p.vars.iter().map(|v| v.x.clone()).collect();
     let n = xs.len();
     let mut found: Vec<Vec<Expr>> = Vec::new();
-    for mask in 0u32..(1 << p.inequalities.len()) {
-        let active: Vec<&Expr> = p
+    'masks: for mask in 0u32..(1 << p.inequalities.len()) {
+        let active = p
             .inequalities
             .iter()
             .enumerate()
             .filter(|(k, _)| mask >> k & 1 == 1)
-            .map(|(_, h)| h)
-            .collect();
+            .map(|(_, h)| h);
         let equations: Vec<&Expr> = p.equalities.iter().chain(active).collect();
         if equations.len() > n {
             continue;
         }
-        let lambdas: Vec<Expr> = (1..=equations.len())
-            .map(|k| Expr::symbol(&format!("λ#{k}")))
-            .collect();
-        let mut lagrangian = p.f.clone();
-        for (g, l) in equations.iter().zip(&lambdas) {
-            lagrangian -= l.clone() * (*g).clone();
+        let mut fixed: Vec<Option<Expr>> = vec![None; n];
+        let mut rest = Vec::new();
+        for g in equations {
+            match bound(ev, g, &xs)? {
+                Some((i, c)) => match &fixed[i] {
+                    None => fixed[i] = Some(c),
+                    Some(other) if *other == c => {}
+                    Some(_) => continue 'masks,
+                },
+                None => rest.push(g.clone()),
+            }
         }
-        let unknowns: Vec<Expr> = xs.iter().chain(&lambdas).cloned().collect();
-        let gradient: Vec<Expr> = unknowns.iter().map(|u| d(&lagrangian, u)).collect();
-        let Some(points) = solutions(ev, gradient, &unknowns)? else {
-            return Ok(None);
+        let rules: Vec<(Expr, Expr)> = xs
+            .iter()
+            .zip(&fixed)
+            .filter_map(|(x, c)| c.as_ref().map(|c| (x.clone(), c.clone())))
+            .collect();
+        let free: Vec<Expr> = xs
+            .iter()
+            .zip(&fixed)
+            .filter(|(_, c)| c.is_none())
+            .map(|(x, _)| x.clone())
+            .collect();
+        let rest: Vec<Expr> = rest.iter().map(|g| g.substitute(&rules)).collect();
+        let points = if free.is_empty() {
+            vec![Vec::new()]
+        } else {
+            if rest.len() > free.len() {
+                continue;
+            }
+            let lambdas: Vec<Expr> = (1..=rest.len())
+                .map(|k| Expr::symbol(&format!("λ#{k}")))
+                .collect();
+            let mut lagrangian = p.f.substitute(&rules);
+            for (g, l) in rest.iter().zip(&lambdas) {
+                lagrangian -= l.clone() * g.clone();
+            }
+            let unknowns: Vec<Expr> = free.iter().chain(&lambdas).cloned().collect();
+            let gradient: Vec<Expr> = unknowns.iter().map(|u| d(&lagrangian, u)).collect();
+            let Some(points) = solutions(ev, gradient, &unknowns)? else {
+                return Ok(None);
+            };
+            points
         };
         'points: for point in points {
-            let point = point[..n].to_vec();
+            let mut values = point.into_iter();
+            let point: Vec<Expr> = fixed
+                .iter()
+                .map(|c| c.clone().or_else(|| values.next()).expect("a value"))
+                .collect();
             let rules: Vec<(Expr, Expr)> = xs.iter().cloned().zip(point.iter().cloned()).collect();
+            // Bounds alone fix the point: the equations are not solved.
+            let unsolved = if free.is_empty() {
+                &p.equalities[..]
+            } else {
+                &[]
+            };
+            for g in unsolved {
+                let value = ev.eval(&g.substitute(&rules))?;
+                if sign(ev, &value) != Some(Ordering::Equal) {
+                    continue 'points;
+                }
+            }
             for h in &p.inequalities {
                 let value = ev.eval(&h.substitute(&rules))?;
                 if !matches!(sign(ev, &value), Some(Ordering::Less | Ordering::Equal)) {
