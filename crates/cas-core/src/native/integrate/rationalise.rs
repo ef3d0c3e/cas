@@ -448,9 +448,15 @@ fn rational_sqrt(q: &Rational) -> Option<Rational> {
 }
 
 /// `x` as a rational function of `t`, `√q` as one, and `t` back in `x`,
-/// by Euler's substitutions; `None` when none is rational.
+/// by Euler's substitutions; `None` when none is rational, or `q` is a
+/// square times `a`, whose root `√a |x − r|` makes `t` constant on a side.
 fn euler(q: &Expr, x: &Expr, t: &Expr) -> Option<(Expr, Expr, Expr)> {
     let (a, b, c) = quadratic_coefficients(q, x)?;
+    let four = Rational::from(Integer::from(4));
+    let discriminant = &(&b * &b) - &(&(&four * &a) * &c);
+    if discriminant.is_zero() {
+        return None;
+    }
     let n = |r: &Rational| Expr::from(r.clone());
     let root_q = q.pow(Expr::from(Rational::new(Integer::ONE, Integer::from(2))));
     if let Some(s) = rational_sqrt(&a) {
@@ -466,8 +472,7 @@ fn euler(q: &Expr, x: &Expr, t: &Expr) -> Option<(Expr, Expr, Expr)> {
         return Some((x_t, root_t, (root_q - n(&r)) / x.clone()));
     }
     // √q = t (x − r): x = (a r' − t² r)/(a − t²).
-    let four = Rational::from(Integer::from(4));
-    let d = rational_sqrt(&(&(&b * &b) - &(&(&four * &a) * &c)))?;
+    let d = rational_sqrt(&discriminant)?;
     let two_a = &a + &a;
     let r = &(&-b.clone() + &d) / &two_a;
     let r2 = &(&-b - &d) / &two_a;

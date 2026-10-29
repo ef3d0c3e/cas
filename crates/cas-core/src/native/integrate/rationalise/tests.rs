@@ -164,6 +164,25 @@ fn roots() {
     );
 }
 
+/// A square under the root, `√(x² − 2x + 1) = |x − 1|`: Euler's
+/// substitutions would make `t` constant on a side, so they leave it; what
+/// another method makes of it has the right derivative past 1.
+#[test]
+fn square_under_the_root() {
+    let ctx = Context::new();
+    let x = Expr::symbol("x");
+    let f = read("Times[x, Power[Plus[1, Times[-2, x], Power[x, 2]], 1/2]]");
+    let found = ctx
+        .eval(&Expr::call(Symbol::INTEGRATE, [f.clone(), x.clone()]))
+        .unwrap();
+    if !found.contains(&Expr::from(Symbol::INTEGRATE)) {
+        check_derivatives_at(
+            &["Times[x, Power[Plus[1, Times[-2, x], Power[x, 2]], 1/2]]"],
+            &[(3, 2), (5, 2), (7, 4)],
+        );
+    }
+}
+
 /// What the substitutions leave: `x` outside the exponentials, a slope
 /// that is not rational, an exponent that is not linear; two arguments of
 /// sines, `x` outside them; roots of two bases, of a quadratic whose
