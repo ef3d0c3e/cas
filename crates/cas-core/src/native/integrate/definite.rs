@@ -21,7 +21,15 @@
 //! `Cos`, and `ArcTan` of a real argument, of what is; `Log[g]` where the
 //! polynomial `g` is positive, `Log[Abs[g]]` where it has no root;
 //! `Tan[u]` for a linear `u` where no `(k + 1/2) π` lies between its values
-//! at the ends.
+//! at the ends; `Sinh`, `Cosh`, and `Tanh` of a real argument; and `g^n` or
+//! `Log[g]` with `g` no polynomial where `g`, at a ball over the whole
+//! interval, keeps clear of 0, or above it (CAS-436).
+//!
+//! An antiderivative with tangents `Tan[w]`, from the substitutions of
+//! CAS-DOC-40 §3, can jump where the integrand is continuous: the interval
+//! splits at their poles inside and takes one-sided limits at a pole on a
+//! bound (CAS-436), as giac's `int(1/(2+cos(x)),x,0,2*pi)` is
+//! `2*pi/sqrt(3)`.
 //!
 //! An improper integral (CAS-DOC-10 §7, CAS-207), with an infinite bound
 //! or a singular point at a bound, is the difference of the one-sided
@@ -35,6 +43,7 @@
 //! warning.
 
 use cas_num::algebra::{EuclideanDomain, Rationals};
+use cas_num::ball::{Ball, Float, Mag, Round};
 use cas_num::{Integer, Rational};
 use cas_poly::{Dense, DenseRing};
 
@@ -49,6 +58,9 @@ use crate::trace::Warning;
 
 /// The bits of the balls that bound real numbers.
 const BITS: u64 = 128;
+
+/// The most poles of an antiderivative's tangents an interval splits at.
+const MAX_POLES: i64 = 64;
 
 /// A closed interval with rational ends, `None` at an infinite one.
 #[derive(Clone, Debug)]
@@ -150,7 +162,42 @@ pub(super) fn integral(
     let bounded = !infinite(a) && !infinite(b);
     if bounded && continuity(ev, e, f, x, &region(ev, a, b, false))? == Continuity::Continuous {
         let at = |v: &Expr| antiderivative.substitute(&[(x.clone(), v.clone())]);
-        return Ok(Some(at(b) - at(a)));
+        let tangents = antiderivative
+            .distinct()
+            .any(|t| t.head() == Some(&Expr::from(Symbol::TAN)) && t.contains(x));
+        if !tangents {
+            return Ok(Some(at(b) - at(a)));
+        }
+        // The antiderivative's tangents may jump inside (CAS-436): the
+        // interval splits at their poles, each piece by its limits.
+        let Some(ascending) = ascending(ev, a, b) else {
+            warn(ev, "the bounds are not ordered", e);
+            return Ok(None);
+        };
+        let (lo, hi) = if ascending { (a, b) } else { (b, a) };
+        let Some((poles, at_bound)) = tangent_poles(ev, &antiderivative, x, lo, hi)? else {
+            warn(
+                ev,
+                "the antiderivative's poles are not told apart from the bounds",
+                e,
+            );
+            return Ok(None);
+        };
+        if poles.is_empty() && !at_bound {
+            return Ok(Some(at(b) - at(a)));
+        }
+        let mut points = vec![lo.clone()];
+        points.extend(poles);
+        points.push(hi.clone());
+        let Some(value) = by_limits(ev, x, &antiderivative, &points)? else {
+            warn(
+                ev,
+                "the antiderivative's limits at its poles are not found",
+                e,
+            );
+            return Ok(None);
+        };
+        return Ok(Some(if ascending { value } else { -value }));
     }
     // Improper: continuous on the open interval, by limits at the bounds.
     if [a, b]
@@ -605,10 +652,13 @@ fn continuity(
         Ok(known)
     };
     Ok(match (head, args) {
-        (Symbol::PLUS | Symbol::TIMES, _) | (Symbol::EXP | Symbol::SIN | Symbol::COS, [_]) => {
+        (Symbol::PLUS | Symbol::TIMES, _)
+        | (Symbol::EXP | Symbol::SIN | Symbol::COS | Symbol::SINH | Symbol::COSH, [_]) => {
             all(ev, args)?
         }
-        (Symbol::ARC_TAN, [g]) if matches!(region, Region::Real { .. }) && real(g) => {
+        (Symbol::ARC_TAN | Symbol::TANH, [g])
+            if matches!(region, Region::Real { .. }) && real(g) =>
+        {
             all(ev, args)?
         }
         (Symbol::POWER, [c, g]) if !c.contains(x) => {
@@ -627,7 +677,9 @@ fn continuity(
                 return Ok(inner);
             }
             let Some(p) = polynomial(ev, e, g, x)? else {
-                return Ok(Continuity::Unknown);
+                // Not a polynomial: its ball over the interval (CAS-436).
+                let clear = cleared(ev, g, x, region, !n.is_integer())?;
+                return Ok(if clear { inner } else { Continuity::Unknown });
             };
             inner.and(if n.is_integer() {
                 roots(region, &p)
@@ -645,13 +697,135 @@ fn continuity(
                 return Ok(all(ev, std::slice::from_ref(h))?.and(roots(region, &p)));
             }
             let Some(p) = polynomial(ev, e, g, x)? else {
-                return Ok(Continuity::Unknown);
+                let clear = cleared(ev, g, x, region, true)?;
+                return Ok(if clear {
+                    all(ev, args)?
+                } else {
+                    Continuity::Unknown
+                });
             };
             all(ev, args)?.and(positive(region, &p, true))
         }
         (Symbol::TAN, [u]) => tangent(ev, u, x, region),
         _ => Continuity::Unknown,
     })
+}
+
+/// Whether `g`, for `x` in the region's interval, keeps clear of 0, or
+/// above it when `positive`: `g` at a ball over the whole interval, which
+/// overestimates, so a `g` it does not clear stays unknown (CAS-436).
+fn cleared(
+    ev: &mut Eval<'_>,
+    g: &Expr,
+    x: &Expr,
+    region: &Region,
+    positive: bool,
+) -> Result<bool, EvalError> {
+    let Region::Real { outer, .. } = region else {
+        return Ok(false);
+    };
+    let (Some(lo), Some(hi)) = (&outer.lo, &outer.hi) else {
+        return Ok(false);
+    };
+    let two = Rational::from(Integer::from(2));
+    let mid = &(lo + hi) / &two;
+    let rad = &(hi - lo) / &two;
+    let radius = Mag::from_float(&Float::from_rational(&rad, 64, Round::Ceil).0);
+    let ball = Ball::from_rational(&mid, BITS).add_error(&radius);
+    let at = g.substitute(&[(x.clone(), Expr::from(ball))]);
+    let value = ev.eval(&Expr::call(Symbol::N, [at]))?;
+    let View::Ball(b) = value.view() else {
+        return Ok(false);
+    };
+    let Some(r) = b.rad().to_float() else {
+        return Ok(false);
+    };
+    let low = b.mid().sub_round(&r, 64, Round::Floor).0;
+    let high = b.mid().add_round(&r, 64, Round::Ceil).0;
+    let above = !low.is_negative() && !low.is_zero();
+    Ok(above || (!positive && high.is_negative()))
+}
+
+/// The poles of the tangents `Tan[w]` of `F`, `w` linear in `x`, where
+/// `w = (k + 1/2)π`: those strictly between `lo` and `hi`, ascending, at
+/// most [`MAX_POLES`], and whether one is at a bound (CAS-436). `None` when
+/// a pole is not told inside, outside or at a bound, or a tangent's
+/// argument is not linear.
+fn tangent_poles(
+    ev: &mut Eval<'_>,
+    antiderivative: &Expr,
+    x: &Expr,
+    lo: &Expr,
+    hi: &Expr,
+) -> Result<Option<(Vec<Expr>, bool)>, EvalError> {
+    let pi = Expr::from(Symbol::PI);
+    let half = Expr::from(Rational::new(Integer::ONE, Integer::from(2)));
+    let mut poles: Vec<(Rational, Expr)> = Vec::new();
+    let mut at_bound = false;
+    let tangents: Vec<Expr> = antiderivative
+        .distinct()
+        .filter(|t| t.head() == Some(&Expr::from(Symbol::TAN)) && t.contains(x))
+        .cloned()
+        .collect();
+    for t in tangents {
+        let w = &t.args()[0];
+        let s = ev.eval(&Expr::call(Symbol::D, [w.clone(), x.clone()]))?;
+        if s.contains(x) || s == Expr::from(0) {
+            return Ok(None);
+        }
+        // τ(v) = w(v)/π − 1/2 at the bounds: the integers between are the
+        // poles; an integer τ, a pole at a bound.
+        let mut ends = Vec::new();
+        for v in [lo, hi] {
+            let at = w.substitute(&[(x.clone(), v.clone())]) / pi.clone() - half.clone();
+            let at = ev.eval(&at)?;
+            let range = if let Some(q) = at.to_rational() {
+                at_bound |= q.is_integer();
+                (q.clone(), q)
+            } else {
+                let Some(range) = ball_ends(ev, &at) else {
+                    return Ok(None);
+                };
+                // An integer in the ball: not told.
+                if range.0.ceil() <= range.1.floor() {
+                    return Ok(None);
+                }
+                range
+            };
+            ends.push(range);
+        }
+        let (below, above) = if ends[0].1 <= ends[1].0 {
+            (&ends[0], &ends[1])
+        } else if ends[1].1 <= ends[0].0 {
+            (&ends[1], &ends[0])
+        } else {
+            return Ok(None);
+        };
+        let from = below.1.floor() + Integer::ONE;
+        let to = above.0.ceil() - Integer::ONE;
+        let (Some(from), Some(to)) = (from.to_i64(), to.to_i64()) else {
+            return Ok(None);
+        };
+        if to - from >= MAX_POLES {
+            return Ok(None);
+        }
+        let c = ev.eval(&w.substitute(&[(x.clone(), Expr::from(0))]))?;
+        for k in from..=to {
+            let w_k = (Expr::from(k) + half.clone()) * pi.clone();
+            let pole = ev.eval(&((w_k - c.clone()) / s.clone()))?;
+            let Some((p_lo, _)) = ball_ends(ev, &pole) else {
+                return Ok(None);
+            };
+            if !poles.iter().any(|(_, q)| *q == pole) {
+                poles.push((p_lo, pole));
+            }
+        }
+    }
+    poles.sort_by(|a, b| a.0.cmp(&b.0));
+    Ok(Some((
+        poles.into_iter().map(|(_, p)| p).collect(),
+        at_bound,
+    )))
 }
 
 /// Whether `g` has no complex number in it, so that it is real where `x`

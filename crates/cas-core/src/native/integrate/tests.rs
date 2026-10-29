@@ -847,6 +847,46 @@ fn roots_of_quadratics() {
     );
 }
 
+/// Definite integrals of CAS-DOC-40 (CAS-436): denominators that a ball
+/// over the interval clears, the hyperbolic functions, and antiderivatives
+/// whose tangents have poles inside or at a bound, split there.
+#[test]
+fn definite_by_substitutions() {
+    let ctx = Context::new();
+    check_values(
+        &ctx,
+        &[
+            // giac's 2*pi/sqrt(3): tan(x/2) has its pole at π.
+            (
+                "Integrate[Power[Plus[2, Cos[x]], -1], x, 0, Times[2, Pi]]",
+                "Times[2/3, Pi, Power[3, 1/2]]",
+            ),
+            // The pole at the bound π.
+            (
+                "Integrate[Power[Plus[2, Cos[x]], -1], x, 0, Pi]",
+                "Times[1/3, Pi, Power[3, 1/2]]",
+            ),
+            // giac's pi/sqrt(2): tan x has its pole at π/2.
+            (
+                "Integrate[Power[Plus[1, Power[Sin[x], 2]], -1], x, 0, Pi]",
+                "Times[1/2, Pi, Power[2, 1/2]]",
+            ),
+            (
+                "Integrate[Power[Plus[1, Exp[x]], -1], x, 0, 1]",
+                "Plus[1, Log[2], Times[-1, Log[Plus[1, E]]]]",
+            ),
+            (
+                "Integrate[Power[Cosh[x], -1], x, -1, 1]",
+                "Times[2, Plus[ArcTan[E], Times[-1, ArcTan[Power[E, -1]]]]]",
+            ),
+            (
+                "Integrate[Times[x, Power[Plus[1, x], 1/2]], x, 0, 3]",
+                "116/15",
+            ),
+        ],
+    );
+}
+
 /// What the methods of CAS-194 to CAS-199 leave as it is.
 #[test]
 fn integrals_that_stay() {
