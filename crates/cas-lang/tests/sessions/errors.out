@@ -25,13 +25,11 @@ warning at 12:1 `two(x + 1)`: the number 2 applied as a function in call(2, 1 + 
 > sin x
 error at 13:1 `sin`: sin takes its argument in parentheses: sin(x)
   fix: `sin(x)`
-> odesolve(x)
-error at 14:1 `odesolve(x)`: odesolve is not available yet
 > f(x) := x
 > f(1, 2)
-warning at 16:1 `f(1, 2)`: no definition of f matches f(1, 2)
+warning at 15:1 `f(1, 2)`: no definition of f matches f(1, 2)
 = f(1, 2)
 > 2 * * 3
-error at 17:5 `*`: expected an expression
+error at 16:5 `*`: expected an expression
 > 1 +
-error at 19:1 ``: expected an expression
+error at 18:1 ``: expected an expression
