@@ -46,6 +46,15 @@ fn quotients() {
             "ContinuedFraction[Plus[1/3, Times[1/3, Power[2, 1/2]]]]",
             "List[0, 1, List[4, 8]]",
         ),
+        (
+            "ContinuedFraction[Power[13, 1/2]]",
+            "List[3, List[1, 1, 1, 1, 6]]",
+        ),
+        // A period of 532572 quotients, by Python's: past 2^16, it stays.
+        (
+            "ContinuedFraction[Power[1000000000039, 1/2]]",
+            "ContinuedFraction[Power[1000000000039, 1/2]]",
+        ),
         ("ContinuedFraction[Pi, 6]", "List[3, 7, 15, 1, 292, 1]"),
         ("ContinuedFraction[E, 8]", "List[2, 1, 2, 1, 1, 4, 1, 1]"),
         ("ContinuedFraction[Power[2, 1/2], 4]", "List[1, 2, 2, 2]"),

@@ -8,10 +8,11 @@
 //!   `(P + √N)/Q` with `Q | N − P²`, its quotients `⌊(P + √N)/Q⌋` exactly,
 //!   `⌊(P + s)/Q⌋` for `Q > 0` and `⌊(P + s + 1)/Q⌋` for `Q < 0`, `s =
 //!   ⌊√N⌋`, and the state `(P, Q)` carried as `P′ = a Q − P`, `Q′ = (N −
-//!   P′²)/Q`; when a state comes back, the quotients from its first time
-//!   on are the period, the last entry as a list: `√7` is `{2, {1, 1, 1,
-//!   4}}` and the golden ratio `{{1}}`. giac writes `dfc(sqrt(2),5)` as
-//!   `[1,2,[2]]`, a period started late.
+//!   P′²)/Q`; the period starts at the first reduced state, above 1 with
+//!   its conjugate in `(−1, 0)` (Galois), and ends when that state comes
+//!   back, the last entry as a list: `√7` is `{2, {1, 1, 1, 4}}` and the
+//!   golden ratio `{{1}}`. giac writes `dfc(sqrt(2),5)` as `[1,2,[2]]`, a
+//!   period started late. Past [`MAX_PERIODIC`] quotients the call stays.
 //! - `ContinuedFraction[x, n]` of a real number: the first `n` quotients,
 //!   each floor proven by `N`'s ball lying between two integers, the
 //!   precision doubled up to [`MAX_BITS`] where it does not; the quotients
@@ -37,6 +38,9 @@ const MAX_BITS: u64 = 1 << 14;
 
 /// The most quotients asked.
 const MAX_TERMS: i64 = 1 << 16;
+
+/// The most quotients of a periodic expansion, before and in its period.
+const MAX_PERIODIC: usize = 1 << 16;
 
 fn list(items: Vec<Expr>) -> Expr {
     Expr::call(Symbol::LIST, items)
@@ -103,8 +107,16 @@ fn quotient(p: &Integer, s: &Integer, q: &Integer) -> Integer {
     Rational::new(top, q.clone()).floor()
 }
 
-/// The quotients of `(a + b √D)` with the start of its period.
-fn periodic(a: &Rational, b: &Rational, d: &Integer) -> (Vec<Integer>, usize) {
+/// Whether `(P + √N)/Q` is reduced, above 1 with its conjugate in `(−1,
+/// 0)`, `s = ⌊√N⌋`: by Galois's theorem, its expansion is then purely
+/// periodic, so the period starts at the first reduced state.
+fn reduced(p: &Integer, q: &Integer, s: &Integer) -> bool {
+    q.is_positive() && p <= s && &(p + s) >= q && s < &(p + q)
+}
+
+/// The quotients of `(a + b √D)` with the start of its period; `None` past
+/// [`MAX_PERIODIC`] quotients.
+fn periodic(a: &Rational, b: &Rational, d: &Integer) -> Option<(Vec<Integer>, usize)> {
     // a = a₁/m, b = b₁/m: (a₁ + b₁ √D)/m = (P + √N)/Q, N = b₁² D.
     let m = a.denom().lcm(b.denom());
     let a1 = (a * &Rational::from(m.clone())).numer().clone();
@@ -120,19 +132,23 @@ fn periodic(a: &Rational, b: &Rational, d: &Integer) -> (Vec<Integer>, usize) {
         q = &q * &size;
     }
     let (s, _) = n.sqrt_rem();
-    let mut seen: Vec<(Integer, Integer)> = Vec::new();
+    let mut start: Option<(usize, Integer, Integer)> = None;
     let mut out = Vec::new();
-    loop {
-        if let Some(k) = seen.iter().position(|st| *st == (p.clone(), q.clone())) {
-            return (out, k);
+    while out.len() <= MAX_PERIODIC {
+        if let Some((k, p0, q0)) = &start {
+            if (&p, &q) == (p0, q0) {
+                return Some((out, *k));
+            }
+        } else if reduced(&p, &q, &s) {
+            start = Some((out.len(), p.clone(), q.clone()));
         }
-        seen.push((p.clone(), q.clone()));
         let c = quotient(&p, &s, &q);
         let next = &(&c * &q) - &p;
         q = (&n - &(&next * &next)).div_exact(&q);
         p = next;
         out.push(c);
     }
+    None
 }
 
 /// The lower and upper ends of a ball, rational; `None` when infinite.
@@ -188,7 +204,9 @@ pub(in crate::native) fn continued_fraction(ev: &mut Eval<'_>, e: &Expr) -> Nati
     if n.is_none()
         && let Some((a, b, d)) = quadratic(x)
     {
-        let (quotients, start) = periodic(&a, &b, &d);
+        let Some((quotients, start)) = periodic(&a, &b, &d) else {
+            return Ok(None);
+        };
         let mut items = ints(quotients);
         let period = items.split_off(start);
         items.push(list(period));
