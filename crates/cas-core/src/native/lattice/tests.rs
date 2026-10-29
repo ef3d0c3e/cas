@@ -19,9 +19,9 @@ fn unimodular(ctx: &Context, m: &Expr) -> bool {
     det == Expr::from(1) || det == Expr::from(-1)
 }
 
-/// `m₁ m₂` (`Dot`).
+/// `m₁ m₂`, `Times` the matrix product (Xcas's).
 fn dot(ctx: &Context, a: &Expr, b: &Expr) -> Expr {
-    ctx.eval(&Expr::call(Symbol::DOT, [a.clone(), b.clone()]))
+    ctx.eval(&Expr::call(Symbol::TIMES, [a.clone(), b.clone()]))
         .unwrap()
 }
 
