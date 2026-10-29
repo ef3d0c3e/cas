@@ -15,7 +15,11 @@
 //!   symbolic `n`, and `u^-1` is `Log[Abs[u]]`; `Exp[u]` and `E^u` are
 //!   themselves, `c^u` is `c^u / Log[c]`; `Sin`, `Cos`, `Tan` (`−ln|cos u|`),
 //!   `Sinh`, `Cosh`, `Tanh` (`ln cosh u`) and `Log` (`u ln u − u`); `1/√(α + β x²)` with `α > 0 > β` is an
-//!   arcsine, `1/(α + β x²)` with `α, β > 0` and `1/(1 + u²)` arctangents.
+//!   arcsine, `1/(α + β x²)` with `α, β > 0` and `1/(1 + u²)` arctangents;
+//!   `√q` and `1/√q` for `q = a x² + b x + c`, rationals, the square
+//!   completed (CAS-428): an inverse hyperbolic sine, a logarithm or an
+//!   arcsine as `a` and `q`'s minimum are signed, so a parabola's length
+//!   `∫ √(1 + 4x²)` is `x √(1 + 4x²)/2 + asinh(2x)/4`.
 //! - Polynomials in `x`, through the conversion of CAS-DOC-8 §2 (CAS-194):
 //!   each term `c x^k` is `c x^(k+1) / (k+1)`, over the common denominator.
 //! - Rational functions of `x` with numeric coefficients (CAS-196), through
@@ -242,7 +246,9 @@ fn table(f: &Expr, x: &Expr) -> Option<Expr> {
     match (f.head()?.as_symbol()?, f.args()) {
         (Symbol::POWER, [u, n]) if !n.contains(x) => {
             let Some(a) = slope(u, x) else {
-                return reciprocal_logarithm(u, n, x).or_else(|| quadratic(u, n, x));
+                return reciprocal_logarithm(u, n, x)
+                    .or_else(|| quadratic(u, n, x))
+                    .or_else(|| root_of_quadratic(u, &n.to_rational()?, x));
             };
             if n.as_i64() == Some(-1) {
                 return Some(log_abs(u.clone()) / a);
@@ -379,6 +385,66 @@ fn quadratic(q: &Expr, n: &Expr, x: &Expr) -> Option<Expr> {
         return Some(call(Symbol::ARC_TAN, x.clone() * scale) / sqrt(&alpha * &beta));
     }
     None
+}
+
+/// `q` as `a x² + b x + c`, rationals, `a` not 0.
+fn quadratic_coefficients(q: &Expr, x: &Expr) -> Option<(Rational, Rational, Rational)> {
+    if q.head() != Some(&Expr::from(Symbol::PLUS)) {
+        return None;
+    }
+    let square = x.pow(2);
+    let (mut a, mut b, mut c) = (Rational::ZERO, Rational::ZERO, Rational::ZERO);
+    for t in q.args() {
+        if let Some(r) = t.to_rational() {
+            c = &c + &r;
+            continue;
+        }
+        let (k, rest) = match (t.head().and_then(Expr::as_symbol), t.args()) {
+            (Some(Symbol::TIMES), [k, rest]) => (k.to_rational()?, rest),
+            _ => (Rational::ONE, t),
+        };
+        if *rest == square {
+            a = &a + &k;
+        } else if rest == x {
+            b = &b + &k;
+        } else {
+            return None;
+        }
+    }
+    (!a.is_zero()).then_some((a, b, c))
+}
+
+/// `q^(1/2)` and `q^(−1/2)` for `q = a x² + b x + c`, rationals (CAS-428),
+/// the square completed, `q = a u² + k` for `u = x + b/(2a)`: `∫ q^(−1/2)`
+/// is `asinh(u √(a/k))/√a` for `a, k > 0`, `ln|√a u + √q|/√a` for `a > 0 >
+/// k`, `asin(u √(−a/k))/√(−a)` for `a < 0 < k`; and `∫ q^(1/2) = u √q/2 +
+/// (k/2) ∫ q^(−1/2)`. Otherwise `None`: `q` a square times `a`, or never
+/// positive.
+fn root_of_quadratic(q: &Expr, n: &Rational, x: &Expr) -> Option<Expr> {
+    let half = Rational::new(Integer::ONE, Integer::from(2));
+    if *n != half && *n != -half.clone() {
+        return None;
+    }
+    let (a, b, c) = quadratic_coefficients(q, x)?;
+    let sqrt = |r: Rational| Expr::from(r).pow(Expr::from(half.clone()));
+    let u = x.clone() + Expr::from(&b / &(&a * &Rational::from(Integer::from(2))));
+    let k = &c - &(&(&b * &b) / &(&a * &Rational::from(Integer::from(4))));
+    let root = q.pow(Expr::from(half.clone()));
+    let reciprocal = if a.is_positive() && k.is_positive() {
+        call(Symbol::ARC_SINH, u.clone() * sqrt(&a / &k)) / sqrt(a.clone())
+    } else if a.is_positive() && k.is_negative() {
+        let inner = sqrt(a.clone()) * u.clone() + root.clone();
+        call(Symbol::LOG, call(Symbol::ABS, inner)) / sqrt(a.clone())
+    } else if a.is_negative() && k.is_positive() {
+        call(Symbol::ARC_SIN, u.clone() * sqrt(-(&a / &k))) / sqrt(-a.clone())
+    } else {
+        return None;
+    };
+    Some(if n.is_positive() {
+        u * root / 2 + Expr::from(&k / &Rational::from(Integer::from(2))) * reciprocal
+    } else {
+        reciprocal
+    })
 }
 
 /// `q` as `α + β x²`, `α` and `β` rationals, `β` not 0.

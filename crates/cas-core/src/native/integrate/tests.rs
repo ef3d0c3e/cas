@@ -787,6 +787,66 @@ fn heuristics() {
     ]);
 }
 
+/// Square roots of quadratics and their reciprocals (CAS-428), the square
+/// completed: inverse hyperbolic sines, logarithms and arcsines.
+#[test]
+fn roots_of_quadratics() {
+    check(&[
+        (
+            "Integrate[Power[Plus[1, Times[4, Power[x, 2]]], 1/2], x]",
+            "Plus[Times[1/2, x, Power[Plus[1, Times[4, Power[x, 2]]], 1/2]], \
+             Times[1/4, ArcSinh[Times[2, x]]]]",
+        ),
+        (
+            "Integrate[Power[Plus[1, Times[4, Power[x, 2]]], -1/2], x]",
+            "Times[1/2, ArcSinh[Times[2, x]]]",
+        ),
+        (
+            "Integrate[Power[Plus[-1, Power[x, 2]], -1/2], x]",
+            "Log[Abs[Plus[x, Power[Plus[-1, Power[x, 2]], 1/2]]]]",
+        ),
+        (
+            "Integrate[Power[Plus[3, Times[-2, x], Times[-1, Power[x, 2]]], -1/2], x]",
+            "ArcSin[Times[1/2, Plus[1, x]]]",
+        ),
+    ]);
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for f in [
+        "Power[Plus[2, Times[2, x], Power[x, 2]], 1/2]",
+        // q > 0 at the three points, k = −1/25: the logarithm, the sign
+        // of √a u + √q changing.
+        "Power[Plus[Power[x, 2], Times[1/5, x], -3/100], 1/2]",
+        "Power[Plus[Times[1/2, Power[x, 2]], x, 7], -1/2]",
+    ] {
+        let f = read(f);
+        let found = ctx
+            .eval(&Expr::call(
+                Symbol::INTEGRATE,
+                [f.clone(), Expr::symbol("x")],
+            ))
+            .unwrap();
+        if found.contains(&Expr::from(Symbol::INTEGRATE)) || !derivative_agrees(&ctx, &f, &found) {
+            wrong.push(format!("{f:?}: {found:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    // A parabola's length, and a half disc's area 2π.
+    check_values(
+        &ctx,
+        &[
+            (
+                "Integrate[Power[Plus[1, Times[4, Power[x, 2]]], 1/2], x, 0, 1]",
+                "Plus[Times[1/2, Power[5, 1/2]], Times[1/4, ArcSinh[2]]]",
+            ),
+            (
+                "Integrate[Power[Plus[4, Times[-1, Power[x, 2]]], 1/2], x, -2, 2]",
+                "Times[2, Pi]",
+            ),
+        ],
+    );
+}
+
 /// What the methods of CAS-194 to CAS-199 leave as it is.
 #[test]
 fn integrals_that_stay() {
