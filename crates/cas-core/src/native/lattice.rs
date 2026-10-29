@@ -1,13 +1,14 @@
 //! Integer matrices (CAS-DOC-42): Xcas's `ihermite`, `ismith` and `lll`.
 //!
 //! - `HermiteDecomposition[A]` (§2, CAS-445): `{U, H}`, `U` unimodular and
-//!   `H = U A` in Hermite normal form: row echelon, each pivot positive,
-//!   the entries above a pivot in `[0, pivot)`, zero rows last. Row
-//!   operations of determinant ±1 on `A` and `U` at once: below a pivot,
-//!   two rows `a, b` become `g = s a + t b` and 0 by the extended gcd;
-//!   then the pivot made positive and the rows above reduced modulo it.
-//!   giac's `ihermite([[9,-36,30],[-36,192,-180],[30,-180,180]])` has `H =
-//!   [[3,0,30],[0,12,0],[0,0,60]]`.
+//!   `H = U A` in Hermite normal form: row echelon, each pivot `p`
+//!   positive, the entries above it in `(−p/2, p/2]` as giac's (unique as
+//!   `[0, p)` would be), zero rows last. Row operations of determinant ±1
+//!   on `A` and `U` at once: below a pivot, two rows `a, b` become
+//!   `g = s a + t b` and 0 by the extended gcd; then the pivot made
+//!   positive and the rows above reduced modulo it. giac's
+//!   `ihermite([[1,2,3],[4,5,6],[7,8,10]])` has
+//!   `H = [[1,-1,0],[0,3,0],[0,0,1]]`.
 //! - `SmithDecomposition[A]` (§3, CAS-446): `{U, S, V}`, `U` and `V`
 //!   unimodular, `S = U A V` diagonal with `d₁ | d₂ | …`, each `dᵢ ≥ 0`:
 //!   at each corner, the least entry of the block moved there, its column
@@ -132,7 +133,11 @@ fn hermite(h: &mut Matrix, u: &mut Matrix) {
         }
         let pivot = h[r][col].clone();
         for k in 0..r {
-            let (q, _) = h[k][col].div_rem_euclid(&pivot);
+            // The symmetric remainder: q with h − q p in (−p/2, p/2].
+            let (mut q, rest) = h[k][col].div_rem_euclid(&pivot);
+            if (&rest + &rest) > pivot {
+                q = &q + &Integer::ONE;
+            }
             if q.is_zero() {
                 continue;
             }

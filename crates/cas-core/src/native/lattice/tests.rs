@@ -57,7 +57,17 @@ fn check_smith(a: &str, s: &str) {
 
 #[test]
 fn hermite_forms() {
-    // giac's [[3,0,30],[0,12,0],[0,0,60]] and [[1,1],[0,2]].
+    // giac's [[3,0,30],[0,12,0],[0,0,60]] and [[1,1],[0,2]]; above the
+    // pivots, giac's symmetric remainders: [[1,-1,0],[0,3,0],[0,0,1]] and
+    // [[1,1,-1],[0,2,1],[0,0,3]].
+    check_hermite(
+        "List[List[1, 2, 3], List[4, 5, 6], List[7, 8, 10]]",
+        "List[List[1, -1, 0], List[0, 3, 0], List[0, 0, 1]]",
+    );
+    check_hermite(
+        "List[List[6, 4, 2], List[3, 9, 12], List[1, 5, 7]]",
+        "List[List[1, 1, -1], List[0, 2, 1], List[0, 0, 3]]",
+    );
     check_hermite(
         "List[List[9, -36, 30], List[-36, 192, -180], List[30, -180, 180]]",
         "List[List[3, 0, 30], List[0, 12, 0], List[0, 0, 60]]",
