@@ -346,3 +346,10 @@ path = "fuzz_targets/integrate_two.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "fourier_transforms"
+path = "fuzz_targets/fourier_transforms.rs"
+test = false
+doc = false
+bench = false
