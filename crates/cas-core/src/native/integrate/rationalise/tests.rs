@@ -76,8 +76,52 @@ fn exponentials() {
     assert_eq!(found, ctx.eval(&read("ArcTan[Exp[x]]")).unwrap());
 }
 
+/// Rational functions of sines and cosines (CAS-434): Bioche's three rules
+/// and Weierstrass's substitution.
+#[test]
+fn sines_and_cosines() {
+    check_derivatives(&[
+        // u = cos x: 1/sin, giac's ln|tan(x/2)|; sin/(1 + cos), giac's
+        // -ln(cos(x)+1); sin³/cos², giac's cos(x)+1/cos(x); cos²/sin; tan³.
+        "Power[Sin[x], -1]",
+        "Times[Sin[x], Power[Plus[1, Cos[x]], -1]]",
+        "Times[Power[Sin[x], 3], Power[Cos[x], -2]]",
+        "Times[Power[Cos[x], 2], Power[Sin[x], -1]]",
+        "Power[Tan[x], 3]",
+        // u = sin x: 1/cos, sec.
+        "Power[Cos[x], -1]",
+        "Sec[x]",
+        // u = tan x: tan², 1/(1 + sin²), 1/cos(2x)².
+        "Power[Tan[x], 2]",
+        "Power[Plus[1, Power[Sin[x], 2]], -1]",
+        "Power[Cos[Times[2, x]], -2]",
+        // Weierstrass: 1/(2 + cos), 1/(1 + sin), 1/(3 + 5 sin), at 3x + 1.
+        "Power[Plus[2, Cos[x]], -1]",
+        "Power[Plus[1, Sin[x]], -1]",
+        "Power[Plus[3, Times[5, Sin[x]]], -1]",
+        "Power[Plus[2, Cos[Plus[1, Times[3, x]]]], -1]",
+    ]);
+    let ctx = Context::new();
+    for (input, expected) in [
+        // giac's tan(x)-x, ArcTan[Tan[x]] back as x.
+        (
+            "Integrate[Power[Tan[x], 2], x]",
+            "Plus[Tan[x], Times[-1, x]]",
+        ),
+        // giac's cos(x)+1/cos(x).
+        (
+            "Integrate[Times[Power[Sin[x], 3], Power[Cos[x], -2]], x]",
+            "Plus[Cos[x], Power[Cos[x], -1]]",
+        ),
+    ] {
+        let found = ctx.eval(&read(input)).unwrap();
+        assert_eq!(found, ctx.eval(&read(expected)).unwrap(), "{input}");
+    }
+}
+
 /// What the substitutions leave: `x` outside the exponentials, a slope
-/// that is not rational, an exponent that is not linear.
+/// that is not rational, an exponent that is not linear; two arguments of
+/// sines, `x` outside them.
 #[test]
 fn what_stays() {
     let ctx = Context::new();
@@ -85,6 +129,8 @@ fn what_stays() {
         "Integrate[Times[x, Power[Plus[1, Exp[x]], -1]], x]",
         "Integrate[Power[Plus[1, Exp[Times[Pi, x]], Exp[x]], -1], x]",
         "Integrate[Power[Plus[1, Exp[Power[x, 2]]], -1], x]",
+        "Integrate[Power[Plus[2, Sin[x], Cos[Times[2, x]]], -1], x]",
+        "Integrate[Times[x, Power[Plus[2, Cos[x]], -1]], x]",
     ] {
         let e = read(input);
         let found = ctx.eval(&e).unwrap();

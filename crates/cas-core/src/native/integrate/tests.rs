@@ -856,8 +856,6 @@ fn integrals_that_stay() {
         // derivative-divides wants.
         "Integrate[Sin[Power[x, 2]], x]",
         "Integrate[Exp[Power[x, 2]], x]",
-        // giac's tan(x)-x: tan^2 is no product of sines and cosines.
-        "Integrate[Power[Tan[x], 2], x]",
         // Residues of degree 3 and 4.
         "Integrate[Power[Plus[-2, Power[x, 3]], -1], x]",
         "Integrate[Power[Plus[1, Power[x, 4]], -1], x]",
