@@ -15,6 +15,14 @@
 //!   `t = tan(v/2)`. The powers of the other function are even, so a square
 //!   root of `1 − u²` or `1 + u²` put for it cancels. `ArcTan[Tan[w]]` goes
 //!   back as `w`: giac's `int(tan(x)^2,x)` is `tan(x)-x`.
+//! - rational functions of `x` and of powers `(a x + b)^(p/q)` of one
+//!   linear function (§4, CAS-435): `u = (a x + b)^(1/n)`, `n` the lcm of
+//!   the `q`s, `x = (uⁿ − b)/a`, `dx = (n/a) u^(n−1) du`, giac's
+//!   `int(sqrt(x)/(1+x),x)` being `2*(sqrt(x)-atan(sqrt(x)))`; and of `x`
+//!   and odd powers of `√q`, `q = a x² + b x + c` with rationals, by
+//!   Euler's substitutions where they are rational: `t = √q + √a x` for a
+//!   square `a`, `t = (√q − √c)/x` for a square `c`, `t = √q/(x − r)` for
+//!   rational roots `r`, `r'` of `q`.
 //!
 //! The rational function is integrated as an integrand of its own, a level
 //! deeper; an antiderivative with an `Integrate` left fails, and the
@@ -22,7 +30,7 @@
 
 use cas_num::{Integer, Rational};
 
-use super::integral_at;
+use super::{integral_at, quadratic_coefficients};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
@@ -44,7 +52,10 @@ pub(super) fn integral(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr, depth: u
     if let Some(g) = exponentials(ev, e, f, x, depth)? {
         return Ok(Some(g));
     }
-    trigonometric(ev, e, f, x, depth)
+    if let Some(g) = trigonometric(ev, e, f, x, depth)? {
+        return Ok(Some(g));
+    }
+    roots(ev, e, f, x, depth)
 }
 
 /// The rational function `r` of `u` integrated whole, `None` otherwise.
@@ -373,6 +384,150 @@ fn trigonometric(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr, depth: u8) -> 
     // dv = a dx.
     let result = antiderivative.substitute(&[(u, back)]) / a;
     Ok(Some(untangled(&ev.eval(&result)?)))
+}
+
+/// Whether `x` is in `f` only alone or in powers of polynomials, through
+/// sums, products and integer powers; the bases of the powers whose
+/// exponents are not integers collected, with those exponents.
+fn root_parts(f: &Expr, x: &Expr, powers: &mut Vec<(Expr, Rational)>) -> bool {
+    if !f.contains(x) || f == x {
+        return true;
+    }
+    match (head(f), f.args()) {
+        (Some(Symbol::PLUS | Symbol::TIMES), parts) => {
+            parts.iter().all(|p| root_parts(p, x, powers))
+        }
+        (Some(Symbol::POWER), [base, n]) if !n.contains(x) => match n.to_rational() {
+            Some(r) if r.is_integer() => root_parts(base, x, powers),
+            Some(r) => {
+                powers.push((base.clone(), r));
+                true
+            }
+            None => false,
+        },
+        _ => false,
+    }
+}
+
+/// `f` with each power `base^r` that is no integer power as `root(r)`, and
+/// `x` elsewhere as `x_of`.
+fn in_root(f: &Expr, x: &Expr, base: &Expr, root: &dyn Fn(&Rational) -> Expr, x_of: &Expr) -> Expr {
+    if f == x {
+        return x_of.clone();
+    }
+    if !f.contains(x) {
+        return f.clone();
+    }
+    if let (Some(Symbol::POWER), [b, n]) = (head(f), f.args())
+        && b == base
+        && let Some(r) = n.to_rational().filter(|r| !r.is_integer())
+    {
+        return root(&r);
+    }
+    match f.head() {
+        Some(h) => {
+            let args: Vec<Expr> = f
+                .args()
+                .iter()
+                .map(|a| in_root(a, x, base, root, x_of))
+                .collect();
+            Expr::apply(h, &args)
+        }
+        None => f.clone(),
+    }
+}
+
+/// The square root of a rational that is a square, positive.
+fn rational_sqrt(q: &Rational) -> Option<Rational> {
+    if q.is_negative() {
+        return None;
+    }
+    let (p, rest) = q.numer().sqrt_rem();
+    let (d, other) = q.denom().sqrt_rem();
+    (rest.is_zero() && other.is_zero()).then(|| Rational::new(p, d))
+}
+
+/// `x` as a rational function of `t`, `√q` as one, and `t` back in `x`,
+/// by Euler's substitutions; `None` when none is rational.
+fn euler(q: &Expr, x: &Expr, t: &Expr) -> Option<(Expr, Expr, Expr)> {
+    let (a, b, c) = quadratic_coefficients(q, x)?;
+    let n = |r: &Rational| Expr::from(r.clone());
+    let root_q = q.pow(Expr::from(Rational::new(Integer::ONE, Integer::from(2))));
+    if let Some(s) = rational_sqrt(&a) {
+        // √q = t − s x: x = (t² − c)/(2 s t + b).
+        let x_t = (t.pow(2) - n(&c)) / (Expr::from(2) * n(&s) * t.clone() + n(&b));
+        let root_t = t.clone() - n(&s) * x_t.clone();
+        return Some((x_t, root_t, root_q + n(&s) * x.clone()));
+    }
+    if let Some(r) = rational_sqrt(&c) {
+        // √q = x t + r: x = (2 r t − b)/(a − t²).
+        let x_t = (Expr::from(2) * n(&r) * t.clone() - n(&b)) / (n(&a) - t.pow(2));
+        let root_t = x_t.clone() * t.clone() + n(&r);
+        return Some((x_t, root_t, (root_q - n(&r)) / x.clone()));
+    }
+    // √q = t (x − r): x = (a r' − t² r)/(a − t²).
+    let four = Rational::from(Integer::from(4));
+    let d = rational_sqrt(&(&(&b * &b) - &(&(&four * &a) * &c)))?;
+    let two_a = &a + &a;
+    let r = &(&-b.clone() + &d) / &two_a;
+    let r2 = &(&-b - &d) / &two_a;
+    let x_t = (n(&a) * n(&r2) - t.pow(2) * n(&r)) / (n(&a) - t.pow(2));
+    let root_t = t.clone() * (x_t.clone() - n(&r));
+    Some((x_t, root_t, root_q / (x.clone() - n(&r))))
+}
+
+/// Rational functions of `x` and of a root of a linear function, or of
+/// the square root of a quadratic (§4).
+fn roots(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr, depth: u8) -> Found {
+    let mut powers = Vec::new();
+    if !root_parts(f, x, &mut powers) {
+        return Ok(None);
+    }
+    let Some((base, _)) = powers.first().cloned() else {
+        return Ok(None);
+    };
+    if powers.iter().any(|(b, _)| *b != base) {
+        return Ok(None);
+    }
+    let u = fresh(depth);
+    if f.contains(&u) {
+        return Ok(None);
+    }
+    let slope = ev.eval(&Expr::call(Symbol::D, [base.clone(), x.clone()]))?;
+    let (r, back) = if !slope.contains(x) && slope != Expr::from(0) {
+        // u = (a x + b)^(1/n): x = (uⁿ − b)/a, dx = (n/a) u^(n−1) du.
+        let n = powers
+            .iter()
+            .fold(Integer::ONE, |n, (_, r)| n.lcm(r.denom()));
+        let b0 = ev.eval(&base.substitute(&[(x.clone(), Expr::from(0))]))?;
+        let n_expr = Expr::from(n.clone());
+        let x_u = (u.pow(n_expr.clone()) - b0) / slope.clone();
+        let root = |r: &Rational| u.pow(Expr::from(&Rational::from(n.clone()) * r));
+        let f_u = in_root(f, x, &base, &root, &x_u);
+        let dx = n_expr.clone() / slope * u.pow(n_expr.clone() - Expr::from(1));
+        let back = base.pow(Expr::from(Rational::new(Integer::ONE, n)));
+        (f_u * dx, back)
+    } else {
+        if powers.iter().any(|(_, r)| *r.denom() != Integer::from(2)) {
+            return Ok(None);
+        }
+        let Some((x_t, root_t, back)) = euler(&base, x, &u) else {
+            return Ok(None);
+        };
+        let two = Rational::from(Integer::from(2));
+        let root = |r: &Rational| root_t.pow(Expr::from(&two * r));
+        let f_t = in_root(f, x, &base, &root, &x_t);
+        let dx = ev.eval(&Expr::call(Symbol::D, [x_t, u.clone()]))?;
+        (f_t * dx, back)
+    };
+    let r = ev.eval(&Expr::call(Symbol::TOGETHER, [r]))?;
+    if has_root(&r, &u) || r.contains(x) {
+        return Ok(None);
+    }
+    let Some(antiderivative) = rational_integral(ev, e, &r, &u, depth)? else {
+        return Ok(None);
+    };
+    Ok(Some(antiderivative.substitute(&[(u, back)])))
 }
 
 #[cfg(test)]

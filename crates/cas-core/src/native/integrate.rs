@@ -388,7 +388,7 @@ fn quadratic(q: &Expr, n: &Expr, x: &Expr) -> Option<Expr> {
 }
 
 /// `q` as `a x² + b x + c`, rationals, `a` not 0.
-fn quadratic_coefficients(q: &Expr, x: &Expr) -> Option<(Rational, Rational, Rational)> {
+pub(super) fn quadratic_coefficients(q: &Expr, x: &Expr) -> Option<(Rational, Rational, Rational)> {
     if q.head() != Some(&Expr::from(Symbol::PLUS)) {
         return None;
     }
