@@ -29,6 +29,7 @@ mod integrate;
 mod interpolation;
 mod lambert;
 mod laplace;
+mod lattice;
 mod limit;
 mod linear;
 mod lists;
@@ -228,6 +229,11 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::INVERSE_FOURIER_TRANSFORM,
             fourier_transform::inverse_fourier_transform,
         ),
+        (
+            Symbol::HERMITE_DECOMPOSITION,
+            lattice::hermite_decomposition,
+        ),
+        (Symbol::SMITH_DECOMPOSITION, lattice::smith_decomposition),
         (
             Symbol::INVERSE_LAPLACE_TRANSFORM,
             laplace::inverse_laplace_transform,

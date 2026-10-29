@@ -137,6 +137,10 @@ builtins! {
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];
+    // Integer matrices (CAS-DOC-42).
+    HERMITE_DECOMPOSITION = "HermiteDecomposition" [PROTECTED];
+    SMITH_DECOMPOSITION = "SmithDecomposition" [PROTECTED];
+    LATTICE_REDUCE = "LatticeReduce" [PROTECTED];
     // Fourier transforms (CAS-DOC-41).
     FOURIER_TRANSFORM = "FourierTransform" [PROTECTED];
     INVERSE_FOURIER_TRANSFORM = "InverseFourierTransform" [PROTECTED];

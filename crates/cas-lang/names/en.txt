@@ -115,6 +115,8 @@ LaplaceTransform: laplace
 InverseLaplaceTransform: ilaplace
 FourierTransform: fourier
 InverseFourierTransform: ifourier
+HermiteDecomposition: ihermite
+SmithDecomposition: ismith
 # Z-transforms and recurrences (CAS-DOC-24, CAS-308).
 ZTransform: ztrans
 InverseZTransform: invztrans
