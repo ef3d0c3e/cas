@@ -339,3 +339,10 @@ path = "fuzz_targets/diophantine.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "integrate_two"
+path = "fuzz_targets/integrate_two.rs"
+test = false
+doc = false
+bench = false
