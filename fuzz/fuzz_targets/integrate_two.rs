@@ -112,7 +112,7 @@ fn euler(u: &mut Unstructured<'_>) -> Result<Expr> {
         }
         // Rational roots.
         _ => {
-            let a = integer(u, -3, 3)?;
+            let a = integer(u, 1, 3)? * if u.arbitrary()? { -1 } else { 1 };
             let r = Expr::from(q(u.int_in_range(-4..=4)?, 2));
             let r2 = Expr::from(q(u.int_in_range(-4..=4)?, 2));
             a * (x() - r) * (x() - r2)
