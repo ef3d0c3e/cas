@@ -415,6 +415,10 @@ pub(super) fn within_dense(
 /// their numerators over ℤ or ℤ\[i\], so the gcd of the contents times
 /// that of the primitive parts, its leading coefficient positive.
 pub(super) fn gcd(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    // Over a prime field (CAS-DOC-43 §5).
+    if let Some(g) = super::modular::polynomials::gcd(ev, e)? {
+        return Ok(Some(g));
+    }
     let args = e.args();
     if let Some(values) = numbers(args) {
         return Ok(
@@ -1054,14 +1058,26 @@ fn divided<R: Numbers>(
 }
 
 pub(super) fn polynomial_quotient(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    use super::modular::polynomials::{Part, divide as modular_divide};
+    if let Some(q) = modular_divide(ev, e, Part::Quotient)? {
+        return Ok(Some(q));
+    }
     divide(ev, e, Division::Quotient)
 }
 
 pub(super) fn polynomial_remainder(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    use super::modular::polynomials::{Part, divide as modular_divide};
+    if let Some(r) = modular_divide(ev, e, Part::Remainder)? {
+        return Ok(Some(r));
+    }
     divide(ev, e, Division::Remainder)
 }
 
 pub(super) fn polynomial_quotient_remainder(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    use super::modular::polynomials::{Part, divide as modular_divide};
+    if let Some(both) = modular_divide(ev, e, Part::Both)? {
+        return Ok(Some(both));
+    }
     divide(ev, e, Division::Both)
 }
 
@@ -1501,6 +1517,10 @@ pub(super) fn factor_rational(ev: &mut Eval<'_>, e: &Expr) -> Native {
 
 /// [`factor`], with the square roots when `roots`.
 fn factoring(ev: &mut Eval<'_>, e: &Expr, roots: bool) -> Native {
+    // Over a prime field (CAS-DOC-43 §5).
+    if let Some(factored) = super::modular::polynomials::factor(ev, e)? {
+        return Ok(Some(factored));
+    }
     let [arg] = e.args() else {
         return Ok(None);
     };

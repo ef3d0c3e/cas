@@ -244,3 +244,76 @@ proptest! {
         }
     }
 }
+
+/// `factor_mod` (CAS-453): giac's examples, repeated factors through the
+/// `p`-th roots, characteristic 2, and the product of the factors.
+#[test]
+fn factor_mod() {
+    let check = |p: u64, coeffs: Vec<u64>, expected: Vec<(Vec<u64>, u64)>| {
+        let ring = fp(p);
+        let f = ring.poly(coeffs.clone());
+        let (lead, factors) = ring.factor_mod(&f);
+        let found: Vec<(Vec<u64>, u64)> = factors
+            .iter()
+            .map(|(g, e)| (g.coeffs().to_vec(), *e))
+            .collect();
+        assert_eq!(found, expected, "{coeffs:?} over 𝔽{p}");
+        let product = factors.iter().fold(ring.poly(vec![lead]), |acc, (g, e)| {
+            (0..*e).fold(acc, |acc, _| ring.mul(&acc, g))
+        });
+        assert_eq!(product, f, "{coeffs:?} over 𝔽{p}: the product");
+    };
+    // giac's factor((x^4+1) % 3): (x^2+x-1)(x^2-x-1), here 2 for −1.
+    check(
+        3,
+        vec![1, 0, 0, 0, 1],
+        vec![(vec![2, 1, 1], 1), (vec![2, 2, 1], 1)],
+    );
+    // x^8 − x over 𝔽₂: the irreducibles of degrees 1 and 3.
+    check(
+        2,
+        vec![0, 1, 0, 0, 0, 0, 0, 0, 1],
+        vec![
+            (vec![0, 1], 1),
+            (vec![1, 1], 1),
+            (vec![1, 0, 1, 1], 1),
+            (vec![1, 1, 0, 1], 1),
+        ],
+    );
+    // (x + 1)^5 = x^5 + 1 over 𝔽₅, and x^2 + 1 = (x + 1)^2 over 𝔽₂.
+    check(5, vec![1, 0, 0, 0, 0, 1], vec![(vec![1, 1], 5)]);
+    check(2, vec![1, 0, 1], vec![(vec![1, 1], 2)]);
+    // 2 (x + 1)^2 (x + 2) over 𝔽₃, its leading coefficient apart.
+    check(3, vec![1, 2, 2, 2], vec![(vec![1, 1], 2), (vec![2, 1], 1)]);
+}
+
+proptest! {
+    /// Over 𝔽₂, 𝔽₃, 𝔽₅ and 𝔽₇, `factor_mod`'s factors multiply back,
+    /// each monic and irreducible (no factor of at most half its degree
+    /// among the irreducibles of degrees 1 to 4).
+    #[test]
+    fn factor_mod_multiplies_back(
+        p in prop::sample::select(vec![2u64, 3, 5, 7]),
+        raw in prop::collection::vec(0u64..7, 2..=8),
+    ) {
+        let ring = fp(p);
+        let mut coeffs: Vec<u64> = raw.iter().map(|c| c % p).collect();
+        if *coeffs.last().unwrap() == 0 {
+            *coeffs.last_mut().unwrap() = 1;
+        }
+        let f = ring.poly(coeffs);
+        let (lead, factors) = ring.factor_mod(&f);
+        let product = factors.iter().fold(ring.poly(vec![lead]), |acc, (g, e)| {
+            (0..*e).fold(acc, |acc, _| ring.mul(&acc, g))
+        });
+        prop_assert_eq!(&product, &f);
+        let small = irreducibles(p);
+        for (g, _) in &factors {
+            prop_assert_eq!(g.lead(), Some(&1));
+            let n = g.degree().unwrap();
+            for h in small.iter().filter(|h| 2 * h.degree().unwrap() <= n) {
+                prop_assert!(!ring.div_rem(g, h).1.is_zero() || g == h, "{g:?} has {h:?}");
+            }
+        }
+    }
+}

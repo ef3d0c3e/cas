@@ -74,7 +74,7 @@ mod sturm;
 
 pub use cancel::{Cancel, Cancelled, Never};
 pub use dense::{Coefficients, Dense, DenseRing};
-pub use factor::{CharacteristicZero, FactorError, Factors};
+pub use factor::{CharacteristicZero, FactorError, Factors, FactorsMod};
 pub use gcd::{Cofactors, GcdDomain, GcdMethod};
 pub use groebner::{
     Distributed, GroebnerError, GroebnerLimits, MAX_ELEMENTS, MAX_EXPONENT, MAX_REDUCTIONS,

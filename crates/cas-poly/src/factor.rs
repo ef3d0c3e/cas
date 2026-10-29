@@ -8,6 +8,8 @@
 //! `doc/algorithms/factor.md` describes the algorithms.
 
 mod finite;
+
+pub use finite::FactorsMod;
 mod hensel;
 mod lifting;
 mod lll;

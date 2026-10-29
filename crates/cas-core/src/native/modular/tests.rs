@@ -110,3 +110,48 @@ fn expressions() {
         ),
     ]);
 }
+
+/// Over a prime field (CAS-453): giac's factorizations, gcds and divisions.
+#[test]
+fn prime_fields() {
+    check(&[
+        // giac's (x^2+x-1)(x^2-x-1) % 3.
+        (
+            "Factor[Modular[Plus[Power[x, 4], 1], 3]]",
+            "Times[Plus[-1, x, Power[x, 2]], Plus[-1, Times[-1, x], Power[x, 2]]]",
+        ),
+        // x^8 − x over 𝔽₂: every irreducible of degree 1 and 3.
+        (
+            "Factor[Modular[Plus[Power[x, 8], Times[-1, x]], 2]]",
+            "Times[x, Plus[1, x], Plus[1, x, Power[x, 3]], Plus[1, Power[x, 2], Power[x, 3]]]",
+        ),
+        // giac's ((1 % 2)*x+1 % 2)^2.
+        (
+            "Factor[Modular[Plus[Power[x, 2], 1], 2]]",
+            "Power[Plus[1, x], 2]",
+        ),
+        // The leading coefficient apart, −1 for 2 modulo 3.
+        (
+            "Factor[Modular[Plus[Times[2, Power[x, 2]], 2], 3]]",
+            "Times[-1, Plus[1, Power[x, 2]]]",
+        ),
+        // giac's (x+1) % 5, (-1 % 5)*x+1 % 5 and (1 % 5)*x.
+        (
+            "GCD[Modular[Plus[Power[x, 2], -1], 5], Modular[Plus[Power[x, 2], Times[3, x], 2], 5]]",
+            "Modular[Plus[1, x], 5]",
+        ),
+        (
+            "PolynomialRemainder[Modular[Plus[Power[x, 3], 1], 5], Modular[Plus[Power[x, 2], 1], 5], x]",
+            "Modular[Plus[1, Times[-1, x]], 5]",
+        ),
+        (
+            "PolynomialQuotient[Modular[Plus[Power[x, 3], 1], 5], Modular[Plus[Power[x, 2], 1], 5], x]",
+            "Modular[x, 5]",
+        ),
+        // A composite modulus stays.
+        (
+            "Factor[Modular[Plus[Power[x, 2], 1], 4]]",
+            "Factor[Modular[Plus[1, Power[x, 2]], 4]]",
+        ),
+    ]);
+}

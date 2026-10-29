@@ -9,7 +9,7 @@
 )]
 
 use cas_num::Natural;
-use cas_num::algebra::{Ring, WordPrimeField};
+use cas_num::algebra::{Field, Ring, WordPrimeField};
 
 use crate::cancel::{Cancel, Cancelled};
 use crate::dense::{Dense, DenseRing};
@@ -169,6 +169,152 @@ pub(crate) fn split_degrees(
             .then_with(|| a.coeffs().cmp(b.coeffs()))
     });
     Ok(out)
+}
+
+/// The irreducible factors of monic `g`, a product of distinct irreducible
+/// polynomials of degree `d` over `𝔽₂`, by the trace map: for a random `a`,
+/// `T(a) = a + a² + a⁴ + ⋯ + a^(2^(d−1))` is 0 or 1 modulo each factor,
+/// each with probability 1/2, so `gcd(T(a), g)` splits `g` as often
+/// (CAS-453).
+fn equal_degree_two(
+    ring: &DenseRing<WordPrimeField>,
+    g: &Dense<u64>,
+    d: usize,
+    random: &mut Random,
+    cancel: &dyn Cancel,
+) -> Result<Vec<Dense<u64>>, Cancelled> {
+    let mut pending = vec![g.clone()];
+    let mut out = Vec::new();
+    while let Some(g) = pending.pop() {
+        let n = g.degree().unwrap_or(0);
+        if n <= d {
+            if n > 0 {
+                out.push(g);
+            }
+            continue;
+        }
+        let factor = loop {
+            if cancel.cancelled() {
+                return Err(Cancelled);
+            }
+            let a = random_poly(ring, n, random);
+            if a.degree().unwrap_or(0) == 0 {
+                continue;
+            }
+            let mut power = a.clone();
+            let mut trace = a;
+            for _ in 1..d {
+                power = mul_mod(ring, &power, &power, &g, cancel)?;
+                trace = ring.add(&trace, &power);
+            }
+            let (s, _, _) = ring.gcd_cofactors_with(&g, &trace, cancel)?;
+            if s.degree() > Some(0) && s.degree() < Some(n) {
+                break s;
+            }
+        };
+        let (rest, _) = ring.div_rem_with(&g, &factor, cancel)?;
+        pending.push(factor);
+        pending.push(rest);
+    }
+    Ok(out)
+}
+
+/// `f`'s `p`-th root for `f` a polynomial in `x^p`: in `𝔽ₚ`, `a^p = a`, so
+/// the root of `Σ a_k x^(kp)` is `Σ a_k x^k`.
+fn pth_root(ring: &DenseRing<WordPrimeField>, f: &Dense<u64>, p: usize) -> Dense<u64> {
+    ring.poly(f.coeffs().iter().step_by(p).copied().collect())
+}
+
+/// The square-free decomposition of monic `f` over `𝔽ₚ`, `(part,
+/// multiplicity)`, the parts coprime: Yun's steps for the multiplicities
+/// that `p` does not divide, then the `p`-th root of what is left, which
+/// has every exponent a multiple of `p` (CAS-453).
+fn squarefree_parts(
+    ring: &DenseRing<WordPrimeField>,
+    f: &Dense<u64>,
+    cancel: &dyn Cancel,
+) -> Result<Vec<(Dense<u64>, u64)>, Cancelled> {
+    let p = ring.base().ring().modulus();
+    let (mut c, mut w, _) = ring.gcd_cofactors_with(f, &ring.derivative(f), cancel)?;
+    let mut out = Vec::new();
+    let mut i = 1;
+    while w.degree() > Some(0) {
+        let (y, z, _) = ring.gcd_cofactors_with(&w, &c, cancel)?;
+        if z.degree() > Some(0) {
+            out.push((z, i));
+        }
+        i += 1;
+        c = ring.div_rem_with(&c, &y, cancel)?.0;
+        w = y;
+    }
+    if c.degree() > Some(0) {
+        let root = pth_root(ring, &c, usize::try_from(p).expect("a word"));
+        for (part, e) in squarefree_parts(ring, &root, cancel)? {
+            out.push((part, e * p));
+        }
+    }
+    Ok(out)
+}
+
+/// A factorization over a prime field: the leading coefficient, and the
+/// monic irreducible factors with their multiplicities.
+pub type FactorsMod = (u64, Vec<(Dense<u64>, u64)>);
+
+impl DenseRing<WordPrimeField> {
+    /// The factorization of `f`, not 0, over the prime field: its leading
+    /// coefficient, and its monic irreducible factors with their
+    /// multiplicities, in increasing degree, then by coefficients
+    /// (CAS-453). Square-free parts first, then the distinct-degree
+    /// factorization and the equal-degree splitting, Cantor and
+    /// Zassenhaus's for an odd `p`, the trace map's for `p = 2`.
+    ///
+    /// # Panics
+    ///
+    /// If `f` is zero.
+    #[must_use]
+    pub fn factor_mod(&self, f: &Dense<u64>) -> FactorsMod {
+        crate::cancel::uncancelled(self.factor_mod_with(f, &crate::cancel::Never))
+    }
+
+    /// As [`DenseRing::factor_mod`], polling `cancel`.
+    ///
+    /// # Errors
+    ///
+    /// [`Cancelled`] when `cancel` says so.
+    ///
+    /// # Panics
+    ///
+    /// If `f` is zero.
+    pub fn factor_mod_with(
+        &self,
+        f: &Dense<u64>,
+        cancel: &dyn Cancel,
+    ) -> Result<FactorsMod, Cancelled> {
+        let lead = *f.lead().expect("a polynomial that is not zero");
+        let inverse = self.base().inv(&lead).expect("a field");
+        let monic = self.scale(f, &inverse);
+        let two = self.characteristic() == Natural::from(2u64);
+        let mut random = Random::new(SEED);
+        let mut out = Vec::new();
+        for (part, e) in squarefree_parts(self, &monic, cancel)? {
+            let ddf = distinct_degree(self, &part, cancel)?;
+            for (g, d) in ddf {
+                let pieces = if two {
+                    equal_degree_two(self, &g, d, &mut random, cancel)?
+                } else {
+                    equal_degree(self, &g, d, &mut random, cancel)?
+                };
+                out.extend(pieces.into_iter().map(|q| (q, e)));
+            }
+        }
+        out.sort_by(|a, b| {
+            a.0.degree()
+                .cmp(&b.0.degree())
+                .then_with(|| a.0.coeffs().cmp(b.0.coeffs()))
+                .then_with(|| a.1.cmp(&b.1))
+        });
+        Ok((lead, out))
+    }
 }
 
 /// The monic irreducible factors of monic, square-free `f` over a word-size

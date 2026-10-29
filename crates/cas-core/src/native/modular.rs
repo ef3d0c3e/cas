@@ -197,5 +197,7 @@ pub(super) fn power(ev: &mut Eval<'_>, e: &Expr) -> Native {
     Ok(Some(modular(a.pow(k), &n)))
 }
 
+pub(super) mod polynomials;
+
 #[cfg(test)]
 mod tests;
