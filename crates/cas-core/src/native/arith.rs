@@ -39,6 +39,10 @@ fn changed(e: &Expr, result: Expr) -> Option<Expr> {
 /// opposite directions, `ComplexInfinity` with another infinity, and
 /// `Indeterminate` give `Indeterminate`.
 pub(super) fn plus(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    // A modular term takes in the sum (CAS-DOC-43 §3).
+    if let Some(r) = super::modular::absorbed(ev, e)? {
+        return Ok(Some(r));
+    }
     let working = Precision::of(ev.context());
     if is_normal_sum(e.args()) {
         debug_assert_eq!(
@@ -201,6 +205,10 @@ fn with_coefficient(c: &Num, m: Expr) -> Expr {
 /// the other factors. The other factors of a directed infinity turn it when
 /// the assumptions tell their sign: `x Infinity` is `Infinity` for `x > 0`.
 pub(super) fn times(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    // A modular factor takes in the product (CAS-DOC-43 §3).
+    if let Some(r) = super::modular::absorbed(ev, e)? {
+        return Ok(Some(r));
+    }
     let result = if is_normal_product(e.args()) {
         debug_assert_eq!(
             product(ev.context(), e),
@@ -585,6 +593,10 @@ pub(super) fn power(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [b, n] = e.args() else {
         return Ok(None);
     };
+    // A modular base raises within its modulus (CAS-DOC-43 §3).
+    if let Some(r) = super::modular::power(ev, e)? {
+        return Ok(Some(r));
+    }
     if matches!(Infinity::of(b), Some(Infinity::Indeterminate))
         || matches!(Infinity::of(n), Some(Infinity::Indeterminate))
     {

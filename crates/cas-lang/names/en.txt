@@ -464,6 +464,8 @@ Integer Rational Real String Symbol
 ElementwiseTimes ElementwiseDivide ElementwisePower Equation Equal Unequal Less LessEqual
 Greater GreaterEqual Element And Or Not If Function Range FiniteSet At ReplaceAt
 Null DirectedInfinity
+# giac's `a % n` (CAS-DOC-43 §1).
+Modular
 # The set operations, written with `union`, `intersect` and `minus`
 # (CAS-DOC-32 §3).
 Union Intersection Complement

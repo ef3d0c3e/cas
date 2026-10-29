@@ -35,6 +35,7 @@ mod linear;
 mod lists;
 mod logic;
 mod matrix;
+mod modular;
 mod ndsolve;
 mod nintegrate;
 mod number;
@@ -234,6 +235,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             lattice::hermite_decomposition,
         ),
         (Symbol::SMITH_DECOMPOSITION, lattice::smith_decomposition),
+        (Symbol::MODULAR, modular::modular_value),
         (Symbol::LATTICE_REDUCE, lattice::lattice_reduce),
         (
             Symbol::INVERSE_LAPLACE_TRANSFORM,

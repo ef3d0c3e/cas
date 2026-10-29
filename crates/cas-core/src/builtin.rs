@@ -137,6 +137,8 @@ builtins! {
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];
+    // Modular arithmetic (CAS-DOC-43): giac's `a % n`.
+    MODULAR = "Modular" [LISTABLE, PROTECTED];
     // Integer matrices (CAS-DOC-42).
     HERMITE_DECOMPOSITION = "HermiteDecomposition" [PROTECTED];
     SMITH_DECOMPOSITION = "SmithDecomposition" [PROTECTED];
