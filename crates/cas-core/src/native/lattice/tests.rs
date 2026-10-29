@@ -104,6 +104,67 @@ fn smith_forms() {
     );
 }
 
+/// `LatticeReduce[B]` is a basis of the same lattice (equal Hermite forms
+/// of the rows that are not 0) that is LLL-reduced: `|μ_kj| ≤ 1/2` and
+/// `B_k ≥ (3/4 − μ²_(k,k−1)) B_(k−1)`.
+fn check_reduced(b: &str) -> Expr {
+    let ctx = Context::new();
+    let found = eval(&ctx, &format!("LatticeReduce[{b}]"));
+    let reduced = super::integers(&found).unwrap_or_default();
+    let input = super::integers(&read(b)).unwrap();
+    let form = |m: &super::Matrix| {
+        let mut h = m.clone();
+        if !h.is_empty() {
+            super::hermite(&mut h, &mut super::identity(m.len()));
+        }
+        h.retain(|r| r.iter().any(|x| !x.is_zero()));
+        h
+    };
+    assert_eq!(
+        form(&reduced),
+        form(&input),
+        "{b}: {found:?} is another lattice"
+    );
+    let (mu, norms) = super::gram_schmidt(&reduced);
+    let half = cas_num::Rational::new(cas_num::Integer::ONE, cas_num::Integer::from(2));
+    let delta = cas_num::Rational::new(cas_num::Integer::from(3), cas_num::Integer::from(4));
+    for k in 1..reduced.len() {
+        for (j, m) in mu[k].iter().enumerate().take(k) {
+            assert!(m.abs() <= half, "{b}: {found:?}: μ_{k}{j}");
+        }
+        let bound = &(&delta - &(&mu[k][k - 1] * &mu[k][k - 1])) * &norms[k - 1];
+        assert!(norms[k] >= bound, "{b}: {found:?}: Lovász at {k}");
+    }
+    found
+}
+
+#[test]
+fn lattice_reduction() {
+    let ctx = Context::new();
+    assert_eq!(
+        check_reduced("List[List[1, 0], List[1000, 1]]"),
+        eval(&ctx, "List[List[1, 0], List[0, 1]]")
+    );
+    // giac's examples: lll([[1,1,1],[-1,0,2],[3,5,6]]) and the knapsack-like
+    // basis, whose first reduced row is [1,-2,1,0] in giac.
+    check_reduced("List[List[1, 1, 1], List[-1, 0, 2], List[3, 5, 6]]");
+    let knapsack =
+        check_reduced("List[List[1, 0, 0, 12345], List[0, 1, 0, 23456], List[0, 0, 1, 34567]]");
+    // Its shortest vector has norm² 6: the first row's is within 2^2 of it.
+    let first = super::integers(&knapsack).unwrap()[0].clone();
+    let norm: i64 = first.iter().map(|x| x.to_i64().unwrap().pow(2)).sum();
+    assert!(norm <= 24, "{knapsack:?}");
+    // Dependent rows: the lattice of (1, 2); and none at all.
+    assert_eq!(
+        check_reduced("List[List[2, 4], List[1, 2]]"),
+        eval(&ctx, "List[List[1, 2]]")
+    );
+    assert_eq!(
+        eval(&ctx, "LatticeReduce[List[List[0, 0]]]"),
+        eval(&ctx, "List[]")
+    );
+}
+
 #[test]
 fn what_stays() {
     let ctx = Context::new();

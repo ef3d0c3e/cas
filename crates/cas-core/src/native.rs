@@ -234,6 +234,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             lattice::hermite_decomposition,
         ),
         (Symbol::SMITH_DECOMPOSITION, lattice::smith_decomposition),
+        (Symbol::LATTICE_REDUCE, lattice::lattice_reduce),
         (
             Symbol::INVERSE_LAPLACE_TRANSFORM,
             laplace::inverse_laplace_transform,

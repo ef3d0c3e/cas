@@ -14,6 +14,13 @@
 //!   and row cleared by gcd steps until both are, and a row whose entry the
 //!   corner does not divide added to the corner's row, until it divides
 //!   them all.
+//! - `LatticeReduce[B]` (§4, CAS-447), giac's `lll`'s first matrix: the
+//!   LLL-reduced basis of the lattice of `B`'s rows, `δ = 3/4`, in exact
+//!   rationals: each row size-reduced against those before it, `|μ_kj| ≤
+//!   1/2`, then swapped back while Lovász's condition `B_k ≥ (δ − μ²) B_(k−1)`
+//!   fails, the Gram–Schmidt data computed again after a swap. Rows that
+//!   depend on others go: the lattice's basis is then the Hermite form's
+//!   rows that are not 0, reduced in turn.
 //!
 //! The matrices are rectangular, of integers; anything else leaves the
 //! call.
@@ -23,7 +30,7 @@
     reason = "the names of matrix algebra: U A V = S, rows r and k, s a + t b = g"
 )]
 
-use cas_num::Integer;
+use cas_num::{Integer, Rational};
 
 use crate::context::EvalError;
 use crate::eval::Eval;
@@ -231,6 +238,94 @@ pub(super) fn smith_decomposition(ev: &mut Eval<'_>, e: &Expr) -> Native {
     smith(&mut s, &mut u, &mut v);
     let result = list(vec![matrix(&u), matrix(&s), matrix(&v)]);
     ev.step("SmithDecomposition", e, &result);
+    Ok(Some(result))
+}
+
+/// `⟨a, b⟩` over the rationals.
+fn inner(a: &[Rational], b: &[Rational]) -> Rational {
+    a.iter()
+        .zip(b)
+        .fold(Rational::ZERO, |sum, (x, y)| &sum + &(x * y))
+}
+
+/// The Gram–Schmidt coefficients `μ` and squared norms `B` of the rows.
+fn gram_schmidt(b: &Matrix) -> (Vec<Vec<Rational>>, Vec<Rational>) {
+    let n = b.len();
+    let rows: Vec<Vec<Rational>> = b
+        .iter()
+        .map(|r| r.iter().cloned().map(Rational::from).collect())
+        .collect();
+    let mut star: Vec<Vec<Rational>> = Vec::with_capacity(n);
+    let mut mu = vec![vec![Rational::ZERO; n]; n];
+    let mut norms = Vec::with_capacity(n);
+    for i in 0..n {
+        let mut v = rows[i].clone();
+        for j in 0..i {
+            mu[i][j] = &inner(&rows[i], &star[j]) / &norms[j];
+            for (x, y) in v.iter_mut().zip(&star[j]) {
+                *x = &*x - &(&mu[i][j] * y);
+            }
+        }
+        norms.push(inner(&v, &v));
+        star.push(v);
+    }
+    (mu, norms)
+}
+
+/// The LLL reduction of independent rows.
+fn lll(mut b: Matrix) -> Matrix {
+    let n = b.len();
+    let delta = Rational::new(Integer::from(3), Integer::from(4));
+    let (mut mu, mut norms) = gram_schmidt(&b);
+    let mut k = 1;
+    while k < n {
+        for j in (0..k).rev() {
+            let q = mu[k][j].round();
+            if q.is_zero() {
+                continue;
+            }
+            for c in 0..b[k].len() {
+                let v = &b[k][c] - &(&q * &b[j][c]);
+                b[k][c] = v;
+            }
+            let qr = Rational::from(q);
+            let (low, high) = mu.split_at_mut(k);
+            let row = &mut high[0];
+            for (x, y) in row.iter_mut().zip(&low[j]).take(j) {
+                *x = &*x - &(&qr * y);
+            }
+            row[j] = &row[j] - &qr;
+        }
+        let bound = &(&delta - &(&mu[k][k - 1] * &mu[k][k - 1])) * &norms[k - 1];
+        if norms[k] >= bound {
+            k += 1;
+        } else {
+            b.swap(k, k - 1);
+            (mu, norms) = gram_schmidt(&b);
+            k = (k - 1).max(1);
+        }
+    }
+    b
+}
+
+/// `LatticeReduce[B]`.
+pub(super) fn lattice_reduce(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [b] = e.args() else {
+        return Ok(None);
+    };
+    let Some(rows) = integers(b) else {
+        return Ok(None);
+    };
+    let mut h = rows.clone();
+    hermite(&mut h, &mut identity(rows.len()));
+    h.retain(|r| r.iter().any(|x| !x.is_zero()));
+    let basis = if h.len() == rows.len() { rows } else { h };
+    let result = if basis.is_empty() {
+        list(Vec::new())
+    } else {
+        matrix(&lll(basis))
+    };
+    ev.step("LatticeReduce", e, &result);
     Ok(Some(result))
 }
 

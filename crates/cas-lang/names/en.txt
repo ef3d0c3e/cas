@@ -117,6 +117,7 @@ FourierTransform: fourier
 InverseFourierTransform: ifourier
 HermiteDecomposition: ihermite
 SmithDecomposition: ismith
+LatticeReduce: lll
 # Z-transforms and recurrences (CAS-DOC-24, CAS-308).
 ZTransform: ztrans
 InverseZTransform: invztrans
