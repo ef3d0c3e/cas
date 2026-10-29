@@ -810,6 +810,7 @@ fn rational_function(
 mod definite;
 mod heuristics;
 mod piecewise;
+mod rationalise;
 mod special;
 #[cfg(test)]
 mod tests;

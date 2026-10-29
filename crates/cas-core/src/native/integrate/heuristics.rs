@@ -77,7 +77,10 @@ pub(super) fn integral(ev: &mut Eval<'_>, e: &Expr, f: &Expr, x: &Expr, depth: u
     if let Some(g) = inverse_parts(ev, e, &factors, x, depth)? {
         return Ok(Some(g));
     }
-    linearised(ev, e, &factors, x, depth)
+    if let Some(g) = linearised(ev, e, &factors, x, depth)? {
+        return Ok(Some(g));
+    }
+    super::rationalise::integral(ev, e, f, x, depth)
 }
 
 /// What is left of `factors` without the one at `i`: their product.
