@@ -6,9 +6,10 @@
 //!   `[-3,2]`. A divisor 0 stays, with a warning.
 //! - `SymmetricMod[a, n]` (`smod`): `a mod n` in `(−n/2, n/2]`, `n` by its
 //!   size: `smod(8,5)` is −2.
-//! - `PseudoprimeQ[n]` (`is_pseudoprime`), `|n|`: 2 for a prime proven by
-//!   cas-num (below 2^64), 1 for a probable prime that passed Baillie and
-//!   PSW's test, 0 otherwise. giac answers 1 for `2^61-1`, which cas-num
+//! - `PseudoprimeQ[n]` (`is_pseudoprime`): 2 for a prime proven by cas-num
+//!   (below 2^64), 1 for a probable prime that passed Baillie and PSW's
+//!   test, 0 otherwise, as for `n < 2`: giac's `is_pseudoprime(-7)` is 0,
+//!   as `isprime(-7)` is false. giac answers 1 for `2^61-1`, which cas-num
 //!   proves prime.
 //! - `Cyclotomic[n]` (`cyclotomic`), `1 ≤ n ≤` [`MAX_CYCLOTOMIC`]: `Φ_n =
 //!   Π_(d | n) (x^d − 1)^μ(n/d)`, the products and exact quotients by `x^d
@@ -88,6 +89,9 @@ pub(in crate::native) fn pseudoprime_q(_: &mut Eval<'_>, e: &Expr) -> Native {
     let Some(n) = n.to_integer() else {
         return Ok(None);
     };
+    if n < Integer::from(2) {
+        return Ok(Some(Expr::from(0)));
+    }
     let level = match n.unsigned_abs().primality() {
         cas_num::Primality::Prime => 2,
         cas_num::Primality::ProbablePrime => 1,

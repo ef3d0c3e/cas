@@ -37,6 +37,8 @@ fn division_and_pseudoprimes() {
         ("PseudoprimeQ[561]", "0"),
         ("PseudoprimeQ[Plus[Power[2, 127], -1]]", "1"),
         ("PseudoprimeQ[1]", "0"),
+        // giac's: negatives are not primes.
+        ("PseudoprimeQ[-7]", "0"),
         // What stays.
         ("QuotientRemainder[1, 0]", "QuotientRemainder[1, 0]"),
         ("SymmetricMod[x, 5]", "SymmetricMod[x, 5]"),
