@@ -225,6 +225,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             fourier_transform::fourier_transform,
         ),
         (
+            Symbol::INVERSE_FOURIER_TRANSFORM,
+            fourier_transform::inverse_fourier_transform,
+        ),
+        (
             Symbol::INVERSE_LAPLACE_TRANSFORM,
             laplace::inverse_laplace_transform,
         ),

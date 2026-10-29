@@ -10,7 +10,12 @@ fn read(text: &str) -> Expr {
 
 /// Whether `a − b` at `s = p/q` is within 10⁻²⁰ of 0, its parts apart.
 fn agree_at(ctx: &Context, a: &Expr, b: &Expr, p: i64, q: i64) -> bool {
-    let s = Expr::symbol("s");
+    agree_in(ctx, a, b, "s", p, q)
+}
+
+/// [`agree_at`] in the variable `v`.
+fn agree_in(ctx: &Context, a: &Expr, b: &Expr, v: &str, p: i64, q: i64) -> bool {
+    let s = Expr::symbol(v);
     let point = [(s, Expr::from(p) / Expr::from(q))];
     let gap = (a.clone() - b.clone()).substitute(&point);
     let Ok(n) = ctx.eval(&Expr::call(Symbol::N, [gap, Expr::from(30)])) else {
@@ -268,6 +273,72 @@ fn unknown_and_what_stays() {
         (
             "FourierTransform[Log[Plus[1, Power[x, 2]]], x, s]",
             "FourierTransform[Log[Plus[1, Power[x, 2]]], x, s]",
+        ),
+    ]);
+}
+
+/// Inverse transforms by duality (CAS-442): giac's, and round trips.
+#[test]
+fn inverse_transforms() {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (big_f, expected) in [
+        // exp(-abs(x)); exp(-x^2); 1/(x^2+1).
+        (
+            "Times[2, Power[Plus[1, Power[s, 2]], -1]]",
+            "Exp[Times[-1, Abs[x]]]",
+        ),
+        (
+            "Times[Power[Pi, 1/2], Exp[Times[-1/4, Power[s, 2]]]]",
+            "Exp[Times[-1, Power[x, 2]]]",
+        ),
+        (
+            "Times[Pi, Exp[Times[-1, Abs[s]]]]",
+            "Power[Plus[1, Power[x, 2]], -1]",
+        ),
+    ] {
+        let input = format!("InverseFourierTransform[{big_f}, s, x]");
+        let found = ctx.eval(&read(&input)).unwrap();
+        let expected = read(expected);
+        if found.contains(&Expr::from(Symbol::INVERSE_FOURIER_TRANSFORM))
+            || ![(3, 7), (5, 2), (-4, 3)]
+                .into_iter()
+                .all(|(p, q)| agree_in(&ctx, &found, &expected, "x", p, q))
+        {
+            wrong.push(format!("{input}: {found:?}"));
+        }
+    }
+    // Round trips: ifourier(fourier(f)) is f.
+    for f in [
+        "Exp[Times[-1, Power[Plus[x, -1], 2]]]",
+        "Times[x, Exp[Times[-1, Power[x, 2]]]]",
+        "Exp[Times[-2, Abs[x]]]",
+        "Power[Plus[4, Power[x, 2]], -1]",
+    ] {
+        let input = format!("InverseFourierTransform[FourierTransform[{f}, x, s], s, x]");
+        let found = ctx.eval(&read(&input)).unwrap();
+        if found.contains(&Expr::from(Symbol::INVERSE_FOURIER_TRANSFORM))
+            || ![(3, 7), (5, 2), (-4, 3)]
+                .into_iter()
+                .all(|(p, q)| agree_in(&ctx, &found, &read(f), "x", p, q))
+        {
+            wrong.push(format!("{input}: {found:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    check(&[
+        // giac's 1/(2*pi) and Dirac(-x).
+        (
+            "InverseFourierTransform[DiracDelta[s], s, x]",
+            "Times[1/2, Power[Pi, -1]]",
+        ),
+        (
+            "InverseFourierTransform[1, s, x]",
+            "DiracDelta[Times[-1, x]]",
+        ),
+        (
+            "InverseFourierTransform[g[s], s, x]",
+            "InverseFourierTransform[g[s], s, x]",
         ),
     ]);
 }

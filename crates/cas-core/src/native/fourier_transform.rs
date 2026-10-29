@@ -1,6 +1,6 @@
 //! Fourier transforms (CAS-DOC-41): `FourierTransform[f, x, s]`, Xcas's
 //! `fourier(f, x, s)`, `F(s) = ∫ f(x) e^(−i s x) dx` over the real line,
-//! giac's convention.
+//! giac's convention, and [`inverse_fourier_transform`], its `ifourier`.
 //!
 //! By the first rule that applies, recursively (§2, CAS-439):
 //!
@@ -102,6 +102,31 @@ pub(super) fn fourier_transform(ev: &mut Eval<'_>, e: &Expr) -> Native {
     }
     let result = ev.eval(&image)?;
     ev.step("FourierTransform", e, &result);
+    Ok(Some(result))
+}
+
+/// `InverseFourierTransform[F, s, x]`, giac's `ifourier(F, s, x)`, `(1/2π)
+/// ∫ F(s) e^(i s x) ds`, by duality (§5, CAS-442): `(1/2π) G(−x)` for `G`
+/// the forward transform of `F` in `s`, so `ifourier(2/(1+s^2),s,x)` is
+/// `exp(-abs(x))`. An unknown function stays.
+pub(super) fn inverse_fourier_transform(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [big_f, s, x] = e.args() else {
+        return Ok(None);
+    };
+    let user = |v: &Expr| v.as_symbol().is_some_and(|v| !v.is_builtin());
+    if !user(x) || !user(s) || x == s {
+        return Ok(None);
+    }
+    let fresh = Expr::from(Symbol::new("InverseFourierTransform$x"));
+    let Some(image) = transform(ev, big_f, s, &fresh)? else {
+        return Ok(None);
+    };
+    if image.contains(&Expr::from(Symbol::FOURIER_TRANSFORM)) {
+        return Ok(None);
+    }
+    let dual = image.substitute(&[(fresh, -x.clone())]) / (Expr::from(2) * pi());
+    let result = ev.eval(&dual)?;
+    ev.step("InverseFourierTransform", e, &result);
     Ok(Some(result))
 }
 
