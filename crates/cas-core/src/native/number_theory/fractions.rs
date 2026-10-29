@@ -63,8 +63,16 @@ fn rational_quotients(x: &Rational, limit: usize) -> Vec<Integer> {
     out
 }
 
-/// `x` as `a + b √D`, `b ≠ 0`, `D > 1` an integer: the terms of its sum.
+/// `x` as `a + b √D`, `b ≠ 0`, `D > 1` an integer: the terms of its sum,
+/// or of a sum times a rational, as `(1 + √5)/2` evaluates.
 fn quadratic(x: &Expr) -> Option<(Rational, Rational, Integer)> {
+    if let (Some(Symbol::TIMES), [c, sum]) = (head(x), x.args())
+        && let Some(c) = c.to_rational()
+        && head(sum) == Some(Symbol::PLUS)
+    {
+        let (a, b, d) = quadratic(sum)?;
+        return Some((&a * &c, &b * &c, d));
+    }
     let terms: &[Expr] = match head(x) {
         Some(Symbol::PLUS) => x.args(),
         _ => std::slice::from_ref(x),

@@ -41,6 +41,15 @@ fn quotients() {
             "ContinuedFraction[Plus[1, Times[-1, Power[2, 1/2]]]]",
             "List[-1, 1, 1, List[2]]",
         ),
+        // (1 + √5)/2 as it evaluates, a product (the oracle's finding).
+        (
+            "ContinuedFraction[Times[1/2, Plus[1, Power[5, 1/2]]]]",
+            "List[List[1]]",
+        ),
+        (
+            "ContinuedFraction[Times[-2/3, Plus[1, Power[3, 1/2]]]]",
+            "ContinuedFraction[Plus[-2/3, Times[-2/3, Power[3, 1/2]]]]",
+        ),
         // (1 + √2)/3, its form scaled so that Q divides N − P².
         (
             "ContinuedFraction[Plus[1/3, Times[1/3, Power[2, 1/2]]]]",
