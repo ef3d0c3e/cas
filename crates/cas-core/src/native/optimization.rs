@@ -194,9 +194,11 @@ enum Kind {
     Neither,
 }
 
-/// `e` with the variables at the point, evaluated.
+/// `e` evaluated, then with the variables at the point: a derivative is
+/// taken before its variable is replaced.
 fn at(ev: &mut Eval<'_>, e: &Expr, xs: &[Expr], point: &[Expr]) -> Result<Expr, EvalError> {
     let rules: Vec<(Expr, Expr)> = xs.iter().cloned().zip(point.iter().cloned()).collect();
+    let e = ev.eval(e)?;
     ev.eval(&e.substitute(&rules))
 }
 
