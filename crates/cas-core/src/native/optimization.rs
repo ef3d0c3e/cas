@@ -9,8 +9,9 @@
 //! - The critical points are the real solutions of `grad f = 0` by `Solve`
 //!   (CAS-DOC-11), or with equality constraints `g_k = c_k` those of the
 //!   Lagrangian `f − Σ λ_k (g_k − c_k)` in the variables and the `λ_k`.
-//!   Points that are not tuples of real numbers are dropped; a system that
-//!   `Solve` leaves leaves the call.
+//!   Points that are not tuples of real numbers, by the assumptions or by
+//!   `N`'s balls, are dropped; a system that `Solve` leaves leaves the
+//!   call.
 //! - In one variable a point is classified by the first derivative of order
 //!   `k ≥ 2` that is not 0 there, up to [`MAX_ORDER`]: a minimum for `k`
 //!   even and a positive value, a maximum for a negative one, neither for
@@ -37,7 +38,7 @@ use std::cmp::Ordering;
 use super::rounding::real_sign;
 use crate::context::EvalError;
 use crate::eval::Eval;
-use crate::expr::Expr;
+use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 
 type Native = Result<Option<Expr>, EvalError>;
@@ -147,11 +148,21 @@ pub(super) fn within(ev: &mut Eval<'_>, v: &Variable, c: &Expr) -> Result<bool, 
     Ok(true)
 }
 
-/// Whether `c` is a real number: free of symbols but constants, and real.
-fn real_number(ev: &Eval<'_>, c: &Expr) -> bool {
-    c.symbols().iter().all(|s| s.is_builtin())
-        && crate::assume::element(ev.context(), c, crate::assume::Set::Reals)
-            == crate::assume::Truth::True
+/// Whether `c` is a real number: free of symbols but constants, and real
+/// by the assumptions or by `N`'s ball. Cardano's three real roots are
+/// cosines of thirds of arccosines, which the assumptions do not tell real
+/// (CAS-429).
+fn real_number(ev: &mut Eval<'_>, c: &Expr) -> Result<bool, EvalError> {
+    if !c.symbols().iter().all(|s| s.is_builtin()) {
+        return Ok(false);
+    }
+    if crate::assume::element(ev.context(), c, crate::assume::Set::Reals)
+        == crate::assume::Truth::True
+    {
+        return Ok(true);
+    }
+    let value = ev.eval(&Expr::call(Symbol::N, [c.clone()]))?;
+    Ok(matches!(value.view(), View::Ball(_)))
 }
 
 /// The real solutions of `equations = 0` in `unknowns`, as tuples; `None`
@@ -179,7 +190,11 @@ pub(super) fn solutions(
             _ if unknowns.len() == 1 => vec![t.clone()],
             _ => return Ok(None),
         };
-        if point.iter().all(|c| real_number(ev, c)) {
+        let mut real = true;
+        for c in &point {
+            real = real && real_number(ev, c)?;
+        }
+        if real {
             tuples.push(point);
         }
     }

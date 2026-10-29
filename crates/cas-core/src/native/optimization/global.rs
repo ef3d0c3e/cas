@@ -398,7 +398,7 @@ fn optimum(
         if limit == unbounded {
             return Ok(Some((limit, Vec::new())));
         }
-        if !super::real_number(ev, &limit) {
+        if !super::real_number(ev, &limit)? {
             warn(ev, e, "no limit at an infinite end");
             return Ok(None);
         }

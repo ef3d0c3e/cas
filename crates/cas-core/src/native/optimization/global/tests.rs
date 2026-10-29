@@ -1,7 +1,7 @@
 //! Tests of the global optima (CAS-416): giac's examples, infinite ends,
 //! points, and what stays.
 
-use crate::{Context, Expr};
+use crate::{Context, Expr, Symbol};
 
 fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
@@ -50,6 +50,38 @@ fn one_variable() {
             "2",
         ),
     ]);
+}
+
+/// The optimization fuzz target's finding (CAS-429): on `[−3/2, −1]`, `f
+/// = 2x⁴ + 3x³ − x² − x − 3` is least at a root `r` of the irreducible
+/// `f′ = 8x³ + 9x² − 2x − 1`, which has three real roots, cosines from
+/// `Solve`: `f(r) = −4.28921352635893719043848911100016227349914872964965…`
+/// by Python's bisection at 80 digits, below `f(−1) = −4`.
+#[test]
+fn a_cubic_critical_point() {
+    let ctx = Context::new();
+    let found = ctx
+        .eval(&read(
+            "N[Minimize[Plus[-3, Times[-1, x], Times[-1, Power[x, 2]], Times[3, Power[x, 3]], \
+             Times[2, Power[x, 4]]], Equation[x, Range[-3/2, -1]]], 40]",
+        ))
+        .unwrap();
+    let reference = read(
+        "428921352635893719043848911100016227349914872964965/\
+         100000000000000000000000000000000000000000000000000",
+    );
+    let within = Expr::call(
+        Symbol::LESS,
+        [
+            Expr::call(Symbol::ABS, [found.clone() + reference]),
+            read("1/100000000000000000000000000000000000"),
+        ],
+    );
+    assert_eq!(
+        ctx.eval(&within).unwrap().as_symbol(),
+        Some(Symbol::TRUE),
+        "{found:?}"
+    );
 }
 
 #[test]
