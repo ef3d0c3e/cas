@@ -222,7 +222,7 @@ fn distributions() {
         ("FourierTransform[1, x, s]", "Times[2, Pi, DiracDelta[s]]"),
         (
             "FourierTransform[DiracDelta[Plus[x, -2]], x, s]",
-            "Exp[Times[-2, I, s]]",
+            "Power[E, Times[-2, I, s]]",
         ),
         (
             "FourierTransform[Exp[Times[I, x]], x, s]",
@@ -243,7 +243,7 @@ fn distributions() {
         // A delta sifts: g(2) e^(−2is).
         (
             "FourierTransform[Times[Power[x, 2], DiracDelta[Plus[x, -2]]], x, s]",
-            "Times[4, Exp[Times[-2, I, s]]]",
+            "Times[4, Power[E, Times[-2, I, s]]]",
         ),
     ]);
 }
