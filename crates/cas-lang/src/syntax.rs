@@ -106,6 +106,8 @@ syntax_kinds! {
     DotSlash,
     /// `.^`.
     DotCaret,
+    /// `%`, giac's modular residue (CAS-DOC-43 §1).
+    Percent,
     /// `!`.
     Bang,
     /// `=`.
@@ -332,6 +334,7 @@ impl SyntaxKind {
             SyntaxKind::DotStar => "`.*`",
             SyntaxKind::DotSlash => "`./`",
             SyntaxKind::DotCaret => "`.^`",
+            SyntaxKind::Percent => "`%`",
             SyntaxKind::Bang => "`!`",
             SyntaxKind::Eq => "`=`",
             SyntaxKind::EqEq => "`==`",

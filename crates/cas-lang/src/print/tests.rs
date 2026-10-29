@@ -403,6 +403,12 @@ fn elementwise_and_factorials() {
         (et(&[a.clone(), times([int(-1), b.clone()])]), "a.*(-b)"),
         (et(&[times([int(-1), a.clone()]), b.clone()]), "-a.*b"),
         (et(&[int(2), a.clone()]), "2.*a"),
+        (app(Symbol::MODULAR, [a.clone(), n.clone()]), "a % n"),
+        (
+            app(Symbol::MODULAR, [plus([a.clone(), int(1)]), int(5)]),
+            "(a + 1) % 5",
+        ),
+        (app(Symbol::MODULAR, [int(-2), int(7)]), "-2 % 7"),
         (fact(&n), "n!"),
         (fact(&plus([n.clone(), int(1)])), "(n + 1)!"),
         (fact(&fact(&n)), "n!!"),
@@ -778,6 +784,7 @@ fn text_reads_back_and_prints_the_same() {
         "not (p and q) or r",
         "subst(x^2, (x = 2))",
         "(a.*b)./c",
+        "(x + 1) % 5",
         "E = m*c^2",
         "x + (-infinity)",
     ]);

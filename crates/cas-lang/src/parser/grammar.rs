@@ -41,23 +41,24 @@ fn binary(kind: K) -> Option<(u8, u8)> {
         K::UnionKw | K::MinusKw => bp::UNION,
         K::IntersectKw => bp::INTERSECT,
         K::Plus | K::Minus => bp::SUM,
-        K::Star | K::Slash | K::DotStar | K::DotSlash => bp::PRODUCT,
+        K::Star | K::Slash | K::DotStar | K::DotSlash | K::Percent => bp::PRODUCT,
         _ => return None,
     })
 }
 
 /// Whether `op` after `previous` in a run of one binding power nests what
-/// came before it once lowered (CAS-164): every `./` after the first, as a
-/// quotient has two operands, and a switch between `*` or `/` and `.*` or
-/// `./`, which lowering folds from the left. The rest of a run lowers flat:
-/// sums, products, `and`, `or` and `.*`.
+/// came before it once lowered (CAS-164): every `./` and `%` after the
+/// first, as a quotient and a residue have two operands, and a switch
+/// between `*` or `/` and `.*`, `./` or `%`, which lowering folds from the
+/// left. The rest of a run lowers flat: sums, products, `and`, `or` and
+/// `.*`.
 fn nests(previous: K, op: K) -> bool {
     let class = |kind: K| match kind {
         K::Minus => K::Plus,
         K::Slash => K::Star,
         kind => kind,
     };
-    op == K::DotSlash || class(op) != class(previous)
+    op == K::DotSlash || op == K::Percent || class(op) != class(previous)
 }
 
 fn is_comparison(kind: K) -> bool {

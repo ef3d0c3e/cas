@@ -110,6 +110,13 @@ fn arithmetic() {
             "a .* b ./ c .* d",
             "ElementwiseTimes[ElementwiseDivide[ElementwiseTimes[a, b], c], d]",
         ),
+        // giac's residues, at the precedence of `*` (CAS-DOC-43 §1).
+        ("a % n", "Modular[a, n]"),
+        ("x^4 + 1 % 3", "Plus[Power[x, 4], Modular[1, 3]]"),
+        ("(x + 1) % 5", "Modular[Plus[x, 1], 5]"),
+        ("2 * x % 5", "Modular[Times[2, x], 5]"),
+        ("a % n * b", "Times[Modular[a, n], b]"),
+        ("a % n % m", "Modular[Modular[a, n], m]"),
         ("a and b and c or d", "Or[And[a, b, c], d]"),
         ("a .^ 2", "ElementwisePower[a, 2]"),
         ("n!", "Factorial[n]"),

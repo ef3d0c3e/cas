@@ -787,7 +787,7 @@ impl Lowerer<'_> {
                 }
                 apply(Symbol::PLUS, terms, range)
             }
-            Some(K::Star | K::Slash | K::DotStar | K::DotSlash) => self.products(node),
+            Some(K::Star | K::Slash | K::DotStar | K::DotSlash | K::Percent) => self.products(node),
             Some(op @ (K::AndKw | K::OrKw | K::IntersectKw)) => {
                 let head = match op {
                     K::AndKw => Symbol::AND,
@@ -830,11 +830,12 @@ impl Lowerer<'_> {
         value
     }
 
-    /// A run of `*`, `/`, `.*` and `./`, folded from the left: `*` and `/`
-    /// make one `Times` with the factors of implicit products, `.*` one
-    /// `ElementwiseTimes`, and each `./` an `ElementwiseDivide` of all
-    /// before it. So `a * b .* c / d` is `(a b .* c) / d` with a `Times`
-    /// around the `ElementwiseTimes`.
+    /// A run of `*`, `/`, `.*`, `./` and `%`, folded from the left: `*` and
+    /// `/` make one `Times` with the factors of implicit products, `.*` one
+    /// `ElementwiseTimes`, each `./` an `ElementwiseDivide` and each `%` a
+    /// `Modular` (CAS-DOC-43 §1) of all before it. So `a * b .* c / d` is
+    /// `(a b .* c) / d` with a `Times` around the `ElementwiseTimes`, and
+    /// `x^2 * 3 % 5` is `(3 x²) % 5`.
     fn products(&mut self, node: &SyntaxNode) -> Lowering {
         let operands: Vec<SyntaxNode> = node.children().collect();
         let Some((first, rest)) = operands.split_first() else {
@@ -877,6 +878,15 @@ impl Lowerer<'_> {
                     let mut factors = vec![before.unwrap_or_else(|| self.expr(first))];
                     factors.extend(run.iter().map(|&(_, operand)| self.expr(operand)));
                     apply(Symbol::ELEMENTWISE_TIMES, factors, start..range(last).end)
+                }
+                K::Percent => {
+                    let mut residue = before.unwrap_or_else(|| self.expr(first));
+                    for &(_, operand) in run {
+                        let modulus = self.expr(operand);
+                        let range = start..range(operand).end;
+                        residue = apply(Symbol::MODULAR, vec![residue, modulus], range);
+                    }
+                    residue
                 }
                 _ => {
                     let mut quotient = before.unwrap_or_else(|| self.expr(first));

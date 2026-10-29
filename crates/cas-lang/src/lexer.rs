@@ -333,6 +333,7 @@ impl Lexer<'_> {
             '*' | '×' | '·' | '⋅' => SyntaxKind::Star,
             '/' | '÷' => SyntaxKind::Slash,
             '^' => SyntaxKind::Caret,
+            '%' => SyntaxKind::Percent,
             '!' if self.eat('=') => SyntaxKind::Neq,
             '!' => SyntaxKind::Bang,
             '≠' => SyntaxKind::Neq,

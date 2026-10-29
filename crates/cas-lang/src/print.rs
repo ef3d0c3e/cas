@@ -292,6 +292,8 @@ fn form(e: &Expr) -> Form<'_> {
         (Symbol::ELEMENTWISE_POWER, [b, n]) => Form::Power(b, ".^", n),
         (Symbol::ELEMENTWISE_TIMES, [_, _, ..]) => Form::Elementwise(args, ".*"),
         (Symbol::ELEMENTWISE_DIVIDE, [_, _]) => Form::Elementwise(args, "./"),
+        // giac's residue, `a % n` (CAS-DOC-43 §1).
+        (Symbol::MODULAR, [_, _]) => Form::Elementwise(args, " % "),
         (Symbol::FACTORIAL, [n]) => Form::Factorial(n),
         (Symbol::AND, [_, _, ..]) if is_chain(args) => Form::Chain(args),
         (Symbol::AND, [_, _, ..]) => Form::Logical(args, " and ", Prec::And, Prec::Not),
