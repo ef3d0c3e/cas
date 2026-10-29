@@ -52,16 +52,51 @@ fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     })
 }
 
+/// The parameters `_Z5`, `_N1`, … of `answer` as `n_0`, `n_1`, … in the
+/// order of their numbers: giac counts them across a session.
+fn renamed(answer: &str) -> String {
+    // Each parameter: where it starts and ends, and its number.
+    let bytes = answer.as_bytes();
+    let mut found: Vec<(usize, usize, u64)> = Vec::new();
+    let mut i = 0;
+    while i + 2 < bytes.len() {
+        if bytes[i] == b'_' && matches!(bytes[i + 1], b'Z' | b'N') {
+            let digits = bytes[i + 2..]
+                .iter()
+                .take_while(|b| b.is_ascii_digit())
+                .count();
+            if digits > 0 {
+                let end = i + 2 + digits;
+                found.push((i, end, answer[i + 2..end].parse().expect("digits")));
+                i = end;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    let mut numbers: Vec<u64> = found.iter().map(|&(_, _, k)| k).collect();
+    numbers.sort_unstable();
+    numbers.dedup();
+    let mut out = String::with_capacity(answer.len());
+    let mut last = 0;
+    for (start, end, k) in found {
+        let index = numbers.binary_search(&k).expect("collected");
+        out.push_str(&answer[last..start]);
+        out.push_str("n_");
+        out.push_str(&index.to_string());
+        last = end;
+    }
+    out.push_str(&answer[last..]);
+    out
+}
+
 /// giac's answer to `input` in the language: its lists, its parameters
-/// `_Z0` and `_N0` as `n_0`, and a residue `g % n` as `g`.
+/// renamed `n_0`, … ([`renamed`]), and a residue `g % n` as `g`.
 fn text(giac: &Giac, input: &str) -> String {
     let answer = giac
         .eval(input)
         .unwrap_or_else(|e| panic!("{input}: {e:?}"));
-    let answer = answer
-        .replace("list[", "[")
-        .replace("_Z", "n_")
-        .replace("_N", "n_");
+    let answer = renamed(&answer.replace("list[", "["));
     match answer.split_once(" % ") {
         Some((g, _)) => g.to_owned(),
         None => answer,
