@@ -712,8 +712,9 @@ fn continuity(
 }
 
 /// Whether `g`, for `x` in the region's interval, keeps clear of 0, or
-/// above it when `positive`: `g` at a ball over the whole interval, which
-/// overestimates, so a `g` it does not clear stays unknown (CAS-436).
+/// above it when `positive`: `g` at balls over the interval cut in 1, 4, 16
+/// and 64 pieces, the first cut whose every piece clears it deciding; the
+/// balls overestimate, so a `g` none clears stays unknown (CAS-436).
 fn cleared(
     ev: &mut Eval<'_>,
     g: &Expr,
@@ -727,23 +728,54 @@ fn cleared(
     let (Some(lo), Some(hi)) = (&outer.lo, &outer.hi) else {
         return Ok(false);
     };
+    let width = hi - lo;
+    for pieces in [1i64, 4, 16, 64] {
+        let step = &width / &Rational::from(Integer::from(pieces));
+        let mut all = true;
+        for k in 0..pieces {
+            let a = lo + &(&step * &Rational::from(Integer::from(k)));
+            let b = &a + &step;
+            if !piece_cleared(ev, g, x, &a, &b, positive) {
+                all = false;
+                break;
+            }
+        }
+        if all {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Whether `g` at a ball over `[a, b]` keeps clear of 0, or above it; by
+/// `approximation`, whose warnings are its own.
+fn piece_cleared(
+    ev: &Eval<'_>,
+    g: &Expr,
+    x: &Expr,
+    a: &Rational,
+    b: &Rational,
+    positive: bool,
+) -> bool {
     let two = Rational::from(Integer::from(2));
-    let mid = &(lo + hi) / &two;
-    let rad = &(hi - lo) / &two;
+    let mid = &(a + b) / &two;
+    let rad = &(b - a) / &two;
     let radius = Mag::from_float(&Float::from_rational(&rad, 64, Round::Ceil).0);
     let ball = Ball::from_rational(&mid, BITS).add_error(&radius);
     let at = g.substitute(&[(x.clone(), Expr::from(ball))]);
-    let value = ev.eval(&Expr::call(Symbol::N, [at]))?;
-    let View::Ball(b) = value.view() else {
-        return Ok(false);
+    let Ok(value) = approximation(ev.context(), &at, BITS) else {
+        return false;
     };
-    let Some(r) = b.rad().to_float() else {
-        return Ok(false);
+    let View::Ball(value) = value.view() else {
+        return false;
     };
-    let low = b.mid().sub_round(&r, 64, Round::Floor).0;
-    let high = b.mid().add_round(&r, 64, Round::Ceil).0;
+    let Some(r) = value.rad().to_float() else {
+        return false;
+    };
+    let low = value.mid().sub_round(&r, 64, Round::Floor).0;
+    let high = value.mid().add_round(&r, 64, Round::Ceil).0;
     let above = !low.is_negative() && !low.is_zero();
-    Ok(above || (!positive && high.is_negative()))
+    above || (!positive && high.is_negative())
 }
 
 /// The poles of the tangents `Tan[w]` of `F`, `w` linear in `x`, where
