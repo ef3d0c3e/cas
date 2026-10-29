@@ -160,6 +160,56 @@ fn functions() {
     ]);
 }
 
+/// Rational functions by residues (CAS-441): giac's answers.
+#[test]
+fn rational_functions() {
+    check_values(&[
+        // pi*exp(-abs(s)); 1/2*pi*exp(-2*abs(s)).
+        (
+            "Power[Plus[1, Power[x, 2]], -1]",
+            "Times[Pi, Exp[Times[-1, Abs[s]]]]",
+        ),
+        (
+            "Power[Plus[4, Power[x, 2]], -1]",
+            "Times[1/2, Pi, Exp[Times[-2, Abs[s]]]]",
+        ),
+        // Odd: -i π sign(s) e^(−|s|).
+        (
+            "Times[x, Power[Plus[1, Power[x, 2]], -1]]",
+            "Times[-1, I, Pi, Sign[s], Exp[Times[-1, Abs[s]]]]",
+        ),
+        // Neither: giac's (-exp((1+i)*s)*Heaviside(s)+exp((1+i)*s)
+        // +exp((-1+i)*s)*Heaviside(s))*pi.
+        (
+            "Power[Plus[2, Times[2, x], Power[x, 2]], -1]",
+            "Times[Pi, Plus[Times[-1, Exp[Times[Plus[1, I], s]], HeavisideTheta[s]], \
+             Exp[Times[Plus[1, I], s]], Times[Exp[Times[Plus[-1, I], s]], HeavisideTheta[s]]]]",
+        ),
+        // giac's sqrt(2)*exp(-sqrt(2)*abs(s)/2)*(cos(sqrt(2)*abs(s)/2)
+        // +sin(sqrt(2)*abs(s)/2))*pi/2.
+        (
+            "Power[Plus[1, Power[x, 4]], -1]",
+            "Times[1/2, Power[2, 1/2], Pi, Exp[Times[-1/2, Power[2, 1/2], Abs[s]]], \
+             Plus[Cos[Times[1/2, Power[2, 1/2], Abs[s]]], Sin[Times[1/2, Power[2, 1/2], Abs[s]]]]]",
+        ),
+        // Double poles, by Residue: (π/2)(1 + |s|) e^(−|s|).
+        (
+            "Power[Plus[1, Power[x, 2]], -2]",
+            "Times[1/2, Pi, Plus[1, Abs[s]], Exp[Times[-1, Abs[s]]]]",
+        ),
+        // A numerator of degree 1 not odd: (x + 2)/(x² + 1).
+        (
+            "Times[Plus[x, 2], Power[Plus[1, Power[x, 2]], -1]]",
+            "Times[Pi, Plus[2, Times[-1, I, Sign[s]]], Exp[Times[-1, Abs[s]]]]",
+        ),
+    ]);
+    // Real poles stay.
+    check(&[(
+        "FourierTransform[Power[Plus[-1, Power[x, 2]], -1], x, s]",
+        "FourierTransform[Power[Plus[-1, Power[x, 2]], -1], x, s]",
+    )]);
+}
+
 /// Distributions: constants, deltas, oscillations, the step and powers.
 #[test]
 fn distributions() {

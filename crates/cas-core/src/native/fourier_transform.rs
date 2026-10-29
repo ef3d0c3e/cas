@@ -31,6 +31,8 @@
 //!     principal value: `(1/p) e^(i σ q/p) (−i π sign σ)`;
 //!   - the box `UnitBox[p x + q]`, giac's `rect`: `(1/|p|) e^(i σ q/p) 2
 //!     sin(σ/(2p))/(σ/p)`.
+//! - **Rational functions** without real poles, by residues ([`rational`],
+//!   §4, CAS-441), before the table.
 //!
 //! What no rule transforms stays.
 
@@ -48,6 +50,8 @@ use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
+
+mod rational;
 
 type Native = Result<Option<Expr>, EvalError>;
 
@@ -210,6 +214,10 @@ fn product(ev: &mut Eval<'_>, factors: &[Expr], x: &Expr, s: &Expr) -> Found {
         if rewritten != f {
             return transform(ev, &rewritten, x, s);
         }
+    }
+    // A rational function, by residues (§4).
+    if let Some(image) = rational::rational(ev, &f, x, s)? {
+        return Ok(Some(image));
     }
     table(ev, &f, x, s)
 }

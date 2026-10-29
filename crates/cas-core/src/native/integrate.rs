@@ -777,7 +777,7 @@ pub(super) fn polynomial(
 
 /// `g` as a rational function of `x` alone over ℚ, `None` when it is not
 /// one.
-fn rational_function(
+pub(super) fn rational_function(
     ev: &mut Eval<'_>,
     e: &Expr,
     g: &Expr,
