@@ -43,6 +43,23 @@ fn one_variable() {
         ("Maximize[Power[E, Times[-1, Power[x, 2]]], x]", "1"),
         // An infimum not attained, with a warning.
         ("Minimize[Power[E, Times[-1, Power[x, 2]]], x]", "0"),
+        // giac's maximize(sin(x),x=0..4): the ends fixed, no multiplier.
+        ("Maximize[Sin[x], Equation[x, Range[0, 4]]]", "1"),
+        // giac's [sin(4),[[4]]]: 3π/2 lies past 4.
+        (
+            "Minimize[Sin[x], Equation[x, Range[0, 4]], point]",
+            "List[Sin[4], List[List[4]]]",
+        ),
+        // Past one period, the roots repeat (CAS-431): giac's
+        // minimize(sin(x),x=0..10,point) is [-1,[[3/2*pi]]].
+        (
+            "Minimize[Sin[x], Equation[x, Range[0, 10]], point]",
+            "List[-1, List[List[Times[3/2, Pi]]]]",
+        ),
+        (
+            "Maximize[Sin[x], Equation[x, Range[0, 10]], point]",
+            "List[1, List[List[Times[1/2, Pi]], List[Times[5/2, Pi]]]]",
+        ),
         ("FMin[Plus[Power[x, 2], Times[-2, x], 1], x]", "1"),
         ("FMax[Plus[Times[-1, Power[x, 2]], Times[4, x]], x]", "2"),
         (

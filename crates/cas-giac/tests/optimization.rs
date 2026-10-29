@@ -74,6 +74,7 @@ fn extrema() {
         "extrema(x^4,x)",
         "extrema(x*y*z,x+y+z=1,[x,y,z])",
         "extrema(x^2+y^2,x*y=1,[x=0..inf,y=0..inf])",
+        "extrema(sin(x),x=0..10)",
     ]);
 }
 
@@ -83,6 +84,8 @@ fn optima() {
     check(&[
         "minimize(x^2-2*x+3,x)",
         "maximize(sin(x),x=0..4)",
+        "minimize(sin(x),x=0..10,point)",
+        "maximize(sin(x),x=0..10,point)",
         "minimize(x^3-3*x,x=-3..3)",
         "minimize(x^2+y^2,x+y=1,[x,y])",
         "minimize(2x^2-y^2+6y,x^2+y^2<=16,[x,y])",

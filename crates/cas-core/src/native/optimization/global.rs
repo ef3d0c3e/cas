@@ -14,7 +14,9 @@
 //!   `solutions`) that satisfy every inequality. A bound `x = c` among them
 //!   fixes `x` instead of taking a multiplier, so an interval's ends need
 //!   no system. That takes in the interior's critical points, those of
-//!   each face, and the corners.
+//!   each face, and the corners. In one free variable with a finite range,
+//!   a periodic function's points repeat by its period across the range
+//!   (CAS-431): giac's `minimize(sin(x),x=0..10)` is −1.
 //! - The region must be bounded: every variable in a finite range, or a
 //!   constraint whose function is quadratic with a definite Hessian (a
 //!   disc, a ball, an ellipse); or the function quadratic with a definite
@@ -208,9 +210,35 @@ fn bound(ev: &mut Eval<'_>, h: &Expr, xs: &[Expr]) -> Result<Option<(usize, Expr
     if slopes.iter().enumerate().any(|(j, s)| j != i && *s != zero) {
         return Ok(None);
     }
-    // c = x_i − h/s.
-    let c = ev.eval(&(xs[i].clone() - h.clone() / slopes[i].clone()))?;
+    // c = −h(x_i = 0)/s: `x − (x − 4)` would stay a sum, as evaluation
+    // does not distribute −1.
+    let at_zero = ev.eval(&h.substitute(&[(xs[i].clone(), Expr::from(0))]))?;
+    let c = ev.eval(&-(at_zero / slopes[i].clone()))?;
     Ok(xs.iter().all(|x| !c.contains(x)).then_some((i, c)))
+}
+
+/// One free variable with a finite range, without multipliers: the
+/// points repeated by a periodic function's period across its range
+/// (CAS-431). The points as they are otherwise.
+fn repeats(
+    ev: &mut Eval<'_>,
+    p: &Problem,
+    free: &[Expr],
+    f: &Expr,
+    points: Vec<Vec<Expr>>,
+) -> Result<Option<Vec<Vec<Expr>>>, EvalError> {
+    let Some(v) = p.vars.iter().find(|v| free.len() == 1 && v.x == free[0]) else {
+        return Ok(Some(points));
+    };
+    let (Some(low), Some(high)) = (&v.low, &v.high) else {
+        return Ok(Some(points));
+    };
+    if points.iter().any(|q| q.len() != 1) {
+        return Ok(Some(points));
+    }
+    let roots = points.into_iter().map(|q| q[0].clone()).collect();
+    Ok(super::repeated(ev, f, &v.x, roots, low, high)?
+        .map(|all| all.into_iter().map(|r| vec![r]).collect()))
 }
 
 /// The candidates, as tuples of the variables' values; `None` when a
@@ -274,7 +302,10 @@ fn candidates(ev: &mut Eval<'_>, p: &Problem) -> Result<Option<Vec<Vec<Expr>>>, 
             let Some(points) = solutions(ev, gradient, &unknowns)? else {
                 return Ok(None);
             };
-            points
+            match repeats(ev, p, &free, &lagrangian, points)? {
+                Some(points) => points,
+                None => return Ok(None),
+            }
         };
         'points: for point in points {
             let mut values = point.into_iter();

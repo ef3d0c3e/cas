@@ -8,7 +8,9 @@
 //!   symbols; a range keeps the points within it, ends included.
 //! - The critical points are the real solutions of `grad f = 0` by `Solve`
 //!   (CAS-DOC-11), or with equality constraints `g_k = c_k` those of the
-//!   Lagrangian `f − Σ λ_k (g_k − c_k)` in the variables and the `λ_k`.
+//!   Lagrangian `f − Σ λ_k (g_k − c_k)` in the variables and the `λ_k`. In
+//!   one variable with a finite range, a periodic `f`'s roots repeat by its
+//!   period across it (CAS-431).
 //!   Points that are not tuples of real numbers, by the assumptions or by
 //!   `N`'s balls, are dropped; a system that `Solve` leaves leaves the
 //!   call.
@@ -35,6 +37,8 @@ mod simplex;
 
 use std::cmp::Ordering;
 
+use cas_num::{Integer, Rational};
+
 use super::rounding::real_sign;
 use crate::context::EvalError;
 use crate::eval::Eval;
@@ -45,6 +49,9 @@ type Native = Result<Option<Expr>, EvalError>;
 
 /// The highest derivative tried in one variable.
 const MAX_ORDER: i64 = 12;
+
+/// The most repeats of a periodic function's root across a range.
+const MAX_REPEATS: i64 = 256;
 
 fn head(e: &Expr) -> Option<Symbol> {
     e.head().and_then(Expr::as_symbol)
@@ -199,6 +206,114 @@ pub(super) fn solutions(
         }
     }
     Ok(Some(tuples))
+}
+
+/// Whether `x` occurs in `e` only in sines, cosines, tangents and their
+/// reciprocals of `a x + b`, `a` a rational not 0, whose sizes it collects.
+fn periodic_parts(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    x: &Expr,
+    slopes: &mut Vec<Rational>,
+) -> Result<bool, EvalError> {
+    if !e.contains(x) {
+        return Ok(true);
+    }
+    let Some(function) = head(e) else {
+        return Ok(false);
+    };
+    if matches!(
+        function,
+        Symbol::SIN | Symbol::COS | Symbol::TAN | Symbol::SEC | Symbol::CSC | Symbol::COT
+    ) {
+        let [argument] = e.args() else {
+            return Ok(false);
+        };
+        let slope = ev.eval(&d(argument, x))?;
+        let Some(slope) = slope.to_rational().filter(|r| !r.is_zero()) else {
+            return Ok(false);
+        };
+        slopes.push(slope.abs());
+        return Ok(true);
+    }
+    for part in e.args() {
+        if !periodic_parts(ev, part, x, slopes)? {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// The period of `f` in `x`, over `π`: `2/g` for `g` the gcd of the slopes
+/// of its trigonometric functions; `None` when `f` is not so periodic.
+fn period(ev: &mut Eval<'_>, f: &Expr, x: &Expr) -> Result<Option<Rational>, EvalError> {
+    let mut slopes = Vec::new();
+    if !periodic_parts(ev, f, x, &mut slopes)? || slopes.is_empty() {
+        return Ok(None);
+    }
+    // gcd(p_i/q_i) = gcd(p_i L/q_i)/L, L = lcm(q_i).
+    let l = slopes.iter().fold(Integer::ONE, |l, a| l.lcm(a.denom()));
+    let g = slopes.iter().fold(Integer::ZERO, |g, a| {
+        g.gcd(&(a.numer() * &l.div_exact(a.denom())))
+    });
+    Ok(Some(Rational::new(&l * &Integer::from(2), g)))
+}
+
+/// The midpoint of the ball `N` gives `e`, a rational; `None` for another
+/// value.
+fn midpoint(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Rational>, EvalError> {
+    let value = ev.eval(&Expr::call(Symbol::N, [e.clone()]))?;
+    Ok(match value.view() {
+        View::Ball(b) if b.is_finite() => Some(b.mid().to_rational()),
+        _ => None,
+    })
+}
+
+/// The roots `r` of `f′` in `x` and their repeats `r + k T` about `[low,
+/// high]`, `T` the period of `f` (CAS-431): `Solve` gives a periodic
+/// equation's roots in one period, so `cos x = 0` is `±π/2` and
+/// `Minimize[Sin[x], x = 0..10]` needs `3π/2` and `7π/2`. The roots alone
+/// when `f` is not periodic; `None` past [`MAX_REPEATS`] repeats of one.
+/// The caller keeps those within the range.
+pub(super) fn repeated(
+    ev: &mut Eval<'_>,
+    f: &Expr,
+    x: &Expr,
+    roots: Vec<Expr>,
+    low: &Expr,
+    high: &Expr,
+) -> Result<Option<Vec<Expr>>, EvalError> {
+    let Some(tau) = period(ev, f, x)? else {
+        return Ok(Some(roots));
+    };
+    let t = Expr::from(tau.clone()) * Expr::from(Symbol::PI);
+    let (Some(lo), Some(hi), Some(tf)) =
+        (midpoint(ev, low)?, midpoint(ev, high)?, midpoint(ev, &t)?)
+    else {
+        return Ok(None);
+    };
+    let mut out = Vec::new();
+    for r in roots {
+        let Some(rf) = midpoint(ev, &r)? else {
+            return Ok(None);
+        };
+        // A step either way covers the balls' error.
+        let first = (&(&lo - &rf) / &tf).floor() - Integer::ONE;
+        let last = (&(&hi - &rf) / &tf).floor() + Integer::ONE;
+        let (Some(first), Some(last)) = (first.to_i64(), last.to_i64()) else {
+            return Ok(None);
+        };
+        if last - first > MAX_REPEATS {
+            return Ok(None);
+        }
+        for k in first..=last {
+            let c = ev.eval(&(r.clone() + Expr::from(k) * t.clone()))?;
+            if !out.contains(&c) {
+                out.push(c);
+            }
+        }
+    }
+    Ok(Some(out))
 }
 
 /// What a critical point is.
@@ -376,9 +491,18 @@ pub(super) fn extrema(ev: &mut Eval<'_>, e: &Expr) -> Native {
     }
     let all: Vec<Expr> = xs.iter().chain(&lambdas).cloned().collect();
     let gradient: Vec<Expr> = all.iter().map(|u| d(&lagrangian, u)).collect();
-    let Some(points) = solutions(ev, gradient, &all)? else {
+    let Some(mut points) = solutions(ev, gradient, &all)? else {
         return Ok(None);
     };
+    if let ([v], true) = (vars.as_slice(), constraints.is_empty())
+        && let (Some(low), Some(high)) = (&v.low, &v.high)
+    {
+        let roots = points.into_iter().map(|p| p[0].clone()).collect();
+        let Some(all) = repeated(ev, f, &v.x, roots, low, high)? else {
+            return Ok(None);
+        };
+        points = all.into_iter().map(|r| vec![r]).collect();
+    }
     let (mut minima, mut maxima) = (Vec::new(), Vec::new());
     'points: for point in points {
         for (v, c) in vars.iter().zip(&point) {

@@ -40,6 +40,12 @@ fn extrema() {
         // Higher derivatives: x⁴ has a minimum, x³ nothing.
         ("Extrema[Power[x, 4], x]", "List[List[0], List[]]"),
         ("Extrema[Power[x, 3], x]", "List[List[], List[]]"),
+        // A periodic function's critical points repeat across the range
+        // (CAS-431), giac's [[3/2*pi],[1/2*pi,5/2*pi]].
+        (
+            "Extrema[Sin[x], Equation[x, Range[0, 10]]]",
+            "List[List[Times[3/2, Pi]], List[Times[1/2, Pi], Times[5/2, Pi]]]",
+        ),
         (
             "Extrema[Times[-1, Power[x, 6]], x]",
             "List[List[], List[0]]",
