@@ -327,6 +327,13 @@ builtins! {
     // `correlation`.
     POPULATION_COVARIANCE = "PopulationCovariance" [PROTECTED];
     CORRELATION = "Correlation" [PROTECTED];
+    // Statistics II (CAS-DOC-50).
+    FREQUENCIES = "Frequencies" [PROTECTED];
+    CUMULATED_FREQUENCIES = "CumulatedFrequencies" [PROTECTED];
+    CLASSES = "Classes" [PROTECTED];
+    COVARIANCE_CORRELATION = "CovarianceCorrelation" [PROTECTED];
+    ROOT_MEAN_SQUARE = "RootMeanSquare" [PROTECTED];
+    MOVING_AVERAGE = "MovingAverage" [PROTECTED];
     // Regressions: `linear_regression`, `polynomial_regression`,
     // `exponential_regression`, `logarithmic_regression` and
     // `power_regression`.

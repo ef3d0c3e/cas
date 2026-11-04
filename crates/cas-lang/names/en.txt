@@ -399,10 +399,10 @@ DegreeLexicographic: tdeg
 DegreeReverseLexicographic: revlex
 # Statistics (CAS-DOC-22, CAS-294): giac's `variance` and `stddev` are the
 # population ones, `stddevp` the sample deviation.
-Mean: mean
+Mean: mean moyenne
 PopulationVariance: variance
-PopulationStandardDeviation: stddev
-StandardDeviation: stddevp
+PopulationStandardDeviation: stddev ecart_type
+StandardDeviation: stddevp ecart_type_population stdDev
 # Its order statistics (CAS-295).
 Median: median
 Quantile: quantile
@@ -412,6 +412,13 @@ ThirdQuartile: quartile3
 # Two variables (CAS-296): giac's `covariance` is the population one.
 PopulationCovariance: covariance
 Correlation: correlation
+# Statistics II (CAS-DOC-50).
+Frequencies: frequencies
+CumulatedFrequencies: cumulated_frequencies
+Classes: classes
+CovarianceCorrelation: covariance_correlation
+RootMeanSquare: rms
+MovingAverage: moving_average
 # Regressions (CAS-297).
 LinearRegression: linear_regression
 PolynomialRegression: polynomial_regression

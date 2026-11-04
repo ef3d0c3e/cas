@@ -32,6 +32,7 @@
 //! - The regressions (§5, CAS-297), least squares: [`regression`].
 //! - Probability distributions (CAS-DOC-23): [`distributions`].
 
+pub(super) mod descriptive;
 pub(super) mod distributions;
 mod order;
 pub(super) mod regression;

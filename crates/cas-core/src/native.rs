@@ -484,6 +484,24 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             statistics::population_covariance,
         ),
         (Symbol::CORRELATION, statistics::correlation),
+        (Symbol::FREQUENCIES, statistics::descriptive::frequencies),
+        (
+            Symbol::CUMULATED_FREQUENCIES,
+            statistics::descriptive::cumulated_frequencies,
+        ),
+        (Symbol::CLASSES, statistics::descriptive::classes),
+        (
+            Symbol::COVARIANCE_CORRELATION,
+            statistics::descriptive::covariance_correlation,
+        ),
+        (
+            Symbol::ROOT_MEAN_SQUARE,
+            statistics::descriptive::root_mean_square,
+        ),
+        (
+            Symbol::MOVING_AVERAGE,
+            statistics::descriptive::moving_average,
+        ),
         (
             Symbol::LINEAR_REGRESSION,
             statistics::regression::linear_regression,
