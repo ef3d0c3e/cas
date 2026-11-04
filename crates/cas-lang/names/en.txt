@@ -181,6 +181,11 @@ HilbertMatrix: hilbert
 VandermondeMatrix: vandermonde
 Norm: l2norm
 FrobeniusNorm: frobenius_norm
+# Matrix decompositions II (CAS-DOC-47).
+HessenbergDecomposition: hessenberg
+CompanionMatrix: companion
+SylvesterMatrix: sylvester
+HadamardProduct: hadamard
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime

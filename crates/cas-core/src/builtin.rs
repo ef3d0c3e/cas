@@ -212,6 +212,11 @@ builtins! {
     VANDERMONDE_MATRIX = "VandermondeMatrix" [PROTECTED];
     NORM = "Norm" [PROTECTED];
     FROBENIUS_NORM = "FrobeniusNorm" [PROTECTED];
+    // Matrix decompositions II (CAS-DOC-47).
+    HESSENBERG_DECOMPOSITION = "HessenbergDecomposition" [PROTECTED];
+    COMPANION_MATRIX = "CompanionMatrix" [PROTECTED];
+    SYLVESTER_MATRIX = "SylvesterMatrix" [PROTECTED];
+    HADAMARD_PRODUCT = "HadamardProduct" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];

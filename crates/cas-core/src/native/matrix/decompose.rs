@@ -675,5 +675,7 @@ pub(in crate::native) fn matrix_power(ev: &mut Eval<'_>, e: &Expr) -> Native {
     Ok(Some(result))
 }
 
+pub(in crate::native) mod forms;
+
 #[cfg(test)]
 mod tests;

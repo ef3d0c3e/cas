@@ -336,6 +336,22 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         ),
         (Symbol::NORM, matrix::constructors::norm),
         (Symbol::FROBENIUS_NORM, matrix::constructors::frobenius_norm),
+        (
+            Symbol::HESSENBERG_DECOMPOSITION,
+            matrix::decompose::forms::hessenberg_decomposition,
+        ),
+        (
+            Symbol::COMPANION_MATRIX,
+            matrix::decompose::forms::companion_matrix,
+        ),
+        (
+            Symbol::SYLVESTER_MATRIX,
+            matrix::decompose::forms::sylvester_matrix,
+        ),
+        (
+            Symbol::HADAMARD_PRODUCT,
+            matrix::decompose::forms::hadamard_product,
+        ),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),

@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 365] = [
+const BUILTINS: [&str; 369] = [
     "Plus",
     "Times",
     "Power",
@@ -205,6 +205,11 @@ const BUILTINS: [&str; 365] = [
     "Convolution",
     // The incomplete gamma function (CAS-DOC-46).
     "LowerGamma",
+    // Matrix decompositions II (CAS-DOC-47).
+    "HessenbergDecomposition",
+    "CompanionMatrix",
+    "SylvesterMatrix",
+    "HadamardProduct",
     "GammaPDF",
     "GammaCDF",
     "GammaICDF",
