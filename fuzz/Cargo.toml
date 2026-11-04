@@ -374,3 +374,10 @@ path = "fuzz_targets/modular_matrices.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "combinatorics"
+path = "fuzz_targets/combinatorics.rs"
+test = false
+doc = false
+bench = false
