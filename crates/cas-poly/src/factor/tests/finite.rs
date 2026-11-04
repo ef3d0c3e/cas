@@ -283,8 +283,9 @@ fn factor_mod() {
     // (x + 1)^5 = x^5 + 1 over 𝔽₅, and x^2 + 1 = (x + 1)^2 over 𝔽₂.
     check(5, vec![1, 0, 0, 0, 0, 1], vec![(vec![1, 1], 5)]);
     check(2, vec![1, 0, 1], vec![(vec![1, 1], 2)]);
-    // 2 (x + 1)^2 (x + 2) over 𝔽₃, its leading coefficient apart.
-    check(3, vec![1, 2, 2, 2], vec![(vec![1, 1], 2), (vec![2, 1], 1)]);
+    // 2 (x + 1)^2 (x + 2) = 2x^3 + 2x^2 + x + 1 over 𝔽₃, its leading
+    // coefficient apart.
+    check(3, vec![1, 1, 2, 2], vec![(vec![1, 1], 2), (vec![2, 1], 1)]);
 }
 
 proptest! {
