@@ -406,6 +406,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::CONJUGATE_GRADIENT,
             matrix::decompose::norms::conjugate_gradient,
         ),
+        (
+            Symbol::SCHUR_DECOMPOSITION,
+            matrix::decompose::unitary::schur_decomposition,
+        ),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),
