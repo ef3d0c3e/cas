@@ -19,7 +19,7 @@
 //! - steps: `sign` and `θ` of linear forms.
 //!
 //! A value that is no finite number, at a pole or past a limit, checks
-//! nothing.
+//! nothing. Values are taken with numbers of at most 2¹⁶ bits (CAS-474).
 #![no_main]
 
 use arbitrary::{Result, Unstructured};
@@ -271,7 +271,7 @@ fn value(ctx: &Context, e: &Expr, point: &[(Expr, Expr)]) -> Option<(Ball, Ball)
 }
 
 fn run(u: &mut Unstructured<'_>) -> Result<()> {
-    let ctx = Context::new();
+    let mut ctx = Context::new();
     let one = |s: Symbol| -> Box<dyn Fn(Expr) -> Expr> { Box::new(move |e| f(s, e)) };
     let combine = |what: Expr| -> Box<dyn Fn(Expr) -> Expr> {
         Box::new(move |e| Expr::call(Symbol::COMBINE, [e, what.clone()]))
@@ -350,6 +350,12 @@ fn run(u: &mut Unstructured<'_>) -> Result<()> {
     };
     let call = command(input.clone());
     let output = ctx.eval(&call).unwrap_or_else(|e| panic!("{call:?}: {e}"));
+    // The values at a point with numbers of at most 2^16 bits: an exact
+    // power past them, as (80/81)^(17^5) from x^((1 + 36 x^2)^5), stays for
+    // `N`'s balls instead of taking a minute (CAS-474).
+    let mut limits = ctx.limits();
+    limits.number_bits = 1 << 16;
+    ctx.set_limits(limits);
     // x and y in (0, 1).
     let mut coordinate = || -> Result<Expr> {
         let d = u.int_in_range(2..=16)?;
