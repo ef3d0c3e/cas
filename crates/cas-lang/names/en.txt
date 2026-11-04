@@ -214,6 +214,8 @@ ConjugateGradient: conjugate_gradient
 # Matrix decompositions III (CAS-DOC-51).
 SchurDecomposition: schur
 SingularValueDecomposition: svd
+JacobiLinearSolve: jacobi_linsolve
+GaussSeidelLinearSolve: gauss_seidel_linsolve
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime

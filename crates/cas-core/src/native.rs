@@ -414,6 +414,14 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::SINGULAR_VALUE_DECOMPOSITION,
             matrix::decompose::unitary::singular_value_decomposition,
         ),
+        (
+            Symbol::JACOBI_LINEAR_SOLVE,
+            matrix::decompose::iterative::jacobi_linear_solve,
+        ),
+        (
+            Symbol::GAUSS_SEIDEL_LINEAR_SOLVE,
+            matrix::decompose::iterative::gauss_seidel_linear_solve,
+        ),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),
