@@ -397,6 +397,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "decompositions_three"
+path = "fuzz_targets/decompositions_three.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "polytools_two"
 path = "fuzz_targets/polytools_two.rs"
 test = false
