@@ -163,7 +163,9 @@ impl Shape {
         }
         let value = match self {
             Shape::Weibull { k, lambda, theta } => {
-                theta + lambda * (-Expr::call(Symbol::LOG, [1 - q])).pow(1 / k.clone())
+                // Log[1/(1 − q)], as Log[1/2] would stay a negated Log[1/2].
+                let log = Expr::call(Symbol::LOG, [(1 - q.clone()).pow(-1)]);
+                theta + lambda * log.pow(1 / k.clone())
             }
             Shape::Cauchy { x0, gamma } => {
                 x0 + gamma * Expr::call(Symbol::TAN, [Expr::from(Symbol::PI) * (q - half())])

@@ -3,6 +3,8 @@
 //! its `ker` and `solve` answers, partly plain integers (`solve((x^3-1) %
 //! 13, x)` is `[-4,1,3]`), are compared modulo `p`, and its `eigenvals`,
 //! in its own order, as sorted lists. `ichinrem` and `powmod` read back.
+//! giac's `charpoly([[3,4],[5,6]] % 12, x)` is left out: its constant −4
+//! is not the determinant −2.
 
 use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
@@ -68,7 +70,7 @@ fn determinants_and_inverses() {
         "inv([[2,3,1],[4,1,5],[6,2,2]] % 11)",
         "charpoly([[1,2],[3,4]] % 7, x)",
         "charpoly([[2,3,1],[4,1,5],[6,2,2]] % 7, x)",
-        "charpoly([[3,4],[5,6]] % 12, x)",
+        "charpoly([[3,4],[5,6]] % 13, x)",
     ]);
 }
 

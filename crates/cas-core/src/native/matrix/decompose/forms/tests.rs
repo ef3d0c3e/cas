@@ -187,10 +187,10 @@ fn norms() {
         ("ConditionNumber[List[List[1, 2], List[2, 4]]]", "Infinity"),
     ]);
     check_values(&[
-        // giac's 5.11667273602 = √(15 + 5√2), and 14.9330343737.
+        // giac's 5.11667273602 = √(15 + 5√5), and 14.9330343737.
         (
             &format!("MatrixNorm[{a}, 2]"),
-            "Power[Plus[15, Times[5, Power[2, 1/2]]], 1/2]",
+            "Power[Plus[15, Times[5, Power[5, 1/2]]], 1/2]",
         ),
         (
             "ConditionNumber[List[List[1, 2], List[3, 4]], 2]",

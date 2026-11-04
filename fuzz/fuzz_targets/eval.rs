@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 399] = [
+const BUILTINS: [&str; 396] = [
     "Plus",
     "Times",
     "Power",
@@ -254,9 +254,6 @@ const BUILTINS: [&str; 399] = [
     "CauchyPDF",
     "CauchyCDF",
     "CauchyICDF",
-    "RandomGamma",
-    "RandomBeta",
-    "RandomWeibull",
     "ZTransform",
     "InverseZTransform",
     "KroneckerDelta",

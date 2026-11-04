@@ -42,8 +42,9 @@ fn roots_and_coefficients() {
         ("HornerEval[List[1, 2, 3], 2]", "11"),
         ("HornerEval[Plus[Power[x, 3], Times[2, x], 1], 2]", "13"),
         (
+            // giac's (a+2)*a+3.
             "HornerEval[List[1, 2, 3], a]",
-            "Plus[3, Times[2, a], Power[a, 2]]",
+            "Plus[3, Times[a, Plus[2, a]]]",
         ),
         // giac's [1,6,14,13] and x^3+6*x^2+14*x+13.
         ("TaylorShift[List[1, 0, 2, 1], 2]", "List[1, 6, 14, 13]"),
@@ -152,6 +153,13 @@ fn factoring_and_forms() {
         // giac's x^2-1; 10 in balanced binary is 8 + 2.
         ("DigitPolynomial[15, 4, x]", "Plus[-1, Power[x, 2]]"),
         ("DigitPolynomial[10, 2, x]", "Plus[x, Power[x, 3]]"),
+        // Base 2 writes no negative number (fuzzing: it looped, CAS-484);
+        // giac's genpoly(-7,3,x) is -x^2+x-1.
+        ("DigitPolynomial[-5, 2, x]", "DigitPolynomial[-5, 2, x]"),
+        (
+            "DigitPolynomial[-7, 3, x]",
+            "Plus[-1, x, Times[-1, Power[x, 2]]]",
+        ),
         // giac's [1,-1,-1]; powers of 2.
         (
             "BerlekampMassey[List[0, 1, 1, 2, 3, 5, 8, 13]]",

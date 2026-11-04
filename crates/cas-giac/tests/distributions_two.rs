@@ -88,12 +88,10 @@ fn distributions() {
     check(
         &[
             "gammad(2,3,x)",
-            "gammad(2,3,0.7)",
             "gammad_cdf(2,3,x)",
             "gammad_cdf(2,3,1/2)",
             "betad(2,3,x)",
             "betad_cdf(2,3,2/5)",
-            "betad_cdf(2,3,0.1,0.5)",
             "weibulld(2,3,x)",
             "weibulld(2,3,1,x)",
             "weibulld_cdf(2,3,x)",
@@ -111,6 +109,8 @@ fn distributions() {
     );
     check(
         &[
+            "gammad(2,3,0.7)",
+            "betad_cdf(2,3,0.1,0.5)",
             "gammad_cdf(2.5,1,2)",
             "gammad_icdf(2,3,0.5)",
             "betad_icdf(2,3,0.5)",

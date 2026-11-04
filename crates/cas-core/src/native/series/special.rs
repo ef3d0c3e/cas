@@ -149,11 +149,13 @@ impl Expander<'_, '_> {
             return Ok(None);
         };
         // f′(g) g′, then its integral from g₀.
-        let power = self.power(&s, &(a.clone() - 1))?;
+        let exponent = self.eval(&(a.clone() - 1))?;
+        let power = self.power(&s, &exponent)?;
         let other = if f == Symbol::BETA {
             let one = Self::constant_like(&Expr::from(1), &s);
             let rest = self.minus(&one, &s)?;
-            self.power(&rest, &(parameters[1].clone() - 1))?
+            let exponent = self.eval(&(parameters[1].clone() - 1))?;
+            self.power(&rest, &exponent)?
         } else {
             let minus = self.scaled(&Expr::from(-1), &s)?;
             self.exp(&minus)?

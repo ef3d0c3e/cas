@@ -296,38 +296,35 @@ pub(in crate::native) fn root_multiplicities(ev: &mut Eval<'_>, e: &Expr) -> Nat
         return Ok(None);
     };
     let x = Expr::symbol("x");
-    let together = ev.eval(&call(Symbol::TOGETHER, vec![f.clone()]))?;
-    let numerator = ev.eval(&call(Symbol::NUMERATOR, vec![together.clone()]))?;
-    let denominator = ev.eval(&call(Symbol::DENOMINATOR, vec![together]))?;
+    // giac's flat `[f₁, m₁, f₂, m₂, …]`, a denominator's factors with
+    // negative multiplicities.
+    let factors = ev.eval(&call(Symbol::FACTOR_LIST, vec![f.clone()]))?;
+    if !is_list(&factors) || factors.args().len() % 2 != 0 {
+        return Ok(None);
+    }
     let mut pairs: Vec<(Expr, i64, Option<Rational>)> = Vec::new();
-    for (part, sign) in [(numerator, 1), (denominator, -1)] {
-        let factors = ev.eval(&call(Symbol::FACTOR_LIST, vec![part]))?;
-        if !is_list(&factors) {
+    for item in factors.args().chunks(2) {
+        let [g, m] = item else {
+            return Ok(None);
+        };
+        if !g.contains(&x) {
+            continue;
+        }
+        let Some(m) = m.as_i64() else {
+            return Ok(None);
+        };
+        let roots = ev.eval(&call(
+            Symbol::SOLVE,
+            vec![
+                Expr::call(Symbol::EQUATION, [g.clone(), Expr::from(0)]),
+                x.clone(),
+            ],
+        ))?;
+        if !is_list(&roots) {
             return Ok(None);
         }
-        for item in factors.args() {
-            let [g, m] = item.args() else {
-                return Ok(None);
-            };
-            if !g.contains(&x) {
-                continue;
-            }
-            let Some(m) = m.as_i64() else {
-                return Ok(None);
-            };
-            let roots = ev.eval(&call(
-                Symbol::SOLVE,
-                vec![
-                    Expr::call(Symbol::EQUATION, [g.clone(), Expr::from(0)]),
-                    x.clone(),
-                ],
-            ))?;
-            if !is_list(&roots) {
-                return Ok(None);
-            }
-            for r in roots.args() {
-                pairs.push((r.clone(), sign * m, r.to_rational()));
-            }
+        for r in roots.args() {
+            pairs.push((r.clone(), m, r.to_rational()));
         }
     }
     // The roots before the poles, as giac's; each part's rational ones
@@ -370,6 +367,10 @@ fn variable(args: &[Expr], n: usize) -> Option<Expr> {
 
 /// `p` over ℚ in `x`.
 fn over_q(ev: &mut Eval<'_>, e: &Expr, p: &Expr, x: &Expr) -> Result<Option<Poly>, EvalError> {
+    // A constant, which `polynomial` refuses (no generator).
+    if let Some(q) = p.to_rational() {
+        return Ok(Some(DenseRing::new(Rationals).poly(vec![q])));
+    }
     polynomial(ev, e, p, x)
 }
 
@@ -642,7 +643,9 @@ pub(in crate::native) fn digit_polynomial(ev: &mut Eval<'_>, e: &Expr) -> Native
     ) else {
         return Ok(None);
     };
-    if x.as_symbol().is_none() {
+    // Base 2's digits 0 and 1 write no negative number (giac runs out of
+    // memory on `genpoly(-5,2,x)`).
+    if x.as_symbol().is_none() || (b == Integer::from(2) && n < Integer::ZERO) {
         return Ok(None);
     }
     let mut digits = Vec::new();

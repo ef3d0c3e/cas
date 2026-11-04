@@ -90,13 +90,18 @@ fn roots(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
             Integer::from(c[c.len() - 1 - k]),
             Integer::from(lead),
         ));
-        let gap = Expr::call(Symbol::ABS, [b.clone() - want]);
-        let small = Expr::call(Symbol::LESS, [gap, Expr::from(10).pow(-8)]);
-        assert_eq!(
-            eval(ctx, &small),
-            Expr::from(Symbol::TRUE),
-            "the roots {found:?} of {p:?} give {back:?}"
-        );
+        // Real and imaginary parts apart: the modulus of a complex ball
+        // about 0 may not be decided.
+        let gap = b.clone() - want;
+        for part in [Symbol::RE, Symbol::IM] {
+            let size = Expr::call(Symbol::ABS, [Expr::call(part, [gap.clone()])]);
+            let small = Expr::call(Symbol::LESS, [size, Expr::from(10).pow(-8)]);
+            assert_eq!(
+                eval(ctx, &small),
+                Expr::from(Symbol::TRUE),
+                "the roots {found:?} of {p:?} give {back:?}"
+            );
+        }
     }
     // Horner's value, and Taylor shifts back.
     let a = Rational::new(
@@ -238,8 +243,9 @@ fn euclid(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
 }
 
 fn digits_and_recurrences(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
-    let n = u.int_in_range(-100_000..=100_000i64)?;
     let b = u.int_in_range(2..=16i64)?;
+    // Base 2 writes no negative number: the call stays.
+    let n = u.int_in_range(if b == 2 { 0 } else { -100_000 }..=100_000i64)?;
     let p = eval(
         ctx,
         &call(

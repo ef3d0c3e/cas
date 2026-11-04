@@ -230,21 +230,20 @@ fn bits(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
 /// Whether `|a − b| < 10⁻⁸` by the CAS's balls, `b` exact: no `N`, whose
 /// precision loop finds no relative accuracy in a difference near 0.
 fn near(ctx: &Context, a: &Expr, b: &Expr) -> bool {
-    let gap = Expr::call(
-        Symbol::ABS,
-        [Expr::call(
-            Symbol::PLUS,
-            [a.clone(), Expr::from(-1) * b.clone()],
-        )],
-    );
-    let small = Expr::call(
-        Symbol::LESS,
-        [
-            gap,
-            Expr::call(Symbol::POWER, [Expr::from(10), Expr::from(-8)]),
-        ],
-    );
-    eval(ctx, &small) == Expr::from(Symbol::TRUE)
+    let gap = Expr::call(Symbol::PLUS, [a.clone(), Expr::from(-1) * b.clone()]);
+    // Real and imaginary parts apart: the modulus of a complex ball about
+    // 0 may not be decided.
+    [Symbol::RE, Symbol::IM].into_iter().all(|part| {
+        let size = Expr::call(Symbol::ABS, [Expr::call(part, [gap.clone()])]);
+        let small = Expr::call(
+            Symbol::LESS,
+            [
+                size,
+                Expr::call(Symbol::POWER, [Expr::from(10), Expr::from(-8)]),
+            ],
+        );
+        eval(ctx, &small) == Expr::from(Symbol::TRUE)
+    })
 }
 
 fn transforms(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {

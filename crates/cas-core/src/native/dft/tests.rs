@@ -21,15 +21,14 @@ fn check_near(cases: &[(&str, &str)]) {
             .unwrap();
         let near = found.args().len() == expected.args().len()
             && found.args().iter().zip(expected.args()).all(|(f, x)| {
-                let gap = Expr::call(
-                    Symbol::ABS,
-                    [Expr::call(
-                        Symbol::PLUS,
-                        [f.clone(), Expr::from(-1) * x.clone()],
-                    )],
-                );
-                let small = Expr::call(Symbol::LESS, [gap, read("Power[10, -12]")]);
-                ctx.eval(&small).ok().and_then(|t| t.as_symbol()) == Some(Symbol::TRUE)
+                // Real and imaginary parts apart: the modulus of a complex
+                // ball about 0 may not be decided.
+                let gap = Expr::call(Symbol::PLUS, [f.clone(), Expr::from(-1) * x.clone()]);
+                [Symbol::RE, Symbol::IM].into_iter().all(|part| {
+                    let size = Expr::call(Symbol::ABS, [Expr::call(part, [gap.clone()])]);
+                    let small = Expr::call(Symbol::LESS, [size, read("Power[10, -12]")]);
+                    ctx.eval(&small).ok().and_then(|t| t.as_symbol()) == Some(Symbol::TRUE)
+                })
             });
         if !near || found.head() != Some(&Expr::from(Symbol::LIST)) {
             wrong.push(format!("{input}: {found:?}, expected {expected:?}"));
@@ -83,7 +82,7 @@ fn numeric() {
         // A delta at 1 of length 8: ω^k = e^(−πik/4).
         (
             "DiscreteFourierTransform[List[0, 1, 0, 0, 0, 0, 0, 0]]",
-            "Table[Power[E, Times[-1/4, Pi, I, k]], List[k, 0, 7]]",
+            "Table[Power[E, Times[-1/4, Pi, I, k]], k, 0, 7]",
         ),
     ]);
     check(&[(

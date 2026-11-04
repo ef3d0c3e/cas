@@ -1,6 +1,6 @@
 //! Polynomial tools II against giac (CAS-DOC-48 §5, CAS-PLAN-42): giac's
-//! answers read back are this CAS's by value (their difference expands to
-//! 0); `proot`'s decimals within 10⁻¹¹ as a list; `abcuv` and `pade` by
+//! answers read back are this CAS's by value (their difference over one
+//! denominator is 0); `proot`'s decimals within 10⁻¹¹ as a list; `abcuv` and `pade` by
 //! their identities where giac's normalization differs (giac's `u` is not
 //! always reduced modulo `b`).
 
@@ -26,12 +26,13 @@ fn leaves(e: &Expr) -> Vec<Expr> {
 }
 
 /// Whether two answers are one value, entry by entry: the difference
-/// expands to 0, or within 10⁻¹¹ by balls.
+/// put over one denominator is 0 (giac's `pade` scales numerator and
+/// denominator), or within 10⁻¹¹ by balls.
 fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     let (a, b) = (leaves(a), leaves(b));
     a.len() == b.len()
         && a.iter().zip(&b).all(|(x, y)| {
-            let difference = Expr::call(Symbol::EXPAND, [x.clone() - y.clone()]);
+            let difference = Expr::call(Symbol::TOGETHER, [x.clone() - y.clone()]);
             if ctx.eval(&difference).is_ok_and(|d| d == Expr::from(0)) {
                 return true;
             }

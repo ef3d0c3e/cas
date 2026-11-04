@@ -30,6 +30,23 @@ fn check(inputs: &[&str]) {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// giac's sequence answers to `inputs`, bracketed to be read as lists,
+/// are this CAS's.
+fn check_sequences(inputs: &[&str]) {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let wrong: Vec<String> = inputs
+        .iter()
+        .filter_map(|input| {
+            giac.answers(&format!("[{input}]"), input)
+                .err()
+                .map(|e| e.to_string())
+        })
+        .collect();
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 /// The entries of nested lists, in order.
 fn leaves(e: &Expr) -> Vec<Expr> {
     if e.head() == Some(&Expr::from(Symbol::LIST)) {
@@ -89,8 +106,8 @@ fn check_near(inputs: &[&str]) {
 /// Hessenberg forms and constructions (CAS-476).
 #[test]
 fn forms_and_constructions() {
+    check_sequences(&["hessenberg([[1,2,3],[4,5,6],[7,8,10]])"]);
     check(&[
-        "hessenberg([[1,2,3],[4,5,6],[7,8,10]])",
         "companion(x^3+2*x+5,x)",
         "companion(2*x^2+3,x)",
         "sylvester(x^2+1,x+2,x)",
@@ -127,9 +144,8 @@ fn forms_and_constructions() {
 /// `L D Lᵀ`, positive definiteness, inertia (CAS-477).
 #[test]
 fn symmetric_matrices() {
+    check_sequences(&["ldl([[4,2,1],[2,3,1],[1,1,5]])", "ldl([[2,1],[1,2]])"]);
     check(&[
-        "ldl([[4,2,1],[2,3,1],[1,1,5]])",
-        "ldl([[2,1],[1,2]])",
         "isposdef([[2,1],[1,2]])",
         "isposdef([[2,-1,0],[-1,2,-1],[0,-1,2]])",
         "inertia([[1,0],[0,-1]])",

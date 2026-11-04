@@ -45,8 +45,16 @@ const MAX_CLOSED: u64 = 20;
 fn split(args: &[Expr], n: usize) -> Option<(&[Expr], bool)> {
     match args.len() {
         k if k == n => Some((args, false)),
-        k if k == n + 1 && args[n] == Expr::from(1) => Some((&args[..n], true)),
+        k if k == n + 1 && is_one(&args[n]) => Some((&args[..n], true)),
         _ => None,
+    }
+}
+
+/// Whether `e` is 1: the integer, or the exact ball `N` makes of it.
+fn is_one(e: &Expr) -> bool {
+    match e.view() {
+        crate::expr::View::Ball(b) => b.is_exact() && b.contains_rational(&Rational::ONE),
+        _ => *e == Expr::from(1),
     }
 }
 
