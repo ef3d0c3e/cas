@@ -6,7 +6,10 @@
 //!   and `sec v` among them;
 //! - rational functions of `x` and `(a x + b)^(1/n)`, `n` 2 or 3;
 //! - `x^j q^(k/2)`, `k` odd, for a quadratic `q` whose leading coefficient
-//!   or constant is a square, or whose roots are rational.
+//!   or constant is a square, or whose roots are rational;
+//! - `x^a e^(−c x)` and `x^a (1 − x)^b` for fractional `a > −1` and `b`
+//!   (CAS-DOC-49 §4, CAS-489), into `LowerGamma` and `Beta`; the first's
+//!   integral over `[0, ∞)` against `Γ(a + 1)/c^(a + 1)`.
 //!
 //! An antiderivative that comes back whole has the integrand as its
 //! derivative at three points where both are real, by overlap of balls; a
@@ -135,12 +138,59 @@ fn value(ctx: &Context, e: &Expr, p: &Expr) -> Option<Ball> {
     }
 }
 
+/// A fraction `p/q > −1` that is no integer, `q` in 2..=4.
+fn fraction(u: &mut Unstructured<'_>) -> Result<Rational> {
+    let d = u.int_in_range(2..=4i64)?;
+    let mut n = u.int_in_range(1 - d..=4 * d)?;
+    if n % d == 0 {
+        n += 1;
+    }
+    Ok(q(n, d))
+}
+
+/// `x^a e^(−c x)` with its integral over `[0, ∞)`, or `x^a (1 − x)^b`.
+fn incomplete(ctx: &Context, u: &mut Unstructured<'_>) -> Result<Expr> {
+    let a = fraction(u)?;
+    if u.arbitrary()? {
+        let c = q(u.int_in_range(1..=6i64)?, u.int_in_range(1..=2i64)?);
+        let integrand = x().pow(Expr::from(a.clone()))
+            * Expr::from(Symbol::E).pow(-(Expr::from(c.clone()) * x()));
+        // Γ(a + 1)/c^(a + 1).
+        let a1 = Expr::from(a) + Expr::from(1);
+        let expected = Expr::call(Symbol::GAMMA, [a1.clone()]) / Expr::from(c).pow(a1);
+        let call = Expr::call(
+            Symbol::INTEGRATE,
+            [
+                integrand.clone(),
+                Expr::call(
+                    Symbol::LIST,
+                    [x(), Expr::from(0), Expr::from(Symbol::INFINITY)],
+                ),
+            ],
+        );
+        let found = ctx.eval(&call).unwrap_or_else(|e| panic!("{call:?}: {e}"));
+        if !found.contains(&Expr::from(Symbol::INTEGRATE)) {
+            let numeric = |e: Expr| ctx.eval(&Expr::call(Symbol::N, [e, Expr::from(30)])).ok();
+            if let (Some(g), Some(w)) = (numeric(found.clone()), numeric(expected.clone()))
+                && let (View::Ball(g), View::Ball(w)) = (g.view(), w.view())
+            {
+                assert!(g.overlaps(w), "{call:?} is {found:?}, not {expected:?}");
+            }
+        }
+        Ok(integrand)
+    } else {
+        let b = fraction(u)?;
+        Ok(x().pow(Expr::from(a)) * (Expr::from(1) - x()).pow(Expr::from(b)))
+    }
+}
+
 fn run(u: &mut Unstructured<'_>) -> Result<()> {
     let ctx = Context::new();
-    let integrand = match u.int_in_range(0u8..=3)? {
+    let integrand = match u.int_in_range(0u8..=4)? {
         0 => exponential(u)?,
         1 => trigonometric(u)?,
         2 => root(u)?,
+        3 => incomplete(&ctx, u)?,
         _ => euler(u)?,
     };
     let integrand = ctx.eval(&integrand).unwrap_or_else(|e| panic!("{e}"));
