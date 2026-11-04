@@ -367,3 +367,10 @@ path = "fuzz_targets/modular.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "modular_matrices"
+path = "fuzz_targets/modular_matrices.rs"
+test = false
+doc = false
+bench = false
