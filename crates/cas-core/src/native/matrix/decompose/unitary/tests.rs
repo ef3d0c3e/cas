@@ -273,3 +273,49 @@ fn ball_matrices() {
         "{found:?}"
     );
 }
+
+/// The SVD of the ball `[[-5.]]` (fuzz `decompositions_three`): each step
+/// on its own, the first that errs named.
+#[test]
+fn ball_singular_value_steps() {
+    let ctx = Context::new();
+    let a = eval(&ctx, &read("N[List[List[-5]], 30]"));
+    let gram = dot(&adjoint(&a), &a);
+    let steps = [
+        ("gram", gram.clone()),
+        (
+            "Eigenvalues",
+            Expr::call(Symbol::EIGENVALUES, [gram.clone()]),
+        ),
+        (
+            "Eigenvectors",
+            Expr::call(Symbol::EIGENVECTORS, [gram.clone()]),
+        ),
+        (
+            "Jordan",
+            Expr::call(Symbol::JORDAN_DECOMPOSITION, [gram.clone()]),
+        ),
+        (
+            "NullSpace",
+            Expr::call(
+                Symbol::NULL_SPACE,
+                [gram.clone() - read("List[List[Times[25, 1.]]]")],
+            ),
+        ),
+        ("GramSchmidt", Expr::call(Symbol::GRAM_SCHMIDT, [a.clone()])),
+        ("Sqrt", Expr::call(Symbol::SQRT, [read("N[25, 30]")])),
+        (
+            "SVD",
+            Expr::call(Symbol::SINGULAR_VALUE_DECOMPOSITION, [a.clone()]),
+        ),
+    ];
+    let mut report = Vec::new();
+    for (name, e) in steps {
+        report.push(format!("{name}: {:?}", ctx.eval(&e)));
+    }
+    assert!(
+        report.iter().all(|r| !r.contains("Err")),
+        "{}",
+        report.join("\n")
+    );
+}
