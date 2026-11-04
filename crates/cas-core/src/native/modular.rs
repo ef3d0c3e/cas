@@ -7,8 +7,8 @@
 //!   expanded and each rational coefficient reduced so, the terms that
 //!   vanish dropped: `Modular[(x + 1)^5, 5]` is `Modular[x^5 + 1, 5]`. A
 //!   modular value of the same modulus inside goes; of another, the call
-//!   stays. An equation is the equation of its sides' values (CAS-DOC-44
-//!   §3, CAS-458).
+//!   stays. An equation is the equation of its sides' values, and a list
+//!   the list of its entries' (CAS-DOC-44 §1, §3).
 //! - **Arithmetic** (§3): in `Plus` and `Times`, a modular argument takes
 //!   in the others, `Modular[a, n] + b` being `Modular[a + b, n]`, so that
 //!   giac's `(1 % 3)*x^2+(1 % 3)` reads back as one value; two moduli
@@ -107,6 +107,13 @@ pub(super) fn modular_value(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some((a, n)) = parts(e) else {
         return Ok(None);
     };
+    // A list modulo n is the list of its entries modulo n, as giac's
+    // `[[1,2],[3,4]] % 7` (CAS-DOC-44 §1): `Listable` would want `n` a list
+    // too.
+    if a.head().and_then(Expr::as_symbol) == Some(Symbol::LIST) {
+        let entries = a.args().iter().map(|x| modular(x.clone(), &n));
+        return Ok(Some(Expr::call(Symbol::LIST, entries.collect::<Vec<_>>())));
+    }
     // An equation modulo n is one of its sides modulo n (CAS-DOC-44 §3),
     // as giac's `[x+2*y=1,3*x+4*y=2] % 7`.
     if a.head().and_then(Expr::as_symbol) == Some(Symbol::EQUATION)

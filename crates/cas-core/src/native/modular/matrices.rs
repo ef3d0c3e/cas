@@ -1,6 +1,6 @@
 //! Matrices over `ℤ/nℤ` (CAS-DOC-44 §2): a matrix whose entries are
 //! modular numbers of one modulus `n`, integers and rationals taken in, as
-//! `[[1,2],[3,4]] % 7` is (`Modular` is `Listable`).
+//! `[[1,2],[3,4]] % 7` is (`Modular` maps over a list).
 //!
 //! - `Det` and `CharacteristicPolynomial` (CAS-457), any `n`: the integer
 //!   matrix of the symmetric residues has them over `ℤ`, exactly, by the
