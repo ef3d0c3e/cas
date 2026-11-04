@@ -57,14 +57,18 @@ fn forms() {
             ],
         );
     }
-    // Off the cuts: past −1 the evaluator's `ArcSin[-u] = -ArcSin[u]`
-    // takes the other side of the cut than the balls do (CAS-406).
+    // On the cuts too, y = 7/3: the balls' counter-clockwise continuity
+    // keeps `ArcSin[-u] = -ArcSin[u]`, which the evaluator applies (CAS-406).
     for f in ["ArcCosToArcSin", "ArcSinToArcCos"] {
         check_values(
             f,
             &[
                 "ArcSin[x]",
                 "ArcCos[Times[-1, x]]",
+                "ArcSin[y]",
+                "ArcSin[Times[-1, y]]",
+                "ArcCos[y]",
+                "ArcCos[Times[-1, y]]",
                 "Plus[ArcSin[Times[1/3, y]], Times[2, ArcCos[Times[1/3, y]]]]",
                 "ArcCos[Times[-1/3, y]]",
             ],
@@ -76,11 +80,15 @@ fn forms() {
             &["ArcTan[x]", "ArcTan[Times[-1, y]]", "Times[y, ArcTan[y]]"],
         );
     }
-    // Off the branch cuts: asin and acos on [−1, 1], atan on the real line.
+    // asin and acos on [−1, 1] and on their cuts, atan on the real line.
     check_values(
         "ArcTrigToLog",
         &[
             "ArcSin[x]",
+            "ArcSin[y]",
+            "ArcSin[Times[-1, y]]",
+            "ArcCos[y]",
+            "ArcCos[Times[-1, y]]",
             "ArcSin[Times[-1/3, y]]",
             "ArcCos[x]",
             "ArcCos[Times[-1/3, y]]",

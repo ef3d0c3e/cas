@@ -12,9 +12,11 @@
 //! - `ArcTrigToLog`: `asin u = −i ln(i u + √(1 − u²))`, `acos u = π/2 + i
 //!   ln(i u + √(1 − u²))` and `atan u = (i/2) ln((i + u)/(i − u))`, the
 //!   principal branches' logarithmic forms (DLMF 4.23(iv)). They agree off
-//!   the branch cuts; on a cut, where this CAS takes the side above it, a
-//!   composition of principal functions can take the other: `asin(7/3)` is
-//!   `π/2 + i acosh(7/3)`, its logarithmic form `π/2 − i acosh(7/3)`. giac's
+//!   the branch cuts, and for `asin` and `acos` on them too, where this CAS
+//!   takes the side of counter-clockwise continuity (CAS-406): `asin(7/3)`
+//!   and its logarithmic form are both `π/2 − i acosh(7/3)`. On `atan`'s
+//!   cuts the form takes the logarithm's side, `atan(2i)` is `π/2 + i
+//!   atanh(1/2)` and its form `−π/2 + i atanh(1/2)`. giac's
 //!   `atrig2ln(asin(x))` is `i*ln(x+sqrt(x^2-1))+pi/2`, the same on `[−1,
 //!   1]`.
 //!
