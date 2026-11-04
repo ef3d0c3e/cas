@@ -217,6 +217,9 @@ builtins! {
     COMPANION_MATRIX = "CompanionMatrix" [PROTECTED];
     SYLVESTER_MATRIX = "SylvesterMatrix" [PROTECTED];
     HADAMARD_PRODUCT = "HadamardProduct" [PROTECTED];
+    LDL_DECOMPOSITION = "LDLDecomposition" [PROTECTED];
+    POSITIVE_DEFINITE_Q = "PositiveDefiniteQ" [PROTECTED];
+    INERTIA = "Inertia" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];

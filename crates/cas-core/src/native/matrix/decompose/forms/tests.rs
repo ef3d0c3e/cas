@@ -84,3 +84,40 @@ fn constructions() {
         ),
     ]);
 }
+
+/// `L D Lᵀ`, positive definiteness and inertia (CAS-477).
+#[test]
+fn symmetric_matrices() {
+    check(&[
+        // giac's [0,1,2], [[1,0,0],[1/2,1,0],[1/4,1/4,1]], diag(4, 2, 37/8).
+        (
+            "LDLDecomposition[List[List[4, 2, 1], List[2, 3, 1], List[1, 1, 5]]]",
+            "List[List[0, 1, 2], List[List[1, 0, 0], List[1/2, 1, 0], List[1/4, 1/4, 1]], \
+             List[List[4, 0, 0], List[0, 2, 0], List[0, 0, 37/8]]]",
+        ),
+        // A zero pivot with an entry below: giac's 2 × 2 block, here the call.
+        (
+            "LDLDecomposition[List[List[0, 1], List[1, 0]]]",
+            "LDLDecomposition[List[List[0, 1], List[1, 0]]]",
+        ),
+        // giac's true, and true for [[1,2],[2,1]], whose eigenvalues are 3
+        // and −1: False here.
+        ("PositiveDefiniteQ[List[List[2, 1], List[1, 2]]]", "True"),
+        ("PositiveDefiniteQ[List[List[1, 2], List[2, 1]]]", "False"),
+        ("PositiveDefiniteQ[List[List[1, 2], List[3, 4]]]", "False"),
+        ("PositiveDefiniteQ[List[List[0, 0], List[0, 1]]]", "False"),
+        (
+            "PositiveDefiniteQ[List[List[a, 0], List[0, 1]]]",
+            "PositiveDefiniteQ[List[List[a, 0], List[0, 1]]]",
+        ),
+        // giac's [1,1,0] twice; eigenvalues 2 and 0; the zero matrix.
+        ("Inertia[List[List[1, 0], List[0, -1]]]", "List[1, 1, 0]"),
+        ("Inertia[List[List[1, 2], List[2, 1]]]", "List[1, 1, 0]"),
+        ("Inertia[List[List[1, 1], List[1, 1]]]", "List[1, 0, 1]"),
+        ("Inertia[List[List[0, 0], List[0, 0]]]", "List[0, 0, 2]"),
+        (
+            "Inertia[List[List[2, -1, 0], List[-1, 2, -1], List[0, -1, 2]]]",
+            "List[3, 0, 0]",
+        ),
+    ]);
+}

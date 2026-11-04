@@ -352,6 +352,15 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::HADAMARD_PRODUCT,
             matrix::decompose::forms::hadamard_product,
         ),
+        (
+            Symbol::LDL_DECOMPOSITION,
+            matrix::decompose::forms::ldl_decomposition,
+        ),
+        (
+            Symbol::POSITIVE_DEFINITE_Q,
+            matrix::decompose::forms::positive_definite_q,
+        ),
+        (Symbol::INERTIA, matrix::decompose::forms::inertia),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),

@@ -186,6 +186,9 @@ HessenbergDecomposition: hessenberg
 CompanionMatrix: companion
 SylvesterMatrix: sylvester
 HadamardProduct: hadamard
+LDLDecomposition: ldl
+PositiveDefiniteQ: isposdef
+Inertia: inertia
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime
