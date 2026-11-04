@@ -23,15 +23,22 @@
 //!   depend on others go: the lattice's basis is then the Hermite form's
 //!   rows that are not 0, reduced in turn.
 //!
-//! The matrices are rectangular, of integers; anything else leaves the
-//! call.
+//! - `SmithDecomposition[A]` over ℚ\[x\] (CAS-DOC-51 §6, CAS-500), Xcas's
+//!   `smith`: entries polynomials over ℚ in one variable, the same
+//!   elimination with the Euclidean division of ℚ\[x\], each `dᵢ` monic;
+//!   giac's `smith([[x,1],[0,x]])` has `D = [[1,0],[0,-x²]]`, ours `x²`.
+//!
+//! The matrices are rectangular, of integers (or for Smith's form of
+//! polynomials in one variable); anything else leaves the call.
 
 #![allow(
     clippy::many_single_char_names,
     reason = "the names of matrix algebra: U A V = S, rows r and k, s a + t b = g"
 )]
 
-use cas_num::{Integer, Rational};
+use cas_num::algebra::{EuclideanDomain, Rationals, Ring};
+use cas_num::{Integer, Natural, Rational};
+use cas_poly::{Dense, DenseRing};
 
 use crate::context::EvalError;
 use crate::eval::Eval;
@@ -85,15 +92,6 @@ fn combine_rows(m: &mut Matrix, r: usize, k: usize, [s, t, u, v]: [&Integer; 4])
         let (a, b) = (m[r][j].clone(), m[k][j].clone());
         m[r][j] = &(s * &a) + &(t * &b);
         m[k][j] = &(u * &a) + &(v * &b);
-    }
-}
-
-/// Columns `c` and `k` of `m` replaced by `s c + t k` and `u c + v k`.
-fn combine_columns(m: &mut Matrix, c: usize, k: usize, [s, t, u, v]: [&Integer; 4]) {
-    for row in m.iter_mut() {
-        let (a, b) = (row[c].clone(), row[k].clone());
-        row[c] = &(s * &a) + &(t * &b);
-        row[k] = &(u * &a) + &(v * &b);
     }
 }
 
@@ -179,16 +177,134 @@ pub(super) fn hermite_decomposition(ev: &mut Eval<'_>, e: &Expr) -> Native {
     Ok(Some(result))
 }
 
+/// A Euclidean domain for Smith's form: ℤ, or ℚ\[x\] (CAS-DOC-51 §6).
+trait Domain {
+    type E: Clone;
+    fn zero(&self) -> Self::E;
+    fn one(&self) -> Self::E;
+    fn is_zero(&self, a: &Self::E) -> bool;
+    fn add(&self, a: &Self::E, b: &Self::E) -> Self::E;
+    fn mul(&self, a: &Self::E, b: &Self::E) -> Self::E;
+    /// The unimodular `[s, t, u, v]` taking `(a, b)` to `(g, 0)`.
+    fn step(&self, a: &Self::E, b: &Self::E) -> [Self::E; 4];
+    /// Whether `a ≠ 0` divides `b`.
+    fn divides(&self, a: &Self::E, b: &Self::E) -> bool;
+    /// `a`'s size in the Euclidean function: `|a|`, or the degree.
+    fn size(&self, a: &Self::E) -> Natural;
+    /// The unit `u` making `a u` canonical: `a`'s sign, or `1/lc(a)`.
+    fn unit(&self, a: &Self::E) -> Self::E;
+}
+
+/// The integers, with GMP's cofactors as [`step`] fixes them.
+struct Z;
+
+impl Domain for Z {
+    type E = Integer;
+    fn zero(&self) -> Integer {
+        Integer::ZERO
+    }
+    fn one(&self) -> Integer {
+        Integer::ONE
+    }
+    fn is_zero(&self, a: &Integer) -> bool {
+        a.is_zero()
+    }
+    fn add(&self, a: &Integer, b: &Integer) -> Integer {
+        a + b
+    }
+    fn mul(&self, a: &Integer, b: &Integer) -> Integer {
+        a * b
+    }
+    fn step(&self, a: &Integer, b: &Integer) -> [Integer; 4] {
+        step(a, b)
+    }
+    fn divides(&self, a: &Integer, b: &Integer) -> bool {
+        b.div_rem_euclid(a).1.is_zero()
+    }
+    fn size(&self, a: &Integer) -> Natural {
+        a.unsigned_abs()
+    }
+    fn unit(&self, a: &Integer) -> Integer {
+        if a.is_negative() {
+            -Integer::ONE
+        } else {
+            Integer::ONE
+        }
+    }
+}
+
+/// ℚ\[x\]: monic gcds by the extended Euclidean algorithm.
+struct Qx(DenseRing<Rationals>);
+
+impl Domain for Qx {
+    type E = Dense<Rational>;
+    fn zero(&self) -> Dense<Rational> {
+        self.0.zero()
+    }
+    fn one(&self) -> Dense<Rational> {
+        self.0.one()
+    }
+    fn is_zero(&self, a: &Dense<Rational>) -> bool {
+        a.is_zero()
+    }
+    fn add(&self, a: &Dense<Rational>, b: &Dense<Rational>) -> Dense<Rational> {
+        self.0.add(a, b)
+    }
+    fn mul(&self, a: &Dense<Rational>, b: &Dense<Rational>) -> Dense<Rational> {
+        self.0.mul(a, b)
+    }
+    fn step(&self, a: &Dense<Rational>, b: &Dense<Rational>) -> [Dense<Rational>; 4] {
+        let ring = &self.0;
+        let quo = |x: &Dense<Rational>, y: &Dense<Rational>| ring.div_rem(x, y).0;
+        if !a.is_zero() && self.divides(a, b) {
+            // `a`'s row stays but for a unit, as in ℤ.
+            let (g, u) = ring.normal_form(a);
+            return [u, ring.zero(), ring.neg(&quo(b, &g)), quo(a, &g)];
+        }
+        let (g, s, t) = EuclideanDomain::gcd_ext(ring, a, b);
+        [s, t, ring.neg(&quo(b, &g)), quo(a, &g)]
+    }
+    fn divides(&self, a: &Dense<Rational>, b: &Dense<Rational>) -> bool {
+        self.0.div_rem(b, a).1.is_zero()
+    }
+    fn size(&self, a: &Dense<Rational>) -> Natural {
+        Natural::from(a.degree().map_or(0, |d| d as u64))
+    }
+    fn unit(&self, a: &Dense<Rational>) -> Dense<Rational> {
+        self.0.normal_form(a).1
+    }
+}
+
+/// Rows `r` and `k` of `m` replaced by `s r + t k` and `u r + v k`.
+fn combine_rows_in<D: Domain>(d: &D, m: &mut [Vec<D::E>], r: usize, k: usize, ops: &[D::E; 4]) {
+    let [s, t, u, v] = ops;
+    for j in 0..m[r].len() {
+        let (a, b) = (m[r][j].clone(), m[k][j].clone());
+        m[r][j] = d.add(&d.mul(s, &a), &d.mul(t, &b));
+        m[k][j] = d.add(&d.mul(u, &a), &d.mul(v, &b));
+    }
+}
+
+/// Columns `c` and `k` of `m` replaced by `s c + t k` and `u c + v k`.
+fn combine_columns_in<D: Domain>(d: &D, m: &mut [Vec<D::E>], c: usize, k: usize, ops: &[D::E; 4]) {
+    let [s, t, u, v] = ops;
+    for row in m.iter_mut() {
+        let (a, b) = (row[c].clone(), row[k].clone());
+        row[c] = d.add(&d.mul(s, &a), &d.mul(t, &b));
+        row[k] = d.add(&d.mul(u, &a), &d.mul(v, &b));
+    }
+}
+
 /// The Smith form of `s` in place, `u` and `v` along.
-fn smith(s: &mut Matrix, u: &mut Matrix, v: &mut Matrix) {
+fn smith<D: Domain>(d: &D, s: &mut [Vec<D::E>], u: &mut [Vec<D::E>], v: &mut [Vec<D::E>]) {
     let (m, n) = (s.len(), s[0].len());
     for t in 0..m.min(n) {
         loop {
             // The least nonzero entry of the block to the corner.
             let least = (t..m)
                 .flat_map(|i| (t..n).map(move |j| (i, j)))
-                .filter(|&(i, j)| !s[i][j].is_zero())
-                .min_by(|&(a, b), &(c, d)| s[a][b].unsigned_abs().cmp(&s[c][d].unsigned_abs()));
+                .filter(|&(i, j)| !d.is_zero(&s[i][j]))
+                .min_by_key(|&(i, j)| d.size(&s[i][j]));
             let Some((i, j)) = least else {
                 return;
             };
@@ -201,60 +317,173 @@ fn smith(s: &mut Matrix, u: &mut Matrix, v: &mut Matrix) {
             let mut clear = false;
             while !clear {
                 for k in t + 1..m {
-                    if !s[k][t].is_zero() {
-                        let ops = step(&s[t][t], &s[k][t]);
-                        let refs = [&ops[0], &ops[1], &ops[2], &ops[3]];
-                        combine_rows(s, t, k, refs);
-                        combine_rows(u, t, k, refs);
+                    if !d.is_zero(&s[k][t]) {
+                        let ops = d.step(&s[t][t], &s[k][t]);
+                        combine_rows_in(d, s, t, k, &ops);
+                        combine_rows_in(d, u, t, k, &ops);
                     }
                 }
                 for k in t + 1..n {
-                    if !s[t][k].is_zero() {
-                        let ops = step(&s[t][t], &s[t][k]);
-                        let refs = [&ops[0], &ops[1], &ops[2], &ops[3]];
-                        combine_columns(s, t, k, refs);
-                        combine_columns(v, t, k, refs);
+                    if !d.is_zero(&s[t][k]) {
+                        let ops = d.step(&s[t][t], &s[t][k]);
+                        combine_columns_in(d, s, t, k, &ops);
+                        combine_columns_in(d, v, t, k, &ops);
                     }
                 }
-                clear = (t + 1..m).all(|k| s[k][t].is_zero());
+                clear = (t + 1..m).all(|k| d.is_zero(&s[k][t]));
             }
             // A row whose entry the corner does not divide goes into its row.
             let corner = s[t][t].clone();
-            let rest = (t + 1..m)
-                .find(|&k| (t + 1..n).any(|j| !s[k][j].div_rem_euclid(&corner).1.is_zero()));
+            let rest = (t + 1..m).find(|&k| (t + 1..n).any(|j| !d.divides(&corner, &s[k][j])));
             match rest {
                 Some(k) => {
-                    let one = Integer::ONE;
-                    let zero = Integer::ZERO;
-                    combine_rows(s, t, k, [&one, &one, &zero, &one]);
-                    combine_rows(u, t, k, [&one, &one, &zero, &one]);
+                    let ops = [d.one(), d.one(), d.zero(), d.one()];
+                    combine_rows_in(d, s, t, k, &ops);
+                    combine_rows_in(d, u, t, k, &ops);
                 }
                 None => break,
             }
         }
-        if s[t][t].is_negative() {
-            for row in [&mut *s, &mut *u] {
-                for x in &mut row[t] {
-                    *x = -x.clone();
-                }
+        let unit = d.unit(&s[t][t]);
+        for row in [&mut *s, &mut *u] {
+            for x in &mut row[t] {
+                *x = d.mul(x, &unit);
             }
         }
     }
 }
 
-/// `SmithDecomposition[A]`.
+/// The only variable of the entries of `a`, none of them a head; `None`
+/// for two or more, or none.
+fn variable(a: &Expr) -> Option<Expr> {
+    fn walk(e: &Expr, found: &mut Vec<Symbol>) {
+        if let Some(s) = e.as_symbol() {
+            if !found.contains(&s) {
+                found.push(s);
+            }
+        }
+        for x in e.args() {
+            walk(x, found);
+        }
+    }
+    let mut found = Vec::new();
+    walk(a, &mut found);
+    match found.as_slice() {
+        [x] => Some(Expr::from(*x)),
+        _ => None,
+    }
+}
+
+/// `a` as a matrix of polynomials over ℚ in `x`, rectangular, from their
+/// coefficient lists.
+fn polynomials(
+    ev: &mut Eval<'_>,
+    ring: &DenseRing<Rationals>,
+    a: &Expr,
+    x: &Expr,
+) -> Result<Option<Vec<Vec<Dense<Rational>>>>, EvalError> {
+    if a.head() != Some(&Expr::from(Symbol::LIST)) || a.args().is_empty() {
+        return Ok(None);
+    }
+    let width = a.args()[0].args().len();
+    let mut rows = Vec::with_capacity(a.args().len());
+    for row in a.args() {
+        if row.head() != Some(&Expr::from(Symbol::LIST)) || row.args().len() != width || width == 0
+        {
+            return Ok(None);
+        }
+        let mut entries = Vec::with_capacity(width);
+        for p in row.args() {
+            let c = ev.eval(&Expr::call(
+                Symbol::COEFFICIENT_LIST,
+                [p.clone(), x.clone()],
+            ))?;
+            if c.head() != Some(&Expr::from(Symbol::LIST)) {
+                return Ok(None);
+            }
+            let Some(mut c) = c
+                .args()
+                .iter()
+                .map(Expr::to_rational)
+                .collect::<Option<Vec<_>>>()
+            else {
+                return Ok(None);
+            };
+            c.reverse();
+            entries.push(ring.poly(c));
+        }
+        rows.push(entries);
+    }
+    Ok(Some(rows))
+}
+
+/// The matrix of the polynomials, in `x`.
+fn polynomial_matrix(m: &[Vec<Dense<Rational>>], x: &Expr) -> Expr {
+    list(
+        m.iter()
+            .map(|row| {
+                list(
+                    row.iter()
+                        .map(|p| {
+                            Expr::call(
+                                Symbol::PLUS,
+                                p.coeffs()
+                                    .iter()
+                                    .enumerate()
+                                    .map(|(k, c)| {
+                                        Expr::from(c.clone())
+                                            * x.clone().pow(i64::try_from(k).expect("small"))
+                                    })
+                                    .collect::<Vec<_>>(),
+                            )
+                        })
+                        .collect(),
+                )
+            })
+            .collect(),
+    )
+}
+
+/// `SmithDecomposition[A]`: over ℤ, or over ℚ\[x\] for entries that are
+/// polynomials in one variable `x` (Xcas's `smith`), the diagonal monic.
 pub(super) fn smith_decomposition(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [a] = e.args() else {
         return Ok(None);
     };
-    let Some(mut s) = integers(a) else {
+    if let Some(mut s) = integers(a) {
+        let mut u = identity(s.len());
+        let mut v = identity(s[0].len());
+        smith(&Z, &mut s, &mut u, &mut v);
+        let result = list(vec![matrix(&u), matrix(&s), matrix(&v)]);
+        ev.step("SmithDecomposition", e, &result);
+        return Ok(Some(result));
+    }
+    let Some(x) = variable(a) else {
         return Ok(None);
     };
-    let mut u = identity(s.len());
-    let mut v = identity(s[0].len());
-    smith(&mut s, &mut u, &mut v);
-    let result = list(vec![matrix(&u), matrix(&s), matrix(&v)]);
-    ev.step("SmithDecomposition", e, &result);
+    let d = Qx(DenseRing::new(Rationals));
+    let Some(mut s) = polynomials(ev, &d.0, a, &x)? else {
+        return Ok(None);
+    };
+    let ident = |n: usize| -> Vec<Vec<Dense<Rational>>> {
+        (0..n)
+            .map(|i| {
+                (0..n)
+                    .map(|j| if i == j { d.one() } else { d.zero() })
+                    .collect()
+            })
+            .collect()
+    };
+    let mut u = ident(s.len());
+    let mut v = ident(s[0].len());
+    smith(&d, &mut s, &mut u, &mut v);
+    let result = list(vec![
+        polynomial_matrix(&u, &x),
+        polynomial_matrix(&s, &x),
+        polynomial_matrix(&v, &x),
+    ]);
+    let result = ev.eval(&result)?;
+    ev.step("smith", e, &result);
     Ok(Some(result))
 }
 

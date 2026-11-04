@@ -117,7 +117,7 @@ InverseLaplaceTransform: ilaplace
 FourierTransform: fourier
 InverseFourierTransform: ifourier
 HermiteDecomposition: ihermite
-SmithDecomposition: ismith
+SmithDecomposition: ismith smith
 LatticeReduce: lll
 # Z-transforms and recurrences (CAS-DOC-24, CAS-308).
 ZTransform: ztrans
@@ -274,7 +274,7 @@ MatrixRank: rank
 NullSpace: ker kernel nullspace
 ColumnSpace: image
 LinSolve: linsolve
-CharacteristicPolynomial: charpoly pcar
+CharacteristicPolynomial: charpoly pcar pcar_hessenberg
 Eigenvalues: eigenvals
 Eigenvectors: eigenvects egv
 # Sums and products (CAS-DOC-13, CAS-224, CAS-225).

@@ -200,3 +200,74 @@ fn what_stays() {
         assert_eq!(ctx.eval(&e).unwrap(), e, "{input}");
     }
 }
+
+/// `x` expanded and put together.
+fn normal(ctx: &Context, x: &Expr) -> Expr {
+    ctx.eval(&Expr::call(
+        Symbol::TOGETHER,
+        [Expr::call(Symbol::EXPAND, [x.clone()])],
+    ))
+    .unwrap()
+}
+
+/// Over ℚ\[x\]: `U A V = S`, `S` the expected (diagonal, monic, each entry
+/// dividing the next), and `U`, `V` of nonzero constant determinants.
+fn check_polynomial_smith(a: &str, s: &str) {
+    let ctx = Context::new();
+    let found = eval(&ctx, &format!("SmithDecomposition[{a}]"));
+    let [u, found_s, v] = found.args() else {
+        panic!("{a}: {found:?}");
+    };
+    let entries = |m: &Expr| -> Vec<Expr> {
+        m.args()
+            .iter()
+            .flat_map(|r| r.args().iter().map(|x| normal(&ctx, x)))
+            .collect()
+    };
+    assert_eq!(
+        entries(found_s),
+        entries(&eval(&ctx, s)),
+        "{a}: S {found_s:?}"
+    );
+    let product = dot(&ctx, &dot(&ctx, u, &read(a)), v);
+    assert_eq!(entries(&product), entries(found_s), "{a}: U A V {found:?}");
+    for m in [u, v] {
+        let d = normal(&ctx, &Expr::call(Symbol::DET, [m.clone()]));
+        assert!(
+            d.to_rational().is_some_and(|q| !q.is_zero()),
+            "{a}: det {m:?} = {d:?}"
+        );
+    }
+}
+
+#[test]
+fn polynomial_smith_forms() {
+    // giac's D = [[1,0],[0,-x²]]: ours monic.
+    check_polynomial_smith(
+        "List[List[x, 1], List[0, x]]",
+        "List[List[1, 0], List[0, Power[x, 2]]]",
+    );
+    // x I − A for a 2 × 2 Jordan block and a diagonal one: the invariant
+    // factors 1, (x − 2)² and x − 1, (x − 1)(x − 2).
+    check_polynomial_smith(
+        "List[List[Plus[x, -2], -1], List[0, Plus[x, -2]]]",
+        "List[List[1, 0], List[0, Power[Plus[x, -2], 2]]]",
+    );
+    check_polynomial_smith(
+        "List[List[Plus[x, -1], 0], List[0, Plus[x, -2]]]",
+        "List[List[1, 0], List[0, Times[Plus[x, -1], Plus[x, -2]]]]",
+    );
+    // Rational coefficients, rectangular, a zero row.
+    check_polynomial_smith(
+        "List[List[Times[1/2, x], Power[x, 2], 0], List[0, 0, 0]]",
+        "List[List[x, 0, 0], List[0, 0, 0]]",
+    );
+    // Two variables, or a non-polynomial entry: the call stays.
+    let ctx = Context::new();
+    for input in [
+        "SmithDecomposition[List[List[x, y], List[0, x]]]",
+        "SmithDecomposition[List[List[Sin[x], 1], List[0, x]]]",
+    ] {
+        assert_eq!(eval(&ctx, input), read(input), "{input}");
+    }
+}
