@@ -395,3 +395,10 @@ path = "fuzz_targets/matrices_two.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "polytools_two"
+path = "fuzz_targets/polytools_two.rs"
+test = false
+doc = false
+bench = false

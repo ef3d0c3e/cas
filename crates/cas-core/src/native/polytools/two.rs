@@ -17,8 +17,10 @@
 //! - **`RootMultiplicities[f]`**: the roots of the numerator and the
 //!   denominator of `f` over ℚ, each followed by its multiplicity, negated
 //!   for a pole: giac's `froot(x^2*(x-3)^3)` is `[0,2,3,3]`. Each
-//!   irreducible factor's roots are `Solve`'s, rational ones first,
-//!   ascending; a factor whose roots `Solve` leaves leaves the call.
+//!   irreducible factor's roots are `Solve`'s, the roots before the poles
+//!   as giac's (`[1,2,-2,-1]` for `(x-1)^2/(x+2)`), rational ones first
+//!   in each, ascending; a factor whose roots `Solve` leaves leaves the
+//!   call.
 //!
 //! Bézout, Chinese remainders and series (§3, CAS-483), over ℚ:
 //!
@@ -221,7 +223,8 @@ pub(in crate::native) fn polynomial_roots_native(ev: &mut Eval<'_>, e: &Expr) ->
     Ok(Some(result))
 }
 
-/// `FromRoots[l]`.
+/// `FromRoots[l]`: the product multiplied out factor by factor, so that
+/// balls among the roots give ball coefficients.
 pub(in crate::native) fn from_roots(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [l] = e.args() else {
         return Ok(None);
@@ -229,18 +232,20 @@ pub(in crate::native) fn from_roots(ev: &mut Eval<'_>, e: &Expr) -> Native {
     if !is_list(l) {
         return Ok(None);
     }
-    let x = Expr::symbol("x");
-    let product = Expr::call(
-        Symbol::TIMES,
-        l.args()
-            .iter()
-            .map(|r| x.clone() - r.clone())
-            .collect::<Vec<_>>(),
-    );
-    let Some(cs) = coefficients(ev, &product, &x)? else {
-        return Ok(None);
-    };
-    let result = Expr::call(Symbol::LIST, cs.into_iter().rev().collect::<Vec<_>>());
+    // From the constant up: (x − r) c(x).
+    let mut c = vec![Expr::from(1)];
+    for r in l.args() {
+        let mut next = vec![Expr::from(0); c.len() + 1];
+        for (k, v) in c.iter().enumerate() {
+            next[k + 1] = next[k + 1].clone() + v.clone();
+            next[k] = next[k].clone() - r.clone() * v.clone();
+        }
+        c = next
+            .into_iter()
+            .map(|v| ev.eval(&call(Symbol::EXPAND, vec![v])))
+            .collect::<Result<_, _>>()?;
+    }
+    let result = Expr::call(Symbol::LIST, c.into_iter().rev().collect::<Vec<_>>());
     ev.step("pcoeff", e, &result);
     Ok(Some(result))
 }
@@ -325,12 +330,15 @@ pub(in crate::native) fn root_multiplicities(ev: &mut Eval<'_>, e: &Expr) -> Nat
             }
         }
     }
-    // Rational roots first, ascending.
-    pairs.sort_by(|a, b| match (&a.2, &b.2) {
-        (Some(p), Some(q)) => p.cmp(q),
-        (Some(_), None) => Ordering::Less,
-        (None, Some(_)) => Ordering::Greater,
-        (None, None) => Ordering::Equal,
+    // The roots before the poles, as giac's; each part's rational ones
+    // first, ascending.
+    pairs.sort_by(|a, b| {
+        (a.1 < 0).cmp(&(b.1 < 0)).then(match (&a.2, &b.2) {
+            (Some(p), Some(q)) => p.cmp(q),
+            (Some(_), None) => Ordering::Less,
+            (None, Some(_)) => Ordering::Greater,
+            (None, None) => Ordering::Equal,
+        })
     });
     let result = Expr::call(
         Symbol::LIST,

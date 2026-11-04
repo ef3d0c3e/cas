@@ -58,7 +58,7 @@ fn roots_and_coefficients() {
         ),
         (
             "RootMultiplicities[Times[Power[Plus[x, -1], 2], Power[Plus[x, 2], -1]]]",
-            "List[-2, -1, 1, 2]",
+            "List[1, 2, -2, -1]",
         ),
         // The names e2r, r2e and ldegree are CoefficientList's,
         // FromCoefficients's and Valuation's.
