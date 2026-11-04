@@ -16,6 +16,7 @@
     reason = "the names of the identities: a = g x, b = g y"
 )]
 
+mod gaussian;
 mod heuristic;
 mod modular;
 mod resultant;
@@ -50,9 +51,11 @@ pub enum GcdMethod {
     /// It can give up.
     Heuristic,
     /// Brown's algorithm \[Bro71\]: over ℤ, images modulo word primes,
-    /// combined by Chinese remaindering; over a prime field, images at
-    /// points of the last variable, combined by interpolation. Over ℚ
-    /// through the numerators.
+    /// combined by Chinese remaindering; over ℤ\[i\], sparse, the same
+    /// modulo word primes `p ≡ 1 (mod 4)` under both maps `i ↦ ±√−1`
+    /// (CAS-494); over a prime field, images at points of the last
+    /// variable, combined by interpolation. Over ℚ and ℚ(i) through the
+    /// numerators.
     Modular,
     /// Subresultant remainder sequences \[BT71, Bro78, Coh93\], in the first
     /// variable over the gcds of the coefficients in the others: every
@@ -866,9 +869,12 @@ impl GcdDomain for GaussianIntegers {
         b: &Sparse<Complex>,
         cancel: &dyn Cancel,
     ) -> Result<Cofactors<Sparse<Complex>>, Cancelled> {
+        // Brown's algorithm modulo Gaussian primes where the heuristic gives
+        // up (CAS-494): subresultants took minutes in two variables of
+        // degree 150.
         match heuristic::sparse(ring, a, b, cancel)? {
             Some(parts) => Ok(parts),
-            None => subres::sparse_gcd(ring, a, b, cancel),
+            None => gaussian::sparse(ring, a, b, cancel),
         }
     }
 
@@ -881,7 +887,8 @@ impl GcdDomain for GaussianIntegers {
     ) -> Result<Option<Cofactors<Sparse<Complex>>>, Cancelled> {
         match method {
             GcdMethod::Heuristic => heuristic::sparse(ring, a, b, cancel),
-            GcdMethod::Modular | GcdMethod::Zippel => Ok(None),
+            GcdMethod::Modular => Ok(Some(gaussian::sparse(ring, a, b, cancel)?)),
+            GcdMethod::Zippel => Ok(None),
             GcdMethod::Subresultant => Ok(Some(subres::sparse_gcd(ring, a, b, cancel)?)),
         }
     }

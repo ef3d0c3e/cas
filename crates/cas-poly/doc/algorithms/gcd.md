@@ -39,9 +39,21 @@ benchmarks; it returns `None` where the method does not apply or gives up.
 | Domain | One variable | Several variables |
 |---|---|---|
 | ℤ | heuristic, then Brown's modular algorithm | heuristic, then Zippel's algorithm, then Brown's |
-| ℤ\[i\] | heuristic, then subresultants | heuristic, then subresultants |
+| ℤ\[i\] | heuristic, then subresultants (dense); heuristic, then Brown's modulo Gaussian primes (sparse) | heuristic, then Brown's modulo Gaussian primes |
 | ℚ, ℚ(i) | the numerators over ℤ, ℤ\[i\] | the same |
 | 𝔽ₚ | Euclid | Brown's evaluation, then subresultants if the field runs out of points |
+
+Over ℤ\[i\], Brown's algorithm (CAS-494) works modulo word primes
+`p ≡ 1 (mod 4)`, where `−1` has the square roots `±s`: `a + b i ↦ a ± b s`
+are the ring maps onto 𝔽ₚ, one for each Gaussian prime over `p`. Each
+image's gcd, by Brown's evaluation over 𝔽ₚ, is scaled to the image of `γ`,
+the gcd of the leading coefficients, and the two images `v±` of a
+coefficient give its parts, `a = (v₊ + v₋)/2` and `b = (v₊ − v₋)/(2s)`
+modulo `p`, combined by Chinese remaindering as over ℤ. A prime whose two
+images disagree on the leading monomial is passed over. It replaced
+subresultants after the heuristic, which took minutes for `Together` of
+exponential forms of degree 150 in two variables, the rewrite fuzz
+target's `TranscendentalSimplify` (giac: 50 ms).
 
 `GcdMethod::Zippel` runs Zippel's sparse interpolation over ℤ (CAS-192), ℚ
 through the numerators, and prime fields of at least `2^31` elements

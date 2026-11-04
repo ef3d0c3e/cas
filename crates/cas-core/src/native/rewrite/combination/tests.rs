@@ -33,6 +33,28 @@ fn combinations() {
     ]);
 }
 
+/// Sums whose exponential forms have degrees near 150 in two variables,
+/// found by the rewrite fuzz target: `Together`'s gcd over ℤ\[i\] took 25 s
+/// to past 200 s by subresultants, where giac's `tsimplify` takes 50 ms
+/// (CAS-494).
+#[test]
+fn transcendental_sums_of_high_degree() {
+    check_values(
+        "TranscendentalSimplify",
+        &[
+            "Plus[Times[-6, Power[Cos[Times[6, y]], 3]], Times[-3, Power[Sin[Times[2, y]], 3]], \
+             Times[1/8, Power[Cos[Times[3, x]], 3], Tan[Times[3/4, y]]]]",
+            "Plus[Times[-3/2, Cos[Times[5, y]]], Times[1/2, Power[Sin[Times[1/2, y]], 3]], \
+             Times[1/6, Power[Cos[Times[3, x]], 3], Power[Tan[Times[3/4, y]], 2]]]",
+            "Plus[Power[Cos[Times[5, y]], 2], Times[1/3, Power[Tan[Times[1/3, y]], 2]], \
+             Times[1/8, Power[Cos[Times[3, x]], 3], Tan[Times[3/4, y]]]]",
+            "Plus[Times[-3, Power[Cos[Times[5/2, y]], 2]], \
+             Times[1/4, Power[Cos[Times[3, x]], 3], Power[Tan[Times[3/4, y]], 3]], \
+             Times[1/3, Power[Tan[Times[4/3, y]], 3]]]",
+        ],
+    );
+}
+
 #[test]
 fn transcendental() {
     check(&[

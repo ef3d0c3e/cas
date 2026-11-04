@@ -277,8 +277,10 @@ proptest! {
         let (fi, gi, hi) = (twist(&f, im[0]), twist(&g, im[1]), twist(&h, im[2]));
         let reference = check_gcd(&zi, &fi, &gi, &hi, GcdMethod::Subresultant)?;
         if let Some(x) = check_gcd(&zi, &fi, &gi, &hi, GcdMethod::Heuristic)? {
-            prop_assert_eq!(Some(x), reference);
+            prop_assert_eq!(Some(x), reference.clone());
         }
+        // Brown's algorithm modulo Gaussian primes (CAS-494).
+        prop_assert_eq!(check_gcd(&zi, &fi, &gi, &hi, GcdMethod::Modular)?, reference);
         // ℚ and ℚ(i): over a denominator.
         let q = SparseRing::new(Rationals, n);
         let over = |p: &Sparse<Integer>| ring.map_into(p, &q, |c| Rational::new(c.clone(), Integer::from(d)));
@@ -615,6 +617,43 @@ fn the_heuristic_gives_up_on_large_values() {
     let (g, x, y) = ring.gcd_cofactors(&a, &b);
     assert!(g == f, "the gcd is f");
     assert_eq!((x, y), (ring.from_i64s(&[1, 1]), ring.from_i64s(&[-1, 1])));
+}
+
+/// Over ℤ\[i\] too, past its size limit the heuristic gives up, and `gcd`
+/// goes on to Brown's algorithm modulo Gaussian primes (CAS-494), where
+/// subresultants took minutes in two variables.
+#[test]
+fn the_heuristic_gives_up_over_the_gaussian_integers() {
+    let ring = SparseRing::new(GaussianIntegers, 2);
+    let gaussian = |a: Integer, b: Integer| Complex::new(Rational::from(a), Rational::from(b));
+    let big = Integer::from(Natural::power_of_two(239));
+    // f = y + Σ (big + 3k + (big − k) i) x^k, of degree 1200 in x.
+    let f = ring.from_terms(
+        (0..=1200u64)
+            .map(|k| {
+                let k_int = Integer::from(k);
+                let c = gaussian(&big + &(&k_int * &Integer::from(3)), &big - &k_int);
+                (vec![k, 0], c)
+            })
+            .chain([(vec![0, 1], gaussian(Integer::ONE, Integer::ZERO))]),
+    );
+    let x = ring.var(0);
+    let iy = ring.scale(&ring.var(1), &gaussian(Integer::ZERO, Integer::ONE));
+    let (u, v) = (ring.add(&x, &iy), ring.sub(&x, &ring.one()));
+    let (a, b) = (ring.mul(&f, &u), ring.mul(&f, &v));
+    assert!(
+        ring.gcd_by(&a, &b, GcdMethod::Heuristic, &Never)
+            .unwrap()
+            .is_none()
+    );
+    let (g, p, q) = ring.gcd_cofactors(&a, &b);
+    assert_eq!(ring.mul(&g, &p), a);
+    assert_eq!(ring.mul(&g, &q), b);
+    assert_eq!(g.exponents(0), f.exponents(0), "the gcd is f, up to a unit");
+    assert!(
+        ring.div_exact(&g, &f)
+            .is_some_and(|w| w.degrees() == vec![0, 0])
+    );
 }
 
 /// The first word prime `p₀` is unlucky for `(x + p₀)(x - 1)` and `x (x -
