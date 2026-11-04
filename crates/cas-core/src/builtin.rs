@@ -244,6 +244,7 @@ builtins! {
     CONJUGATE_GRADIENT = "ConjugateGradient" [PROTECTED];
     // Matrix decompositions III (CAS-DOC-51).
     SCHUR_DECOMPOSITION = "SchurDecomposition" [PROTECTED];
+    SINGULAR_VALUE_DECOMPOSITION = "SingularValueDecomposition" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];

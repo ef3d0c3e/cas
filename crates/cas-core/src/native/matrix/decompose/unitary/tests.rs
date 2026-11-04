@@ -122,3 +122,61 @@ fn schur_stays() {
         assert_eq!(eval(&ctx, &e), e, "{input}");
     }
 }
+
+/// The SVD of `a`, checked: `U` and `V` unitary, `s` descending and equal
+/// to `SingularValues` reversed, `U diag(s) Vᴴ = A`.
+fn svd(ctx: &Context, a: &str) -> Expr {
+    let a = read(a);
+    let found = eval(
+        ctx,
+        &Expr::call(Symbol::SINGULAR_VALUE_DECOMPOSITION, [a.clone()]),
+    );
+    let [u, s, v] = found.args() else {
+        panic!("{a:?}: {found:?}");
+    };
+    let n = s.args().len();
+    let ident = eval(
+        ctx,
+        &Expr::call(
+            Symbol::IDENTITY_MATRIX,
+            [Expr::from(i64::try_from(n).expect("small"))],
+        ),
+    );
+    for w in [u, v] {
+        let unitary = eval(ctx, &(dot(&adjoint(w), w) - ident.clone()));
+        assert!(negligible(ctx, &unitary), "{a:?}: {found:?}");
+    }
+    let ascending = eval(ctx, &Expr::call(Symbol::SINGULAR_VALUES, [a.clone()]));
+    let reversed = eval(ctx, &Expr::call(Symbol::REVERSE, [ascending]));
+    let gap = eval(ctx, &(s.clone() - reversed));
+    assert!(
+        negligible(ctx, &Expr::call(Symbol::LIST, [gap])),
+        "{a:?}: s = {s:?}"
+    );
+    let diagonal = Expr::call(Symbol::DIAGONAL_MATRIX, [s.clone()]);
+    let back = eval(ctx, &(dot(&dot(u, &diagonal), &adjoint(v)) - a.clone()));
+    assert!(negligible(ctx, &back), "{a:?}: {found:?}");
+    s.clone()
+}
+
+#[test]
+fn singular_value_decompositions() {
+    let ctx = Context::new();
+    // giac's s = [3√5, √5].
+    let s = svd(&ctx, "List[List[3, 0], List[4, 5]]");
+    let gap = eval(
+        &ctx,
+        &(s.clone() - read("List[Times[3, Sqrt[5]], Sqrt[5]]")),
+    );
+    assert!(negligible(&ctx, &Expr::call(Symbol::LIST, [gap])), "{s:?}");
+    // √(15 ± √221), giac's [5.46498570422,0.365966190626].
+    svd(&ctx, "List[List[1, 2], List[3, 4]]");
+    // Singular: a zero singular value, U completed.
+    let s = svd(&ctx, "List[List[1, 2], List[2, 4]]");
+    assert_eq!(s, eval(&ctx, &read("List[5, 0]")), "{s:?}");
+    // A repeated singular value: an orthogonal matrix.
+    svd(&ctx, "List[List[0, 1], List[1, 0]]");
+    svd(&ctx, "List[List[2, 0, 0], List[0, 0, 3], List[0, 0, 0]]");
+    // Complex entries.
+    svd(&ctx, "List[List[1, I], List[0, 1]]");
+}

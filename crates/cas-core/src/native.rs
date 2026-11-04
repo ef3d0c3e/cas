@@ -410,6 +410,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::SCHUR_DECOMPOSITION,
             matrix::decompose::unitary::schur_decomposition,
         ),
+        (
+            Symbol::SINGULAR_VALUE_DECOMPOSITION,
+            matrix::decompose::unitary::singular_value_decomposition,
+        ),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),

@@ -327,7 +327,7 @@ pub(in crate::native) fn ldl_decomposition(ev: &mut Eval<'_>, e: &Expr) -> Nativ
 }
 
 /// The sign of `x` when decided: exactly, or by a ball.
-fn sign(ev: &mut Eval<'_>, x: &Expr) -> Result<Option<Ordering>, EvalError> {
+pub(super) fn sign(ev: &mut Eval<'_>, x: &Expr) -> Result<Option<Ordering>, EvalError> {
     if let Some(q) = x.to_rational() {
         return Ok(Some(q.cmp(&cas_num::Rational::ZERO)));
     }
