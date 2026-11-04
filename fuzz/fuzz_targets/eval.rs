@@ -20,8 +20,8 @@
 
 use arbitrary::{Result, Unstructured};
 use cas_core::{
-    Attributes, Context, Domain, EvalOptions, Expr, Limits, STACK_PER_LEVEL, Step, StepKind,
-    Symbol, Trace, TraceLevel,
+    Attributes, Context, Domain, EvalError, EvalOptions, Expr, Limits, STACK_PER_LEVEL, Step,
+    StepKind, Symbol, Trace, TraceLevel,
 };
 use libfuzzer_sys::fuzz_target;
 
@@ -874,11 +874,22 @@ fn check(mut u: Unstructured<'_>, recursion: u32) {
             trace: TraceLevel::Verbose,
         },
     );
-    assert_eq!(
-        traced.is_ok(),
-        plain.is_ok(),
-        "{e:?}: {traced:?} and {plain:?}"
+    // A first evaluation stopped by a limit leaves the fixpoint stamps of
+    // the parts it finished on the context, so a second one may take fewer
+    // levels and finish: then a third agrees with it.
+    let limited = matches!(
+        plain,
+        Err(EvalError::RecursionLimit | EvalError::IterationLimit | EvalError::MatchLimit)
     );
+    if limited && let Ok(t) = &traced {
+        assert_eq!(ctx.eval(&e).as_ref(), Ok(t), "{e:?} after a limit");
+    } else {
+        assert_eq!(
+            traced.is_ok(),
+            plain.is_ok(),
+            "{e:?}: {traced:?} and {plain:?}"
+        );
+    }
     check_tree(&report.trace);
     if let (Ok(r), Ok(t)) = (&plain, &traced) {
         assert_eq!(t, r, "{e:?}");
