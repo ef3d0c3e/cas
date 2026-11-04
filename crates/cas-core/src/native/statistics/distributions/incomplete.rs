@@ -39,7 +39,7 @@ fn half_power(b: &Expr, k: u64) -> Expr {
 }
 
 /// `P(a, x)` for `a = twice/2 > 0`; `None` past [`MAX_TERMS`].
-pub(super) fn lower_gamma(twice: u64, x: &Expr) -> Option<Expr> {
+pub(in crate::native) fn lower_gamma(twice: u64, x: &Expr) -> Option<Expr> {
     if twice == 0 || twice / 2 > MAX_TERMS {
         return None;
     }
@@ -62,7 +62,7 @@ pub(super) fn lower_gamma(twice: u64, x: &Expr) -> Option<Expr> {
 
 /// `I_x(a, b)` for `a = a2/2 > 0` and `b = b2/2 > 0`; `None` past
 /// [`MAX_TERMS`].
-pub(super) fn beta(a2: u64, b2: u64, x: &Expr) -> Option<Expr> {
+pub(in crate::native) fn beta(a2: u64, b2: u64, x: &Expr) -> Option<Expr> {
     if a2 == 0 || b2 == 0 || a2.saturating_add(b2) > 2 * MAX_TERMS {
         return None;
     }

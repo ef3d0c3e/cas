@@ -263,6 +263,42 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "HeavisideTheta[Pattern[f, Blank[]]]",
             "Times[DiracDelta[f], D[f, x]]",
         ),
+        // The incomplete functions in their last argument (CAS-DOC-46 §3):
+        // the integrand, over Γ(a) or B(a, b) when regularized.
+        d(
+            "D/LowerGamma",
+            "LowerGamma[Pattern[a, Blank[]], Pattern[f, Blank[]]]",
+            "Condition[Times[Power[f, Plus[a, -1]], Power[E, Times[-1, f]], D[f, x]], FreeQ[a, x]]",
+        ),
+        d(
+            "D/LowerGamma/regularized",
+            "LowerGamma[Pattern[a, Blank[]], Pattern[f, Blank[]], 1]",
+            "Condition[Times[Power[f, Plus[a, -1]], Power[E, Times[-1, f]], Power[Gamma[a], -1], \
+             D[f, x]], FreeQ[a, x]]",
+        ),
+        d(
+            "D/Gamma/upper",
+            "Gamma[Pattern[a, Blank[]], Pattern[f, Blank[]]]",
+            "Condition[Times[-1, Power[f, Plus[a, -1]], Power[E, Times[-1, f]], D[f, x]], FreeQ[a, x]]",
+        ),
+        d(
+            "D/Gamma/upper/regularized",
+            "Gamma[Pattern[a, Blank[]], Pattern[f, Blank[]], 1]",
+            "Condition[Times[-1, Power[f, Plus[a, -1]], Power[E, Times[-1, f]], \
+             Power[Gamma[a], -1], D[f, x]], FreeQ[a, x]]",
+        ),
+        d(
+            "D/Beta/incomplete",
+            "Beta[Pattern[a, Blank[]], Pattern[b, Blank[]], Pattern[f, Blank[]]]",
+            "Condition[Times[Power[f, Plus[a, -1]], Power[Plus[1, Times[-1, f]], Plus[b, -1]], \
+             D[f, x]], And[FreeQ[a, x], FreeQ[b, x]]]",
+        ),
+        d(
+            "D/Beta/incomplete/regularized",
+            "Beta[Pattern[a, Blank[]], Pattern[b, Blank[]], Pattern[f, Blank[]], 1]",
+            "Condition[Times[Power[f, Plus[a, -1]], Power[Plus[1, Times[-1, f]], Plus[b, -1]], \
+             Power[Beta[a, b], -1], D[f, x]], And[FreeQ[a, x], FreeQ[b, x]]]",
+        ),
         // A modular expression's derivative, in its modulus (CAS-DOC-43 §4).
         d(
             "D/Modular",

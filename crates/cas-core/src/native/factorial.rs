@@ -164,7 +164,8 @@ fn ball_gamma(ev: &mut Eval<'_>, e: &Expr, x: &Expr) -> Option<Expr> {
 /// `≤ 0`; a real ball's by `Ball::gamma`. Anything else stays.
 pub(super) fn gamma(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [z] = e.args() else {
-        return Ok(None);
+        // The upper incomplete gamma function (CAS-DOC-46 §3).
+        return super::incomplete::upper_gamma(ev, e);
     };
     if let Some(q) = z.to_rational() {
         if q.is_integer() && !q.is_positive() {
@@ -185,7 +186,8 @@ pub(super) fn gamma(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// stays.
 pub(super) fn beta(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [a, b] = e.args() else {
-        return Ok(None);
+        // The incomplete beta function (CAS-DOC-46 §3).
+        return super::incomplete::incomplete_beta(ev, e);
     };
     let mut values = Vec::with_capacity(3);
     for x in [a.clone(), b.clone(), a.clone() + b.clone()] {

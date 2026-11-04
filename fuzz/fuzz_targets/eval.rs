@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 349] = [
+const BUILTINS: [&str; 350] = [
     "Plus",
     "Times",
     "Power",
@@ -203,6 +203,8 @@ const BUILTINS: [&str; 349] = [
     "DiscreteFourierTransform",
     "InverseDiscreteFourierTransform",
     "Convolution",
+    // The incomplete gamma function (CAS-DOC-46).
+    "LowerGamma",
     "ZTransform",
     "InverseZTransform",
     "KroneckerDelta",

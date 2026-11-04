@@ -86,6 +86,9 @@ builtins! {
     // Special functions (CAS-DOC-15 §6–§8).
     GAMMA = "Gamma" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     BETA = "Beta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    // The lower incomplete gamma function (CAS-DOC-46 §3); the upper is
+    // `Gamma` with two arguments, the incomplete beta `Beta` with three.
+    LOWER_GAMMA = "LowerGamma" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     ZETA = "Zeta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     ERF = "Erf" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     ERFC = "Erfc" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];

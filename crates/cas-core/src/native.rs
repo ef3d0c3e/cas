@@ -25,6 +25,7 @@ mod factorial;
 mod fourier;
 mod fourier_transform;
 mod groebner;
+mod incomplete;
 mod index;
 mod integer;
 mod integrate;
@@ -121,6 +122,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::MIN, rounding::extremum),
         (Symbol::GAMMA, factorial::gamma),
         (Symbol::BETA, factorial::beta),
+        (Symbol::LOWER_GAMMA, incomplete::lower_gamma),
         (Symbol::ZETA, zeta::zeta),
         (Symbol::ERF, erf::erf),
         (Symbol::ERFC, erf::erf),

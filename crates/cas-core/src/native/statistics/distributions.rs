@@ -21,7 +21,7 @@
 pub(in crate::native) mod continuous;
 pub(in crate::native) mod degrees;
 pub(in crate::native) mod discrete;
-mod incomplete;
+pub(in crate::native) mod incomplete;
 pub(in crate::native) mod inversion;
 
 use std::cmp::Ordering;

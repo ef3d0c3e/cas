@@ -55,7 +55,8 @@ Round: round
 Sign: sign
 Max: max
 Min: min
-Gamma: Gamma
+Gamma: Gamma ugamma
+LowerGamma: igamma
 Beta: Beta
 Zeta: Zeta
 Erf: erf
