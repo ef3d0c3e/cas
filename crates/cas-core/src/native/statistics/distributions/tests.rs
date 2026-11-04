@@ -306,8 +306,35 @@ fn degrees_of_freedom() {
     stays(&[
         "StudentTPDF[0, 1]",
         "StudentTPDF[-1, 1]",
-        "StudentTPDF[5/2, 1]",
+        "StudentTPDF[x, 1]",
         "ChiSquareCDF[2, x]",
         "FisherICDF[2, 3, 3/2]",
     ]);
+}
+
+/// Degrees of freedom that are not natural numbers (CAS-471): the
+/// incomplete functions, numbers by `N`, against 30-digit references
+/// (Python's `decimal`; giac's `igamma(1.25,0.5,1)` and its `Beta(…, 1)`s
+/// agree).
+#[test]
+fn fractional_degrees() {
+    check(&[
+        ("ChiSquareCDF[5/2, 1]", "LowerGamma[5/4, 1/2, 1]"),
+        ("FisherCDF[3/2, 5/2, 1]", "Beta[3/4, 5/4, 3/8, 1]"),
+        // ν = 3: the density at 1/2 through Gamma at half-integers.
+        (
+            "ChiSquarePDF[5/2, x]",
+            "Times[Power[x, 1/4], Exp[Times[-1/2, x]], Power[Times[Power[2, 5/4], Gamma[5/4]], -1]]",
+        ),
+    ]);
+    let ctx = Context::new();
+    for claim in [
+        "Less[Abs[N[Plus[ChiSquareCDF[5/2, 1], Times[-2837899526653129741723134370805, Power[10, -31]]], 30]], Power[10, -25]]",
+        "Less[Abs[N[Plus[StudentTCDF[5/2, 1], Times[-7979694863608632668190298846388, Power[10, -31]]], 30]], Power[10, -25]]",
+        "Less[Abs[N[Plus[FisherCDF[3/2, 5/2, 1], Times[-5496493417630371911501052199720, Power[10, -31]]], 30]], Power[10, -25]]",
+        // An inverse at fractional degrees takes the cumulative function back.
+        "Less[Abs[N[Plus[ChiSquareCDF[5/2, ChiSquareICDF[5/2, 1/3]], -1/3], 20]], Power[10, -12]]",
+    ] {
+        assert!(holds(&ctx, claim), "{claim}");
+    }
 }

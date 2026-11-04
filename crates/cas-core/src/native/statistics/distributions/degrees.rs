@@ -16,9 +16,11 @@
 //!   ν₁x/ν₂)^(−(ν₁+ν₂)/2) / B(ν₁/2, ν₂/2)` for `x ≥ 0`. `FisherCDF`:
 //!   `I_{ν₁x/(ν₁x+ν₂)}(ν₁/2, ν₂/2)`, where giac leaves `Beta(…, 1)`.
 //!
-//! Degrees of freedom that are numbers but not natural numbers above 0
-//! leave the call: those that are not positive with a warning, the others
-//! as functions this plan leaves out. The densities take a symbolic
+//! Degrees of freedom that are numbers but not natural numbers (CAS-DOC-46
+//! §4, CAS-471) take the same densities, and the incomplete functions as
+//! cumulative functions: `LowerGamma[ν/2, x/2, 1]`, `Beta[1/2, ν/2, t²/(ν +
+//! t²), 1]` and `Beta[ν₁/2, ν₂/2, ν₁x/(ν₁x + ν₂), 1]`, numbers by their
+//! balls. Those not above 0 leave the call with a warning. The densities take a symbolic
 //! point, as giac's do. The cumulative functions and inverses need a real
 //! number (or `±∞`, and `q` in `[0, 1]`).
 
@@ -58,27 +60,31 @@ impl Kind {
     }
 }
 
+/// Degrees of freedom: their value, and the natural number it is, if one.
+#[derive(Clone, Debug)]
+struct Dof {
+    value: Expr,
+    natural: Option<u64>,
+}
+
+impl Dof {
+    /// `ν/2`.
+    fn half(&self) -> Expr {
+        &self.value / 2
+    }
+}
+
 /// A distribution with its degrees of freedom.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 enum Degrees {
-    Student(u64),
-    ChiSquare(u64),
-    Fisher(u64, u64),
-}
-
-/// `n` as an expression.
-fn int(n: u64) -> Expr {
-    Expr::from(cas_num::Integer::from(n))
-}
-
-/// `k/2`.
-fn half(k: u64) -> Expr {
-    Expr::from(Rational::new(k.into(), 2.into()))
+    Student(Dof),
+    ChiSquare(Dof),
+    Fisher(Dof, Dof),
 }
 
 impl Degrees {
     /// The least value of the support; `None` for all of the line.
-    fn low(self) -> Option<Rational> {
+    fn low(&self) -> Option<Rational> {
         match self {
             Degrees::Student(_) => None,
             _ => Some(Rational::ZERO),
@@ -86,55 +92,68 @@ impl Degrees {
     }
 
     /// The density at `x`, unevaluated.
-    fn density(self, x: &Expr) -> Expr {
+    fn density(&self, x: &Expr) -> Expr {
         match self {
             Degrees::Student(n) => {
-                let scale = Expr::call(Symbol::GAMMA, [half(n + 1)])
-                    / (Expr::call(Symbol::SQRT, [int(n) * Expr::from(Symbol::PI)])
-                        * Expr::call(Symbol::GAMMA, [half(n)]));
-                scale * (1 + x.pow(2) / int(n)).pow(-half(n + 1))
+                let above = &n.value / 2 + Expr::from(Rational::new(1.into(), 2.into()));
+                let scale = Expr::call(Symbol::GAMMA, [above.clone()])
+                    / (Expr::call(Symbol::SQRT, [&n.value * Expr::from(Symbol::PI)])
+                        * Expr::call(Symbol::GAMMA, [n.half()]));
+                scale * (1 + x.pow(2) / &n.value).pow(-above)
             }
             Degrees::ChiSquare(n) => {
-                let power = if n == 2 {
-                    Expr::from(1)
-                } else {
-                    x.pow(half(n) - 1)
-                };
-                power * Expr::call(Symbol::EXP, [-x / 2])
-                    / (Expr::from(2).pow(half(n)) * Expr::call(Symbol::GAMMA, [half(n)]))
+                x.pow(n.half() - 1) * Expr::call(Symbol::EXP, [-x / 2])
+                    / (Expr::from(2).pow(n.half()) * Expr::call(Symbol::GAMMA, [n.half()]))
             }
             Degrees::Fisher(m, n) => {
-                let ratio = Expr::from(Rational::new(m.into(), n.into()));
-                let power = if m == 2 {
-                    Expr::from(1)
-                } else {
-                    x.pow(half(m) - 1)
-                };
-                ratio.pow(half(m)) * power * (1 + &ratio * x).pow(-half(m + n))
-                    / Expr::call(Symbol::BETA, [half(m), half(n)])
+                let ratio = &m.value / &n.value;
+                ratio.pow(m.half())
+                    * x.pow(m.half() - 1)
+                    * (1 + &ratio * x).pow(-(m.half() + n.half()))
+                    / Expr::call(Symbol::BETA, [m.half(), n.half()])
             }
         }
     }
 
-    /// `F(x)` for `x` in the support, `x ≥ 0` for Student's, unevaluated;
-    /// `None` without a closed form.
-    fn cumulative(self, x: &Expr) -> Option<Expr> {
+    /// `F(x)` for `x` in the support, `x ≥ 0` for Student's, unevaluated:
+    /// closed forms at natural degrees, the incomplete functions otherwise;
+    /// `None` past the closed forms' size.
+    fn cumulative(&self, x: &Expr) -> Option<Expr> {
+        let half = Expr::from(Rational::new(1.into(), 2.into()));
+        let regularized = Expr::from(1);
         match self {
             Degrees::Student(n) => {
                 let square = x.pow(2);
-                let at = &square / (int(n) + &square);
-                Some(Expr::from(Rational::new(1.into(), 2.into())) + beta(1, n, &at)? / 2)
+                let at = &square / (&n.value + &square);
+                let i = match n.natural {
+                    Some(k) => beta(1, k, &at)?,
+                    None => Expr::call(Symbol::BETA, [half.clone(), n.half(), at, regularized]),
+                };
+                Some(half + i / 2)
             }
-            Degrees::ChiSquare(n) => lower_gamma(n, &(x / 2)),
+            Degrees::ChiSquare(n) => match n.natural {
+                Some(k) => lower_gamma(k, &(x / 2)),
+                None => Some(Expr::call(
+                    Symbol::LOWER_GAMMA,
+                    [n.half(), x / 2, regularized],
+                )),
+            },
             Degrees::Fisher(m, n) => {
-                let scaled = int(m) * x;
-                beta(m, n, &(&scaled / (&scaled + int(n))))
+                let scaled = &m.value * x;
+                let at = &scaled / (&scaled + &n.value);
+                match (m.natural, n.natural) {
+                    (Some(a), Some(b)) => beta(a, b, &at),
+                    _ => Some(Expr::call(
+                        Symbol::BETA,
+                        [m.half(), n.half(), at, regularized],
+                    )),
+                }
             }
         }
     }
 
     /// `F(x)` for a real `x`; `None` when its place is not decided.
-    fn cumulative_at(self, ev: &mut Eval<'_>, x: &Expr) -> Native {
+    fn cumulative_at(&self, ev: &mut Eval<'_>, x: &Expr) -> Native {
         let infinity = Expr::from(Symbol::INFINITY);
         if *x == infinity {
             return Ok(Some(Expr::from(1)));
@@ -162,7 +181,7 @@ impl Degrees {
     }
 
     /// `F⁻¹(q)` for a number `q` in `[0, 1]`.
-    fn inverse(self, ev: &mut Eval<'_>, q: &Expr) -> Native {
+    fn inverse(&self, ev: &mut Eval<'_>, q: &Expr) -> Native {
         let infinity = Expr::from(Symbol::INFINITY);
         if compare(ev, q, &Expr::from(0))? == Some(Ordering::Equal) {
             return Ok(Some(match self.low() {
@@ -209,15 +228,19 @@ fn distribution(
             refuse(ev, e, "the degrees of freedom must be above 0")?;
             return Ok(None);
         }
-        let Some(n) = p.to_integer().and_then(|n| u64::try_from(n.to_i64()?).ok()) else {
+        if !p.is_number() {
             return Ok(None);
-        };
-        degrees.push(n);
+        }
+        let natural = p.to_integer().and_then(|n| u64::try_from(n.to_i64()?).ok());
+        degrees.push(Dof {
+            value: p.clone(),
+            natural,
+        });
     }
     Ok(Some(match (kind, degrees.as_slice()) {
-        (Kind::Student, [n]) => Degrees::Student(*n),
-        (Kind::ChiSquare, [n]) => Degrees::ChiSquare(*n),
-        (Kind::Fisher, [m, n]) => Degrees::Fisher(*m, *n),
+        (Kind::Student, [n]) => Degrees::Student(n.clone()),
+        (Kind::ChiSquare, [n]) => Degrees::ChiSquare(n.clone()),
+        (Kind::Fisher, [m, n]) => Degrees::Fisher(m.clone(), n.clone()),
         _ => return Ok(None),
     }))
 }
