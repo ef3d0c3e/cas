@@ -214,7 +214,8 @@ fn coefficients(ctx: &Context, f: &Expr, p: u64) -> Poly {
     let call = Expr::call(Symbol::COEFFICIENT_LIST, [f.clone(), Expr::symbol("x")]);
     let list = eval(ctx, &call);
     let modulus = Integer::from(p);
-    let coeffs = list.args().iter().map(|c| {
+    // From the leading coefficient down, as giac's `symb2poly`.
+    let coeffs = list.args().iter().rev().map(|c| {
         let c = c
             .to_integer()
             .unwrap_or_else(|| panic!("{call:?} is {list:?}"));
