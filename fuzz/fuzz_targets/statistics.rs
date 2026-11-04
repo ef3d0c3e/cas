@@ -9,7 +9,10 @@
 //!   that the polynomial regression meets, or the call left when fewer
 //!   distinct abscissas than coefficients make them singular;
 //! - the exponential and power regressions of data on `y = b aˣ` and
-//!   `y = b xᵃ`, which give back `a` and `b` exactly.
+//!   `y = b xᵃ`, which give back `a` and `b` exactly;
+//! - frequencies against the counts, cumulated ones ending at 1, classes
+//!   counting their values, the root mean square, moving averages
+//!   (CAS-DOC-50 §4, CAS-493).
 #![no_main]
 
 use arbitrary::{Result, Unstructured};
@@ -290,6 +293,106 @@ fn run(u: &mut Unstructured<'_>) -> Result<()> {
     let exact: Vec<Option<Rational>> = found.args().iter().map(Expr::to_rational).collect();
     let k = q(i64::try_from(exponent).expect("small"), 1);
     assert_eq!(exact, [Some(k), Some(b)], "PowerRegression: {found:?}");
+    second(&ctx, u, &xs)
+}
+
+/// Statistics II (CAS-493) on the values `xs`.
+fn second(ctx: &Context, u: &mut Unstructured<'_>, xs: &[Rational]) -> Result<()> {
+    let n = xs.len();
+    let total = q(i64::try_from(n).expect("small"), 1);
+    let x = list(xs);
+    let count = |v: &Rational| xs.iter().filter(|w| *w == v).count();
+    let frequencies = eval(ctx, Symbol::FREQUENCIES, &[x.clone()]);
+    let mut seen = 0usize;
+    for pair in frequencies.args() {
+        let [v, f] = pair.args() else {
+            panic!("Frequencies[{xs:?}] is {frequencies:?}");
+        };
+        let (v, f) = (
+            v.to_rational().expect("a value"),
+            f.to_rational().expect("a share"),
+        );
+        let k = count(&v);
+        assert_eq!(
+            f,
+            &q(i64::try_from(k).expect("small"), 1) / &total,
+            "Frequencies[{xs:?}]"
+        );
+        seen += k;
+    }
+    assert_eq!(seen, n, "Frequencies[{xs:?}] is {frequencies:?}");
+    let cumulated = eval(ctx, Symbol::CUMULATED_FREQUENCIES, &[x.clone()]);
+    let last = cumulated
+        .args()
+        .last()
+        .and_then(|p| p.args().get(1))
+        .and_then(Expr::to_rational);
+    assert_eq!(
+        last,
+        Some(q(1, 1)),
+        "CumulatedFrequencies[{xs:?}] is {cumulated:?}"
+    );
+    // Classes from below the least value.
+    let least = xs.iter().min().expect("a value").clone();
+    let start = &least - &q(u.int_in_range(0..=4)?, 2);
+    let width = q(u.int_in_range(1..=6)?, 2);
+    let classes = eval(
+        ctx,
+        Symbol::CLASSES,
+        &[x.clone(), Expr::from(start), Expr::from(width)],
+    );
+    let mut counted = 0i64;
+    for row in classes.args() {
+        let [range, c] = row.args() else {
+            panic!("Classes[{xs:?}] is {classes:?}");
+        };
+        let [lo, hi] = range.args() else {
+            panic!("Classes[{xs:?}] is {classes:?}");
+        };
+        let (lo, hi) = (
+            lo.to_rational().expect("an end"),
+            hi.to_rational().expect("an end"),
+        );
+        let inside = xs.iter().filter(|v| **v >= lo && **v < hi).count();
+        let c = c.as_i64().expect("a count");
+        assert_eq!(
+            c,
+            i64::try_from(inside).expect("small"),
+            "Classes[{xs:?}]: {row:?}"
+        );
+        counted += c;
+    }
+    assert_eq!(
+        counted,
+        i64::try_from(n).expect("small"),
+        "Classes[{xs:?}] is {classes:?}"
+    );
+    // The root mean square, squared.
+    let squares = xs.iter().fold(q(0, 1), |acc, v| &acc + &(v * v));
+    assert_eq!(
+        square(ctx, Symbol::ROOT_MEAN_SQUARE, &[x.clone()]),
+        &squares / &total,
+        "RootMeanSquare[{xs:?}]"
+    );
+    // Moving averages.
+    let k = u.int_in_range(1..=n)?;
+    let means = eval(
+        ctx,
+        Symbol::MOVING_AVERAGE,
+        &[x, Expr::from(i64::try_from(k).expect("small"))],
+    );
+    let expected: Vec<Rational> = xs
+        .windows(k)
+        .map(|w| {
+            &w.iter().fold(q(0, 1), |acc, v| &acc + v) / &q(i64::try_from(k).expect("small"), 1)
+        })
+        .collect();
+    let found: Vec<Option<Rational>> = means.args().iter().map(Expr::to_rational).collect();
+    assert_eq!(
+        found,
+        expected.into_iter().map(Some).collect::<Vec<_>>(),
+        "MovingAverage[{xs:?}, {k}]"
+    );
     Ok(())
 }
 
