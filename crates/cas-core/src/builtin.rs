@@ -264,6 +264,13 @@ builtins! {
     PERMUTATION_ORDER = "PermutationOrder" [PROTECTED];
     PERMUTATION_SIGNATURE = "PermutationSignature" [PROTECTED];
     PERMUTATION_MATRIX = "PermutationMatrix" [PROTECTED];
+    // Bits, digits and falling factorials (CAS-DOC-45 §3).
+    BIT_AND = "BitAnd" [LISTABLE, PROTECTED];
+    BIT_OR = "BitOr" [LISTABLE, PROTECTED];
+    BIT_XOR = "BitXor" [LISTABLE, PROTECTED];
+    HAMMING_DISTANCE = "HammingDistance" [LISTABLE, PROTECTED];
+    CONVERT = "Convert" [PROTECTED];
+    FACTORIAL_POWER = "FactorialPower" [LISTABLE, PROTECTED];
     // Statistics (CAS-DOC-22): Xcas's `mean`, `variance`, `stddev` and
     // `stddevp`. giac's `variance` and `stddev` are the population ones and
     // Mathematica's `Variance` and `StandardDeviation` the sample ones, hence

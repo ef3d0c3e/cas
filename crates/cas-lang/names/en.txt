@@ -210,6 +210,13 @@ CycleProduct: c1oc2
 PermutationOrder: permuorder
 PermutationSignature: signature
 PermutationMatrix: permu2mat
+# Bits, digits and falling factorials (CAS-DOC-45 §3, CAS-464).
+BitAnd: bitand
+BitOr: bitor
+BitXor: bitxor
+HammingDistance: hamdist
+Convert: convert
+FactorialPower: perm
 # Equations (CAS-DOC-11, CAS-210, CAS-214).
 Solve: solve
 CSolve: csolve

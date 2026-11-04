@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 340] = [
+const BUILTINS: [&str; 346] = [
     "Plus",
     "Times",
     "Power",
@@ -194,6 +194,12 @@ const BUILTINS: [&str; 340] = [
     "PermutationOrder",
     "PermutationSignature",
     "PermutationMatrix",
+    "BitAnd",
+    "BitOr",
+    "BitXor",
+    "HammingDistance",
+    "Convert",
+    "FactorialPower",
     "ZTransform",
     "InverseZTransform",
     "KroneckerDelta",

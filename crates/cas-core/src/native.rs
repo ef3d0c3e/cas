@@ -15,6 +15,7 @@
 mod arith;
 mod ball;
 mod bessel;
+mod bits;
 mod dsolve;
 mod elementary;
 mod erf;
@@ -378,6 +379,12 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             permutations::permutation_signature,
         ),
         (Symbol::PERMUTATION_MATRIX, permutations::permutation_matrix),
+        (Symbol::BIT_AND, bits::bit_and),
+        (Symbol::BIT_OR, bits::bit_or),
+        (Symbol::BIT_XOR, bits::bit_xor),
+        (Symbol::HAMMING_DISTANCE, bits::hamming_distance),
+        (Symbol::CONVERT, bits::convert),
+        (Symbol::FACTORIAL_POWER, bits::factorial_power),
         (Symbol::MEAN, statistics::mean),
         (Symbol::POPULATION_VARIANCE, statistics::population_variance),
         (
