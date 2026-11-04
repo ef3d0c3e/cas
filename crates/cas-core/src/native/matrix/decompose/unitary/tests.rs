@@ -296,10 +296,10 @@ fn ball_singular_value_steps() {
             Expr::call(Symbol::JORDAN_DECOMPOSITION, [gram.clone()]),
         ),
         (
-            "NullSpace",
+            "Together",
             Expr::call(
-                Symbol::NULL_SPACE,
-                [gram.clone() - read("List[List[Times[25, 1.]]]")],
+                Symbol::TOGETHER,
+                [read("Times[N[-5, 30], Power[N[5, 30], -1]]")],
             ),
         ),
         ("GramSchmidt", Expr::call(Symbol::GRAM_SCHMIDT, [a.clone()])),

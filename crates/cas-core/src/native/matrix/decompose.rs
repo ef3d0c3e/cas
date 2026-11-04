@@ -81,9 +81,11 @@ fn rows(e: &Expr) -> Option<Matrix> {
     (width > 0 && rows.len() <= MAX_SIZE && width <= MAX_SIZE).then_some(rows)
 }
 
-/// `x` put together; a number as it is, `Together` leaving a ball in its
-/// call (CAS-498's fuzzing: Schur of `[[-5.]]`).
+/// `x` evaluated and put together; a number as it is: `Together` leaves a
+/// ball in its call, and on a quotient of balls exceeds the recursion limit
+/// (CAS-498's fuzzing: Schur and the SVD of `[[-5.]]`).
 fn simplified(ev: &mut Eval<'_>, x: Expr) -> Result<Expr, EvalError> {
+    let x = ev.eval(&x)?;
     if x.is_number() {
         return Ok(x);
     }
