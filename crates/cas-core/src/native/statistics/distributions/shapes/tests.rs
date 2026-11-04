@@ -22,7 +22,8 @@ fn check(cases: &[(&str, &str)]) {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
-/// The value of `input` is within `10⁻¹¹` of `expected`, giac's decimal.
+/// The value of `input` is within `10⁻¹¹` of `expected`, giac's decimal
+/// written exactly (full form reads no decimals).
 fn check_near(cases: &[(&str, &str)]) {
     let ctx = Context::new();
     let mut wrong = Vec::new();
@@ -118,8 +119,11 @@ fn quantiles() {
     ]);
     // giac's 0.559448996672 and 0.385727568132.
     check_near(&[
-        ("GammaICDF[2, 3, 1/2]", "0.559448996672"),
-        ("BetaICDF[2, 3, 1/2]", "0.385727568132"),
+        (
+            "GammaICDF[2, 3, 1/2]",
+            "Times[559448996672, Power[10, -12]]",
+        ),
+        ("BetaICDF[2, 3, 1/2]", "Times[385727568132, Power[10, -12]]"),
     ]);
 }
 

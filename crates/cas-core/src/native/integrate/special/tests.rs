@@ -349,3 +349,36 @@ fn incomplete_limits() {
         ),
     ]);
 }
+
+/// giac's `int(x^(3/2)*exp(-x),x,0,inf)`, `3*sqrt(pi)/4` (CAS-488): a
+/// half-integer power, whose antiderivative is elementary with an `Erf`;
+/// on failure, the antiderivative and its one-sided limits at the ends.
+#[test]
+fn half_integer_gamma_integral() {
+    let ctx = Context::new();
+    let f = "Times[Power[x, 3/2], Power[E, Times[-1, x]]]";
+    let found = ctx
+        .eval(&read(&format!("Integrate[{f}, List[x, 0, Infinity]]")))
+        .unwrap();
+    let want = ctx.eval(&read("Times[3/4, Power[Pi, 1/2]]")).unwrap();
+    if found != want {
+        let antiderivative = ctx.eval(&read(&format!("Integrate[{f}, x]"))).unwrap();
+        let limit = |point: &str, side: i64| {
+            ctx.eval(&Expr::call(
+                Symbol::LIMIT,
+                [
+                    antiderivative.clone(),
+                    Expr::symbol("x"),
+                    read(point),
+                    Expr::from(side),
+                ],
+            ))
+            .unwrap()
+        };
+        panic!(
+            "{found:?}, not {want:?}: the antiderivative {antiderivative:?}, at 0⁺ {:?}, at ∞ {:?}",
+            limit("0", 1),
+            limit("Infinity", -1)
+        );
+    }
+}

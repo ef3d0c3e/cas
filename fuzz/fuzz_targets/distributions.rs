@@ -55,6 +55,23 @@ fn holds(ctx: &Context, claim: &Expr) -> bool {
     ctx.eval(claim).ok().and_then(|e| e.as_symbol()) == Some(Symbol::TRUE)
 }
 
+/// Whether `a` is within `10⁻⁹` of `b`: a quantile's ball widens through
+/// a steep cumulative function (`StudentTCDF[1/4]` at `1/11`, a radius
+/// near `2·10⁻¹²`).
+fn roughly(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    let gap = Expr::call(
+        Symbol::ABS,
+        [Expr::call(
+            Symbol::N,
+            [a.clone() - b.clone(), Expr::from(20)],
+        )],
+    );
+    holds(
+        ctx,
+        &Expr::call(Symbol::LESS, [gap, Expr::from(10).pow(-9)]),
+    )
+}
+
 /// Whether `a` is within `10⁻¹²` of `b`, numerically.
 fn near(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     let gap = Expr::call(
@@ -307,7 +324,7 @@ fn run(u: &mut Unstructured<'_>) -> Result<()> {
                 let x = eval(&ctx, icdf, &args(p.clone()));
                 let back = eval(&ctx, cdf, &args(x));
                 assert!(
-                    near(&ctx, &back, &p),
+                    roughly(&ctx, &back, &p),
                     "{cdf}{params:?} of {icdf} at {p:?}: {back:?}"
                 );
             }

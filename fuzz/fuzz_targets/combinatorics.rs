@@ -285,11 +285,15 @@ fn transforms(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
         Symbol::PLUS,
         big.args()
             .iter()
-            .map(|z| {
-                Expr::call(
-                    Symbol::POWER,
-                    [Expr::call(Symbol::ABS, [z.clone()]), Expr::from(2)],
-                )
+            // Re² + Im²: the modulus of a complex ball about 0 may not
+            // be decided.
+            .flat_map(|z| {
+                [Symbol::RE, Symbol::IM].map(|part| {
+                    Expr::call(
+                        Symbol::POWER,
+                        [Expr::call(part, [z.clone()]), Expr::from(2)],
+                    )
+                })
             })
             .collect::<Vec<_>>(),
     );
