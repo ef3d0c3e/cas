@@ -270,3 +270,48 @@ fn reduced_forms() {
         ),
     ]);
 }
+
+/// Roots modulo a prime and eigenvalues over 𝔽ₚ (CAS-459): giac's `solve`,
+/// whose plain residues are modular values here, and `eigenvals`.
+#[test]
+fn roots_and_eigenvalues() {
+    check(&[
+        // giac's [-3, 3], from an expression or an equation.
+        (
+            "Solve[Modular[Plus[Power[x, 2], -2], 7], x]",
+            "Modular[List[-3, 3], 7]",
+        ),
+        (
+            "Solve[Equation[Modular[Power[x, 2], 7], Modular[2, 7]], x]",
+            "Modular[List[-3, 3], 7]",
+        ),
+        // giac's [], [-2, 1] (a double root once) and every element of 𝔽₅.
+        ("Solve[Modular[Plus[Power[x, 2], 1], 3], x]", "List[]"),
+        (
+            "Solve[Modular[Times[Power[Plus[x, -1], 2], Plus[x, 2]], 5], x]",
+            "Modular[List[-2, 1], 5]",
+        ),
+        (
+            "Solve[Modular[Plus[Power[x, 5], Times[-1, x]], 5], x]",
+            "Modular[List[-2, -1, 0, 1, 2], 5]",
+        ),
+        // giac's 1 % 7,3 % 7; -1 % 3,1 % 3; 1 % 5,1 % 5.
+        (
+            "Eigenvalues[Modular[List[List[2, 1], List[1, 2]], 7]]",
+            "Modular[List[1, 3], 7]",
+        ),
+        (
+            "Eigenvalues[Modular[List[List[0, 1], List[1, 0]], 3]]",
+            "Modular[List[-1, 1], 3]",
+        ),
+        (
+            "Eigenvalues[Modular[List[List[1, 1], List[0, 1]], 5]]",
+            "Modular[List[1, 1], 5]",
+        ),
+        // x² + 1 does not split over 𝔽₃, where giac builds GF(3, 2).
+        (
+            "Eigenvalues[Modular[List[List[0, 1], List[-1, 0]], 3]]",
+            "Eigenvalues[List[List[Modular[0, 3], Modular[1, 3]], List[Modular[-1, 3], Modular[0, 3]]]]",
+        ),
+    ]);
+}

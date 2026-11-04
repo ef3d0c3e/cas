@@ -909,6 +909,10 @@ pub(super) fn eigenvalues(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some((m, n)) = square(ev, e) else {
         return Ok(None);
     };
+    // Over 𝔽ₚ (CAS-DOC-44 §2).
+    if let Some(found) = super::modular::matrices::eigenvalues(ev, e, &m)? {
+        return Ok(found);
+    }
     let Some((poly, _)) = char_poly(ev, e, &m, n)? else {
         return Ok(None);
     };

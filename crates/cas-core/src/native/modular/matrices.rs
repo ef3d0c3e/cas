@@ -19,6 +19,11 @@
 //!   A composite `n` leaves these with a warning: `ℤ/nℤ` has zero
 //!   divisors, and giac's answers there are not reliable ("Reduction may
 //!   fail").
+//! - `Eigenvalues` (CAS-459), `n` a word prime: the roots in `𝔽ₚ` of the
+//!   characteristic polynomial, each as often as its multiplicity,
+//!   ascending, as giac's `eigenvals([[2,1],[1,2]] % 7)` is `1 % 7,3 % 7`;
+//!   one that does not split over `𝔽ₚ` leaves the call with a warning,
+//!   where giac builds a splitting field.
 //! - `LinSolve` of equations with a modular value in them: each `l = r`
 //!   as `Modular[l − r, p]`, linear in the unknowns, the augmented matrix
 //!   reduced; a pivot unknown is its modular value in the free ones, a
@@ -353,5 +358,43 @@ pub(in crate::native) fn lin_solve(
     });
     let result = Expr::call(Symbol::LIST, solution.collect::<Vec<_>>());
     ev.step("linsolve", e, &result);
+    Ok(Some(Some(result)))
+}
+
+/// `Eigenvalues[m]` of a modular matrix.
+pub(in crate::native) fn eigenvalues(ev: &mut Eval<'_>, e: &Expr, m: &Expr) -> Hooked {
+    let Some(mm) = modular_matrix(m) else {
+        return Ok(None);
+    };
+    let x = Expr::symbol("Eigenvalues$x");
+    let p = ev.eval(&Expr::call(
+        Symbol::CHARACTERISTIC_POLYNOMIAL,
+        [mm.integers(), x.clone()],
+    ))?;
+    let reduced = ev.eval(&modular(p, &mm.n))?;
+    let Some(u) = super::polynomials::univariate(&reduced) else {
+        warn(
+            ev,
+            e,
+            format!("eigenvalues modulo {}, not a word prime", mm.n),
+        );
+        return Ok(Some(None));
+    };
+    let Some(roots) = super::polynomials::split(&u) else {
+        warn(
+            ev,
+            e,
+            format!(
+                "the characteristic polynomial does not split modulo {}",
+                mm.n
+            ),
+        );
+        return Ok(Some(None));
+    };
+    let values = roots
+        .into_iter()
+        .flat_map(|(r, k)| std::iter::repeat_n(modular(Expr::from(r), &mm.n), k));
+    let result = Expr::call(Symbol::LIST, values.collect::<Vec<_>>());
+    ev.step("eigenvals", e, &result);
     Ok(Some(Some(result)))
 }

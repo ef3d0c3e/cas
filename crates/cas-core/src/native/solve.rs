@@ -116,6 +116,13 @@ fn solving(ev: &mut Eval<'_>, e: &Expr, complex: bool) -> Native {
     let [eqn, x] = e.args() else {
         return Ok(None);
     };
+    // Modulo a prime (CAS-DOC-44 §3).
+    if x.as_symbol().is_some()
+        && !is_list(eqn)
+        && let Some(found) = super::modular::polynomials::solve(ev, e, eqn, x)?
+    {
+        return Ok(found);
+    }
     let result = if is_list(x) {
         system(ev, e, eqn, x.args(), complex)?
     } else if x.as_symbol().is_none() {

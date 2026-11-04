@@ -12,6 +12,11 @@
 //! - `GCD`: monic, giac's `gcd((x^2-1) % 5,(x^2+3*x+2) % 5)` being `(x+1) %
 //!   5`; the quotients and remainders by Euclid, modular values.
 //!
+//! - `Solve` (CAS-459): the roots in `𝔽ₚ` of `l − r`, from its linear
+//!   factors, each once, ascending by their symmetric residues, as modular
+//!   values; giac's `solve((x^2-2) % 7, x)` is `[-3, 3]`. A difference
+//!   that vanishes is solved by every element and leaves the call.
+//!
 //! Another modulus, another variable count or coefficients that are not
 //! integers leave the call.
 
@@ -28,10 +33,10 @@ use crate::symbol::Symbol;
 type Native = Result<Option<Expr>, EvalError>;
 
 /// A polynomial over `𝔽ₚ` in the symbol `x`.
-struct Univariate {
-    p: u64,
-    x: Option<Expr>,
-    f: Dense<u64>,
+pub(in crate::native) struct Univariate {
+    pub(in crate::native) p: u64,
+    pub(in crate::native) x: Option<Expr>,
+    pub(in crate::native) f: Dense<u64>,
 }
 
 /// The integer coefficient and the power of `x` of a term `c xᵏ`.
@@ -63,7 +68,7 @@ fn term(t: &Expr, x: &mut Option<Expr>) -> Option<(Integer, usize)> {
 }
 
 /// `e`, a `Modular[f, p]`, as a polynomial over `𝔽ₚ`.
-fn univariate(e: &Expr) -> Option<Univariate> {
+pub(in crate::native) fn univariate(e: &Expr) -> Option<Univariate> {
     let (f, n) = parts(e)?;
     let p = u64::try_from(&n).ok()?;
     if Natural::from(p).primality() != Primality::Prime {
@@ -201,4 +206,80 @@ pub(in crate::native) fn divide(ev: &mut Eval<'_>, e: &Expr, part: Part) -> Nati
     };
     ev.step("quorem", e, &result);
     Ok(Some(result))
+}
+
+/// The roots of `u.f`, not 0, in `𝔽ₚ` with their multiplicities, ascending
+/// by their symmetric residues; `None` when a factor of degree 2 or more
+/// keeps it from splitting.
+pub(in crate::native) fn split(u: &Univariate) -> Option<Vec<(Integer, usize)>> {
+    let ring = DenseRing::new(WordPrimeField::new(u.p).expect("a prime"));
+    let (_, factors) = ring.factor_mod(&u.f);
+    let mut roots = Vec::with_capacity(factors.len());
+    for (g, k) in &factors {
+        match g.coeffs() {
+            // A monic x + c: the root −c.
+            [c, 1] => roots.push((
+                symmetric((u.p - c) % u.p, u.p),
+                usize::try_from(*k).expect("a multiplicity"),
+            )),
+            _ => return None,
+        }
+    }
+    roots.sort();
+    Some(roots)
+}
+
+/// The roots in `𝔽ₚ` of the linear factors of `u.f`, not 0, each once.
+fn linear_roots(u: &Univariate) -> Vec<Integer> {
+    let ring = DenseRing::new(WordPrimeField::new(u.p).expect("a prime"));
+    let (_, factors) = ring.factor_mod(&u.f);
+    let mut roots: Vec<Integer> = factors
+        .iter()
+        .filter_map(|(g, _)| match g.coeffs() {
+            [c, 1] => Some(symmetric((u.p - c) % u.p, u.p)),
+            _ => None,
+        })
+        .collect();
+    roots.sort();
+    roots
+}
+
+/// `Solve[eqn, x]` for an equation of modular values modulo a word prime,
+/// in one unknown: `None` for another, `Some(None)` for one that stays.
+pub(in crate::native) fn solve(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    eqn: &Expr,
+    x: &Expr,
+) -> super::matrices::Hooked {
+    if !eqn.contains(&Expr::from(Symbol::MODULAR)) {
+        return Ok(None);
+    }
+    let difference = match (eqn.head().and_then(Expr::as_symbol), eqn.args()) {
+        (Some(Symbol::EQUATION | Symbol::EQUAL), [l, r]) => ev.eval(&Expr::call(
+            Symbol::PLUS,
+            [l.clone(), Expr::from(-1) * r.clone()],
+        ))?,
+        _ => eqn.clone(),
+    };
+    let Some(u) = univariate(&difference) else {
+        return Ok(None);
+    };
+    if u.x.as_ref().is_some_and(|v| v != x) {
+        return Ok(None);
+    }
+    if u.f.is_zero() {
+        ev.warn(crate::trace::Warning::Native {
+            message: format!("every element of the field of {} elements solves it", u.p).into(),
+            expr: e.clone(),
+        });
+        return Ok(Some(None));
+    }
+    let roots: Vec<Expr> = linear_roots(&u)
+        .into_iter()
+        .map(|r| modular(Expr::from(r), u.p))
+        .collect();
+    let result = Expr::call(Symbol::LIST, roots);
+    ev.step("Solve", e, &result);
+    Ok(Some(Some(result)))
 }
