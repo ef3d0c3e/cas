@@ -16,9 +16,16 @@
 //! `A` and `D` are continuous in `z`, so the only discontinuity is the
 //! sign, across the cuts (`y = 0` with `X > 1` for `asin`, `acos`, where
 //! `acosh A > 0`, and with `x < 1` for `acosh`, where `atan2(D, x) > 0`;
-//! `x = 0`, `|y| > 1` for `asinh`). On a cut it is the `+0` side, and a
-//! ball across the axis gets `[0 ± v]` for the part `sgn(y) v` (or `sgn(x)
-//! v`), which holds both sides. `A - 1` and `A - X`
+//! `x = 0`, `|y| > 1` for `asinh`). On a cut (an exact 0 part) it is the
+//! side of counter-clockwise continuity (CAS-406), as Mathematica's and
+//! giac's: the one met turning counter-clockwise about the cut's branch
+//! point, below `(1, ∞)` and above `(-∞, -1)` for `asin` and `acos`, right
+//! of `(i, i∞)` and left of `(-i∞, -i)` for `asinh`, above `(-∞, 1)` for
+//! `acosh`. The odd functions stay odd on their cuts, `asin(-2) =
+//! -asin(2)`, and `acos(-u) = π - acos(u)`, `acos u = π/2 - asin u` hold
+//! there, which the evaluator's rules apply. A ball across the axis gets
+//! `[0 ± v]` for the part `sgn(y) v` (or `sgn(x) v`), which holds both
+//! sides. `A - 1` and `A - X`
 //! never cancel: with `r = |z + 1|`, `s = |z - 1|` and `r - (X + 1) = Y^2 /
 //! (r + X + 1)`,
 //!
@@ -45,7 +52,8 @@
 //! symmetry, near `-1`); the quotient, `>= 0`, is clamped to `[0, …]` when
 //! its ball reaches below 0. The imaginary part's cancellation near `|z| =
 //! 1` only moves an angle near `±π/2`. On the cut `atan2(+0, ·) = π` gives
-//! the `+0` side, across it `atan2` gives `[0 ± π]`.
+//! the side above; below `(1, ∞)` it is negated, counter-clockwise
+//! continuity as for `asin`; across the cut `atan2` gives `[0 ± π]`.
 
 #![allow(
     clippy::many_single_char_names,
@@ -65,6 +73,17 @@ fn within_one(x: &Ball) -> bool {
         one().sub(&x.abs(), 64).sign(),
         Some(Ordering::Greater | Ordering::Equal)
     )
+}
+
+/// The sign of `part` for [`unfold`], or on a cut, where `part` is an exact
+/// 0, the side counter-clockwise continuity takes: `other`'s sign, reversed
+/// when `flip`.
+fn side(part: &Ball, other: &Ball, flip: bool) -> Option<Ordering> {
+    if is_zero(part) {
+        other.sign().map(|o| if flip { o.reverse() } else { o })
+    } else {
+        part.sign()
+    }
 }
 
 /// `(D, acosh A)` of the module comment for `X = |x|`, `Y = |y|` (balls of
@@ -109,7 +128,7 @@ impl ComplexBall {
         let (d, acosh_a) = hft(&fold(x).0, &fold(y).0, prec + 16);
         ComplexBall::new(
             x.atan2(&d, prec),
-            unfold(acosh_a, y.sign()).round_to_accuracy(prec),
+            unfold(acosh_a, side(y, x, true)).round_to_accuracy(prec),
         )
     }
 
@@ -123,7 +142,9 @@ impl ComplexBall {
         let (d, acosh_a) = hft(&fold(x).0, &fold(y).0, prec + 16);
         ComplexBall::new(
             d.atan2(x, prec),
-            unfold(acosh_a, y.sign()).neg().round_to_accuracy(prec),
+            unfold(acosh_a, side(y, x, true))
+                .neg()
+                .round_to_accuracy(prec),
         )
     }
 
@@ -140,7 +161,7 @@ impl ComplexBall {
         }
         let (d, acosh_a) = hft(&fold(y).0, &fold(x).0, prec + 16);
         ComplexBall::new(
-            unfold(acosh_a, x.sign()).round_to_accuracy(prec),
+            unfold(acosh_a, side(x, y, false)).round_to_accuracy(prec),
             y.atan2(&d, prec),
         )
     }
@@ -185,7 +206,11 @@ impl ComplexBall {
         );
         let re = ratio.log1p(wp).mul_2exp(&Integer::from(-2));
         let den = omx.mul(&one.add(&xa, wp), wp).sub(&y2, wp);
-        let im = half(&y.mul_2exp(&Integer::ONE).atan2(&den, wp));
+        let mut im = half(&y.mul_2exp(&Integer::ONE).atan2(&den, wp));
+        if is_zero(y) && sign == Some(Ordering::Greater) {
+            // Below (1, ∞): -π/2, as atanh(-2) = -atanh(2).
+            im = im.neg();
+        }
         ComplexBall::new(
             unfold(re, sign).round_to_accuracy(prec),
             im.round_to_accuracy(prec),

@@ -519,16 +519,10 @@ impl ComplexBall {
             .sub(&unit.sub(&iz, wp).log(wp), wp);
         // d / (2i) = -i d / 2.
         let h = d.mul_i().neg();
-        let mut re = h.re.mul_2exp(&-Integer::ONE).round_to_accuracy(prec);
-        // On a cut itself (real part exactly 0, |im| > 1) the value continuous
-        // from the right half-plane, as C99's catan and MPC: real part +π/2.
-        // The formula gives that above +i and -π/2 below -i.
-        let beyond = |b: &Ball| b.abs().cmp(&one()) == Some(Ordering::Greater);
-        if self.re.is_exact() && self.re.mid().is_zero() && beyond(&self.im) {
-            re = Ball::const_pi(prec + 8)
-                .mul_2exp(&-Integer::ONE)
-                .round_to_accuracy(prec);
-        }
+        let re = h.re.mul_2exp(&-Integer::ONE).round_to_accuracy(prec);
+        // On a cut itself (real part exactly 0, |im| > 1) the formula, with
+        // log's side above its cut, gives counter-clockwise continuity
+        // (CAS-406): +π/2 above +i, -π/2 below -i, so that atan stays odd.
         ComplexBall {
             re,
             im: h.im.mul_2exp(&-Integer::ONE).round_to_accuracy(prec),

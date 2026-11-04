@@ -12,7 +12,9 @@
 //! `log`, `log1p`, `pow` and `root` take the logarithm from MPFR instead:
 //! `log1p` of the exact `1 + z`, and `pow` and `root` as `exp(w log z)` far
 //! above the precision with an explicit margin, as `sin_pi` and `cos_pi`.
-//! `expm1` is `exp` minus 1 with the bits the subtraction cancels.
+//! `expm1` is `exp` minus 1 with the bits the subtraction cancels. On the
+//! inverse functions' cuts, MPC's points get the signed zero of this CAS's
+//! side ([`cut_side`]).
 #![no_main]
 
 use arbitrary::{Result, Unstructured};
@@ -121,10 +123,31 @@ fn run(u: &mut Unstructured<'_>) -> Result<()> {
         }),
         _ => {
             let (_, f, mp) = UNARY[op];
-            let oracle = move |zm: &MpComplex, prec: u64| mpc_bracket(prec, |p, r| mp(zm, p, r));
+            let oracle = move |zm: &MpComplex, prec: u64| {
+                let zm = cut_side(name, zm);
+                mpc_bracket(prec, |p, r| mp(&zm, p, r))
+            };
             unary(u, name, &z, &f(&z, prec), prec, true, &oracle)
         }
     }
+}
+
+/// The point `z` with the zero part MPC's signed zeros need for this CAS's
+/// side of `f`'s cut (counter-clockwise continuity, CAS-406): `-0i` right of
+/// 0 for `asin`, `acos` and `atanh` (below `(1, ∞)`), a real part `-0`
+/// below 0 for `asinh` and `atan` (left of `(-i∞, -i)`).
+fn cut_side(f: &str, z: &MpComplex) -> MpComplex {
+    let mut z = z.clone();
+    match f {
+        "asin" | "acos" | "atanh" if z.imag().is_zero() && *z.real() > 0 => {
+            *z.mut_imag() = -z.imag().clone();
+        }
+        "asinh" | "atan" if z.real().is_zero() && *z.imag() < 0 => {
+            *z.mut_real() = -z.real().clone();
+        }
+        _ => {}
+    }
+    z
 }
 
 /// A complex ball with parts below `2^20` and radii up to `2^20`.

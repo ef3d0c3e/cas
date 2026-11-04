@@ -21,6 +21,24 @@ pub(super) fn mp(re: &Dyadic, im: &Dyadic, p: u32) -> MpComplex {
     MpComplex::with_val(p, (re.to_rug().unwrap(), im.to_rug().unwrap()))
 }
 
+/// The point `z` with the zero part MPC's signed zeros need for this CAS's
+/// side of `f`'s cut (counter-clockwise continuity, CAS-406): `-0i` right of
+/// 0 for `asin`, `acos` and `atanh` (below `(1, ∞)`), a real part `-0`
+/// below 0 for `asinh` and `atan` (left of `(-i∞, -i)`).
+pub(super) fn cut_side(f: &str, z: &MpComplex) -> MpComplex {
+    let mut z = z.clone();
+    match f {
+        "asin" | "acos" | "atanh" if z.imag().is_zero() && *z.real() > 0 => {
+            *z.mut_imag() = -z.imag().clone();
+        }
+        "asinh" | "atan" if z.real().is_zero() && *z.imag() < 0 => {
+            *z.mut_real() = -z.real().clone();
+        }
+        _ => {}
+    }
+    z
+}
+
 /// Both parts' brackets of an MPC computation at `prec + 192` bits: MPC's
 /// `log` at low precisions misses `log|z|` for `|z|` within about `2^-126`
 /// of 1 (at 66 bits, `(1 - 2^-127) + 4.5e-28 i` gives `+1.03e-55` for
@@ -94,7 +112,8 @@ proptest! {
             check("pow", &z.pow(&w, prec), prec, &brackets(prec, |p, r| MpComplex::with_val_round(p, rug::ops::Pow::pow(&zr, &wr), r).0))?;
             // atan has poles at ±i (0 + 1i is a dyadic point too).
             let pole = zr.real().is_zero() && zr.imag().clone().abs() == 1;
-            if !pole { check("atan", &z.atan(prec), prec, &brackets(prec, |p, r| MpComplex::with_val_round(p, zr.atan_ref(), r).0))?; }
+            let za = cut_side("atan", &zr);
+            if !pole { check("atan", &z.atan(prec), prec, &brackets(prec, |p, r| MpComplex::with_val_round(p, za.atan_ref(), r).0))?; }
         }
         // abs and arg are real balls.
         let real = |what: &str, b: &Ball, f: &dyn Fn(u32, MpRound) -> MpFloat| -> Result<(), TestCaseError> {

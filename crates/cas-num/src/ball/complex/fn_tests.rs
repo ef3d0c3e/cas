@@ -20,7 +20,7 @@ use rug::ops::Pow;
 use rug::{Complex as MpComplex, Float as MpFloat};
 
 use super::ComplexBall;
-use super::tests::{ball, brackets, check, mp, part, prec};
+use super::tests::{ball, brackets, check, cut_side, mp, part, prec};
 use crate::ball::{Ball, Float, Mag};
 use crate::testkit::ToRug;
 use crate::testkit::float::{Bracket, Dyadic, check_encloses};
@@ -129,7 +129,12 @@ fn check_point(re: &Dyadic, im: &Dyadic, prec: u64) -> Result<(), TestCaseError>
     let zr = mp(re, im, 2000);
     for (name, ours, oracle) in FUNCTIONS {
         if !singular(name, &zr) {
-            check(name, &ours(&z, prec), prec, &oracle(&zr, prec))?;
+            check(
+                name,
+                &ours(&z, prec),
+                prec,
+                &oracle(&cut_side(name, &zr), prec),
+            )?;
         }
     }
     check("cos_pi", &z.cos_pi(prec), prec, &pi_oracle(&zr, prec, true))?;
@@ -232,7 +237,7 @@ proptest! {
                 if !w.is_finite() || singular(name, &zr) {
                     continue;
                 }
-                let (bre, bim) = oracle(&zr, prec);
+                let (bre, bim) = oracle(&cut_side(name, &zr), prec);
                 for (part, br) in [(w.re(), bre), (w.im(), bim)] {
                     let mid = part.mid().to_rational().to_rug();
                     let r = part.rad().to_float().unwrap().to_rational().to_rug();
@@ -321,10 +326,11 @@ fn cut_sides() {
     let near = |v: &Ball, w: &Ball| {
         v.sub(w, 128).abs().mid() < &Float::from(1i64).mul_2exp(&Integer::from(-40))
     };
-    // asin(2 + 0i) = π/2 + i acosh 2 (the +0 side), conjugate below,
-    // both across.
+    // asin(2 + 0i) = π/2 - i acosh 2, the side below (counter-clockwise
+    // continuity, CAS-406), conjugate above, both across; asin(-2) is
+    // -asin(2), the side above.
     let acosh2 = int(2).acosh(128);
-    for (im, sign) in [(Ball::ZERO, 1), (tiny.clone(), 1), (tiny.neg(), -1)] {
+    for (im, sign) in [(Ball::ZERO, -1), (tiny.clone(), 1), (tiny.neg(), -1)] {
         let v = ComplexBall::new(int(2), im.clone()).asin(100);
         assert!(
             near(v.re(), &hp) && near(v.im(), &acosh2.mul(&int(sign), 128)),
@@ -364,9 +370,10 @@ fn cut_sides() {
         v.re().contains(&Float::from_f64(1.3).unwrap())
             && v.re().contains(&Float::from_f64(-1.3).unwrap())
     );
-    // atanh(±2 + 0i): imaginary part +π/2, -π/2 below.
+    // atanh(±2 + 0i) = ±(atanh(1/2) - iπ/2): below (1, ∞), above (-∞, -1);
+    // -π/2 below both.
     for x in [2, -2] {
-        for (im, sign) in [(Ball::ZERO, 1), (tiny.neg(), -1)] {
+        for (im, sign) in [(Ball::ZERO, -x / 2), (tiny.neg(), -1)] {
             let v = ComplexBall::new(int(x), im).atanh(100);
             assert!(near(v.im(), &hp.mul(&int(sign), 128)), "atanh({x}): {v:?}");
         }
@@ -392,6 +399,53 @@ fn cut_sides() {
     // Poles and singular points: indeterminate.
     assert!(!ComplexBall::from_real(int(1)).atanh(64).is_finite());
     assert!(!ComplexBall::from_real(int(-1)).log1p(64).is_finite());
+}
+
+/// The odd functions are odd on their cuts, and `acos(-u) = π - acos u`
+/// there (counter-clockwise continuity, CAS-406).
+#[test]
+fn odd_on_the_cuts() {
+    let int = |n: i64| Ball::from_integer(&Integer::from(n));
+    let hp = Ball::const_pi(128).mul_2exp(&-Integer::ONE);
+    let pi = Ball::const_pi(128);
+    let acosh2 = int(2).acosh(128);
+    let near = |v: &Ball, w: &Ball| {
+        v.sub(w, 128).abs().mid() < &Float::from(1i64).mul_2exp(&Integer::from(-40))
+    };
+    let (v, w) = (
+        ComplexBall::from_real(int(2)).asin(100),
+        ComplexBall::from_real(int(-2)).asin(100),
+    );
+    assert!(
+        near(v.re(), &w.re().neg()) && near(v.im(), &w.im().neg()),
+        "{w:?}"
+    );
+    let (v, w) = (
+        ComplexBall::from_real(int(2)).acos(100),
+        ComplexBall::from_real(int(-2)).acos(100),
+    );
+    // acos(-2) = π - acos(2) = π - i acosh 2.
+    assert!(
+        near(w.re(), &pi.sub(v.re(), 128)) && near(w.im(), &v.im().neg()),
+        "{v:?}, {w:?}"
+    );
+    // asinh(0 - 2i) = -asinh(0 + 2i), left of the cut.
+    let v = ComplexBall::new(Ball::ZERO, int(-2)).asinh(100);
+    assert!(
+        near(v.re(), &acosh2.neg()) && near(v.im(), &hp.neg()),
+        "asinh: {v:?}"
+    );
+    // atan(0 ± 2i) = ±(π/2 + i atanh(1/2)): right of the upper cut, left of
+    // the lower one.
+    let atanh_half = Ball::exact(Float::from(1i64).mul_2exp(&-Integer::ONE)).atanh(128);
+    for sign in [1, -1] {
+        let v = ComplexBall::new(Ball::ZERO, int(2 * sign)).atan(100);
+        assert!(
+            near(v.re(), &hp.mul(&int(sign), 128))
+                && near(v.im(), &atanh_half.mul(&int(sign), 128)),
+            "atan: {v:?}"
+        );
+    }
 }
 
 #[test]
