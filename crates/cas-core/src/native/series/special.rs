@@ -25,6 +25,13 @@
 //!   `ψ^(m)(g)` toward `+∞` by its asymptotic series, `log g − 1/(2g) −
 //!   Σ B_{2k}/(2k g^(2k))` and its derivatives, an O-bound at each order.
 //!   `Ei` toward `+∞`, `Gamma` and `LambertW` have no series there.
+//! - The incomplete functions (CAS-DOC-49 §3, CAS-488), of `g` in their
+//!   last argument, the others free of `t`: the lower gamma function as its
+//!   value at `g₀` plus `∫ g^(a−1) e^(−g) g′`, the upper one as `Γ(a)` less
+//!   that, and the incomplete beta function as its value at `g₀` plus `∫
+//!   g^(a−1) (1 − g)^(b−1) g′`, over `Γ(a)` or `B(a, b)` when regularized;
+//!   toward `+∞`, `γ(a, g) = Γ(a)` and `Γ(a, g) = 0` to every order, the
+//!   remainder `g^(a−1) e^(−g)` beating every power of `t`.
 
 use std::cmp::Ordering;
 
@@ -55,6 +62,12 @@ impl Expander<'_, '_> {
     /// `f(args)` for the special functions, their arguments' series to
     /// `order`; `None` where they have none here.
     pub(super) fn special(&mut self, f: Symbol, args: &[Expr], order: &Rational) -> Found {
+        if f == Symbol::LOWER_GAMMA
+            || (f == Symbol::GAMMA && args.len() >= 2)
+            || (f == Symbol::BETA && args.len() >= 3)
+        {
+            return self.incomplete(f, args, order);
+        }
         let (g, extra) = match args {
             [g] => (g, None),
             [g, k] => (g, Some(k)),
@@ -87,6 +100,89 @@ impl Expander<'_, '_> {
             ) => self.integral_function(f, &s, order),
             _ => Ok(None),
         }
+    }
+
+    /// `LowerGamma`, `Gamma` with two or three arguments and `Beta` with
+    /// three or four, of their last argument `g`.
+    pub(super) fn incomplete(&mut self, f: Symbol, args: &[Expr], order: &Rational) -> Found {
+        let (parameters, g, regularized) = match (f, args) {
+            (Symbol::LOWER_GAMMA | Symbol::GAMMA, [a, g]) => (vec![a.clone()], g, false),
+            (Symbol::LOWER_GAMMA | Symbol::GAMMA, [a, g, one]) if *one == Expr::from(1) => {
+                (vec![a.clone()], g, true)
+            }
+            (Symbol::BETA, [a, b, g]) => (vec![a.clone(), b.clone()], g, false),
+            (Symbol::BETA, [a, b, g, one]) if *one == Expr::from(1) => {
+                (vec![a.clone(), b.clone()], g, true)
+            }
+            _ => return Ok(None),
+        };
+        if parameters.iter().any(|p| p.contains(&self.t)) {
+            return Ok(None);
+        }
+        let Some(s) = self.expand(g, order)? else {
+            return Ok(None);
+        };
+        let s = self.normalized(s)?;
+        let a = &parameters[0];
+        let whole = match f {
+            Symbol::BETA => Expr::call(Symbol::BETA, [a.clone(), parameters[1].clone()]),
+            _ => Expr::call(Symbol::GAMMA, [a.clone()]),
+        };
+        let scale = if regularized {
+            self.eval(&(Expr::from(1) / whole.clone()))?
+        } else {
+            Expr::from(1)
+        };
+        if s.valuation < 0 {
+            if f == Symbol::BETA || self.leading_sign(&s) != Some(Ordering::Greater) {
+                return Ok(None);
+            }
+            let value = if f == Symbol::LOWER_GAMMA {
+                whole
+            } else {
+                Expr::from(0)
+            };
+            let value = self.eval(&(value * scale))?;
+            return Ok(Some(Self::constant(&value, order)));
+        }
+        let Some((g0, _)) = self.split(&s)? else {
+            return Ok(None);
+        };
+        // f′(g) g′, then its integral from g₀.
+        let power = self.power(&s, &(a.clone() - 1))?;
+        let other = if f == Symbol::BETA {
+            let one = Self::constant_like(&Expr::from(1), &s);
+            let rest = self.minus(&one, &s)?;
+            self.power(&rest, &(parameters[1].clone() - 1))?
+        } else {
+            let minus = self.scaled(&Expr::from(-1), &s)?;
+            self.exp(&minus)?
+        };
+        let (Some(power), Some(other)) = (power, other) else {
+            return Ok(None);
+        };
+        let derivative = self.mul(&power, &other)?;
+        let dg = self.derivative(&s)?;
+        let integrand = self.mul(&derivative, &dg)?;
+        let Some(body) = self.integral(&integrand)? else {
+            return Ok(None);
+        };
+        let lower = match f {
+            Symbol::BETA => Expr::call(Symbol::BETA, [a.clone(), parameters[1].clone(), g0]),
+            _ => Expr::call(Symbol::LOWER_GAMMA, [a.clone(), g0]),
+        };
+        let start = self.eval(&lower)?;
+        let start = Self::constant_like(&start, &body);
+        let mut value = self.add(&start, &body)?;
+        if f == Symbol::GAMMA {
+            let whole = self.eval(&whole)?;
+            let whole = Self::constant_like(&whole, &value);
+            value = self.minus(&whole, &value)?;
+        }
+        if regularized {
+            value = self.scaled(&scale, &value)?;
+        }
+        Ok(Some(value))
     }
 
     /// `c` with the order of `like`.

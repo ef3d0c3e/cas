@@ -750,6 +750,8 @@ impl<'a, 'e> Expander<'a, 'e> {
                 | Symbol::ERF
                 | Symbol::ERFC
                 | Symbol::GAMMA
+                | Symbol::LOWER_GAMMA
+                | Symbol::BETA
                 | Symbol::POLY_GAMMA
                 | Symbol::LAMBERT_W,
                 _,

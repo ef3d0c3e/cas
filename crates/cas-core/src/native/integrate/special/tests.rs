@@ -303,3 +303,49 @@ fn incomplete_functions() {
         "Times[Power[x, 1/3], Power[Plus[1, Times[-1, x]], 2/3]]",
     ]);
 }
+
+/// `input` and `expected` are one number, within `10⁻²⁰` by balls.
+fn check_numbers(cases: &[(&str, &str)]) {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, expected) in cases {
+        let numeric = |e: &str| {
+            ctx.eval(&Expr::call(Symbol::N, [read(e), Expr::from(30)]))
+                .unwrap()
+        };
+        let (found, want) = (numeric(input), numeric(expected));
+        let gap = Expr::call(Symbol::ABS, [found.clone() - want.clone()]);
+        let small = Expr::call(Symbol::LESS, [gap, read("Power[10, -20]")]);
+        if ctx.eval(&small).unwrap().as_symbol() != Some(Symbol::TRUE) {
+            wrong.push(format!("{input}: {found:?}, expected {want:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Limits of the incomplete functions and the definite integrals through
+/// them (CAS-488): giac's `Gamma(1/3)/(6*2^(1/3))` and `Gamma(a+1)*
+/// Gamma(b+1)/Gamma(a+b+2)`.
+#[test]
+fn incomplete_limits() {
+    let ctx = Context::new();
+    for (input, expected) in [
+        ("Limit[LowerGamma[a, x], Rule[x, Infinity]]", "Gamma[a]"),
+        ("Limit[LowerGamma[1/3, x, 1], Rule[x, Infinity]]", "1"),
+        ("Limit[Gamma[1/3, x], Rule[x, Infinity]]", "0"),
+        ("Limit[LowerGamma[1/3, x], Rule[x, 0]]", "0"),
+    ] {
+        let found = ctx.eval(&read(input)).unwrap();
+        assert_eq!(found, ctx.eval(&read(expected)).unwrap(), "{input}");
+    }
+    check_numbers(&[
+        (
+            "Integrate[Times[Power[x, 1/3], Power[E, Times[-2, x]]], List[x, 0, Infinity]]",
+            "Times[Gamma[1/3], Power[Times[6, Power[2, 1/3]], -1]]",
+        ),
+        (
+            "Integrate[Times[Power[x, 1/3], Power[Plus[1, Times[-1, x]], 2/3]], List[x, 0, 1]]",
+            "Times[Gamma[4/3], Gamma[5/3], Power[Gamma[3], -1]]",
+        ),
+    ]);
+}
