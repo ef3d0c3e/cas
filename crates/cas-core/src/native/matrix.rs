@@ -500,6 +500,10 @@ fn reduced(ev: &mut Eval<'_>, e: &Expr, m: &Expr) -> Result<Option<Reduced>, Eva
     let Some(Shape::Matrix(rows, columns)) = shape(m) else {
         return Ok(None);
     };
+    // Over 𝔽ₚ (CAS-DOC-44 §2).
+    if let Some(found) = super::modular::matrices::reduced(ev, e, m)? {
+        return Ok(found.map(|(rows, pivots)| Reduced { rows, pivots }));
+    }
     if numeric(m) {
         let mut entries = rows_of(m);
         return Ok(match numeric_gauss_jordan(ev, &mut entries, columns)? {
@@ -688,6 +692,10 @@ pub(super) fn lin_solve(ev: &mut Eval<'_>, e: &Expr) -> Native {
         .all(|(i, x)| x.as_symbol().is_some() && !unknowns[..i].contains(x));
     if unknowns.is_empty() || !distinct {
         return Ok(None);
+    }
+    // Modulo a prime (CAS-DOC-44 §3).
+    if let Some(found) = super::modular::matrices::lin_solve(ev, e, &equations, &unknowns)? {
+        return Ok(found);
     }
     let Some(solutions) = super::solve::linear_system(ev, e, &equations, &unknowns)? else {
         return Ok(None);

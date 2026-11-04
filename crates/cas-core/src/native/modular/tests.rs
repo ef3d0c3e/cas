@@ -209,3 +209,64 @@ fn matrices() {
         ),
     ]);
 }
+
+/// Reduced forms over 𝔽ₚ and modular linear systems (CAS-458): giac's
+/// `rref`, `rank`, `ker`, `image` and `linsolve`.
+#[test]
+fn reduced_forms() {
+    check(&[
+        (
+            "RowReduce[Modular[List[List[1, 2, 3], List[4, 5, 6], List[7, 8, 10]], 5]]",
+            "Modular[IdentityMatrix[3], 5]",
+        ),
+        // giac's [[1 % 7,2 % 7],[0 % 7,0 % 7]]; rank 1 modulo 3.
+        (
+            "RowReduce[Modular[List[List[1, 2], List[2, 4]], 7]]",
+            "Modular[List[List[1, 2], List[0, 0]], 7]",
+        ),
+        (
+            "MatrixRank[Modular[List[List[1, 2, 3], List[4, 5, 6], List[7, 8, 9]], 3]]",
+            "1",
+        ),
+        // giac's [[2 % 5,-1,0],[-2 % 5,0,-1]] and [[1 % 5,0 % 5],[0 % 5,1 % 5]].
+        (
+            "NullSpace[Modular[List[List[1, 2, 3], List[2, 4, 6]], 5]]",
+            "List[List[Modular[2, 5], -1, 0], List[Modular[-2, 5], 0, -1]]",
+        ),
+        (
+            "ColumnSpace[Modular[List[List[1, 2, 3], List[2, 4, 7]], 5]]",
+            "Modular[List[List[1, 0], List[0, 1]], 5]",
+        ),
+        // giac's [0 % 7,-3 % 7], one side modular or all of them.
+        (
+            "LinSolve[Modular[List[Equation[Plus[x, Times[2, y]], 1], \
+             Equation[Plus[Times[3, x], Times[4, y]], 2]], 7], List[x, y]]",
+            "Modular[List[0, -3], 7]",
+        ),
+        (
+            "LinSolve[List[Equation[Plus[x, Times[2, y]], Modular[1, 7]], \
+             Equation[Plus[Times[3, x], Times[4, y]], 2]], List[x, y]]",
+            "Modular[List[0, -3], 7]",
+        ),
+        (
+            "LinSolve[Modular[List[List[1, 2], List[3, 4]], 7], List[1, 2]]",
+            "Modular[List[0, -3], 7]",
+        ),
+        // giac's [] and [(-1 % 5)*y+1 % 5,y].
+        (
+            "LinSolve[Modular[List[Equation[Plus[x, y], 1], Equation[Plus[x, y], 2]], 5], \
+             List[x, y]]",
+            "List[]",
+        ),
+        (
+            "LinSolve[Modular[List[Equation[Plus[x, y], 1], \
+             Equation[Plus[Times[2, x], Times[2, y]], 2]], 5], List[x, y]]",
+            "List[Modular[Plus[1, Times[-1, y]], 5], y]",
+        ),
+        // A composite modulus: the call stays.
+        (
+            "RowReduce[Modular[List[List[2, 4], List[1, 3]], 6]]",
+            "RowReduce[List[List[Modular[2, 6], Modular[-2, 6]], List[Modular[1, 6], Modular[3, 6]]]]",
+        ),
+    ]);
+}
