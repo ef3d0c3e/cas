@@ -84,6 +84,10 @@ fn rows(e: &Expr) -> Option<Matrix> {
 /// `x` evaluated and put together; a number as it is: `Together` leaves a
 /// ball in its call, and on a quotient of balls exceeds the recursion limit
 /// (CAS-498's fuzzing: Schur and the SVD of `[[-5.]]`).
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "the callers hand over the entries they build"
+)]
 fn simplified(ev: &mut Eval<'_>, x: Expr) -> Result<Expr, EvalError> {
     let x = ev.eval(&x)?;
     if x.is_number() {
