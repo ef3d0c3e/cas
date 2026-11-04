@@ -355,6 +355,22 @@ builtins! {
     RANDOM_CHI_SQUARE = "RandomChiSquare" [PROTECTED];
     RANDOM_STUDENT_T = "RandomStudentT" [PROTECTED];
     RANDOM_FISHER = "RandomFisher" [PROTECTED];
+    // The gamma, beta, Weibull and Cauchy distributions (CAS-DOC-46 §4).
+    GAMMA_PDF = "GammaPDF" [PROTECTED];
+    GAMMA_CDF = "GammaCDF" [PROTECTED];
+    GAMMA_ICDF = "GammaICDF" [PROTECTED];
+    BETA_PDF = "BetaPDF" [PROTECTED];
+    BETA_CDF = "BetaCDF" [PROTECTED];
+    BETA_ICDF = "BetaICDF" [PROTECTED];
+    WEIBULL_PDF = "WeibullPDF" [PROTECTED];
+    WEIBULL_CDF = "WeibullCDF" [PROTECTED];
+    WEIBULL_ICDF = "WeibullICDF" [PROTECTED];
+    CAUCHY_PDF = "CauchyPDF" [PROTECTED];
+    CAUCHY_CDF = "CauchyCDF" [PROTECTED];
+    CAUCHY_ICDF = "CauchyICDF" [PROTECTED];
+    RANDOM_GAMMA = "RandomGamma" [PROTECTED];
+    RANDOM_BETA = "RandomBeta" [PROTECTED];
+    RANDOM_WEIBULL = "RandomWeibull" [PROTECTED];
     // Random vectors, matrices and polynomials, permutations and samples
     // (CAS-DOC-33 §5, §6).
     RANDOM_VECTOR = "RandomVector" [PROTECTED];

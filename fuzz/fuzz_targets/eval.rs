@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 350] = [
+const BUILTINS: [&str; 365] = [
     "Plus",
     "Times",
     "Power",
@@ -205,6 +205,21 @@ const BUILTINS: [&str; 350] = [
     "Convolution",
     // The incomplete gamma function (CAS-DOC-46).
     "LowerGamma",
+    "GammaPDF",
+    "GammaCDF",
+    "GammaICDF",
+    "BetaPDF",
+    "BetaCDF",
+    "BetaICDF",
+    "WeibullPDF",
+    "WeibullCDF",
+    "WeibullICDF",
+    "CauchyPDF",
+    "CauchyCDF",
+    "CauchyICDF",
+    "RandomGamma",
+    "RandomBeta",
+    "RandomWeibull",
     "ZTransform",
     "InverseZTransform",
     "KroneckerDelta",

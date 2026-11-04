@@ -403,24 +403,37 @@ NegativeBinomialCDF: negbinomial_cdf
 NegativeBinomialICDF: negbinomial_icdf
 # Continuous distributions in closed form (CAS-DOC-23, CAS-303).
 NormalPDF: normald
-NormalCDF: normald_cdf
-NormalICDF: normald_icdf
-ExponentialPDF: exponentiald
-ExponentialCDF: exponentiald_cdf
-ExponentialICDF: exponentiald_icdf
-UniformPDF: uniformd
-UniformCDF: uniformd_cdf
-UniformICDF: uniformd_icdf
+NormalCDF: normald_cdf normal_cdf
+NormalICDF: normald_icdf normal_icdf
+ExponentialPDF: exponentiald exponential
+ExponentialCDF: exponentiald_cdf exponential_cdf
+ExponentialICDF: exponentiald_icdf exponential_icdf
+UniformPDF: uniformd uniform
+UniformCDF: uniformd_cdf uniform_cdf
+UniformICDF: uniformd_icdf uniform_icdf
 # Distributions with degrees of freedom (CAS-DOC-23, CAS-304).
-StudentTPDF: student
+StudentTPDF: student studentd
 StudentTCDF: student_cdf
 StudentTICDF: student_icdf
-ChiSquarePDF: chisquare
-ChiSquareCDF: chisquare_cdf
-ChiSquareICDF: chisquare_icdf
-FisherPDF: fisher
-FisherCDF: fisher_cdf
-FisherICDF: fisher_icdf
+ChiSquarePDF: chisquare chisquared
+ChiSquareCDF: chisquare_cdf chisquared_cdf
+ChiSquareICDF: chisquare_icdf chisquared_icdf
+FisherPDF: fisher fisherd snedecor snedecord
+FisherCDF: fisher_cdf fisherd_cdf snedecor_cdf snedecord_cdf
+FisherICDF: fisher_icdf fisherd_icdf snedecor_icdf snedecord_icdf
+# The gamma, beta, Weibull and Cauchy distributions (CAS-DOC-46 §4, CAS-470).
+GammaPDF: gammad
+GammaCDF: gammad_cdf
+GammaICDF: gammad_icdf
+BetaPDF: betad
+BetaCDF: betad_cdf
+BetaICDF: betad_icdf
+WeibullPDF: weibulld weibull
+WeibullCDF: weibulld_cdf weibull_cdf
+WeibullICDF: weibulld_icdf weibull_icdf
+CauchyPDF: cauchyd cauchy
+CauchyCDF: cauchyd_cdf cauchy_cdf
+CauchyICDF: cauchyd_icdf cauchy_icdf
 
 # Random numbers (CAS-DOC-33).
 SeedRandom: srand randseed
@@ -434,6 +447,9 @@ RandomGeometric: randgeometric
 RandomChiSquare: randchisquare
 RandomStudentT: randstudent
 RandomFisher: randfisher
+RandomGamma: randgammad
+RandomBeta: randbetad
+RandomWeibull: randweibulld
 RandomVector: randvector ranv
 RandomMatrix: randmatrix ranm
 RandomPolynomial: randpoly

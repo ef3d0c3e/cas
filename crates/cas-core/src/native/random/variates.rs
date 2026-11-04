@@ -1,6 +1,7 @@
 //! Random variates of the distributions (CAS-DOC-33 §4, CAS-372): Xcas's
 //! `randnorm`, `randexp`, `randbinomial`, `randpoisson`, `randgeometric`,
-//! `randchisquare`, `randstudent` and `randfisher`, and the laws of
+//! `randchisquare`, `randstudent` and `randfisher`, `randgammad`,
+//! `randbetad` and `randweibulld` (CAS-DOC-46 §4), and the laws of
 //! `randvector`, `randmatrix` and `randpoly`, named by their densities.
 //!
 //! A variate is the inverse cumulative function of its law (CAS-DOC-23) at
@@ -37,6 +38,9 @@ pub(in crate::native) enum Law {
     StudentT,
     ChiSquare,
     Fisher,
+    Gamma,
+    Beta,
+    Weibull,
 }
 
 impl Law {
@@ -54,6 +58,9 @@ impl Law {
             Symbol::STUDENT_T_PDF => Law::StudentT,
             Symbol::CHI_SQUARE_PDF => Law::ChiSquare,
             Symbol::FISHER_PDF => Law::Fisher,
+            Symbol::GAMMA_PDF => Law::Gamma,
+            Symbol::BETA_PDF => Law::Beta,
+            Symbol::WEIBULL_PDF => Law::Weibull,
             _ => return None,
         })
     }
@@ -71,6 +78,9 @@ impl Law {
             Law::StudentT => Symbol::STUDENT_T_ICDF,
             Law::ChiSquare => Symbol::CHI_SQUARE_ICDF,
             Law::Fisher => Symbol::FISHER_ICDF,
+            Law::Gamma => Symbol::GAMMA_ICDF,
+            Law::Beta => Symbol::BETA_ICDF,
+            Law::Weibull => Symbol::WEIBULL_ICDF,
         }
     }
 
@@ -78,7 +88,13 @@ impl Law {
     fn takes(self, n: usize) -> bool {
         match self {
             Law::Normal => n == 0 || n == 2,
-            Law::Uniform | Law::Binomial | Law::NegativeBinomial | Law::Fisher => n == 2,
+            Law::Uniform
+            | Law::Binomial
+            | Law::NegativeBinomial
+            | Law::Fisher
+            | Law::Gamma
+            | Law::Beta => n == 2,
+            Law::Weibull => n == 2 || n == 3,
             Law::Exponential | Law::Poisson | Law::Geometric | Law::StudentT | Law::ChiSquare => {
                 n == 1
             }
@@ -167,4 +183,19 @@ pub(in crate::native) fn random_student_t(ev: &mut Eval<'_>, e: &Expr) -> Native
 /// `RandomFisher[ν₁, ν₂]`.
 pub(in crate::native) fn random_fisher(ev: &mut Eval<'_>, e: &Expr) -> Native {
     variate(ev, Law::Fisher, e.args())
+}
+
+/// `RandomGamma[a, b]`.
+pub(in crate::native) fn random_gamma(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    variate(ev, Law::Gamma, e.args())
+}
+
+/// `RandomBeta[a, b]`.
+pub(in crate::native) fn random_beta(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    variate(ev, Law::Beta, e.args())
+}
+
+/// `RandomWeibull[k, λ]`, `RandomWeibull[k, λ, θ]`.
+pub(in crate::native) fn random_weibull(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    variate(ev, Law::Weibull, e.args())
 }

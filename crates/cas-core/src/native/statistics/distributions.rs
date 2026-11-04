@@ -8,6 +8,8 @@
 //!   `InverseErf` ([`inversion`], §3, §5, CAS-302).
 //! - The normal, exponential and uniform distributions ([`continuous`], §3,
 //!   CAS-303).
+//! - The gamma, beta, Weibull and Cauchy distributions ([`shapes`],
+//!   CAS-DOC-46 §4, CAS-470).
 //! - Student's t, χ² and Fisher's F ([`degrees`], §4, CAS-304), through the
 //!   closed forms of the regularized incomplete gamma and beta functions
 //!   at integer and half-integer parameters ([`incomplete`]).
@@ -23,6 +25,7 @@ pub(in crate::native) mod degrees;
 pub(in crate::native) mod discrete;
 pub(in crate::native) mod incomplete;
 pub(in crate::native) mod inversion;
+pub(in crate::native) mod shapes;
 
 use std::cmp::Ordering;
 

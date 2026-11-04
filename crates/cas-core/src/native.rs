@@ -571,6 +571,57 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         ),
         (Symbol::RANDOM_STUDENT_T, random::variates::random_student_t),
         (Symbol::RANDOM_FISHER, random::variates::random_fisher),
+        (
+            Symbol::GAMMA_PDF,
+            statistics::distributions::shapes::gamma_pdf,
+        ),
+        (
+            Symbol::GAMMA_CDF,
+            statistics::distributions::shapes::gamma_cdf,
+        ),
+        (
+            Symbol::GAMMA_ICDF,
+            statistics::distributions::shapes::gamma_icdf,
+        ),
+        (
+            Symbol::BETA_PDF,
+            statistics::distributions::shapes::beta_pdf,
+        ),
+        (
+            Symbol::BETA_CDF,
+            statistics::distributions::shapes::beta_cdf,
+        ),
+        (
+            Symbol::BETA_ICDF,
+            statistics::distributions::shapes::beta_icdf,
+        ),
+        (
+            Symbol::WEIBULL_PDF,
+            statistics::distributions::shapes::weibull_pdf,
+        ),
+        (
+            Symbol::WEIBULL_CDF,
+            statistics::distributions::shapes::weibull_cdf,
+        ),
+        (
+            Symbol::WEIBULL_ICDF,
+            statistics::distributions::shapes::weibull_icdf,
+        ),
+        (
+            Symbol::CAUCHY_PDF,
+            statistics::distributions::shapes::cauchy_pdf,
+        ),
+        (
+            Symbol::CAUCHY_CDF,
+            statistics::distributions::shapes::cauchy_cdf,
+        ),
+        (
+            Symbol::CAUCHY_ICDF,
+            statistics::distributions::shapes::cauchy_icdf,
+        ),
+        (Symbol::RANDOM_GAMMA, random::variates::random_gamma),
+        (Symbol::RANDOM_BETA, random::variates::random_beta),
+        (Symbol::RANDOM_WEIBULL, random::variates::random_weibull),
         (Symbol::RANDOM_VECTOR, random::collections::random_vector),
         (Symbol::RANDOM_MATRIX, random::collections::random_matrix),
         (
