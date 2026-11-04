@@ -266,11 +266,12 @@ fn branch_cuts() {
     };
     assert!(near(right.atan(100).re(), &hp), "{:?}", right.atan(100));
     assert!(near(left.atan(100).re(), &hp.neg()), "{:?}", left.atan(100));
-    // Exactly on the cuts: the side continuous with Re z > 0 (MPC's +0).
-    for y in [2i64, -2] {
+    // Exactly on the cuts: counter-clockwise continuity (CAS-406), right of
+    // 2i and left of -2i, so that atan is odd.
+    for (y, side) in [(2i64, hp.clone()), (-2, hp.neg())] {
         let on = ComplexBall::new(Ball::ZERO, Ball::from_integer(&Integer::from(y)));
         let v = on.atan(100);
-        assert!(near(v.re(), &hp), "atan({y}i) = {v:?}");
+        assert!(near(v.re(), &side), "atan({y}i) = {v:?}");
     }
     // A ball straddling the cut below -i: both sides.
     let across = ComplexBall::new(
