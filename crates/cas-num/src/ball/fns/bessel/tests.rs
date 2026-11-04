@@ -359,3 +359,26 @@ proptest! {
         prop_assert!(w.overlaps(&expected), "ν = {}, x = {:?}: {:?}", n, b, w);
     }
 }
+
+/// `Y_n` of a large order where it oscillates, `n < x`: the forward
+/// recurrence's balls widen by up to 1.27 bits a step, which the working
+/// precision covers (fuzzing: `Y_(−1024)(1662)` at 2 bits had −5 bits).
+#[test]
+fn large_orders_where_y_oscillates() {
+    let x = exact(1662.0);
+    let fine = x.bessel_y(1024, 256);
+    for (n, prec) in [(-1024, 2), (1024, 2), (1024, 53), (1000, 20)] {
+        let y = x.bessel_y(n, prec);
+        assert!(y.is_finite(), "Y_{n}(1662) at {prec}");
+        let want = i64::try_from(prec).unwrap() - 3;
+        assert!(
+            y.rel_accuracy_bits() >= want,
+            "Y_{n}(1662) at {prec}: {} bits, {y:?}",
+            y.rel_accuracy_bits()
+        );
+        // Y_(−1024) = (−1)^1024 Y_1024.
+        if n.abs() == 1024 {
+            assert!(y.overlaps(&fine), "Y_{n}(1662) at {prec}: {y:?}");
+        }
+    }
+}

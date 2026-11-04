@@ -229,7 +229,7 @@ pub(super) fn j_exact(n: u64, x: &Float, wp: u64) -> Ball {
 
 /// `Y_n(x)` for an exact `x > 0`, at about `wp` bits.
 pub(super) fn y_exact(n: u64, x: &Float, wp: u64) -> Ball {
-    let q = wp + order_bits(n) + 16;
+    let q = wp + order_bits(n) + 16 + oscillating_loss(n, x);
     let (y0, y1) = match (magnitude(x) >= threshold(q))
         .then(|| hankel_pairs(x, q))
         .flatten()
@@ -238,6 +238,22 @@ pub(super) fn y_exact(n: u64, x: &Float, wp: u64) -> Ball {
         None => y_series(x, q),
     };
     forward(y0, y1, n, x, q, false)
+}
+
+/// The bits the forward recurrence's balls lose where `Y` oscillates: each
+/// step `k < x`, where `2k/x < 2`, may widen a radius by up to the root
+/// `1 + √2` of `t² = 2t + 1`, about 1.27 bits, though the values keep
+/// their size; `4/3` bits a step (fuzzing: `Y_1024` at `x ≈ 1662` lost
+/// some 1300 bits, past the Ziv loop's reach at 2 bits).
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "a step count below the largest order"
+)]
+fn oscillating_loss(n: u64, x: &Float) -> u64 {
+    let steps = n.min(magnitude(x).ceil().min(n as f64) as u64);
+    steps * 4 / 3
 }
 
 /// `√(J_k(x)² + Y_k(x)²)` from above at an exact `x > 0`: the modulus,
