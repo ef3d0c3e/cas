@@ -155,3 +155,57 @@ fn prime_fields() {
         ),
     ]);
 }
+
+/// Matrices over ℤ/nℤ (CAS-457): giac's determinants, inverses and
+/// characteristic polynomials.
+#[test]
+fn matrices() {
+    let m = "Modular[List[List[1, 2], List[3, 4]], 7]";
+    check(&[
+        // giac's -2 % 7 and -2 % 6.
+        (&format!("Det[{m}]"), "Modular[-2, 7]"),
+        (
+            "Det[Modular[List[List[1, 2], List[3, 4]], 6]]",
+            "Modular[-2, 6]",
+        ),
+        // Mixed entries are taken in.
+        (
+            "Det[List[List[Modular[1, 7], 2], List[3, 4]]]",
+            "Modular[-2, 7]",
+        ),
+        // giac's [[-2 % 7,1 % 7],[-2 % 7,3 % 7]], and the power -1 the same.
+        (
+            &format!("Inverse[{m}]"),
+            "Modular[List[List[-2, 1], List[-2, 3]], 7]",
+        ),
+        (
+            &format!("Power[{m}, -1]"),
+            "Modular[List[List[-2, 1], List[-2, 3]], 7]",
+        ),
+        // giac's [[1 % 6,2 % 6],[3 % 6,-1 % 6]]: the determinant -1 is
+        // invertible modulo 6.
+        (
+            "Inverse[Modular[List[List[1, 2], List[3, 5]], 6]]",
+            "Modular[List[List[1, 2], List[3, -1]], 6]",
+        ),
+        // Singular modulo 7, and modulo 5 though not over ℚ (det −5): the
+        // call stays.
+        (
+            "Inverse[Modular[List[List[1, 2], List[2, 4]], 7]]",
+            "Inverse[List[List[Modular[1, 7], Modular[2, 7]], List[Modular[2, 7], Modular[-3, 7]]]]",
+        ),
+        (
+            "Inverse[Modular[List[List[1, 2], List[3, 1]], 5]]",
+            "Inverse[List[List[Modular[1, 5], Modular[2, 5]], List[Modular[-2, 5], Modular[1, 5]]]]",
+        ),
+        // giac's (1 % 7)*x^2+(2 % 7)*x-2 % 7, and the coefficients alone.
+        (
+            &format!("CharacteristicPolynomial[{m}, x]"),
+            "Modular[Plus[Power[x, 2], Times[2, x], -2], 7]",
+        ),
+        (
+            &format!("CharacteristicPolynomial[{m}]"),
+            "Modular[List[1, 2, -2], 7]",
+        ),
+    ]);
+}

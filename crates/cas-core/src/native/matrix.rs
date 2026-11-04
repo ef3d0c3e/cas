@@ -32,6 +32,9 @@
 //!   as often as its multiplicity; `Eigenvectors`, `eigenvects`, by
 //!   [`eigen`].
 //!
+//! A matrix of modular values of one modulus goes to `modular::matrices`
+//! first (CAS-DOC-44 §2).
+//!
 //! Dimensions that do not fit are [`EvalError::Shape`], as in products.
 //! Results are built unevaluated, for the loop to evaluate; each call takes
 //! one step, named after the giac function.
@@ -301,6 +304,10 @@ pub(super) fn det(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some((m, n)) = square(ev, e) else {
         return Ok(None);
     };
+    // Over ℤ/nℤ (CAS-DOC-44 §2).
+    if let Some(found) = super::modular::matrices::det(ev, e, &m)? {
+        return Ok(found);
+    }
     match determinant(ev, e, &m, n)? {
         Some(d) => stepped(ev, "det", e, d),
         None => Ok(None),
@@ -379,6 +386,10 @@ pub(super) fn inverse_of(ev: &mut Eval<'_>, e: &Expr, m: &Expr) -> Result<Option
     };
     if n != columns {
         return Err(EvalError::Shape);
+    }
+    // Over ℤ/nℤ (CAS-DOC-44 §2).
+    if let Some(found) = super::modular::matrices::inverse(ev, e, m)? {
+        return Ok(found);
     }
     if numeric(m) {
         let mut rows: Vec<Vec<Expr>> = rows_of(m)
@@ -868,6 +879,10 @@ pub(super) fn characteristic_polynomial(ev: &mut Eval<'_>, e: &Expr) -> Native {
     if n != columns {
         not_square(ev, e);
         return Ok(None);
+    }
+    // Over ℤ/nℤ (CAS-DOC-44 §2).
+    if let Some(found) = super::modular::matrices::characteristic_polynomial(ev, e, m, x)? {
+        return Ok(found);
     }
     let Some((poly, c)) = char_poly(ev, e, m, n)? else {
         return Ok(None);
