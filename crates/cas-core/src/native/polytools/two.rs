@@ -36,6 +36,20 @@
 //!   `deg Q ≤ n − p + 1`, `Q(0) = 1` and `f Q − P = O(xⁿ⁺¹)`, from `f`'s
 //!   series by the linear system of the coefficients of `Q`; a singular
 //!   system leaves the call.
+//!
+//! Factoring and forms (§4, CAS-484):
+//!
+//! - **`ComplexFactor[p]`**, `cfactor`: `Factor` over ℚ(i), as it factors
+//!   when a coefficient is complex: `Factor[i p]/i`, giac's
+//!   `(x+i)*(x-i)` for `x² + 1`.
+//! - **`CompleteSquare[p, x]`**, `canonical_form`: `a (x + b/(2a))² + c −
+//!   b²/(4a)` for `a x² + b x + c`, giac's `(x-3)^2-7`.
+//! - **`DigitPolynomial[n, b, x]`**, `genpoly`: `Σ dᵢ xⁱ` with `n = Σ dᵢ bⁱ`,
+//!   the balanced digits in `(−b/2, b/2]`, giac's `x^2-1` for 15 in base 4.
+//! - **`BerlekampMassey[s]`**, `berlekamp_massey`: the shortest linear
+//!   recurrence of a sequence of even length over ℚ, its connection
+//!   polynomial `1 + c₁ x + ⋯ + c_L x^L` as a list from the constant up,
+//!   giac's `[1,-1,-1]` for the Fibonacci numbers.
 
 use std::cmp::Ordering;
 
@@ -567,6 +581,121 @@ pub(in crate::native) fn pade_approximant(ev: &mut Eval<'_>, e: &Expr) -> Native
         .collect();
     let result = expression(&ps, x) / expression(&qs, x);
     answer(ev, "pade", e, &result)
+}
+
+/// `ComplexFactor[p]`.
+pub(in crate::native) fn complex_factor(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [p] = e.args() else {
+        return Ok(None);
+    };
+    let i = Expr::from(Complex::new(Rational::ZERO, Rational::ONE));
+    let factored = ev.eval(&call(Symbol::FACTOR, vec![i.clone() * p.clone()]))?;
+    if factored.head() == Some(&Expr::from(Symbol::FACTOR)) {
+        return Ok(None);
+    }
+    answer(ev, "cfactor", e, &(factored / i))
+}
+
+/// `CompleteSquare[p, x]`.
+pub(in crate::native) fn complete_square(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some(x) = variable(e.args(), 1) else {
+        return Ok(None);
+    };
+    let Some(cs) = coefficients(ev, &e.args()[0], &x)? else {
+        return Ok(None);
+    };
+    let [c, b, a] = cs.as_slice() else {
+        return Ok(None);
+    };
+    let shift = ev.eval(&(b.clone() / (2 * a.clone())))?;
+    let rest = ev.eval(&(c.clone() - b.clone().pow(2) / (4 * a.clone())))?;
+    // The square left as it is: Times and Plus of the parts, unevaluated.
+    let square = Expr::call(
+        Symbol::POWER,
+        [Expr::call(Symbol::PLUS, [x.clone(), shift]), Expr::from(2)],
+    );
+    let result = Expr::call(
+        Symbol::PLUS,
+        [Expr::call(Symbol::TIMES, [a.clone(), square]), rest],
+    );
+    let result = ev.eval(&result)?;
+    ev.step("canonical_form", e, &result);
+    Ok(Some(result))
+}
+
+/// `DigitPolynomial[n, b, x]`.
+pub(in crate::native) fn digit_polynomial(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [n, b, x] = e.args() else {
+        return Ok(None);
+    };
+    let (Some(mut n), Some(b)) = (
+        n.to_integer(),
+        b.to_integer().filter(|b| *b >= Integer::from(2)),
+    ) else {
+        return Ok(None);
+    };
+    if x.as_symbol().is_none() {
+        return Ok(None);
+    }
+    let mut digits = Vec::new();
+    while !n.is_zero() {
+        let (_, r) = n.div_rem_euclid(&b);
+        let r = if (&r + &r) > b { &r - &b } else { r };
+        n = (&n - &r).div_exact(&b);
+        digits.push(Expr::from(r));
+    }
+    answer(ev, "genpoly", e, &expression(&digits, x))
+}
+
+/// `BerlekampMassey[s]`.
+pub(in crate::native) fn berlekamp_massey(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [s] = e.args() else {
+        return Ok(None);
+    };
+    if !is_list(s) || s.args().len() % 2 == 1 {
+        return Ok(None);
+    }
+    let Some(s) = s
+        .args()
+        .iter()
+        .map(Expr::to_rational)
+        .collect::<Option<Vec<_>>>()
+    else {
+        return Ok(None);
+    };
+    let mut c: Vec<Rational> = vec![Rational::ONE];
+    let mut prev: Vec<Rational> = vec![Rational::ONE];
+    let (mut l, mut m, mut last) = (0usize, 1usize, Rational::ONE);
+    for n in 0..s.len() {
+        let d = (1..=l).fold(s[n].clone(), |acc, i| &acc + &(&c[i] * &s[n - i]));
+        if d.is_zero() {
+            m += 1;
+            continue;
+        }
+        let factor = &d / &last;
+        let mut next = c.clone();
+        if next.len() < prev.len() + m {
+            next.resize(prev.len() + m, Rational::ZERO);
+        }
+        for (j, v) in prev.iter().enumerate() {
+            next[j + m] = &next[j + m] - &(&factor * v);
+        }
+        if 2 * l <= n {
+            prev = c;
+            l = n + 1 - l;
+            last = d;
+            m = 1;
+        } else {
+            m += 1;
+        }
+        c = next;
+    }
+    c.resize(l + 1, Rational::ZERO);
+    let result = Expr::call(
+        Symbol::LIST,
+        c.into_iter().map(Expr::from).collect::<Vec<_>>(),
+    );
+    answer(ev, "berlekamp_massey", e, &result)
 }
 
 #[cfg(test)]

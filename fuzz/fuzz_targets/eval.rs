@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 389] = [
+const BUILTINS: [&str; 393] = [
     "Plus",
     "Times",
     "Power",
@@ -231,6 +231,10 @@ const BUILTINS: [&str; 389] = [
     "PolynomialChineseRemainder",
     "SeriesDivision",
     "PadeApproximant",
+    "ComplexFactor",
+    "CompleteSquare",
+    "DigitPolynomial",
+    "BerlekampMassey",
     "GammaPDF",
     "GammaCDF",
     "GammaICDF",

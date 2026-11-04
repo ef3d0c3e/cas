@@ -179,6 +179,10 @@ PolynomialBezout: abcuv
 PolynomialChineseRemainder: chinrem
 SeriesDivision: divpc
 PadeApproximant: pade
+ComplexFactor: cfactor
+CompleteSquare: canonical_form
+DigitPolynomial: genpoly
+BerlekampMassey: berlekamp_massey
 # Matrix decompositions and functions (CAS-DOC-30, CAS-344 to CAS-347).
 LUDecomposition: lu
 QRDecomposition: qr

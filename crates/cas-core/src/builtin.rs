@@ -210,6 +210,10 @@ builtins! {
     POLYNOMIAL_CHINESE_REMAINDER = "PolynomialChineseRemainder" [PROTECTED];
     SERIES_DIVISION = "SeriesDivision" [PROTECTED];
     PADE_APPROXIMANT = "PadeApproximant" [PROTECTED];
+    COMPLEX_FACTOR = "ComplexFactor" [PROTECTED];
+    COMPLETE_SQUARE = "CompleteSquare" [PROTECTED];
+    DIGIT_POLYNOMIAL = "DigitPolynomial" [PROTECTED];
+    BERLEKAMP_MASSEY = "BerlekampMassey" [PROTECTED];
     // Matrix decompositions and functions (CAS-DOC-30).
     LU_DECOMPOSITION = "LUDecomposition" [PROTECTED];
     QR_DECOMPOSITION = "QRDecomposition" [PROTECTED];

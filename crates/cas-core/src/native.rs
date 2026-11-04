@@ -325,6 +325,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         ),
         (Symbol::SERIES_DIVISION, polytools::two::series_division),
         (Symbol::PADE_APPROXIMANT, polytools::two::pade_approximant),
+        (Symbol::COMPLEX_FACTOR, polytools::two::complex_factor),
+        (Symbol::COMPLETE_SQUARE, polytools::two::complete_square),
+        (Symbol::DIGIT_POLYNOMIAL, polytools::two::digit_polynomial),
+        (Symbol::BERLEKAMP_MASSEY, polytools::two::berlekamp_massey),
         (
             Symbol::LU_DECOMPOSITION,
             matrix::decompose::lu_decomposition,

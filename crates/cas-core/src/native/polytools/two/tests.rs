@@ -123,3 +123,45 @@ fn bezout_and_series() {
         ),
     ]);
 }
+
+/// Factoring over ℚ(i), completed squares, digits and recurrences
+/// (CAS-484).
+#[test]
+fn factoring_and_forms() {
+    check(&[
+        // giac's (x+i)*(x-i) and its four factors of x^4+4, multiplied back.
+        (
+            "Expand[ComplexFactor[Plus[Power[x, 2], 1]]]",
+            "Plus[1, Power[x, 2]]",
+        ),
+        ("Length[ComplexFactor[Plus[Power[x, 2], 1]]]", "2"),
+        (
+            "Expand[ComplexFactor[Plus[Power[x, 4], 4]]]",
+            "Plus[4, Power[x, 4]]",
+        ),
+        ("Length[ComplexFactor[Plus[Power[x, 4], 4]]]", "4"),
+        // giac's 2*(x+1)^2-1 and (x-3)^2-7.
+        (
+            "CompleteSquare[Plus[Times[2, Power[x, 2]], Times[4, x], 1], x]",
+            "Plus[-1, Times[2, Power[Plus[1, x], 2]]]",
+        ),
+        (
+            "CompleteSquare[Plus[Power[x, 2], Times[-6, x], 2], x]",
+            "Plus[-7, Power[Plus[-3, x], 2]]",
+        ),
+        // giac's x^2-1; 10 in balanced binary is 8 + 2.
+        ("DigitPolynomial[15, 4, x]", "Plus[-1, Power[x, 2]]"),
+        ("DigitPolynomial[10, 2, x]", "Plus[x, Power[x, 3]]"),
+        // giac's [1,-1,-1]; powers of 2.
+        (
+            "BerlekampMassey[List[0, 1, 1, 2, 3, 5, 8, 13]]",
+            "List[1, -1, -1]",
+        ),
+        ("BerlekampMassey[List[1, 2, 4, 8]]", "List[1, -2]"),
+        // An odd length stays, where giac errs.
+        (
+            "BerlekampMassey[List[1, 2, 4]]",
+            "BerlekampMassey[List[1, 2, 4]]",
+        ),
+    ]);
+}
