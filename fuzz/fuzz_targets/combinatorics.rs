@@ -227,16 +227,14 @@ fn bits(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
     Ok(())
 }
 
-/// Whether `|a − b| < 10⁻⁸` by the CAS's balls.
+/// Whether `|a − b| < 10⁻⁸` by the CAS's balls, `b` exact: no `N`, whose
+/// precision loop finds no relative accuracy in a difference near 0.
 fn near(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     let gap = Expr::call(
-        Symbol::N,
+        Symbol::ABS,
         [Expr::call(
-            Symbol::ABS,
-            [Expr::call(
-                Symbol::PLUS,
-                [a.clone(), Expr::from(-1) * b.clone()],
-            )],
+            Symbol::PLUS,
+            [a.clone(), Expr::from(-1) * b.clone()],
         )],
     );
     let small = Expr::call(

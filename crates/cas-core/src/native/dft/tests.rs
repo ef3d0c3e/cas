@@ -14,7 +14,11 @@ fn check_near(cases: &[(&str, &str)]) {
     let mut wrong = Vec::new();
     for (input, expected) in cases {
         let found = ctx.eval(&read(input)).unwrap();
-        let expected = ctx.eval(&read(expected)).unwrap();
+        // The exact values as balls: `N` of a difference near 0 has no
+        // relative accuracy to reach.
+        let expected = ctx
+            .eval(&Expr::call(Symbol::N, [read(expected), Expr::from(40)]))
+            .unwrap();
         let near = found.args().len() == expected.args().len()
             && found.args().iter().zip(expected.args()).all(|(f, x)| {
                 let gap = Expr::call(
@@ -24,7 +28,6 @@ fn check_near(cases: &[(&str, &str)]) {
                         [f.clone(), Expr::from(-1) * x.clone()],
                     )],
                 );
-                let gap = Expr::call(Symbol::N, [gap]);
                 let small = Expr::call(Symbol::LESS, [gap, read("Power[10, -12]")]);
                 ctx.eval(&small).ok().and_then(|t| t.as_symbol()) == Some(Symbol::TRUE)
             });
