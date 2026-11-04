@@ -388,3 +388,10 @@ path = "fuzz_targets/incomplete_fns.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "matrices_two"
+path = "fuzz_targets/matrices_two.rs"
+test = false
+doc = false
+bench = false
