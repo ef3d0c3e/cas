@@ -315,3 +315,46 @@ fn roots_and_eigenvalues() {
         ),
     ]);
 }
+
+/// Chinese remainders of modular values and powers of polynomials modulo a
+/// prime and a polynomial (CAS-460): giac's `ichinrem` and `powmod`.
+#[test]
+fn remainders_and_powers() {
+    check(&[
+        // giac's -7 % 15, 8 % 105 and -3 % 12.
+        (
+            "ChineseRemainder[Modular[2, 3], Modular[3, 5]]",
+            "Modular[-7, 15]",
+        ),
+        (
+            "ChineseRemainder[List[Modular[2, 3], Modular[3, 5], Modular[1, 7]]]",
+            "Modular[8, 105]",
+        ),
+        (
+            "ChineseRemainder[Modular[1, 4], Modular[3, 6]]",
+            "Modular[-3, 12]",
+        ),
+        // giac's "No Integer Solution": the call stays.
+        (
+            "ChineseRemainder[Modular[2, 4], Modular[1, 6]]",
+            "ChineseRemainder[Modular[2, 4], Modular[1, 6]]",
+        ),
+        // giac's -x, x^2, 3*x+1 and 1.
+        (
+            "PowerMod[Plus[x, 1], 10, 3, Plus[Power[x, 2], 1], x]",
+            "Times[-1, x]",
+        ),
+        (
+            "PowerMod[x, 100, 2, Plus[Power[x, 3], x, 1], x]",
+            "Power[x, 2]",
+        ),
+        (
+            "PowerMod[Plus[Times[3, x], 1], 7, 7, Plus[Power[x, 2], 3], x]",
+            "Plus[1, Times[3, x]]",
+        ),
+        (
+            "PowerMod[Plus[Power[x, 2], 2], 0, 5, Plus[Power[x, 3], 1]]",
+            "1",
+        ),
+    ]);
+}

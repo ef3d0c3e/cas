@@ -17,10 +17,15 @@
 //!   values; giac's `solve((x^2-2) % 7, x)` is `[-3, 3]`. A difference
 //!   that vanishes is solved by every element and leaves the call.
 //!
+//! - `PowerMod[a, k, p, q, x]` (CAS-460), giac's `powmod(a, k, p, q, x)`:
+//!   `a^k` in `𝔽ₚ[x]/(q)` by repeated squaring, `k ≥ 0`, a polynomial with
+//!   symmetric coefficients, as giac's `powmod(x+1,10,3,x^2+1,x)` is `-x`;
+//!   `x` is `x` when left out.
+//!
 //! Another modulus, another variable count or coefficients that are not
 //! integers leave the call.
 
-use cas_num::algebra::{EuclideanDomain, WordPrimeField};
+use cas_num::algebra::{EuclideanDomain, Ring, WordPrimeField};
 use cas_num::{Integer, Natural, Primality};
 use cas_poly::{Dense, DenseRing};
 
@@ -282,4 +287,50 @@ pub(in crate::native) fn solve(
     let result = Expr::call(Symbol::LIST, roots);
     ev.step("Solve", e, &result);
     Ok(Some(Some(result)))
+}
+
+/// `PowerMod[a, k, p, q, x]` and `PowerMod[a, k, p, q]`.
+pub(in crate::native) fn power_mod(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let (a, k, p, q, x) = match e.args() {
+        [a, k, p, q, x] => (a, k, p, q, x.clone()),
+        [a, k, p, q] => (a, k, p, q, Expr::symbol("x")),
+        _ => return Ok(None),
+    };
+    let (Some(mut k), Some(p)) = (k.to_integer(), p.to_integer()) else {
+        return Ok(None);
+    };
+    if x.as_symbol().is_none() || k.is_negative() {
+        return Ok(None);
+    }
+    let mut polynomial = |f: &Expr| -> Result<Option<Univariate>, EvalError> {
+        let m = ev.eval(&Expr::call(
+            Symbol::MODULAR,
+            [f.clone(), Expr::from(p.clone())],
+        ))?;
+        Ok(univariate(&m).filter(|u| u.x.as_ref().is_none_or(|v| *v == x)))
+    };
+    let (Some(a), Some(q)) = (polynomial(a)?, polynomial(q)?) else {
+        return Ok(None);
+    };
+    if q.f.is_zero() {
+        return Ok(None);
+    }
+    let ring = DenseRing::new(WordPrimeField::new(a.p).expect("a prime"));
+    let reduce = |f: &Dense<u64>| ring.div_rem(f, &q.f).1;
+    let mut base = reduce(&a.f);
+    let mut result = reduce(&ring.poly(vec![1]));
+    let two = Integer::from(2);
+    while !k.is_zero() {
+        let (half, bit) = k.div_rem_euclid(&two);
+        if !bit.is_zero() {
+            result = reduce(&ring.mul(&result, &base));
+        }
+        k = half;
+        if !k.is_zero() {
+            base = reduce(&ring.mul(&base, &base));
+        }
+    }
+    let answer = expression(&result, Some(&x), a.p);
+    ev.step("powmod", e, &answer);
+    Ok(Some(answer))
 }

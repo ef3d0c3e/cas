@@ -270,6 +270,10 @@ fn integer_arguments(e: &Expr) -> Option<Vec<Integer>> {
 
 /// `PowerMod[a, b, m]`.
 pub(super) fn power_mod(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    // Of a polynomial modulo a prime and a polynomial (CAS-DOC-44 §4).
+    if e.args().len() > 3 {
+        return super::modular::polynomials::power_mod(ev, e);
+    }
     let Some([a, b, m]) = integer_arguments(e).and_then(|v| <[Integer; 3]>::try_from(v).ok())
     else {
         return Ok(None);
@@ -298,6 +302,28 @@ pub(super) fn extended_gcd(_: &mut Eval<'_>, e: &Expr) -> Native {
 /// `ChineseRemainder[{a₁, m₁}, {a₂, m₂}, …]`.
 pub(super) fn chinese_remainder(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let list = Expr::from(Symbol::LIST);
+    // Modular values (CAS-DOC-44 §4), as arguments or in one list: the
+    // value modulo the lcm.
+    let values = match e.args() {
+        [l] if l.head() == Some(&list) => l.args(),
+        args => args,
+    };
+    if !values.is_empty() && values.iter().all(|v| super::modular::parts(v).is_some()) {
+        let pairs = values.iter().map(|v| {
+            let (a, n) = super::modular::parts(v).expect("modular");
+            Expr::call(Symbol::LIST, [a.clone(), Expr::from(n)])
+        });
+        let found = ev.eval(&Expr::call(
+            Symbol::CHINESE_REMAINDER,
+            pairs.collect::<Vec<_>>(),
+        ))?;
+        return Ok(match found.args() {
+            [x, l] if found.head() == Some(&list) => {
+                Some(Expr::call(Symbol::MODULAR, [x.clone(), l.clone()]))
+            }
+            _ => None,
+        });
+    }
     let mut pairs = Vec::with_capacity(e.args().len());
     for pair in e.args() {
         let (true, [a, m]) = (pair.head() == Some(&list), pair.args()) else {
