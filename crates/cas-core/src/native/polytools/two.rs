@@ -19,10 +19,27 @@
 //!   for a pole: giac's `froot(x^2*(x-3)^3)` is `[0,2,3,3]`. Each
 //!   irreducible factor's roots are `Solve`'s, rational ones first,
 //!   ascending; a factor whose roots `Solve` leaves leaves the call.
+//!
+//! Bézout, Chinese remainders and series (§3, CAS-483), over ℚ:
+//!
+//! - **`PolynomialExtendedGCD[a, b, x]`**, `egcd` and `gcdex`: `{u, v, d}`
+//!   with `u a + v b = d`, by the extended Euclid, `d` the last remainder
+//!   as it comes (giac's `[1,-x+1,2]` for `x² + 1` and `x + 1`).
+//! - **`PolynomialBezout[a, b, c, x]`**, `abcuv`: `{u, v}` with `u a + v b =
+//!   c` and `deg u < deg b`, for `gcd(a, b)` dividing `c`.
+//! - **`PolynomialChineseRemainder[{a, p}, {b, q}]`**, `chinrem`: `{c, p
+//!   q}`, `c ≡ a mod p` and `c ≡ b mod q`, for coprime `p` and `q`: giac's
+//!   `[-x+2,x^2+x]` for `[2,x]` and `[3,x+1]`.
+//! - **`SeriesDivision[a, b, n]`**, `divpc`: the power series of `a/b` at
+//!   0 up to `xⁿ`, `b(0) ≠ 0`.
+//! - **`PadeApproximant[f, x, n, p]`**, `pade`: `P/Q` with `deg P < p`,
+//!   `deg Q ≤ n − p + 1`, `Q(0) = 1` and `f Q − P = O(xⁿ⁺¹)`, from `f`'s
+//!   series by the linear system of the coefficients of `Q`; a singular
+//!   system leaves the call.
 
 use std::cmp::Ordering;
 
-use cas_num::algebra::Rationals;
+use cas_num::algebra::{EuclideanDomain, Rationals, Ring};
 use cas_num::ball::{ComplexBall, Float, Round, polynomial_roots};
 use cas_num::{Complex, Integer, Rational};
 use cas_poly::{Dense, DenseRing};
@@ -310,6 +327,246 @@ pub(in crate::native) fn root_multiplicities(ev: &mut Eval<'_>, e: &Expr) -> Nat
     );
     ev.step("froot", e, &result);
     Ok(Some(result))
+}
+
+type Poly = Dense<Rational>;
+
+/// A polynomial over ℚ as an expression in `x`.
+fn to_expr(d: &Poly, x: &Expr) -> Expr {
+    let cs: Vec<Expr> = d.coeffs().iter().cloned().map(Expr::from).collect();
+    expression(&cs, x)
+}
+
+/// The variable of the trailing argument, `x` when left out.
+fn variable(args: &[Expr], n: usize) -> Option<Expr> {
+    match args.len() {
+        k if k == n => Some(Expr::symbol("x")),
+        k if k == n + 1 && args[n].as_symbol().is_some() => Some(args[n].clone()),
+        _ => None,
+    }
+}
+
+/// `p` over ℚ in `x`.
+fn over_q(ev: &mut Eval<'_>, e: &Expr, p: &Expr, x: &Expr) -> Result<Option<Poly>, EvalError> {
+    polynomial(ev, e, p, x)
+}
+
+/// `(u, v, d)` with `u a + v b = d`, the extended Euclid.
+fn extended(ring: &DenseRing<Rationals>, a: &Poly, b: &Poly) -> (Poly, Poly, Poly) {
+    let (mut r0, mut r1) = (a.clone(), b.clone());
+    let (mut s0, mut s1) = (ring.one(), ring.zero());
+    let (mut t0, mut t1) = (ring.zero(), ring.one());
+    while !r1.is_zero() {
+        let (q, r) = ring.div_rem(&r0, &r1);
+        (r0, r1) = (r1, r);
+        let s = ring.sub(&s0, &ring.mul(&q, &s1));
+        (s0, s1) = (s1, s);
+        let t = ring.sub(&t0, &ring.mul(&q, &t1));
+        (t0, t1) = (t1, t);
+    }
+    (s0, t0, r0)
+}
+
+fn answer(ev: &mut Eval<'_>, name: &'static str, e: &Expr, result: &Expr) -> Native {
+    let result = ev.eval(result)?;
+    ev.step(name, e, &result);
+    Ok(Some(result))
+}
+
+/// `PolynomialExtendedGCD[a, b, x]`.
+pub(in crate::native) fn polynomial_extended_gcd(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some(x) = variable(e.args(), 2) else {
+        return Ok(None);
+    };
+    let (Some(a), Some(b)) = (
+        over_q(ev, e, &e.args()[0], &x)?,
+        over_q(ev, e, &e.args()[1], &x)?,
+    ) else {
+        return Ok(None);
+    };
+    let ring = DenseRing::new(Rationals);
+    let (u, v, d) = extended(&ring, &a, &b);
+    let result = Expr::call(
+        Symbol::LIST,
+        [to_expr(&u, &x), to_expr(&v, &x), to_expr(&d, &x)],
+    );
+    answer(ev, "egcd", e, &result)
+}
+
+/// `PolynomialBezout[a, b, c, x]`.
+pub(in crate::native) fn polynomial_bezout(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some(x) = variable(e.args(), 3) else {
+        return Ok(None);
+    };
+    let args = e.args();
+    let (Some(a), Some(b), Some(c)) = (
+        over_q(ev, e, &args[0], &x)?,
+        over_q(ev, e, &args[1], &x)?,
+        over_q(ev, e, &args[2], &x)?,
+    ) else {
+        return Ok(None);
+    };
+    if b.is_zero() {
+        return Ok(None);
+    }
+    let ring = DenseRing::new(Rationals);
+    let (u0, _, d) = extended(&ring, &a, &b);
+    let (k, rest) = ring.div_rem(&c, &d);
+    if !rest.is_zero() {
+        return Ok(None);
+    }
+    let u = ring.div_rem(&ring.mul(&u0, &k), &b).1;
+    let (v, exact) = ring.div_rem(&ring.sub(&c, &ring.mul(&u, &a)), &b);
+    if !exact.is_zero() {
+        return Ok(None);
+    }
+    let result = Expr::call(Symbol::LIST, [to_expr(&u, &x), to_expr(&v, &x)]);
+    answer(ev, "abcuv", e, &result)
+}
+
+/// `PolynomialChineseRemainder[{a, p}, {b, q}]`.
+pub(in crate::native) fn polynomial_chinese_remainder(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [first, second] = e.args() else {
+        return Ok(None);
+    };
+    let ([a, p], [b, q]) = (first.args(), second.args()) else {
+        return Ok(None);
+    };
+    if !is_list(first) || !is_list(second) {
+        return Ok(None);
+    }
+    let x = Expr::symbol("x");
+    let (Some(a), Some(p), Some(b), Some(q)) = (
+        over_q(ev, e, a, &x)?,
+        over_q(ev, e, p, &x)?,
+        over_q(ev, e, b, &x)?,
+        over_q(ev, e, q, &x)?,
+    ) else {
+        return Ok(None);
+    };
+    let ring = DenseRing::new(Rationals);
+    let (s, _, d) = extended(&ring, &p, &q);
+    if d.degree() != Some(0) {
+        return Ok(None);
+    }
+    // s p = d modulo q: p's inverse is s/d.
+    let inverse = ring.div_rem(&s, &d).0;
+    let t = ring.div_rem(&ring.mul(&ring.sub(&b, &a), &inverse), &q).1;
+    let c = ring.add(&a, &ring.mul(&p, &t));
+    let modulus = ring.mul(&p, &q);
+    let result = Expr::call(Symbol::LIST, [to_expr(&c, &x), to_expr(&modulus, &x)]);
+    answer(ev, "chinrem", e, &result)
+}
+
+/// `SeriesDivision[a, b, n]`.
+pub(in crate::native) fn series_division(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [a, b, n] = e.args() else {
+        return Ok(None);
+    };
+    let Some(n) = n.as_i64().and_then(|n| usize::try_from(n).ok()) else {
+        return Ok(None);
+    };
+    let x = Expr::symbol("x");
+    let (Some(a), Some(b)) = (over_q(ev, e, a, &x)?, over_q(ev, e, b, &x)?) else {
+        return Ok(None);
+    };
+    let at = |d: &Poly, k: usize| d.coeffs().get(k).cloned().unwrap_or(Rational::ZERO);
+    let b0 = at(&b, 0);
+    if b0.is_zero() {
+        return Ok(None);
+    }
+    let mut q: Vec<Rational> = Vec::with_capacity(n + 1);
+    for k in 0..=n {
+        let mut v = at(&a, k);
+        for j in 1..=k {
+            v = &v - &(&at(&b, j) * &q[k - j]);
+        }
+        q.push(&v / &b0);
+    }
+    let result = to_expr(&DenseRing::new(Rationals).poly(q), &x);
+    answer(ev, "divpc", e, &result)
+}
+
+/// `PadeApproximant[f, x, n, p]`.
+pub(in crate::native) fn pade_approximant(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [f, x, n, p] = e.args() else {
+        return Ok(None);
+    };
+    let (Some(n), Some(p)) = (
+        n.as_i64().and_then(|n| usize::try_from(n).ok()),
+        p.as_i64().and_then(|p| usize::try_from(p).ok()),
+    ) else {
+        return Ok(None);
+    };
+    if x.as_symbol().is_none() || p == 0 || p > n + 1 {
+        return Ok(None);
+    }
+    let m = n + 1 - p;
+    // The series of f to xⁿ, its order term dropped.
+    let series = ev.eval(&Expr::call(
+        Symbol::SERIES,
+        [
+            f.clone(),
+            x.clone(),
+            Expr::from(0),
+            Expr::from(i64::try_from(n).expect("small")),
+        ],
+    ))?;
+    let order = Expr::call(Symbol::ORDER_SIZE, [x.clone()]);
+    let truncated = ev.eval(&series.substitute(&[(order, Expr::from(0))]))?;
+    let Some(mut c) = coefficients(ev, &truncated, x)? else {
+        return Ok(None);
+    };
+    c.resize(n + 1, Expr::from(0));
+    let coefficient = |k: isize| -> Expr {
+        usize::try_from(k)
+            .ok()
+            .and_then(|k| c.get(k).cloned())
+            .unwrap_or_else(|| Expr::from(0))
+    };
+    // Σ_{j=0..m} q_j c_{k−j} = 0 for k = p..n, q_0 = 1: m equations in
+    // q_1 … q_m.
+    let to_i = |k: usize| isize::try_from(k).expect("small");
+    let rows: Vec<Expr> = (p..=n)
+        .map(|k| {
+            Expr::call(
+                Symbol::LIST,
+                (1..=m)
+                    .map(|j| coefficient(to_i(k) - to_i(j)))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+    let rhs: Vec<Expr> = (p..=n).map(|k| -coefficient(to_i(k))).collect();
+    let q: Vec<Expr> = if m == 0 {
+        Vec::new()
+    } else {
+        let solution = ev.eval(&Expr::call(
+            Symbol::LIN_SOLVE,
+            [
+                Expr::call(Symbol::LIST, rows),
+                Expr::call(Symbol::LIST, rhs),
+            ],
+        ))?;
+        if !is_list(&solution) || solution.args().len() != m {
+            return Ok(None);
+        }
+        solution.args().to_vec()
+    };
+    let mut qs = vec![Expr::from(1)];
+    qs.extend(q);
+    let ps: Vec<Expr> = (0..p)
+        .map(|k| {
+            Expr::call(
+                Symbol::PLUS,
+                (0..=m.min(k))
+                    .map(|j| qs[j].clone() * coefficient(to_i(k) - to_i(j)))
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .collect();
+    let result = expression(&ps, x) / expression(&qs, x);
+    answer(ev, "pade", e, &result)
 }
 
 #[cfg(test)]

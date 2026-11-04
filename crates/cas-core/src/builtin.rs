@@ -205,6 +205,11 @@ builtins! {
     HORNER_EVAL = "HornerEval" [PROTECTED];
     TAYLOR_SHIFT = "TaylorShift" [PROTECTED];
     ROOT_MULTIPLICITIES = "RootMultiplicities" [PROTECTED];
+    POLYNOMIAL_EXTENDED_GCD = "PolynomialExtendedGCD" [PROTECTED];
+    POLYNOMIAL_BEZOUT = "PolynomialBezout" [PROTECTED];
+    POLYNOMIAL_CHINESE_REMAINDER = "PolynomialChineseRemainder" [PROTECTED];
+    SERIES_DIVISION = "SeriesDivision" [PROTECTED];
+    PADE_APPROXIMANT = "PadeApproximant" [PROTECTED];
     // Matrix decompositions and functions (CAS-DOC-30).
     LU_DECOMPOSITION = "LUDecomposition" [PROTECTED];
     QR_DECOMPOSITION = "QRDecomposition" [PROTECTED];

@@ -81,3 +81,45 @@ fn roots_and_coefficients() {
         .unwrap();
     assert_eq!(near_one.as_symbol(), Some(Symbol::TRUE), "{roots:?}");
 }
+
+/// Bézout, Chinese remainders, series division and Padé (CAS-483).
+#[test]
+fn bezout_and_series() {
+    check(&[
+        // giac's [1,-x+1,2] and [-1/2,1/2*(x+1)].
+        (
+            "PolynomialExtendedGCD[Plus[Power[x, 2], 1], Plus[x, 1], x]",
+            "List[1, Plus[1, Times[-1, x]], 2]",
+        ),
+        (
+            "PolynomialBezout[Plus[Power[x, 2], 1], Plus[x, 1], x, x]",
+            "List[-1/2, Plus[1/2, Times[1/2, x]]]",
+        ),
+        // giac's [-x+2,x^2+x].
+        (
+            "PolynomialChineseRemainder[List[2, x], List[3, Plus[x, 1]]]",
+            "List[Plus[2, Times[-1, x]], Plus[x, Power[x, 2]]]",
+        ),
+        // giac's x^5+x^4+x^3+x^2+x+1 and x^4-x^3-x^2+x+1.
+        (
+            "SeriesDivision[1, Plus[1, Times[-1, x]], 5]",
+            "Plus[1, x, Power[x, 2], Power[x, 3], Power[x, 4], Power[x, 5]]",
+        ),
+        (
+            "SeriesDivision[Plus[x, 1], Plus[Power[x, 2], 1], 4]",
+            "Plus[1, x, Times[-1, Power[x, 2]], Times[-1, Power[x, 3]], Power[x, 4]]",
+        ),
+        // giac's (-6*x-24)/(x^3-6*x^2+18*x-24), the same fraction.
+        (
+            "Together[Plus[PadeApproximant[Exp[x], x, 4, 2], \
+             Times[-1, Times[Plus[Times[-6, x], -24], \
+             Power[Plus[Power[x, 3], Times[-6, Power[x, 2]], Times[18, x], -24], -1]]]]]",
+            "0",
+        ),
+        // Not coprime moduli: the call stays.
+        (
+            "PolynomialChineseRemainder[List[1, x], List[2, Times[2, x]]]",
+            "PolynomialChineseRemainder[List[1, x], List[2, Times[2, x]]]",
+        ),
+    ]);
+}

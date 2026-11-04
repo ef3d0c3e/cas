@@ -174,6 +174,11 @@ FromRoots: pcoeff
 HornerEval: peval horner
 TaylorShift: ptayl
 RootMultiplicities: froot
+PolynomialExtendedGCD: egcd gcdex
+PolynomialBezout: abcuv
+PolynomialChineseRemainder: chinrem
+SeriesDivision: divpc
+PadeApproximant: pade
 # Matrix decompositions and functions (CAS-DOC-30, CAS-344 to CAS-347).
 LUDecomposition: lu
 QRDecomposition: qr

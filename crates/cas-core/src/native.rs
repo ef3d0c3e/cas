@@ -315,6 +315,17 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             polytools::two::root_multiplicities,
         ),
         (
+            Symbol::POLYNOMIAL_EXTENDED_GCD,
+            polytools::two::polynomial_extended_gcd,
+        ),
+        (Symbol::POLYNOMIAL_BEZOUT, polytools::two::polynomial_bezout),
+        (
+            Symbol::POLYNOMIAL_CHINESE_REMAINDER,
+            polytools::two::polynomial_chinese_remainder,
+        ),
+        (Symbol::SERIES_DIVISION, polytools::two::series_division),
+        (Symbol::PADE_APPROXIMANT, polytools::two::pade_approximant),
+        (
             Symbol::LU_DECOMPOSITION,
             matrix::decompose::lu_decomposition,
         ),
