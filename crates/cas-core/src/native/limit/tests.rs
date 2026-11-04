@@ -157,3 +157,25 @@ fn an_undecided_leading_coefficient_warns() {
         "{messages:?}"
     );
 }
+
+/// A sum neither the series nor Gruntz's algorithm takes whole, term by
+/// term (CAS-488): `Erf[√x] − e^(−x) x^(3/2)` at ∞; a term without a limit
+/// leaves the call.
+#[test]
+fn sums_term_by_term() {
+    let ctx = Context::new();
+    for (input, expected) in [
+        (
+            "Limit[Plus[Erf[Power[x, 1/2]], Times[-1, Power[E, Times[-1, x]], Power[x, 3/2]]], Rule[x, Infinity]]",
+            "1",
+        ),
+        (
+            "Limit[Plus[Sin[x], x], Rule[x, Infinity]]",
+            "Limit[Plus[Sin[x], x], Rule[x, Infinity]]",
+        ),
+    ] {
+        let found = ctx.eval(&Expr::parse_full_form(input).unwrap()).unwrap();
+        let want = ctx.eval(&Expr::parse_full_form(expected).unwrap()).unwrap();
+        assert_eq!(found, want, "{input}");
+    }
+}

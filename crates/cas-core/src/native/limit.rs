@@ -161,8 +161,52 @@ pub(crate) fn limit(ev: &mut Eval<'_>, e: &Expr) -> Native {
             });
             Ok(None)
         }
-        Err(Failure::Unknown) => Ok(None),
+        Err(Failure::Unknown) => termwise(ev, e, f),
     }
+}
+
+/// The limit of a sum whose whole neither the series nor Gruntz's
+/// algorithm finds, term by term once expanded: the sum of finite limits,
+/// with infinities of one sign; `None` for a term without a limit, or
+/// infinities of both signs (`3/4 √π (Erf[√x] − e^(−x) (…))` at ∞, a
+/// definite integral's antiderivative, CAS-488).
+fn termwise(ev: &mut Eval<'_>, e: &Expr, f: &Expr) -> Native {
+    let expanded = ev.eval(&Expr::call(Symbol::EXPAND, [f.clone()]))?;
+    if expanded.head() != Some(&Expr::from(Symbol::PLUS)) || expanded.args().len() < 2 {
+        return Ok(None);
+    }
+    let limit = Expr::from(Symbol::LIMIT);
+    let minus = -Expr::from(Symbol::INFINITY);
+    let minus_evaluated = ev.eval(&minus)?;
+    let (mut finite, mut up, mut down) = (Vec::new(), false, false);
+    for term in expanded.args() {
+        let mut args = e.args().to_vec();
+        args[0] = term.clone();
+        let value = ev.eval(&Expr::apply(&limit, &args))?;
+        if value.contains(&limit)
+            || value.contains(&Expr::from(Symbol::COMPLEX_INFINITY))
+            || value.contains(&Expr::from(Symbol::INDETERMINATE))
+        {
+            return Ok(None);
+        }
+        if value == Expr::from(Symbol::INFINITY) {
+            up = true;
+        } else if value == minus || value == minus_evaluated {
+            down = true;
+        } else if value.contains(&Expr::from(Symbol::INFINITY)) {
+            return Ok(None);
+        } else {
+            finite.push(value);
+        }
+    }
+    let result = match (up, down) {
+        (true, true) => return Ok(None),
+        (true, false) => Expr::from(Symbol::INFINITY),
+        (false, true) => -Expr::from(Symbol::INFINITY),
+        (false, false) => ev.eval(&Expr::call(Symbol::PLUS, finite))?,
+    };
+    ev.step("Limit", e, &result);
+    Ok(Some(result))
 }
 
 /// Both sides: the same, or opposite infinities.

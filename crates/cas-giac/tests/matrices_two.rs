@@ -129,11 +129,10 @@ fn forms_and_constructions() {
         };
         let back = ctx
             .eval(&Expr::call(
-                // Dot: Times is orderless, P P⁻¹ H.
+                // Dot, of two: Times is orderless, P P⁻¹ H.
                 Symbol::DOT,
                 [
-                    p.clone(),
-                    h.clone(),
+                    Expr::call(Symbol::DOT, [p.clone(), h.clone()]),
                     Expr::call(Symbol::INVERSE, [p.clone()]),
                 ],
             ))
