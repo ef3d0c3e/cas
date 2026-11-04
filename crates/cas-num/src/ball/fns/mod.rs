@@ -29,6 +29,7 @@ mod expint;
 mod fixed;
 mod gamma;
 mod hyp;
+mod incomplete;
 mod lambert;
 mod log;
 mod polygamma;
