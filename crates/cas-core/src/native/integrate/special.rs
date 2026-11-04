@@ -32,6 +32,12 @@
 //!   `−x^(1−n) C_(n−1)(a x)/a` for `J`, `Y` and `K` and its negative for
 //!   `I`. Airy's `x Ai(a x)` and `x Bi(a x)` are `Ai′(a x)/a²` and `Bi′(a
 //!   x)/a²`, by `Ai″(z) = z Ai(z)`.
+//! - **Incomplete gamma and beta** (CAS-DOC-49 §2, CAS-487): for an
+//!   exponent `a` that is no integer (a rational, or a symbol free of `x`),
+//!   `k x^a e^u` with `u = c x + d` and `c` shown negative is `k e^d
+//!   (−c)^(−a−1) LowerGamma[a + 1, −c x]`, giac's
+//!   `igamma(a+1,b*x)/b^(a+1)`; `k x^a (1 − x)^b` with `a` or `b` no
+//!   integer is `k Beta[a + 1, b + 1, x]`.
 
 use cas_num::algebra::{Rationals, Ring};
 use cas_num::{Integer, Rational};
@@ -105,7 +111,87 @@ pub(super) fn integral(
     if let Some(g) = bessel(ev, factors, x)? {
         return Ok(Some(g));
     }
-    gaussian(ev, e, factors, x)
+    if let Some(g) = gaussian(ev, e, factors, x)? {
+        return Ok(Some(g));
+    }
+    incomplete(ev, factors, x)
+}
+
+/// `(k, a)` of `k x^a`, `k` and `a` free of `x`.
+fn general_power(e: &Expr, x: &Expr) -> Option<(Expr, Expr)> {
+    let single = |f: &Expr| -> Option<Expr> {
+        if f == x {
+            return Some(Expr::from(1));
+        }
+        match (f.head().and_then(Expr::as_symbol), f.args()) {
+            (Some(Symbol::POWER), [b, a]) if b == x && !a.contains(x) => Some(a.clone()),
+            _ => None,
+        }
+    };
+    if let Some(a) = single(e) {
+        return Some((Expr::from(1), a));
+    }
+    if e.head() != Some(&Expr::from(Symbol::TIMES)) {
+        return None;
+    }
+    let mut a = None;
+    let mut rest = Vec::new();
+    for f in e.args() {
+        match single(f) {
+            Some(k) if a.is_none() => a = Some(k),
+            _ if !f.contains(x) => rest.push(f.clone()),
+            _ => return None,
+        }
+    }
+    Some((Expr::call(Symbol::TIMES, rest), a?))
+}
+
+/// Whether `a` is a rational that is no integer, or a symbol (which the
+/// rule takes for one that is not an integer, as giac does).
+fn fractional(a: &Expr) -> bool {
+    match a.to_rational() {
+        Some(q) => !q.is_integer(),
+        None => !a.is_number(),
+    }
+}
+
+/// The rule of the incomplete gamma and beta functions (§ the module
+/// comment).
+fn incomplete(ev: &mut Eval<'_>, factors: &[Expr], x: &Expr) -> Found {
+    let one_minus_x = ev.eval(&(Expr::from(1) - x.clone()))?;
+    for (i, t) in factors.iter().enumerate() {
+        let rest = others(factors, i);
+        // k x^a e^(c x + d).
+        if let Some(found) = kernels(t)
+            && let [(w, Kernel::Exp, u)] = found.as_slice()
+            && *w == Expr::from(1)
+            && let Some((k, a)) = general_power(&rest, x)
+            && fractional(&a)
+            && let Some(c) = slope(u, x)
+        {
+            let d = ev.eval(&(u.clone() - c.clone() * x.clone()))?;
+            if d.contains(x) || !negative(ev, &c)? {
+                continue;
+            }
+            let b = ev.eval(&-c)?;
+            let g = k
+                * Expr::from(Symbol::E).pow(d)
+                * b.pow(-(a.clone() + 1))
+                * Expr::call(Symbol::LOWER_GAMMA, [a + 1, b * x.clone()]);
+            return Ok(Some(g));
+        }
+        // k x^a (1 − x)^b.
+        if let (Some(Symbol::POWER), [base, b]) = (t.head().and_then(Expr::as_symbol), t.args())
+            && *base == one_minus_x
+            && !b.contains(x)
+            && let Some((k, a)) = general_power(&rest, x)
+            && (fractional(&a) || fractional(b))
+        {
+            let g = k * Expr::call(Symbol::BETA, [a + 1, b.clone() + 1, x.clone()]);
+            return Ok(Some(g));
+        }
+    }
+    Ok(None)
 }
 
 /// `c x^m`, `c` free of `x` and `m` an integer: `(c, m)`.

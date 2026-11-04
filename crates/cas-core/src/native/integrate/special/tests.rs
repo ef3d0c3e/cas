@@ -248,3 +248,58 @@ fn bessel_functions() {
         ),
     ]);
 }
+
+/// The derivative of `Integrate[f, x]` at `x = 7/5` against `f`'s, within
+/// `10⁻²⁰`, numbers on both sides: closed forms through `erf`.
+fn check_derivatives(integrands: &[&str]) {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for f in integrands {
+        let g = ctx
+            .eval(&Expr::call(Symbol::INTEGRATE, [read(f), read("x")]))
+            .unwrap();
+        let point = |e: Expr| {
+            let at = e.substitute(&[(read("x"), read("7/5"))]);
+            ctx.eval(&Expr::call(Symbol::N, [at, Expr::from(30)]))
+                .unwrap()
+        };
+        let derivative = ctx
+            .eval(&Expr::call(Symbol::D, [g.clone(), read("x")]))
+            .unwrap();
+        let gap = Expr::call(Symbol::ABS, [point(derivative) - point(read(f))]);
+        let small = Expr::call(Symbol::LESS, [gap, read("Power[10, -20]")]);
+        if g.contains(&Expr::from(Symbol::INTEGRATE))
+            || ctx.eval(&small).unwrap().as_symbol() != Some(Symbol::TRUE)
+        {
+            wrong.push(format!("∫ {f}: {g:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Powers times exponentials into `LowerGamma`, and beta integrands into
+/// `Beta` (CAS-487): giac's `igamma(a+1,b*x)/b^(a+1)`.
+#[test]
+fn incomplete_functions() {
+    check(&[
+        (
+            "Times[Power[x, 1/3], Power[E, Times[-2, x]]]",
+            "Times[Power[2, -4/3], LowerGamma[4/3, Times[2, x]]]",
+        ),
+        (
+            "Times[Power[x, a], Power[E, Times[-1, x]]]",
+            "LowerGamma[Plus[1, a], x]",
+        ),
+        (
+            "Times[Power[x, 1/3], Power[Plus[1, Times[-1, x]], 2/3]]",
+            "Beta[4/3, 5/3, x]",
+        ),
+    ]);
+    // Half-integers close into erf; a shift e^(d) comes out.
+    check_derivatives(&[
+        "Times[Power[x, 3/2], Power[E, Times[-1, x]]]",
+        "Times[Power[x, -1/2], Power[E, Plus[1, Times[-3, x]]]]",
+        "Times[Power[x, 1/3], Power[E, Times[-2, x]]]",
+        "Times[Power[x, 1/3], Power[Plus[1, Times[-1, x]], 2/3]]",
+    ]);
+}
