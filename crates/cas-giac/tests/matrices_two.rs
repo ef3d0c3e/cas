@@ -1,7 +1,7 @@
 //! Matrix decompositions II against giac (CAS-DOC-47 §6, CAS-PLAN-41):
 //! giac's exact answers read back are this CAS's; its decimals (`cond` of
 //! a non-diagonal matrix, `svl`, the 2-norm) within a relative 10⁻¹¹;
-//! `hessenberg` of a larger matrix by its identity `A = P H P⁻¹`, the form
+//! `hessenberg` of a larger matrix by its identity `A P = P H`, the form
 //! not being unique. giac's `isposdef([[1,2],[2,1]])` (`true`, though an
 //! eigenvalue is −1) and its `hadamard` of two vectors (the Hadamard bound
 //! `|u| |v|`, not the entrywise product) are left out.
@@ -117,9 +117,10 @@ fn forms_and_constructions() {
     let Some(giac) = giac() else {
         return;
     };
-    // A larger one: giac's and this CAS's P H P⁻¹ are A.
+    // A larger one: giac's and this CAS's A P = P H, A = P H P⁻¹.
     let ctx = Context::new();
     let a = "[[2,1,0,3],[1,4,2,1],[5,0,1,2],[3,1,1,6]]";
+    let matrix = ours(a).unwrap();
     for d in [
         giac.value(&format!("[hessenberg({a})]")).unwrap(),
         ours(&format!("hessenberg({a})")).unwrap(),
@@ -127,18 +128,32 @@ fn forms_and_constructions() {
         let [p, h] = d.args() else {
             panic!("{d:?}");
         };
-        let back = ctx
-            .eval(&Expr::call(
-                // Dot, of two: Times is orderless, P P⁻¹ H.
-                Symbol::DOT,
-                [
-                    Expr::call(Symbol::DOT, [p.clone(), h.clone()]),
-                    Expr::call(Symbol::INVERSE, [p.clone()]),
-                ],
-            ))
-            .unwrap();
-        assert_eq!(back, ours(a).unwrap(), "{d:?}");
+        assert_eq!(product(&ctx, &matrix, p), product(&ctx, p, h), "{d:?}");
     }
+}
+
+/// The matrix product `x y`, entry by entry: `Dot` is giac's `dot`, and
+/// `Times` orderless.
+fn product(ctx: &Context, x: &Expr, y: &Expr) -> Expr {
+    let rows = x
+        .args()
+        .iter()
+        .map(|row| {
+            let entries = (0..y.args()[0].args().len())
+                .map(|j| {
+                    let terms: Vec<Expr> = row
+                        .args()
+                        .iter()
+                        .zip(y.args())
+                        .map(|(r, col)| r.clone() * col.args()[j].clone())
+                        .collect();
+                    ctx.eval(&Expr::call(Symbol::PLUS, terms)).unwrap()
+                })
+                .collect::<Vec<_>>();
+            Expr::call(Symbol::LIST, entries)
+        })
+        .collect::<Vec<_>>();
+    Expr::call(Symbol::LIST, rows)
 }
 
 /// `L D Lᵀ`, positive definiteness, inertia (CAS-477).
