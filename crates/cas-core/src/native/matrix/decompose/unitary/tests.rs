@@ -144,7 +144,19 @@ fn svd(ctx: &Context, a: &str) -> Expr {
         &Expr::call(Symbol::SINGULAR_VALUE_DECOMPOSITION, [a.clone()]),
     );
     let [u, s, v] = found.args() else {
-        panic!("{a:?}: {found:?}");
+        let gram = eval(ctx, &dot(&adjoint(&a), &a));
+        let vectors = eval(ctx, &Expr::call(Symbol::EIGENVECTORS, [gram.clone()]));
+        let values = eval(ctx, &Expr::call(Symbol::EIGENVALUES, [gram.clone()]));
+        let basis = eval(
+            ctx,
+            &Expr::call(
+                Symbol::GRAM_SCHMIDT,
+                [Expr::call(Symbol::TRANSPOSE, [vectors.clone()])],
+            ),
+        );
+        panic!(
+            "{a:?}: {found:?}; AᴴA {gram:?}, values {values:?}, vectors {vectors:?}, GramSchmidt {basis:?}"
+        );
     };
     let n = s.args().len();
     let ident = eval(

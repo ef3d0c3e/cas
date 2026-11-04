@@ -4,7 +4,7 @@
 use cas_num::ball::{Ball, ComplexBall, Mag};
 use cas_num::{Complex, Integer, Rational};
 
-use super::eigenpair;
+use super::{attempt, eigenpair};
 
 const PREC: u64 = 128;
 
@@ -35,7 +35,7 @@ fn narrow(z: &ComplexBall) -> bool {
 fn symmetric() {
     // [[2, 1], [1, 3]]: λ = (5 ± √5)/2, x = (1, λ − 2) scaled.
     let a = matrix(&[&[2, 1], &[1, 3]]);
-    let (lambda, x) = eigenpair(&a, &real(3618, 1000), PREC).expect("certified");
+    let (lambda, x) = attempt(&a, &real(3618, 1000), PREC).unwrap_or_else(|e| panic!("{e}"));
     assert!(lambda.is_real() && narrow(&lambda), "{lambda:?}");
     // λ² − 5λ + 5 holds 0.
     let p = lambda
@@ -67,7 +67,7 @@ fn rotation() {
         Ball::from_rational(&Rational::new(1.into(), 100.into()), PREC),
         Ball::from_rational(&Rational::new(99.into(), 100.into()), PREC),
     );
-    let (lambda, x) = eigenpair(&a, &guess, PREC).expect("certified");
+    let (lambda, x) = attempt(&a, &guess, PREC).unwrap_or_else(|e| panic!("{e}"));
     let i = Complex::new(Rational::ZERO, Rational::ONE);
     assert!(lambda.contains_complex(&i) && narrow(&lambda), "{lambda:?}");
     let ratio = x[0].div(&x[1], PREC);

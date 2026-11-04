@@ -48,7 +48,7 @@ fn solutions() {
     // Three unknowns and decimals: x = (1, −1, 2).
     holds(
         "JacobiLinearSolve[N[List[List[10, -1, 2], List[-1, 11, -1], List[2, -1, 10]], 30], \
-         List[16, -14, 23], Power[10, -14]]",
+         List[15, -14, 23], Power[10, -14]]",
         &[(1, 1), (-1, 1), (2, 1)],
     );
 }

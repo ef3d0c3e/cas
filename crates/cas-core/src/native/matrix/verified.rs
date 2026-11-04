@@ -75,9 +75,10 @@ impl Arith {
             a.swap(k, best);
             for i in k + 1..n {
                 let c = mid(&a[i][k].div(&a[k][k], self.prec));
-                for j in k..=n {
-                    let t = mid(&c.mul(&a[k][j], self.prec));
-                    a[i][j] = mid(&a[i][j].sub(&t, self.prec));
+                let pivot = a[k].clone();
+                for (x, p) in a[i].iter_mut().zip(&pivot).skip(k) {
+                    let t = mid(&c.mul(p, self.prec));
+                    *x = mid(&x.sub(&t, self.prec));
                 }
             }
         }
@@ -218,6 +219,19 @@ pub(super) fn eigenpair(
     approximate: &ComplexBall,
     prec: u64,
 ) -> Option<(ComplexBall, Vec<ComplexBall>)> {
+    attempt(a, approximate, prec).ok()
+}
+
+/// [`eigenpair`], or the stage where it failed and what it had then.
+#[allow(
+    clippy::too_many_lines,
+    reason = "the three stages in order, each with its failure"
+)]
+fn attempt(
+    a: &[Vec<ComplexBall>],
+    approximate: &ComplexBall,
+    prec: u64,
+) -> Result<(ComplexBall, Vec<ComplexBall>), String> {
     let arith = Arith { prec };
     let n = a.len();
     let real = approximate.im().mid().is_zero()
@@ -230,18 +244,23 @@ pub(super) fn eigenpair(
     }
     let mids: Vec<Vec<ComplexBall>> = a.iter().map(|r| r.iter().map(mid).collect()).collect();
     // Inverse iteration, the shift nudged off an exact eigenvalue.
+    let half = -i64::try_from(prec / 2).map_err(|_| "precision")?;
     let nudge = ComplexBall::from_real(Ball::exact(
-        Mag::power_of_two(&Integer::from(-i64::try_from(prec / 2).ok()?)).to_float()?,
+        Mag::power_of_two(&Integer::from(half))
+            .to_float()
+            .ok_or("nudge")?,
     ));
     // Column `n` replaced: none, `A − (λ̃ + ν) I`.
     let shifted = arith.jacobian(&mids, &lambda.add(&nudge, prec), &[], n);
     let mut x = vec![one(); n];
     for _ in 0..3 {
-        x = arith.solve(&shifted, &x)?;
-        x = normalized(&arith, &x)?.1;
+        x = arith
+            .solve(&shifted, &x)
+            .ok_or("inverse iteration: singular")?;
+        x = normalized(&arith, &x).ok_or("inverse iteration: zero")?.1;
     }
     // Newton's method on (x, λ), x_k = 1.
-    let (mut k, mut xt) = normalized(&arith, &x)?;
+    let (mut k, mut xt) = normalized(&arith, &x).ok_or("zero vector")?;
     for _ in 0..4 {
         let j = arith.jacobian(&mids, &lambda, &xt, k);
         let f: Vec<ComplexBall> = arith
@@ -249,7 +268,9 @@ pub(super) fn eigenpair(
             .iter()
             .map(mid)
             .collect();
-        let step = arith.solve(&j, &f)?;
+        let step = arith
+            .solve(&j, &f)
+            .ok_or_else(|| format!("Newton: singular at λ {lambda:?}, x {xt:?}"))?;
         for (i, s) in step.iter().enumerate() {
             if i == k {
                 lambda = mid(&lambda.sub(s, prec));
@@ -257,16 +278,20 @@ pub(super) fn eigenpair(
                 xt[i] = mid(&xt[i].sub(s, prec));
             }
         }
-        (k, xt) = normalized(&arith, &xt)?;
+        (k, xt) = normalized(&arith, &xt).ok_or("Newton: zero vector")?;
     }
     // Krawczyk's check.
-    let r = arith.inverse(&arith.jacobian(&mids, &lambda, &xt, k))?;
+    let r = arith
+        .inverse(&arith.jacobian(&mids, &lambda, &xt, k))
+        .ok_or("R: singular")?;
     let z: Vec<ComplexBall> = arith
         .apply(&r, &arith.residual(a, &lambda, &xt))
         .iter()
         .map(ComplexBall::neg)
         .collect();
-    let floor = Mag::power_of_two(&Integer::from(-i64::try_from(prec).ok()?));
+    let floor = Mag::power_of_two(&Integer::from(
+        -i64::try_from(prec).map_err(|_| "precision")?,
+    ));
     let mut rho: Vec<Mag> = z
         .iter()
         .map(|w| {
@@ -274,6 +299,7 @@ pub(super) fn eigenpair(
             m.add(&m).add(&floor)
         })
         .collect();
+    let mut last = Vec::new();
     for _ in 0..INFLATIONS {
         let y = centred(&rho, real);
         // x̃ + y_x, its component k fixed.
@@ -309,8 +335,9 @@ pub(super) fn eigenpair(
                     }
                 })
                 .collect();
-            return Some((value, vector));
+            return Ok((value, vector));
         }
+        last.clone_from(&kv);
         rho = kv
             .iter()
             .zip(&rho)
@@ -320,7 +347,9 @@ pub(super) fn eigenpair(
             })
             .collect();
     }
-    None
+    Err(format!(
+        "Krawczyk: λ {lambda:?}, x {xt:?}, k {k}, z {z:?}, last K {last:?}, ρ {rho:?}"
+    ))
 }
 
 #[cfg(test)]

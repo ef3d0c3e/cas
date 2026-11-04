@@ -138,7 +138,8 @@ pub(super) fn tr(ev: &mut Eval<'_>, e: &Expr) -> Native {
 }
 
 /// The conjugate of the entry `x`: of a number, exactly or of its ball; `x`
-/// itself when it is known real; `None` otherwise.
+/// itself when it is known real; `Conjugate[x]` of another numeric
+/// constant; `None` otherwise.
 fn conjugate(ctx: &Context, x: &Expr) -> Option<Expr> {
     match x.view() {
         View::ComplexBall(z) => return Some(Expr::from(z.conj())),
@@ -148,7 +149,13 @@ fn conjugate(ctx: &Context, x: &Expr) -> Option<Expr> {
     if let Some(z) = x.to_complex() {
         return Some(Expr::from(&z.conj()));
     }
-    (element(ctx, x, Set::Reals) == Truth::True).then(|| x.clone())
+    if element(ctx, x, Set::Reals) == Truth::True {
+        return Some(x.clone());
+    }
+    // A numeric constant not known to be real, `−i/√2` of a unitary
+    // matrix's column (CAS-496): `Conjugate` evaluates it.
+    x.is_numeric()
+        .then(|| Expr::call(Symbol::CONJUGATE, [x.clone()]))
 }
 
 /// `Dot[u, v]`.
