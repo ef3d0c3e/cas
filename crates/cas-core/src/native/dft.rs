@@ -11,9 +11,9 @@
 //!   entry with a zero imaginary part that is exact is a real ball, as giac's
 //!   `fft([1,2,3,4])` is `[10.0,-2.0+2.0*i,-2.0,-2.0-2.0*i]`.
 //! - `DiscreteFourierTransform[l, w, p]`, giac's `fft(l, w, p)`: integer
-//!   entries, `w` of order `n` modulo `p` (checked), the sums modulo `p` in
-//!   `0, …, p − 1`, giac's `fft([1,2,3,4],2,5)` being `[0,2,3,4]`; the
-//!   inverse with `w⁻¹` and `n⁻¹`. Another `w` leaves the call, with a
+//!   entries, `w` of order `n` modulo `p` (checked), `X_k = Σ_j x_j
+//!   w^(−jk)` modulo `p` in `0, …, p − 1`, giac's `fft([1,2,3,4],2,5)` being
+//!   `[0,2,3,4]`; the inverse with `w` and `n⁻¹`. Another `w` leaves the call, with a
 //!   warning.
 //! - `Convolution[a, b]`: `c_k = Σ a_i b_(k−i)`, built and evaluated, so
 //!   exact for exact entries (`[1,1,1,-3]` for giac's
@@ -226,13 +226,18 @@ fn modular(ev: &mut Eval<'_>, e: &Expr, l: &Expr, w: &Expr, p: &Expr, inverse: b
         return Ok(None);
     }
     let n_i = Integer::from(i64::try_from(n).expect("a length"));
+    // giac's: the transform with w⁻¹ (as the numeric one with e^(−2πi/n)
+    // for w = e^(2πi/n)), the inverse with w and n⁻¹.
     let (w, scale) = if inverse {
-        let (Some(w), Some(scale)) = (w.mod_inverse(&p), n_i.mod_inverse(&p)) else {
+        let Some(scale) = n_i.mod_inverse(&p) else {
             warn(ev, e, format!("{n} is not invertible modulo {p}"));
             return Ok(None);
         };
         (w, scale)
     } else {
+        let Some(w) = w.mod_inverse(&p) else {
+            return Ok(None);
+        };
         (w, Integer::ONE)
     };
     // The powers w^m, m < n.

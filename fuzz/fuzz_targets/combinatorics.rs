@@ -318,10 +318,12 @@ fn transforms(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
     let y: Vec<i64> = (0..m)
         .map(|_| u.int_in_range(0..=p - 1))
         .collect::<Result<_>>()?;
+    // giac's convention: the transform with w⁻¹.
+    let w_inverse = (1..p).find(|v| v * w % p == 1).expect("a unit");
     let powers: Vec<i64> = (0..m)
         .scan(1, |c, _| {
             let v = *c;
-            *c = *c * w % p;
+            *c = *c * w_inverse % p;
             Some(v)
         })
         .collect();

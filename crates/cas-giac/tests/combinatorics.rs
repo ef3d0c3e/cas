@@ -6,7 +6,7 @@
 //! integers or Gaussian integers, and its modular transforms exactly.
 //! `is_permu`'s 1 and 0 are this CAS's `True` and `False`.
 
-use cas_core::{Expr, Symbol};
+use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
 
 /// The shared library, or `None` with a note: the checks skip.
@@ -158,7 +158,23 @@ fn transforms() {
         "fft([1,2,3,4,5,6,7,8],9,17)",
         "ifft([1,2,3,4,5,6,7,8],9,17)",
         "fft([5,1,4],7,19)",
-        "convolution([1,2,3],[1,-1])",
-        "convolution([1,2],[3,4,5])",
     ]));
+    // giac's convolutions are decimals, by its fft; ours exact.
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    for input in ["convolution([1,2,3],[1,-1])", "convolution([1,2],[3,4,5])"] {
+        let (theirs, ours) = (giac.value(input).unwrap(), ours(input).unwrap());
+        let gap = Expr::call(
+            Symbol::MAX,
+            [Expr::call(
+                Symbol::ABS,
+                [Expr::call(Symbol::N, [ours.clone() - theirs.clone()])],
+            )],
+        );
+        let small = Expr::call(Symbol::LESS, [gap, Expr::from(10).pow(-9)]);
+        let holds = ctx.eval(&small).ok().and_then(|e| e.as_symbol()) == Some(Symbol::TRUE);
+        assert!(holds, "{input}: ours {ours:?}, giac's {theirs:?}");
+    }
 }
