@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 379] = [
+const BUILTINS: [&str; 384] = [
     "Plus",
     "Times",
     "Power",
@@ -220,6 +220,12 @@ const BUILTINS: [&str; 379] = [
     "GramSchmidt",
     "SingularValues",
     "ConjugateGradient",
+    // Polynomial tools II (CAS-DOC-48).
+    "PolynomialRoots",
+    "FromRoots",
+    "HornerEval",
+    "TaylorShift",
+    "RootMultiplicities",
     "GammaPDF",
     "GammaCDF",
     "GammaICDF",

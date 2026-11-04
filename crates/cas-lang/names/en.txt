@@ -162,12 +162,18 @@ Zip: zip
 Accumulate: cumsum
 # Polynomial tools (CAS-DOC-29, CAS-339 to CAS-341).
 Apart: partfrac
-CoefficientList: symb2poly coeffs
-FromCoefficients: poly2symb
+CoefficientList: symb2poly coeffs e2r
+FromCoefficients: poly2symb r2e
 TrailingCoefficient: tcoeff
-Valuation: valuation
+Valuation: valuation ldegree
 CountRoots: sturmab
 RealRoots: realroot
+# Polynomial tools II (CAS-DOC-48 §2, CAS-482).
+PolynomialRoots: proot
+FromRoots: pcoeff
+HornerEval: peval horner
+TaylorShift: ptayl
+RootMultiplicities: froot
 # Matrix decompositions and functions (CAS-DOC-30, CAS-344 to CAS-347).
 LUDecomposition: lu
 QRDecomposition: qr

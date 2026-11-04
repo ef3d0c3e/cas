@@ -304,6 +304,17 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::COUNT_ROOTS, polytools::count_roots),
         (Symbol::REAL_ROOTS, polytools::real_roots),
         (
+            Symbol::POLYNOMIAL_ROOTS,
+            polytools::two::polynomial_roots_native,
+        ),
+        (Symbol::FROM_ROOTS, polytools::two::from_roots),
+        (Symbol::HORNER_EVAL, polytools::two::horner_eval),
+        (Symbol::TAYLOR_SHIFT, polytools::two::taylor_shift),
+        (
+            Symbol::ROOT_MULTIPLICITIES,
+            polytools::two::root_multiplicities,
+        ),
+        (
             Symbol::LU_DECOMPOSITION,
             matrix::decompose::lu_decomposition,
         ),

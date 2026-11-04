@@ -199,6 +199,12 @@ builtins! {
     VALUATION = "Valuation" [PROTECTED];
     COUNT_ROOTS = "CountRoots" [PROTECTED];
     REAL_ROOTS = "RealRoots" [PROTECTED];
+    // Polynomial tools II (CAS-DOC-48).
+    POLYNOMIAL_ROOTS = "PolynomialRoots" [PROTECTED];
+    FROM_ROOTS = "FromRoots" [PROTECTED];
+    HORNER_EVAL = "HornerEval" [PROTECTED];
+    TAYLOR_SHIFT = "TaylorShift" [PROTECTED];
+    ROOT_MULTIPLICITIES = "RootMultiplicities" [PROTECTED];
     // Matrix decompositions and functions (CAS-DOC-30).
     LU_DECOMPOSITION = "LUDecomposition" [PROTECTED];
     QR_DECOMPOSITION = "QRDecomposition" [PROTECTED];
