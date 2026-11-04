@@ -45,7 +45,19 @@ fn schur(ctx: &Context, a: &str, diagonal: Option<&[&str]>) -> (Expr, Expr) {
     let a = read(a);
     let found = eval(ctx, &Expr::call(Symbol::SCHUR_DECOMPOSITION, [a.clone()]));
     let [q, t] = found.args() else {
-        panic!("{a:?}: {found:?}");
+        let jordan = eval(ctx, &Expr::call(Symbol::JORDAN_DECOMPOSITION, [a.clone()]));
+        let qr = eval(
+            ctx,
+            &Expr::call(
+                Symbol::QR_DECOMPOSITION,
+                [jordan
+                    .args()
+                    .first()
+                    .cloned()
+                    .unwrap_or_else(|| Expr::from(0))],
+            ),
+        );
+        panic!("{a:?}: {found:?}; Jordan {jordan:?}; its P's QR {qr:?}");
     };
     let n = t.args().len();
     for (i, row) in t.args().iter().enumerate() {
