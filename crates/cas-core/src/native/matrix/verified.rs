@@ -313,16 +313,20 @@ fn attempt(
             })
             .collect();
         let jy = arith.jacobian(a, &lambda, &moved, k);
+        // `C = I − R J̃(Y)` first, then `C Y`: `Y − (R J̃) Y` would count
+        // `Y` twice.
         let rj = arith.times(&r, &jy);
-        let ry: Vec<ComplexBall> = (0..n)
-            .map(|i| {
-                let mut s = y[i].clone();
-                for (j, yj) in y.iter().enumerate() {
-                    s = s.sub(&rj[i][j].mul(yj, prec), prec);
-                }
-                s
+        let c: Vec<Vec<ComplexBall>> = rj
+            .iter()
+            .enumerate()
+            .map(|(i, row)| {
+                row.iter()
+                    .enumerate()
+                    .map(|(j, x)| if i == j { one().sub(x, prec) } else { x.neg() })
+                    .collect()
             })
             .collect();
+        let ry = arith.apply(&c, &y);
         let kv: Vec<ComplexBall> = z.iter().zip(&ry).map(|(a, b)| a.add(b, prec)).collect();
         if kv.iter().zip(&rho).all(|(w, r)| inside(w, r)) {
             let value = lambda.add(&kv[k], prec);

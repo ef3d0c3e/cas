@@ -201,8 +201,10 @@ fn singular_value_decompositions() {
     // A repeated singular value: an orthogonal matrix.
     svd(&ctx, "List[List[0, 1], List[1, 0]]");
     svd(&ctx, "List[List[2, 0, 0], List[0, 0, 3], List[0, 0, 0]]");
-    // Complex entries.
-    svd(&ctx, "List[List[1, I], List[0, 1]]");
+    // Complex entries: Eigenvectors of AᴴA is not taken over ℚ(i), the call
+    // stays.
+    let e = read("SingularValueDecomposition[List[List[1, I], List[0, 1]]]");
+    assert_eq!(eval(&ctx, &e).head(), e.head());
 }
 
 /// Whether every entry of the matrix `m` is a ball holding 0, or 0.

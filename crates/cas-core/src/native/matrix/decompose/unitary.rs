@@ -19,7 +19,8 @@
 //!   distinct eigenvalues are orthogonal already, so that each stays in its
 //!   eigenspace. `uᵢ = A vᵢ / σᵢ` for `σᵢ ≠ 0`, and `GramSchmidt` of these
 //!   and `e₁, …, eₙ` completes `U`. giac's `svd([[3,0],[4,5]])` has `s =
-//!   [3√5, √5]`.
+//!   [3√5, √5]`. A complex `A` stays where `Eigenvectors` of `Aᴴ A` does,
+//!   its entries in ℚ(i).
 //!
 //! Matrices of balls take their eigenvectors from `Eigenvectors`'
 //! certified eigenpairs (CAS-DOC-51 §4, CAS-498), through the chains'
