@@ -13,6 +13,16 @@
 //!   `vₖ = bₖ − Σ ⟨uⱼ, bₖ⟩ uⱼ`, and normalized, `uₖ = vₖ/√⟨vₖ, vₖ⟩`, the
 //!   inner product conjugating its first vector; a row that depends on the
 //!   ones before is dropped.
+//! - **`SingularValues[A]`** (CAS-479), `svl`: the square roots of the
+//!   eigenvalues of `Aᴴ A`, ascending, exact where they are (giac's
+//!   `[0.365966190626,5.46498570422]` for `[[1,2],[3,4]]` is `√(15 ∓
+//!   √221)` here), balls otherwise.
+//! - **`ConjugateGradient[A, b]`**, `conjugate_gradient`: Hestenes and
+//!   Stiefel's iteration from 0, `n` steps at most, exact for exact
+//!   entries, giac's `[1/11,7/11]` for `[[4,1],[1,3]]` and `[1,2]`; the
+//!   residual `b − A x` must then be shown 0 (a ball holding 0), else the
+//!   call stays, as it does when `pᵀ A p` vanishes (`A` not positive
+//!   definite).
 
 use super::{inner, is_zero, list, matrix, rows, simplified};
 use crate::context::EvalError;
@@ -258,5 +268,88 @@ pub(in crate::native) fn gram_schmidt(ev: &mut Eval<'_>, e: &Expr) -> Native {
         matrix(basis)
     };
     ev.step("gramschmidt", e, &result);
+    Ok(Some(result))
+}
+
+/// `SingularValues[A]`.
+pub(in crate::native) fn singular_values_native(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [a] = e.args() else {
+        return Ok(None);
+    };
+    if rows(a).is_none() {
+        return Ok(None);
+    }
+    let Some(values) = singular_values(ev, a)? else {
+        return Ok(None);
+    };
+    let result = list(values);
+    ev.step("svl", e, &result);
+    Ok(Some(result))
+}
+
+/// `Σ uᵢ vᵢ`, put together.
+fn dot(ev: &mut Eval<'_>, u: &[Expr], v: &[Expr]) -> Result<Expr, EvalError> {
+    let terms: Vec<Expr> = u
+        .iter()
+        .zip(v)
+        .map(|(x, y)| x.clone() * y.clone())
+        .collect();
+    simplified(ev, sum(terms))
+}
+
+/// `A v`, put together.
+fn apply(ev: &mut Eval<'_>, a: &[Vec<Expr>], v: &[Expr]) -> Result<Vec<Expr>, EvalError> {
+    a.iter().map(|row| dot(ev, row, v)).collect()
+}
+
+/// `ConjugateGradient[A, b]`.
+pub(in crate::native) fn conjugate_gradient(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [a, b] = e.args() else {
+        return Ok(None);
+    };
+    let Some(m) = rows(a) else {
+        return Ok(None);
+    };
+    let n = m.len();
+    if m[0].len() != n || b.head() != Some(&Expr::from(Symbol::LIST)) || b.args().len() != n {
+        return Ok(None);
+    }
+    let rhs = b.args().to_vec();
+    let mut x = vec![Expr::from(0); n];
+    let mut r = rhs.clone();
+    let mut p = r.clone();
+    let mut rr = dot(ev, &r, &r)?;
+    for _ in 0..n {
+        if is_zero(ev, &rr)? == Some(true) {
+            break;
+        }
+        let ap = apply(ev, &m, &p)?;
+        let pap = dot(ev, &p, &ap)?;
+        if is_zero(ev, &pap)? != Some(false) {
+            return Ok(None);
+        }
+        let alpha = simplified(ev, rr.clone() / pap)?;
+        for (xi, pi) in x.iter_mut().zip(&p) {
+            *xi = simplified(ev, xi.clone() + alpha.clone() * pi.clone())?;
+        }
+        for (ri, api) in r.iter_mut().zip(&ap) {
+            *ri = simplified(ev, ri.clone() - alpha.clone() * api.clone())?;
+        }
+        let next = dot(ev, &r, &r)?;
+        let beta = simplified(ev, next.clone() / rr)?;
+        for (pi, ri) in p.iter_mut().zip(&r) {
+            *pi = simplified(ev, ri.clone() + beta.clone() * pi.clone())?;
+        }
+        rr = next;
+    }
+    // The residual, from scratch.
+    let ax = apply(ev, &m, &x)?;
+    for (bi, axi) in rhs.iter().zip(&ax) {
+        if is_zero(ev, &(bi.clone() - axi.clone()))? == Some(false) {
+            return Ok(None);
+        }
+    }
+    let result = list(x);
+    ev.step("conjugate_gradient", e, &result);
     Ok(Some(result))
 }

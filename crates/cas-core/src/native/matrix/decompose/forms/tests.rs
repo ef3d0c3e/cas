@@ -206,3 +206,30 @@ fn norms() {
     // A dependent row goes.
     check(&[("Length[GramSchmidt[List[List[1, 2], List[2, 4]]]]", "1")]);
 }
+
+/// Singular values and conjugate gradients (CAS-479).
+#[test]
+fn singular_values_and_conjugate_gradients() {
+    check(&[
+        // giac's [1/11,7/11], exactly; a 3 × 3 positive definite system.
+        (
+            "ConjugateGradient[List[List[4, 1], List[1, 3]], List[1, 2]]",
+            "List[1/11, 7/11]",
+        ),
+        (
+            "ConjugateGradient[List[List[2, -1, 0], List[-1, 2, -1], List[0, -1, 2]], List[1, 0, 1]]",
+            "List[1, 1, 1]",
+        ),
+        // Not positive definite: pᵀ A p vanishes.
+        (
+            "ConjugateGradient[List[List[0, 1], List[1, 0]], List[1, 0]]",
+            "ConjugateGradient[List[List[0, 1], List[1, 0]], List[1, 0]]",
+        ),
+        ("SingularValues[List[List[3, 0], List[0, 4]]]", "List[3, 4]"),
+    ]);
+    // giac's [0.365966190626,5.46498570422].
+    check_values(&[(
+        "SingularValues[List[List[1, 2], List[3, 4]]]",
+        "List[Power[Plus[15, Times[-1, Power[221, 1/2]]], 1/2], Power[Plus[15, Power[221, 1/2]], 1/2]]",
+    )]);
+}

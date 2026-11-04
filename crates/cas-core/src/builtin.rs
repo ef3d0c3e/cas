@@ -225,6 +225,8 @@ builtins! {
     L_INFINITY_NORM = "LInfinityNorm" [PROTECTED];
     CONDITION_NUMBER = "ConditionNumber" [PROTECTED];
     GRAM_SCHMIDT = "GramSchmidt" [PROTECTED];
+    SINGULAR_VALUES = "SingularValues" [PROTECTED];
+    CONJUGATE_GRADIENT = "ConjugateGradient" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];

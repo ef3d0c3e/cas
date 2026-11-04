@@ -194,6 +194,8 @@ L1Norm: l1norm
 LInfinityNorm: linfnorm
 ConditionNumber: cond
 GramSchmidt: gramschmidt
+SingularValues: svl
+ConjugateGradient: conjugate_gradient
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime
