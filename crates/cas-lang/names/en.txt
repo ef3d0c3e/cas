@@ -196,6 +196,20 @@ LegendreSymbol: legendre_symbol
 BernoulliB: bernoulli
 Prime: ithprime
 PrimePi: nprimes
+# Permutations (CAS-DOC-45 §2, CAS-463).
+PermutationQ: is_permu
+PermutationCycles: permu2cycles
+CyclesPermutation: cycles2permu
+CyclePermutation: cycle2perm
+InversePermutation: perminv
+InverseCycle: cycleinv
+PermutationProduct: p1op2
+PermutationCycleProduct: p1oc2
+CyclePermutationProduct: c1op2
+CycleProduct: c1oc2
+PermutationOrder: permuorder
+PermutationSignature: signature
+PermutationMatrix: permu2mat
 # Equations (CAS-DOC-11, CAS-210, CAS-214).
 Solve: solve
 CSolve: csolve

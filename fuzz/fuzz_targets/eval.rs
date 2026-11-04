@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 327] = [
+const BUILTINS: [&str; 340] = [
     "Plus",
     "Times",
     "Power",
@@ -180,6 +180,20 @@ const BUILTINS: [&str; 327] = [
     "LatticeReduce",
     // Modular arithmetic (CAS-DOC-43).
     "Modular",
+    // Permutations (CAS-DOC-45).
+    "PermutationQ",
+    "PermutationCycles",
+    "CyclesPermutation",
+    "CyclePermutation",
+    "InversePermutation",
+    "InverseCycle",
+    "PermutationProduct",
+    "PermutationCycleProduct",
+    "CyclePermutationProduct",
+    "CycleProduct",
+    "PermutationOrder",
+    "PermutationSignature",
+    "PermutationMatrix",
     "ZTransform",
     "InverseZTransform",
     "KroneckerDelta",

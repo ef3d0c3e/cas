@@ -44,6 +44,7 @@ mod numeric;
 mod optimization;
 mod orthogonal;
 mod parts;
+mod permutations;
 mod polygamma;
 mod polynomial;
 mod polytools;
@@ -349,6 +350,34 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::BERNOULLI_B, number_theory::bernoulli_b),
         (Symbol::PRIME, number_theory::prime),
         (Symbol::PRIME_PI, number_theory::prime_pi_native),
+        (Symbol::PERMUTATION_Q, permutations::permutation_q),
+        (Symbol::PERMUTATION_CYCLES, permutations::permutation_cycles),
+        (Symbol::CYCLES_PERMUTATION, permutations::cycles_permutation),
+        (Symbol::CYCLE_PERMUTATION, permutations::cycle_permutation),
+        (
+            Symbol::INVERSE_PERMUTATION,
+            permutations::inverse_permutation,
+        ),
+        (Symbol::INVERSE_CYCLE, permutations::inverse_cycle),
+        (
+            Symbol::PERMUTATION_PRODUCT,
+            permutations::permutation_product,
+        ),
+        (
+            Symbol::PERMUTATION_CYCLE_PRODUCT,
+            permutations::permutation_cycle_product,
+        ),
+        (
+            Symbol::CYCLE_PERMUTATION_PRODUCT,
+            permutations::cycle_permutation_product,
+        ),
+        (Symbol::CYCLE_PRODUCT, permutations::cycle_product),
+        (Symbol::PERMUTATION_ORDER, permutations::permutation_order),
+        (
+            Symbol::PERMUTATION_SIGNATURE,
+            permutations::permutation_signature,
+        ),
+        (Symbol::PERMUTATION_MATRIX, permutations::permutation_matrix),
         (Symbol::MEAN, statistics::mean),
         (Symbol::POPULATION_VARIANCE, statistics::population_variance),
         (

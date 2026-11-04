@@ -250,6 +250,20 @@ builtins! {
     BERNOULLI_B = "BernoulliB" [LISTABLE, PROTECTED];
     PRIME = "Prime" [LISTABLE, PROTECTED];
     PRIME_PI = "PrimePi" [LISTABLE, PROTECTED];
+    // Permutations (CAS-DOC-45 §2): giac's lists of 0, …, n − 1.
+    PERMUTATION_Q = "PermutationQ" [PROTECTED];
+    PERMUTATION_CYCLES = "PermutationCycles" [PROTECTED];
+    CYCLES_PERMUTATION = "CyclesPermutation" [PROTECTED];
+    CYCLE_PERMUTATION = "CyclePermutation" [PROTECTED];
+    INVERSE_PERMUTATION = "InversePermutation" [PROTECTED];
+    INVERSE_CYCLE = "InverseCycle" [PROTECTED];
+    PERMUTATION_PRODUCT = "PermutationProduct" [PROTECTED];
+    PERMUTATION_CYCLE_PRODUCT = "PermutationCycleProduct" [PROTECTED];
+    CYCLE_PERMUTATION_PRODUCT = "CyclePermutationProduct" [PROTECTED];
+    CYCLE_PRODUCT = "CycleProduct" [PROTECTED];
+    PERMUTATION_ORDER = "PermutationOrder" [PROTECTED];
+    PERMUTATION_SIGNATURE = "PermutationSignature" [PROTECTED];
+    PERMUTATION_MATRIX = "PermutationMatrix" [PROTECTED];
     // Statistics (CAS-DOC-22): Xcas's `mean`, `variance`, `stddev` and
     // `stddevp`. giac's `variance` and `stddev` are the population ones and
     // Mathematica's `Variance` and `StandardDeviation` the sample ones, hence
