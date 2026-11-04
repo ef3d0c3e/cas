@@ -361,6 +361,17 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             matrix::decompose::forms::positive_definite_q,
         ),
         (Symbol::INERTIA, matrix::decompose::forms::inertia),
+        (Symbol::MATRIX_NORM, matrix::decompose::norms::matrix_norm),
+        (Symbol::L1_NORM, matrix::decompose::norms::l1_norm),
+        (
+            Symbol::L_INFINITY_NORM,
+            matrix::decompose::norms::l_infinity_norm,
+        ),
+        (
+            Symbol::CONDITION_NUMBER,
+            matrix::decompose::norms::condition_number,
+        ),
+        (Symbol::GRAM_SCHMIDT, matrix::decompose::norms::gram_schmidt),
         (Symbol::PRIME_Q, number_theory::prime_q),
         (Symbol::NEXT_PRIME, number_theory::next_prime),
         (Symbol::PREVIOUS_PRIME, number_theory::previous_prime),

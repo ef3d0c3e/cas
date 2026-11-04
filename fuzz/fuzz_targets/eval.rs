@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 372] = [
+const BUILTINS: [&str; 377] = [
     "Plus",
     "Times",
     "Power",
@@ -213,6 +213,11 @@ const BUILTINS: [&str; 372] = [
     "LDLDecomposition",
     "PositiveDefiniteQ",
     "Inertia",
+    "MatrixNorm",
+    "L1Norm",
+    "LInfinityNorm",
+    "ConditionNumber",
+    "GramSchmidt",
     "GammaPDF",
     "GammaCDF",
     "GammaICDF",

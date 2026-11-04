@@ -121,3 +121,88 @@ fn symmetric_matrices() {
         ),
     ]);
 }
+
+/// The entries of nested lists, in order.
+fn leaves(e: &Expr) -> Vec<Expr> {
+    if e.head() == Some(&Expr::from(crate::Symbol::LIST)) {
+        e.args().iter().flat_map(leaves).collect()
+    } else {
+        vec![e.clone()]
+    }
+}
+
+/// `N` of both sides at 40 digits, entry by entry within `10⁻²⁰`: radicals
+/// written in other forms.
+fn check_values(cases: &[(&str, &str)]) {
+    use crate::Symbol;
+    let ctx = Context::new();
+    let numeric = |e: &str| {
+        ctx.eval(&Expr::call(Symbol::N, [read(e), Expr::from(40)]))
+            .unwrap()
+    };
+    let mut wrong = Vec::new();
+    for (input, expected) in cases {
+        let (found, want) = (numeric(input), numeric(expected));
+        // Entry by entry, balls on both sides: no `N` of a difference near
+        // 0, and no `Max` of gaps it cannot order.
+        let (a, b) = (leaves(&found), leaves(&want));
+        let near = a.len() == b.len()
+            && a.iter().zip(&b).all(|(x, y)| {
+                let gap = Expr::call(
+                    Symbol::ABS,
+                    [Expr::call(
+                        Symbol::PLUS,
+                        [x.clone(), Expr::from(-1) * y.clone()],
+                    )],
+                );
+                let small = Expr::call(Symbol::LESS, [gap, read("Power[10, -20]")]);
+                ctx.eval(&small).unwrap().as_symbol() == Some(Symbol::TRUE)
+            });
+        if !near {
+            wrong.push(format!("{input}: {found:?}, expected {want:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Norms, condition numbers and Gram–Schmidt (CAS-478).
+#[test]
+fn norms() {
+    let a = "List[List[1, -2], List[3, 4]]";
+    check(&[
+        // giac's 6, 7 and 6, 7; of a vector, 6 and 3.
+        (&format!("MatrixNorm[{a}, 1]"), "6"),
+        (&format!("MatrixNorm[{a}, Infinity]"), "7"),
+        (&format!("MatrixNorm[{a}, frobenius]"), "Power[30, 1/2]"),
+        (&format!("L1Norm[{a}]"), "6"),
+        (&format!("LInfinityNorm[{a}]"), "7"),
+        ("L1Norm[List[1, -2, 3]]", "6"),
+        ("LInfinityNorm[List[1, -2, 3]]", "3"),
+        // giac's 21.0 twice, exactly; a singular matrix.
+        ("ConditionNumber[List[List[1, 2], List[3, 4]]]", "21"),
+        (
+            "ConditionNumber[List[List[1, 2], List[3, 4]], Infinity]",
+            "21",
+        ),
+        ("ConditionNumber[List[List[1, 2], List[2, 4]]]", "Infinity"),
+    ]);
+    check_values(&[
+        // giac's 5.11667273602 = √(15 + 5√2), and 14.9330343737.
+        (
+            &format!("MatrixNorm[{a}, 2]"),
+            "Power[Plus[15, Times[5, Power[2, 1/2]]], 1/2]",
+        ),
+        (
+            "ConditionNumber[List[List[1, 2], List[3, 4]], 2]",
+            "Times[Power[Plus[15, Power[221, 1/2]], 1/2], Power[Plus[15, Times[-1, Power[221, 1/2]]], -1/2]]",
+        ),
+        // giac's [[1/√2,1/√2,0],[1/√6,−1/√6,2/√6]].
+        (
+            "GramSchmidt[List[List[1, 1, 0], List[1, 0, 1]]]",
+            "List[List[Power[2, -1/2], Power[2, -1/2], 0], \
+             List[Power[6, -1/2], Times[-1, Power[6, -1/2]], Times[2, Power[6, -1/2]]]]",
+        ),
+    ]);
+    // A dependent row goes.
+    check(&[("Length[GramSchmidt[List[List[1, 2], List[2, 4]]]]", "1")]);
+}

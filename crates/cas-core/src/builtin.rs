@@ -220,6 +220,11 @@ builtins! {
     LDL_DECOMPOSITION = "LDLDecomposition" [PROTECTED];
     POSITIVE_DEFINITE_Q = "PositiveDefiniteQ" [PROTECTED];
     INERTIA = "Inertia" [PROTECTED];
+    MATRIX_NORM = "MatrixNorm" [PROTECTED];
+    L1_NORM = "L1Norm" [PROTECTED];
+    L_INFINITY_NORM = "LInfinityNorm" [PROTECTED];
+    CONDITION_NUMBER = "ConditionNumber" [PROTECTED];
+    GRAM_SCHMIDT = "GramSchmidt" [PROTECTED];
     // Equations (CAS-DOC-11): the real solutions, the complex ones, and
     // numeric roots.
     SOLVE = "Solve" [PROTECTED];

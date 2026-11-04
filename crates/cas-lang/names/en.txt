@@ -189,6 +189,11 @@ HadamardProduct: hadamard
 LDLDecomposition: ldl
 PositiveDefiniteQ: isposdef
 Inertia: inertia
+MatrixNorm: matrix_norm
+L1Norm: l1norm
+LInfinityNorm: linfnorm
+ConditionNumber: cond
+GramSchmidt: gramschmidt
 # Number theory (CAS-DOC-17, CAS-267 to CAS-271).
 PrimeQ: isprime
 NextPrime: nextprime
