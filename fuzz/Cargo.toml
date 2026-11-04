@@ -381,3 +381,10 @@ path = "fuzz_targets/combinatorics.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "incomplete_fns"
+path = "fuzz_targets/incomplete_fns.rs"
+test = false
+doc = false
+bench = false

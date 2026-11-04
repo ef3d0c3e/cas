@@ -11,7 +11,9 @@
 //! - uniform and exponential: the cumulative function takes the inverse
 //!   back, exactly;
 //! - normal, Student, χ² and Fisher, and `erfinv`: `F(F⁻¹(q))` within
-//!   `10⁻¹²` of `q`, the cumulative function increasing and in `[0, 1]`.
+//!   `10⁻¹²` of `q`, the cumulative function increasing and in `[0, 1]`;
+//!   with fractional degrees of freedom, and the gamma, beta, Weibull and
+//!   Cauchy distributions (CAS-DOC-46 §5, CAS-472), likewise.
 #![no_main]
 
 use arbitrary::{Result, Unstructured};
@@ -280,10 +282,23 @@ fn run(u: &mut Unstructured<'_>) -> Result<()> {
             // Student, χ² and Fisher: F(F⁻¹(q)) ≈ q, F increasing in [0, 1].
             let n = u.int_in_range(1..=6usize)?;
             let m = u.int_in_range(1..=6usize)?;
-            let (names, params): ([&str; 2], Vec<Expr>) = match u.int_in_range(0..=2u8)? {
+            // A positive rational up to 6, in quarters.
+            let quarter = |u: &mut Unstructured<'_>| -> Result<Expr> {
+                Ok(Expr::from(q(u.int_in_range(1..=24)?, 4)))
+            };
+            let (names, params): ([&str; 2], Vec<Expr>) = match u.int_in_range(0..=8u8)? {
                 0 => (["StudentTCDF", "StudentTICDF"], vec![int(n)]),
                 1 => (["ChiSquareCDF", "ChiSquareICDF"], vec![int(n)]),
-                _ => (["FisherCDF", "FisherICDF"], vec![int(m), int(n)]),
+                2 => (["FisherCDF", "FisherICDF"], vec![int(m), int(n)]),
+                3 => (["StudentTCDF", "StudentTICDF"], vec![quarter(u)?]),
+                4 => (["ChiSquareCDF", "ChiSquareICDF"], vec![quarter(u)?]),
+                5 => (["GammaCDF", "GammaICDF"], vec![quarter(u)?, quarter(u)?]),
+                6 => (["BetaCDF", "BetaICDF"], vec![quarter(u)?, quarter(u)?]),
+                7 => (
+                    ["WeibullCDF", "WeibullICDF"],
+                    vec![quarter(u)?, quarter(u)?],
+                ),
+                _ => (["CauchyCDF", "CauchyICDF"], vec![quarter(u)?, quarter(u)?]),
             };
             let [cdf, icdf] = names;
             let args = |extra: Expr| [params.as_slice(), &[extra]].concat();
@@ -298,10 +313,12 @@ fn run(u: &mut Unstructured<'_>) -> Result<()> {
             }
             let x1 = Expr::from(q(u.int_in_range(0..=20)?, 4));
             let x2 = Expr::from(q(u.int_in_range(0..=20)?, 4));
-            let (f1, f2) = (
-                eval(&ctx, cdf, &args(x1.clone())),
-                eval(&ctx, cdf, &args(x2.clone())),
-            );
+            // Numbers: an incomplete function stays exact.
+            let numeric = |x: &Expr| {
+                let f = Expr::call(Symbol::new(cdf), args(x.clone()));
+                eval(&ctx, "N", &[f, Expr::from(20)])
+            };
+            let (f1, f2) = (numeric(&x1), numeric(&x2));
             let ordered =
                 |a: &Expr, b: &Expr| Expr::call(Symbol::LESS_EQUAL, [a.clone(), b.clone()]);
             assert!(
