@@ -33,8 +33,11 @@ use super::{
 };
 use crate::context::EvalError;
 use crate::eval::Eval;
-use crate::expr::Expr;
+use crate::expr::{Expr, View};
+use crate::native::approximation;
 use crate::poly::Fraction;
+use crate::symbol::Symbol;
+use cas_num::ball::{Ball, ComplexBall};
 
 /// An eigenvalue and a basis of its eigenvectors.
 type Eigen = (Expr, Vec<Vec<Expr>>);
@@ -45,12 +48,7 @@ pub(in crate::native) fn eigenvectors(ev: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(None);
     };
     if numeric(&m) {
-        warn(
-            ev,
-            "the eigenvectors of a numeric matrix are not computed here",
-            e,
-        );
-        return Ok(None);
+        return numeric_eigenvectors(ev, e, &m, n);
     }
     let Some((poly, _)) = char_poly(ev, e, &m, n)? else {
         return Ok(None);
@@ -111,6 +109,64 @@ pub(in crate::native) fn eigenvectors(ev: &mut Eval<'_>, e: &Expr) -> Native {
     }
     if columns.len() != n {
         return Ok(None);
+    }
+    let rows = (0..n).map(|i| list(columns.iter().map(|c| c[i].clone())));
+    stepped(ev, "eigenvects", e, list(rows.collect::<Vec<_>>()))
+}
+
+/// The number `x` as a complex ball at `prec` bits; `None` for another
+/// value.
+fn complex_ball(ev: &mut Eval<'_>, x: &Expr, prec: u64) -> Result<Option<ComplexBall>, EvalError> {
+    let direct = |x: &Expr| match x.view() {
+        View::Ball(b) => Some(ComplexBall::from_real(b.clone())),
+        View::ComplexBall(z) => Some(z.clone()),
+        View::Complex(c) => Some(ComplexBall::from_complex(c, prec)),
+        _ => x
+            .to_rational()
+            .map(|q| ComplexBall::from_real(Ball::from_rational(&q, prec))),
+    };
+    if let Some(z) = direct(x) {
+        return Ok(Some(z));
+    }
+    let value = approximation(ev.context(), x, prec)?;
+    Ok(direct(&value).filter(ComplexBall::is_finite))
+}
+
+/// The eigenvectors of a numeric matrix (CAS-DOC-51 §4, CAS-498): for each
+/// of `Eigenvalues`' balls, the eigenpair certified near it by
+/// [`super::verified::eigenpair`], its vector with 1 at its largest
+/// component; an eigenvalue not shown simple leaves the call.
+fn numeric_eigenvectors(ev: &mut Eval<'_>, e: &Expr, m: &Expr, n: usize) -> Native {
+    let values = ev.eval(&Expr::call(Symbol::EIGENVALUES, [m.clone()]))?;
+    if values.head() != Some(&Expr::from(Symbol::LIST)) || values.args().len() != n {
+        return Ok(None);
+    }
+    let prec = ev.context().working_precision();
+    let mut a = Vec::with_capacity(n);
+    for row in m.args() {
+        let mut entries = Vec::with_capacity(n);
+        for x in row.args() {
+            let Some(z) = complex_ball(ev, x, prec)? else {
+                return Ok(None);
+            };
+            entries.push(z);
+        }
+        a.push(entries);
+    }
+    let mut columns: Vec<Vec<Expr>> = Vec::with_capacity(n);
+    for value in values.args() {
+        let Some(guess) = complex_ball(ev, value, prec)? else {
+            return Ok(None);
+        };
+        let Some((_, vector)) = super::verified::eigenpair(&a, &guess, prec) else {
+            warn(
+                ev,
+                "an eigenvalue is not shown simple: its eigenvector is not certified",
+                e,
+            );
+            return Ok(None);
+        };
+        columns.push(vector.into_iter().map(Expr::from).collect());
     }
     let rows = (0..n).map(|i| list(columns.iter().map(|c| c[i].clone())));
     stepped(ev, "eigenvects", e, list(rows.collect::<Vec<_>>()))

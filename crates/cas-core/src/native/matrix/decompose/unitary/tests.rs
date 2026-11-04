@@ -180,3 +180,65 @@ fn singular_value_decompositions() {
     // Complex entries.
     svd(&ctx, "List[List[1, I], List[0, 1]]");
 }
+
+/// Whether every entry of the matrix `m` is a ball holding 0, or 0.
+fn holds_zero(ctx: &Context, m: &Expr) -> bool {
+    use crate::expr::View;
+    let m = eval(ctx, m);
+    m.args().iter().all(|row| {
+        row.args().iter().all(|x| match x.view() {
+            View::Ball(b) => b.contains_rational(&cas_num::Rational::ZERO),
+            View::ComplexBall(z) => z.may_be_zero(),
+            _ => *x == Expr::from(0),
+        })
+    })
+}
+
+/// Balls (CAS-498): the identities hold as balls holding 0.
+#[test]
+fn ball_matrices() {
+    let ctx = Context::new();
+    for a in [
+        "N[List[List[1, 2], List[3, 4]], 30]",
+        "N[List[List[2, 1, 0], List[1, 3, 1], List[0, 1, 4]], 30]",
+        "N[List[List[0, -1], List[1, 0]], 30]",
+    ] {
+        let a = eval(&ctx, &read(a));
+        let found = eval(&ctx, &Expr::call(Symbol::SCHUR_DECOMPOSITION, [a.clone()]));
+        let [q, t] = found.args() else {
+            panic!("{a:?}: {found:?}");
+        };
+        let back = dot(&dot(q, t), &adjoint(q)) - a.clone();
+        assert!(holds_zero(&ctx, &back), "{a:?}: {found:?}");
+        let n = i64::try_from(q.args().len()).expect("small");
+        let ident = Expr::call(Symbol::IDENTITY_MATRIX, [Expr::from(n)]);
+        assert!(
+            holds_zero(&ctx, &(dot(&adjoint(q), q) - ident.clone())),
+            "{a:?}: {found:?}"
+        );
+        let found = eval(
+            &ctx,
+            &Expr::call(Symbol::SINGULAR_VALUE_DECOMPOSITION, [a.clone()]),
+        );
+        let [u, s, v] = found.args() else {
+            panic!("{a:?}: {found:?}");
+        };
+        let diagonal = Expr::call(Symbol::DIAGONAL_MATRIX, [s.clone()]);
+        let back = dot(&dot(u, &diagonal), &adjoint(v)) - a.clone();
+        assert!(holds_zero(&ctx, &back), "{a:?}: {found:?}");
+        // Eigenvectors: A P − P diag(λ) holds 0.
+        let p = eval(&ctx, &Expr::call(Symbol::EIGENVECTORS, [a.clone()]));
+        let values = Expr::call(Symbol::EIGENVALUES, [a.clone()]);
+        let lambda = Expr::call(Symbol::DIAGONAL_MATRIX, [values]);
+        let gap = dot(&a, &p) - dot(&p, &lambda);
+        assert!(holds_zero(&ctx, &gap), "{a:?}: {p:?}");
+    }
+    // A double eigenvalue: not certified, the call stays.
+    let a = eval(&ctx, &read("N[List[List[1, 0], List[0, 1]], 30]"));
+    let found = eval(&ctx, &Expr::call(Symbol::EIGENVECTORS, [a]));
+    assert_eq!(
+        found.head(),
+        Some(&Expr::from(Symbol::EIGENVECTORS)),
+        "{found:?}"
+    );
+}

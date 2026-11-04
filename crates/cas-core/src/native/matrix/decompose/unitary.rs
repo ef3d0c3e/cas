@@ -20,6 +20,12 @@
 //!   eigenspace. `uᵢ = A vᵢ / σᵢ` for `σᵢ ≠ 0`, and `GramSchmidt` of these
 //!   and `e₁, …, eₙ` completes `U`. giac's `svd([[3,0],[4,5]])` has `s =
 //!   [3√5, √5]`.
+//!
+//! Matrices of balls take their eigenvectors from `Eigenvectors`'
+//! certified eigenpairs (CAS-DOC-51 §4, CAS-498), through the chains'
+//! fallback to it; each eigenvalue must then be shown simple, and each
+//! entry of the answer is a ball holding the exact decomposition's of
+//! every matrix in `A`'s balls.
 
 use std::cmp::Ordering;
 
@@ -168,7 +174,11 @@ pub(in crate::native) fn singular_value_decomposition(ev: &mut Eval<'_>, e: &Exp
         }
         s.push(sigma);
     }
-    u.extend(identity(n).into_iter().map(list));
+    // Completed only past a zero singular value: of balls, `GramSchmidt`
+    // cannot drop the unit vectors a full basis already spans.
+    if u.len() < n {
+        u.extend(identity(n).into_iter().map(list));
+    }
     let Some(u) = orthonormal(ev, u, n)? else {
         return Ok(None);
     };

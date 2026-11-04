@@ -928,5 +928,6 @@ mod eigen;
 mod elimination;
 #[cfg(test)]
 mod tests;
+pub(super) mod verified;
 
 pub(super) use eigen::eigenvectors;
