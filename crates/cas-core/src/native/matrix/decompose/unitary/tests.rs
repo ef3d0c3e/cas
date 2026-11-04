@@ -220,6 +220,29 @@ fn holds_zero(ctx: &Context, m: &Expr) -> bool {
     })
 }
 
+/// For each column `x` of `p`, `A x − (A x)_k x`, `k` the component that
+/// is exactly 1: 0 for an eigenvector, whatever its eigenvalue.
+fn eigen_gaps(ctx: &Context, a: &Expr, p: &Expr) -> Expr {
+    let n = p.args().len();
+    let one = |x: &Expr| match x.view() {
+        crate::expr::View::Ball(b) => b.is_exact() && b.contains_rational(&cas_num::Rational::ONE),
+        _ => *x == Expr::from(1),
+    };
+    let mut gaps = Vec::with_capacity(n);
+    for j in 0..n {
+        let x: Vec<Expr> = p.args().iter().map(|row| row.args()[j].clone()).collect();
+        let k = x
+            .iter()
+            .position(one)
+            .unwrap_or_else(|| panic!("{p:?}: no 1 in column {j}"));
+        let x = Expr::call(Symbol::LIST, x);
+        let image = eval(ctx, &dot(a, &x));
+        let scale = image.args()[k].clone();
+        gaps.push(image - scale * x);
+    }
+    Expr::call(Symbol::LIST, gaps)
+}
+
 /// Balls (CAS-498): the identities hold as balls holding 0.
 #[test]
 fn ball_matrices() {
@@ -257,12 +280,13 @@ fn ball_matrices() {
         let diagonal = Expr::call(Symbol::DIAGONAL_MATRIX, [s.clone()]);
         let back = dot(&dot(u, &diagonal), &adjoint(v)) - a.clone();
         assert!(holds_zero(&ctx, &back), "{a:?}: {found:?}");
-        // Eigenvectors: A P − P diag(λ) holds 0.
+        // Eigenvectors: each column's image parallel to it.
         let p = eval(&ctx, &Expr::call(Symbol::EIGENVECTORS, [a.clone()]));
-        let values = Expr::call(Symbol::EIGENVALUES, [a.clone()]);
-        let lambda = Expr::call(Symbol::DIAGONAL_MATRIX, [values]);
-        let gap = dot(&a, &p) - dot(&p, &lambda);
-        assert!(holds_zero(&ctx, &gap), "{a:?}: {p:?}");
+        let values = eval(&ctx, &Expr::call(Symbol::EIGENVALUES, [a.clone()]));
+        assert!(
+            holds_zero(&ctx, &eigen_gaps(&ctx, &a, &p)),
+            "{a:?}: {p:?}, Eigenvalues {values:?}"
+        );
     }
     // A double eigenvalue: not certified, the call stays.
     let a = eval(&ctx, &read("N[List[List[1, 0], List[0, 1]], 30]"));

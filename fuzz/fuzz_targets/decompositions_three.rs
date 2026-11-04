@@ -4,7 +4,8 @@
 //!   upper triangular, `Qᴴ Q = I` and `Q T Qᴴ = A`;
 //! - `SingularValueDecomposition` (the same sizes): `s` descending, `U`
 //!   and `V` unitary, `U diag(s) Vᴴ = A`;
-//! - `Eigenvectors` of `A` as balls: `A P − P Λ` holds 0;
+//! - `Eigenvectors` of `A` as balls: each column `x` with `A x` parallel,
+//!   `A x − (A x)_k x` holding 0 for its component `x_k = 1`;
 //! - `JacobiLinearSolve` and `GaussSeidelLinearSolve` on `A` made strictly
 //!   diagonally dominant: balls holding the exact solution;
 //! - `SmithDecomposition` of a 2 × 2 matrix of polynomials in `x`: `U A V
@@ -79,6 +80,26 @@ fn vanishes(ctx: &Context, m: &Expr, balls: bool) -> bool {
             }
         }
     })
+}
+
+/// For each column `x` of `p`, `A x − (A x)_k x`, `k` the component that
+/// is exactly 1: 0 for an eigenvector, whatever its eigenvalue.
+fn eigen_gaps(ctx: &Context, a: &Expr, p: &Expr) -> Expr {
+    let n = p.args().len();
+    let one = |x: &Expr| match x.view() {
+        cas_core::View::Ball(b) => b.is_exact() && b.contains_rational(&Rational::ONE),
+        _ => *x == Expr::from(1),
+    };
+    let mut gaps = Vec::with_capacity(n);
+    for j in 0..n {
+        let x: Vec<Expr> = p.args().iter().map(|row| row.args()[j].clone()).collect();
+        let k = x.iter().position(one).unwrap_or_else(|| panic!("{p:?}: no 1 in column {j}"));
+        let x = Expr::call(Symbol::LIST, x);
+        let image = eval(ctx, &dot(a, &x));
+        let scale = image.args()[k].clone();
+        gaps.push(image - scale * x);
+    }
+    Expr::call(Symbol::LIST, gaps)
 }
 
 fn is_list(e: &Expr) -> bool {
@@ -158,10 +179,8 @@ fn run(u: &mut Unstructured<'_>) -> Result<()> {
     unitary_checks(&ctx, &balls, n, true);
     let p = eval(&ctx, &Expr::call(Symbol::EIGENVECTORS, [balls.clone()]));
     if is_list(&p) {
-        let values = Expr::call(Symbol::EIGENVALUES, [balls.clone()]);
-        let lambda = Expr::call(Symbol::DIAGONAL_MATRIX, [values]);
         assert!(
-            vanishes(&ctx, &(dot(&balls, &p) - dot(&p, &lambda)), true),
+            vanishes(&ctx, &eigen_gaps(&ctx, &balls, &p), true),
             "{balls:?}: {p:?}"
         );
     }
