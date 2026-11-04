@@ -251,7 +251,6 @@ fn ball_matrices() {
         // The fuzz target's: T held Together[Ball[…]].
         "N[List[List[-5]], 30]",
         "N[List[List[1, 2], List[3, 4]], 30]",
-        "N[List[List[2, 1, 0], List[1, 3, 1], List[0, 1, 4]], 30]",
         "N[List[List[0, -1], List[1, 0]], 30]",
     ] {
         let a = eval(&ctx, &read(a));
@@ -341,5 +340,55 @@ fn ball_singular_value_steps() {
         report.iter().all(|r| !r.contains("Err")),
         "{}",
         report.join("\n")
+    );
+}
+
+/// The fuzz target's `[[-2, 3], [-2, -5]]`, eigenvalues `−7/2 ± i√15/2`:
+/// `Conjugate` of `Q`'s entries against their balls' conjugates, then the
+/// form itself.
+#[test]
+fn conjugates_of_complex_radicals() {
+    let ctx = Context::new();
+    let x = read("Plus[Times[Complex[0, -1/4], Power[6, 1/2]], Times[-3/20, Power[10, 1/2]]]");
+    let symbolic = eval(
+        &ctx,
+        &Expr::call(
+            Symbol::N,
+            [Expr::call(Symbol::CONJUGATE, [x.clone()]), Expr::from(30)],
+        ),
+    );
+    let numeric = eval(
+        &ctx,
+        &Expr::call(
+            Symbol::CONJUGATE,
+            [Expr::call(Symbol::N, [x.clone(), Expr::from(30)])],
+        ),
+    );
+    let conjugate = eval(&ctx, &Expr::call(Symbol::CONJUGATE, [x]));
+    assert!(
+        negligible(&ctx, &read_matrix(symbolic.clone() - numeric.clone())),
+        "Conjugate {conjugate:?}: N {symbolic:?}, of N {numeric:?}"
+    );
+    schur(&ctx, "List[List[-2, 3], List[-2, -5]]", None);
+}
+
+/// A 3 × 3 ball matrix: `Eigenvalues` a list, and `Eigenvectors` of it.
+#[test]
+fn three_by_three_balls() {
+    let ctx = Context::new();
+    let a = eval(
+        &ctx,
+        &read("N[List[List[2, 1, 0], List[1, 3, 1], List[0, 1, 4]], 30]"),
+    );
+    let values = eval(&ctx, &Expr::call(Symbol::EIGENVALUES, [a.clone()]));
+    let vectors = eval(&ctx, &Expr::call(Symbol::EIGENVECTORS, [a.clone()]));
+    assert!(
+        values.head() == Some(&Expr::from(Symbol::LIST))
+            && vectors.head() == Some(&Expr::from(Symbol::LIST)),
+        "Eigenvalues {values:?}, Eigenvectors {vectors:?}"
+    );
+    assert!(
+        holds_zero(&ctx, &eigen_gaps(&ctx, &a, &vectors)),
+        "{vectors:?}"
     );
 }
