@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 346] = [
+const BUILTINS: [&str; 349] = [
     "Plus",
     "Times",
     "Power",
@@ -200,6 +200,9 @@ const BUILTINS: [&str; 346] = [
     "HammingDistance",
     "Convert",
     "FactorialPower",
+    "DiscreteFourierTransform",
+    "InverseDiscreteFourierTransform",
+    "Convolution",
     "ZTransform",
     "InverseZTransform",
     "KroneckerDelta",

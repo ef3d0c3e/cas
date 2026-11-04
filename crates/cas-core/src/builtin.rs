@@ -271,6 +271,10 @@ builtins! {
     HAMMING_DISTANCE = "HammingDistance" [LISTABLE, PROTECTED];
     CONVERT = "Convert" [PROTECTED];
     FACTORIAL_POWER = "FactorialPower" [LISTABLE, PROTECTED];
+    // The discrete Fourier transform (CAS-DOC-45 §4).
+    DISCRETE_FOURIER_TRANSFORM = "DiscreteFourierTransform" [PROTECTED];
+    INVERSE_DISCRETE_FOURIER_TRANSFORM = "InverseDiscreteFourierTransform" [PROTECTED];
+    CONVOLUTION = "Convolution" [PROTECTED];
     // Statistics (CAS-DOC-22): Xcas's `mean`, `variance`, `stddev` and
     // `stddevp`. giac's `variance` and `stddev` are the population ones and
     // Mathematica's `Variance` and `StandardDeviation` the sample ones, hence

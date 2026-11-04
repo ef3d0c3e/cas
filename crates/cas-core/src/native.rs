@@ -16,6 +16,7 @@ mod arith;
 mod ball;
 mod bessel;
 mod bits;
+mod dft;
 mod dsolve;
 mod elementary;
 mod erf;
@@ -385,6 +386,15 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::HAMMING_DISTANCE, bits::hamming_distance),
         (Symbol::CONVERT, bits::convert),
         (Symbol::FACTORIAL_POWER, bits::factorial_power),
+        (
+            Symbol::DISCRETE_FOURIER_TRANSFORM,
+            dft::discrete_fourier_transform,
+        ),
+        (
+            Symbol::INVERSE_DISCRETE_FOURIER_TRANSFORM,
+            dft::inverse_discrete_fourier_transform,
+        ),
+        (Symbol::CONVOLUTION, dft::convolution),
         (Symbol::MEAN, statistics::mean),
         (Symbol::POPULATION_VARIANCE, statistics::population_variance),
         (

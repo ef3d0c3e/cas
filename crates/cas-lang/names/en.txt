@@ -217,6 +217,10 @@ BitXor: bitxor
 HammingDistance: hamdist
 Convert: convert
 FactorialPower: perm
+# The discrete Fourier transform (CAS-DOC-45 §4, CAS-465).
+DiscreteFourierTransform: fft
+InverseDiscreteFourierTransform: ifft
+Convolution: convolution
 # Equations (CAS-DOC-11, CAS-210, CAS-214).
 Solve: solve
 CSolve: csolve
