@@ -132,16 +132,45 @@ fn complex_ball(ev: &mut Eval<'_>, x: &Expr, prec: u64) -> Result<Option<Complex
     Ok(direct(&value).filter(ComplexBall::is_finite))
 }
 
+/// The matrix of the exact midpoints of `m`'s balls.
+fn midpoints(m: &Expr) -> Expr {
+    let mid = |x: &Expr| match x.view() {
+        View::Ball(b) => Expr::from(Rational::from(b.mid())),
+        View::ComplexBall(z) => Expr::from(&cas_num::Complex::new(
+            Rational::from(z.re().mid()),
+            Rational::from(z.im().mid()),
+        )),
+        _ => x.clone(),
+    };
+    list(m.args().iter().map(|row| list(row.args().iter().map(mid))))
+}
+
 /// The eigenvectors of a numeric matrix (CAS-DOC-51 §4, CAS-498): for each
 /// of `Eigenvalues`' balls, the eigenpair certified near it by
 /// [`super::verified::eigenpair`], its vector with 1 at its largest
-/// component; an eigenvalue not shown simple leaves the call.
+/// component; an eigenvalue not shown simple leaves the call. Without
+/// `Eigenvalues`, the guesses are `PolynomialRoots` of the midpoints'
+/// characteristic polynomial: only the check makes them eigenvalues.
 fn numeric_eigenvectors(ev: &mut Eval<'_>, e: &Expr, m: &Expr, n: usize) -> Native {
+    let prec = ev.context().working_precision();
     let values = ev.eval(&Expr::call(Symbol::EIGENVALUES, [m.clone()]))?;
+    let values = if values.head() == Some(&Expr::from(Symbol::LIST)) && values.args().len() == n {
+        values
+    } else {
+        // Guesses only: the roots of the midpoint matrix's characteristic
+        // polynomial, `PolynomialRoots`' (a cubic of balls has no
+        // `Eigenvalues`).
+        let x = fresh();
+        let mid = midpoints(m);
+        let p = ev.eval(&Expr::call(
+            Symbol::CHARACTERISTIC_POLYNOMIAL,
+            [mid, x.clone()],
+        ))?;
+        ev.eval(&Expr::call(Symbol::POLYNOMIAL_ROOTS, [p, x]))?
+    };
     if values.head() != Some(&Expr::from(Symbol::LIST)) || values.args().len() != n {
         return Ok(None);
     }
-    let prec = ev.context().working_precision();
     let mut a = Vec::with_capacity(n);
     for row in m.args() {
         let mut entries = Vec::with_capacity(n);

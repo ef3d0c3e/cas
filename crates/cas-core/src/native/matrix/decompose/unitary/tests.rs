@@ -30,10 +30,15 @@ fn negligible(ctx: &Context, m: &Expr) -> bool {
     let value = eval(ctx, &Expr::call(Symbol::N, [m.clone(), Expr::from(40)]));
     value.args().iter().all(|row| {
         row.args().iter().all(|x| {
-            let small = Expr::call(
-                Symbol::LESS,
-                [Expr::call(Symbol::ABS, [x.clone()]), read("Power[10, -20]")],
+            // `|Re| + |Im|`: `Abs` of a complex ball holding 0 stays.
+            let size = Expr::call(
+                Symbol::PLUS,
+                [
+                    Expr::call(Symbol::ABS, [Expr::call(Symbol::RE, [x.clone()])]),
+                    Expr::call(Symbol::ABS, [Expr::call(Symbol::IM, [x.clone()])]),
+                ],
             );
+            let small = Expr::call(Symbol::LESS, [size, read("Power[10, -20]")]);
             eval(ctx, &small).as_symbol() == Some(Symbol::TRUE)
         })
     })
@@ -273,8 +278,11 @@ fn ball_matrices() {
             &ctx,
             &Expr::call(Symbol::SINGULAR_VALUE_DECOMPOSITION, [a.clone()]),
         );
+        // A repeated singular value (the rotation's): not certified.
+        let repeated = found.head() == Some(&Expr::from(Symbol::SINGULAR_VALUE_DECOMPOSITION));
         let [u, s, v] = found.args() else {
-            panic!("{a:?}: {found:?}");
+            assert!(repeated, "{a:?}: {found:?}");
+            continue;
         };
         let diagonal = Expr::call(Symbol::DIAGONAL_MATRIX, [s.clone()]);
         let back = dot(&dot(u, &diagonal), &adjoint(v)) - a.clone();

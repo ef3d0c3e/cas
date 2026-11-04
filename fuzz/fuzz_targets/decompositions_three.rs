@@ -69,13 +69,15 @@ fn vanishes(ctx: &Context, m: &Expr, balls: bool) -> bool {
             View::ComplexBall(z) if balls => z.may_be_zero(),
             _ if *x == Expr::from(0) => true,
             _ => {
-                let small = Expr::call(
-                    Symbol::LESS,
+                // `|Re| + |Im|`: `Abs` of a complex ball holding 0 stays.
+                let size = Expr::call(
+                    Symbol::PLUS,
                     [
-                        Expr::call(Symbol::ABS, [x.clone()]),
-                        Expr::from(10).pow(-15),
+                        Expr::call(Symbol::ABS, [Expr::call(Symbol::RE, [x.clone()])]),
+                        Expr::call(Symbol::ABS, [Expr::call(Symbol::IM, [x.clone()])]),
                     ],
                 );
+                let small = Expr::call(Symbol::LESS, [size, Expr::from(10).pow(-15)]);
                 !balls && eval(ctx, &small).as_symbol() == Some(Symbol::TRUE)
             }
         }
