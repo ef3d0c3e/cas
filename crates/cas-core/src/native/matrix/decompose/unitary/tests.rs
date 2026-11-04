@@ -225,6 +225,8 @@ fn holds_zero(ctx: &Context, m: &Expr) -> bool {
 fn ball_matrices() {
     let ctx = Context::new();
     for a in [
+        // The fuzz target's: T held Together[Ball[…]].
+        "N[List[List[-5]], 30]",
         "N[List[List[1, 2], List[3, 4]], 30]",
         "N[List[List[2, 1, 0], List[1, 3, 1], List[0, 1, 4]], 30]",
         "N[List[List[0, -1], List[1, 0]], 30]",
@@ -232,7 +234,10 @@ fn ball_matrices() {
         let a = eval(&ctx, &read(a));
         let found = eval(&ctx, &Expr::call(Symbol::SCHUR_DECOMPOSITION, [a.clone()]));
         let [q, t] = found.args() else {
-            panic!("{a:?}: {found:?}");
+            let p = eval(&ctx, &Expr::call(Symbol::EIGENVECTORS, [a.clone()]));
+            let qr = eval(&ctx, &Expr::call(Symbol::QR_DECOMPOSITION, [p.clone()]));
+            let chains = eval(&ctx, &Expr::call(Symbol::JORDAN_DECOMPOSITION, [a.clone()]));
+            panic!("{a:?}: {found:?}; Eigenvectors {p:?}, its QR {qr:?}, Jordan {chains:?}");
         };
         let back = dot(&dot(q, t), &adjoint(q)) - a.clone();
         assert!(holds_zero(&ctx, &back), "{a:?}: {found:?}");
