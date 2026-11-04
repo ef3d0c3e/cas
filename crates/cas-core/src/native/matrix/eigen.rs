@@ -160,13 +160,12 @@ fn numeric_eigenvectors(ev: &mut Eval<'_>, e: &Expr, m: &Expr, n: usize) -> Nati
         // Guesses only: the roots of the midpoint matrix's characteristic
         // polynomial, `PolynomialRoots`' (a cubic of balls has no
         // `Eigenvalues`).
-        let x = fresh();
-        let mid = midpoints(m);
+        // `PolynomialRoots[p]` takes the coefficient list, giac's `proot`.
         let p = ev.eval(&Expr::call(
             Symbol::CHARACTERISTIC_POLYNOMIAL,
-            [mid, x.clone()],
+            [midpoints(m)],
         ))?;
-        ev.eval(&Expr::call(Symbol::POLYNOMIAL_ROOTS, [p, x]))?
+        ev.eval(&Expr::call(Symbol::POLYNOMIAL_ROOTS, [p]))?
     };
     if values.head() != Some(&Expr::from(Symbol::LIST)) || values.args().len() != n {
         return Ok(None);
