@@ -343,6 +343,7 @@ builtins! {
     Z_TEST = "ZTest" [PROTECTED];
     T_TEST = "TTest" [PROTECTED];
     CHI_SQUARE_TEST = "ChiSquareTest" [PROTECTED];
+    KOLMOGOROV_CDF = "KolmogorovCDF" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     // Regressions: `linear_regression`, `polynomial_regression`,
     // `exponential_regression`, `logarithmic_regression` and
     // `power_regression`.

@@ -110,3 +110,45 @@ fn chi_square() {
         "ChiSquareTest[List[0, 0], List[1, 1]]",
     ]);
 }
+
+/// The ball of `input`'s value, as a double, and its radius.
+fn ball(input: &str) -> (f64, f64) {
+    let ctx = Context::new();
+    let value = ctx.eval(&read(input)).unwrap();
+    match value.view() {
+        crate::View::Ball(b) => (
+            b.mid().to_f64(),
+            b.rad().to_float().map_or(f64::INFINITY, |r| r.to_f64()),
+        ),
+        _ => panic!("{input}: {value:?}"),
+    }
+}
+
+/// `KolmogorovCDF` (CAS-505), against both series in doubles: giac's
+/// `kolmogorovd(1.0)` is 0.730000328323.
+#[test]
+fn kolmogorov_distribution() {
+    for (x, expected) in [
+        ("1", 0.730_000_328_322_645_5),
+        ("9999/10000", 0.729_893_118_031_144_5),
+        ("10001/10000", 0.730_107_507_743_515_6),
+        ("3", 0.999_999_969_540_040_6),
+        ("1/5", 5.050_407_338_670_114e-13),
+        // giac's 2.2e-16 is its rounding.
+        ("1/20", 2.423_167_479_157_9e-213),
+    ] {
+        let (mid, rad) = ball(&format!("N[KolmogorovCDF[{x}], 30]"));
+        assert!(
+            ((mid - expected) / expected).abs() < 1e-13,
+            "K({x}) = {mid}, expected {expected}"
+        );
+        assert!(rad <= mid.abs() * 1e-25, "K({x}): radius {rad}");
+    }
+    check(&[
+        ("KolmogorovCDF[0]", "0"),
+        ("KolmogorovCDF[-2]", "0"),
+        ("KolmogorovCDF[Ball[-1/2, 0]]", "0"),
+        ("KolmogorovCDF[1]", "KolmogorovCDF[1]"),
+        ("KolmogorovCDF[x]", "KolmogorovCDF[x]"),
+    ]);
+}

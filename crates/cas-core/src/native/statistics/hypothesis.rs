@@ -12,8 +12,10 @@
 //!   its report.
 //! - Location tests on a mean ([`location`], §2, CAS-503).
 //! - Pearson's χ² ([`chisquare`], §3, CAS-504).
+//! - Kolmogorov's distribution ([`kolmogorov`], §4, CAS-505).
 
 pub(in crate::native) mod chisquare;
+pub(in crate::native) mod kolmogorov;
 pub(in crate::native) mod location;
 
 use std::cmp::Ordering;

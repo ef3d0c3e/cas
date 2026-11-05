@@ -428,6 +428,7 @@ MovingAverage: moving_average
 ZTest: normalt
 TTest: studentt
 ChiSquareTest: chisquaret
+KolmogorovCDF: kolmogorovd
 # Regressions (CAS-297).
 LinearRegression: linear_regression
 PolynomialRegression: polynomial_regression
