@@ -116,6 +116,10 @@ pub(super) fn integrate(ev: &mut Eval<'_>, e: &Expr) -> Native {
         _ => None,
     } {
         split
+    } else if bounds.is_some() && f.contains(&Expr::from(Symbol::PIECEWISE)) {
+        // A branchwise antiderivative need not be continuous: its values at
+        // the bounds would not give the integral (CAS-DOC-53 §3).
+        return Ok(None);
     } else {
         let Some(antiderivative) = integral(ev, e, f, x)? else {
             return Ok(None);
@@ -153,6 +157,29 @@ fn integral_at(
         return Ok(Some(x.pow(2) / 2));
     }
     match f.head().and_then(Expr::as_symbol) {
+        Some(Symbol::PIECEWISE) => {
+            // Branch by branch (CAS-DOC-53 §2), every branch or none.
+            let (pairs, default) = super::piecewise::branches(f.args());
+            let mut whole = |v: &Expr| -> Result<Option<Expr>, EvalError> {
+                Ok(integral_at(ev, e, v, x, depth)?
+                    .filter(|g| !g.contains(&Expr::from(Symbol::INTEGRATE))))
+            };
+            let mut done = Vec::with_capacity(pairs.len());
+            for (c, v) in pairs {
+                let Some(g) = whole(v)? else {
+                    return Ok(None);
+                };
+                done.push((c.clone(), g));
+            }
+            let default = match default {
+                Some(d) => match whole(d)? {
+                    Some(g) => Some(g),
+                    None => return Ok(None),
+                },
+                None => None,
+            };
+            Ok(Some(super::piecewise::piecewise(&done, default)))
+        }
         Some(Symbol::PLUS) => {
             let mut done = Vec::new();
             let mut rest = Vec::new();

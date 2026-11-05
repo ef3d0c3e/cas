@@ -575,6 +575,7 @@ builtins! {
     NOT = "Not" [PROTECTED];
     IF = "If" [HOLD_REST, PROTECTED];
     PIECEWISE = "Piecewise" [PROTECTED];
+    PIECEWISE_MAP = "PiecewiseMap" [PROTECTED];
     // Predicates that always decide (CAS-DOC-4 §6.1).
     SAME_Q = "SameQ" [PROTECTED];
     FREE_Q = "FreeQ" [PROTECTED];

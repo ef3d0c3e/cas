@@ -6,6 +6,12 @@
 //! when no undecided condition came before and the new default otherwise.
 //! With no pair left the default is the answer, and with none the call is
 //! `Indeterminate`, with a warning (giac's `"No case applies"`).
+//!
+//! Derivatives and antiderivatives go branch by branch, the conditions
+//! kept (CAS-514): `D` through [`piecewise_map`], `Integrate[f, x]` in
+//! `integrate`, which leaves the call when a branch does not integrate.
+//! The antiderivative need not be continuous at the breakpoints, as
+//! giac's.
 
 use crate::context::EvalError;
 use crate::eval::Eval;
@@ -63,4 +69,23 @@ pub(super) fn piecewise_native(ev: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(Some(Expr::from(Symbol::INDETERMINATE)));
     }
     Ok(changed.then(|| piecewise(&kept, default.cloned())))
+}
+
+/// `PiecewiseMap[f, p]`, without a surface name: `f` applied to each value
+/// and the default of the `Piecewise` `p`, its conditions kept (CAS-514);
+/// `f[p]` for what is not a `Piecewise`. `D` maps through it.
+pub(super) fn piecewise_map(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [f, p] = e.args() else {
+        return Ok(None);
+    };
+    if p.head() != Some(&Expr::from(Symbol::PIECEWISE)) {
+        return Ok(Some(Expr::apply(f, std::slice::from_ref(p))));
+    }
+    let (pairs, default) = branches(p.args());
+    let pairs: Vec<(Expr, Expr)> = pairs
+        .into_iter()
+        .map(|(c, v)| (c.clone(), Expr::apply(f, std::slice::from_ref(v))))
+        .collect();
+    let default = default.map(|d| Expr::apply(f, std::slice::from_ref(d)));
+    Ok(Some(piecewise(&pairs, default)))
 }

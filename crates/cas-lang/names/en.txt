@@ -570,6 +570,8 @@ Union Intersection Complement
 # these meanings (its `has`, `op`, `part` and `apply` differ), and none is
 # needed yet (CAS-123); a ticket that needs one adds it.
 SameQ FreeQ Part Apply Replace ReplaceRepeated MatchQ Slot
+# D maps over the values of a Piecewise with it (CAS-514).
+PiecewiseMap
 # Signs and number sets, for assumptions (CAS-DOC-4 §7); the session's
 # `assume` writes them (CAS-121).
 Positive Negative NonNegative NonPositive Integers Rationals Reals Complexes

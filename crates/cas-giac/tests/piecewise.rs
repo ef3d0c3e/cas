@@ -57,3 +57,22 @@ fn evaluation() {
         "piecewise(-2<0,-1,1)",
     ]);
 }
+
+/// Derivatives and antiderivatives (CAS-514): giac's and this CAS's agree
+/// at points on each side of the breakpoints.
+#[test]
+fn calculus() {
+    let mut inputs = Vec::new();
+    for f in [
+        "diff(piecewise(x<0,x^2,x<1,sin(x),exp(x)),x)",
+        "diff(3*piecewise(x<0,-x,x^3)+x,x)",
+        "int(piecewise(x<0,-x,x^2),x)",
+        "int(piecewise(x<0,1,x<2,x,cos(x)),x)",
+    ] {
+        for point in ["-2", "-1/2", "1/2", "3/2", "3"] {
+            inputs.push(format!("subst({f},x={point})"));
+        }
+    }
+    let inputs: Vec<&str> = inputs.iter().map(String::as_str).collect();
+    check(&inputs);
+}

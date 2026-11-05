@@ -186,6 +186,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::NOT, logic::not),
         (Symbol::IF, logic::if_native),
         (Symbol::PIECEWISE, piecewise::piecewise_native),
+        (Symbol::PIECEWISE_MAP, piecewise::piecewise_map),
         (Symbol::LENGTH, structure::length),
         (Symbol::PART, structure::part),
         (Symbol::MAP, structure::map),

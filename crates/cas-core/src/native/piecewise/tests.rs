@@ -61,3 +61,41 @@ fn assumptions() {
     let found = ctx.eval(&read("Piecewise[Less[a, 0], 1, 2]")).unwrap();
     assert_eq!(found, read("2"));
 }
+
+/// Derivatives and antiderivatives branch by branch (CAS-514), giac's.
+#[test]
+fn calculus() {
+    check(&[
+        (
+            "D[Piecewise[Less[x, 0], Power[x, 2], Less[y, 0], x, 1], x]",
+            "Piecewise[Less[x, 0], Times[2, x], Less[y, 0], 1, 0]",
+        ),
+        (
+            "D[Plus[x, Times[3, Piecewise[Less[x, 0], Sin[x], Power[x, 2]]]], x]",
+            "Plus[1, Times[3, Piecewise[Less[x, 0], Cos[x], Times[2, x]]]]",
+        ),
+        ("D[Piecewise[Less[x, 0], 1, 2], y]", "0"),
+        (
+            "D[Piecewise[Less[x, 0], Times[-1, x], Power[x, 3]], List[x, 2]]",
+            "Piecewise[Less[x, 0], 0, Times[6, x]]",
+        ),
+        (
+            "Integrate[Piecewise[Less[x, 0], Times[-1, x], Power[x, 2]], x]",
+            "Piecewise[Less[x, 0], Times[-1/2, Power[x, 2]], Times[1/3, Power[x, 3]]]",
+        ),
+        (
+            "Integrate[Times[2, Piecewise[Less[x, 0], 1, x]], x]",
+            "Times[2, Piecewise[Less[x, 0], x, Times[1/2, Power[x, 2]]]]",
+        ),
+        // A branch that does not integrate leaves the call.
+        (
+            "Integrate[Piecewise[Less[x, 0], Power[x, x], x], x]",
+            "Integrate[Piecewise[Less[x, 0], Power[x, x], x], x]",
+        ),
+        // Not mapped by its head alone.
+        (
+            "PiecewiseMap[Function[Times[2, Slot[1]]], x]",
+            "Times[2, x]",
+        ),
+    ]);
+}

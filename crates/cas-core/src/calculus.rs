@@ -21,6 +21,7 @@
 //!   `Abs`, whose derivative is
 //!   `Abs[f] / f` times `f′`, giac's `abs(x)/x`, so that the logarithms of
 //!   absolute values integrals give differentiate back (CAS-DOC-9);
+//! - `Piecewise`, value by value, the conditions kept (CAS-DOC-53 §2);
 //! - a function the table does not know: `Derivative[1][g][u] D[u, x]`, and
 //!   `Derivative[n + 1][g][u]` for the derivative of `Derivative[n][g][u]`;
 //! - higher derivatives, `D[f, {x, n}]` for an integer `n >= 0`, and partial
@@ -321,6 +322,11 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "Times[Power[f, -1], D[f, x]]",
         ),
         // abs(f)/f times f', as giac writes it (CAS-DOC-9).
+        d(
+            "D/Piecewise",
+            "Pattern[p, Blank[Piecewise]]",
+            "PiecewiseMap[Function[D[Slot[1], x]], p]",
+        ),
         d(
             "D/Abs",
             "Abs[Pattern[f, Blank[]]]",
