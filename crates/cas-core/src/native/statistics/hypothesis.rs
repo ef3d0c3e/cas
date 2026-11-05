@@ -15,7 +15,7 @@
 //! - Kolmogorov's distribution and the Kolmogorov–Smirnov test
 //!   ([`kolmogorov`], §4, CAS-505, CAS-506).
 //! - Wilcoxon's and Mann–Whitney's laws, statistics and tests
-//!   ([`wilcoxon`], §5, CAS-507).
+//!   ([`wilcoxon`], §5, CAS-507, CAS-508).
 
 pub(in crate::native) mod chisquare;
 pub(in crate::native) mod kolmogorov;
@@ -76,6 +76,8 @@ pub(super) fn options(
     let (alternative, level) = match rest {
         [] => (None, None),
         [a] if is_string(a) => (Some(a), None),
+        // A level alone, as giac's `wilcoxont(l₁, l₂, 0.01)`.
+        [alpha] => (None, Some(alpha)),
         [a, alpha] => (Some(a), Some(alpha)),
         _ => {
             refuse(

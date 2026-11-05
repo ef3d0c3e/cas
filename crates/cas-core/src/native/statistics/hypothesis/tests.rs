@@ -243,3 +243,46 @@ fn wilcoxon_laws() {
         "WilcoxonStatistic[List[1, 2], List[b]]",
     ]);
 }
+
+/// `WilcoxonTest` (CAS-508): giac's answers, its two-sided p-values 1/35
+/// and 6/7 at `U₁` = 16 and 5.
+#[test]
+fn wilcoxon_tests() {
+    check(&[
+        ("WilcoxonTest[List[10, 30, 20, 40], List[1, 2, 3, 4]]", "0"),
+        // p = 1/35 is above 1 %.
+        (
+            "WilcoxonTest[List[10, 30, 20, 40], List[1, 2, 3, 4], 1/100]",
+            "1",
+        ),
+        ("WilcoxonTest[List[1, 3, 4, 20], List[2, 6, 10]]", "1"),
+        // One-sided: P(U ≥ 16) = 1/70 for ">", P(U ≤ 16) = 1 for "<".
+        (
+            "WilcoxonTest[List[10, 30, 20, 40], List[1, 2, 3, 4], \">\"]",
+            "0",
+        ),
+        (
+            "WilcoxonTest[List[10, 30, 20, 40], List[1, 2, 3, 4], \"<\"]",
+            "1",
+        ),
+        // One sample: W⁺ = 36 of 8 values, all above, P = 1/256 each way.
+        (
+            "WilcoxonTest[List[11, 12, 13, 14, 15, 16, 17, 18], 10, \">\"]",
+            "0",
+        ),
+        (
+            "WilcoxonTest[List[11, 12, 13, 14, 15, 16, 17, 18], 10, \"<\"]",
+            "1",
+        ),
+        (
+            "WilcoxonTest[List[11, 12, 13, 14, 15, 16, 17, 18], 10]",
+            "0",
+        ),
+        // Every difference 0: nothing to reject.
+        ("WilcoxonTest[List[5, 5], 5]", "1"),
+    ]);
+    stays(&[
+        "WilcoxonTest[List[1, 2], a]",
+        "WilcoxonTest[List[1, 2], 1, \"=\"]",
+    ]);
+}

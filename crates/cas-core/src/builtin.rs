@@ -347,6 +347,7 @@ builtins! {
     KOLMOGOROV_SMIRNOV_TEST = "KolmogorovSmirnovTest" [PROTECTED];
     WILCOXON_DISTRIBUTION = "WilcoxonDistribution" [PROTECTED];
     WILCOXON_STATISTIC = "WilcoxonStatistic" [PROTECTED];
+    WILCOXON_TEST = "WilcoxonTest" [PROTECTED];
     // Regressions: `linear_regression`, `polynomial_regression`,
     // `exponential_regression`, `logarithmic_regression` and
     // `power_regression`.

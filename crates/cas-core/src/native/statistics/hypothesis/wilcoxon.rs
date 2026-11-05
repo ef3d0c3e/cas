@@ -15,12 +15,26 @@
 //!   (`wilcoxons([1,2,9,4],5)` is 4 there, 7/2 here).
 //! - `WilcoxonStatistic[l₁, l₂]`: the sum of `l₂`'s ranks in the pooled
 //!   sample, at midranks, giac's (as a decimal there).
+//!
+//! `WilcoxonTest` (`wilcoxont`, CAS-508), with the alternatives and level
+//! of `ZTest`:
+//!
+//! - `WilcoxonTest[l, μ, alt, α]`: `W⁺` against the signed-rank law of the
+//!   `k` nonzero differences, `P(W⁺ ≤ w)` for `"<"`, `P(W⁺ ≥ w)` for `">"`,
+//!   and twice the smaller, at most 1, for `"!="`.
+//! - `WilcoxonTest[l₁, l₂, alt, α]`: `U₁ = R₁ − n₁(n₁+1)/2` from `l₁`'s
+//!   rank sum against Mann–Whitney's law, `P(U ≥ U₁)` for `">"` (`l₁` the
+//!   larger), `P(U ≤ U₁)` for `"<"`; giac's one-sided alternatives are the
+//!   other way round and strict (`wilcoxont([1,3,4,20],[2,6,10],'>')` has
+//!   its p-value 11/35, `P(U ≤ 4)`; 24/35 here).
+//! - With ties, the laws of tie-free data, the usual convention; the
+//!   statistic may then be a half-integer.
 
 use std::cmp::Ordering;
 
 use cas_num::{Integer, Rational};
 
-use super::{Native, compare};
+use super::{Alternative, Native, compare, decide, options, written};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
@@ -254,4 +268,86 @@ pub(in crate::native) fn wilcoxon_statistic(ev: &mut Eval<'_>, e: &Expr) -> Nati
     let result = Expr::from(found);
     ev.step("wilcoxons", e, &result);
     Ok(Some(result))
+}
+
+/// The p-value of `x` against the law of the `counts`: the lower tail
+/// `P(X ≤ x)`, the upper `P(X ≥ x)`, or twice the smaller, at most 1.
+fn tail_p(counts: &[Integer], x: &Rational, alternative: Alternative) -> Rational {
+    let total = counts.iter().fold(Integer::ZERO, |mut t, c| {
+        t += c;
+        t
+    });
+    let mut lower = Integer::ZERO;
+    let mut upper = Integer::ZERO;
+    for (s, c) in counts.iter().enumerate() {
+        let s = Rational::from(Integer::from(u64::try_from(s).expect("small")));
+        if s <= *x {
+            lower += c;
+        }
+        if s >= *x {
+            upper += c;
+        }
+    }
+    let (lower, upper) = (
+        Rational::new(lower, total.clone()),
+        Rational::new(upper, total),
+    );
+    match alternative {
+        Alternative::Less => lower,
+        Alternative::Greater => upper,
+        Alternative::Unequal => {
+            let twice = &lower.min(upper) * &Rational::from(Integer::from(2));
+            twice.min(Rational::ONE)
+        }
+    }
+}
+
+/// `WilcoxonTest[l, μ, alt, α]`, `WilcoxonTest[l₁, l₂, alt, α]`, giac's
+/// `wilcoxont`.
+pub(in crate::native) fn wilcoxon_test(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [l, other, rest @ ..] = e.args() else {
+        return Ok(None);
+    };
+    if !real_list(ev, l) {
+        return Ok(None);
+    }
+    let two = is_list(other);
+    if two && !real_list(ev, other) || !two && real_sign(ev.context(), other).is_none() {
+        return Ok(None);
+    }
+    let Some((alternative, alpha)) = options(ev, e, rest)? else {
+        return Ok(None);
+    };
+    let (statistic, counts, what, name) = if two {
+        let (n1, n2) = (l.args().len(), other.args().len());
+        let (m, n) = (
+            u64::try_from(n1).expect("small"),
+            u64::try_from(n2).expect("small"),
+        );
+        if m.checked_mul(n).is_none_or(|p| p > MAX_PRODUCT) {
+            return refuse(ev, e, "the rank-sum law is built up to m n = 40000");
+        }
+        let Some(r1) = rank_sum(ev, other.args(), l.args())? else {
+            return refuse(ev, e, "the values are not ordered");
+        };
+        let shift = Rational::new(Integer::from(m * (m + 1)), Integer::from(2));
+        (
+            &r1 - &shift,
+            rank_sum_counts(m, n),
+            "Mann–Whitney test",
+            "U₁",
+        )
+    } else {
+        let Some((w, k)) = signed_rank(ev, l.args(), other)? else {
+            return refuse(ev, e, "the values are not ordered");
+        };
+        let k = u64::try_from(k).expect("small");
+        if k > MAX_SIGNED {
+            return refuse(ev, e, "the signed-rank law is built up to n = 200");
+        }
+        (w, signed_rank_counts(k), "Wilcoxon signed-rank test", "W⁺")
+    };
+    let p = Expr::from(tail_p(&counts, &statistic, alternative));
+    let what = format!("{what}, H1: {}", written(alternative));
+    decide(ev, e, &what, &[(name, Expr::from(statistic))], &p, &alpha)
 }

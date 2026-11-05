@@ -541,6 +541,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             statistics::hypothesis::wilcoxon::wilcoxon_statistic,
         ),
         (
+            Symbol::WILCOXON_TEST,
+            statistics::hypothesis::wilcoxon::wilcoxon_test,
+        ),
+        (
             Symbol::LINEAR_REGRESSION,
             statistics::regression::linear_regression,
         ),

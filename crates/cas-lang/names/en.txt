@@ -432,6 +432,7 @@ KolmogorovCDF: kolmogorovd
 KolmogorovSmirnovTest: kolmogorovt
 WilcoxonDistribution: wilcoxonp
 WilcoxonStatistic: wilcoxons
+WilcoxonTest: wilcoxont
 # Regressions (CAS-297).
 LinearRegression: linear_regression
 PolynomialRegression: polynomial_regression
