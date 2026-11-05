@@ -321,6 +321,25 @@ fn numeric_solutions() {
     ]);
 }
 
+/// giac's root finders by name (CAS-517), by value: ranges with one root,
+/// as giac's bracketing methods give one.
+#[test]
+fn numeric_methods() {
+    check(&[
+        "fsolve(cos(x)=x,x,0,newton_solver)",
+        "fsolve(cos(x)=x,x,0.5,secant_solver)",
+        "fsolve(cos(x)=x,x,[0,1],secant_solver)",
+        "fsolve(x^3-2,x,1,steffenson_solver)",
+        "fsolve(cos(x)=x,x=0..1,bisection_solver)",
+        "fsolve(cos(x)=x,x=0..1,falsepos_solver)",
+        "fsolve(cos(x)=x,x=0..1,brent_solver)",
+        "fsolve(cos(x)=x,x=0..1,newton_solver)",
+        "fsolve(cos(x)=x,x=0..1,secant_solver)",
+        "fsolve(x^2-2,x=0..2,falsepos_solver)",
+        "fsolve(cos(x)=x,x,newton_solver)",
+    ]);
+}
+
 /// Identities and contradictions.
 #[test]
 fn identities() {

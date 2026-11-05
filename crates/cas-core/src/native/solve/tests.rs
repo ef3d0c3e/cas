@@ -707,6 +707,114 @@ fn numeric_solutions() {
     ]);
 }
 
+/// giac's root finders by name (CAS-517): every one certified, the
+/// bracketing ones on a range or the whole line, the open ones from a
+/// point, a pair or a range's midpoint.
+#[test]
+fn numeric_methods() {
+    let dottie = 0.739_085_133_215_160_7;
+    let close = |(a, b): (f64, f64), x: f64| (a - x).abs() < 1e-12 && b == 0.0;
+    for (input, root) in [
+        ("FSolve[Equation[Cos[x], x], x, 0, newton_solver]", dottie),
+        ("FSolve[Equation[Cos[x], x], x, 1/2, secant_solver]", dottie),
+        (
+            "FSolve[Equation[Cos[x], x], x, List[0, 1], secant_solver]",
+            dottie,
+        ),
+        ("FSolve[Equation[Cos[x], x], x, newton_solver]", dottie),
+        (
+            "FSolve[Plus[-2, Power[x, 3]], x, 1, steffenson_solver]",
+            1.259_921_049_894_873_2,
+        ),
+    ] {
+        assert!(close(bare_value(input), root), "{input}");
+    }
+    let r2 = std::f64::consts::SQRT_2;
+    let pi = std::f64::consts::PI;
+    check_values(&[
+        (
+            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], bisection_solver]",
+            &[(dottie, 0.0)],
+        ),
+        (
+            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], falsepos_solver]",
+            &[(dottie, 0.0)],
+        ),
+        (
+            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], brent_solver]",
+            &[(dottie, 0.0)],
+        ),
+        (
+            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], newton_solver]",
+            &[(dottie, 0.0)],
+        ),
+        (
+            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], secant_solver]",
+            &[(dottie, 0.0)],
+        ),
+        (
+            "FSolve[Equation[Cos[x], x], x, bisection_solver]",
+            &[(dottie, 0.0)],
+        ),
+        (
+            "FSolve[Equation[Sin[x], 0], Equation[x, Range[2, 10]], brent_solver]",
+            &[(pi, 0.0), (2.0 * pi, 0.0), (3.0 * pi, 0.0)],
+        ),
+        (
+            "FSolve[Plus[-2, Power[x, 2]], Equation[x, Range[0, 2]], falsepos_solver]",
+            &[(r2, 0.0)],
+        ),
+        (
+            "FSolve[Plus[-2, Power[x, 2]], x, List[0, 2], brent_solver]",
+            &[(r2, 0.0)],
+        ),
+        // Newton's from 4 runs to √2, outside [3, 5]: no root there.
+        (
+            "FSolve[Plus[-2, Power[x, 2]], Equation[x, Range[3, 5]], newton_solver]",
+            &[],
+        ),
+    ]);
+    // A bracketing method needs a range; x^2 + 1 has no root to iterate to.
+    check(&[
+        (
+            "FSolve[Equation[Cos[x], x], x, 0, bisection_solver]",
+            "FSolve[Equation[Cos[x], x], x, 0, bisection_solver]",
+        ),
+        (
+            "FSolve[Plus[1, Power[x, 2]], x, 1, secant_solver]",
+            "FSolve[Plus[1, Power[x, 2]], x, 1, secant_solver]",
+        ),
+    ]);
+}
+
+/// Brent's method and false position converge themselves, not through
+/// the bisection they fall back to (CAS-517).
+#[test]
+fn bracketing_estimates() {
+    use super::fsolve::{brent, false_position};
+    let ctx = Context::new();
+    let x = read("x");
+    let one = cas_num::Rational::from(cas_num::Integer::from(1));
+    let (lo, hi) = (cas_num::Rational::ZERO, one);
+    for f in ["Plus[Cos[x], Times[-1, x]]", "Plus[-1/2, Power[x, 3]]"] {
+        let f = read(f);
+        for estimate in [
+            brent(&ctx, &f, &x, &lo, &hi, 64),
+            false_position(&ctx, &f, &x, &lo, &hi, 64),
+        ] {
+            let q = estimate.expect("an estimate");
+            let at = Context::new()
+                .eval(&f.substitute(&[(x.clone(), crate::Expr::from(q))]))
+                .unwrap();
+            let v = crate::native::approximation(&ctx, &at, 128).unwrap();
+            match v.view() {
+                crate::View::Ball(b) => assert!(b.mid().to_f64().abs() < 1e-15, "{f:?}: {b:?}"),
+                _ => panic!("{v:?}"),
+            }
+        }
+    }
+}
+
 /// Two polynomial equations in two unknowns (CAS-215), by the resultant.
 #[test]
 fn polynomial_systems() {

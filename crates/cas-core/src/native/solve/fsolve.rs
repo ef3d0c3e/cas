@@ -20,6 +20,18 @@
 //!   so, by a sign change across a few of its last bits; when it is not,
 //!   the call stays with a warning.
 //! - With parameters, `f` no number at a point, the call stays.
+//! - A last argument names giac's method (CAS-517), each answer certified
+//!   as above whatever found it. The bracketing ones, `bisection_solver`,
+//!   `falsepos_solver` (Illinois) and `brent_solver`, refine each sign
+//!   change of the scan, on the range or the whole line, into a list, as
+//!   giac's `fsolve(cos(x)=x,x=0..1,brent_solver)` is `[0.739085133215]`;
+//!   with a start point, giac's error, the call stays with a warning. A
+//!   false position or Brent estimate that is not certified falls back to
+//!   bisection. The open ones, `newton_solver`, `secant_solver` and
+//!   `steffenson_solver`, iterate from the start point, the range's
+//!   midpoint (a list, `[]` when the root is outside) or 0 for the whole
+//!   line; the secant from `x0` and `x0 + 1/16`, or from the two points of
+//!   `[x0, x1]`, which a bracketing method takes as a range.
 
 use std::cmp::Ordering;
 
@@ -53,15 +65,61 @@ const MAX_SCANNED: usize = 16;
 const MAX_BISECTION: u64 = 1024;
 
 /// Where the roots are sought.
+#[derive(Clone, Copy)]
 enum Where<'a> {
     Everywhere,
     From(&'a Expr),
     Between(&'a Expr, &'a Expr),
+    /// `[x0, x1]`, given with a method: the secant's two points, or a
+    /// range.
+    Pair(&'a Expr, &'a Expr),
 }
 
-/// `FSolve[eqn, x]`, `FSolve[eqn, x, x0]` or `FSolve[eqn, x == a .. b]`.
+/// giac's root finders, the last argument's names.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+enum Method {
+    Bisection,
+    FalsePosition,
+    Brent,
+    Newton,
+    Secant,
+    Steffensen,
+}
+
+impl Method {
+    const NAMES: [(&'static str, Self); 6] = [
+        ("bisection_solver", Self::Bisection),
+        ("falsepos_solver", Self::FalsePosition),
+        ("brent_solver", Self::Brent),
+        ("newton_solver", Self::Newton),
+        ("secant_solver", Self::Secant),
+        ("steffenson_solver", Self::Steffensen),
+    ];
+
+    fn named(e: &Expr) -> Option<Self> {
+        e.as_symbol()?;
+        Self::NAMES
+            .iter()
+            .find(|(name, _)| *e == Expr::symbol(name))
+            .map(|&(_, m)| m)
+    }
+
+    fn bracketing(self) -> bool {
+        matches!(self, Self::Bisection | Self::FalsePosition | Self::Brent)
+    }
+}
+
+/// `FSolve[eqn, x]`, `FSolve[eqn, x, x0]` or `FSolve[eqn, x == a .. b]`,
+/// each with a method last.
 pub(in crate::native) fn fsolve(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    let (eqn, x, place) = match e.args() {
+    let (args, method) = match e.args() {
+        [rest @ .., last] if rest.len() >= 2 => match Method::named(last) {
+            Some(m) => (rest, Some(m)),
+            None => (e.args(), None),
+        },
+        args => (args, None),
+    };
+    let (eqn, x, place) = match args {
         [eqn, spec] => match sides(spec) {
             Some((x, r)) => match range(r) {
                 Some((a, b)) => (eqn, x, Where::Between(a, b)),
@@ -69,9 +127,12 @@ pub(in crate::native) fn fsolve(ev: &mut Eval<'_>, e: &Expr) -> Native {
             },
             None => (eqn, spec, Where::Everywhere),
         },
-        [eqn, x, guess] => match range(guess) {
-            Some((a, b)) => (eqn, x, Where::Between(a, b)),
-            None => (eqn, x, Where::From(guess)),
+        [eqn, x, guess] => match (range(guess), guess.args()) {
+            (Some((a, b)), _) => (eqn, x, Where::Between(a, b)),
+            (None, [a, b]) if method.is_some() && head(guess) == Some(Symbol::LIST) => {
+                (eqn, x, Where::Pair(a, b))
+            }
+            _ => (eqn, x, Where::From(guess)),
         },
         _ => return Ok(None),
     };
@@ -86,40 +147,155 @@ pub(in crate::native) fn fsolve(ev: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(None);
     }
     let bits = ev.context().working_precision();
-    let result = match place {
-        Where::Everywhere => match polynomial(ev, &f, x, bits)? {
-            Some(mut roots) if roots.len() == 1 => roots.pop().expect("one root"),
-            Some(roots) => list(roots),
-            None => list(scanned(ev.context(), &f, x, &tangent_grid(), bits)),
+    let result = match method {
+        None => match unmethodical(ev, &f, x, place, bits)? {
+            Some(r) => r,
+            None => return Ok(None),
         },
-        Where::Between(a, b) => {
-            let (Some(a), Some(b)) = (point(ev.context(), a), point(ev.context(), b)) else {
-                return Ok(None);
-            };
-            if a > b {
-                return Ok(None);
-            }
-            match polynomial(ev, &f, x, bits)? {
-                Some(roots) => list(roots.into_iter().filter(|r| within(r, &a, &b)).collect()),
-                None => list(scanned(ev.context(), &f, x, &interval_grid(&a, &b), bits)),
-            }
-        }
-        Where::From(guess) => {
-            let Some(start) = point(ev.context(), guess) else {
-                return Ok(None);
-            };
-            let Some(root) = newton(ev, &f, x, start, bits)? else {
-                ev.warn(Warning::Native {
-                    message: "Newton's iteration found no root it could certify from".into(),
-                    expr: guess.clone(),
-                });
-                return Ok(None);
-            };
-            root
-        }
+        Some(m) if m.bracketing() => match bracketed(ev, &f, x, place, m, bits) {
+            Some(r) => r,
+            None => return Ok(None),
+        },
+        Some(m) => match opened(ev, &f, x, place, m, bits)? {
+            Some(r) => r,
+            None => return Ok(None),
+        },
     };
     ev.step("FSolve", e, &result);
     Ok(Some(result))
+}
+
+/// The answer without a method: polynomial roots, a scan, or Newton's.
+fn unmethodical(ev: &mut Eval<'_>, f: &Expr, x: &Expr, place: Where<'_>, bits: u64) -> Native {
+    Ok(Some(match place {
+        Where::Everywhere => match polynomial(ev, f, x, bits)? {
+            Some(mut roots) if roots.len() == 1 => roots.pop().expect("one root"),
+            Some(roots) => list(roots),
+            None => list(scanned(
+                ev.context(),
+                f,
+                x,
+                &tangent_grid(),
+                Method::Bisection,
+                bits,
+            )),
+        },
+        Where::Between(a, b) => {
+            let Some((a, b)) = ends(ev.context(), a, b) else {
+                return Ok(None);
+            };
+            match polynomial(ev, f, x, bits)? {
+                Some(roots) => list(roots.into_iter().filter(|r| within(r, &a, &b)).collect()),
+                None => list(scanned(
+                    ev.context(),
+                    f,
+                    x,
+                    &interval_grid(&a, &b),
+                    Method::Bisection,
+                    bits,
+                )),
+            }
+        }
+        Where::From(guess) => match opened(ev, f, x, Where::From(guess), Method::Newton, bits)? {
+            Some(root) => root,
+            None => return Ok(None),
+        },
+        Where::Pair(..) => return Ok(None),
+    }))
+}
+
+/// The ends of a range as rationals, in order.
+fn ends(ctx: &Context, a: &Expr, b: &Expr) -> Option<(Rational, Rational)> {
+    let (a, b) = (point(ctx, a)?, point(ctx, b)?);
+    (a <= b).then_some((a, b))
+}
+
+/// A bracketing method's roots: each sign change of the scan refined.
+fn bracketed(
+    ev: &mut Eval<'_>,
+    f: &Expr,
+    x: &Expr,
+    place: Where<'_>,
+    method: Method,
+    bits: u64,
+) -> Option<Expr> {
+    let ctx = ev.context();
+    let grid = match place {
+        Where::Everywhere => tangent_grid(),
+        Where::Between(a, b) | Where::Pair(a, b) => {
+            let (a, b) = ends(ctx, a, b)?;
+            interval_grid(&a, &b)
+        }
+        Where::From(guess) => {
+            ev.warn(Warning::Native {
+                message: "a bracketing method needs a range, not a start point".into(),
+                expr: guess.clone(),
+            });
+            return None;
+        }
+    };
+    Some(list(scanned(ctx, f, x, &grid, method, bits)))
+}
+
+/// An open method's root: a number from a start point or the whole line,
+/// a list of it, or `[]`, on a range.
+fn opened(
+    ev: &mut Eval<'_>,
+    f: &Expr,
+    x: &Expr,
+    place: Where<'_>,
+    method: Method,
+    bits: u64,
+) -> Native {
+    let ctx = ev.context();
+    let half = Rational::new(Integer::from(1), Integer::from(2));
+    let (q0, q1, bounds, start) = match place {
+        Where::Everywhere => (None, Rational::ZERO, None, e_zero()),
+        Where::From(guess) => match point(ctx, guess) {
+            Some(q) => (None, q, None, guess.clone()),
+            None => return Ok(None),
+        },
+        Where::Pair(a, b) => match (point(ctx, a), point(ctx, b)) {
+            (Some(p), Some(q)) if method == Method::Secant => (Some(p), q, None, a.clone()),
+            (Some(p), Some(q)) => (None, &(&p + &q) * &half, None, a.clone()),
+            _ => return Ok(None),
+        },
+        Where::Between(a, b) => match ends(ctx, a, b) {
+            Some((p, q)) if method == Method::Secant => {
+                (Some(p.clone()), q.clone(), Some((p, q)), a.clone())
+            }
+            Some((p, q)) => (None, &(&p + &q) * &half, Some((p, q)), a.clone()),
+            None => return Ok(None),
+        },
+    };
+    let df = match method {
+        Method::Newton => Some(ev.eval(&Expr::call(Symbol::D, [f.clone(), x.clone()]))?),
+        _ => None,
+    };
+    let ctx = ev.context();
+    let q0 = q0.unwrap_or_else(|| &q1 + &Rational::new(Integer::from(1), Integer::from(16)));
+    let root = iterated(ctx, f, df.as_ref(), x, method, q0, q1, bits)
+        .and_then(|q| around(ctx, f, x, &q, bits));
+    let Some(root) = root else {
+        ev.warn(Warning::Native {
+            message: "the iteration found no root it could certify from".into(),
+            expr: start,
+        });
+        return Ok(None);
+    };
+    Ok(Some(match bounds {
+        None => root,
+        Some((a, b)) if within(&root, &a, &b) => list(vec![root]),
+        Some(_) => list(Vec::new()),
+    }))
+}
+
+fn e_zero() -> Expr {
+    Expr::from(Integer::from(0))
+}
+
+fn head(e: &Expr) -> Option<Symbol> {
+    e.head().and_then(Expr::as_symbol)
 }
 
 /// Whether `f` is a number at `x = 1/3` or `x = 2/7`: no parameters.
@@ -295,7 +471,14 @@ pub(in crate::native) fn sign(
 
 /// The roots at the sign changes of `f` between neighbours of `grid`,
 /// each bisected and certified.
-fn scanned(ctx: &Context, f: &Expr, x: &Expr, grid: &[Rational], bits: u64) -> Vec<Expr> {
+fn scanned(
+    ctx: &Context,
+    f: &Expr,
+    x: &Expr,
+    grid: &[Rational],
+    method: Method,
+    bits: u64,
+) -> Vec<Expr> {
     let signs: Vec<Option<Ordering>> = grid.iter().map(|q| sign(ctx, f, x, q, bits)).collect();
     let mut roots = Vec::new();
     for (i, q) in grid.iter().enumerate() {
@@ -310,7 +493,7 @@ fn scanned(ctx: &Context, f: &Expr, x: &Expr, grid: &[Rational], bits: u64) -> V
             && s != Ordering::Equal
             && t != Ordering::Equal
             && s != t
-            && let Some(root) = bisected(ctx, f, x, grid[i].clone(), grid[i + 1].clone(), s, bits)
+            && let Some(root) = refined(ctx, f, x, &grid[i], &grid[i + 1], s, method, bits)
         {
             roots.push(root);
         }
@@ -409,41 +592,237 @@ fn certified(
     }
 }
 
-/// Newton's iteration on `f` from `start`, its limit certified by a sign
-/// change around it.
-fn newton(
-    ev: &mut Eval<'_>,
+/// The root of `f` in `[lo, hi]`, where its sign is `s_lo` at `lo` and
+/// the other at `hi`: the method's estimate when it is certified within
+/// the bracket, else by bisection.
+#[allow(clippy::too_many_arguments, reason = "a bracket and its method")]
+fn refined(
+    ctx: &Context,
     f: &Expr,
     x: &Expr,
-    start: Rational,
+    lo: &Rational,
+    hi: &Rational,
+    s_lo: Ordering,
+    method: Method,
     bits: u64,
-) -> Result<Option<Expr>, EvalError> {
-    let df = ev.eval(&Expr::call(Symbol::D, [f.clone(), x.clone()]))?;
-    let ctx = ev.context();
+) -> Option<Expr> {
+    let estimate = match method {
+        Method::FalsePosition => false_position(ctx, f, x, lo, hi, bits),
+        Method::Brent => brent(ctx, f, x, lo, hi, bits),
+        _ => None,
+    };
+    if let Some(q) = estimate
+        && let Some(root) = around(ctx, f, x, &q, bits)
+        && within(&root, lo, hi)
+    {
+        return Some(root);
+    }
+    bisected(ctx, f, x, lo.clone(), hi.clone(), s_lo, bits)
+}
+
+/// `q` rounded to `prec` bits, so that iterates stay short.
+fn rounded(q: &Rational, prec: u64) -> Rational {
+    Float::from_rational(q, prec, Round::Nearest)
+        .0
+        .to_rational()
+}
+
+/// The midpoint of `f`'s ball at `q`, at `prec` bits.
+fn at(ctx: &Context, f: &Expr, x: &Expr, q: &Rational, prec: u64) -> Option<Rational> {
+    value(ctx, f, x, &Expr::from(q.clone()), prec).map(|b| b.mid().to_rational())
+}
+
+/// Whether `step` is below `bits` bits of `q`, or of 1 about 0.
+fn settled(step: &Rational, q: &Rational, bits: u64) -> bool {
+    let exponent = i64::try_from(bits).unwrap_or(i64::MAX).saturating_add(8);
+    let scale = q.abs().max(Rational::from(Integer::from(1)));
+    step.is_zero() || step.abs() <= &scale * &Rational::from(Integer::from(2)).pow(-exponent)
+}
+
+/// Newton's, the secant's (from `q0` and `q1`) or Steffensen's iteration
+/// on `f` from `q1`: its limit, uncertified.
+#[allow(clippy::too_many_arguments, reason = "the iteration's state")]
+fn iterated(
+    ctx: &Context,
+    f: &Expr,
+    df: Option<&Expr>,
+    x: &Expr,
+    method: Method,
+    mut q0: Rational,
+    mut q: Rational,
+    bits: u64,
+) -> Option<Rational> {
     let prec = bits.saturating_add(32);
-    let exponent = i64::try_from(bits).unwrap_or(i64::MAX);
-    let mut q = start;
+    let mut f0 = match method {
+        Method::Secant => at(ctx, f, x, &q0, prec)?,
+        _ => Rational::ZERO,
+    };
     for _ in 0..MAX_NEWTON {
-        let at = Expr::from(q.clone());
-        let (Some(v), Some(d)) = (value(ctx, f, x, &at, prec), value(ctx, &df, x, &at, prec))
-        else {
-            return Ok(None);
-        };
-        if d.mid().is_zero() {
-            return Ok(None);
+        let v = at(ctx, f, x, &q, prec)?;
+        if v.is_zero() {
+            return Some(q);
         }
-        let step = &v.mid().to_rational() / &d.mid().to_rational();
-        let next = &q - &step;
-        let (rounded, _) = Float::from_rational(&next, prec, Round::Nearest);
-        let next = rounded.to_rational();
-        let small = step.abs()
-            <= &next.abs() * &Rational::from(Integer::from(2)).pow(-exponent.saturating_add(8));
+        let step = match method {
+            Method::Newton => {
+                let d = at(ctx, df?, x, &q, prec)?;
+                if d.is_zero() {
+                    return None;
+                }
+                &v / &d
+            }
+            Method::Secant => {
+                let den = &v - &f0;
+                if den.is_zero() {
+                    return None;
+                }
+                let step = &(&v * &(&q - &q0)) / &den;
+                (q0, f0) = (q.clone(), v);
+                step
+            }
+            Method::Steffensen => {
+                let w = at(ctx, f, x, &(&q + &v), prec)?;
+                let den = &w - &v;
+                if den.is_zero() {
+                    return None;
+                }
+                &(&v * &v) / &den
+            }
+            _ => return None,
+        };
+        let next = rounded(&(&q - &step), prec);
+        let done = settled(&step, &next, bits);
         q = next;
-        if small || step.is_zero() {
-            return Ok(around(ctx, f, x, &q, bits));
+        if done {
+            return Some(q);
         }
     }
-    Ok(None)
+    None
+}
+
+/// The Illinois variant of false position on `[lo, hi]`: its estimate.
+pub(super) fn false_position(
+    ctx: &Context,
+    f: &Expr,
+    x: &Expr,
+    lo: &Rational,
+    hi: &Rational,
+    bits: u64,
+) -> Option<Rational> {
+    let prec = bits.saturating_add(32);
+    let two = Rational::from(Integer::from(2));
+    let (mut a, mut b) = (lo.clone(), hi.clone());
+    let (mut fa, mut fb) = (at(ctx, f, x, &a, prec)?, at(ctx, f, x, &b, prec)?);
+    let mut side = Ordering::Equal;
+    let mut last: Option<Rational> = None;
+    for _ in 0..MAX_BISECTION {
+        let den = &fb - &fa;
+        if den.is_zero() {
+            return None;
+        }
+        let c = rounded(&(&(&(&a * &fb) - &(&b * &fa)) / &den), prec);
+        if let Some(l) = &last
+            && settled(&(&c - l), &c, bits)
+        {
+            return Some(c);
+        }
+        let fc = at(ctx, f, x, &c, prec)?;
+        if fc.is_zero() || narrow(&a, &b, bits) {
+            return Some(c);
+        }
+        if (fc > Rational::ZERO) == (fb > Rational::ZERO) {
+            (b, fb) = (c.clone(), fc);
+            if side == Ordering::Less {
+                fa = &fa / &two;
+            }
+            side = Ordering::Less;
+        } else {
+            (a, fa) = (c.clone(), fc);
+            if side == Ordering::Greater {
+                fb = &fb / &two;
+            }
+            side = Ordering::Greater;
+        }
+        last = Some(c);
+    }
+    last
+}
+
+/// Brent's method on `[lo, hi]` (inverse quadratic interpolation, secant
+/// and bisection steps): its estimate.
+pub(super) fn brent(
+    ctx: &Context,
+    f: &Expr,
+    x: &Expr,
+    lo: &Rational,
+    hi: &Rational,
+    bits: u64,
+) -> Option<Rational> {
+    let prec = bits.saturating_add(32);
+    let zero = Rational::ZERO;
+    let one = Rational::from(Integer::from(1));
+    let two = Rational::from(Integer::from(2));
+    let three = Rational::from(Integer::from(3));
+    let exponent = i64::try_from(bits).unwrap_or(i64::MAX);
+    let eps = two.pow(-exponent.saturating_add(2));
+    let (mut a, mut b) = (lo.clone(), hi.clone());
+    let (mut fa, mut fb) = (at(ctx, f, x, &a, prec)?, at(ctx, f, x, &b, prec)?);
+    let (mut c, mut fc) = (b.clone(), fb.clone());
+    let mut d = &b - &a;
+    let mut e = d.clone();
+    for _ in 0..MAX_BISECTION {
+        if (fb > zero) == (fc > zero) {
+            (c, fc) = (a.clone(), fa.clone());
+            d = &b - &a;
+            e = d.clone();
+        }
+        if fc.abs() < fb.abs() {
+            (a, b, c) = (b.clone(), c.clone(), b.clone());
+            (fa, fb, fc) = (fb.clone(), fc.clone(), fb.clone());
+        }
+        let tol = &(&two * &eps) * &b.abs().max(eps.clone());
+        let xm = &(&c - &b) / &two;
+        if xm.abs() <= tol || fb.is_zero() {
+            return Some(b);
+        }
+        if e.abs() >= tol && fa.abs() > fb.abs() {
+            let s = &fb / &fa;
+            let (mut p, mut q) = if a == c {
+                (&(&two * &xm) * &s, &one - &s)
+            } else {
+                let q = &fa / &fc;
+                let r = &fb / &fc;
+                let p =
+                    &s * &(&(&(&(&two * &xm) * &q) * &(&q - &r)) - &(&(&b - &a) * &(&r - &one)));
+                (p, &(&(&q - &one) * &(&r - &one)) * &(&s - &one))
+            };
+            if p > zero {
+                q = -q;
+            }
+            p = p.abs();
+            let min1 = &(&(&three * &xm) * &q) - &(&tol * &q).abs();
+            let min2 = (&e * &q).abs();
+            if &two * &p < min1.min(min2) {
+                e = d;
+                d = &p / &q;
+            } else {
+                d = xm.clone();
+                e = d.clone();
+            }
+        } else {
+            d = xm.clone();
+            e = d.clone();
+        }
+        (a, fa) = (b.clone(), fb.clone());
+        b = if d.abs() > tol {
+            rounded(&(&b + &d), prec)
+        } else if xm > zero {
+            &b + &tol
+        } else {
+            &b - &tol
+        };
+        fb = at(ctx, f, x, &b, prec)?;
+    }
+    Some(b)
 }
 
 /// A ball about `q` that holds a root of `f`: `f` of opposite signs at
