@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 400] = [
+const BUILTINS: [&str; 401] = [
     "Plus",
     "Times",
     "Power",
@@ -247,6 +247,7 @@ const BUILTINS: [&str; 400] = [
     "TTest",
     "ChiSquareTest",
     "KolmogorovCDF",
+    "KolmogorovSmirnovTest",
     "GammaPDF",
     "GammaCDF",
     "GammaICDF",

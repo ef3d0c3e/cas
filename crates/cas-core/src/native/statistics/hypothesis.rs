@@ -12,7 +12,8 @@
 //!   its report.
 //! - Location tests on a mean ([`location`], §2, CAS-503).
 //! - Pearson's χ² ([`chisquare`], §3, CAS-504).
-//! - Kolmogorov's distribution ([`kolmogorov`], §4, CAS-505).
+//! - Kolmogorov's distribution and the Kolmogorov–Smirnov test
+//!   ([`kolmogorov`], §4, CAS-505, CAS-506).
 
 pub(in crate::native) mod chisquare;
 pub(in crate::native) mod kolmogorov;
@@ -104,6 +105,21 @@ pub(super) fn options(
         }
     };
     Ok(Some((alternative, alpha)))
+}
+
+/// Whether a ball occurs in `x`.
+pub(super) fn has_ball(x: &Expr) -> bool {
+    matches!(x.view(), View::Ball(_) | View::ComplexBall(_)) || x.args().iter().any(has_ball)
+}
+
+/// `x` as one ball at the working precision when `inexact`, as `N` makes
+/// it: an expression of balls left by exact steps.
+pub(super) fn settled(ev: &mut Eval<'_>, x: Expr, inexact: bool) -> Result<Expr, EvalError> {
+    if !inexact {
+        return Ok(x);
+    }
+    let bits = ev.context().working_precision();
+    crate::native::approximation(ev.context(), &x, bits)
 }
 
 /// Whether `x` is a string: an alternative, or a wrong one.

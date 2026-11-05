@@ -152,3 +152,48 @@ fn kolmogorov_distribution() {
         ("KolmogorovCDF[x]", "KolmogorovCDF[x]"),
     ]);
 }
+
+/// `KolmogorovSmirnovTest` (CAS-506): giac's
+/// `kolmogorovt([1,2,3],[1.5,2.5,8])` is `["D=",0.333,"K=",0.408,…]`, and
+/// against `uniformd(0,2)` `D` is 0.55.
+#[test]
+fn kolmogorov_smirnov() {
+    check(&[
+        (
+            "KolmogorovSmirnovTest[List[1, 2, 3], List[3/2, 5/2, 8]]",
+            "List[\"D=\", 1/3, \"K=\", Times[1/6, Power[6, 1/2]], \"1-kolmogorovd(K)=\", Plus[1, Times[-1, KolmogorovCDF[Times[1/6, Power[6, 1/2]]]]]]",
+        ),
+        // Ties across the samples step together.
+        (
+            "Part[KolmogorovSmirnovTest[List[1, 1, 2], List[1, 2, 2]], 2]",
+            "1/3",
+        ),
+        (
+            "Part[KolmogorovSmirnovTest[List[1/10, 1/2, 9/10], UniformPDF[0, 2]], 2]",
+            "11/20",
+        ),
+        (
+            "KolmogorovSmirnovTest[List[a, 1], List[1, 2]]",
+            "KolmogorovSmirnovTest[List[a, 1], List[1, 2]]",
+        ),
+        (
+            "KolmogorovSmirnovTest[List[1, 2], f[5]]",
+            "KolmogorovSmirnovTest[List[1, 2], f[5]]",
+        ),
+    ]);
+    // giac's D = 0.539827837277, K = 0.935009241504, 1 − K(K) =
+    // 0.346240413235 against normald(0,1).
+    let ctx = Context::new();
+    let found = ctx
+        .eval(&read(
+            "KolmogorovSmirnovTest[List[N[1/10], 1/2, 9/10], NormalPDF[0, 1]]",
+        ))
+        .unwrap();
+    let expected = [0.539_827_837_277, 0.935_009_241_504, 0.346_240_413_235];
+    for (k, want) in [1, 3, 5].into_iter().zip(expected) {
+        let crate::View::Ball(b) = found.args()[k].view() else {
+            panic!("{found:?}");
+        };
+        assert!((b.mid().to_f64() - want).abs() < 1e-11, "{found:?}");
+    }
+}

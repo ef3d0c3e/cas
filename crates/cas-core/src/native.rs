@@ -529,6 +529,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             statistics::hypothesis::kolmogorov::kolmogorov_cdf_native,
         ),
         (
+            Symbol::KOLMOGOROV_SMIRNOV_TEST,
+            statistics::hypothesis::kolmogorov::kolmogorov_smirnov_test,
+        ),
+        (
             Symbol::LINEAR_REGRESSION,
             statistics::regression::linear_regression,
         ),

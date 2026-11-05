@@ -429,6 +429,7 @@ ZTest: normalt
 TTest: studentt
 ChiSquareTest: chisquaret
 KolmogorovCDF: kolmogorovd
+KolmogorovSmirnovTest: kolmogorovt
 # Regressions (CAS-297).
 LinearRegression: linear_regression
 PolynomialRegression: polynomial_regression
