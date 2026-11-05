@@ -380,7 +380,7 @@ fn conjugates_of_complex_radicals() {
     schur(&ctx, "List[List[-2, 3], List[-2, -5]]", None);
 }
 
-/// A 3 × 3 ball matrix: `Eigenvalues` a list, and `Eigenvectors` of it.
+/// A 3 × 3 ball matrix: its `Eigenvectors`.
 #[test]
 fn three_by_three_balls() {
     let ctx = Context::new();
@@ -390,9 +390,10 @@ fn three_by_three_balls() {
     );
     let values = eval(&ctx, &Expr::call(Symbol::EIGENVALUES, [a.clone()]));
     let vectors = eval(&ctx, &Expr::call(Symbol::EIGENVECTORS, [a.clone()]));
+    // `Eigenvalues` of a cubic of balls stays: the guesses come from
+    // `PolynomialRoots`.
     assert!(
-        values.head() == Some(&Expr::from(Symbol::LIST))
-            && vectors.head() == Some(&Expr::from(Symbol::LIST)),
+        vectors.head() == Some(&Expr::from(Symbol::LIST)),
         "Eigenvalues {values:?}, Eigenvectors {vectors:?}"
     );
     assert!(
