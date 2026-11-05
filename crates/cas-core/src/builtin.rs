@@ -339,6 +339,9 @@ builtins! {
     COVARIANCE_CORRELATION = "CovarianceCorrelation" [PROTECTED];
     ROOT_MEAN_SQUARE = "RootMeanSquare" [PROTECTED];
     MOVING_AVERAGE = "MovingAverage" [PROTECTED];
+    // Hypothesis tests (CAS-DOC-52).
+    Z_TEST = "ZTest" [PROTECTED];
+    T_TEST = "TTest" [PROTECTED];
     // Regressions: `linear_regression`, `polynomial_regression`,
     // `exponential_regression`, `logarithmic_regression` and
     // `power_regression`.

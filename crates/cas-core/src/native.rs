@@ -518,6 +518,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::MOVING_AVERAGE,
             statistics::descriptive::moving_average,
         ),
+        (Symbol::Z_TEST, statistics::hypothesis::location::z_test),
+        (Symbol::T_TEST, statistics::hypothesis::location::t_test),
         (
             Symbol::LINEAR_REGRESSION,
             statistics::regression::linear_regression,

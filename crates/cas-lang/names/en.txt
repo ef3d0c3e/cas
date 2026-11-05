@@ -424,6 +424,9 @@ Classes: classes
 CovarianceCorrelation: covariance_correlation
 RootMeanSquare: rms
 MovingAverage: moving_average
+# Hypothesis tests (CAS-DOC-52).
+ZTest: normalt
+TTest: studentt
 # Regressions (CAS-297).
 LinearRegression: linear_regression
 PolynomialRegression: polynomial_regression

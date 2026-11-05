@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 396] = [
+const BUILTINS: [&str; 398] = [
     "Plus",
     "Times",
     "Power",
@@ -242,6 +242,9 @@ const BUILTINS: [&str; 396] = [
     "CovarianceCorrelation",
     "RootMeanSquare",
     "MovingAverage",
+    // Hypothesis tests (CAS-DOC-52).
+    "ZTest",
+    "TTest",
     "GammaPDF",
     "GammaCDF",
     "GammaICDF",

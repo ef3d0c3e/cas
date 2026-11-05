@@ -31,9 +31,11 @@
 //!   `Indeterminate` for constant data (giac's `undef`).
 //! - The regressions (§5, CAS-297), least squares: [`regression`].
 //! - Probability distributions (CAS-DOC-23): [`distributions`].
+//! - Hypothesis tests (CAS-DOC-52): [`hypothesis`].
 
 pub(super) mod descriptive;
 pub(super) mod distributions;
+pub(super) mod hypothesis;
 mod order;
 pub(super) mod regression;
 
