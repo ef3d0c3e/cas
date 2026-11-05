@@ -81,9 +81,10 @@ fn rows(e: &Expr) -> Option<Matrix> {
     (width > 0 && rows.len() <= MAX_SIZE && width <= MAX_SIZE).then_some(rows)
 }
 
-/// `x` evaluated and put together; a number as it is: `Together` leaves a
-/// ball in its call, and on a quotient of balls exceeds the recursion limit
-/// (CAS-498's fuzzing: Schur and the SVD of `[[-5.]]`).
+/// `x` evaluated and put together; a number as it is, and a numeric
+/// expression with balls as one ball: `Together` leaves a ball in its call,
+/// and on a quotient of balls exceeds the recursion limit (CAS-498's
+/// fuzzing: Schur and the SVD of `[[-5.]]`).
 #[allow(
     clippy::needless_pass_by_value,
     reason = "the callers hand over the entries they build"
@@ -93,7 +94,18 @@ fn simplified(ev: &mut Eval<'_>, x: Expr) -> Result<Expr, EvalError> {
     if x.is_number() {
         return Ok(x);
     }
+    // Balls with exact radicals (a ball matrix's exact eigenvalues, the
+    // fuzz target's `x³ + 27`): one ball, `Together` leaving them apart.
+    if x.is_numeric() && has_ball(&x) {
+        let bits = ev.context().working_precision();
+        return approximation(ev.context(), &x, bits);
+    }
     ev.eval(&Expr::call(Symbol::TOGETHER, [x]))
+}
+
+/// Whether a ball occurs in `x`.
+fn has_ball(x: &Expr) -> bool {
+    matches!(x.view(), View::Ball(_) | View::ComplexBall(_)) || x.args().iter().any(has_ball)
 }
 
 /// Whether `x` is 0: exactly, or `None` when a ball cannot tell.

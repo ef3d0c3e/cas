@@ -257,6 +257,8 @@ fn ball_matrices() {
         "N[List[List[-5]], 30]",
         "N[List[List[1, 2], List[3, 4]], 30]",
         "N[List[List[0, -1], List[1, 0]], 30]",
+        // The fuzz target's: exact eigenvalues of x³ + 27 with balls.
+        "N[List[List[3, -3, 5], List[3, 0, 0], List[0, 0, -3]], 30]",
     ] {
         let a = eval(&ctx, &read(a));
         let found = eval(&ctx, &Expr::call(Symbol::SCHUR_DECOMPOSITION, [a.clone()]));
