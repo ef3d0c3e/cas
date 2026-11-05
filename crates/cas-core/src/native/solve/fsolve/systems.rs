@@ -3,7 +3,9 @@
 //!
 //! - `FSolve[{eqns}, {vars}, {x0, …}]`: Newton's iteration from the start
 //!   point, the Jacobian by `D` and each step by Gaussian elimination at
-//!   the working precision and 32 bits more; the limit as a list of balls,
+//!   the working precision and 32 bits more, until the steps are below it
+//!   or every function's ball holds 0 (an inexact constant's radius); the
+//!   limit as a list of balls,
 //!   certified by Krawczyk's test, giac's `[1.93185165258,0.517638090205]`.
 //!   giac's multivariate method names (`newton_solver`, `dnewton_solver`,
 //!   `newtonj_solver`, `hybrid_solver`, `hybrids_solver`, `hybridj_solver`,
@@ -113,24 +115,8 @@ pub(in crate::native) fn system(ev: &mut Eval<'_>, e: &Expr) -> Native {
         ev.step("FSolve", e, &found);
         return Ok(Some(found));
     }
-    let mut jacobian = Vec::with_capacity(n);
-    for f in &fs {
-        let mut row = Vec::with_capacity(n);
-        for x in vars {
-            row.push(ev.eval(&Expr::call(Symbol::D, [f.clone(), x.clone()]))?);
-        }
-        jacobian.push(row);
-    }
-    let system = System {
-        fs,
-        vars: vars.to_vec(),
-        jacobian,
-    };
-    let bits = ev.context().working_precision();
     let q = start.unwrap_or_else(|| vec![Rational::ZERO; n]);
-    let ctx = ev.context();
-    let root = newton(ctx, &system, q, bits).and_then(|q| krawczyk(ctx, &system, &q, bits));
-    let Some(root) = root else {
+    let Some(root) = certified_root(ev, fs, vars, q)? else {
         ev.warn(Warning::Native {
             message: "Newton's iteration found no root it could certify".into(),
             expr: guess
@@ -142,6 +128,33 @@ pub(in crate::native) fn system(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let result = list(root);
     ev.step("FSolve", e, &result);
     Ok(Some(result))
+}
+
+/// A root of the square system `fs = 0` in `vars` by Newton's iteration
+/// from `start`, certified by Krawczyk's test: a ball for each unknown.
+/// Also `NLPSolve`'s, for its Karush–Kuhn–Tucker points (CAS-519).
+pub(in crate::native) fn certified_root(
+    ev: &mut Eval<'_>,
+    fs: Vec<Expr>,
+    vars: &[Expr],
+    start: Vec<Rational>,
+) -> Result<Option<Vec<Expr>>, EvalError> {
+    let mut jacobian = Vec::with_capacity(fs.len());
+    for f in &fs {
+        let mut row = Vec::with_capacity(vars.len());
+        for x in vars {
+            row.push(ev.eval(&Expr::call(Symbol::D, [f.clone(), x.clone()]))?);
+        }
+        jacobian.push(row);
+    }
+    let system = System {
+        fs,
+        vars: vars.to_vec(),
+        jacobian,
+    };
+    let bits = ev.context().working_precision();
+    let ctx = ev.context();
+    Ok(newton(ctx, &system, start, bits).and_then(|q| krawczyk(ctx, &system, &q, bits)))
 }
 
 fn listed(e: &Expr) -> Option<&[Expr]> {
@@ -230,22 +243,34 @@ fn solved(ev: &mut Eval<'_>, eqns: &[Expr], vars: &[Expr]) -> Native {
     Ok(Some(list(found)))
 }
 
-/// The midpoints of the `F_i` at `q`, and of the Jacobian.
+/// The midpoints of the `F_i` at `q` and of the Jacobian, and whether
+/// every `F_i`'s ball holds 0: `q` is a root as far as the functions'
+/// own balls, an inexact constant's, tell.
+#[allow(
+    clippy::type_complexity,
+    reason = "the values, the Jacobian and a flag"
+)]
 fn midpoints(
     ctx: &Context,
     system: &System,
     q: &[Rational],
     prec: u64,
-) -> Option<(Vec<Rational>, Vec<Vec<Rational>>)> {
+) -> Option<(Vec<Rational>, Vec<Vec<Rational>>, bool)> {
     let rules = at(&system.vars, q.iter().cloned().map(Expr::from));
+    let mut zeros = true;
+    let mut fv = Vec::with_capacity(system.fs.len());
+    for f in &system.fs {
+        let b = real(ctx, &f.substitute(&rules), prec)?;
+        zeros &= b.contains_rational(&Rational::ZERO);
+        fv.push(b.mid().to_rational());
+    }
     let mid = |e: &Expr| real(ctx, &e.substitute(&rules), prec).map(|b| b.mid().to_rational());
-    let fv = system.fs.iter().map(mid).collect::<Option<Vec<_>>>()?;
     let jv = system
         .jacobian
         .iter()
         .map(|row| row.iter().map(mid).collect::<Option<Vec<_>>>())
         .collect::<Option<Vec<_>>>()?;
-    Some((fv, jv))
+    Some((fv, jv, zeros))
 }
 
 /// Newton's iteration from `q`: its limit, uncertified.
@@ -257,8 +282,8 @@ fn newton(
 ) -> Option<Vec<Rational>> {
     let prec = bits.saturating_add(32);
     for _ in 0..MAX_NEWTON {
-        let (fv, jv) = midpoints(ctx, system, &q, prec)?;
-        if fv.iter().all(Rational::is_zero) {
+        let (fv, jv, zeros) = midpoints(ctx, system, &q, prec)?;
+        if zeros {
             return Some(q);
         }
         let step = solve_linear(jv, fv)?;
@@ -345,7 +370,7 @@ fn ball(mid: &Rational, rad: &Rational) -> Expr {
 fn krawczyk(ctx: &Context, system: &System, q: &[Rational], bits: u64) -> Option<Vec<Expr>> {
     let prec = bits.saturating_add(32);
     let n = q.len();
-    let (_, jv) = midpoints(ctx, system, q, prec)?;
+    let (_, jv, _) = midpoints(ctx, system, q, prec)?;
     let c = inverse(&jv, prec)?;
     let exact = at(&system.vars, q.iter().cloned().map(Expr::from));
     let fq = system

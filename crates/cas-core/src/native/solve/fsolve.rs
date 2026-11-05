@@ -50,7 +50,7 @@ use crate::poly::{Bounds, Fraction, Polynomials};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
 
-mod systems;
+pub(in crate::native) mod systems;
 
 type Native = Result<Option<Expr>, EvalError>;
 
@@ -664,10 +664,12 @@ fn iterated(
         _ => Rational::ZERO,
     };
     for _ in 0..MAX_NEWTON {
-        let v = at(ctx, f, x, &q, prec)?;
-        if v.is_zero() {
+        // A ball that holds 0 is a root as far as `f`'s own balls tell.
+        let ball = value(ctx, f, x, &Expr::from(q.clone()), prec)?;
+        if ball.contains_rational(&Rational::ZERO) {
             return Some(q);
         }
+        let v = ball.mid().to_rational();
         let step = match method {
             Method::Newton => {
                 let d = at(ctx, df?, x, &q, prec)?;
