@@ -815,6 +815,82 @@ fn bracketing_estimates() {
     }
 }
 
+/// The numbers in `e`, nested lists flattened, as `f64`s; `None` for
+/// anything but real balls and lists.
+fn flat_values(e: &crate::Expr) -> Option<Vec<f64>> {
+    match e.view() {
+        crate::View::Ball(b) => Some(vec![b.mid().to_f64()]),
+        _ if e.head() == Some(&crate::Expr::from(crate::Symbol::LIST)) => {
+            let mut all = Vec::new();
+            for a in e.args() {
+                all.extend(flat_values(a)?);
+            }
+            Some(all)
+        }
+        _ => None,
+    }
+}
+
+/// Systems by number (CAS-518): Newton's iteration from a start point,
+/// certified by Krawczyk's test; a polynomial system's real solutions by
+/// `Solve`; another from the origin.
+#[test]
+fn numeric_systems() {
+    let (big, small) = (1.931_851_652_578_136_6, 0.517_638_090_205_041_5);
+    let half = std::f64::consts::FRAC_1_SQRT_2;
+    let dottie_like = 0.510_973_429_388_569_2;
+    for (input, expected) in [
+        (
+            "FSolve[List[Equation[Plus[Power[x, 2], Power[y, 2]], 4], Equation[Times[x, y], 1]], \
+             List[x, y], List[1, 0]]",
+            vec![big, small],
+        ),
+        (
+            "FSolve[List[Equation[Plus[Power[x, 2], Power[y, 2]], 4], Equation[Times[x, y], 1]], \
+             List[x, y], List[1, 0], dnewton_solver]",
+            vec![big, small],
+        ),
+        (
+            "FSolve[List[Equation[Plus[Sin[x], y], 1], Equation[x, y]], List[x, y]]",
+            vec![dottie_like, dottie_like],
+        ),
+        (
+            "FSolve[List[Equation[Plus[Power[x, 2], Power[y, 2], Power[z, 2]], 3], \
+             Equation[x, y], Equation[y, z]], List[x, y, z], List[2, 2, 2]]",
+            vec![1.0, 1.0, 1.0],
+        ),
+        (
+            "FSolve[List[Equation[Plus[Power[x, 2], Power[y, 2]], 1], Equation[x, y]], List[x, y]]",
+            vec![-half, -half, half, half],
+        ),
+        (
+            "FSolve[List[Equation[Plus[Power[x, 2], Power[y, 2]], 4], Equation[Times[x, y], 1]], \
+             List[x, y]]",
+            vec![-big, -small, -small, -big, small, big, big, small],
+        ),
+        (
+            "FSolve[List[Equation[Plus[Power[x, 2], Power[y, 2]], -1], Equation[x, y]], List[x, y]]",
+            vec![],
+        ),
+    ] {
+        let found = Context::new().eval(&read(input)).unwrap();
+        let values = flat_values(&found).unwrap_or_else(|| panic!("{input}: {found:?}"));
+        assert_eq!(values.len(), expected.len(), "{input}: {found:?}");
+        for (a, b) in values.iter().zip(&expected) {
+            assert!((a - b).abs() < 1e-12, "{input}: {found:?}");
+        }
+    }
+    // No real root to reach, a singular Jacobian at the start, parameters.
+    for input in [
+        "FSolve[List[Plus[1, Power[x, 2]], y], List[x, y], List[1, 1]]",
+        "FSolve[List[Plus[-1, Times[x, y]], Plus[x, Times[-1, y]]], List[x, y], List[0, 0]]",
+        "FSolve[List[Plus[Times[-1, a], Power[x, 2]], y], List[x, y], List[1, 1]]",
+        "FSolve[List[x, y], List[x], List[1]]",
+    ] {
+        check(&[(input, input)]);
+    }
+}
+
 /// Two polynomial equations in two unknowns (CAS-215), by the resultant.
 #[test]
 fn polynomial_systems() {

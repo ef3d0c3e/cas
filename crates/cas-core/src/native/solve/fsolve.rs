@@ -20,6 +20,7 @@
 //!   so, by a sign change across a few of its last bits; when it is not,
 //!   the call stays with a warning.
 //! - With parameters, `f` no number at a point, the call stays.
+//! - A list of equations is a system, by [`systems`] (CAS-518).
 //! - A last argument names giac's method (CAS-517), each answer certified
 //!   as above whatever found it. The bracketing ones, `bisection_solver`,
 //!   `falsepos_solver` (Illinois) and `brent_solver`, refine each sign
@@ -48,6 +49,8 @@ use crate::expr::{Expr, View};
 use crate::poly::{Bounds, Fraction, Polynomials};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
+
+mod systems;
 
 type Native = Result<Option<Expr>, EvalError>;
 
@@ -112,6 +115,9 @@ impl Method {
 /// `FSolve[eqn, x]`, `FSolve[eqn, x, x0]` or `FSolve[eqn, x == a .. b]`,
 /// each with a method last.
 pub(in crate::native) fn fsolve(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    if e.args().first().and_then(Expr::head) == Some(&Expr::from(Symbol::LIST)) {
+        return systems::system(ev, e);
+    }
     let (args, method) = match e.args() {
         [rest @ .., last] if rest.len() >= 2 => match Method::named(last) {
             Some(m) => (rest, Some(m)),

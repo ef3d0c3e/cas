@@ -340,6 +340,21 @@ fn numeric_methods() {
     ]);
 }
 
+/// Systems by number (CAS-518): Newton's iteration from a start point, a
+/// polynomial system's real solutions, giac's `fsolve` by value.
+#[test]
+fn numeric_systems() {
+    check(&[
+        "fsolve([x^2+y^2=4,x*y=1],[x,y],[1,0])",
+        "fsolve([x^2+y^2=4,x*y=1],[x,y],[1,0],dnewton_solver)",
+        "fsolve([sin(x)+y=1,x-y=0],[x,y],[1,1])",
+        "fsolve([sin(x)+y=1,x-y=0],[x,y])",
+        "fsolve([x^2+y^2+z^2=3,x=y,y=z],[x,y,z],[2,2,2])",
+        "fsolve([x^2+y^2=1,x=y],[x,y])",
+        "fsolve([x^2+y^2=4,x*y=1],[x,y])",
+    ]);
+}
+
 /// Identities and contradictions.
 #[test]
 fn identities() {
