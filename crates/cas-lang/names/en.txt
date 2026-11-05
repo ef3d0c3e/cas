@@ -526,6 +526,8 @@ AiryBiPrime: Airy_Bi_prime
 # Numerical solutions of differential equations (CAS-DOC-35), Xcas's
 # `odesolve`.
 NDSolve: odesolve
+# Two-point boundary value problems by shooting (CAS-520), Xcas's `bvpsolve`.
+BVPSolve: bvpsolve
 
 [planned]
 

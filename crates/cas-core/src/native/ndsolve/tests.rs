@@ -142,3 +142,69 @@ fn what_stays() {
         );
     }
 }
+
+/// Two-point boundary value problems by shooting (CAS-520): each value
+/// holds the closed form's, the abscissae exact, the ends the given
+/// values; resonance, giac's spline output and parameters stay.
+#[test]
+fn boundary_value_problems() {
+    let ctx = Context::new();
+    let cases = [
+        // y″ = −y, y(0) = 0, y(1) = 1: sin x / sin 1.
+        (
+            "BVPSolve[Times[-1, y], List[Equation[x, Range[0, 1]], y], List[0, 1], 4]",
+            "Times[Sin[x], Power[Sin[1], -1]]",
+        ),
+        // y″ = y, y(0) = 1, y(1) = 2: (sinh(1 − x) + 2 sinh x) / sinh 1.
+        (
+            "BVPSolve[y, List[Equation[x, Range[0, 1]], y], List[1, 2], 4]",
+            "Times[Power[Sinh[1], -1], Plus[Sinh[Plus[1, Times[-1, x]]], Times[2, Sinh[x]]]]",
+        ),
+        // giac's example, y′ as diff(y(x), x) reads: x² + 16/x.
+        (
+            "BVPSolve[Times[1/8, Plus[32, Times[2, Power[x, 3]], \
+             Times[-1, y, Derivative[1][y][x]]]], List[Equation[x, Range[1, 3]], y], \
+             List[17, 43/3], 4]",
+            "Plus[Power[x, 2], Times[16, Power[x, -1]]]",
+        ),
+    ];
+    for (input, solution) in cases {
+        let found = eval(&ctx, input);
+        let rows = found.args();
+        assert_eq!(rows.len(), 5, "{input}: {found:?}");
+        for (k, row) in rows.iter().enumerate() {
+            let [x, y] = row.args() else {
+                panic!("{input}: {row:?}");
+            };
+            assert!(x.to_rational().is_some(), "{input}: {x:?}");
+            let exact = read(solution).substitute(&[(Expr::symbol("x"), x.clone())]);
+            if k == 0 || k == 4 {
+                assert!(y.to_rational().is_some(), "{input}: end {y:?}");
+                let gap = ctx
+                    .eval(&Expr::call(Symbol::N, [exact - y.clone(), Expr::from(30)]))
+                    .unwrap();
+                let zero = match gap.view() {
+                    View::Ball(b) => b.contains_rational(&cas_num::Rational::ZERO),
+                    _ => gap.to_rational().is_some_and(|q| q.is_zero()),
+                };
+                assert!(zero, "{input}: end {y:?}, gap {gap:?}");
+            } else {
+                holds(input, y, &value(&ctx, &exact));
+            }
+        }
+    }
+    // y″ = −y on [0, π] with y(0) = 0, y(π) = 1 has no solution; giac's
+    // spline output; a parameter.
+    for input in [
+        "BVPSolve[Times[-1, y], List[Equation[x, Range[0, Pi]], y], List[0, 1], 2]",
+        "BVPSolve[Times[-1, y], List[Equation[x, Range[0, 1]], y], List[0, 1], 2, \
+         Equation[output, spline]]",
+        "BVPSolve[Times[-1, a, y], List[Equation[x, Range[0, 1]], y], List[0, 1], 2]",
+    ] {
+        assert_eq!(
+            eval(&ctx, input).head().and_then(Expr::as_symbol),
+            Some(Symbol::BVP_SOLVE),
+            "{input}"
+        );
+    }
+}

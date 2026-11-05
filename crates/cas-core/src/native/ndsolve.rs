@@ -14,7 +14,11 @@
 //! and 32 bits more, the answer kept to the working precision. A right side
 //! that does not compile, or an integration that fails, leaves the call,
 //! the latter with a warning.
+//!
+//! [`bvp`]: two-point boundary value problems by shooting, `BVPSolve`
+//! (CAS-520).
 
+pub(super) mod bvp;
 pub(super) mod rhs;
 mod taylor;
 

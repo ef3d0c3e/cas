@@ -137,6 +137,7 @@ builtins! {
     DSOLVE = "DSolve" [PROTECTED];
     // Numerical solutions of initial value problems (CAS-DOC-35).
     NDSOLVE = "NDSolve" [PROTECTED];
+    BVP_SOLVE = "BVPSolve" [PROTECTED];
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];

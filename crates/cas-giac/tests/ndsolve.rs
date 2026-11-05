@@ -62,3 +62,48 @@ fn values() {
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+/// Whether two lists of points `[x, y]` agree within `10⁻⁴ (1 + |b|)`:
+/// giac's `bvpsolve` errs by about `10⁻⁵` with few points (CAS-520).
+fn close_points(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    let list = Expr::from(Symbol::LIST);
+    if a.head() != Some(&list) || b.head() != Some(&list) || a.args().len() != b.args().len() {
+        return false;
+    }
+    a.args().iter().zip(b.args()).all(|(p, q)| {
+        p.args().len() == 2
+            && q.args().len() == 2
+            && p.args().iter().zip(q.args()).all(|(u, v)| {
+                let scale = Expr::from(1) + Expr::call(Symbol::ABS, [v.clone()]);
+                let bound = scale / Expr::from(10_000_i64);
+                let gap = Expr::call(Symbol::ABS, [u.clone() - v.clone()]);
+                ctx.eval(&Expr::call(Symbol::LESS, [gap, bound]))
+                    .ok()
+                    .and_then(|e| e.as_symbol())
+                    == Some(Symbol::TRUE)
+            })
+    })
+}
+
+/// Boundary value problems (CAS-520): giac's `bvpsolve` by shooting in
+/// doubles, ours enclosing the solution.
+#[test]
+fn boundary_values() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in [
+        "bvpsolve(-y,[x=0..1,y],[0,1],4)",
+        "bvpsolve(y,[x=0..1,y],[1,2],4)",
+        "bvpsolve((32+2x^3-y*diff(y(x),x))/8,[x=1..3,y],[17,43/3],4)",
+        "bvpsolve(-y,[x=0..1,y],[0,1],2,output=list)",
+    ] {
+        match (giac.value(input), ours(input)) {
+            (Ok(theirs), Ok(ours)) if close_points(&ctx, &ours, &theirs) => {}
+            (theirs, ours) => wrong.push(format!("{input}: ours {ours:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}

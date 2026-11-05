@@ -134,6 +134,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::POLY_GAMMA, polygamma::polygamma),
         (Symbol::LAMBERT_W, lambert::lambert_w),
         (Symbol::NDSOLVE, ndsolve::ndsolve),
+        (Symbol::BVP_SOLVE, ndsolve::bvp::bvp_solve),
         (Symbol::BESSEL_J, bessel::bessel),
         (Symbol::BESSEL_Y, bessel::bessel),
         (Symbol::BESSEL_I, bessel::bessel),
