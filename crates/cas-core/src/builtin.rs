@@ -160,6 +160,8 @@ builtins! {
     // Correlations of signals (CAS-523).
     CROSS_CORRELATION = "CrossCorrelation" [PROTECTED];
     AUTO_CORRELATION = "AutoCorrelation" [PROTECTED];
+    // Thresholds of lists (CAS-524).
+    THRESHOLD = "Threshold" [PROTECTED];
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];

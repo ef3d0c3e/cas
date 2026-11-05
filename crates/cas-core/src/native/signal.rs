@@ -44,6 +44,19 @@
 //! complex samples the conjugate's, the usual definition, where giac's
 //! answers fit none. At most [`MAX_PRODUCTS`] products.
 //!
+//! Thresholds (CAS-524), giac's `threshold`: `Threshold[L, b]` replaces each
+//! entry `x` with `compare(x, b)` by `b`, the comparison `<` by default, or
+//! a last argument: `">"`, `">="`, `"<"`, `"<="` (giac's quoted operators,
+//! which the language writes as strings), a comparison's head, or a
+//! function of `x` and `b`. `b = r` replaces by `r` instead; with `abs =
+//! true`, `|x|` is compared and the replacement takes `x`'s sign (giac's
+//! `[-10,-a,a,a,10]` for `7 = a`). `Threshold[L, {lo, hi}]`, each end with
+//! its own replacement `lo = r`, replaces the entries below `lo` and above
+//! `hi`. A complex entry is compared by its modulus and replaced keeping its
+//! argument, `b x/|x|`, as giac's. An entry no comparison decides (a
+//! symbol, which giac replaces regardless) leaves the call, with a
+//! warning.
+//!
 //! The windows are exact (`sin(π/4)² = 1/2`, where giac's doubles leave
 //! `1.5·10⁻³²` for 0), numbers with an inexact parameter (a decimal), and
 //! evaluated with the samples, symbolic ones staying symbolic. A parameter is a real number; out of its range, as a
@@ -484,6 +497,159 @@ pub(super) fn correlation(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let result = list(out);
     ev.step("Correlation", e, &result);
     Ok(Some(result))
+}
+
+/// A bound and its replacement: `b` or `b = r`.
+fn bound(e: &Expr) -> (Expr, Expr) {
+    match (head(e), e.args()) {
+        (Some(Symbol::EQUATION | Symbol::EQUAL), [b, r]) => (b.clone(), r.clone()),
+        _ => (e.clone(), e.clone()),
+    }
+}
+
+/// How entries are compared with a single bound.
+enum Compare {
+    Head(Symbol),
+    Function(Expr),
+}
+
+impl Compare {
+    fn of(e: &Expr) -> Option<Compare> {
+        if let View::String(s) = e.view() {
+            return Some(Compare::Head(match s {
+                "<" => Symbol::LESS,
+                "<=" => Symbol::LESS_EQUAL,
+                ">" => Symbol::GREATER,
+                ">=" => Symbol::GREATER_EQUAL,
+                _ => return None,
+            }));
+        }
+        match e.as_symbol() {
+            Some(
+                s @ (Symbol::LESS | Symbol::LESS_EQUAL | Symbol::GREATER | Symbol::GREATER_EQUAL),
+            ) => Some(Compare::Head(s)),
+            _ if head(e) == Some(Symbol::FUNCTION) => Some(Compare::Function(e.clone())),
+            _ => None,
+        }
+    }
+
+    fn call(&self, x: Expr, b: Expr) -> Expr {
+        match self {
+            Compare::Head(s) => Expr::call(*s, [x, b]),
+            Compare::Function(f) => Expr::apply(f, &[x, b]),
+        }
+    }
+}
+
+/// Whether `proposition` evaluates to `True` or `False`; `None` when it
+/// stays.
+fn decided(ev: &mut Eval<'_>, proposition: &Expr) -> Result<Option<bool>, EvalError> {
+    Ok(match ev.eval(proposition)?.as_symbol() {
+        Some(Symbol::TRUE) => Some(true),
+        Some(Symbol::FALSE) => Some(false),
+        _ => None,
+    })
+}
+
+/// Whether `x` is a complex number that is not real.
+fn complex(ev: &mut Eval<'_>, x: &Expr) -> Result<bool, EvalError> {
+    if !matches!(x.view(), View::Complex(_) | View::ComplexBall(_)) {
+        return Ok(false);
+    }
+    let im = ev.eval(&Expr::call(Symbol::IM, [x.clone()]))?;
+    Ok(decided(ev, &Expr::call(Symbol::UNEQUAL, [im, Expr::from(0)]))? == Some(true))
+}
+
+/// `Threshold[L, b, options…]` and `Threshold[L, {lo, hi}, options…]`.
+pub(super) fn threshold(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [l, bounds, options @ ..] = e.args() else {
+        return Ok(None);
+    };
+    if head(l) != Some(Symbol::LIST) {
+        return Ok(None);
+    }
+    let mut compare = Compare::Head(Symbol::LESS);
+    let mut absolute = false;
+    for option in options {
+        match (head(option), option.args()) {
+            (Some(Symbol::EQUATION | Symbol::EQUAL), [k, v])
+                if k.as_symbol() == Some(Symbol::ABS) =>
+            {
+                absolute = match v.as_symbol() {
+                    Some(Symbol::TRUE) => true,
+                    Some(Symbol::FALSE) => false,
+                    _ => return Ok(None),
+                };
+            }
+            _ => match Compare::of(option) {
+                Some(c) => compare = c,
+                None => return Ok(None),
+            },
+        }
+    }
+    let interval = match (head(bounds), bounds.args()) {
+        (Some(Symbol::LIST), [lo, hi]) => Some((bound(lo), bound(hi))),
+        (Some(Symbol::LIST), _) => return Ok(None),
+        _ => None,
+    };
+    let (b, r) = bound(bounds);
+    let mut out = Vec::with_capacity(l.args().len());
+    for x in l.args() {
+        let is_complex = complex(ev, x)?;
+        let size = if absolute || is_complex {
+            ev.eval(&Expr::call(Symbol::ABS, [x.clone()]))?
+        } else {
+            x.clone()
+        };
+        let replaced = if let Some(((lo, rl), (hi, ru))) = &interval {
+            let below = Expr::call(Symbol::LESS, [size.clone(), lo.clone()]);
+            let above = Expr::call(Symbol::GREATER, [size.clone(), hi.clone()]);
+            match decided(ev, &below)? {
+                Some(true) => Some(rl.clone()),
+                Some(false) => match decided(ev, &above)? {
+                    Some(true) => Some(ru.clone()),
+                    Some(false) => None,
+                    None => return undecided(ev, x),
+                },
+                None => return undecided(ev, x),
+            }
+        } else {
+            match decided(ev, &compare.call(size.clone(), b.clone()))? {
+                Some(true) => Some(r.clone()),
+                Some(false) => None,
+                None => return undecided(ev, x),
+            }
+        };
+        let Some(replacement) = replaced else {
+            out.push(x.clone());
+            continue;
+        };
+        let value = if is_complex {
+            // The replacement along x's direction: r x / |x|.
+            replacement * x.clone() / size
+        } else if absolute {
+            match decided(ev, &Expr::call(Symbol::LESS, [x.clone(), Expr::from(0)]))? {
+                Some(true) => Expr::from(-1) * replacement,
+                Some(false) => replacement,
+                None => return undecided(ev, x),
+            }
+        } else {
+            replacement
+        };
+        out.push(ev.eval(&value)?);
+    }
+    let result = list(out);
+    ev.step("Threshold", e, &result);
+    Ok(Some(result))
+}
+
+/// The call stays: no comparison decides the entry `x`.
+fn undecided(ev: &mut Eval<'_>, x: &Expr) -> Native {
+    ev.warn(Warning::Native {
+        message: "no comparison decides this entry".into(),
+        expr: x.clone(),
+    });
+    Ok(None)
 }
 
 #[cfg(test)]

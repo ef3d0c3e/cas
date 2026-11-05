@@ -345,3 +345,58 @@ fn correlations() {
         ("AutoCorrelation[x]", "AutoCorrelation[x]"),
     ]);
 }
+
+/// Thresholds (CAS-524): giac's examples, comparisons as strings, heads and
+/// functions, replacements, absolute values, intervals, complex entries;
+/// an undecided entry stays.
+#[test]
+fn thresholds() {
+    check(&[
+        (
+            "Threshold[List[1, 3, 2, 4, 5, 4, 3, 2, 3, 1], 3, \">=\"]",
+            "List[1, 3, 2, 3, 3, 3, 3, 2, 3, 1]",
+        ),
+        (
+            "Threshold[List[-10, -5, 0, 5, 10], Equation[7, a], Equation[Abs, True]]",
+            "List[-10, Times[-1, a], a, a, 10]",
+        ),
+        ("Threshold[List[1, 3, 2, 4, 5], 3]", "List[3, 3, 3, 4, 5]"),
+        (
+            "Threshold[List[1, 3, 2, 4, 5], Equation[3, 0]]",
+            "List[0, 3, 0, 4, 5]",
+        ),
+        (
+            "Threshold[List[1, 3, 2, 4, 5], 3, Greater]",
+            "List[1, 3, 2, 3, 3]",
+        ),
+        (
+            "Threshold[List[1, 3, 2, 4, 5], 3, Function[List[x, b], Greater[x, Plus[b, 1]]]]",
+            "List[1, 3, 2, 4, 3]",
+        ),
+        (
+            "Threshold[List[1, 3, 2, 4, 5], List[2, 4]]",
+            "List[2, 3, 2, 4, 4]",
+        ),
+        (
+            "Threshold[List[1, 3, 2, 4, 5], List[Equation[2, a], Equation[4, b]]]",
+            "List[a, 3, 2, 4, b]",
+        ),
+        (
+            "Threshold[List[-10, -5, 0, 5, 10], 7, Equation[Abs, True]]",
+            "List[-10, -7, 7, 7, 10]",
+        ),
+        (
+            "Threshold[List[-10, -5, 0, 5, 10], List[-6, 6]]",
+            "List[-6, -5, 0, 5, 6]",
+        ),
+        (
+            "Threshold[List[Complex[1, 1], 3, Complex[0, -4]], 2]",
+            "List[Times[Complex[1, 1], Power[2, 1/2]], 3, Complex[0, -4]]",
+        ),
+        ("Threshold[List[x, 3, 1], 2]", "Threshold[List[x, 3, 1], 2]"),
+        (
+            "Threshold[List[1, 2], 3, \"=>\"]",
+            "Threshold[List[1, 2], 3, \"=>\"]",
+        ),
+    ]);
+}

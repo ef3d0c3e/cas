@@ -550,6 +550,8 @@ HighPass: highpass
 # Correlations of signals (CAS-523), Xcas's.
 CrossCorrelation: cross_correlation
 AutoCorrelation: auto_correlation
+# Thresholds of lists (CAS-524), Xcas's.
+Threshold: threshold
 
 [planned]
 

@@ -132,3 +132,21 @@ fn correlations() {
         "auto_correlation([3,-1,4,1,-5,9])",
     ]);
 }
+
+/// Thresholds (CAS-524): giac's examples without its quoted operators,
+/// which the language writes as strings.
+#[test]
+fn thresholds() {
+    check(&[
+        "threshold([-10,-5,0,5,10],7=a,abs=true)",
+        "threshold([1,3,2,4,5],3)",
+        "threshold([1,3,2,4,5],3=0)",
+        "threshold([1,3,2,4,5],[2,4])",
+        "threshold([1,3,2,4,5],[2=a,4=b])",
+        "threshold([-10,-5,0,5,10],7,abs=true)",
+        "threshold([-10,-5,0,5,10],7,abs=false)",
+        "threshold([-10,-5,0,5,10],[-6,6])",
+        "threshold([1+i,3,-4i],2)",
+        "threshold([1,3,2],[4,2])",
+    ]);
+}
