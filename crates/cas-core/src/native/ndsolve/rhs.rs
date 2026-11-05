@@ -24,7 +24,7 @@ const MAX_EXPONENT: i64 = 1 << 16;
 
 /// A function of one argument.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Function {
+pub(in crate::native) enum Function {
     Exp,
     Log,
     Sin,
@@ -103,7 +103,7 @@ impl Function {
 
 /// A right side's tree.
 #[derive(Clone, Debug)]
-pub(super) enum Node {
+pub(in crate::native) enum Node {
     /// `t` for 0, `y_k` for `k`.
     Variable(usize),
     Constant(Ball),
@@ -149,7 +149,12 @@ impl Node {
     /// `f` in `variables`, `t` first, as a tree at `prec` bits; `None` for
     /// a head without a ball function here, or a part free of the
     /// variables that is no real number.
-    pub(super) fn compile(ctx: &Context, f: &Expr, variables: &[Expr], prec: u64) -> Option<Node> {
+    pub(in crate::native) fn compile(
+        ctx: &Context,
+        f: &Expr,
+        variables: &[Expr],
+        prec: u64,
+    ) -> Option<Node> {
         if let Some(k) = variables.iter().position(|v| v == f) {
             return Some(Node::Variable(k));
         }
@@ -189,7 +194,7 @@ impl Node {
     }
 
     /// The value at the balls `at`, `t` first; `None` outside a domain.
-    pub(super) fn ball(&self, at: &[Ball], prec: u64) -> Option<Ball> {
+    pub(in crate::native) fn ball(&self, at: &[Ball], prec: u64) -> Option<Ball> {
         Some(match self {
             Node::Variable(k) => at.get(*k)?.clone(),
             Node::Constant(c) => c.clone(),

@@ -855,6 +855,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::F_MIN, optimization::global::f_min),
         (Symbol::F_MAX, optimization::global::f_max),
         (Symbol::LP_SOLVE, optimization::lpsolve::lp_solve),
+        (Symbol::NLP_SOLVE, optimization::nlpsolve::nlp_solve),
         (
             Symbol::QUOTIENT_REMAINDER,
             number_theory::residues::quotient_remainder,

@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 407] = [
+const BUILTINS: [&str; 408] = [
     "Plus",
     "Times",
     "Power",
@@ -481,6 +481,7 @@ const BUILTINS: [&str; 407] = [
     "FMin",
     "FMax",
     "LPSolve",
+    "NLPSolve",
     // Number theory II (CAS-422).
     "QuotientRemainder",
     "SymmetricMod",

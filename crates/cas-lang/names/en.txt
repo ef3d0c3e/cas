@@ -353,6 +353,7 @@ Maximize: maximize
 FMin: fMin
 FMax: fMax
 LPSolve: lpsolve
+NLPSolve: nlpsolve
 # Number theory II (CAS-DOC-39, CAS-422).
 QuotientRemainder: iquorem
 SymmetricMod: smod

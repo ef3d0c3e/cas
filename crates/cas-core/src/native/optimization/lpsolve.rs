@@ -51,7 +51,7 @@ fn warn(ev: &mut Eval<'_>, e: &Expr, message: &str) {
 
 /// The symbols of `e` that are not builtins, in the order they first
 /// appear, depth first and left to right, after those in `found`.
-fn symbols_in_order(e: &Expr, found: &mut Vec<Expr>) {
+pub(super) fn symbols_in_order(e: &Expr, found: &mut Vec<Expr>) {
     if let Some(s) = e.as_symbol() {
         if !s.is_builtin() && !found.contains(e) {
             found.push(e.clone());

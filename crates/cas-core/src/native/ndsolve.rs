@@ -15,7 +15,7 @@
 //! that does not compile, or an integration that fails, leaves the call,
 //! the latter with a warning.
 
-mod rhs;
+pub(super) mod rhs;
 mod taylor;
 
 use cas_num::ball::Ball;

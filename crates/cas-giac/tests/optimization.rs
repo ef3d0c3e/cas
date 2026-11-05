@@ -20,8 +20,8 @@ fn holds(ctx: &Context, proposition: &Expr) -> bool {
 }
 
 /// Whether two values are one: lists and equations part by part, the
-/// same, or numbers within 10⁻¹⁰.
-fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+/// same, or numbers within `1/scale`.
+fn same(ctx: &Context, a: &Expr, b: &Expr, scale: i64) -> bool {
     if a == b {
         return true;
     }
@@ -32,7 +32,10 @@ fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
             .is_some_and(|h| matches!(h, Symbol::LIST | Symbol::EQUATION))
     {
         return a.args().len() == b.args().len()
-            && a.args().iter().zip(b.args()).all(|(a, b)| same(ctx, a, b));
+            && a.args()
+                .iter()
+                .zip(b.args())
+                .all(|(a, b)| same(ctx, a, b, scale));
     }
     let Ok(difference) = ctx.eval(&Expr::call(Symbol::N, [a.clone() - b.clone()])) else {
         return false;
@@ -41,7 +44,7 @@ fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
         View::ComplexBall(z) => vec![Expr::from(z.re().clone()), Expr::from(z.im().clone())],
         _ => vec![difference],
     };
-    let tolerance = Expr::from(1) / Expr::from(10_000_000_000_i64);
+    let tolerance = Expr::from(1) / Expr::from(scale);
     parts.into_iter().all(|p| {
         let gap = Expr::call(Symbol::ABS, [p]);
         holds(ctx, &Expr::call(Symbol::LESS, [gap, tolerance.clone()]))
@@ -50,6 +53,12 @@ fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
 
 /// giac's answers and this CAS's, the same by [`same`].
 fn check(inputs: &[&str]) {
+    check_within(inputs, 10_000_000_000);
+}
+
+/// giac's answers and this CAS's, the same by [`same`] with numbers within
+/// `1/scale`.
+fn check_within(inputs: &[&str], scale: i64) {
     let Some(giac) = giac() else {
         return;
     };
@@ -57,7 +66,7 @@ fn check(inputs: &[&str]) {
     let mut wrong = Vec::new();
     for input in inputs {
         match (giac.value(input), ours(input)) {
-            (Ok(theirs), Ok(ours)) if same(&ctx, &ours, &theirs) => {}
+            (Ok(theirs), Ok(ours)) if same(&ctx, &ours, &theirs, scale) => {}
             (theirs, ours) => wrong.push(format!("{input}: ours {ours:?}, giac's {theirs:?}")),
         }
     }
@@ -106,4 +115,21 @@ fn linear_programs() {
         "lpsolve(8x1+11x2+6x3+4x4,[5x1+7x2+4x3+3x4<=14],assume=lp_binary,maximize)",
         "lpsolve(x+y,[x>=1/3,y>=1/2],assume=integer)",
     ]);
+}
+
+/// Nonlinear programs (CAS-519): giac's examples that its `nlpsolve`
+/// solves, its answers good to about 10⁻⁷ (COBYLA's tolerance), ours
+/// certified.
+#[test]
+fn nonlinear_programs() {
+    check_within(
+        &[
+            "nlpsolve(sin(x1+x2)+(x1-x2)^2-1.5x1+2.5x2+1,x1=-1.5..4,x2=-3..3)",
+            "nlpsolve(sin(x)*cos(y),[x=0..3,y=0..3])",
+            "nlpsolve(x^2+y^2,[x+y=1],maximize=false)",
+            "nlpsolve(x*y,[x+y=2],maximize)",
+            "nlpsolve((x-2)^2,[x=0..1])",
+        ],
+        100_000,
+    );
 }
