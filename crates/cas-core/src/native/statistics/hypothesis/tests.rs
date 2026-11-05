@@ -197,3 +197,49 @@ fn kolmogorov_smirnov() {
         assert!((b.mid().to_f64() - want).abs() < 1e-11, "{found:?}");
     }
 }
+
+/// `WilcoxonDistribution` and `WilcoxonStatistic` (CAS-507): giac's
+/// `wilcoxonp` coefficients, and `wilcoxons` where it has no ties or
+/// zeros.
+#[test]
+fn wilcoxon_laws() {
+    check(&[
+        (
+            "WilcoxonDistribution[4]",
+            "List[1/16, 1/16, 1/16, 1/8, 1/8, 1/8, 1/8, 1/8, 1/16, 1/16, 1/16]",
+        ),
+        (
+            "WilcoxonDistribution[3, 2]",
+            "List[1/10, 1/10, 1/5, 1/5, 1/5, 1/10, 1/10]",
+        ),
+        (
+            "WilcoxonDistribution[2, 3]",
+            "List[1/10, 1/10, 1/5, 1/5, 1/5, 1/10, 1/10]",
+        ),
+        (
+            "WilcoxonDistribution[4, 3]",
+            "List[1/35, 1/35, 2/35, 3/35, 4/35, 4/35, 1/7, 4/35, 4/35, 3/35, 2/35, 1/35, 1/35]",
+        ),
+        ("WilcoxonDistribution[0]", "List[1]"),
+        ("Apply[Plus, WilcoxonDistribution[30, 40]]", "1"),
+        ("Apply[Plus, WilcoxonDistribution[200]]", "1"),
+        ("Length[WilcoxonDistribution[200, 200]]", "40001"),
+        // giac's 13.0, 15.0 and 10.0: the second sample's rank sum.
+        ("WilcoxonStatistic[List[1, 3, 4, 20], List[2, 6, 10]]", "13"),
+        ("WilcoxonStatistic[List[2, 6, 10], List[1, 3, 4, 20]]", "15"),
+        ("WilcoxonStatistic[List[5, 6, 7], List[1, 2, 3, 4]]", "10"),
+        // Ties at their midranks: 5/2 + 4.
+        ("WilcoxonStatistic[List[1, 2], List[2, 3]]", "13/2"),
+        // giac's 4: its ties ranked apart; zeros dropped here, kept there.
+        ("WilcoxonStatistic[List[1, 2, 9, 4], 5]", "7/2"),
+        ("WilcoxonStatistic[List[1, 2, 9, 4, 5], 5]", "7/2"),
+        ("WilcoxonStatistic[List[1, 2, 9, 7], 5]", "9/2"),
+    ]);
+    stays(&[
+        "WilcoxonDistribution[201]",
+        "WilcoxonDistribution[201, 200]",
+        "WilcoxonDistribution[-1]",
+        "WilcoxonStatistic[List[a, 1], 2]",
+        "WilcoxonStatistic[List[1, 2], List[b]]",
+    ]);
+}

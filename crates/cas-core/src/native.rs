@@ -533,6 +533,14 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             statistics::hypothesis::kolmogorov::kolmogorov_smirnov_test,
         ),
         (
+            Symbol::WILCOXON_DISTRIBUTION,
+            statistics::hypothesis::wilcoxon::wilcoxon_distribution,
+        ),
+        (
+            Symbol::WILCOXON_STATISTIC,
+            statistics::hypothesis::wilcoxon::wilcoxon_statistic,
+        ),
+        (
             Symbol::LINEAR_REGRESSION,
             statistics::regression::linear_regression,
         ),

@@ -14,17 +14,20 @@
 //! - Pearson's χ² ([`chisquare`], §3, CAS-504).
 //! - Kolmogorov's distribution and the Kolmogorov–Smirnov test
 //!   ([`kolmogorov`], §4, CAS-505, CAS-506).
+//! - Wilcoxon's and Mann–Whitney's laws, statistics and tests
+//!   ([`wilcoxon`], §5, CAS-507).
 
 pub(in crate::native) mod chisquare;
 pub(in crate::native) mod kolmogorov;
 pub(in crate::native) mod location;
+pub(in crate::native) mod wilcoxon;
 
 use std::cmp::Ordering;
 use std::fmt::Write as _;
 
 use cas_num::Rational;
 
-use super::refuse;
+use super::{is_list, refuse};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
@@ -105,6 +108,42 @@ pub(super) fn options(
         }
     };
     Ok(Some((alternative, alpha)))
+}
+
+/// How `a` compares with `b`, both real; `None` when not decided.
+pub(super) fn compare(
+    ev: &mut Eval<'_>,
+    a: &Expr,
+    b: &Expr,
+) -> Result<Option<Ordering>, EvalError> {
+    let gap = ev.eval(&(a.clone() - b.clone()))?;
+    Ok(real_sign(ev.context(), &gap))
+}
+
+/// The values of the list `l` sorted ascending, each a real number;
+/// `None` when they are not, or `Sort` does not order them.
+pub(super) fn sorted(ev: &mut Eval<'_>, l: &Expr) -> Result<Option<Vec<Expr>>, EvalError> {
+    if !is_list(l) || l.args().is_empty() {
+        return Ok(None);
+    }
+    if !l
+        .args()
+        .iter()
+        .all(|x| real_sign(ev.context(), x).is_some())
+    {
+        return Ok(None);
+    }
+    let s = ev.eval(&Expr::call(Symbol::SORT, [l.clone()]))?;
+    if !is_list(&s) || s.args().len() != l.args().len() {
+        return Ok(None);
+    }
+    let values = s.args().to_vec();
+    for pair in values.windows(2) {
+        if compare(ev, &pair[0], &pair[1])?.is_none_or(|o| o == Ordering::Greater) {
+            return Ok(None);
+        }
+    }
+    Ok(Some(values))
 }
 
 /// Whether a ball occurs in `x`.

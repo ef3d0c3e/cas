@@ -28,7 +28,7 @@ use std::cmp::Ordering;
 use cas_num::ball::{Ball, Mag};
 use cas_num::{Integer, Rational};
 
-use super::{Native, has_ball, settled};
+use super::{Native, compare, has_ball, settled, sorted};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
@@ -132,38 +132,6 @@ fn cdf_of(law: &Expr) -> Option<Symbol> {
         Symbol::CAUCHY_PDF => Symbol::CAUCHY_CDF,
         _ => return None,
     })
-}
-
-/// How `a` compares with `b`, both real; `None` when not decided.
-fn compare(ev: &mut Eval<'_>, a: &Expr, b: &Expr) -> Result<Option<Ordering>, EvalError> {
-    let gap = ev.eval(&(a.clone() - b.clone()))?;
-    Ok(real_sign(ev.context(), &gap))
-}
-
-/// The values of the list `l` sorted ascending, each a real number;
-/// `None` when they are not, or `Sort` does not order them.
-fn sorted(ev: &mut Eval<'_>, l: &Expr) -> Result<Option<Vec<Expr>>, EvalError> {
-    if !is_list(l) || l.args().is_empty() {
-        return Ok(None);
-    }
-    if !l
-        .args()
-        .iter()
-        .all(|x| real_sign(ev.context(), x).is_some())
-    {
-        return Ok(None);
-    }
-    let s = ev.eval(&Expr::call(Symbol::SORT, [l.clone()]))?;
-    if !is_list(&s) || s.args().len() != l.args().len() {
-        return Ok(None);
-    }
-    let values = s.args().to_vec();
-    for pair in values.windows(2) {
-        if compare(ev, &pair[0], &pair[1])?.is_none_or(|o| o == Ordering::Greater) {
-            return Ok(None);
-        }
-    }
-    Ok(Some(values))
 }
 
 /// The largest of `candidates`; `None` when comparisons do not decide.
