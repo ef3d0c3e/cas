@@ -155,6 +155,7 @@ builtins! {
     INVERSE_ZTRANSFORM = "InverseZTransform" [PROTECTED];
     KRONECKER_DELTA = "KroneckerDelta" [LISTABLE, PROTECTED];
     RSOLVE = "RSolve" [PROTECTED];
+    SEQ_SOLVE = "SeqSolve" [PROTECTED];
     // Residues and Fourier coefficients (CAS-DOC-25).
     RESIDUE = "Residue" [PROTECTED];
     FOURIER_COS_COEFFICIENT = "FourierCosCoefficient" [PROTECTED];

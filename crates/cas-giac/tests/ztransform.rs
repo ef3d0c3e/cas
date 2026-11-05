@@ -173,3 +173,49 @@ fn recurrences() {
         "rsolve(u(n+2)=u(n+1)+u(n),u(n),u(0)=0,u(1)=1)",
     ]);
 }
+
+/// `seqsolve` (CAS-512): this CAS's `u(n)`, or `{v₁(n), …}` for a system,
+/// against giac's at `n = 0 … 6`.
+#[test]
+fn sequences_by_seqsolve() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, system) in [
+        ("seqsolve(2x+n,[x,n],3)", false),
+        ("seqsolve(2x+n,[x,n],[3])", false),
+        ("seqsolve(2x+n,[x,n])", false),
+        ("seqsolve(x+n,[x,n],0)", false),
+        ("seqsolve(x+y,[x,y,n],[0,1])", false),
+        ("seqsolve(2*y-x,[x,y,n],[1,2])", false),
+        ("seqsolve([x+2*y,n+1+x],[x,y,n],[0,1])", true),
+        ("seqsolve([x+y,x-y],[x,y,n],[1,0])", true),
+    ] {
+        let parts: Vec<(Expr, String)> = match ours(input) {
+            Ok(found) if system && found.args().len() == 2 => found
+                .args()
+                .iter()
+                .enumerate()
+                .map(|(j, u)| (u.clone(), format!("({input})[{j}]")))
+                .collect(),
+            Ok(found) if !system => vec![(found, input.to_string())],
+            found => {
+                wrong.push(format!("{input}: ours {found:?}"));
+                continue;
+            }
+        };
+        for (sequence, theirs) in parts {
+            for k in 0..=6i64 {
+                let o = ctx.eval(&sequence.substitute(&[(Expr::symbol("n"), Expr::from(k))]));
+                let t = giac.value(&format!("subst({theirs},n={k})"));
+                match (o, t) {
+                    (Ok(o), Ok(t)) if close(&ctx, &o, &t) => {}
+                    (o, t) => wrong.push(format!("{theirs} at n = {k}: ours {o:?}, giac's {t:?}")),
+                }
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}

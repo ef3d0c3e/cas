@@ -24,7 +24,10 @@
 //!   expanded, as giac's `[2*2^n-1]` and `[[n,1]]`. What these do not solve
 //!   stays, with a warning.
 //!
-//! Each call that solves takes one step, `"RSolve"`.
+//! `SeqSolve` (`seqsolve`, CAS-512) reads giac's form, `u(n + 1) = f(x = u(n),
+//! n)`, into an `RSolve` call; see [`seqsolve`].
+//!
+//! Each call that solves takes one step, `"RSolve"` or `"SeqSolve"`.
 
 #![allow(
     clippy::many_single_char_names,
@@ -529,3 +532,124 @@ fn fix(ev: &mut Eval<'_>, e: &Expr, p: &Problem, components: &[Expr]) -> Native 
 
 #[cfg(test)]
 mod tests;
+
+/// `SeqSolve[f, {x₁, …, x_k, n}, {a₁, …, a_k}]`, giac's `seqsolve`, read as
+/// an `RSolve` (CAS-512).
+///
+/// - One expression and `k` variables: `u(n + k) = f(u(n), …, u(n + k −
+///   1), n)` with `u(i) = a_{i+1}`; the answer is `u(n)`.
+/// - A list of `k` expressions: the system `vⱼ(n + 1) = fⱼ(v₁(n), …,
+///   v_k(n), n)` with `vⱼ(0) = aⱼ`; the answer is `{v₁(n), …}`.
+///
+/// The initial values may be one value for `k = 1`, and are 0 when left
+/// out, as giac's. What `RSolve` does not solve, or conditions it finds
+/// inconsistent, leave the call, with a warning (giac's `undef`).
+pub(super) fn seqsolve(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let (f, variables, initial) = match e.args() {
+        [f, v] => (f, v, None),
+        [f, v, a] => (f, v, Some(a)),
+        _ => return Ok(None),
+    };
+    let [names @ .., n] = variables.args() else {
+        return Ok(None);
+    };
+    let distinct = names
+        .iter()
+        .enumerate()
+        .all(|(i, x)| !names[..i].contains(x) && x != n);
+    if !is_list(variables)
+        || names.is_empty()
+        || !distinct
+        || variables
+            .args()
+            .iter()
+            .any(|x| x.as_symbol().is_none_or(Symbol::is_builtin))
+    {
+        return Ok(None);
+    }
+    let k = names.len();
+    let values: Vec<Expr> = match initial {
+        None => vec![Expr::from(0); k],
+        Some(a) if is_list(a) => a.args().to_vec(),
+        Some(a) => vec![a.clone()],
+    };
+    if values.len() != k {
+        return Ok(None);
+    }
+    if is_list(f) && f.args().len() != k {
+        return Ok(None);
+    }
+    let call = recurrence(f, names, n, &values);
+    let Some(solved) = rsolve(ev, &call)? else {
+        return Ok(None);
+    };
+    let result = match solved.args() {
+        [only] if is_list(&solved) => only.clone(),
+        _ => {
+            ev.warn(Warning::Native {
+                message: "the initial values are inconsistent".into(),
+                expr: e.clone(),
+            });
+            return Ok(None);
+        }
+    };
+    ev.step("SeqSolve", e, &result);
+    Ok(Some(result))
+}
+
+/// The `RSolve` call of `SeqSolve[f, {names…, n}, values]`.
+fn recurrence(f: &Expr, names: &[Expr], n: &Expr, values: &[Expr]) -> Expr {
+    let system = is_list(f);
+    let k = names.len();
+    let heads: Vec<Expr> = (0..if system { k } else { 1 })
+        .map(|j| Expr::from(Symbol::new(&format!("SeqSolve$u{j}"))))
+        .collect();
+    let number = |i: usize| i64::try_from(i).expect("small");
+    let at = |j: usize, shift: usize| {
+        let arg = if shift == 0 {
+            n.clone()
+        } else {
+            n + number(shift)
+        };
+        Expr::apply(&heads[j], &[arg])
+    };
+    // vⱼ(0) = aⱼ for a system, u(i) = a_{i+1} for one sequence.
+    let conditions = values.iter().enumerate().map(|(i, a)| {
+        let (j, i) = if system { (i, 0) } else { (0, i) };
+        Expr::call(
+            Symbol::EQUATION,
+            [Expr::apply(&heads[j], &[Expr::from(number(i))]), a.clone()],
+        )
+    });
+    let mut args = Vec::with_capacity(2 + k);
+    if system {
+        let current: Vec<(Expr, Expr)> = names
+            .iter()
+            .enumerate()
+            .map(|(j, x)| (x.clone(), at(j, 0)))
+            .collect();
+        let equations = f
+            .args()
+            .iter()
+            .enumerate()
+            .map(|(j, fj)| Expr::call(Symbol::EQUATION, [at(j, 1), fj.substitute(&current)]));
+        args.push(Expr::call(Symbol::LIST, equations.collect::<Vec<_>>()));
+        args.push(Expr::call(
+            Symbol::LIST,
+            (0..k).map(|j| at(j, 0)).collect::<Vec<_>>(),
+        ));
+    } else {
+        let earlier: Vec<(Expr, Expr)> = names
+            .iter()
+            .enumerate()
+            .map(|(i, x)| (x.clone(), at(0, i)))
+            .collect();
+        args.push(Expr::call(
+            Symbol::EQUATION,
+            [at(0, k), f.substitute(&earlier)],
+        ));
+        args.push(at(0, 0));
+    }
+    args.extend(conditions);
+    Expr::call(Symbol::RSOLVE, args)
+}

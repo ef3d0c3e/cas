@@ -250,6 +250,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::INVERSE_ZTRANSFORM, ztransform::inverse_z_transform),
         (Symbol::KRONECKER_DELTA, ztransform::kronecker_delta),
         (Symbol::RSOLVE, rsolve::rsolve),
+        (Symbol::SEQ_SOLVE, rsolve::seqsolve),
         (Symbol::RESIDUE, residue::residue),
         (
             Symbol::FOURIER_COS_COEFFICIENT,

@@ -125,6 +125,7 @@ InverseZTransform: invztrans
 KroneckerDelta: Kronecker
 # Recurrences (CAS-DOC-24, CAS-310).
 RSolve: rsolve
+SeqSolve: seqsolve
 # Residues and Fourier coefficients (CAS-DOC-25, CAS-315, CAS-319).
 Residue: residue
 FourierCosCoefficient: fourier_an

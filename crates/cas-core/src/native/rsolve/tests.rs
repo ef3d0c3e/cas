@@ -151,3 +151,77 @@ fn constants_and_systems() {
         assert_eq!(found.head(), Some(&read("RSolve")), "{input}: {found:?}");
     }
 }
+
+/// `SeqSolve` (CAS-512): giac's answers, by their values at `n = 0 … 6`.
+#[test]
+fn seqsolve() {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    let single = [
+        // u(n + 1) = 2u(n) + n, u(0) = 3.
+        (
+            "SeqSolve[Plus[Times[2, x], n], List[x, n], 3]",
+            "Plus[-1, Times[4, Power[2, n]], Times[-1, n]]",
+        ),
+        (
+            "SeqSolve[Plus[Times[2, x], n], List[x, n], List[3]]",
+            "Plus[-1, Times[4, Power[2, n]], Times[-1, n]]",
+        ),
+        // Initial values 0 when left out.
+        (
+            "SeqSolve[Plus[Times[2, x], n], List[x, n]]",
+            "Plus[-1, Power[2, n], Times[-1, n]]",
+        ),
+        // Second order: u(n + 2) = 2u(n + 1) − u(n).
+        (
+            "SeqSolve[Plus[Times[2, y], Times[-1, x]], List[x, y, n], List[1, 2]]",
+            "Plus[1, n]",
+        ),
+        // Coefficients in n: u(n + 1) = (n + 1) u(n).
+        (
+            "SeqSolve[Times[x, Plus[n, 1]], List[x, n], 1]",
+            "Factorial[n]",
+        ),
+    ];
+    for (input, expected) in single {
+        let found = ctx.eval(&read(input)).unwrap();
+        if !agree(&ctx, &found, &read(expected)) {
+            wrong.push(format!("{input}: {found:?}, expected {expected}"));
+        }
+    }
+    // The system x(n + 1) = x + 2y, y(n + 1) = n + 1 + x from (0, 1).
+    let found = ctx
+        .eval(&read(
+            "SeqSolve[List[Plus[x, Times[2, y]], Plus[n, 1, x]], List[x, y, n], List[0, 1]]",
+        ))
+        .unwrap();
+    let expected = [
+        "Plus[-3/2, Times[-1/2, Power[-1, n]], Times[2, Power[2, n]], Times[-1, n]]",
+        "Plus[-1/2, Times[1/2, Power[-1, n]], Power[2, n]]",
+    ];
+    let ok = found.args().len() == 2
+        && found
+            .args()
+            .iter()
+            .zip(expected)
+            .all(|(u, x)| agree(&ctx, u, &read(x)));
+    if !ok {
+        wrong.push(format!("system: {found:?}"));
+    }
+    for input in [
+        // Not linear; malformed variables; initial values of the wrong
+        // length.
+        "SeqSolve[Power[x, 2], List[x, n], 2]",
+        "SeqSolve[x, List[x, x], 1]",
+        "SeqSolve[x, List[n], 1]",
+        "SeqSolve[x, x, 1]",
+        "SeqSolve[Plus[x, y], List[x, y, n], List[1]]",
+        "SeqSolve[List[x], List[x, y, n], List[1, 2]]",
+    ] {
+        let found = ctx.eval(&read(input)).unwrap();
+        if found.head() != Some(&read("SeqSolve")) {
+            wrong.push(format!("{input}: {found:?}, expected to stay"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
