@@ -138,6 +138,22 @@ builtins! {
     // Numerical solutions of initial value problems (CAS-DOC-35).
     NDSOLVE = "NDSolve" [PROTECTED];
     BVP_SOLVE = "BVPSolve" [PROTECTED];
+    // Signal processing (CAS-521): giac's window functions.
+    BARTLETT_HANN_WINDOW = "BartlettHannWindow" [PROTECTED];
+    BLACKMAN_HARRIS_WINDOW = "BlackmanHarrisWindow" [PROTECTED];
+    BLACKMAN_WINDOW = "BlackmanWindow" [PROTECTED];
+    BOHMAN_WINDOW = "BohmanWindow" [PROTECTED];
+    COSINE_WINDOW = "CosineWindow" [PROTECTED];
+    GAUSSIAN_WINDOW = "GaussianWindow" [PROTECTED];
+    HAMMING_WINDOW = "HammingWindow" [PROTECTED];
+    HANN_POISSON_WINDOW = "HannPoissonWindow" [PROTECTED];
+    HANN_WINDOW = "HannWindow" [PROTECTED];
+    PARZEN_WINDOW = "ParzenWindow" [PROTECTED];
+    POISSON_WINDOW = "PoissonWindow" [PROTECTED];
+    RIEMANN_WINDOW = "RiemannWindow" [PROTECTED];
+    TRIANGLE_WINDOW = "TriangleWindow" [PROTECTED];
+    TUKEY_WINDOW = "TukeyWindow" [PROTECTED];
+    WELCH_WINDOW = "WelchWindow" [PROTECTED];
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];

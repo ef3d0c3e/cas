@@ -528,6 +528,22 @@ AiryBiPrime: Airy_Bi_prime
 NDSolve: odesolve
 # Two-point boundary value problems by shooting (CAS-520), Xcas's `bvpsolve`.
 BVPSolve: bvpsolve
+# Window functions on lists of samples (CAS-521), Xcas's.
+BartlettHannWindow: bartlett_hann_window
+BlackmanHarrisWindow: blackman_harris_window
+BlackmanWindow: blackman_window
+BohmanWindow: bohman_window
+CosineWindow: cosine_window
+GaussianWindow: gaussian_window
+HammingWindow: hamming_window
+HannPoissonWindow: hann_poisson_window
+HannWindow: hann_window
+ParzenWindow: parzen_window
+PoissonWindow: poisson_window
+RiemannWindow: riemann_window
+TriangleWindow: triangle_window
+TukeyWindow: tukey_window
+WelchWindow: welch_window
 
 [planned]
 

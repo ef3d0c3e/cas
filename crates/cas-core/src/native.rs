@@ -62,6 +62,7 @@ mod rounding;
 mod rsolve;
 mod series;
 mod sets;
+mod signal;
 mod simplify;
 mod solve;
 mod special;
@@ -135,6 +136,21 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::LAMBERT_W, lambert::lambert_w),
         (Symbol::NDSOLVE, ndsolve::ndsolve),
         (Symbol::BVP_SOLVE, ndsolve::bvp::bvp_solve),
+        (Symbol::BARTLETT_HANN_WINDOW, signal::window),
+        (Symbol::BLACKMAN_HARRIS_WINDOW, signal::window),
+        (Symbol::BLACKMAN_WINDOW, signal::window),
+        (Symbol::BOHMAN_WINDOW, signal::window),
+        (Symbol::COSINE_WINDOW, signal::window),
+        (Symbol::GAUSSIAN_WINDOW, signal::window),
+        (Symbol::HAMMING_WINDOW, signal::window),
+        (Symbol::HANN_POISSON_WINDOW, signal::window),
+        (Symbol::HANN_WINDOW, signal::window),
+        (Symbol::PARZEN_WINDOW, signal::window),
+        (Symbol::POISSON_WINDOW, signal::window),
+        (Symbol::RIEMANN_WINDOW, signal::window),
+        (Symbol::TRIANGLE_WINDOW, signal::window),
+        (Symbol::TUKEY_WINDOW, signal::window),
+        (Symbol::WELCH_WINDOW, signal::window),
         (Symbol::BESSEL_J, bessel::bessel),
         (Symbol::BESSEL_Y, bessel::bessel),
         (Symbol::BESSEL_I, bessel::bessel),

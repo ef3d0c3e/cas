@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 409] = [
+const BUILTINS: [&str; 424] = [
     "Plus",
     "Times",
     "Power",
@@ -483,6 +483,21 @@ const BUILTINS: [&str; 409] = [
     "LPSolve",
     "NLPSolve",
     "BVPSolve",
+    "BartlettHannWindow",
+    "BlackmanHarrisWindow",
+    "BlackmanWindow",
+    "BohmanWindow",
+    "CosineWindow",
+    "GaussianWindow",
+    "HammingWindow",
+    "HannPoissonWindow",
+    "HannWindow",
+    "ParzenWindow",
+    "PoissonWindow",
+    "RiemannWindow",
+    "TriangleWindow",
+    "TukeyWindow",
+    "WelchWindow",
     // Number theory II (CAS-422).
     "QuotientRemainder",
     "SymmetricMod",
