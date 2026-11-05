@@ -427,6 +427,7 @@ MovingAverage: moving_average
 # Hypothesis tests (CAS-DOC-52).
 ZTest: normalt
 TTest: studentt
+ChiSquareTest: chisquaret
 # Regressions (CAS-297).
 LinearRegression: linear_regression
 PolynomialRegression: polynomial_regression

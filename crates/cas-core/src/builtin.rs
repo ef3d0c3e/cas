@@ -342,6 +342,7 @@ builtins! {
     // Hypothesis tests (CAS-DOC-52).
     Z_TEST = "ZTest" [PROTECTED];
     T_TEST = "TTest" [PROTECTED];
+    CHI_SQUARE_TEST = "ChiSquareTest" [PROTECTED];
     // Regressions: `linear_regression`, `polynomial_regression`,
     // `exponential_regression`, `logarithmic_regression` and
     // `power_regression`.

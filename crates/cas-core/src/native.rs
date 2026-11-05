@@ -521,6 +521,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::Z_TEST, statistics::hypothesis::location::z_test),
         (Symbol::T_TEST, statistics::hypothesis::location::t_test),
         (
+            Symbol::CHI_SQUARE_TEST,
+            statistics::hypothesis::chisquare::chi_square_test,
+        ),
+        (
             Symbol::LINEAR_REGRESSION,
             statistics::regression::linear_regression,
         ),

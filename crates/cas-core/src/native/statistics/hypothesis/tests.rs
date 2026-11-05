@@ -66,3 +66,47 @@ fn location_tests() {
         "TTest[List[a, b, c], 1]",
     ]);
 }
+
+/// `ChiSquareTest` (CAS-504): giac's examples, exact.
+#[test]
+fn chi_square() {
+    check(&[
+        // giac's 1.10344827586.
+        ("ChiSquareTest[List[57, 30], List[3/5, 2/5]]", "32/29"),
+        (
+            "ChiSquareTest[List[57, 30], List[3/5, 2/5], 1/100]",
+            "32/29",
+        ),
+        // Uniform: giac's 6.57142857143 and 0.0810810810811.
+        ("ChiSquareTest[List[1, 1, 1, 5, 2, 4]]", "46/7"),
+        ("ChiSquareTest[List[57, 54]]", "3/37"),
+        (
+            "ChiSquareTest[List[11, 16, 17, 22, 14, 10], List[1/6, 1/6, 1/6, 1/6, 1/6, 1/6]]",
+            "32/5",
+        ),
+        // Two samples: giac's 0.202238009215 and 0.0634482758621.
+        (
+            "ChiSquareTest[List[17, 15, 12, 15], List[15, 13, 13, 14]]",
+            "26644251/131747000",
+        ),
+        ("ChiSquareTest[List[57, 30], List[3, 2]]", "46/725"),
+        // Three: giac's 2.40477818022.
+        (
+            "ChiSquareTest[List[List[17, 15, 12, 15], List[15, 13, 13, 14], List[1, 2, 3, 4]]]",
+            "6008699/2498650",
+        ),
+        // Raw data, counted: 10 zeros and 13 ones; giac's 0.115942028986.
+        (
+            "ChiSquareTest[List[1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0], List[2/5, 3/5]]",
+            "8/69",
+        ),
+    ]);
+    stays(&[
+        "ChiSquareTest[List[-1, 3]]",
+        "ChiSquareTest[List[a, 3]]",
+        // Three distinct values for two probabilities.
+        "ChiSquareTest[List[1, 2, 3], List[1/2, 1/2]]",
+        // No expected count above 0.
+        "ChiSquareTest[List[0, 0], List[1, 1]]",
+    ]);
+}
