@@ -4,7 +4,7 @@
 //!   upper triangular, `Qᴴ Q = I` and `Q T Qᴴ = A`;
 //! - `SingularValueDecomposition` (the same sizes): `s` descending, `U`
 //!   and `V` unitary, `U diag(s) Vᴴ = A`;
-//! - `Eigenvalues` of `A` as balls, each `det(A − λ I)` holding 0;
+//! - `Eigenvalues` of `A` as balls, each `det(λ I − A)` holding 0;
 //! - `Eigenvectors` of `A` as balls: each column `x` with `A x` parallel,
 //!   `A x − (A x)_k x` holding 0 for its component `x_k = 1`;
 //! - `JacobiLinearSolve` and `GaussSeidelLinearSolve` on `A` made strictly
@@ -183,13 +183,26 @@ fn run(u: &mut Unstructured<'_>) -> Result<()> {
     }
     let balls = eval(&ctx, &Expr::call(Symbol::N, [a.clone(), Expr::from(30)]));
     unitary_checks(&ctx, &balls, n, true);
-    // `Eigenvalues` (CAS-502): each `det(A − λ I)` holds 0.
+    // `Eigenvalues` (CAS-502): each `det(λ I − A)` holds 0.
     let values = eval(&ctx, &Expr::call(Symbol::EIGENVALUES, [balls.clone()]));
     if is_list(&values) {
-        let dets = values
-            .args()
-            .iter()
-            .map(|lambda| Expr::call(Symbol::DET, [balls.clone() - lambda.clone() * identity(n)]));
+        // `Det` of a ball matrix that may be singular stays: `det(λ I − A)`
+        // from the characteristic polynomial.
+        let c = eval(
+            &ctx,
+            &Expr::call(Symbol::CHARACTERISTIC_POLYNOMIAL, [balls.clone()]),
+        );
+        let dets = values.args().iter().map(|lambda| {
+            let terms: Vec<Expr> = c
+                .args()
+                .iter()
+                .enumerate()
+                .map(|(i, ci)| {
+                    ci.clone() * lambda.clone().pow(i64::try_from(n - i).expect("small"))
+                })
+                .collect();
+            Expr::call(Symbol::PLUS, terms)
+        });
         assert!(vanishes(&ctx, &list(dets), true), "{balls:?}: {values:?}");
     }
     let p = eval(&ctx, &Expr::call(Symbol::EIGENVECTORS, [balls.clone()]));

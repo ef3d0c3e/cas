@@ -403,8 +403,24 @@ fn three_by_three_balls() {
     );
 }
 
+/// `det(λ I − A)` by the characteristic polynomial's coefficients, unevaluated.
+fn characteristic_at(ctx: &Context, a: &Expr, lambda: &Expr) -> Expr {
+    let c = eval(
+        ctx,
+        &Expr::call(Symbol::CHARACTERISTIC_POLYNOMIAL, [a.clone()]),
+    );
+    let n = c.args().len();
+    let terms: Vec<Expr> = c
+        .args()
+        .iter()
+        .enumerate()
+        .map(|(i, ci)| ci.clone() * lambda.clone().pow(i64::try_from(n - 1 - i).unwrap()))
+        .collect();
+    Expr::call(Symbol::PLUS, terms)
+}
+
 /// `Eigenvalues` of 3 × 3 ball matrices (CAS-502): `n` balls, each holding
-/// a zero of `det(A − λ I)`, real ones real; a repeated eigenvalue is not
+/// a zero of `det(λ I − A)`, real ones real; a repeated eigenvalue is not
 /// certified and goes to the characteristic polynomial's roots.
 #[test]
 fn three_by_three_eigenvalues() {
@@ -424,10 +440,6 @@ fn three_by_three_eigenvalues() {
             values.head() == Some(&Expr::from(Symbol::LIST)) && values.args().len() == n,
             "{a:?}: {values:?}"
         );
-        let identity = Expr::call(
-            Symbol::IDENTITY_MATRIX,
-            [Expr::from(i64::try_from(n).unwrap())],
-        );
         for lambda in values.args() {
             if real {
                 assert!(
@@ -435,7 +447,9 @@ fn three_by_three_eigenvalues() {
                     "{a:?}: {values:?}"
                 );
             }
-            let det = Expr::call(Symbol::DET, [a.clone() - lambda.clone() * identity.clone()]);
+            // `det(λ I − A)`, from the characteristic polynomial: `Det` of
+            // a ball matrix that may be singular stays.
+            let det = characteristic_at(&ctx, &a, lambda);
             let det = Expr::call(Symbol::LIST, [Expr::call(Symbol::LIST, [det])]);
             assert!(holds_zero(&ctx, &det), "{a:?}: {lambda:?}");
         }
