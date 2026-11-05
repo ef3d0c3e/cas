@@ -544,6 +544,9 @@ RiemannWindow: riemann_window
 TriangleWindow: triangle_window
 TukeyWindow: tukey_window
 WelchWindow: welch_window
+# First-order RC filters (CAS-522), Xcas's.
+LowPass: lowpass
+HighPass: highpass
 
 [planned]
 

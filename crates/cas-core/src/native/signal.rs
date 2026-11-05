@@ -27,6 +27,15 @@
 //!   else 1 (all 1 for `a = 0`);
 //! - Welch: `1 − ((2k − m)/m)²`.
 //!
+//! RC filters (CAS-522), giac's `lowpass(s, c, [rate])` and `highpass(s, c,
+//! [rate])`: `LowPass[s, c]`, `LowPass[s, c, rate]` and the same for
+//! `HighPass`, first-order filters with the cutoff frequency `c > 0` at
+//! the sample rate (default 44100), `α = 2πc/(rate + 2πc)`: `y_0 = x_0`,
+//! then `y_k = y_{k−1} + α (x_k − y_{k−1})` for the low pass and `y_k = (1 −
+//! α)(y_{k−1} + x_k − x_{k−1})` for the high pass. As α holds π, exact
+//! recurrences would grow without end: the samples are real numbers and
+//! the answer balls at the working precision, as giac's are doubles.
+//!
 //! The windows are exact (`sin(π/4)² = 1/2`, where giac's doubles leave
 //! `1.5·10⁻³²` for 0), numbers with an inexact parameter (a decimal), and
 //! evaluated with the samples, symbolic ones staying symbolic. A parameter is a real number; out of its range, as a
@@ -37,6 +46,7 @@
     reason = "the windows' names: samples k of m, parameter a, x, n, h"
 )]
 
+use cas_num::ball::Ball;
 use cas_num::{Integer, Rational};
 
 use super::approximation;
@@ -350,6 +360,77 @@ pub(super) fn window(ev: &mut Eval<'_>, e: &Expr) -> Native {
     }
     let result = list(out);
     ev.step("Window", e, &result);
+    Ok(Some(result))
+}
+
+/// The default sample rate of giac's filters.
+const SAMPLE_RATE: i64 = 44_100;
+
+/// A real number's ball at `bits`.
+fn ball(ev: &Eval<'_>, x: &Expr, bits: u64) -> Option<Ball> {
+    match approximation(ev.context(), x, bits).ok()?.view() {
+        View::Ball(b) if b.is_finite() => Some(b.clone()),
+        _ => None,
+    }
+}
+
+/// `LowPass[s, c, rate]` and `HighPass[s, c, rate]`.
+pub(super) fn filter(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let low = match head(e) {
+        Some(Symbol::LOW_PASS) => true,
+        Some(Symbol::HIGH_PASS) => false,
+        _ => return Ok(None),
+    };
+    let (s, c, rate) = match e.args() {
+        [s, c] => (s, c, Expr::from(SAMPLE_RATE)),
+        [s, c, rate] => (s, c, rate.clone()),
+        _ => return Ok(None),
+    };
+    if head(s) != Some(Symbol::LIST) {
+        return Ok(None);
+    }
+    let bits = ev.context().working_precision();
+    let prec = bits + 32;
+    let (Some(c), Some(rate)) = (ball(ev, c, prec), ball(ev, &rate, prec)) else {
+        return Ok(None);
+    };
+    let positive = |b: &Ball| b.sign() == Some(std::cmp::Ordering::Greater);
+    if !positive(&c) {
+        warn(ev, e, "the cutoff frequency should be positive");
+        return Ok(None);
+    }
+    if !positive(&rate) {
+        warn(ev, e, "the sample rate should be positive");
+        return Ok(None);
+    }
+    let mut xs = Vec::with_capacity(s.args().len());
+    for x in s.args() {
+        let Some(b) = ball(ev, x, prec) else {
+            return Ok(None);
+        };
+        xs.push(b);
+    }
+    let Some(pi) = ball(ev, &Expr::from(Symbol::PI), prec) else {
+        return Ok(None);
+    };
+    let two_pi_c = pi.mul_2exp(&Integer::from(1)).mul(&c, prec);
+    let alpha = two_pi_c.div(&rate.add(&two_pi_c, prec), prec);
+    let beta = Ball::from_rational(&Rational::from(Integer::from(1)), prec).sub(&alpha, prec);
+    let mut ys: Vec<Ball> = Vec::with_capacity(xs.len());
+    for (k, x) in xs.iter().enumerate() {
+        let y = match ys.last() {
+            None => x.clone(),
+            Some(last) if low => last.add(&alpha.mul(&x.sub(last, prec), prec), prec),
+            Some(last) => beta.mul(&last.add(&x.sub(&xs[k - 1], prec), prec), prec),
+        };
+        ys.push(y);
+    }
+    let result = list(
+        ys.iter()
+            .map(|y| Expr::from(y.round_to_accuracy(bits)))
+            .collect(),
+    );
+    ev.step(if low { "LowPass" } else { "HighPass" }, e, &result);
     Ok(Some(result))
 }
 

@@ -102,3 +102,18 @@ fn windows() {
     let inputs: Vec<&str> = inputs.iter().map(String::as_str).collect();
     check(&inputs);
 }
+
+/// First-order RC filters (CAS-522).
+#[test]
+fn rc_filters() {
+    check(&[
+        "lowpass([1,0,0,0,0],1000)",
+        "lowpass([1,1,1,1],1000,10000)",
+        "lowpass([1,2,3],1000)",
+        "lowpass([5],1000)",
+        "lowpass([],1000)",
+        "highpass([1,1,1,1],1000,10000)",
+        "highpass([1,0,0,0],1000,10000)",
+        "highpass([3,1,4,1,5],2000)",
+    ]);
+}

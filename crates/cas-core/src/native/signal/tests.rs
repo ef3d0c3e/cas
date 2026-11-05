@@ -262,3 +262,56 @@ fn what_stays() {
         check(&[(input, input)]);
     }
 }
+
+/// RC filters (CAS-522): giac's values, an impulse decaying by `1 − α` and
+/// the high pass of a constant by `1 − α` per step; what stays.
+#[test]
+fn rc_filters() {
+    let ctx = Context::new();
+    let cases: [(&str, &[f64]); 5] = [
+        (
+            "LowPass[List[1, 0, 0, 0, 0], 1000]",
+            &[
+                1.0,
+                0.875_292_019_174,
+                0.766_136_118_83,
+                0.670_592_830_412,
+                0.586_964_552_575,
+            ],
+        ),
+        (
+            "LowPass[List[1, 1, 1, 1], 1000, 10000]",
+            &[1.0, 1.0, 1.0, 1.0],
+        ),
+        (
+            "HighPass[List[1, 1, 1, 1], 1000, 10000]",
+            &[1.0, 0.614_130_454_902, 0.377_156_215_638, 0.231_623_118_279],
+        ),
+        (
+            "HighPass[List[1, 0, 0, 0], 1000, 10000]",
+            &[1.0, 0.0, 0.0, 0.0],
+        ),
+        (
+            "LowPass[List[1, 2, 3], 1000]",
+            &[1.0, 1.124_707_980_83, 1.358_571_862],
+        ),
+    ];
+    for (input, expected) in cases {
+        let found = ctx.eval(&read(input)).unwrap();
+        let values = doubles(&ctx, &found);
+        assert_eq!(values.len(), expected.len(), "{input}: {found:?}");
+        for (a, b) in values.iter().zip(expected) {
+            assert!((a - b).abs() <= 1e-11, "{input}: {values:?}");
+        }
+    }
+    check(&[("LowPass[List[], 1000]", "List[]")]);
+    for input in [
+        "LowPass[List[a, b], 1000]",
+        "LowPass[List[1, 2], -1]",
+        "HighPass[List[1, 2], 1000, 0]",
+        "LowPass[List[1, 2], c]",
+        "HighPass[x, 1000]",
+    ] {
+        check(&[(input, input)]);
+    }
+}

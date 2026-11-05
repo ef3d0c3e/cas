@@ -151,6 +151,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::TRIANGLE_WINDOW, signal::window),
         (Symbol::TUKEY_WINDOW, signal::window),
         (Symbol::WELCH_WINDOW, signal::window),
+        (Symbol::LOW_PASS, signal::filter),
+        (Symbol::HIGH_PASS, signal::filter),
         (Symbol::BESSEL_J, bessel::bessel),
         (Symbol::BESSEL_Y, bessel::bessel),
         (Symbol::BESSEL_I, bessel::bessel),

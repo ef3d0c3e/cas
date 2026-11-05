@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 424] = [
+const BUILTINS: [&str; 426] = [
     "Plus",
     "Times",
     "Power",
@@ -498,6 +498,8 @@ const BUILTINS: [&str; 424] = [
     "TriangleWindow",
     "TukeyWindow",
     "WelchWindow",
+    "LowPass",
+    "HighPass",
     // Number theory II (CAS-422).
     "QuotientRemainder",
     "SymmetricMod",

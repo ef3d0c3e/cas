@@ -154,6 +154,9 @@ builtins! {
     TRIANGLE_WINDOW = "TriangleWindow" [PROTECTED];
     TUKEY_WINDOW = "TukeyWindow" [PROTECTED];
     WELCH_WINDOW = "WelchWindow" [PROTECTED];
+    // First-order RC filters (CAS-522).
+    LOW_PASS = "LowPass" [PROTECTED];
+    HIGH_PASS = "HighPass" [PROTECTED];
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];
