@@ -76,3 +76,14 @@ fn calculus() {
     let inputs: Vec<&str> = inputs.iter().map(String::as_str).collect();
     check(&inputs);
 }
+
+/// Definite integrals (CAS-515), with linear conditions, which giac takes.
+#[test]
+fn definite_integrals() {
+    check(&[
+        "int(piecewise(x<0,-x,x^2),x,-1,2)",
+        "int(piecewise(x<0,1,x<2,x,4),x,-1,3)",
+        "int(piecewise(x<-1,0,x<1,1-x^2,0),x,-3,3)",
+        "int(piecewise(x>1,x,2),x,0,3)",
+    ]);
+}

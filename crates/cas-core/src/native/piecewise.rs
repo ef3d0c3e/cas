@@ -12,6 +12,10 @@
 //! `integrate`, which leaves the call when a branch does not integrate.
 //! The antiderivative need not be continuous at the breakpoints, as
 //! giac's.
+//!
+//! A definite integral (CAS-515) is taken of [`indicators`]' rewriting,
+//! which `Integrate` splits at the zeros of the `HeavisideTheta`
+//! arguments (CAS-316).
 
 use crate::context::EvalError;
 use crate::eval::Eval;
@@ -88,4 +92,68 @@ pub(super) fn piecewise_map(_: &mut Eval<'_>, e: &Expr) -> Native {
         .collect();
     let default = default.map(|d| Expr::apply(f, std::slice::from_ref(d)));
     Ok(Some(piecewise(&pairs, default)))
+}
+
+/// `f` with each `Piecewise` written with indicator functions of its
+/// conditions in `x` (CAS-DOC-53 §3): branch `j` weighted by `[c_j]
+/// Π_{i<j} (1 − [c_i])`, the default by `Π (1 − [c_i])`, where `[u < v]`
+/// and `[u ≤ v]` are `θ(v − u)`, `[u > v]` and `[u ≥ v]` are `θ(u − v)`,
+/// `And` multiplies, `Or` is `1 − Π (1 − [c_i])` and `Not` is `1 − [c]`.
+/// `None` when a condition is of another kind, or free of `x` and
+/// undecided, or when a `Piecewise` has no default: where no case applies
+/// the integrand is undefined.
+pub(crate) fn indicators(f: &Expr, x: &Expr) -> Option<Expr> {
+    let head = Expr::from(Symbol::PIECEWISE);
+    let mut rules = Vec::new();
+    for part in f.distinct() {
+        if part.head() == Some(&head) {
+            rules.push((part.clone(), rewrite(&part, x)?));
+        }
+    }
+    Some(f.substitute(&rules))
+}
+
+/// The indicator form of the `Piecewise` `p`.
+fn rewrite(p: &Expr, x: &Expr) -> Option<Expr> {
+    let (pairs, default) = branches(p.args());
+    let mut rest = Expr::from(1);
+    let mut terms = Vec::with_capacity(pairs.len() + 1);
+    for (c, v) in pairs {
+        let i = indicator(c, x)?;
+        terms.push(rest.clone() * i.clone() * indicators(v, x)?);
+        rest = rest * (Expr::from(1) - i);
+    }
+    terms.push(rest * indicators(default?, x)?);
+    Some(terms.into_iter().sum())
+}
+
+/// `[c]`, the indicator function of the condition `c` in `x`.
+fn indicator(c: &Expr, x: &Expr) -> Option<Expr> {
+    let theta = |u: Expr| Expr::call(Symbol::HEAVISIDE_THETA, [u]);
+    let one = || Expr::from(1);
+    match c.as_symbol() {
+        Some(Symbol::TRUE) => return Some(one()),
+        Some(Symbol::FALSE) => return Some(Expr::from(0)),
+        _ if !c.contains(x) => return None,
+        _ => {}
+    }
+    match (c.head().and_then(Expr::as_symbol), c.args()) {
+        (Some(Symbol::LESS | Symbol::LESS_EQUAL), [u, v]) => Some(theta(v.clone() - u.clone())),
+        (Some(Symbol::GREATER | Symbol::GREATER_EQUAL), [u, v]) => {
+            Some(theta(u.clone() - v.clone()))
+        }
+        (Some(Symbol::AND), cs) => cs
+            .iter()
+            .map(|c| indicator(c, x))
+            .try_fold(one(), |p, i| Some(p * i?)),
+        (Some(Symbol::OR), cs) => {
+            let none = cs
+                .iter()
+                .map(|c| indicator(c, x))
+                .try_fold(one(), |p, i| Some(p * (one() - i?)))?;
+            Some(one() - none)
+        }
+        (Some(Symbol::NOT), [c]) => Some(one() - indicator(c, x)?),
+        _ => None,
+    }
 }

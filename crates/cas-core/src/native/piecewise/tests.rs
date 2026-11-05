@@ -99,3 +99,56 @@ fn calculus() {
         ),
     ]);
 }
+
+/// Definite integrals through indicator functions (CAS-515).
+#[test]
+fn definite_integrals() {
+    check(&[
+        // giac's 19/6.
+        (
+            "Integrate[Piecewise[Less[x, 0], Times[-1, x], Power[x, 2]], x, -1, 2]",
+            "19/6",
+        ),
+        // A polynomial condition, which giac does not take.
+        (
+            "Integrate[Piecewise[Less[Power[x, 2], 1], 0, 1], x, -2, 2]",
+            "2",
+        ),
+        (
+            "Integrate[Piecewise[Less[x, 0], 1, And[GreaterEqual[x, 0], Less[x, 2]], x, 4], x, -1, 3]",
+            "7",
+        ),
+        (
+            "Integrate[Piecewise[Or[Less[x, 0], Greater[x, 1]], 1, 0], x, -1, 2]",
+            "2",
+        ),
+        (
+            "Integrate[Piecewise[Less[x, 0], Power[E, x], Power[E, Times[-1, x]]], x, \
+             DirectedInfinity[-1], DirectedInfinity[1]]",
+            "2",
+        ),
+        // Nested.
+        (
+            "Integrate[Piecewise[Less[x, 1/2], Piecewise[Less[x, 0], 1, 2], 3], x, -1, 1]",
+            "7/2",
+        ),
+        (
+            "Integrate[Piecewise[Not[Less[x, 0]], x, 0], x, -1, 1]",
+            "1/2",
+        ),
+        // Without a default, or with an order the assumptions do not tell,
+        // the integral stays.
+        (
+            "Integrate[Piecewise[Less[x, 0], -1, Less[x, 1], 0], x, -1, 1/2]",
+            "Integrate[Piecewise[Less[x, 0], -1, Less[x, 1], 0], x, -1, 1/2]",
+        ),
+        (
+            "Integrate[Piecewise[Less[x, a], 1, 2], x, 0, 1]",
+            "Integrate[Piecewise[Less[x, a], 1, 2], x, 0, 1]",
+        ),
+        (
+            "Integrate[Piecewise[Less[y, 0], x, 1], x, 0, 1]",
+            "Integrate[Piecewise[Less[y, 0], x, 1], x, 0, 1]",
+        ),
+    ]);
+}

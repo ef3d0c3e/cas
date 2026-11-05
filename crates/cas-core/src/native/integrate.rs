@@ -117,9 +117,18 @@ pub(super) fn integrate(ev: &mut Eval<'_>, e: &Expr) -> Native {
     } {
         split
     } else if bounds.is_some() && f.contains(&Expr::from(Symbol::PIECEWISE)) {
-        // A branchwise antiderivative need not be continuous: its values at
-        // the bounds would not give the integral (CAS-DOC-53 §3).
-        return Ok(None);
+        // A branchwise antiderivative need not be continuous, so its values
+        // at the bounds would not give the integral: indicator functions
+        // instead, which split the interval (CAS-DOC-53 §3).
+        let Some(g) = super::piecewise::indicators(f, x) else {
+            return Ok(None);
+        };
+        let mut args = e.args().to_vec();
+        args[0] = ev.eval(&g)?;
+        match integrate(ev, &Expr::call(Symbol::INTEGRATE, args))? {
+            Some(value) => value,
+            None => return Ok(None),
+        }
     } else {
         let Some(antiderivative) = integral(ev, e, f, x)? else {
             return Ok(None);
