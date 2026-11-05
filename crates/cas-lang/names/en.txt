@@ -547,6 +547,9 @@ WelchWindow: welch_window
 # First-order RC filters (CAS-522), Xcas's.
 LowPass: lowpass
 HighPass: highpass
+# Correlations of signals (CAS-523), Xcas's.
+CrossCorrelation: cross_correlation
+AutoCorrelation: auto_correlation
 
 [planned]
 

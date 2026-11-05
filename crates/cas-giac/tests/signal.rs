@@ -117,3 +117,18 @@ fn rc_filters() {
         "highpass([3,1,4,1,5],2000)",
     ]);
 }
+
+/// Correlations of real signals (CAS-523); giac's complex answers fit no
+/// definition, and it refuses symbolic samples.
+#[test]
+fn correlations() {
+    check(&[
+        "cross_correlation([1,2],[3,4,5])",
+        "auto_correlation([1,-1,0,2,1])",
+        "cross_correlation([1,2,3],[1])",
+        "cross_correlation([1],[1,2,3])",
+        "cross_correlation([1.5,2],[3,4,5])",
+        "auto_correlation([2])",
+        "auto_correlation([3,-1,4,1,-5,9])",
+    ]);
+}

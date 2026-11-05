@@ -157,6 +157,9 @@ builtins! {
     // First-order RC filters (CAS-522).
     LOW_PASS = "LowPass" [PROTECTED];
     HIGH_PASS = "HighPass" [PROTECTED];
+    // Correlations of signals (CAS-523).
+    CROSS_CORRELATION = "CrossCorrelation" [PROTECTED];
+    AUTO_CORRELATION = "AutoCorrelation" [PROTECTED];
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];

@@ -315,3 +315,33 @@ fn rc_filters() {
         check(&[(input, input)]);
     }
 }
+
+/// Correlations (CAS-523): giac's examples exactly, symbolic and complex
+/// samples, empty lists.
+#[test]
+fn correlations() {
+    check(&[
+        (
+            "CrossCorrelation[List[1, 2], List[3, 4, 5]]",
+            "List[6, 11, 14, 5]",
+        ),
+        (
+            "AutoCorrelation[List[1, -1, 0, 2, 1]]",
+            "List[1, 1, -2, 1, 7, 1, -2, 1, 1]",
+        ),
+        ("CrossCorrelation[List[1, 2, 3], List[1]]", "List[3, 2, 1]"),
+        ("CrossCorrelation[List[1], List[1, 2, 3]]", "List[1, 2, 3]"),
+        (
+            "CrossCorrelation[List[a, b], List[c, d]]",
+            "List[Times[b, c], Plus[Times[a, c], Times[b, d]], Times[a, d]]",
+        ),
+        // The conjugate of the first: r_0 of [1, i] with itself is 2.
+        (
+            "AutoCorrelation[List[1, Complex[0, 1]]]",
+            "List[Complex[0, -1], 2, Complex[0, 1]]",
+        ),
+        ("CrossCorrelation[List[], List[1]]", "List[]"),
+        ("AutoCorrelation[List[2]]", "List[4]"),
+        ("AutoCorrelation[x]", "AutoCorrelation[x]"),
+    ]);
+}

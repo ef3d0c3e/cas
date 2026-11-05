@@ -36,6 +36,14 @@
 //! recurrences would grow without end: the samples are real numbers and
 //! the answer balls at the working precision, as giac's are doubles.
 //!
+//! Correlations (CAS-523), giac's `cross_correlation(u, v)` and
+//! `auto_correlation(u)`: `CrossCorrelation[u, v]` is `r_k = Σ_n conj(u_n)
+//! v_{n+k}` for the lags `k = −(len u − 1) … len v − 1`, giac's order
+//! (`[6,11,14,5]` for `[1,2]` and `[3,4,5]`), `AutoCorrelation[u]` that of
+//! `u` with itself. Exact, symbolic entries too (giac refuses them); on
+//! complex samples the conjugate's, the usual definition, where giac's
+//! answers fit none. At most [`MAX_PRODUCTS`] products.
+//!
 //! The windows are exact (`sin(π/4)² = 1/2`, where giac's doubles leave
 //! `1.5·10⁻³²` for 0), numbers with an inexact parameter (a decimal), and
 //! evaluated with the samples, symbolic ones staying symbolic. A parameter is a real number; out of its range, as a
@@ -431,6 +439,50 @@ pub(super) fn filter(ev: &mut Eval<'_>, e: &Expr) -> Native {
             .collect(),
     );
     ev.step(if low { "LowPass" } else { "HighPass" }, e, &result);
+    Ok(Some(result))
+}
+
+/// The most products of a correlation.
+const MAX_PRODUCTS: usize = 1 << 20;
+
+/// `CrossCorrelation[u, v]` and `AutoCorrelation[u]`.
+pub(super) fn correlation(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let (u, v) = match (head(e), e.args()) {
+        (Some(Symbol::CROSS_CORRELATION), [u, v]) => (u, v),
+        (Some(Symbol::AUTO_CORRELATION), [u]) => (u, u),
+        _ => return Ok(None),
+    };
+    if head(u) != Some(Symbol::LIST) || head(v) != Some(Symbol::LIST) {
+        return Ok(None);
+    }
+    let (u, v) = (u.args(), v.args());
+    if u.len().saturating_mul(v.len()) > MAX_PRODUCTS {
+        return Ok(None);
+    }
+    if u.is_empty() || v.is_empty() {
+        return Ok(Some(list(Vec::new())));
+    }
+    let mut conjugates = Vec::with_capacity(u.len());
+    for x in u {
+        conjugates.push(ev.eval(&Expr::call(Symbol::CONJUGATE, [x.clone()]))?);
+    }
+    let lags = u.len() + v.len() - 1;
+    let mut out = Vec::with_capacity(lags);
+    // Lag k = j − (len u − 1): v_m with m = n + k, so n − m = len u − 1 − j.
+    for j in 0..lags {
+        let mut terms = Vec::new();
+        for (n, cu) in conjugates.iter().enumerate() {
+            let Some(m) = (n + j).checked_sub(u.len() - 1) else {
+                continue;
+            };
+            if let Some(vm) = v.get(m) {
+                terms.push(cu.clone() * vm.clone());
+            }
+        }
+        out.push(ev.eval(&Expr::call(Symbol::PLUS, terms))?);
+    }
+    let result = list(out);
+    ev.step("Correlation", e, &result);
     Ok(Some(result))
 }
 
