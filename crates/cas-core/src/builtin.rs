@@ -574,6 +574,7 @@ builtins! {
     OR = "Or" [FLAT, ONE_IDENTITY, HOLD_ALL, PROTECTED];
     NOT = "Not" [PROTECTED];
     IF = "If" [HOLD_REST, PROTECTED];
+    PIECEWISE = "Piecewise" [PROTECTED];
     // Predicates that always decide (CAS-DOC-4 §6.1).
     SAME_Q = "SameQ" [PROTECTED];
     FREE_Q = "FreeQ" [PROTECTED];

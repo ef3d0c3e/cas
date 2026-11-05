@@ -88,6 +88,8 @@ EulerGamma: euler_gamma
 True: true
 False: false
 Indeterminate: undef
+# Piecewise functions (CAS-DOC-53, CAS-513).
+Piecewise: piecewise
 ComplexInfinity: infinity
 Infinity: inf
 Hold: hold

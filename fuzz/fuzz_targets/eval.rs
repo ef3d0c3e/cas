@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 406] = [
+const BUILTINS: [&str; 407] = [
     "Plus",
     "Times",
     "Power",
@@ -45,6 +45,7 @@ const BUILTINS: [&str; 406] = [
     "Or",
     "Not",
     "If",
+    "Piecewise",
     "Greater",
     "Less",
     "Equal",

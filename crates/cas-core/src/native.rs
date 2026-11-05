@@ -47,6 +47,7 @@ mod numeric;
 mod optimization;
 mod orthogonal;
 mod parts;
+pub(crate) mod piecewise;
 mod permutations;
 mod polygamma;
 mod polynomial;
@@ -184,6 +185,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::OR, logic::or),
         (Symbol::NOT, logic::not),
         (Symbol::IF, logic::if_native),
+        (Symbol::PIECEWISE, piecewise::piecewise_native),
         (Symbol::LENGTH, structure::length),
         (Symbol::PART, structure::part),
         (Symbol::MAP, structure::map),
