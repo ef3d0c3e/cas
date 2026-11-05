@@ -107,7 +107,7 @@ pub(crate) fn indicators(f: &Expr, x: &Expr) -> Option<Expr> {
     let mut rules = Vec::new();
     for part in f.distinct() {
         if part.head() == Some(&head) {
-            rules.push((part.clone(), rewrite(&part, x)?));
+            rules.push((part.clone(), rewrite(part, x)?));
         }
     }
     Some(f.substitute(&rules))
@@ -121,7 +121,7 @@ fn rewrite(p: &Expr, x: &Expr) -> Option<Expr> {
     for (c, v) in pairs {
         let i = indicator(c, x)?;
         terms.push(rest.clone() * i.clone() * indicators(v, x)?);
-        rest = rest * (Expr::from(1) - i);
+        rest *= Expr::from(1) - i;
     }
     terms.push(rest * indicators(default?, x)?);
     Some(terms.into_iter().sum())
