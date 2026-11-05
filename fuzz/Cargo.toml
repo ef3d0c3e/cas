@@ -409,3 +409,10 @@ path = "fuzz_targets/polytools_two.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "hypothesis_tests"
+path = "fuzz_targets/hypothesis_tests.rs"
+test = false
+doc = false
+bench = false
