@@ -63,7 +63,7 @@ pub fn nth_prime(n: u64) -> Option<u64> {
 
 /// Calls `visit` with each prime up to `limit`, increasing, until it
 /// returns `false`.
-fn sieve(limit: u64, mut visit: impl FnMut(u64) -> bool) {
+pub(crate) fn sieve(limit: u64, mut visit: impl FnMut(u64) -> bool) {
     if limit < 2 || !visit(2) {
         return;
     }

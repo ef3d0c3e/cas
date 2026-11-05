@@ -9,10 +9,12 @@
 //!   [`Integer::jacobi`](crate::Integer::jacobi).
 //! - [`Natural::factor`]: trial division, perfect powers and Pollard's rho
 //!   (Brent's variant), with an effort bound; factors it cannot split stay
-//!   labelled [`Primality::NotPrime`].
+//!   labelled [`Primality::NotPrime`]. [`Natural::factor_with_ecm`] then
+//!   tries the elliptic curve method ([`Natural::ecm`]) on them.
 //! - [`prime_pi`] and [`nth_prime`]: a segmented sieve of Eratosthenes, to
 //!   [`PRIME_PI_LIMIT`] and [`NTH_PRIME_LIMIT`].
 
+mod ecm;
 mod factor;
 mod jacobi;
 mod probable;

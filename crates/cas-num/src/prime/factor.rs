@@ -1,4 +1,5 @@
-//! Integer factorisation: trial division, perfect powers and Pollard's rho.
+//! Integer factorisation: trial division, perfect powers, Pollard's rho
+//! and, on request, the elliptic curve method.
 #![allow(
     clippy::many_single_char_names,
     reason = "the algorithms use the textbook names (n, c, x, y, q, g, k, r)"
@@ -110,11 +111,28 @@ impl Natural {
     /// If `self` is zero.
     #[must_use]
     pub fn factor_with_effort(&self, rho_iterations: u64) -> Factorization {
+        self.factor_with_ecm(rho_iterations, 0, 0)
+    }
+
+    /// The factorisation of `self` as [`Natural::factor_with_effort`], then
+    /// on each composite rho leaves, at most `curves` curves of the
+    /// elliptic curve method with stage-1 bound `b1` (see [`Natural::ecm`]).
+    ///
+    /// # Panics
+    ///
+    /// If `self` is zero.
+    #[must_use]
+    pub fn factor_with_ecm(&self, rho_iterations: u64, b1: u64, curves: u32) -> Factorization {
         assert!(!self.is_zero(), "factorisation of zero");
+        let effort = Effort {
+            rho: rho_iterations,
+            b1,
+            curves,
+        };
         let mut found = Vec::new();
         let rest = trial_division(self, &mut found);
         if !rest.is_one() {
-            split(rest, 1, rho_iterations, &mut found);
+            split(rest, 1, &effort, &mut found);
         }
         found.sort_by(|a, b| a.base.cmp(&b.base));
         let mut factors: Vec<Factor> = Vec::with_capacity(found.len());
@@ -171,9 +189,16 @@ fn trial_division(n: &Natural, found: &mut Vec<Factor>) -> Natural {
     n
 }
 
+/// How hard [`split`] tries on each composite.
+struct Effort {
+    rho: u64,
+    b1: u64,
+    curves: u32,
+}
+
 /// Factors `n > 1` without prime factors below 2^16, each found base
 /// raised to `multiplicity`.
-fn split(n: Natural, multiplicity: u64, effort: u64, found: &mut Vec<Factor>) {
+fn split(n: Natural, multiplicity: u64, effort: &Effort, found: &mut Vec<Factor>) {
     let primality = n.primality();
     if primality.is_probable_prime() {
         found.push(Factor {
@@ -187,7 +212,15 @@ fn split(n: Natural, multiplicity: u64, effort: u64, found: &mut Vec<Factor>) {
         split(base, multiplicity * k, effort, found);
         return;
     }
-    match rho(&n, effort) {
+    let factor = rho(&n, effort.rho).or_else(|| {
+        if effort.curves == 0 {
+            return None;
+        }
+        // Each composite starts from the same curves: a factor of n that
+        // rho missed is found as it would be in a call on n alone.
+        n.ecm(effort.b1, effort.curves, 0)
+    });
+    match factor {
         Some(d) => {
             let e = n.div_exact(&d);
             split(d, multiplicity, effort, found);
