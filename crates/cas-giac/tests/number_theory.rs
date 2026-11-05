@@ -189,7 +189,8 @@ fn elliptic_curves() {
         "97",
         "1000000016000000063",
         "1000000016000000063*1000003",
-        "2^128+1",
+        // Not 2^128+1: libgiac's ecm_factor gives no answer there within
+        // the oracle's limits; ifactors(2^128+1) is compared above.
         "3^40",
     ] {
         let input = format!("ecm_factor({n})");

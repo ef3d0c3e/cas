@@ -282,3 +282,26 @@ fn factorials() {
         ("Simplify[Binomial[n, k]]", "Binomial[n, k]"),
     ]);
 }
+
+/// Shared subexpressions: `f[e, e]` nested 80 deep has 2^80 leaves but 81
+/// distinct parts. The complexity counts the leaves, saturating, and
+/// `Simplify` of a shared radical expression finishes (an eval fuzz input
+/// spent minutes walking such a tree, through `Frenet`).
+#[test]
+fn shared_subexpressions() {
+    let mut e = read("Plus[1, Power[2, 1/2]]");
+    for _ in 0..80 {
+        e = Expr::call(crate::symbol::Symbol::new("f"), [e.clone(), e]);
+    }
+    assert_eq!(complexity(&e), u64::MAX);
+    let mut small = read("x");
+    for _ in 0..10 {
+        small = Expr::call(crate::symbol::Symbol::new("f"), [small.clone(), small]);
+    }
+    // 2^10 leaves x and 2^10 − 1 heads f.
+    assert_eq!(complexity(&small), 2047);
+    let ctx = Context::new();
+    let start = std::time::Instant::now();
+    let _ = ctx.eval(&Expr::call(crate::symbol::Symbol::SIMPLIFY, [e]));
+    assert!(start.elapsed().as_secs() < 20, "{:?}", start.elapsed());
+}

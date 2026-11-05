@@ -18,7 +18,7 @@ use super::super::solve::{surd_sign, surd_sqrt};
 use super::evaluated;
 use crate::context::EvalError;
 use crate::eval::Eval;
-use crate::expr::{Expr, View};
+use crate::expr::Expr;
 use crate::symbol::Symbol;
 
 /// The square roots a denominator is rid of at most.
@@ -37,22 +37,17 @@ fn half(e: &Expr) -> Option<bool> {
     }
 }
 
-/// A square root `Power[n, 1/2]` of a positive integer in `e`.
+/// A square root `Power[n, 1/2]` of a positive integer in `e`. Each
+/// distinct subexpression is looked at once: a walk of the tree would take
+/// time exponential in the depth where subexpressions are shared.
 fn square_root(e: &Expr) -> Option<Expr> {
-    let mut stack = vec![e];
-    while let Some(x) = stack.pop() {
-        if let View::Apply { head, args } = x.view() {
-            if head.as_symbol() == Some(Symbol::POWER)
-                && let [b, h] = args
-                && half(h) == Some(true)
-                && b.to_integer().is_some_and(|n| n.is_positive())
-            {
-                return Some(x.clone());
-            }
-            stack.extend(args);
-        }
-    }
-    None
+    e.distinct()
+        .find(|x| {
+            x.head().and_then(Expr::as_symbol) == Some(Symbol::POWER)
+                && matches!(x.args(), [b, h] if half(h) == Some(true)
+                    && b.to_integer().is_some_and(|n| n.is_positive()))
+        })
+        .cloned()
 }
 
 /// `e` with its denominator rid of square roots; `None` when it has none,

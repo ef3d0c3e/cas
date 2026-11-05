@@ -22,6 +22,10 @@
 //!
 //! One step a call, `"simplify"`.
 
+use std::collections::HashMap;
+
+use foldhash::fast::FixedState;
+
 use crate::attributes::Attributes;
 use crate::context::EvalError;
 use crate::eval::Eval;
@@ -182,27 +186,26 @@ fn evaluated(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Expr>, EvalError> {
     }
 }
 
-/// The complexity of `e` (§2).
+/// The complexity of `e` (§2): the sizes of its leaves, summed over the
+/// tree. Each distinct subexpression is measured once, children before
+/// parents, so shared subexpressions do not make it exponential.
 pub(super) fn complexity(e: &Expr) -> u64 {
-    let mut total: u64 = 0;
-    let mut stack = vec![e];
-    while let Some(e) = stack.pop() {
-        let own = match e.view() {
+    let mut sizes: HashMap<&Expr, u64, FixedState> = HashMap::with_hasher(FixedState::default());
+    for x in e.distinct() {
+        let size = match x.view() {
             View::Symbol(_) | View::String(_) => 1,
             View::Int(n) => small_digits(n),
             View::Integer(n) => digits(n.bit_length()) + u64::from(n.is_negative()),
             View::Rational(q) => rational(q),
             View::Complex(z) => rational(z.re()) + rational(z.im()) + 1,
             View::Ball(_) | View::ComplexBall(_) => 2,
-            View::Apply { head, args } => {
-                stack.push(head);
-                stack.extend(args);
-                0
-            }
+            View::Apply { head, args } => std::iter::once(head)
+                .chain(args)
+                .fold(0u64, |t, c| t.saturating_add(sizes[c])),
         };
-        total = total.saturating_add(own);
+        sizes.insert(x, size);
     }
-    total
+    sizes[e]
 }
 
 /// The decimal digits of an `i64`, 1 for 0, plus 1 when negative.
