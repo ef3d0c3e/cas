@@ -40,7 +40,7 @@ fn location_tests() {
         // giac's normalt([0.48,50],0.5,0.1,'<'): z = −√2, p = 0.0786.
         ("ZTest[List[12/25, 50], 1/2, 1/10, \"<\"]", "1"),
         ("ZTest[List[12/25, 50], 1/2, 1/10, \"<\", 1/10]", "0"),
-        // z = 3 √3 / 2 ≈ 2.6: rejected both ways at 5 %, but not "<".
+        // z = 7 √3 / 3 ≈ 4.04: rejected for ">" and "!=", not for "<".
         ("ZTest[List[3, 2, 5], 1, 1, \">\"]", "0"),
         ("ZTest[List[3, 2, 5], 1, 1]", "0"),
         ("ZTest[List[3, 2, 5], 1, 1, \"<\"]", "1"),
@@ -50,7 +50,7 @@ fn location_tests() {
         // giac's studentt([0.48,20],0.5,0.1,'<').
         ("TTest[List[12/25, 20], 1/2, 1/10, \"<\"]", "1"),
         // Decimal data: balls.
-        ("ZTest[List[0.48, 50], 0.5, 0.1, \"<\"]", "1"),
+        ("ZTest[List[N[12/25], 50], N[1/2], N[1/10], \"<\"]", "1"),
     ]);
     stays(&[
         // No σ for a Z test.
