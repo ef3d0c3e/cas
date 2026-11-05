@@ -66,6 +66,8 @@ fn factorisation() {
         "ifactors(-12)",
         "ifactors(1)",
         "ifactors(2^64+1)",
+        // Past rho, through the elliptic curve method (CAS-511).
+        "ifactors(2^128+1)",
         "idivis(12)",
         "idivis(-12)",
         "euler(36)",
@@ -87,6 +89,7 @@ fn held_factorisations() {
         "ifactor(360)",
         "ifactor(-12)",
         "ifactor(2^64+1)",
+        "ifactor(2^128+1)",
         "ifactor(97)",
     ] {
         let held = ours(input).ok();
@@ -171,4 +174,42 @@ fn counting_primes() {
         "nprimes(100)",
         "nprimes(10^6)",
     ]);
+}
+
+/// `ecm_factor` (CAS-511): which divisor a search finds depends on its
+/// curves, so both answers are checked to be proper divisors, and a prime
+/// is itself in both.
+#[test]
+fn elliptic_curves() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let mut wrong = Vec::new();
+    for n in [
+        "97",
+        "1000000016000000063",
+        "1000000016000000063*1000003",
+        "2^128+1",
+        "3^40",
+    ] {
+        let input = format!("ecm_factor({n})");
+        let prime = ours(&format!("isprime({n})")).ok() == Some(Expr::from(Symbol::TRUE));
+        for (who, d) in [
+            ("giac", giac.value(&input).ok()),
+            ("ours", ours(&input).ok()),
+        ] {
+            let divides = d.as_ref().is_some_and(|d| {
+                let test = if prime {
+                    format!("{d:?} == {n}")
+                } else {
+                    format!("irem({n}, {d:?}) == 0 and {d:?} > 1 and {d:?} < {n}")
+                };
+                ours(&test).ok() == Some(Expr::from(Symbol::TRUE))
+            });
+            if !divides {
+                wrong.push(format!("{input}: {who} {d:?}"));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }

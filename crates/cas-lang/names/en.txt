@@ -222,6 +222,7 @@ NextPrime: nextprime
 PreviousPrime: prevprime
 IntegerFactor: ifactor
 IntegerFactorList: ifactors
+EcmFactor: ecm_factor
 Divisors: idivis
 EulerPhi: euler
 PowerMod: powmod

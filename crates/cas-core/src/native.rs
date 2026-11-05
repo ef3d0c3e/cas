@@ -430,6 +430,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::INTEGER_FACTOR_LIST,
             number_theory::integer_factor_list,
         ),
+        (Symbol::ECM_FACTOR, number_theory::ecm_factor),
         (Symbol::DIVISORS, number_theory::divisors),
         (Symbol::EULER_PHI, number_theory::euler_phi),
         (Symbol::POWER_MOD, number_theory::power_mod),

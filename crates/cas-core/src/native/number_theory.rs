@@ -19,6 +19,16 @@
 //!   `[-1, 1, …]` first for a negative `n`. `Divisors[n]` (`idivis`): the
 //!   positive divisors of `|n|`, ascending, at most 2^20 of them.
 //!   `EulerPhi[n]` (`euler`): `n Π (1 − 1/p)`, `φ(0) = 0`; negatives stay.
+//! - `EcmFactor[n]`, `EcmFactor[n, B1]` (`ecm_factor`, CAS-511): a
+//!   non-trivial divisor of `n ≥ 2` by Lenstra's elliptic curve method,
+//!   stage 1 to `B1` (11 000 by default, at most 10⁵) and stage 2 to
+//!   `100 B1`, on `min(100, 1.1·10⁶/B1)` curves; the base of a perfect
+//!   power, and `n` itself for a prime. Which divisor depends on the
+//!   curves: `ecm_factor(360)` is 9 in giac, 2 here. A search that fails
+//!   stays, with a warning (giac's undef), as does `n < 2` (giac's Bad
+//!   Argument Value). The factorisations above run 40 curves at
+//!   `B1 = 11 000` on what rho leaves, fewer above 128 bits, so
+//!   `ifactor(2^128+1)` splits.
 //! - Modular arithmetic (CAS-269). `PowerMod[a, b, m]` (`powmod`): `a^b mod
 //!   m` in `[0, |m|)`, a negative `b` through the inverse of `a`, which must
 //!   exist; giac answers that inverse in the symmetric range (`powmod(3,-1,7)`
@@ -129,6 +139,19 @@ pub(super) fn previous_prime(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// default, enough for factors up to about 2^40.
 const RHO_ITERATIONS: u64 = 1 << 22;
 
+/// The elliptic curve method's stage-1 bound in factorisations (CAS-511),
+/// and the default of `EcmFactor`: factors of about 20 digits.
+const ECM_B1: u64 = 11_000;
+
+/// Curves per composite up to 128 bits in factorisations, some 0.3 s.
+const ECM_CURVES: u32 = 40;
+
+/// `EcmFactor`'s largest `B1`: stage 2 sieves to `100 B1`.
+const ECM_MAX_B1: u64 = 100_000;
+
+/// `EcmFactor`'s work in curves times `B1`: 100 curves at the default.
+const ECM_WORK: u64 = 100 * ECM_B1;
+
 /// The most divisors `Divisors` lists.
 const MAX_DIVISORS: u64 = 1 << 20;
 
@@ -137,13 +160,17 @@ const MAX_DIVISORS: u64 = 1 << 20;
 fn factorization(n: &Integer) -> Option<Factorization> {
     let m = magnitude(n);
     let bits = u128::from(m.bit_length().max(1));
-    let effort = if bits <= 128 {
-        RHO_ITERATIONS
+    let (effort, curves) = if bits <= 128 {
+        (RHO_ITERATIONS, ECM_CURVES)
     } else {
         let scaled = u128::from(RHO_ITERATIONS) * 128 * 128 / (bits * bits);
-        u64::try_from(scaled).unwrap_or(RHO_ITERATIONS).max(1 << 12)
+        let curves = u128::from(ECM_CURVES) * 128 * 128 / (bits * bits);
+        (
+            u64::try_from(scaled).unwrap_or(RHO_ITERATIONS).max(1 << 12),
+            u32::try_from(curves).unwrap_or(ECM_CURVES).max(2),
+        )
     };
-    let f = m.factor_with_effort(effort);
+    let f = m.factor_with_ecm(effort, ECM_B1, curves);
     f.is_complete().then_some(f)
 }
 
@@ -180,6 +207,40 @@ pub(super) fn integer_factor(ev: &mut Eval<'_>, e: &Expr) -> Native {
         _ => Expr::call(Symbol::TIMES, factors),
     };
     Ok(Some(Expr::call(Symbol::HOLD, [product])))
+}
+
+/// `EcmFactor[n]`, `EcmFactor[n, B1]`.
+pub(super) fn ecm_factor(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let (n, b1) = match e.args() {
+        [n] => (n.to_integer(), Some(ECM_B1)),
+        [n, b1] => (
+            n.to_integer(),
+            b1.to_integer().and_then(|b| u64::try_from(&b).ok()),
+        ),
+        _ => return Ok(None),
+    };
+    let (Some(n), Some(b1)) = (n, b1) else {
+        return Ok(None);
+    };
+    if n < Integer::from(2) {
+        return refuse(ev, e, "Bad Argument Value");
+    }
+    if b1 == 0 || b1 > ECM_MAX_B1 {
+        return refuse(ev, e, "B1 is not between 1 and 100000");
+    }
+    let m = magnitude(&n);
+    if m.primality().is_probable_prime() {
+        return Ok(Some(Expr::from(n)));
+    }
+    let curves = u32::try_from((ECM_WORK / b1).clamp(1, 100)).expect("at most 100");
+    let found = m
+        .perfect_power()
+        .map(|(base, _)| base)
+        .or_else(|| m.ecm(b1, curves, 0));
+    match found {
+        Some(d) => Ok(Some(Expr::from(Integer::from(d)))),
+        None => refuse(ev, e, "no factor found"),
+    }
 }
 
 /// `IntegerFactorList[n]`.

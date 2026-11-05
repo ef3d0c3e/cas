@@ -1,5 +1,5 @@
 //! Roots, modular arithmetic, CRT, Jacobi symbols, primality, factorisation
-//! and the previous prime against GMP.
+//! the previous prime and the elliptic curve method against GMP.
 #![no_main]
 
 use arbitrary::Unstructured;
@@ -11,7 +11,7 @@ use libfuzzer_sys::fuzz_target;
 fuzz_target!(|data: &[u8]| {
     let mut u = Unstructured::new(data);
     let (Ok(op), Ok((a, ag)), Ok((m, mg))) = (
-        u.int_in_range(0u8..=9),
+        u.int_in_range(0u8..=10),
         natural(&mut u, 200),
         natural(&mut u, 160),
     ) else {
@@ -131,6 +131,32 @@ fuzz_target!(|data: &[u8]| {
             for x in f.factors() {
                 let prime = gmp(x.base()).is_probably_prime(30) != rug::integer::IsPrime::No;
                 check("factor label", x.primality().is_probable_prime(), prime);
+            }
+        }
+        10 => {
+            // The elliptic curve method (CAS-510): a proper divisor or
+            // nothing, never for a prime, and factorisations through it.
+            if a.is_zero() || a.limb_len() > 3 {
+                return;
+            }
+            let seed = u.int_in_range(0u64..=1000).unwrap_or(0);
+            let prime = ag.is_probably_prime(30) != rug::integer::IsPrime::No;
+            match a.ecm(300, 2, seed) {
+                Some(d) => {
+                    let dg = gmp(&d);
+                    assert!(!prime, "a factor of a prime");
+                    assert!(
+                        dg > 1 && dg < ag && ag.is_divisible(&dg),
+                        "not a proper divisor"
+                    );
+                }
+                None => assert!(prime || ag <= 3u32 || ag.is_odd(), "even and unsplit"),
+            }
+            let f = a.factor_with_ecm(1 << 8, 300, 2);
+            check("ecm factor product", f.value(), a.clone());
+            for x in f.factors() {
+                let prime = gmp(x.base()).is_probably_prime(30) != rug::integer::IsPrime::No;
+                check("ecm factor label", x.primality().is_probable_prime(), prime);
             }
         }
         9 => {

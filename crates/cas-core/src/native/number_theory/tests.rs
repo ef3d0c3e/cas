@@ -161,3 +161,34 @@ fn counting_primes() {
         ("PrimePi[1000000000]", "PrimePi[1000000000]"),
     ]);
 }
+
+/// The elliptic curve method (CAS-511).
+#[test]
+fn elliptic_curves() {
+    let fermat = "Plus[Power[2, 128], 1]";
+    let hard = "Times[Plus[Power[2, 127], -1], Plus[Power[2, 89], -1]]";
+    check(&[
+        ("EcmFactor[17]", "17"),
+        ("EcmFactor[360]", "2"),
+        ("EcmFactor[Power[3, 40]]", "3"),
+        ("EcmFactor[1000000016000000063]", "1000000009"),
+        ("EcmFactor[1000000016000000063, 2000]", "1000000009"),
+        (&format!("EcmFactor[{fermat}]"), "59649589127497217"),
+        ("EcmFactor[List[15, 21]]", "List[3, 3]"),
+        ("EcmFactor[-15]", "EcmFactor[-15]"),
+        ("EcmFactor[1]", "EcmFactor[1]"),
+        ("EcmFactor[15, 0]", "EcmFactor[15, 0]"),
+        ("EcmFactor[15, 1000000]", "EcmFactor[15, 1000000]"),
+        ("EcmFactor[x]", "EcmFactor[x]"),
+        // A 27-digit factor is far beyond B1 = 100: the search fails.
+        (
+            &format!("EcmFactor[{hard}, 100]"),
+            "EcmFactor[105312291668557186697918027513529248857806893649219117400977309697, 100]",
+        ),
+        // ifactor reaches past rho: the 17-digit factor of 2^128 + 1.
+        (
+            &format!("IntegerFactor[{fermat}]"),
+            "Hold[Times[59649589127497217, 5704689200685129054721]]",
+        ),
+    ]);
+}

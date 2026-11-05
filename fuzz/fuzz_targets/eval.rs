@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 404] = [
+const BUILTINS: [&str; 405] = [
     "Plus",
     "Times",
     "Power",
@@ -322,6 +322,7 @@ const BUILTINS: [&str; 404] = [
     "PreviousPrime",
     "IntegerFactor",
     "IntegerFactorList",
+    "EcmFactor",
     "Divisors",
     "EulerPhi",
     "PowerMod",
