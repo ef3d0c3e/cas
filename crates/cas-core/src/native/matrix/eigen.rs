@@ -42,6 +42,9 @@ use cas_num::ball::{Ball, ComplexBall};
 /// An eigenvalue and a basis of its eigenvectors.
 type Eigen = (Expr, Vec<Vec<Expr>>);
 
+/// A certified eigenvalue and its eigenvector, as balls.
+type Pair = (ComplexBall, Vec<ComplexBall>);
+
 /// `Eigenvectors[m]`.
 pub(in crate::native) fn eigenvectors(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some((m, n)) = square(ev, e) else {
@@ -145,28 +148,28 @@ fn midpoints(m: &Expr) -> Expr {
     list(m.args().iter().map(|row| list(row.args().iter().map(mid))))
 }
 
-/// The eigenvectors of a numeric matrix (CAS-DOC-51 §4, CAS-498): for each
-/// of `Eigenvalues`' balls, the eigenpair certified near it by
-/// [`super::verified::eigenpair`], its vector with 1 at its largest
-/// component; an eigenvalue not shown simple leaves the call. Without
-/// `Eigenvalues`, the guesses are `PolynomialRoots` of the midpoints'
-/// characteristic polynomial: only the check makes them eigenvalues.
-fn numeric_eigenvectors(ev: &mut Eval<'_>, e: &Expr, m: &Expr, n: usize) -> Native {
+/// The midpoint matrix's characteristic polynomial's roots, by
+/// `PolynomialRoots` (giac's `proot`, on the coefficient list): guesses
+/// only, which [`certified_pairs`] makes eigenvalues.
+fn guesses(ev: &mut Eval<'_>, m: &Expr) -> Result<Expr, EvalError> {
+    let p = ev.eval(&Expr::call(
+        Symbol::CHARACTERISTIC_POLYNOMIAL,
+        [midpoints(m)],
+    ))?;
+    ev.eval(&Expr::call(Symbol::POLYNOMIAL_ROOTS, [p]))
+}
+
+/// The eigenpairs of the numeric `n × n` matrix `m` certified by
+/// [`super::verified::eigenpair`] near each of `values`, their
+/// eigenvalues' balls pairwise disjoint: `n` distinct simple eigenvalues,
+/// so all of them. `None` when a check fails.
+fn certified_pairs(
+    ev: &mut Eval<'_>,
+    m: &Expr,
+    n: usize,
+    values: &Expr,
+) -> Result<Option<Vec<Pair>>, EvalError> {
     let prec = ev.context().working_precision();
-    let values = ev.eval(&Expr::call(Symbol::EIGENVALUES, [m.clone()]))?;
-    let values = if values.head() == Some(&Expr::from(Symbol::LIST)) && values.args().len() == n {
-        values
-    } else {
-        // Guesses only: the roots of the midpoint matrix's characteristic
-        // polynomial, `PolynomialRoots`' (a cubic of balls has no
-        // `Eigenvalues`).
-        // `PolynomialRoots[p]` takes the coefficient list, giac's `proot`.
-        let p = ev.eval(&Expr::call(
-            Symbol::CHARACTERISTIC_POLYNOMIAL,
-            [midpoints(m)],
-        ))?;
-        ev.eval(&Expr::call(Symbol::POLYNOMIAL_ROOTS, [p]))?
-    };
     if values.head() != Some(&Expr::from(Symbol::LIST)) || values.args().len() != n {
         return Ok(None);
     }
@@ -181,23 +184,62 @@ fn numeric_eigenvectors(ev: &mut Eval<'_>, e: &Expr, m: &Expr, n: usize) -> Nati
         }
         a.push(entries);
     }
-    let mut columns: Vec<Vec<Expr>> = Vec::with_capacity(n);
+    let mut pairs: Vec<Pair> = Vec::with_capacity(n);
     for value in values.args() {
         let Some(guess) = complex_ball(ev, value, prec)? else {
             return Ok(None);
         };
-        let Some((_, vector)) = super::verified::eigenpair(&a, &guess, prec) else {
-            warn(
-                ev,
-                "an eigenvalue is not shown simple: its eigenvector is not certified",
-                e,
-            );
+        let Some(pair) = super::verified::eigenpair(&a, &guess, prec) else {
             return Ok(None);
         };
-        columns.push(vector.into_iter().map(Expr::from).collect());
+        // Two guesses led to the same eigenvalue, or one not told apart.
+        if pairs.iter().any(|(lambda, _)| lambda.overlaps(&pair.0)) {
+            return Ok(None);
+        }
+        pairs.push(pair);
     }
+    Ok(Some(pairs))
+}
+
+/// The eigenvectors of a numeric matrix (CAS-DOC-51 §4, CAS-498): for each
+/// of `Eigenvalues`' balls, the eigenpair certified near it by
+/// [`certified_pairs`], its vector with 1 at its largest component; an
+/// eigenvalue not shown simple leaves the call.
+fn numeric_eigenvectors(ev: &mut Eval<'_>, e: &Expr, m: &Expr, n: usize) -> Native {
+    let values = ev.eval(&Expr::call(Symbol::EIGENVALUES, [m.clone()]))?;
+    let values = if values.head() == Some(&Expr::from(Symbol::LIST)) && values.args().len() == n {
+        values
+    } else {
+        guesses(ev, m)?
+    };
+    let Some(pairs) = certified_pairs(ev, m, n, &values)? else {
+        warn(
+            ev,
+            "an eigenvalue is not shown simple: its eigenvector is not certified",
+            e,
+        );
+        return Ok(None);
+    };
+    let columns: Vec<Vec<Expr>> = pairs
+        .into_iter()
+        .map(|(_, vector)| vector.into_iter().map(Expr::from).collect())
+        .collect();
     let rows = (0..n).map(|i| list(columns.iter().map(|c| c[i].clone())));
     stepped(ev, "eigenvects", e, list(rows.collect::<Vec<_>>()))
+}
+
+/// The eigenvalues of a numeric matrix whose characteristic polynomial has
+/// no roots in closed form (CAS-502): balls each holding one eigenvalue,
+/// certified with its eigenvector by [`certified_pairs`] near
+/// `PolynomialRoots`' guesses; `None`, quietly, when they are not all
+/// shown simple.
+pub(super) fn numeric_eigenvalues(ev: &mut Eval<'_>, e: &Expr, m: &Expr, n: usize) -> Native {
+    let values = guesses(ev, m)?;
+    let Some(pairs) = certified_pairs(ev, m, n, &values)? else {
+        return Ok(None);
+    };
+    let values = pairs.into_iter().map(|(lambda, _)| Expr::from(lambda));
+    stepped(ev, "eigenvals", e, list(values.collect::<Vec<_>>()))
 }
 
 /// The roots of the irreducible factor `f` of the characteristic polynomial

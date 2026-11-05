@@ -28,7 +28,8 @@
 //!   echelon form of [`elimination`], generic in the parameters.
 //! - `CharacteristicPolynomial`, Xcas's `charpoly`: `det(x I − m)`, by
 //!   Bareiss's for exact entries and the Faddeev–Le Verrier recurrence for
-//!   numeric ones; `Eigenvalues`, `eigenvals`: its roots as `CSolve`'s, each
+//!   numeric ones; `Eigenvalues`, `eigenvals`: its roots as `CSolve`'s (a
+//!   numeric matrix of size 3 and up: certified balls, CAS-502), each
 //!   as often as its multiplicity; `Eigenvectors`, `eigenvects`, by
 //!   [`eigen`].
 //!
@@ -919,6 +920,13 @@ pub(super) fn eigenvalues(ev: &mut Eval<'_>, e: &Expr) -> Native {
     // Over 𝔽ₚ (CAS-DOC-44 §2).
     if let Some(found) = super::modular::matrices::eigenvalues(ev, e, &m)? {
         return Ok(found);
+    }
+    // Numeric, 3 × 3 and up: certified balls (CAS-502); a cubic of balls
+    // has no closed-form roots here.
+    if n >= 3 && numeric(&m) {
+        if let Some(found) = eigen::numeric_eigenvalues(ev, e, &m, n)? {
+            return Ok(Some(found));
+        }
     }
     let Some((poly, _)) = char_poly(ev, e, &m, n)? else {
         return Ok(None);

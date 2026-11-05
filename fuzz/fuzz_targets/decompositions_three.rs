@@ -4,6 +4,7 @@
 //!   upper triangular, `Qᴴ Q = I` and `Q T Qᴴ = A`;
 //! - `SingularValueDecomposition` (the same sizes): `s` descending, `U`
 //!   and `V` unitary, `U diag(s) Vᴴ = A`;
+//! - `Eigenvalues` of `A` as balls, each `det(A − λ I)` holding 0;
 //! - `Eigenvectors` of `A` as balls: each column `x` with `A x` parallel,
 //!   `A x − (A x)_k x` holding 0 for its component `x_k = 1`;
 //! - `JacobiLinearSolve` and `GaussSeidelLinearSolve` on `A` made strictly
@@ -95,7 +96,10 @@ fn eigen_gaps(ctx: &Context, a: &Expr, p: &Expr) -> Expr {
     let mut gaps = Vec::with_capacity(n);
     for j in 0..n {
         let x: Vec<Expr> = p.args().iter().map(|row| row.args()[j].clone()).collect();
-        let k = x.iter().position(one).unwrap_or_else(|| panic!("{p:?}: no 1 in column {j}"));
+        let k = x
+            .iter()
+            .position(one)
+            .unwrap_or_else(|| panic!("{p:?}: no 1 in column {j}"));
         let x = Expr::call(Symbol::LIST, x);
         let image = eval(ctx, &dot(a, &x));
         let scale = image.args()[k].clone();
@@ -179,6 +183,15 @@ fn run(u: &mut Unstructured<'_>) -> Result<()> {
     }
     let balls = eval(&ctx, &Expr::call(Symbol::N, [a.clone(), Expr::from(30)]));
     unitary_checks(&ctx, &balls, n, true);
+    // `Eigenvalues` (CAS-502): each `det(A − λ I)` holds 0.
+    let values = eval(&ctx, &Expr::call(Symbol::EIGENVALUES, [balls.clone()]));
+    if is_list(&values) {
+        let dets = values
+            .args()
+            .iter()
+            .map(|lambda| Expr::call(Symbol::DET, [balls.clone() - lambda.clone() * identity(n)]));
+        assert!(vanishes(&ctx, &list(dets), true), "{balls:?}: {values:?}");
+    }
     let p = eval(&ctx, &Expr::call(Symbol::EIGENVECTORS, [balls.clone()]));
     if is_list(&p) {
         assert!(

@@ -392,8 +392,7 @@ fn three_by_three_balls() {
     );
     let values = eval(&ctx, &Expr::call(Symbol::EIGENVALUES, [a.clone()]));
     let vectors = eval(&ctx, &Expr::call(Symbol::EIGENVECTORS, [a.clone()]));
-    // `Eigenvalues` of a cubic of balls stays: the guesses come from
-    // `PolynomialRoots`.
+    // `Eigenvalues`' certified balls (CAS-502).
     assert!(
         vectors.head() == Some(&Expr::from(Symbol::LIST)),
         "Eigenvalues {values:?}, Eigenvectors {vectors:?}"
@@ -402,4 +401,50 @@ fn three_by_three_balls() {
         holds_zero(&ctx, &eigen_gaps(&ctx, &a, &vectors)),
         "{vectors:?}"
     );
+}
+
+/// `Eigenvalues` of 3 × 3 ball matrices (CAS-502): `n` balls, each holding
+/// a zero of `det(A − λ I)`, real ones real; a repeated eigenvalue is not
+/// certified and goes to the characteristic polynomial's roots.
+#[test]
+fn three_by_three_eigenvalues() {
+    let ctx = Context::new();
+    for (a, real) in [
+        ("List[List[2, 1, 0], List[1, 3, 1], List[0, 1, 4]]", true),
+        ("List[List[0, -1, 0], List[1, 0, 0], List[0, 0, 2]]", false),
+        (
+            "List[List[1, 2, 3, 4], List[0, 5, 6, 7], List[1, 0, 2, 1], List[3, 1, 0, 1]]",
+            false,
+        ),
+    ] {
+        let a = eval(&ctx, &read(&format!("N[{a}, 30]")));
+        let values = eval(&ctx, &Expr::call(Symbol::EIGENVALUES, [a.clone()]));
+        let n = a.args().len();
+        assert!(
+            values.head() == Some(&Expr::from(Symbol::LIST)) && values.args().len() == n,
+            "{a:?}: {values:?}"
+        );
+        let identity = Expr::call(
+            Symbol::IDENTITY_MATRIX,
+            [Expr::from(i64::try_from(n).unwrap())],
+        );
+        for lambda in values.args() {
+            if real {
+                assert!(
+                    matches!(lambda.view(), crate::expr::View::Ball(_)),
+                    "{a:?}: {values:?}"
+                );
+            }
+            let det = Expr::call(Symbol::DET, [a.clone() - lambda.clone() * identity.clone()]);
+            let det = Expr::call(Symbol::LIST, [Expr::call(Symbol::LIST, [det])]);
+            assert!(holds_zero(&ctx, &det), "{a:?}: {lambda:?}");
+        }
+    }
+    // N[3 I]: 3 thrice, not certified, from the polynomial's roots.
+    let a = eval(&ctx, &read("N[Times[3, IdentityMatrix[3]], 30]"));
+    let values = eval(&ctx, &Expr::call(Symbol::EIGENVALUES, [a.clone()]));
+    // Diagonal: the polynomial's roots are 3 thrice, or the call stays.
+    if values.head() == Some(&Expr::from(Symbol::LIST)) {
+        assert_eq!(values.args().len(), 3, "{values:?}");
+    }
 }
