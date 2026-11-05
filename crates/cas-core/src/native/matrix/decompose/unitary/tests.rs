@@ -409,14 +409,10 @@ fn characteristic_at(ctx: &Context, a: &Expr, lambda: &Expr) -> Expr {
         ctx,
         &Expr::call(Symbol::CHARACTERISTIC_POLYNOMIAL, [a.clone()]),
     );
-    let n = c.args().len();
-    let terms: Vec<Expr> = c
-        .args()
+    // By Horner's scheme: no 0⁰ at λ = 0.
+    c.args()
         .iter()
-        .enumerate()
-        .map(|(i, ci)| ci.clone() * lambda.clone().pow(i64::try_from(n - 1 - i).unwrap()))
-        .collect();
-    Expr::call(Symbol::PLUS, terms)
+        .fold(Expr::from(0), |acc, ci| acc * lambda.clone() + ci.clone())
 }
 
 /// `Eigenvalues` of 3 × 3 ball matrices (CAS-502): `n` balls, each holding
@@ -428,6 +424,11 @@ fn three_by_three_eigenvalues() {
     for (a, real) in [
         ("List[List[2, 1, 0], List[1, 3, 1], List[0, 1, 4]]", true),
         ("List[List[0, -1, 0], List[1, 0, 0], List[0, 0, 2]]", false),
+        // A fuzz finding: −15, 0 and 0, exact zeros from the polynomial.
+        (
+            "List[List[-5, -5, -5], List[-5, -5, -5], List[-5, -5, -5]]",
+            false,
+        ),
         (
             "List[List[1, 2, 3, 4], List[0, 5, 6, 7], List[1, 0, 2, 1], List[3, 1, 0, 1]]",
             false,

@@ -192,16 +192,11 @@ fn run(u: &mut Unstructured<'_>) -> Result<()> {
             &ctx,
             &Expr::call(Symbol::CHARACTERISTIC_POLYNOMIAL, [balls.clone()]),
         );
+        // By Horner's scheme: no 0⁰ at λ = 0.
         let dets = values.args().iter().map(|lambda| {
-            let terms: Vec<Expr> = c
-                .args()
+            c.args()
                 .iter()
-                .enumerate()
-                .map(|(i, ci)| {
-                    ci.clone() * lambda.clone().pow(i64::try_from(n - i).expect("small"))
-                })
-                .collect();
-            Expr::call(Symbol::PLUS, terms)
+                .fold(Expr::from(0), |acc, ci| acc * lambda.clone() + ci.clone())
         });
         assert!(vanishes(&ctx, &list(dets), true), "{balls:?}: {values:?}");
     }
