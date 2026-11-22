@@ -2,6 +2,7 @@
 //! compared after putting the difference together, coefficient lists,
 //! trailing terms, root counts and real roots in balls.
 
+use cas_num::ball::Ball;
 use cas_num::{Integer, Rational};
 
 use crate::expr::View;
@@ -383,4 +384,90 @@ fn complex_roots() {
         panic!("{found:?}");
     };
     assert!(z.contains_complex(&i), "{found:?}");
+}
+
+/// Whether `b` holds `sign · c^(1/k)`, `c ≥ 0`, decided exactly on the
+/// endpoints of `b` as rationals: `lo ≤ c^(1/k) ≤ hi`.
+fn holds_root(b: &Ball, sign: i64, k: u32, c: &Rational) -> bool {
+    let b = if sign < 0 { b.neg() } else { b.clone() };
+    // An unbounded ball holds the root but encloses nothing: wrong here.
+    let Some(r) = b.rad().to_float() else {
+        return false;
+    };
+    let (m, r) = (b.mid().to_rational(), r.to_rational());
+    let (lo, hi) = (&m - &r, &m + &r);
+    let power = |x: &Rational| (0..k).fold(Rational::ONE, |acc, _| &acc * x);
+    (lo <= Rational::ZERO || power(&lo) <= *c) && hi >= Rational::ZERO && power(&hi) >= *c
+}
+
+/// `ComplexRoots[p, 10⁻¹²]`: each ball holds its exact root, checked on
+/// the endpoints of its parts, each root in exactly one ball.
+#[test]
+fn complex_root_balls_hold_their_roots() {
+    let ctx = Context::new();
+    let q = |n: i64, d: i64| Rational::new(Integer::from(n), Integer::from(d));
+    // A part `sign · c^(1/k)`.
+    let zero = || (0, 1, q(0, 1));
+    let part = |sign: i64, k: u32, c: Rational| (sign, k, c);
+    let cases = [
+        (
+            "Plus[Power[x, 2], 1]",
+            vec![
+                (zero(), part(-1, 1, q(1, 1))),
+                (zero(), part(1, 1, q(1, 1))),
+            ],
+        ),
+        // (−1 ± i√3)/2 and 1.
+        (
+            "Plus[Power[x, 3], -1]",
+            vec![
+                (part(-1, 1, q(1, 2)), part(-1, 2, q(3, 4))),
+                (part(-1, 1, q(1, 2)), part(1, 2, q(3, 4))),
+                (part(1, 1, q(1, 1)), zero()),
+            ],
+        ),
+        // ±2^(1/4) and ±2^(1/4) i.
+        (
+            "Plus[Power[x, 4], -2]",
+            vec![
+                (part(-1, 4, q(2, 1)), zero()),
+                (part(1, 4, q(2, 1)), zero()),
+                (zero(), part(-1, 4, q(2, 1))),
+                (zero(), part(1, 4, q(2, 1))),
+            ],
+        ),
+    ];
+    for (p, roots) in cases {
+        let input = format!("ComplexRoots[{p}, 1/1000000000000]");
+        let found = ctx.eval(&read(&input)).unwrap();
+        let balls: Vec<(Ball, Ball)> = found
+            .args()
+            .iter()
+            .map(|pair| {
+                assert_eq!(pair.args()[1], Expr::from(1), "{input}: {found:?}");
+                let value = &pair.args()[0];
+                match value.view() {
+                    View::Ball(b) => (Ball::clone(b), Ball::from_integer(&Integer::from(0))),
+                    View::ComplexBall(z) => (z.re().clone(), z.im().clone()),
+                    _ => {
+                        let r = value.to_rational().expect("an exact root");
+                        (
+                            Ball::from_rational(&r, 128),
+                            Ball::from_integer(&Integer::from(0)),
+                        )
+                    }
+                }
+            })
+            .collect();
+        assert_eq!(balls.len(), roots.len(), "{input}: {found:?}");
+        for (re, im) in &roots {
+            let holding = balls
+                .iter()
+                .filter(|(a, b)| {
+                    holds_root(a, re.0, re.1, &re.2) && holds_root(b, im.0, im.1, &im.2)
+                })
+                .count();
+            assert_eq!(holding, 1, "{input}: {re:?} + {im:?} i in {found:?}");
+        }
+    }
 }

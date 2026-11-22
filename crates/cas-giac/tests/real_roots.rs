@@ -219,14 +219,20 @@ fn entries(printed: &str) -> usize {
     count
 }
 
-/// Whether `|a − b| < 10⁻¹⁰` in this CAS.
+/// Whether `a` and `b` agree to `10⁻¹⁰` in this CAS, real and imaginary
+/// parts apart: `Abs` of a complex ball that holds 0 is indeterminate.
 fn close(ctx: &Context, a: &Expr, b: &Expr) -> bool {
-    let gap = Expr::call(Symbol::ABS, [a.clone() - b.clone()]);
-    let bound = Expr::from(1) / Expr::from(10_000_000_000_i64);
-    ctx.eval(&Expr::call(Symbol::LESS, [gap, bound]))
-        .ok()
-        .and_then(|e| e.as_symbol())
-        == Some(Symbol::TRUE)
+    let gap = Expr::call(Symbol::N, [a.clone() - b.clone(), Expr::from(30)]);
+    [Symbol::RE, Symbol::IM].into_iter().all(|part| {
+        let small = Expr::call(
+            Symbol::LESS,
+            [
+                Expr::call(Symbol::ABS, [Expr::call(part, [gap.clone()])]),
+                Expr::from(10).pow(-10),
+            ],
+        );
+        ctx.eval(&small).ok().and_then(|e| e.as_symbol()) == Some(Symbol::TRUE)
+    })
 }
 
 /// `complexroot`: each closed form, with its multiplicity, within `10⁻¹⁰`
