@@ -331,6 +331,13 @@ RowSpace: rowspace
 ColSpace: colspace
 IntersectionBasis: ibasis
 SystemMatrix: syst2mat
+# giac's minors, echelon forms and pivots (CAS-530, CAS-528).
+DetMinor: det_minor
+AdjointMatrix: adjoint_matrix
+RowEchelon: ref
+Pivot: pivot
+JordanMatrix: egvl eigVl
+KeepPivot: keep_pivot
 # Sums and products (CAS-DOC-13, CAS-224, CAS-225).
 Sum: sum
 Product: product mul

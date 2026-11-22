@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 485] = [
+const BUILTINS: [&str; 490] = [
     "Plus",
     "Times",
     "Power",
@@ -406,6 +406,11 @@ const BUILTINS: [&str; 485] = [
     "ColSpace",
     "IntersectionBasis",
     "SystemMatrix",
+    "DetMinor",
+    "AdjointMatrix",
+    "RowEchelon",
+    "Pivot",
+    "JordanMatrix",
     // Sums and products (CAS-224, CAS-225).
     "Sum",
     "Product",

@@ -42,6 +42,11 @@
 //!   `IntersectionBasis`, `ibasis`: bases by the reduced row echelon form,
 //!   where giac's are fraction-free multiples; `SystemMatrix`, `syst2mat`:
 //!   the augmented matrix of linear equations (CAS-532).
+//! - `DetMinor`, Xcas's `det_minor`; `AdjointMatrix`, `adjoint_matrix`;
+//!   `RowEchelon`, `ref`; `RowReduce[m, KeepPivot]`, `rref(m, keep_pivot)`;
+//!   `Pivot`, `pivot`; `JordanMatrix`, `egvl`: giac's minors, echelon
+//!   forms and pivots, ported from its source, in [`echelon`] (CAS-530,
+//!   CAS-528).
 //!
 //! A matrix of modular values of one modulus goes to `modular::matrices`
 //! first (CAS-DOC-44 §2).
@@ -609,8 +614,16 @@ fn matrix_argument(e: &Expr) -> Option<&Expr> {
     }
 }
 
-/// `RowReduce[m]`, Xcas's `rref`.
+/// `RowReduce[m]`, Xcas's `rref`; `RowReduce[m, KeepPivot]`, giac's
+/// `keep_pivot` option, by [`echelon`].
 pub(super) fn row_reduce(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    if let [m, option] = e.args() {
+        if option.as_symbol() == Some(Symbol::KEEP_PIVOT)
+            && matches!(shape(m), Some(Shape::Matrix(..)))
+        {
+            return echelon::keep_pivot(ev, e, m);
+        }
+    }
     let Some(m) = matrix_argument(e) else {
         return Ok(None);
     };
@@ -920,7 +933,7 @@ fn char_poly(
 ) -> Result<Option<(Expr, Vec<Expr>)>, EvalError> {
     let x = fresh();
     if numeric(m) {
-        let c = faddeev(ev, &rows_of(m))?;
+        let (c, _) = faddeev(ev, &rows_of(m))?;
         let poly = ev.eval(&Expr::call(
             Symbol::PLUS,
             c.iter()
@@ -989,10 +1002,14 @@ fn coefficients_in<R: Numbers>(
         .collect()
 }
 
-/// The coefficients of the characteristic polynomial of the numbers `a`
-/// by the Faddeev–Le Verrier recurrence: `c_n = 1`, `M₁ = I`,
-/// `c_{n−k} = −tr(A Mₖ)/k`, `Mₖ₊₁ = A Mₖ + c_{n−k} I`.
-fn faddeev(ev: &mut Eval<'_>, a: &[Vec<Expr>]) -> Result<Vec<Expr>, EvalError> {
+/// Square matrices as rows of entries.
+type Matrices = Vec<Vec<Vec<Expr>>>;
+
+/// The coefficients of the characteristic polynomial of `a` by the
+/// Faddeev–Le Verrier recurrence: `c_n = 1`, `M₁ = I`,
+/// `c_{n−k} = −tr(A Mₖ)/k`, `Mₖ₊₁ = A Mₖ + c_{n−k} I`; and its matrices
+/// `M₁, …, M_n`, giac's `adjoint_matrix`'s (CAS-530).
+fn faddeev(ev: &mut Eval<'_>, a: &[Vec<Expr>]) -> Result<(Vec<Expr>, Matrices), EvalError> {
     let n = a.len();
     let identity = |c: &Expr| -> Vec<Vec<Expr>> {
         (0..n)
@@ -1021,6 +1038,7 @@ fn faddeev(ev: &mut Eval<'_>, a: &[Vec<Expr>]) -> Result<Vec<Expr>, EvalError> {
     };
     let mut c = vec![Expr::from(1)];
     let mut m = identity(&Expr::from(1));
+    let mut matrices = vec![m.clone()];
     for k in 1..=n {
         let am = product(ev, a, &m)?;
         let trace = Expr::call(
@@ -1034,10 +1052,11 @@ fn faddeev(ev: &mut Eval<'_>, a: &[Vec<Expr>]) -> Result<Vec<Expr>, EvalError> {
             for (i, row) in m.iter_mut().enumerate() {
                 row[i] = ev.eval(&(row[i].clone() + ck.clone()))?;
             }
+            matrices.push(m.clone());
         }
         c.push(ck);
     }
-    Ok(c)
+    Ok((c, matrices))
 }
 
 /// `CharacteristicPolynomial[m, x]`, Xcas's `charpoly`: `det(x I − m)`,
@@ -1099,6 +1118,7 @@ pub(super) fn eigenvalues(ev: &mut Eval<'_>, e: &Expr) -> Native {
 
 pub(super) mod constructors;
 pub(super) mod decompose;
+pub(super) mod echelon;
 mod eigen;
 mod elimination;
 pub(super) mod slicing;

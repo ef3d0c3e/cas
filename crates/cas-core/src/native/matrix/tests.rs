@@ -790,3 +790,109 @@ fn system_matrices() {
         ("SystemMatrix[x, List[x]]", "SystemMatrix[x, List[x]]"),
     ]);
 }
+
+/// giac's `det_minor`, `adjoint_matrix`, `ref`, `pivot`,
+/// `rref(…, keep_pivot)` and `egvl` (CAS-530, CAS-528), as giac 2.0
+/// answers, and what stays.
+#[test]
+fn minors_echelons_and_pivots() {
+    check(&[
+        ("DetMinor[List[List[1, 2], List[3, 4]]]", "-2"),
+        (
+            "DetMinor[List[List[1, 2, 3], List[4, 5, 6], List[7, 8, 10]]]",
+            "-3",
+        ),
+        (
+            "DetMinor[List[List[a, b], List[c, d]]]",
+            "Plus[Times[a, d], Times[-1, b, c]]",
+        ),
+        (
+            "DetMinor[List[List[1, 2, 3]]]",
+            "DetMinor[List[List[1, 2, 3]]]",
+        ),
+        (
+            "AdjointMatrix[List[List[1, 2], List[3, 4]]]",
+            "List[List[1, -5, -2], List[List[List[1, 0], List[0, 1]], List[List[-4, 2], List[3, -1]]]]",
+        ),
+        (
+            "AdjointMatrix[List[List[a, b], List[c, d]]]",
+            "List[List[1, Plus[Times[-1, a], Times[-1, d]], Plus[Times[a, d], Times[-1, b, c]]], List[List[List[1, 0], List[0, 1]], List[List[Times[-1, d], b], List[c, Times[-1, a]]]]]",
+        ),
+        (
+            "RowEchelon[List[List[1, 2], List[3, 4]]]",
+            "List[List[1, 2], List[0, 1]]",
+        ),
+        (
+            "RowEchelon[List[List[2, 1], List[1, 3]]]",
+            "List[List[1, 3], List[0, 1]]",
+        ),
+        (
+            "RowEchelon[List[List[3, 1, -2], List[3, 2, 2]]]",
+            "List[List[1, 1/3, -2/3], List[0, 1, 4]]",
+        ),
+        (
+            "RowEchelon[List[List[2, 1, 1, -1], List[1, 1, 2, -1], List[1, 2, 1, -4]]]",
+            "List[List[1, 1, 2, -1], List[0, 1, -1, -3], List[0, 0, 1, 1/2]]",
+        ),
+        (
+            "RowEchelon[List[List[0, 0], List[0, 3]]]",
+            "List[List[0, 1], List[0, 0]]",
+        ),
+        (
+            "RowEchelon[List[List[0, 2], List[0, 3], List[1, 1]]]",
+            "List[List[1, 1], List[0, 1], List[0, 0]]",
+        ),
+        (
+            "RowEchelon[List[List[a, b], List[c, d]]]",
+            "List[List[1, Times[b, Power[a, -1]]], List[0, 1]]",
+        ),
+        (
+            "Pivot[List[List[1, 2], List[3, 4]], 1, 1]",
+            "List[List[-2, 0], List[3, 4]]",
+        ),
+        (
+            "Pivot[List[List[1, 2, 3], List[4, 5, 6], List[7, 8, 10]], 1, 2]",
+            "List[List[-6, -3, 0], List[4, 5, 6], List[2, -2, 0]]",
+        ),
+        (
+            "Pivot[List[List[1, 2], List[3, 4], List[5, 6]], 0, 1]",
+            "List[List[1, 2], List[2, 0], List[4, 0]]",
+        ),
+        (
+            "RowReduce[List[List[1, 2], List[3, 4]], KeepPivot]",
+            "List[List[-2, 0], List[0, -2]]",
+        ),
+        (
+            "RowReduce[List[List[4, 2], List[2, 4]], KeepPivot]",
+            "List[List[-3, 0], List[0, -3]]",
+        ),
+        (
+            "RowReduce[List[List[0, 2], List[3, 4]], KeepPivot]",
+            "List[List[3, 0], List[0, 3]]",
+        ),
+        (
+            "RowReduce[List[List[2, 1], List[1, 3]], KeepPivot]",
+            "List[List[-5, 0], List[0, -5]]",
+        ),
+        (
+            "RowReduce[List[List[2, 4, 6], List[1, 3, 5]], KeepPivot]",
+            "List[List[1, 0, -1], List[0, 1, 2]]",
+        ),
+        (
+            "RowReduce[List[List[1, 2, 3], List[4, 5, 6], List[7, 8, 10]], KeepPivot]",
+            "List[List[-3, 0, 0], List[0, -3, 0], List[0, 0, -3]]",
+        ),
+        (
+            "RowReduce[List[List[a, b], List[c, d]], KeepPivot]",
+            "List[List[Plus[Times[a, d], Times[-1, b, c]], 0], List[0, Plus[Times[a, d], Times[-1, b, c]]]]",
+        ),
+        (
+            "JordanMatrix[List[List[4, 1], List[-4, 0]]]",
+            "List[List[2, 1], List[0, 2]]",
+        ),
+        (
+            "JordanMatrix[List[List[1, 1], List[0, 2]]]",
+            "List[List[1, 0], List[0, 2]]",
+        ),
+    ]);
+}

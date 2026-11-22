@@ -211,6 +211,14 @@ spaces and norms (CAS-531, CAS-532, CAS-533, CAS-534):
   (giac errs), `ibasis` with no intersection is `{}` (giac errs), and
   `rowspace(A,d)` stays (giac stores the dimension in `d`).
 
+`tests/matrices_four.rs`, minors, echelon forms and pivots (CAS-530,
+CAS-528):
+- giac's `det_minor`, `adjoint_matrix`, `ref`, `rref(A,keep_pivot)`,
+  `pivot`, `egvl` and `eigVl` read back and compared;
+- the departures, each with giac's answer: `egvl`'s eigenvalues in this
+  CAS's order (giac's in its own), and giac's inert `Det`, `Inverse`,
+  `Nullspace` and `Rref` stay user calls (giac prints `det(...)` etc.).
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

@@ -61,7 +61,7 @@ pub(super) fn scaled_rows<R: Numbers>(
 }
 
 /// Whether the product of `a` and `b` could pass `terms` terms.
-fn large<E>(a: &Sparse<E>, b: &Sparse<E>, terms: usize) -> bool {
+pub(super) fn large<E>(a: &Sparse<E>, b: &Sparse<E>, terms: usize) -> bool {
     a.term_count().saturating_mul(b.term_count()) > terms
 }
 

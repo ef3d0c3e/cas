@@ -344,6 +344,13 @@ builtins! {
     COL_SPACE = "ColSpace" [PROTECTED];
     INTERSECTION_BASIS = "IntersectionBasis" [PROTECTED];
     SYSTEM_MATRIX = "SystemMatrix" [PROTECTED];
+    // giac's minors, echelon forms and pivots (CAS-530, CAS-528).
+    DET_MINOR = "DetMinor" [PROTECTED];
+    ADJOINT_MATRIX = "AdjointMatrix" [PROTECTED];
+    ROW_ECHELON = "RowEchelon" [PROTECTED];
+    PIVOT = "Pivot" [PROTECTED];
+    JORDAN_MATRIX = "JordanMatrix" [PROTECTED];
+    KEEP_PIVOT = "KeepPivot" [PROTECTED];
     // Sums and products (CAS-DOC-13).
     SUM = "Sum" [PROTECTED];
     PRODUCT = "Product" [PROTECTED];
