@@ -1,12 +1,12 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-22T18:08:45.630Z
+# filed through: 2026-11-22T18:37:20.936Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22/084638-013r-claude-record.md
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22/084638-013r-claude-record.md
 R3 | 2026-11-22 | open | superseded by R8 | Generation 1 start | what the developer's "changes to the project's organization" are; git shows none -> ask the develop… | .claude-state/journal/2026-11-22/084638-013r-claude-record.md
 R4 | 2026-11-22 | open | superseded by R10 | Generation 1 start | generation plan draft in progress by pa-planner -> present with plan(kind: generation) when its rep… | .claude-state/journal/2026-11-22/084638-013r-claude-record.md
 R5 | 2026-11-22 | finding | in force | Generation 1 start | Areas that would need a brand new Lific module stay out of gen 1: units (~217 giac commands), graph… | .claude-state/journal/2026-11-22/090706-015r-claude-record.md
-R6 | 2026-11-22 | finding | in force | Generation 1 start | Phase 1.1 stops for the developer's push right after its two CI fixes, then CI takes ~45 min to run… | .claude-state/journal/2026-11-22/090706-015r-claude-record.md
+R6 | 2026-11-22 | finding | retired by .claude-state/journal/2026-11-22/195238-056r-claude-record.md (superseded by R16: agents push master themselves, so no phase stops for the developer's push) | Generation 1 start | Phase 1.1 stops for the developer's push right after its two CI fixes, then CI takes ~45 min to run… | .claude-state/journal/2026-11-22/090706-015r-claude-record.md
 R7 | 2026-11-22 | open | superseded by R12 | Generation 1 start | confirm the Numerical analysis and Signal processing modules; name the first new-module area (graph… | .claude-state/journal/2026-11-22/090706-015r-claude-record.md
 R8 | 2026-11-22 | open | superseded by R13 | Generation 1 start | the reorganization; the draft reads it as the PA3 install, nothing else found in git or Lific -> de… | .claude-state/journal/2026-11-22/090706-015r-claude-record.md
 R9 | 2026-11-22 | open | superseded by R11 | Generation 1 start | push timing; leaning: keep 1.1 as drafted, or pull the first area into 1.1 ahead of its push stop i… | .claude-state/journal/2026-11-22/090706-015r-claude-record.md
@@ -26,4 +26,5 @@ R22 | 2026-11-22 | finding | in force | Phase 1.1 Green master | boundary_values
 R23 | 2026-11-22 | finding | in force | Phase 1.1 Green master | `lific issue list` returns 50 issues by default and at most 500, so a check on specific tickets use… | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
 R24 | 2026-11-22 | open | in force | Phase 1.1 Green master | checkout@v4 shows a Node 20 deprecation warning in CI. | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
 R25 | 2026-11-22 | open | in force | Phase 1.1 Green master | .run/logs/gen1-gap/ sits outside .run/<phase>/ and was kept for later phases; it can be rebuilt wit… | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
-R26 | 2026-11-22 | open | in force | Phase 1.2 Algebra and polynomials parity | phase 1.2 draft in progress by pa-planner -> present with plan(kind: phase) when its report arrives | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
+R26 | 2026-11-22 | open | superseded by R27 | Phase 1.2 Algebra and polynomials parity | phase 1.2 draft in progress by pa-planner -> present with plan(kind: phase) when its report arrives | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
+R27 | 2026-11-22 | decision | in force | Phase 1.2 Algebra and polynomials parity | The phase 1.2 plan is installed and runs on its own; the developer's touchpoints are the approval a… | .claude-state/journal/2026-11-22/195238-056r-claude-record.md
