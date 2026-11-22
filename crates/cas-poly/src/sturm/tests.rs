@@ -1,6 +1,7 @@
 //! Tests of Sturm's count of real roots (CAS-197, CAS-198): examples on the
 //! line and between bounds, roots at the bounds, repeated roots; and a
-//! proptest against products of linear factors with known roots.
+//! proptest against products of linear factors with known roots; giac's
+//! subresultant sequences (CAS-539).
 
 use cas_num::algebra::{Rationals, Ring};
 use cas_num::{Integer, Rational};
@@ -120,4 +121,49 @@ proptest! {
         };
         prop_assert_eq!(ring.count_real_roots(&p, lo.as_ref(), hi.as_ref()), expected, "{:?}", p);
     }
+}
+
+/// giac's `sturmseq` sequences (CAS-539), each entry from its leading
+/// coefficient down: the subresultant remainders with their signs set
+/// right.
+#[test]
+fn giac_sequences() {
+    let ring = qx();
+    let down = |cs: &[i64]| poly(&cs.iter().rev().copied().collect::<Vec<_>>());
+    for sequence in [
+        vec![&[1, 0, -7, 7][..], &[3, 0, -7], &[42, -63], &[49]],
+        vec![&[-1, 0, 7, -7][..], &[-3, 0, 7], &[-42, 63], &[-49]],
+        vec![&[1, 0, 0, 0, 1][..], &[4, 0, 0, 0], &[-16]],
+        vec![
+            &[1, 0, 0, -3, 1, -1][..],
+            &[5, 0, 0, -6, 1],
+            &[45, -20, 25],
+            &[1_317_150, -327_150],
+            &[-781_633_800],
+        ],
+        vec![
+            &[1, 0, -2, 0, 3][..],
+            &[4, 0, -4, 0],
+            &[16, 0, -48],
+            &[-128, 0],
+            &[3072],
+        ],
+        vec![
+            &[1, 0, 0, 1, 0, -2, 5][..],
+            &[6, 0, 0, 3, 0, -2],
+            &[-18, 0, 60, -180],
+            &[166_212, -194_400, 589_032],
+            &[-234_877_968, 249_624_180],
+            &[-14_056_431_012],
+        ],
+        vec![&[6, 0, -2, 1][..], &[18, 0, -2], &[432, -324], &[-4680]],
+        vec![&[1, 0, -2][..], &[2, 0], &[8]],
+        vec![&[1, -4, 3][..], &[2, -4], &[4]],
+        vec![&[1, 2][..], &[1]],
+        vec![&[-1][..], &[]],
+    ] {
+        let expected: Vec<Dense<Rational>> = sequence.iter().map(|cs| down(cs)).collect();
+        assert_eq!(ring.sturm_sequence(&expected[0]), expected);
+    }
+    assert_eq!(ring.sturm_sequence(&poly(&[])), [poly(&[])]);
 }

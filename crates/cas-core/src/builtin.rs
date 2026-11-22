@@ -228,6 +228,15 @@ builtins! {
     VALUATION = "Valuation" [PROTECTED];
     COUNT_ROOTS = "CountRoots" [PROTECTED];
     REAL_ROOTS = "RealRoots" [PROTECTED];
+    // Roots (CAS-538, CAS-539).
+    REAL_ROOT_ISOLATION = "RealRootIsolation" [PROTECTED];
+    POSITIVE_ROOT_ISOLATION = "PositiveRootIsolation" [PROTECTED];
+    POSITIVE_ROOT_UPPER_BOUND = "PositiveRootUpperBound" [PROTECTED];
+    POSITIVE_ROOT_LOWER_BOUND = "PositiveRootLowerBound" [PROTECTED];
+    STURM_SEQUENCE = "SturmSequence" [PROTECTED];
+    RATIONAL_ROOTS = "RationalRoots" [PROTECTED];
+    COMPLEX_RATIONAL_ROOTS = "ComplexRationalRoots" [PROTECTED];
+    COMPLEX_ROOTS = "ComplexRoots" [PROTECTED];
     // Polynomial tools II (CAS-DOC-48).
     POLYNOMIAL_ROOTS = "PolynomialRoots" [PROTECTED];
     FROM_ROOTS = "FromRoots" [PROTECTED];

@@ -37,6 +37,14 @@
 //!   roots in balls of the working precision, or of `−log₂ ε` bits, each
 //!   with its multiplicity, `{{root, m}, …}` ascending, from the
 //!   square-free factors' roots (`polynomial_roots`, CAS-211).
+//! - **`RealRootIsolation`**, **`PositiveRootIsolation`**,
+//!   **`PositiveRootUpperBound`**, **`PositiveRootLowerBound`** (CAS-538),
+//!   **`SturmSequence`**, **`RationalRoots`**, **`ComplexRationalRoots`**
+//!   and **`ComplexRoots`** (CAS-539): giac's `VAS`, `VAS_positive`,
+//!   `posubLMQ`, `poslbdLMQ`, `sturmseq` and `sturm`, `rationalroot`,
+//!   `crationalroot` and `complexroot`, in [`roots`]: VAS intervals, LMQ
+//!   bounds, subresultant Sturm sequences, linear factors' roots, and
+//!   every complex root in balls.
 //!
 //! Each call that answers takes one step, its builtin's name.
 
@@ -467,19 +475,25 @@ pub(super) fn count_roots(ev: &mut Eval<'_>, e: &Expr) -> Native {
     Ok(Some(result))
 }
 
+/// The bits `−log₂ ε` of a positive rational `ε`, from the bit lengths:
+/// within a bit or two, at least 8.
+fn precision(eps: &Expr) -> Option<u64> {
+    let eps = eps.to_rational().filter(Rational::is_positive)?;
+    let bits = eps
+        .denom()
+        .bit_length()
+        .saturating_sub(eps.numer().unsigned_abs().bit_length());
+    Some(bits.max(8))
+}
+
 pub(super) fn real_roots(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let (p, bits) = match e.args() {
         [p] => (p, ev.context().working_precision()),
         [p, eps] => {
-            let Some(eps) = eps.to_rational().filter(Rational::is_positive) else {
+            let Some(bits) = precision(eps) else {
                 return Ok(None);
             };
-            // −log₂ ε, from the bit lengths: within a bit or two.
-            let bits = eps
-                .denom()
-                .bit_length()
-                .saturating_sub(eps.numer().unsigned_abs().bit_length());
-            (p, bits.max(8))
+            (p, bits)
         }
         _ => return Ok(None),
     };
@@ -521,6 +535,7 @@ pub(super) fn real_roots(ev: &mut Eval<'_>, e: &Expr) -> Native {
     Ok(Some(result))
 }
 
+pub(super) mod roots;
 pub(super) mod two;
 
 #[cfg(test)]

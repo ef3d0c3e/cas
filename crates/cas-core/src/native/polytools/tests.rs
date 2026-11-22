@@ -236,3 +236,151 @@ fn real_roots() {
     assert_eq!(found.args().len(), 2, "{found:?}");
     assert_eq!(found.args()[1].args()[1], Expr::from(2), "{found:?}");
 }
+
+/// giac's `VAS`, `VAS_positive`, `posubLMQ`, `poslbdLMQ`, `sturmseq`,
+/// `sturm` with bounds, `rationalroot` and `crationalroot` (CAS-538,
+/// CAS-539), on giac's examples.
+#[test]
+fn isolation_and_sequences() {
+    let ctx = Context::new();
+    let cubic = "Plus[Power[x, 3], Times[-7, x], 7]";
+    let mut wrong = Vec::new();
+    for (input, expected) in [
+        (
+            format!("RealRootIsolation[{cubic}]"),
+            "List[List[-4, 0], List[1, 3/2], List[3/2, 2]]",
+        ),
+        (
+            format!("PositiveRootIsolation[{cubic}]"),
+            "List[List[1, 3/2], List[3/2, 2]]",
+        ),
+        (
+            "RealRootIsolation[Times[Power[Plus[x, -1], 2], Plus[x, -2]]]".to_owned(),
+            "List[1, List[1, 4]]",
+        ),
+        (
+            "RealRootIsolation[Plus[Power[x, 3], Times[-1, x]]]".to_owned(),
+            "List[List[-2, 0], 0, List[0, 2]]",
+        ),
+        (
+            "RealRootIsolation[Plus[Power[y, 2], -2], y]".to_owned(),
+            "List[List[-3, 0], List[0, 3]]",
+        ),
+        ("RealRootIsolation[5]".to_owned(), "List[]"),
+        (format!("PositiveRootUpperBound[{cubic}]"), "4"),
+        (format!("PositiveRootLowerBound[{cubic}]"), "1/2"),
+        ("PositiveRootUpperBound[Plus[x, -2]]".to_owned(), "5"),
+        ("PositiveRootLowerBound[Plus[x, -100]]".to_owned(), "32"),
+        (
+            "PositiveRootLowerBound[Plus[Power[x, 3], x, 1]]".to_owned(),
+            "Infinity",
+        ),
+        (
+            format!("SturmSequence[{cubic}]"),
+            "List[1, List[List[1, 0, -7, 7], List[3, 0, -7], List[42, -63], 49], 1]",
+        ),
+        (
+            "SturmSequence[Plus[Times[2, Power[x, 2]], -4]]".to_owned(),
+            "List[2, List[List[1, 0, -2], List[2, 0], 8], 1]",
+        ),
+        (
+            "SturmSequence[Power[Plus[Power[x, 2], -2], 2]]".to_owned(),
+            "List[1, 1]",
+        ),
+        (
+            "SturmSequence[Times[Power[Plus[x, -1], 2], Plus[x, 2]]]".to_owned(),
+            "List[1, List[List[1, 2], 1], 1]",
+        ),
+        (
+            "SturmSequence[Times[Plus[x, -1], Power[Plus[x, 2], -1]]]".to_owned(),
+            "List[1, List[List[1, -1], 1], 1, List[List[1, 2], 1]]",
+        ),
+        ("SturmSequence[-5]".to_owned(), "List[-5, 1]"),
+        (format!("SturmSequence[{cubic}, x, -5, 5]"), "3"),
+        (format!("SturmSequence[{cubic}, x, 1, 5]"), "2"),
+        (
+            "SturmSequence[Plus[Power[x, 2], -1], x, -1, 1]".to_owned(),
+            "1",
+        ),
+        (
+            "SturmSequence[Plus[Power[x, 2], -1], x, 1, 2]".to_owned(),
+            "0",
+        ),
+        (
+            "SturmSequence[Plus[Power[x, 2], -4], x, -1, 1]".to_owned(),
+            "-1",
+        ),
+        (
+            "SturmSequence[Plus[Power[x, 2], -1], x, 0, 0]".to_owned(),
+            "-1",
+        ),
+        (
+            "RationalRoots[Plus[Times[2, Power[x, 2]], Times[-3, x], 1]]".to_owned(),
+            "List[1, 1/2]",
+        ),
+        (
+            "RationalRoots[Times[Power[Plus[x, -1], 2], Plus[Times[2, x], 3]]]".to_owned(),
+            "List[-3/2, 1]",
+        ),
+        ("RationalRoots[Plus[Power[x, 2], -2]]".to_owned(), "List[]"),
+        ("RationalRoots[3]".to_owned(), "List[]"),
+        (
+            "ComplexRationalRoots[Plus[Power[x, 2], 1]]".to_owned(),
+            "List[Complex[0, -1], Complex[0, 1]]",
+        ),
+        (
+            "ComplexRationalRoots[Times[Plus[Power[x, 2], 1], Plus[Times[2, x], -1]]]".to_owned(),
+            "List[1/2, Complex[0, -1], Complex[0, 1]]",
+        ),
+    ] {
+        let got = ctx.eval(&read(&input));
+        if got.as_ref() != Ok(&read(expected)) {
+            wrong.push(format!("{input}: {got:?}, expected {expected}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// giac's `complexroot`: every root with its multiplicity, a linear
+/// factor's exact, the others in balls; the rectangle keeps those in it.
+#[test]
+fn complex_roots() {
+    let ctx = Context::new();
+    let i = cas_num::Complex::new(Rational::ZERO, Rational::ONE);
+    // (x − 1)²(x² + 1): ±i in balls, then 1 twice.
+    let found = ctx
+        .eval(&read(
+            "ComplexRoots[Times[Power[Plus[x, -1], 2], Plus[Power[x, 2], 1]], 1/10]",
+        ))
+        .unwrap();
+    assert_eq!(found.args().len(), 3, "{found:?}");
+    assert_eq!(found.args()[2], read("List[1, 2]"), "{found:?}");
+    let mut signs = Vec::new();
+    for pair in &found.args()[..2] {
+        let View::ComplexBall(z) = pair.args()[0].view() else {
+            panic!("{found:?}");
+        };
+        assert_eq!(pair.args()[1], Expr::from(1), "{found:?}");
+        let plus = z.contains_complex(&i);
+        assert!(plus || z.contains_complex(&-&i), "{found:?}");
+        signs.push(plus);
+    }
+    assert!(signs[0] != signs[1], "{found:?}");
+    // The rectangle from 0 to 2 + 2i.
+    let found = ctx
+        .eval(&read(
+            "ComplexRoots[Times[Power[Plus[x, -1], 2], Plus[x, 2]], 1/10, 0, Complex[2, 2]]",
+        ))
+        .unwrap();
+    assert_eq!(found, read("List[List[1, 2]]"));
+    let found = ctx
+        .eval(&read(
+            "ComplexRoots[Plus[Power[x, 2], 1], 1/1000, 0, Complex[2, 2]]",
+        ))
+        .unwrap();
+    assert_eq!(found.args().len(), 1, "{found:?}");
+    let View::ComplexBall(z) = found.args()[0].args()[0].view() else {
+        panic!("{found:?}");
+    };
+    assert!(z.contains_complex(&i), "{found:?}");
+}

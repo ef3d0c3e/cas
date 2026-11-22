@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 437] = [
+const BUILTINS: [&str; 445] = [
     "Plus",
     "Times",
     "Power",
@@ -314,6 +314,14 @@ const BUILTINS: [&str; 437] = [
     "Valuation",
     "CountRoots",
     "RealRoots",
+    "RealRootIsolation",
+    "PositiveRootIsolation",
+    "PositiveRootUpperBound",
+    "PositiveRootLowerBound",
+    "SturmSequence",
+    "RationalRoots",
+    "ComplexRationalRoots",
+    "ComplexRoots",
     "LUDecomposition",
     "QRDecomposition",
     "CholeskyDecomposition",

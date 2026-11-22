@@ -44,6 +44,17 @@ algorithm here is taken from, or is compared with, are listed.
 
 ## Papers
 
+- <a id="as05"></a>**[AS05]** Alkiviadis G. Akritas and Adam W.
+  Strzeboński, "A comparative study of two real root isolation methods",
+  *Nonlinear Analysis: Modelling and Control* 10 (4) (2005), 297–304.
+  The continued fractions method (VAS) against bisection: Möbius maps of
+  the half line, Descartes's rule of signs, the steps giac's
+  `VAS_positive_roots` numbers.
+- <a id="asv08"></a>**[ASV08]** Alkiviadis G. Akritas, Adam W. Strzeboński
+  and Panagiotis S. Vigklas, "Improving the performance of the continued
+  fractions method using new bounds of positive roots", *Nonlinear
+  Analysis: Modelling and Control* 13 (3) (2008), 265–279. The
+  Local-Max-Quadratic (LMQ) bound on the positive roots.
 - <a id="bro05"></a>**[Bro05]** Manuel Bronstein, *Symbolic Integration I:
   Transcendental Functions*, 2nd ed., Springer, 2005. Chapter 2, rational
   functions: the Hermite reduction (§2.2), the Rothstein–Trager and
@@ -73,6 +84,11 @@ algorithm here is taken from, or is compared with, are listed.
   algorithmic method in polynomial ideal theory", in N. K. Bose (ed.),
   *Multidimensional Systems Theory*, Reidel, 1985, 184–232. The normal
   selection strategy, the least lcm first.
+- <a id="ca76"></a>**[CA76]** George E. Collins and Alkiviadis G. Akritas,
+  "Polynomial real root isolation using Descartes' rule of signs",
+  *Proceedings of the 1976 ACM Symposium on Symbolic and Algebraic
+  Computation* (1976), 272–275. Root isolation by sign variations under
+  Möbius maps, the bisection form.
 - <a id="cgg89"></a>**[CGG89]** B. W. Char, K. O. Geddes and G. H. Gonnet,
   "GCDHEU: Heuristic polynomial GCD algorithm based on integer GCD
   computation", *Journal of Symbolic Computation* 7 (1989), 31–48; first in
@@ -165,6 +181,10 @@ algorithm here is taken from, or is compared with, are listed.
   of the 2014 ACM International Conference on Object Oriented Programming
   Systems Languages & Applications (OOPSLA '14)*, ACM, 2014, 453–472. The
   `SplitMix64` generator of the random splitting polynomials.
+- <a id="stu35"></a>**[Stu35]** Charles Sturm, "Mémoire sur la résolution
+  des équations numériques", *Mémoires présentés par divers savants
+  étrangers à l'Académie royale des sciences* 6 (1835), 273–318. The
+  sequences counting the real roots between two bounds.
 - <a id="tra76"></a>**[Tra76]** Barry M. Trager, "Algebraic factoring and
   rational function integration", in *Proceedings of the Third ACM Symposium
   on Symbolic and Algebraic Computation (SYMSAC '76)*, ACM, 1976, 219–226.
@@ -177,6 +197,11 @@ algorithm here is taken from, or is compared with, are listed.
   The recombination of lifted factors by lattice reduction, and the lemma
   that drops the basis vectors whose Gram-Schmidt norms pass the true
   vectors'.
+- <a id="vin36"></a>**[Vin36]** Alexandre J. H. Vincent, "Sur la résolution
+  des équations numériques", *Journal de mathématiques pures et
+  appliquées* 1 (1836), 341–372. The continued fraction expansion of the
+  real roots, whose transformed polynomials end with at most one sign
+  variation.
 - <a id="wan78"></a>**[Wan78]** Paul S. Wang, "An improved multivariate
   polynomial factoring algorithm", *Mathematics of Computation* 32 (144)
   (1978), 1215–1231. Evaluation points, the leading coefficients of the

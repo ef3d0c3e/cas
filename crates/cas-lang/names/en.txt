@@ -174,6 +174,15 @@ TrailingCoefficient: tcoeff
 Valuation: valuation ldegree
 CountRoots: sturmab
 RealRoots: realroot
+# Roots (CAS-538, CAS-539).
+RealRootIsolation: VAS
+PositiveRootIsolation: VAS_positive
+PositiveRootUpperBound: posubLMQ
+PositiveRootLowerBound: poslbdLMQ
+SturmSequence: sturmseq sturm
+RationalRoots: rationalroot
+ComplexRationalRoots: crationalroot
+ComplexRoots: complexroot
 # Polynomial tools II (CAS-DOC-48 §2, CAS-482).
 PolynomialRoots: proot
 FromRoots: pcoeff

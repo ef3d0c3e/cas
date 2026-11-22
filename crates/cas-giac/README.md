@@ -124,6 +124,16 @@ a third argument (giac's `'L'`, which giac assigns) taken and not assigned.
 - the departure: at `n = 4` giac's step `1/2` errs by `4·10⁻²` on
   `x² + 16/x`, recorded with its values, where ours is the closed form.
 
+`tests/real_roots.rs`, real roots (CAS-538, CAS-539): giac's `VAS`,
+`VAS_positive`, `posubLMQ`, `poslbdLMQ`, `sturmseq`, `sturm` with bounds,
+`rationalroot` and `crationalroot` read back and compared by value;
+`complexroot` against closed forms within `10⁻¹⁰` (giac's `[a..b]`
+intervals do not read back) with giac's count of roots; and the
+departures, each with giac's answer: `VAS_positive` of a polynomial with a
+repeated root (giac's spurious `[0,1]`), the sign of a `sturmseq` factor
+when the highest multiplicity is even, and the order of rational roots
+within a multiplicity.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

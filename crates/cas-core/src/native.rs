@@ -341,6 +341,29 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::COUNT_ROOTS, polytools::count_roots),
         (Symbol::REAL_ROOTS, polytools::real_roots),
         (
+            Symbol::REAL_ROOT_ISOLATION,
+            polytools::roots::real_root_isolation,
+        ),
+        (
+            Symbol::POSITIVE_ROOT_ISOLATION,
+            polytools::roots::positive_root_isolation,
+        ),
+        (
+            Symbol::POSITIVE_ROOT_UPPER_BOUND,
+            polytools::roots::positive_root_upper_bound,
+        ),
+        (
+            Symbol::POSITIVE_ROOT_LOWER_BOUND,
+            polytools::roots::positive_root_lower_bound,
+        ),
+        (Symbol::STURM_SEQUENCE, polytools::roots::sturm_sequence),
+        (Symbol::RATIONAL_ROOTS, polytools::roots::rational_roots),
+        (
+            Symbol::COMPLEX_RATIONAL_ROOTS,
+            polytools::roots::complex_rational_roots,
+        ),
+        (Symbol::COMPLEX_ROOTS, polytools::roots::complex_roots),
+        (
             Symbol::POLYNOMIAL_ROOTS,
             polytools::two::polynomial_roots_native,
         ),

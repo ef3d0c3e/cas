@@ -33,6 +33,9 @@
 //!   ([`groebner_basis`], Buchberger's algorithm with Gebauer and Möller's
 //!   criteria) and the remainders of division by lists
 //!   ([`groebner_reduce`]).
+//! - [`real_roots`]: the real roots of a polynomial over ℚ isolated in
+//!   intervals by Vincent–Akritas–Strzeboński continued fractions, with
+//!   the LMQ bounds on its positive roots (CAS-538).
 //! - [`Cancel`]: what long computations poll to stop early, with the
 //!   never-cancelled default [`Never`].
 //!
@@ -68,6 +71,7 @@ mod gcd;
 mod groebner;
 mod integrate;
 mod random;
+pub mod real_roots;
 mod shared;
 mod sparse;
 mod sturm;
