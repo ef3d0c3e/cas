@@ -14,7 +14,9 @@ rules `rules/INDEX.md`; techniques `cookbook/INDEX.md`; ops detail `docs/ops/IND
 Who: ef3d0c3e. Experience: advanced. Domain: cas.
 Preferences: recommendations, not questions. Plain-English recaps at phase end. A notification
 whenever anything waits on them. Autonomy: full inside an approved plan; stop only at the two gates. Notification channel: toast.
-The developer pushes; agents never do. They ratify rules at the next plan approval.
+They ratify rules at the next plan approval.
+- Pushing: agents push master themselves (`git push origin master`) when CI needs to run; no push stop for the
+  developer. The remote is for CI, nothing released to preserve. Still no force-push, no history rewrite.
 - Area order: when an area (Lific `CAS-PLAN-n`) closes, Claude plans the next one in its own recommended order, no
   which-area question; a brand new Lific module needs their word (existing: Algebra, Balls, Calculus, Evaluator,
   Expressions, Infrastructure, Integers, Language, Polynomials, Statistics, Numerical analysis,
