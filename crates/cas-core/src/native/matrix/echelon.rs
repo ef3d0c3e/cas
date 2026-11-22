@@ -29,11 +29,16 @@
 //!   `m[l][c] row_i − m[i][c] row_l`, row `l` kept; indices from 0,
 //!   negative ones from the end.
 //! - `JordanMatrix[m]`, Xcas's `egvl` and `eigVl`: the `J` of
-//!   `JordanDecomposition` ([`super::decompose`]), its eigenvalues in this
-//!   CAS's order.
+//!   `JordanDecomposition` ([`super::decompose`]), its blocks in giac 2.0's
+//!   order: real part descending, then imaginary part ascending (by 64-bit
+//!   balls), each eigenvalue's longest block first. A matrix already in
+//!   Jordan form is its own `J`, as giac's.
 
-use cas_num::Complex;
+use std::cmp::Ordering;
+
 use cas_num::algebra::{GaussianIntegers, Integers, Ring};
+use cas_num::ball::{Float, Round};
+use cas_num::{Complex, Rational};
 use cas_poly::{Cancel, Sparse, SparseRing};
 
 use super::super::linear::{Shape, shape};
@@ -45,7 +50,8 @@ use super::{
 };
 use crate::context::EvalError;
 use crate::eval::Eval;
-use crate::expr::Expr;
+use crate::expr::{Expr, View};
+use crate::native::approximation;
 use crate::native::index::Index;
 use crate::poly::{Coefficient, Fraction, Polynomials};
 use crate::symbol::Symbol;
@@ -129,17 +135,84 @@ pub(in crate::native) fn pivot(ev: &mut Eval<'_>, e: &Expr) -> Native {
 
 /// `JordanMatrix[m]`.
 pub(in crate::native) fn jordan_matrix(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    let [m] = e.args() else {
+    let [_] = e.args() else {
         return Ok(None);
     };
-    let call = Expr::call(Symbol::JORDAN_DECOMPOSITION, [m.clone()]);
-    let Some(found) = super::decompose::jordan_decomposition(ev, &call)? else {
+    let Some((a, n)) = super::decompose::square_matrix(e) else {
         return Ok(None);
     };
-    let [_, j] = found.args() else {
+    if in_jordan_form(&rows_of(&a)) {
+        return stepped(ev, "egvl", e, a);
+    }
+    let Some(chains) = super::decompose::chains(ev, &a, n)? else {
         return Ok(None);
     };
-    stepped(ev, "egvl", e, j.clone())
+    let mut keyed = Vec::with_capacity(chains.len());
+    for (lambda, chain) in chains {
+        let key = plane(ev, &lambda)?;
+        keyed.push((key, lambda, chain.len()));
+    }
+    // giac's order: real part descending, then imaginary part ascending;
+    // the sort is stable, so each eigenvalue's chains stay longest first.
+    // An eigenvalue without a numeric value keeps this CAS's order.
+    if keyed.iter().all(|(key, ..)| key.is_some()) {
+        let close = |x: f64, y: f64| (x - y).abs() <= 1e-12 * x.abs().max(y.abs()).max(1.0);
+        keyed.sort_by(|(u, ..), (v, ..)| {
+            let (Some((ur, ui)), Some((vr, vi))) = (u, v) else {
+                return Ordering::Equal;
+            };
+            if close(*ur, *vr) {
+                if close(*ui, *vi) {
+                    Ordering::Equal
+                } else {
+                    ui.total_cmp(vi)
+                }
+            } else {
+                vr.total_cmp(ur)
+            }
+        });
+    }
+    let mut j = vec![vec![Expr::from(0); n]; n];
+    let mut start = 0;
+    for (_, lambda, size) in keyed {
+        for r in 0..size {
+            j[start + r][start + r] = lambda.clone();
+            if r + 1 < size {
+                j[start + r][start + r + 1] = Expr::from(1);
+            }
+        }
+        start += size;
+    }
+    stepped(ev, "egvl", e, list(j.into_iter().map(list)))
+}
+
+/// Whether `a` is a Jordan matrix: upper bidiagonal, each entry above the
+/// diagonal 0, or 1 between equal diagonal entries.
+fn in_jordan_form(a: &[Vec<Expr>]) -> bool {
+    let (zero, one) = (Expr::from(0), Expr::from(1));
+    a.iter().enumerate().all(|(i, row)| {
+        row.iter().enumerate().all(|(k, x)| {
+            if k == i {
+                true
+            } else if k == i + 1 {
+                *x == zero || (*x == one && a[i][i] == a[k][k])
+            } else {
+                *x == zero
+            }
+        })
+    })
+}
+
+/// The point of the complex plane `x` is near, from its 64-bit ball;
+/// `None` when it has no numeric value.
+fn plane(ev: &Eval<'_>, x: &Expr) -> Result<Option<(f64, f64)>, EvalError> {
+    let value = approximation(ev.context(), x, 64)?;
+    let real = |q: &Rational| Float::from_rational(q, 64, Round::Nearest).0.to_f64();
+    Ok(match value.view() {
+        View::Ball(b) => Some((b.mid().to_f64(), 0.0)),
+        View::ComplexBall(z) => Some((z.re().mid().to_f64(), z.im().mid().to_f64())),
+        _ => value.to_complex().map(|z| (real(z.re()), real(z.im()))),
+    })
 }
 
 /// `RowEchelon[m]`.

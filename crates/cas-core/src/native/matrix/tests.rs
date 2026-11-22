@@ -892,7 +892,137 @@ fn minors_echelons_and_pivots() {
         ),
         (
             "JordanMatrix[List[List[1, 1], List[0, 2]]]",
-            "List[List[1, 0], List[0, 2]]",
+            "List[List[2, 0], List[0, 1]]",
         ),
     ]);
+}
+
+/// giac 2.0's `gauss`, `rat_jordan` and `egvl` order (CAS-535, CAS-530).
+#[test]
+fn squares_and_rational_jordan_forms() {
+    check(&[
+        (
+            "GaussSquares[Plus[Power[x, 2], Times[2, x, y]], List[x, y]]",
+            "Plus[Power[Plus[x, y], 2], Times[-1, Power[y, 2]]]",
+        ),
+        (
+            "GaussSquares[Plus[Power[x, 2], Power[y, 2], Power[z, 2], Times[2, x, y], Times[4, y, z]], List[x, y, z]]",
+            "Plus[Power[Plus[x, y], 2], Power[Plus[Times[2, y], z], 2], Times[-4, Power[y, 2]]]",
+        ),
+        (
+            "GaussSquares[Times[x, y], List[x, y]]",
+            "Plus[Power[Plus[Times[x, Power[2, -1]], Times[y, Power[2, -1]]], 2], Times[-1, Power[Plus[Times[-1, x, Power[2, -1]], Times[y, Power[2, -1]]], 2]]]",
+        ),
+        (
+            "GaussSquares[Plus[Times[2, Power[x, 2]], Times[-3, Power[y, 2]]], List[x, y]]",
+            "Plus[Times[Power[Times[2, x], 2], Power[2, -1]], Times[-3, Power[y, 2]]]",
+        ),
+        (
+            "GaussSquares[Plus[Power[x, 2], Times[2, a, x, y]], List[x, y]]",
+            "Plus[Power[Plus[Times[a, y], x], 2], Times[-1, Power[y, 2], Power[a, 2]]]",
+        ),
+        (
+            "GaussSquares[Plus[Power[x, 3], Power[y, 2]], List[x, y]]",
+            "GaussSquares[Plus[Power[x, 3], Power[y, 2]], List[x, y]]",
+        ),
+        (
+            "JordanMatrix[List[List[1, 0, 1], List[0, 2, 0], List[0, 0, 3]]]",
+            "List[List[3, 0, 0], List[0, 2, 0], List[0, 0, 1]]",
+        ),
+        (
+            "JordanMatrix[List[List[1, 2], List[2, 1]]]",
+            "List[List[3, 0], List[0, -1]]",
+        ),
+        (
+            "JordanMatrix[List[List[2, 0, 0], List[0, 1, 0], List[0, 0, 3]]]",
+            "List[List[2, 0, 0], List[0, 1, 0], List[0, 0, 3]]",
+        ),
+        (
+            "JordanMatrix[List[List[1, 1, 0], List[0, 1, 0], List[0, 0, -2]]]",
+            "List[List[1, 1, 0], List[0, 1, 0], List[0, 0, -2]]",
+        ),
+        (
+            "RationalJordanForm[List[List[1, 2], List[3, 4]]]",
+            "List[List[List[1, 1], List[0, 3]], List[List[0, 2], List[1, 5]]]",
+        ),
+        (
+            "RationalJordanForm[List[List[2, 0], List[0, 3]]]",
+            "List[List[List[1, 0], List[0, 1]], List[List[2, 0], List[0, 3]]]",
+        ),
+        (
+            "RationalJordanForm[List[List[1, 2, 0], List[3, 4, 0], List[0, 0, 7]]]",
+            "List[List[List[1, 1, 0], List[0, 3, 0], List[0, 0, 1]], List[List[0, 2, 0], List[1, 5, 0], List[0, 0, 7]]]",
+        ),
+        (
+            "RationalJordanForm[List[List[2, 1], List[0, 3]]]",
+            "List[List[List[1, 1], List[1, 0]], List[List[3, 0], List[0, 2]]]",
+        ),
+        (
+            "RationalJordanForm[List[List[3, 1], List[0, 2]]]",
+            "List[List[List[1, -1], List[0, 1]], List[List[3, 0], List[0, 2]]]",
+        ),
+        (
+            "RationalJordanForm[List[List[a, 1], List[0, a]]]",
+            "RationalJordanForm[List[List[a, 1], List[0, a]]]",
+        ),
+    ]);
+}
+
+/// `RationalJordanForm[A]` is `{P, R}` with `P` invertible and `A P = P R`.
+#[test]
+fn rational_jordan_forms_are_similar() {
+    use cas_num::Rational;
+    let ctx = Context::new();
+    let rationals = |m: &Expr| -> Vec<Vec<Rational>> {
+        m.args()
+            .iter()
+            .map(|r| r.args().iter().map(|x| x.to_rational().unwrap()).collect())
+            .collect()
+    };
+    let product = |a: &[Vec<Rational>], b: &[Vec<Rational>]| -> Vec<Vec<Rational>> {
+        a.iter()
+            .map(|row| {
+                (0..b[0].len())
+                    .map(|j| {
+                        row.iter()
+                            .zip(b)
+                            .fold(Rational::ZERO, |s, (x, r)| s + x * &r[j])
+                    })
+                    .collect()
+            })
+            .collect()
+    };
+    let mut wrong = Vec::new();
+    for a in [
+        "List[List[1, 1], List[0, 1]]",
+        "List[List[1, 2], List[3, 4]]",
+        "List[List[0, -1], List[1, 0]]",
+        "List[List[2, 1], List[0, 3]]",
+        "List[List[3, 1], List[0, 2]]",
+        "List[List[1, 2, 0], List[3, 4, 0], List[0, 0, 7]]",
+        "List[List[-2, -2, 1], List[-2, 1, -2], List[1, -2, -2]]",
+        "List[List[0, -1, 1, 0], List[1, 0, 0, 1], List[0, 0, 0, -1], List[0, 0, 1, 0]]",
+        "List[List[0, 1, 0, 0], List[0, 0, 1, 0], List[0, 0, 0, 1], List[1, 0, 0, 0]]",
+        "List[List[2, 1, 0, 0], List[0, 2, 1, 0], List[0, 0, 2, 0], List[0, 0, 0, 2]]",
+        "List[List[1, 1, 1], List[0, 1, 1], List[0, 0, 1]]",
+        "List[List[0, 0, 0, -1], List[1, 0, 0, 0], List[0, 1, 0, -2], List[0, 0, 1, 0]]",
+        "List[List[Power[2, -1], 1], List[-1, Power[3, -1]]]",
+    ] {
+        let found = ctx
+            .eval(&read(&format!("RationalJordanForm[{a}]")))
+            .unwrap();
+        let [p, r] = found.args() else {
+            wrong.push(format!("{a}: {found:?}"));
+            continue;
+        };
+        let m = rationals(&ctx.eval(&read(a)).unwrap());
+        let (pq, rq) = (rationals(p), rationals(r));
+        let det = ctx
+            .eval(&Expr::call(crate::Symbol::DET, [p.clone()]))
+            .unwrap();
+        if product(&m, &pq) != product(&pq, &rq) || det == Expr::from(0) {
+            wrong.push(format!("{a}: P = {p:?}, R = {r:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }

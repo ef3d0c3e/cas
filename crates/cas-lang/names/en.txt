@@ -338,6 +338,9 @@ RowEchelon: ref
 Pivot: pivot
 JordanMatrix: egvl eigVl
 KeepPivot: keep_pivot
+# giac's sums of squares and rational Jordan forms (CAS-535).
+GaussSquares: gauss
+RationalJordanForm: rat_jordan
 # Sums and products (CAS-DOC-13, CAS-224, CAS-225).
 Sum: sum
 Product: product mul

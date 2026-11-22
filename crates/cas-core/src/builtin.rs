@@ -351,6 +351,9 @@ builtins! {
     PIVOT = "Pivot" [PROTECTED];
     JORDAN_MATRIX = "JordanMatrix" [PROTECTED];
     KEEP_PIVOT = "KeepPivot" [PROTECTED];
+    // giac's sums of squares and rational Jordan forms (CAS-535).
+    GAUSS_SQUARES = "GaussSquares" [PROTECTED];
+    RATIONAL_JORDAN_FORM = "RationalJordanForm" [PROTECTED];
     // Sums and products (CAS-DOC-13).
     SUM = "Sum" [PROTECTED];
     PRODUCT = "Product" [PROTECTED];

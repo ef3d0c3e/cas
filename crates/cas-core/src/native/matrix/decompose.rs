@@ -17,6 +17,22 @@
 //!   chain. Kernels over ℚ take radicals as free generators: a
 //!   diagonalizable `A` whose eigenvalues have them takes its `P` from
 //!   `Eigenvectors`, over ℚ\[t\]/(q(t)), giac's `jordan([[1,2],[3,4]])`.
+//! - **`RationalJordanForm[A]`** (`rat_jordan`, CAS-535): `{P, R}` with
+//!   `P⁻¹ A P = R` over ℚ, for a rational `A`. The characteristic
+//!   polynomial (Faddeev–Le Verrier) factored over ℚ; the semisimple part
+//!   `S` by Newton's iteration `S ← S − f(S) f′(S)⁻¹` from `A`, `f` the
+//!   squarefree part, `N = A − S` nilpotent. For each irreducible `p` of
+//!   degree `d`, nonlinear ones first by degree, then linear ones by root
+//!   descending: in `V_p = ker p(S)` the chains of `N`, longest first, each
+//!   top `w` the first vector of the kernel of `p(S)` and `Nʰ` (free
+//!   columns in order, 1 there) outside what is spanned; its columns
+//!   `N^(h−b) S^(j−1) w`, `b = 1..h`, `j = 1..d`, and its block `C(p)`
+//!   along the diagonal (ones below its diagonal, `−pₖ` in its last
+//!   column) with identities just above. An `A` already of that form, its
+//!   blocks in any order, gives `{I, A}`, as giac's. giac's `P` differs
+//!   where its own kernels do (`[[2,1],[0,3]]`: giac's `[[1,-1],[1,0]]`,
+//!   here `[[1,1],[1,0]]`), and giac puts the linear factors of `x⁴ − 1`
+//!   first.
 //! - **`MinimalPolynomial[A]`** (`pmin`): `Π (x − λ)^(k_λ)`, `k_λ` the
 //!   longest chain of `λ`: giac's coefficient list, or the polynomial in
 //!   the variable given.
@@ -37,7 +53,11 @@
     reason = "the names of linear algebra: A = L U = Q R, P J P⁻¹, entries i, j, k"
 )]
 
+use std::cmp::Ordering;
+
 use cas_num::Rational;
+use cas_num::algebra::{Rationals, Ring};
+use cas_poly::DenseRing;
 
 use super::{conjugate, warn};
 use crate::context::EvalError;
@@ -397,7 +417,7 @@ fn rank(ev: &mut Eval<'_>, vectors: &[Expr]) -> Result<Option<usize>, EvalError>
 /// The Jordan chains of `a`: for each one, its eigenvalue and its vectors,
 /// eigenvector first; `None` where the eigenvalues fail, or the kernels
 /// and [`diagonal`] both.
-fn chains(ev: &mut Eval<'_>, a: &Expr, n: usize) -> Result<Option<Chains>, EvalError> {
+pub(super) fn chains(ev: &mut Eval<'_>, a: &Expr, n: usize) -> Result<Option<Chains>, EvalError> {
     let Some(values) = eigenvalues(ev, a)? else {
         return Ok(None);
     };
@@ -531,7 +551,7 @@ fn leads_negative(v: &Expr) -> bool {
 }
 
 /// The square matrix argument, `n ≤ MAX_SIZE`.
-fn square_matrix(e: &Expr) -> Option<(Expr, usize)> {
+pub(super) fn square_matrix(e: &Expr) -> Option<(Expr, usize)> {
     let a = e.args().first()?;
     let r = rows(a)?;
     (r.len() == r[0].len()).then(|| (a.clone(), r.len()))
@@ -581,6 +601,415 @@ pub(in crate::native) fn jordan_decomposition(ev: &mut Eval<'_>, e: &Expr) -> Na
     let (p, j) = assembled(ev, &chains, n, &mut block)?;
     let result = list(vec![p, j]);
     ev.step("jordan", e, &result);
+    Ok(Some(result))
+}
+
+/// A matrix of rationals, by rows.
+type QMatrix = Vec<Vec<Rational>>;
+
+fn q_identity(n: usize) -> QMatrix {
+    (0..n)
+        .map(|i| (0..n).map(|j| Rational::from(i64::from(i == j))).collect())
+        .collect()
+}
+
+fn q_mul(a: &[Vec<Rational>], b: &[Vec<Rational>]) -> QMatrix {
+    a.iter()
+        .map(|row| {
+            (0..b[0].len())
+                .map(|j| {
+                    row.iter()
+                        .zip(b)
+                        .fold(Rational::ZERO, |s, (x, r)| s + x * &r[j])
+                })
+                .collect()
+        })
+        .collect()
+}
+
+fn q_sub(a: &[Vec<Rational>], b: &[Vec<Rational>]) -> QMatrix {
+    a.iter()
+        .zip(b)
+        .map(|(r, s)| r.iter().zip(s).map(|(x, y)| x - y).collect())
+        .collect()
+}
+
+fn q_apply(a: &[Vec<Rational>], v: &[Rational]) -> Vec<Rational> {
+    a.iter()
+        .map(|row| {
+            row.iter()
+                .zip(v)
+                .fold(Rational::ZERO, |s, (x, y)| s + x * y)
+        })
+        .collect()
+}
+
+/// `p(a)` for `p`'s coefficients from the constant, by Horner.
+fn q_eval(p: &[Rational], a: &[Vec<Rational>]) -> QMatrix {
+    let n = a.len();
+    let mut r = vec![vec![Rational::ZERO; n]; n];
+    for c in p.iter().rev() {
+        r = q_mul(&r, a);
+        for (i, row) in r.iter_mut().enumerate() {
+            row[i] = &row[i] + c;
+        }
+    }
+    r
+}
+
+/// The rows of `a` reduced (Gauss–Jordan, pivots 1) and the pivot columns.
+fn q_reduced(a: &[Vec<Rational>]) -> (QMatrix, Vec<usize>) {
+    let mut rows = a.to_vec();
+    let columns = rows.first().map_or(0, Vec::len);
+    let mut pivots = Vec::new();
+    for j in 0..columns {
+        let rank = pivots.len();
+        let Some(r) = (rank..rows.len()).find(|&i| !rows[i][j].is_zero()) else {
+            continue;
+        };
+        rows.swap(rank, r);
+        let pivot = rows[rank][j].clone();
+        for x in &mut rows[rank] {
+            *x = &*x / &pivot;
+        }
+        let pivot_row = rows[rank].clone();
+        for (i, row) in rows.iter_mut().enumerate() {
+            if i == rank || row[j].is_zero() {
+                continue;
+            }
+            let c = row[j].clone();
+            for (x, y) in row.iter_mut().zip(&pivot_row) {
+                *x = &*x - &(&c * y);
+            }
+        }
+        pivots.push(j);
+    }
+    (rows, pivots)
+}
+
+/// The inverse of `a`; `None` when singular.
+fn q_inverse(a: &[Vec<Rational>]) -> Option<QMatrix> {
+    let n = a.len();
+    let augmented: QMatrix = a
+        .iter()
+        .zip(q_identity(n))
+        .map(|(r, e)| r.iter().cloned().chain(e).collect())
+        .collect();
+    let (rows, pivots) = q_reduced(&augmented);
+    (pivots.len() == n && pivots[n - 1] == n - 1)
+        .then(|| rows.into_iter().map(|r| r[n..].to_vec()).collect())
+}
+
+/// A basis of the kernel of `a`, `columns` wide: for each column without a
+/// pivot in order, 1 there and the negated entries of the pivot rows.
+fn q_kernel(a: &[Vec<Rational>], columns: usize) -> QMatrix {
+    let (rows, pivots) = q_reduced(a);
+    (0..columns)
+        .filter(|j| !pivots.contains(j))
+        .map(|f| {
+            let mut v = vec![Rational::ZERO; columns];
+            v[f] = Rational::ONE;
+            for (i, &p) in pivots.iter().enumerate() {
+                v[p] = -&rows[i][f];
+            }
+            v
+        })
+        .collect()
+}
+
+/// Whether `v` is outside the span of `basis`, kept reduced: each vector 1
+/// at its first nonzero entry, 0 there in the vectors after it. `v` joins
+/// it when outside.
+fn q_joins(basis: &mut Vec<Vec<Rational>>, v: &[Rational]) -> bool {
+    let mut v = v.to_vec();
+    for b in basis.iter() {
+        let p = b.iter().position(|x| !x.is_zero()).expect("nonzero");
+        if !v[p].is_zero() {
+            let c = v[p].clone();
+            for (x, y) in v.iter_mut().zip(b) {
+                *x = &*x - &(&c * y);
+            }
+        }
+    }
+    let Some(p) = v.iter().position(|x| !x.is_zero()) else {
+        return false;
+    };
+    let lead = v[p].clone();
+    basis.push(v.iter().map(|x| x / &lead).collect());
+    true
+}
+
+/// The characteristic polynomial `det(x I − a)`, coefficients from the
+/// constant, by Faddeev–Le Verrier.
+fn q_charpoly(a: &[Vec<Rational>]) -> Vec<Rational> {
+    let n = a.len();
+    let mut c = vec![Rational::ZERO; n + 1];
+    c[n] = Rational::ONE;
+    let mut m = vec![vec![Rational::ZERO; n]; n];
+    for k in 1..=n {
+        m = q_mul(a, &m);
+        for (i, row) in m.iter_mut().enumerate() {
+            row[i] = &row[i] + &c[n + 1 - k];
+        }
+        let am = q_mul(a, &m);
+        let trace = (0..n).fold(Rational::ZERO, |s, i| s + &am[i][i]);
+        c[n - k] = -(trace / Rational::from(i64::try_from(k).expect("small")));
+    }
+    c
+}
+
+/// The companion matrix of the monic `p` (from the constant): ones below
+/// the diagonal, `−pₖ` in the last column.
+fn q_companion(p: &[Rational]) -> QMatrix {
+    let d = p.len() - 1;
+    let mut c = vec![vec![Rational::ZERO; d]; d];
+    for (k, row) in c.iter_mut().enumerate() {
+        if k > 0 {
+            row[k - 1] = Rational::ONE;
+        }
+        row[d - 1] = -&p[k];
+    }
+    c
+}
+
+/// The rational Jordan block of `p` (monic, from the constant) with `h`
+/// steps: `C(p)` along the diagonal, identities just above it.
+fn q_block(p: &[Rational], h: usize) -> QMatrix {
+    let d = p.len() - 1;
+    let c = q_companion(p);
+    let mut r = vec![vec![Rational::ZERO; h * d]; h * d];
+    for b in 0..h {
+        for i in 0..d {
+            for j in 0..d {
+                r[b * d + i][b * d + j] = c[i][j].clone();
+            }
+            if b + 1 < h {
+                r[b * d + i][(b + 1) * d + i] = Rational::ONE;
+            }
+        }
+    }
+    r
+}
+
+/// Whether `p` (from the constant) is irreducible over ℚ.
+fn q_irreducible(p: &[Rational]) -> bool {
+    let qx = DenseRing::new(Rationals);
+    let factors = qx.factor(&qx.poly(p.to_vec()));
+    matches!(factors.factors(), [(f, 1)] if f.degree() == Some(p.len() - 1))
+}
+
+/// Whether `a` is already a rational Jordan form: its blocks along the
+/// diagonal, the smallest that split it, each [`q_block`] of an
+/// irreducible polynomial, in any order.
+fn q_in_form(a: &[Vec<Rational>]) -> bool {
+    let n = a.len();
+    let mut start = 0;
+    while start < n {
+        let mut end = start;
+        loop {
+            let reach = (start..=end)
+                .flat_map(|i| {
+                    (end + 1..n).filter(move |&j| !a[i][j].is_zero() || !a[j][i].is_zero())
+                })
+                .max();
+            match reach {
+                Some(j) => end = j,
+                None => break,
+            }
+        }
+        let k = end + 1 - start;
+        let block: QMatrix = a[start..=end]
+            .iter()
+            .map(|r| r[start..=end].to_vec())
+            .collect();
+        let fits = (1..=k).filter(|d| k % d == 0).any(|d| {
+            let mut p: Vec<Rational> = (0..d).map(|i| -&block[i][d - 1]).collect();
+            p.push(Rational::ONE);
+            q_block(&p, k / d) == block && q_irreducible(&p)
+        });
+        if !fits {
+            return false;
+        }
+        start = end + 1;
+    }
+    true
+}
+
+/// The semisimple part of `a`, by Newton's iteration `S ← S − f(S)
+/// f′(S)⁻¹` from `a` for its squarefree `f` (from the constant); `None`
+/// where an inverse fails or the iteration does not end.
+fn q_semisimple(a: &[Vec<Rational>], f: &[Rational]) -> Option<QMatrix> {
+    let n = a.len();
+    let derivative: Vec<Rational> = f
+        .iter()
+        .enumerate()
+        .skip(1)
+        .map(|(k, c)| c * &Rational::from(i64::try_from(k).expect("small")))
+        .collect();
+    let mut s = a.to_vec();
+    for _ in 0..=n {
+        let value = q_eval(f, &s);
+        if value.iter().flatten().all(Rational::is_zero) {
+            break;
+        }
+        let step = q_mul(&value, &q_inverse(&q_eval(&derivative, &s))?);
+        s = q_sub(&s, &step);
+    }
+    q_eval(f, &s)
+        .iter()
+        .flatten()
+        .all(Rational::is_zero)
+        .then_some(s)
+}
+
+/// The tops of the chains of `nil` in the kernel of `ps`, `p(S)` for `p`
+/// of degree `d`, with their lengths, longest first: each a vector of the
+/// kernel of `p(S)` and `Nʰ` outside the span of the kernel below and of
+/// the chains' vectors at its level, `S` applied `d − 1` times included.
+fn q_tops(
+    ps: &[Vec<Rational>],
+    nil: &[Vec<Rational>],
+    s: &[Vec<Rational>],
+    d: usize,
+) -> Option<Vec<(usize, Vec<Rational>)>> {
+    let n = ps.len();
+    let dimension = q_kernel(ps, n).len();
+    // kernels[k]: V_p ∩ ker N^k, up to V_p.
+    let mut kernels: Vec<QMatrix> = vec![Vec::new()];
+    let mut power = q_identity(n);
+    while kernels.last().map(Vec::len) != Some(dimension) {
+        if kernels.len() > n {
+            return None;
+        }
+        power = q_mul(&power, nil);
+        let stacked: QMatrix = ps.iter().chain(&power).cloned().collect();
+        kernels.push(q_kernel(&stacked, n));
+    }
+    // Chain tops, longest first: a vector of the kernel outside the
+    // span of the kernel below and the chains' vectors at its level.
+    let mut tops: Vec<(usize, Vec<Rational>)> = Vec::new();
+    for size in (1..kernels.len()).rev() {
+        let mut span = Vec::new();
+        for v in &kernels[size - 1] {
+            q_joins(&mut span, v);
+        }
+        let level = |span: &mut Vec<Vec<Rational>>, h: usize, w: &[Rational]| {
+            let mut v = w.to_vec();
+            for _ in size..h {
+                v = q_apply(nil, &v);
+            }
+            for _ in 0..d {
+                q_joins(span, &v);
+                v = q_apply(s, &v);
+            }
+        };
+        for (h, w) in &tops {
+            level(&mut span, *h, w);
+        }
+        for w in &kernels[size] {
+            let mut probe = span.clone();
+            if q_joins(&mut probe, w) {
+                level(&mut span, size, w);
+                tops.push((size, w.clone()));
+            }
+        }
+    }
+    Some(tops)
+}
+
+/// `[P, R]` with `P⁻¹ A P = R` for the rational `a`; `None` where Newton's
+/// iteration or an inverse fails, which theory rules out.
+fn rational_jordan(a: &[Vec<Rational>]) -> Option<(QMatrix, QMatrix)> {
+    let n = a.len();
+    let qx = DenseRing::new(Rationals);
+    let factors = qx.factor(&qx.poly(q_charpoly(a))).into_parts().1;
+    let mut factors: Vec<Vec<Rational>> = factors
+        .into_iter()
+        .map(|(f, _)| f.coeffs().to_vec())
+        .collect();
+    // Nonlinear factors first, by degree; then the linear ones by their
+    // root, descending.
+    factors.sort_by(|f, g| match (f.len(), g.len()) {
+        (2, 2) => f[0].cmp(&g[0]),
+        (2, _) => Ordering::Greater,
+        (_, 2) => Ordering::Less,
+        (u, v) => u.cmp(&v),
+    });
+    // The semisimple part S, by Newton's iteration on the squarefree f.
+    let f = factors.iter().fold(qx.poly(vec![Rational::ONE]), |s, g| {
+        qx.mul(&s, &qx.poly(g.clone()))
+    });
+    let s = q_semisimple(a, f.coeffs())?;
+    let nil = q_sub(a, &s);
+    let mut columns: Vec<Vec<Rational>> = Vec::with_capacity(n);
+    let mut r = vec![vec![Rational::ZERO; n]; n];
+    let mut start = 0;
+    for p in &factors {
+        let d = p.len() - 1;
+        let ps = q_eval(p, &s);
+        let tops = q_tops(&ps, &nil, &s, d)?;
+        for (h, w) in tops {
+            for b in 1..=h {
+                let mut u = w.clone();
+                for _ in b..h {
+                    u = q_apply(&nil, &u);
+                }
+                for _ in 0..d {
+                    let next = q_apply(&s, &u);
+                    columns.push(u);
+                    u = next;
+                }
+            }
+            let block = q_block(p, h);
+            for (i, row) in block.into_iter().enumerate() {
+                for (j, x) in row.into_iter().enumerate() {
+                    r[start + i][start + j] = x;
+                }
+            }
+            start += h * d;
+        }
+    }
+    if columns.len() != n {
+        return None;
+    }
+    let p = (0..n)
+        .map(|i| columns.iter().map(|v| v[i].clone()).collect())
+        .collect();
+    Some((p, r))
+}
+
+/// `RationalJordanForm[A]`.
+pub(in crate::native) fn rational_jordan_form(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [_] = e.args() else {
+        return Ok(None);
+    };
+    let Some((a, n)) = square_matrix(e) else {
+        return Ok(None);
+    };
+    let Some(a) = rows(&a).and_then(|r| {
+        r.iter()
+            .map(|row| row.iter().map(Expr::to_rational).collect())
+            .collect::<Option<QMatrix>>()
+    }) else {
+        return Ok(None);
+    };
+    let found = if q_in_form(&a) {
+        Some((q_identity(n), a))
+    } else {
+        rational_jordan(&a)
+    };
+    let Some((p, r)) = found else {
+        return Ok(None);
+    };
+    let expr = |m: QMatrix| {
+        matrix(
+            m.into_iter()
+                .map(|row| row.into_iter().map(Expr::from).collect())
+                .collect(),
+        )
+    };
+    let result = list(vec![expr(p), expr(r)]);
+    ev.step("rat_jordan", e, &result);
     Ok(Some(result))
 }
 

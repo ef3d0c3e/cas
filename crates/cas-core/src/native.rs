@@ -900,6 +900,14 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::ROW_ECHELON, matrix::echelon::row_echelon),
         (Symbol::PIVOT, matrix::echelon::pivot),
         (Symbol::JORDAN_MATRIX, matrix::echelon::jordan_matrix),
+        (
+            Symbol::GAUSS_SQUARES,
+            matrix::decompose::forms::gauss_squares,
+        ),
+        (
+            Symbol::RATIONAL_JORDAN_FORM,
+            matrix::decompose::rational_jordan_form,
+        ),
         (Symbol::SIMPLIFY, simplify::simplify),
         (Symbol::TRIG_EXPAND, trig::trig_expand),
         (Symbol::TRIG_REDUCE, trig::trig_reduce),

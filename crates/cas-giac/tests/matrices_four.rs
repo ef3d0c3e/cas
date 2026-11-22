@@ -1,6 +1,8 @@
-//! giac's minors, echelon forms and pivots (CAS-530, CAS-528) against
-//! giac 2.0: its answers read back are this CAS's, and the departures,
-//! each with giac's answer as it prints it and this CAS's as decided.
+//! giac's minors, echelon forms and pivots (CAS-530, CAS-528), `gauss`
+//! and `rat_jordan` (CAS-535) against giac 2.0: its answers read back are
+//! this CAS's, and the departures, each with giac's answer as it prints it
+//! and this CAS's as decided. `rat_jordan` returns a sequence, read in
+//! brackets as a list.
 
 use cas_giac::{Giac, ours};
 
@@ -68,6 +70,59 @@ fn pivots() {
     ]);
 }
 
+#[test]
+fn jordan_matrices() {
+    check(&[
+        "egvl([[1,2],[3,4]])",
+        "egvl([[1,1],[0,2]])",
+        "egvl([[1,0,1],[0,2,0],[0,0,3]])",
+        "egvl([[1,2],[2,1]])",
+        "egvl([[0,1],[-2,2]])",
+        "egvl([[0,-1],[1,0]])",
+        "egvl([[2,0,0],[0,1,0],[0,0,3]])",
+        "egvl([[1,1,0],[0,1,0],[0,0,-2]])",
+    ]);
+}
+
+#[test]
+fn squares() {
+    check(&[
+        "gauss(x^2+2*x*y,[x,y])",
+        "gauss(x^2+y^2+z^2+2*x*y+4*y*z,[x,y,z])",
+        "gauss(x*y,[x,y])",
+        "gauss(2*x^2-3*y^2,[x,y])",
+        "gauss(2*x*y,[x,y])",
+        "gauss(x*y+y*z,[x,y,z])",
+        "gauss(x^2+x*y+y^2+z^2,[x,y,z])",
+        "gauss(2*x^2+2*x*y+3*y^2,[x,y])",
+        "gauss(x^2+2*a*x*y,[x,y])",
+        "gauss(y*z+x*z,[x,y,z])",
+    ]);
+}
+
+/// giac's `[rat_jordan(A)]`, read back, is this CAS's `rat_jordan(A)`.
+#[test]
+fn rational_jordan_forms() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let wrong: Vec<String> = [
+        "rat_jordan([[1,1],[0,1]])",
+        "rat_jordan([[1,2],[3,4]])",
+        "rat_jordan([[0,-1],[1,0]])",
+        "rat_jordan([[2,0],[0,3]])",
+        "rat_jordan([[1,2,0],[3,4,0],[0,0,7]])",
+    ]
+    .iter()
+    .filter_map(|input| {
+        giac.answers(&format!("[{input}]"), input)
+            .err()
+            .map(|e| e.to_string())
+    })
+    .collect();
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 /// Where this CAS departs from giac on purpose: giac's answer as it
 /// prints it, and this CAS's as decided.
 #[test]
@@ -76,14 +131,31 @@ fn departures() {
         return;
     };
     let cases = [
-        // The eigenvalues in this CAS's order, Eigenvalues', where giac's
-        // are in its own.
+        // giac's P from its own kernels: the vectors of an eigenvalue
+        // here are those of the reduced kernel, 1 at each free column.
         (
-            "egvl([[1,2],[3,4]])",
-            "[[(sqrt(33)+5)/2,0],[0,(-sqrt(33)+5)/2]]",
-            "[[(-sqrt(33)+5)/2,0],[0,(sqrt(33)+5)/2]]",
+            "rat_jordan([[2,1],[0,3]])",
+            "[[1,-1],[1,0]],[[3,0],[0,2]]",
+            "[[[1,1],[1,0]],[[3,0],[0,2]]]",
         ),
-        ("egvl([[1,1],[0,2]])", "[[2,0],[0,1]]", "[[1,0],[0,2]]"),
+        (
+            "rat_jordan([[3,1],[0,2]])",
+            "[[1,1],[0,-1]],[[3,0],[0,2]]",
+            "[[[1,-1],[0,1]],[[3,0],[0,2]]]",
+        ),
+        (
+            "rat_jordan([[-2,-2,1],[-2,1,-2],[1,-2,-2]])",
+            "[[1,5,5],[-2,0,5],[1,-5,5]],[[3,0,0],[0,-3,0],[0,0,-3]]",
+            "[[[1,2,-1],[-2,1,0],[1,0,1]],[[3,0,0],[0,-3,0],[0,0,-3]]]",
+        ),
+        // Already a rational Jordan form: P = I here, giac's P is not.
+        (
+            "rat_jordan([[0,-1,1,0],[1,0,0,1],[0,0,0,-1],[0,0,1,0]])",
+            "[[4,0,0,4],[0,4,-4,0],[0,0,4,0],[0,0,0,4]],[[0,-1,1,0],[1,0,0,1],[0,0,0,-1],[0,0,1,0]]",
+            "[[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],[[0,-1,1,0],[1,0,0,1],[0,0,0,-1],[0,0,1,0]]]",
+        ),
+        // Not a quadratic form: giac returns it, the call stays here.
+        ("gauss(x^3+y^2,[x,y])", "x^3+y^2", "gauss(x^3+y^2,[x,y])"),
         // CAS-527: giac's inert capitalised forms stay unevaluated user
         // calls here; an alias would evaluate.
         (

@@ -12,6 +12,16 @@
 //!   [[1,0,0],[0,4/7,1],[0,1,0]]`.
 //! - **`CompanionMatrix[p, x]`**: ones below the diagonal and `−cₖ/cₙ` in
 //!   the last column, row `k`, for `p = Σ cₖ xᵏ` of degree `n ≥ 1`.
+//! - **`GaussSquares[q, vars]`** (CAS-535), Xcas's `gauss`: the quadratic
+//!   form `q` in the list `vars` as a sum of squares, by Lagrange's
+//!   reduction as giac 2.0 does it: while `q ≠ 0`, the first variable `xᵢ`
+//!   with a coefficient `a ≠ 0` of `xᵢ²` gives `L²/a`, `L = ½ ∂q/∂xᵢ`
+//!   expanded, and `q` becomes `q − L²/a`; without one, the first `xᵢ xⱼ`
+//!   with a coefficient `c ≠ 0` gives `((u + v)/2)²/c − ((u − v)/2)²/c`, `u
+//!   = ∂q/∂xᵢ`, `v = ∂q/∂xⱼ`, and `q` becomes `q − u v/c`. The squares stay
+//!   unexpanded: giac's `gauss(x^2+2*x*y,[x,y])` is `(x+y)^2-y^2`. A `q`
+//!   that is not a quadratic form in `vars` leaves the call (giac returns
+//!   it as it is).
 //! - **`SylvesterMatrix[p, q, x]`**: for degrees `m` and `n`, `n` rows of
 //!   `p`'s coefficients from the leading one, each shifted one further,
 //!   then `m` of `q`'s: giac's `[[1,0,1],[1,2,0],[0,1,2]]` for `x² + 1` and
@@ -169,6 +179,110 @@ pub(in crate::native) fn companion_matrix(ev: &mut Eval<'_>, e: &Expr) -> Native
     let result = matrix(m);
     ev.step("companion", e, &result);
     Ok(Some(result))
+}
+
+/// `GaussSquares[q, vars]`.
+pub(in crate::native) fn gauss_squares(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [q, vars] = e.args() else {
+        return Ok(None);
+    };
+    if vars.head() != Some(&Expr::from(Symbol::LIST))
+        || vars.args().is_empty()
+        || vars.args().len() > super::MAX_SIZE
+        || vars.args().iter().any(|x| x.as_symbol().is_none())
+    {
+        return Ok(None);
+    }
+    let vars = vars.args();
+    let expand = |ev: &mut Eval<'_>, x: Expr| ev.eval(&Expr::call(Symbol::EXPAND, [x]));
+    let derivative = |ev: &mut Eval<'_>, f: &Expr, x: &Expr| {
+        ev.eval(&Expr::call(Symbol::D, [f.clone(), x.clone()]))
+    };
+    let mut q = expand(ev, q.clone())?;
+    // A quadratic form: second derivatives free of the variables, and
+    // q = ½ Σ ∂²q/∂xᵢ∂xⱼ xᵢ xⱼ.
+    let mut form = Vec::new();
+    for x in vars {
+        let dx = derivative(ev, &q, x)?;
+        for y in vars {
+            let h = derivative(ev, &dx, y)?;
+            if vars.iter().any(|v| h.contains(v)) {
+                return Ok(None);
+            }
+            form.push(h * x.clone() * y.clone());
+        }
+    }
+    let rest = expand(
+        ev,
+        q.clone() - Expr::call(Symbol::PLUS, form) / Expr::from(2),
+    )?;
+    if !vanishes(ev, &rest)? {
+        return Ok(None);
+    }
+    let mut terms = Vec::new();
+    for _ in 0..=vars.len() {
+        if vanishes(ev, &q)? {
+            break;
+        }
+        // A square: the first xᵢ with a coefficient a ≠ 0 of xᵢ², and L =
+        // ½ ∂q/∂xᵢ: q − L²/a is free of xᵢ.
+        let mut square = None;
+        for x in vars {
+            let dx = derivative(ev, &q, x)?;
+            let dxx = derivative(ev, &dx, x)?;
+            let a = expand(ev, dxx / Expr::from(2))?;
+            if !vanishes(ev, &a)? {
+                square = Some((dx, a));
+                break;
+            }
+        }
+        if let Some((dx, a)) = square {
+            let l = expand(ev, dx / Expr::from(2))?;
+            terms.push(l.pow(Expr::from(2)) / a.clone());
+            q = expand(ev, q.clone() - l.clone() * l / a)?;
+            continue;
+        }
+        // No square: the first xᵢ xⱼ with a coefficient c ≠ 0, u = ∂q/∂xᵢ,
+        // v = ∂q/∂xⱼ: q = ((u + v)/2)²/c − ((u − v)/2)²/c + (q − u v/c).
+        let mut cross = None;
+        'pairs: for x in vars {
+            let u = derivative(ev, &q, x)?;
+            for y in vars {
+                if y == x {
+                    continue;
+                }
+                let uy = derivative(ev, &u, y)?;
+                let c = expand(ev, uy)?;
+                if !vanishes(ev, &c)? {
+                    let v = derivative(ev, &q, y)?;
+                    cross = Some((u, v, c));
+                    break 'pairs;
+                }
+            }
+        }
+        let Some((u, v, c)) = cross else {
+            return Ok(None);
+        };
+        let sum = expand(ev, (u.clone() + v.clone()) / Expr::from(2))?;
+        let difference = expand(ev, (u.clone() - v.clone()) / Expr::from(2))?;
+        terms.push(sum.pow(Expr::from(2)) / c.clone());
+        terms.push(-(difference.pow(Expr::from(2)) / c.clone()));
+        q = expand(ev, q.clone() - u * v / c)?;
+    }
+    if !vanishes(ev, &q)? {
+        return Ok(None);
+    }
+    let result = ev.eval(&Expr::call(Symbol::PLUS, terms))?;
+    ev.step("gauss", e, &result);
+    Ok(Some(result))
+}
+
+/// Whether `x` is 0 once put together.
+fn vanishes(ev: &mut Eval<'_>, x: &Expr) -> Result<bool, EvalError> {
+    if *x == Expr::from(0) {
+        return Ok(true);
+    }
+    Ok(ev.eval(&Expr::call(Symbol::TOGETHER, [x.clone()]))? == Expr::from(0))
 }
 
 /// `SylvesterMatrix[p, q, x]`.
