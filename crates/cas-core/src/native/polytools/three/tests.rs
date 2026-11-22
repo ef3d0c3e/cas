@@ -20,14 +20,17 @@ fn check(cases: &[(&str, &str)]) {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
-/// Inputs that leave the call.
+/// Inputs that leave the call: the call of its evaluated (canonically
+/// ordered) arguments.
 fn unevaluated(inputs: &[&str]) {
     let ctx = Context::new();
     let mut wrong = Vec::new();
     for input in inputs {
         let e = read(input);
         let found = ctx.eval(&e).unwrap();
-        if found != e {
+        let head = e.head().expect("a call").clone();
+        let args: Vec<Expr> = e.args().iter().map(|a| ctx.eval(a).unwrap()).collect();
+        if found != Expr::apply(&head, &args) {
             wrong.push(format!("{input}: {found:?}"));
         }
     }
