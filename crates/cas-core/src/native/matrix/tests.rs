@@ -768,7 +768,7 @@ fn spaces() {
 fn system_matrices() {
     check(&[
         (
-            "SystemMatrix[List[Equal[Plus[x, Times[-1, y]], 1], Plus[x, Times[2, y]]], List[x, y]]",
+            "SystemMatrix[List[Equation[Plus[x, Times[-1, y]], 1], Plus[x, Times[2, y]]], List[x, y]]",
             "List[List[1, -1, -1], List[1, 2, 0]]",
         ),
         (
@@ -776,7 +776,7 @@ fn system_matrices() {
             "List[List[y, x, -1]]",
         ),
         (
-            "SystemMatrix[List[Equal[Plus[Times[2, x], Times[3, y]], 5], Equal[Plus[x, Times[-1, y]], a]], List[x, y]]",
+            "SystemMatrix[List[Equation[Plus[Times[2, x], Times[3, y]], 5], Equation[Plus[x, Times[-1, y]], a]], List[x, y]]",
             "List[List[2, 3, -5], List[1, -1, Times[-1, a]]]",
         ),
         (

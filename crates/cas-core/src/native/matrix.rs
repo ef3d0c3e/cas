@@ -802,8 +802,12 @@ pub(super) fn system_matrix(ev: &mut Eval<'_>, e: &Expr) -> Native {
         .map(|v| (v.clone(), Expr::from(0)))
         .collect();
     let rows = eqns.args().iter().map(|eq| {
+        let equation = matches!(
+            eq.head().and_then(Expr::as_symbol),
+            Some(Symbol::EQUATION | Symbol::EQUAL)
+        );
         let f = match eq.args() {
-            [l, r] if eq.head() == Some(&Expr::from(Symbol::EQUAL)) => Expr::call(
+            [l, r] if equation => Expr::call(
                 Symbol::PLUS,
                 [
                     l.clone(),
