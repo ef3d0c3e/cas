@@ -108,3 +108,5 @@ and `set[…]` is `{…}`.
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
+
+`scripts/giac_gap.sh <outdir>` lists giac's commands (`aide_cas`) with and without a name in `cas-lang`.

@@ -17,7 +17,8 @@ whenever anything waits on them. Autonomy: full inside an approved plan; stop on
 The developer pushes; agents never do. They ratify rules at the next plan approval.
 - Area order: when an area (Lific `CAS-PLAN-n`) closes, Claude plans the next one in its own recommended order, no
   which-area question; a brand new Lific module needs their word (existing: Algebra, Balls, Calculus, Evaluator,
-  Expressions, Infrastructure, Integers, Language, Polynomials, Statistics). The plan gate still applies.
+  Expressions, Infrastructure, Integers, Language, Polynomials, Statistics, Numerical analysis,
+  Signal processing). The plan gate still applies.
 - Keep the dev machine free of test/fuzz load; be careful with CI's memory limits.
 
 ## Tools <!-- roles: expert coder planner review auditor curator -->

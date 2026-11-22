@@ -2,3 +2,4 @@
 <!-- T<n> | <status> | <title> | <tags> | tasks/T<n>.md | logs/T<n>.md | <research ids, comma-separated> -->
 T1 | done | fix the eval fuzz divide-by-zero at its source, with a regression test | - | tasks/T1.md | logs/T1.md | R0-003,R1.1-005,R0-003
 T2 | done | boundary_values checks BVPSolve against the closed form (CAS-520) | - | tasks/T2.md | logs/T2.md | R0-001,R1.1-005
+T3 | done | baseline chores: giac_gap.sh into scripts/, modules on the card | - | tasks/T3.md | logs/T3.md | R1.1-005
