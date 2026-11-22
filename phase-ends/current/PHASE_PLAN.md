@@ -59,7 +59,7 @@ Approved: 2026-11-22   Planner: claude-opus-5-5/medium   Plan-hash: 62a88689aaec
   No research needed. Present the commits since `866047b` in one short list with their tickets.
 - T6 | done | title: CI check on the pushed head | deps: T5 | coder: none | done-when: `gh run list --branch master --limit 2` shows CI and Fuzz green on the pushed head; a red job is fixed in this phase (fuzz finding: regression test in its owning crate) and goes back through T5 as T5.1 | verify: gh run list --branch master --limit 2
   Cookbook: C0004 (one `gh run watch --interval 60` per run; logs via `gh api repos/ef3d0c3e/cas/actions/jobs/<id>/logs`, grep'd). Fuzz takes about 45 minutes. No research needed.
-- T7 | title: close CAS-517..524 and the fix's ticket in Lific | deps: T6 | coder: none | done-when: `lific issue list --project CAS --backend http --json` shows CAS-517..524 and T1's ticket at status `done`
+- T7 | next | title: close CAS-517..524 and the fix's ticket in Lific | deps: T6 | coder: none | done-when: `lific issue list --project CAS --backend http --json` shows CAS-517..524 and T1's ticket at status `done`
   No research needed. CAS-519 sits in backlog; set it `done` like the rest.
 - T8 | title: phase cleanup | deps: T7 | done-when: what the project still needs from .run/1.1/ is in its proper place in the repo
   Also note in the summary that `.run/logs/gen1-gap/` is regenerable by `scripts/giac_gap.sh` (T3); leave it for later phases unless the developer says otherwise. No research needed.
