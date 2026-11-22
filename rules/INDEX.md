@@ -32,3 +32,5 @@ M9 | The real gate, not the proxy | method, gates | active | seed-2.0
 M10 | Determinism and pinning at every boundary | determinism, pinning | active | seed-2.0
 M11 | Provenance on every imported datum | provenance | active | seed-2.0
 M12 | Preserve the raw record | archive, raw-record | active | seed-2.0
+
+L1 | CAS features before kernel speedups; no new unsafe | priorities,unsafe,scope | active | gen3.2 memory focus-on-cas-features.md
