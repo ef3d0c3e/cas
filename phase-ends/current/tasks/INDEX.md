@@ -7,3 +7,4 @@ T4 | done | real root isolation (VAS), root bounds, Sturm sequences, rational an
 T5 | done | complex numeric solving, zero lists, surd, and the all_trig_solutions and with_sqrt settings | - | tasks/T5.md | logs/T5.md | R1.2-005
 T6 | done | polynomial tools: rootof, fcoeff, homogeneize, total_degree, factor_xn, bezoutian, is_irreducible | - | tasks/T6.md | logs/T6.md | R1.2-003,R1.2-006
 T7 | done | Gröbner: in_ideal, syzygy, gbasis_vars and gbasis's rur option; giac's engine knobs as departures | - | tasks/T7.md | logs/T7.md | R1.2-003,R1.2-006
+T8 | done | matrix constructors, shape, slicing, row operations, norms and subspaces | - | tasks/T8.md | logs/T8.md | R1.2-004,R1.2-006
