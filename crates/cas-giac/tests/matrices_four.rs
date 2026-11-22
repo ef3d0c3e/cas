@@ -4,6 +4,7 @@
 //! and this CAS's as decided. `rat_jordan` returns a sequence, read in
 //! brackets as a list.
 
+use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
 
 /// The shared library, or `None` with a note: the checks skip.
@@ -55,7 +56,6 @@ fn echelon_forms() {
         "rref([[2,4,6],[1,3,5]],keep_pivot)",
         "rref([[1,2,3],[4,5,6],[7,8,10]],keep_pivot)",
         "rref([[a,b],[c,d]],keep_pivot)",
-        "rref([[2.0,1],[1,3]],keep_pivot)",
     ]);
 }
 
@@ -70,9 +70,44 @@ fn pivots() {
     ]);
 }
 
+/// Whether two answers agree once put together, lists element by element,
+/// as matrices.rs's: giac's `(sqrt(33)+5)/2` is this CAS's
+/// `5/2 + sqrt(33)/2`.
+fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    let list = Expr::from(Symbol::LIST);
+    if a.head() == Some(&list) || b.head() == Some(&list) {
+        return a.head() == b.head()
+            && a.args().len() == b.args().len()
+            && a.args().iter().zip(b.args()).all(|(x, y)| same(ctx, x, y));
+    }
+    let difference = Expr::call(
+        Symbol::TOGETHER,
+        [Expr::call(Symbol::EXPAND, [a.clone() - b.clone()])],
+    );
+    ctx.eval(&difference) == Ok(Expr::from(0))
+}
+
+/// giac's answers to `inputs`, read back, are this CAS's entry by entry
+/// once put together.
+fn check_together(inputs: &[&str]) {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in inputs {
+        let theirs = giac.value(input).unwrap();
+        let mine = ours(input).unwrap();
+        if !same(&ctx, &theirs, &mine) {
+            wrong.push(format!("{input}: giac {theirs:?}, this CAS {mine:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 #[test]
 fn jordan_matrices() {
-    check(&[
+    check_together(&[
         "egvl([[1,2],[3,4]])",
         "egvl([[1,1],[0,2]])",
         "egvl([[1,0,1],[0,2,0],[0,0,3]])",
@@ -153,6 +188,14 @@ fn departures() {
             "rat_jordan([[0,-1,1,0],[1,0,0,1],[0,0,0,-1],[0,0,1,0]])",
             "[[4,0,0,4],[0,4,-4,0],[0,0,4,0],[0,0,0,4]],[[0,-1,1,0],[1,0,0,1],[0,0,0,-1],[0,0,1,0]]",
             "[[[1,0,0,0],[0,1,0,0],[0,0,1,0],[0,0,0,1]],[[0,-1,1,0],[1,0,0,1],[0,0,0,-1],[0,0,1,0]]]",
+        ),
+        // A float matrix: giac's rows come out exactly 0.0 and 1.0, this
+        // CAS's numeric elimination keeps its balls' radii; keep_pivot of
+        // numbers is rref's here.
+        (
+            "rref([[2.0,1],[1,3]],keep_pivot)",
+            "[[1.0,0.0],[0.0,1.0]]",
+            "rref([[2.0,1],[1,3]])",
         ),
         // Not a quadratic form: giac returns it, the call stays here.
         ("gauss(x^3+y^2,[x,y])", "x^3+y^2", "gauss(x^3+y^2,[x,y])"),
