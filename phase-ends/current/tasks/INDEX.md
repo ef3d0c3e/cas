@@ -6,3 +6,4 @@ T3 | done | partial fractions over C, proper fractions and convert's options | -
 T4 | done | real root isolation (VAS), root bounds, Sturm sequences, rational and complex root lists | - | tasks/T4.md | logs/T4.md | R1.2-005,R1.2-006,R1.2-007
 T5 | done | complex numeric solving, zero lists, surd, and the all_trig_solutions and with_sqrt settings | - | tasks/T5.md | logs/T5.md | R1.2-005
 T6 | done | polynomial tools: rootof, fcoeff, homogeneize, total_degree, factor_xn, bezoutian, is_irreducible | - | tasks/T6.md | logs/T6.md | R1.2-003,R1.2-006
+T7 | done | Gröbner: in_ideal, syzygy, gbasis_vars and gbasis's rur option; giac's engine knobs as departures | - | tasks/T7.md | logs/T7.md | R1.2-003,R1.2-006
