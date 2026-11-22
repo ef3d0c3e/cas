@@ -51,7 +51,9 @@ the tickets. This documentation describes the code as it is.
 - [groebner.md](groebner.md): Gröbner bases (CAS-287, planned in
   CAS-PLAN-15). Distributed polynomials over ℚ under lex, deglex and
   degrevlex; division by lists; Buchberger's algorithm with the normal
-  strategy and Gebauer and Möller's criteria; reduced bases; the bounds.
+  strategy and Gebauer and Möller's criteria; reduced bases; the bounds;
+  normal sets, the rational univariate representation and syzygies
+  (CAS-541).
 - [real_roots.md](real_roots.md): real roots (CAS-538, CAS-539). giac's
   Sturm sequences from subresultants with their sign correction; VAS root
   isolation by continued fractions and Möbius maps; the LMQ bounds on the

@@ -1,7 +1,7 @@
 # Gröbner bases
 
 `src/groebner.rs` (CAS-287, planned in CAS-PLAN-15; the design is
-CAS-DOC-21).
+CAS-DOC-21) and `src/groebner/zero_dim.rs` (CAS-541).
 
 ## What it computes
 
@@ -99,6 +99,91 @@ one input under a budget of 200 000 steps.
 The remainder keeps what is left as the tail of its term vector. The terms
 that no leading monomial divides move out without the vector shifting.
 
+## Normal sets and the rational univariate representation
+
+`src/groebner/zero_dim.rs` (CAS-541).
+
+- `normal_set`: the monomials of a reduced basis's quotient ring, those no
+  leading monomial divides, in increasing order; `None` unless every
+  variable has a pure power among the leading monomials (the finiteness
+  theorem, [CLO15, §5.3]), empty for `[1]`. The monomials are walked
+  variable by variable, the exponent of each growing until a leading
+  monomial divides, which its pure power ends: every multiple of a
+  divisible monomial is divisible, so the walk visits few more monomials
+  than it keeps.
+- `rational_univariate`: Rouillier's representation [Rou99] of the points
+  of a zero-dimensional ideal, a separating linear form `l` and polynomials
+  `f, f', gᵢ` in `t` with the points `xᵢ = gᵢ(l)/f'(l)` at the roots of
+  `f`, each once. giac's `gbasis(…, rur)`.
+
+The base algorithm works in the quotient ℚ\[X\]/I as a vector space over
+the normal set: the minimal polynomial of a linear form `l` is the first
+linear dependence of the normal forms of `1, l, l², …`, each the normal
+form of `l` times the last, found by incremental Gaussian elimination over
+ℚ, each row carrying the polynomial in `l` it is the normal form of. The
+same rows give the `hᵢ` with `NF(xᵢ) = hᵢ(l)`.
+
+Our choices, fixed by giac 2.0.0's answers (CAS-541):
+
+1. `G` the reduced `DegRevLex` basis, `D` the size of its normal set. The
+   minimal polynomial `mᵢ` of each variable, from the last to the first;
+   the first of degree `D` is `l` (for `x², y`, `l = x`: `y` has degree
+   1).
+2. The radical `I' = I + (sqfree(mᵢ)(xᵢ))` for every `i`, `sqfree(m) =
+   m / gcd(m, m')`: in characteristic 0, Seidenberg's lemma [Sei74]. Its
+   normal set has `D'` monomials, one for each point.
+3. The form: the variable of step 1 if any, else the single variables from
+   the last, else `x₁ + k·x₂ + k²·x₃ + … + k^(n−1)·xₙ` for `k = 1, 2, …,
+   n·D'²`, the first whose minimal polynomial modulo `I'` has degree `D'`.
+   Two points give the same value of the form for at most `n − 1` values
+   of `k`, so one of the `n·D'²` separates. giac's own combination differs
+   (`−6x − 4y` for `x² − 1, y² − 1`); the representation is then another
+   one of the same points.
+4. `f` is minus the monic minimal polynomial of `l` modulo `I'`, as giac
+   gives it, `f'` its derivative, `gᵢ = hᵢ·f' rem f`.
+
+`None` for the whole ring, an ideal that is not zero-dimensional, and one
+variable, where giac gives the basis.
+
+Bounds: a normal set past `MAX_NORMAL_SET` (256) monomials stops the
+computation with `TooLarge`, so the vectors and the elimination stay small;
+the bases, normal forms and eliminations share one `GroebnerLimits` budget
+and poll the `Cancel`.
+
+## Syzygies
+
+`syzygies` gives giac's `syzygy`: for `f₁, …, fₘ` in `n` variables, the
+reduced `DegRevLex` basis, in the variables `A₁, …, Aₘ, x₁, …, xₙ`, of the
+ideal of the `Σ aᵢAᵢ` with `Σ aᵢfᵢ = 0` and of every `AᵢAⱼ`. Its elements
+linear in the `Aᵢ` generate the module of syzygies.
+
+The base algorithm is elimination [KR00]: the module is the kernel of
+`(a₁, …, aₘ) ↦ Σ aᵢfᵢ`, and a tag variable `E` turns it into an ideal.
+With the generators `fᵢE + Aᵢ` and every monomial of degree 2 in `E, A₁,
+…, Aₘ`, an element of the ideal that is free of `E` is, modulo the
+products of two of `E, A`, a `Σ aᵢAᵢ` whose coefficient of `E`, `Σ aᵢfᵢ`,
+vanished. Our choice: their `Lex` basis with `E` the greatest, then the
+`A`, then the `x`, keeps the elements whose leading monomial is free of
+`E`; the `E` exponent dropped, they are reduced again under `DegRevLex`, so
+the answer is unique. Bounds: those of the two basis computations, which
+share the `GroebnerLimits`.
+
+## Ideal membership
+
+giac's `greduce` of a polynomial by a list reduces by the list as given,
+which decides membership only when the list is a Gröbner basis. Membership
+is decided by reducing by the reduced basis of the ideal (`groebner_basis`,
+then `groebner_reduce`): the remainder is 0 exactly for the members [CLO15,
+§2.6, Corollary 2].
+
+## Variable order for revlex
+
+When the variables are not given, `gbasis_vars` in cas-core (CAS-541)
+orders them as giac does before a `revlex` basis: a stable sort by the
+product over the generators of `deg_v + 1`, `deg_v` the degree of the
+generator in `v`, the ties in their order of first appearance. The order
+changes the basis, not the ideal.
+
 ## Tests
 
 `src/groebner/tests.rs`: the orders on [CLO15, §2.2]'s examples; division
@@ -114,3 +199,15 @@ element is monic and no term of one is divisible by another's leading
 monomial. The fuzz target `poly_groebner` checks the same properties on
 small random ideals in one to three variables under each order, within
 limits on the work and the coefficients.
+
+`src/groebner/zero_dim/tests.rs`: normal sets of a reduced basis, of a
+monomial ideal, of `[1]`, `None` for a curve and for the zero ideal; the
+rational univariate representations giac gives for `x² + y² − 1, x − y`;
+`x² − 2, y² − 3`; `x², y`; `x²(x − 1), y`; `x² − 1, (y − 1)²`; `x³ − y,
+y² − x`; `x − 1, y − 2, z − 3`; `x² − 3x + 2, y − x²`; `None` for a curve,
+a line, the whole ring, one variable and no polynomial; for `x² − 1, y² −
+1`, where giac's form differs, the degree of `f` and each generator
+vanishing at the representation modulo `f`; a normal set past the bound.
+The syzygies of `x, y`; `xy, x² − y³`; `x − 1, x² − 1`; `x², xy, y²`,
+giac's answers up to constant factors, each element homogeneous in the
+`Aᵢ` and those linear in them syzygies.

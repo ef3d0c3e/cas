@@ -13,6 +13,7 @@
 
 #[cfg(test)]
 mod tests;
+mod zero_dim;
 
 use std::cell::Cell;
 use std::cmp::Ordering;
@@ -20,6 +21,8 @@ use std::cmp::Ordering;
 use cas_num::{Integer, Rational};
 
 use crate::cancel::{Cancel, Never};
+
+pub use zero_dim::{MAX_NORMAL_SET, Rur, normal_set, rational_univariate, syzygies};
 
 /// A monomial order, `x₁ > x₂ > … > xₙ`.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -512,7 +515,16 @@ pub fn groebner_basis(
     limits: GroebnerLimits,
     cancel: &dyn Cancel,
 ) -> Result<Vec<Distributed>, GroebnerError> {
-    let work = Work::new(limits, cancel);
+    basis_with(polys, order, &Work::new(limits, cancel))
+}
+
+/// [`groebner_basis`] within `work`, which computations of several bases
+/// share.
+fn basis_with(
+    polys: &[Distributed],
+    order: MonomialOrder,
+    work: &Work<'_>,
+) -> Result<Vec<Distributed>, GroebnerError> {
     let mut inputs: Vec<&Distributed> = polys.iter().filter(|p| !p.is_zero()).collect();
     if inputs.iter().any(|p| p.max_exponent() > MAX_EXPONENT) {
         return Err(GroebnerError::TooLarge);
@@ -530,12 +542,12 @@ pub fn groebner_basis(
         pairs: Vec::new(),
     };
     for p in inputs {
-        let h = remainder(p, &state.divisors(), order, &work)?;
+        let h = remainder(p, &state.divisors(), order, work)?;
         if h.is_constant() {
             return Ok(vec![one]);
         }
         if !h.is_zero() {
-            state.add(h, &work)?;
+            state.add(h, work)?;
         }
     }
     let mut reductions = 0;
@@ -550,13 +562,13 @@ pub fn groebner_basis(
             .min_by(|&a, &b| order.cmp(&state.pairs[a].lcm, &state.pairs[b].lcm))
             .unwrap_or(0);
         let pair = state.pairs.swap_remove(k);
-        let s = s_poly(&state.all[pair.i], &state.all[pair.j], state.order, &work)?;
-        let h = remainder(&s, &state.divisors(), order, &work)?;
+        let s = s_poly(&state.all[pair.i], &state.all[pair.j], state.order, work)?;
+        let h = remainder(&s, &state.divisors(), order, work)?;
         if h.is_constant() {
             return Ok(vec![one]);
         }
         if !h.is_zero() {
-            state.add(h, &work)?;
+            state.add(h, work)?;
         }
     }
     // The minimal basis, each element reduced by the others: its leading
@@ -571,9 +583,9 @@ pub fn groebner_basis(
                 .filter(|&(j, _)| j != i)
                 .map(|(_, g)| g)
                 .collect();
-            remainder(&basis[i], &others, order, &work)?
+            remainder(&basis[i], &others, order, work)?
         };
-        basis[i] = reduced.monic(&work)?;
+        basis[i] = reduced.monic(work)?;
     }
     Ok(basis)
 }

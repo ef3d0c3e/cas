@@ -15,7 +15,9 @@ algorithm here is taken from, or is compared with, are listed.
   O'Shea, *Ideals, Varieties, and Algorithms*, 4th edition, Undergraduate
   Texts in Mathematics, Springer, 2015. Chapter 2: §2.2, monomial orders
   (lex, grlex, grevlex); §2.3, the division algorithm in several variables;
-  §2.7, Buchberger's algorithm and reduced Gröbner bases.
+  §2.6, ideal membership by the remainder on division by a Gröbner basis;
+  §2.7, Buchberger's algorithm and reduced Gröbner bases. Chapter 5: §5.3,
+  the quotient ring's normal set and the finiteness theorem.
 - <a id="coh93"></a>**[Coh93]** Henri Cohen, *A Course in Computational
   Algebraic Number Theory*, Graduate Texts in Mathematics 138, Springer,
   1993. §3.3, "The Sub-Resultant Algorithm": §3.3.1, "Description of the
@@ -34,6 +36,9 @@ algorithm here is taken from, or is compared with, are listed.
   (division of polynomials over a field) and Algorithm R (pseudo-division,
   `l(v)^(m−n+1) u(x) = q(x) v(x) + r(x)` with `deg r < n`, without
   division).
+- <a id="kr00"></a>**[KR00]** Martin Kreuzer and Lorenzo Robbiano,
+  *Computational Commutative Algebra 1*, Springer, 2000. Chapter 3:
+  syzygy modules and their computation by elimination with Gröbner bases.
 - <a id="vzgg13"></a>**[vzGG13]** Joachim von zur Gathen and Jürgen
   Gerhard, *Modern Computer Algebra*, 3rd edition, Cambridge University
   Press, 2013. Chapter 14, "Factoring polynomials over finite fields": §14.2,
@@ -169,6 +174,13 @@ algorithm here is taken from, or is compared with, are listed.
   Q(z))` divides `P` and `Q`, it is their gcd, in any number of variables,
   over ℤ or ℤ\[i\]. It fills the gap of [CGG89]'s proof in several
   variables.
+- <a id="rou99"></a>**[Rou99]** Fabrice Rouillier, "Solving
+  zero-dimensional systems through the rational univariate
+  representation", *Applicable Algebra in Engineering, Communication and
+  Computing* 9 (5) (1999), 433–461. The points of a zero-dimensional ideal
+  as `xᵢ = gᵢ(t)/f'(t)` at the roots of one polynomial `f`, `t` a
+  separating linear form, computed in the quotient ring by its
+  multiplication by `t`.
 - <a id="sch82"></a>**[Sch82]** Arnold Schönhage, "Asymptotically fast
   algorithms for the numerical multiplication and division of polynomials
   with complex coefficients", in J. Calmet (ed.), *Computer Algebra
@@ -176,6 +188,11 @@ algorithm here is taken from, or is compared with, are listed.
   3–15, doi:10.1007/3-540-11607-9_1. The reduction of products in ℤ\[x\] to
   products in ℤ, by evaluation at a power of 2 ("binary segmentation"), as
   [Har09] credits it.
+- <a id="sei74"></a>**[Sei74]** Abraham Seidenberg, "Constructions in
+  algebra", *Transactions of the American Mathematical Society* 197 (1974),
+  273–313. Seidenberg's lemma: a zero-dimensional ideal over a field of
+  characteristic 0 containing a squarefree polynomial in each variable is
+  radical.
 - <a id="slf14"></a>**[SLF14]** Guy L. Steele Jr., Doug Lea and Christine
   H. Flood, "Fast splittable pseudorandom number generators", in *Proceedings
   of the 2014 ACM International Conference on Object Oriented Programming

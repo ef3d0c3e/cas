@@ -81,8 +81,9 @@ pub use dense::{Coefficients, Dense, DenseRing};
 pub use factor::{CharacteristicZero, FactorError, Factors, FactorsMod};
 pub use gcd::{Cofactors, GcdDomain, GcdMethod};
 pub use groebner::{
-    Distributed, GroebnerError, GroebnerLimits, MAX_ELEMENTS, MAX_EXPONENT, MAX_REDUCTIONS,
-    MonomialOrder, groebner_basis, groebner_reduce, s_polynomial,
+    Distributed, GroebnerError, GroebnerLimits, MAX_ELEMENTS, MAX_EXPONENT, MAX_NORMAL_SET,
+    MAX_REDUCTIONS, MonomialOrder, Rur, groebner_basis, groebner_reduce, normal_set,
+    rational_univariate, s_polynomial, syzygies,
 };
 pub use integrate::{Logarithm, Pair, Ratio, RationalIntegral, Surd};
 pub use shared::{
