@@ -21,14 +21,36 @@
 //!   in the input's other symbols, in canonical order, as `GroebnerBasis`
 //!   gives it under `revlex`: `{x³ − y²}` for `x = t², y = t³`; `{}` when
 //!   no relation is left, `{1}` for inconsistent equations.
+//! - `GroebnerBasis[{…}, {…}, RationalUnivariateRepresentation]`, the option
+//!   in any order with the monomial order, giac's `rur` (CAS-541): for a
+//!   zero-dimensional ideal in two or more variables, `{rur, l, f(t), f'(t),
+//!   g₁(t), …}`, the points `xᵢ = gᵢ(l)/f'(l)` at the roots of `f`, always
+//!   from `revlex`; `t` is `l` when `l` is a variable, else `x₁`. Otherwise
+//!   the basis.
+//! - `IdealMemberQ[p, {p₁, …}, {x₁, …}]`, with an order after the
+//!   variables, or without them (the input's symbols in canonical order),
+//!   giac's `in_ideal`: 1 when `p` reduces to 0 by the reduced basis, else
+//!   0; for a list of `p`, the list. giac reduces by the list as given, so
+//!   its 0 for `x²` in `(x + y, x − y)` is 1 here.
+//! - `GroebnerVariables[{p₁, …}]`, giac's `gbasis_vars`: the symbols in
+//!   order of first appearance, stably sorted by `∏ (deg_x pᵢ + 1)`; `{}` for
+//!   anything but a list, and the call stays when a `pᵢ` is no polynomial in
+//!   symbols.
+//! - `Syzygies[{p₁, …, pₘ}]` or `Syzygies[{…}, {x₁, …}]`, giac's `syzygy`:
+//!   `{S, V, A, X}` with `X` the variables (else the symbols in canonical
+//!   order), `A = {A0, …, A(m−1)}`, `V = A ∪ X`, and `S` cas-poly's
+//!   [`syzygies`](cas_poly::syzygies) in `V`, each primitive: the elements
+//!   linear in the `Aᵢ` generate the module of syzygies. The call stays when
+//!   a variable is one of the `Aᵢ`.
 //! - Past the bounds of a computation, or past its limits ([`limits`]): work
 //!   from the limit on terms and coefficients of the limit on numbers, the
 //!   call stays, with a warning.
 
 use cas_num::Rational;
 use cas_poly::{
-    Distributed, GroebnerError, GroebnerLimits, MAX_EXPONENT, MonomialOrder,
-    groebner_basis as basis_of, groebner_reduce as reduce_by,
+    Distributed, GroebnerError, GroebnerLimits, MAX_EXPONENT, MonomialOrder, Rur,
+    groebner_basis as basis_of, groebner_reduce as reduce_by, rational_univariate,
+    syzygies as syzygies_of,
 };
 
 use crate::context::{Context, EvalError};
@@ -64,6 +86,20 @@ fn too_large(ev: &mut Eval<'_>, e: &Expr) -> Native {
         expr: e.clone(),
     });
     Ok(None)
+}
+
+/// The value of a computation; `None` past the bounds or the limits, with a
+/// warning on `e`.
+fn computed<T>(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    outcome: Result<T, GroebnerError>,
+) -> Result<Option<T>, EvalError> {
+    match outcome {
+        Ok(value) => Ok(Some(value)),
+        Err(GroebnerError::Cancelled) => Err(EvalError::Interrupted),
+        Err(GroebnerError::TooLarge) => too_large(ev, e).map(|_| None),
+    }
 }
 
 /// The reduced basis of `polys` under `order`; `None` past the bounds or
@@ -204,16 +240,41 @@ fn list(
     Ok(Some(out))
 }
 
-/// `GroebnerBasis[{p₁, …}, {x₁, …}]` or `GroebnerBasis[{…}, {…}, order]`.
+/// `GroebnerBasis[{p₁, …}, {x₁, …}]`, or with an order and
+/// `RationalUnivariateRepresentation` after the variables, in any order.
 pub(super) fn groebner_basis(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    let (polys, vars, order) = match e.args() {
-        [polys, vars] => (polys, vars, Some(MonomialOrder::DegRevLex)),
-        [polys, vars, order] => (polys, vars, monomial_order(order)),
-        _ => return Ok(None),
-    };
-    let (Some(vars), Some(order)) = (variables(vars), order) else {
+    let [polys, vars, options @ ..] = e.args() else {
         return Ok(None);
     };
+    let (mut order, mut rur) = (None, false);
+    for option in options {
+        if option.as_symbol() == Some(Symbol::RATIONAL_UNIVARIATE_REPRESENTATION) && !rur {
+            rur = true;
+        } else if let (Some(o), None) = (monomial_order(option), order) {
+            order = Some(o);
+        } else {
+            return Ok(None);
+        }
+    }
+    let order = order.unwrap_or(MonomialOrder::DegRevLex);
+    let Some(vars) = variables(vars) else {
+        return Ok(None);
+    };
+    if rur {
+        let Some(polys) = list(ev, polys, &vars, MonomialOrder::DegRevLex)? else {
+            return Ok(None);
+        };
+        let ctx = ev.context();
+        let outcome = rational_univariate(&polys, limits(ctx), ctx.interrupt_flag());
+        let Some(found) = computed(ev, e, outcome)? else {
+            return Ok(None);
+        };
+        if let Some(r) = found {
+            let result = ev.eval(&representation(&r, &vars))?;
+            ev.step("GroebnerBasis", e, &result);
+            return Ok(Some(result));
+        }
+    }
     let Some(polys) = list(ev, polys, &vars, order)? else {
         return Ok(None);
     };
@@ -222,6 +283,173 @@ pub(super) fn groebner_basis(ev: &mut Eval<'_>, e: &Expr) -> Native {
     };
     let result = basis_list(ev, &basis, &vars)?;
     ev.step("GroebnerBasis", e, &result);
+    Ok(Some(result))
+}
+
+/// `{rur, l, f(t), f'(t), g₁(t), …}`, giac's form of `r` in `vars`: `t` is
+/// `l` when `l` is a variable, else the first variable.
+fn representation(r: &Rur, vars: &[Expr]) -> Expr {
+    let form = r
+        .form
+        .iter()
+        .zip(vars)
+        .map(|(c, v)| Expr::from(c.clone()) * v.clone());
+    let l = Expr::call(Symbol::PLUS, form);
+    let mut nonzero = r.form.iter().zip(vars).filter(|(c, _)| !c.is_zero());
+    let t = match (nonzero.next(), nonzero.next()) {
+        (Some((c, v)), None) if *c == Rational::ONE => v.clone(),
+        _ => vars[0].clone(),
+    };
+    let univariate = |coefficients: &[Rational]| {
+        let terms = coefficients.iter().enumerate().map(|(k, c)| {
+            let k = i64::try_from(k).expect("a normal set's size");
+            Expr::from(c.clone()) * t.pow(k)
+        });
+        Expr::call(Symbol::PLUS, terms)
+    };
+    let mut elements = vec![
+        Expr::from(Symbol::RATIONAL_UNIVARIATE_REPRESENTATION),
+        l,
+        univariate(&r.minimal),
+        univariate(&r.derivative),
+    ];
+    elements.extend(r.numerators.iter().map(|g| univariate(g)));
+    Expr::call(Symbol::LIST, elements)
+}
+
+/// The symbols of `e` that are no builtins, in canonical order.
+fn user_symbols(e: &Expr) -> Vec<Expr> {
+    e.symbols()
+        .into_iter()
+        .filter(|s| !s.is_builtin())
+        .map(Expr::from)
+        .collect()
+}
+
+/// `IdealMemberQ[p, {p₁, …}, {x₁, …}]`, with an order after the variables,
+/// or `IdealMemberQ[p, {p₁, …}]` in the symbols of both; `p` may be a list.
+pub(super) fn ideal_member_q(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let (p, polys, vars, order) = match e.args() {
+        [p, polys] => {
+            let both = Expr::call(Symbol::LIST, [p.clone(), polys.clone()]);
+            let vars = user_symbols(&both);
+            let vars = (!vars.is_empty()).then_some(vars);
+            (p, polys, vars, Some(MonomialOrder::DegRevLex))
+        }
+        [p, polys, vars] => (p, polys, variables(vars), Some(MonomialOrder::DegRevLex)),
+        [p, polys, vars, order] => (p, polys, variables(vars), monomial_order(order)),
+        _ => return Ok(None),
+    };
+    let (Some(vars), Some(order)) = (vars, order) else {
+        return Ok(None);
+    };
+    let members = if is_list(p) {
+        p.args().to_vec()
+    } else {
+        vec![p.clone()]
+    };
+    let mut candidates = Vec::with_capacity(members.len());
+    for q in &members {
+        let Some(d) = distributed(ev, q, &vars, order)? else {
+            return Ok(None);
+        };
+        candidates.push(d);
+    }
+    let Some(polys) = list(ev, polys, &vars, order)? else {
+        return Ok(None);
+    };
+    let Some(basis) = reduced_basis(ev, e, &polys, order)? else {
+        return Ok(None);
+    };
+    let mut answers = Vec::with_capacity(candidates.len());
+    for q in &candidates {
+        let ctx = ev.context();
+        let outcome = reduce_by(q, &basis, order, limits(ctx), ctx.interrupt_flag());
+        let Some(remainder) = computed(ev, e, outcome)? else {
+            return Ok(None);
+        };
+        answers.push(Expr::from(i64::from(remainder.is_zero())));
+    }
+    let result = if is_list(p) {
+        Expr::call(Symbol::LIST, answers)
+    } else {
+        answers.swap_remove(0)
+    };
+    ev.step("IdealMemberQ", e, &result);
+    Ok(Some(result))
+}
+
+/// `GroebnerVariables[{p₁, …}]`: the symbols in order of first appearance,
+/// stably sorted by `∏ (deg_x pᵢ + 1)`, as giac orders them; `{}` for
+/// anything but a list.
+pub(super) fn groebner_variables(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [polys] = e.args() else {
+        return Ok(None);
+    };
+    if !is_list(polys) {
+        return Ok(Some(Expr::call(Symbol::LIST, Vec::<Expr>::new())));
+    }
+    let mut vars: Vec<Expr> = Vec::new();
+    for sub in polys.post_order() {
+        if sub.as_symbol().is_some_and(|s| !s.is_builtin()) && !vars.contains(sub) {
+            vars.push(sub.clone());
+        }
+    }
+    let Some(polys) = list(ev, polys, &vars, MonomialOrder::DegRevLex)? else {
+        return Ok(None);
+    };
+    let weight = |k: usize| {
+        polys.iter().fold(1u128, |w, g| {
+            let degree = g.terms().iter().map(|(m, _)| m[k]).max().unwrap_or(0);
+            w.saturating_mul(u128::from(degree) + 1)
+        })
+    };
+    let mut weighted: Vec<(u128, Expr)> = vars
+        .into_iter()
+        .enumerate()
+        .map(|(k, v)| (weight(k), v))
+        .collect();
+    weighted.sort_by_key(|(w, _)| *w);
+    let result = Expr::call(Symbol::LIST, weighted.into_iter().map(|(_, v)| v));
+    ev.step("GroebnerVariables", e, &result);
+    Ok(Some(result))
+}
+
+/// `Syzygies[{p₁, …, pₘ}]` or `Syzygies[{…}, {x₁, …}]`: `{S, V, A, X}`.
+/// The `Aᵢ` are the symbols the reader makes of `A0`, `A1`, …, a bounded
+/// set: one per generator of the largest call.
+pub(super) fn syzygies(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let (polys, vars) = match e.args() {
+        [polys] => (polys, Some(user_symbols(polys))),
+        [polys, vars] => (polys, variables(vars)),
+        _ => return Ok(None),
+    };
+    let Some(vars) = vars else {
+        return Ok(None);
+    };
+    let m = polys.args().len();
+    if !is_list(polys) || m == 0 || vars.is_empty() {
+        return Ok(None);
+    }
+    let a: Vec<Expr> = (0..m)
+        .map(|i| Expr::from(Symbol::new(&format!("$A{i}"))))
+        .collect();
+    if vars.iter().any(|v| a.contains(v)) {
+        return Ok(None);
+    }
+    let Some(polys) = list(ev, polys, &vars, MonomialOrder::DegRevLex)? else {
+        return Ok(None);
+    };
+    let ctx = ev.context();
+    let outcome = syzygies_of(&polys, limits(ctx), ctx.interrupt_flag());
+    let Some(found) = computed(ev, e, outcome)? else {
+        return Ok(None);
+    };
+    let all = [a.as_slice(), &vars].concat();
+    let s = basis_list(ev, &found, &all)?;
+    let lists = [all, a, vars].map(|l| Expr::call(Symbol::LIST, l));
+    let result = ev.eval(&Expr::call(Symbol::LIST, [s].into_iter().chain(lists)))?;
+    ev.step("Syzygies", e, &result);
     Ok(Some(result))
 }
 

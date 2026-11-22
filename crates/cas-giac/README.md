@@ -148,6 +148,18 @@ variable stays (giac errs); `is_irreducible(x*y)` and `(x*y+x)` are 0, where
 giac's 1 is wrong; and `is_irreducible(... mod 7)` is giac's 1, as the
 language does not read `mod`.
 
+`tests/groebner_two.rs`, Gröbner tools II (CAS-541, CAS-542): giac's
+`in_ideal` and `gbasis_vars` compared exactly, `syzygy`'s generators as
+sets up to constants, `gbasis`'s `rur` element by element (the basis when
+there is none); and the departures, each with giac's answer: `in_ideal`
+by the reduced basis (giac's 0 for `x^2` in `(x+y,x-y)`), `gbasis_vars`'
+ties in the evaluated order and its symbols only (`sin(x)`), `syzygy`
+with variables (giac's `[1]`), giac's syzygies of `[x-1,x^2-1]` (missing
+one) and `[x^2,x*y,y^2]` (not the minimal ones), another separating form
+for `[x^2-1,y^2-1]`, and the calls of giac's F4 knobs
+(`gbasis_max_pairs`, `gbasis_simult_primes`, `gbasis_reinject`,
+`rur_gbasis`, `rur_certify`) staying.
+
 `tests/all_trig_solutions.rs` and `tests/with_sqrt.rs`, giac's settings
 (CAS-545), one setting a file, as giac's instance is shared by the tests of
 a file and giac's input sets and resets it within one call:

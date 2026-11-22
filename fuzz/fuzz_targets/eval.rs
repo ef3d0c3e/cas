@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 456] = [
+const BUILTINS: [&str; 459] = [
     "Plus",
     "Times",
     "Power",
@@ -112,10 +112,13 @@ const BUILTINS: [&str; 456] = [
     "FactorRational",
     "FactorList",
     "FactorSquareFree",
-    // Gröbner bases (CAS-288) and elimination (CAS-292).
+    // Gröbner bases (CAS-288), elimination (CAS-292) and CAS-541.
     "GroebnerBasis",
     "GroebnerReduce",
     "Eliminate",
+    "IdealMemberQ",
+    "Syzygies",
+    "GroebnerVariables",
     // Statistics (CAS-294).
     "Mean",
     "PopulationVariance",

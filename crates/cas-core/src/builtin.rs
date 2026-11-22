@@ -677,10 +677,15 @@ builtins! {
     FACTOR_SQUARE_FREE = "FactorSquareFree" [LISTABLE, PROTECTED];
     // Gröbner bases (CAS-DOC-21): Xcas's `gbasis`, `greduce` and
     // `eliminate`, and the monomial orders, Mathematica's `MonomialOrder`
-    // values: `plex`, `tdeg` and `revlex`.
+    // values: `plex`, `tdeg` and `revlex`. Xcas's `in_ideal`, `syzygy`,
+    // `gbasis_vars` and `gbasis`'s option `rur` (CAS-541).
     GROEBNER_BASIS = "GroebnerBasis" [PROTECTED];
     GROEBNER_REDUCE = "GroebnerReduce" [PROTECTED];
     ELIMINATE = "Eliminate" [PROTECTED];
+    IDEAL_MEMBER_Q = "IdealMemberQ" [PROTECTED];
+    SYZYGIES = "Syzygies" [PROTECTED];
+    GROEBNER_VARIABLES = "GroebnerVariables" [PROTECTED];
+    RATIONAL_UNIVARIATE_REPRESENTATION = "RationalUnivariateRepresentation" [PROTECTED];
     LEXICOGRAPHIC = "Lexicographic" [PROTECTED];
     DEGREE_LEXICOGRAPHIC = "DegreeLexicographic" [PROTECTED];
     DEGREE_REVERSE_LEXICOGRAPHIC = "DegreeReverseLexicographic" [PROTECTED];

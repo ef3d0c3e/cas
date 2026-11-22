@@ -438,6 +438,13 @@ Eliminate: eliminate
 Lexicographic: plex
 DegreeLexicographic: tdeg
 DegreeReverseLexicographic: revlex
+# Ideal membership, syzygies, giac's order of the variables and the rational
+# univariate representation (CAS-541): Xcas's `in_ideal`, `syzygy`,
+# `gbasis_vars` and `gbasis`'s option `rur`.
+IdealMemberQ: in_ideal
+Syzygies: syzygy
+GroebnerVariables: gbasis_vars
+RationalUnivariateRepresentation: rur
 # Statistics (CAS-DOC-22, CAS-294): giac's `variance` and `stddev` are the
 # population ones, `stddevp` the sample deviation.
 Mean: mean moyenne
