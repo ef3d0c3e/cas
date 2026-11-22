@@ -16,6 +16,14 @@
 //!   `p`'s coefficients from the leading one, each shifted one further,
 //!   then `m` of `q`'s: giac's `[[1,0,1],[1,2,0],[0,1,2]]` for `x² + 1` and
 //!   `x + 2`. Its determinant is the resultant.
+//! - **`BezoutMatrix[f, g]`** (CAS-543), Xcas's `bezoutian`: in `x`, the
+//!   other symbols coefficients, or of lists of coefficients, the leading
+//!   one first; for `n` the larger degree, the `n × n` matrix of the
+//!   coefficients of `sⁱ tʲ` in `(f(t) g(s) − f(s) g(t))/(s − t)`: with `f =
+//!   Σ aₖ xᵏ`, `g = Σ bₖ xᵏ`, each `k > l` adds `a_l b_k − a_k b_l` at
+//!   `(l + p, k − 1 − p)`, `p < k − l`. giac's `[[1,-2],[-2,-1]]` for `x² +
+//!   1` and `x + 2`. Its determinant is `±lc(f)^(deg f − deg g)` times the
+//!   resultant.
 //! - **`HadamardProduct[A, B]`**: entrywise, of one shape.
 //! - **`LDLDecomposition[A]`** (CAS-477): `{p, L, D}` for a symmetric `A =
 //!   L D Lᵀ`, `L` unit lower triangular, `D` diagonal, by elimination
@@ -192,6 +200,53 @@ pub(in crate::native) fn sylvester_matrix(ev: &mut Eval<'_>, e: &Expr) -> Native
         .collect();
     let result = matrix(rows);
     ev.step("sylvester", e, &result);
+    Ok(Some(result))
+}
+
+/// `BezoutMatrix[f, g]`.
+pub(in crate::native) fn bezout_matrix(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [f, g] = e.args() else {
+        return Ok(None);
+    };
+    let x = Expr::symbol("x");
+    let mut ascending = Vec::with_capacity(2);
+    for p in [f, g] {
+        let c = if p.head() == Some(&Expr::from(Symbol::LIST)) {
+            Some(p.args().to_vec())
+        } else {
+            coefficients(ev, p, &x)?
+        };
+        let Some(mut c) = c.filter(|c| !c.is_empty()) else {
+            return Ok(None);
+        };
+        c.reverse();
+        ascending.push(c);
+    }
+    let n = ascending.iter().map(Vec::len).max().unwrap_or(0) - 1;
+    if n == 0 {
+        return Ok(None);
+    }
+    let coefficient = |c: &[Expr], k: usize| c.get(k).cloned().unwrap_or_else(|| Expr::from(0));
+    let (a, b) = (&ascending[0], &ascending[1]);
+    let mut terms = vec![vec![Vec::new(); n]; n];
+    for k in 1..=n {
+        for l in 0..k {
+            let c = coefficient(a, l) * coefficient(b, k) - coefficient(a, k) * coefficient(b, l);
+            for p in 0..k - l {
+                terms[l + p][k - 1 - p].push(c.clone());
+            }
+        }
+    }
+    let rows: Vec<Vec<Expr>> = terms
+        .into_iter()
+        .map(|row| {
+            row.into_iter()
+                .map(|t| Expr::call(Symbol::PLUS, t))
+                .collect()
+        })
+        .collect();
+    let result = ev.eval(&Expr::call(Symbol::EXPAND, [matrix(rows)]))?;
+    ev.step("bezoutian", e, &result);
     Ok(Some(result))
 }
 

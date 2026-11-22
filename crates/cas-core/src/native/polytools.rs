@@ -536,6 +536,7 @@ pub(super) fn real_roots(ev: &mut Eval<'_>, e: &Expr) -> Native {
 }
 
 pub(super) mod roots;
+pub(super) mod three;
 pub(super) mod two;
 
 #[cfg(test)]

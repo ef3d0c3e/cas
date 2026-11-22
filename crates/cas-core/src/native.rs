@@ -390,6 +390,22 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::COMPLETE_SQUARE, polytools::two::complete_square),
         (Symbol::DIGIT_POLYNOMIAL, polytools::two::digit_polynomial),
         (Symbol::BERLEKAMP_MASSEY, polytools::two::berlekamp_massey),
+        (Symbol::ROOT_OF, polytools::three::root_of),
+        (
+            Symbol::FACTORED_FROM_ROOTS,
+            polytools::three::factored_from_roots,
+        ),
+        (Symbol::HOMOGENIZE, polytools::three::homogenize),
+        (Symbol::TOTAL_DEGREE, polytools::three::total_degree),
+        (Symbol::FACTOR_XN, polytools::three::factor_xn),
+        (
+            Symbol::BEZOUT_MATRIX,
+            matrix::decompose::forms::bezout_matrix,
+        ),
+        (
+            Symbol::IRREDUCIBLE_POLYNOMIAL_Q,
+            polytools::three::irreducible_polynomial_q,
+        ),
         (
             Symbol::LU_DECOMPOSITION,
             matrix::decompose::lu_decomposition,

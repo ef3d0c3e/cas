@@ -1,0 +1,211 @@
+//! Polynomial tools III against giac (CAS-540, CAS-543): `rootof`,
+//! `fcoeff`, `homogeneize`, `total_degree`, `factor_xn`, `bezoutian` and
+//! `is_irreducible`, giac's answers read back and compared with ours
+//! (`Giac::agrees`: the same expression, or `==`); and the departures,
+//! each with giac's answer as it prints it.
+
+use cas_giac::{Giac, ours};
+
+/// The shared library, or `None` with a note: the comparisons skip.
+fn giac() -> Option<&'static Giac> {
+    let giac = Giac::shared();
+    if giac.is_none() {
+        eprintln!("libgiac is missing: comparisons skipped");
+    }
+    giac
+}
+
+fn check(inputs: &[&str]) {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let wrong: Vec<String> = inputs
+        .iter()
+        .filter_map(|input| giac.agrees(input).err().map(|e| format!("{e}")))
+        .collect();
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `rootof` stays a call; polynomials become giac's lists (CAS-540).
+#[test]
+fn roots_of() {
+    check(&[
+        "rootof([1,0],[1,0,10,0,1])",
+        "rootof([1,2],[1,0,-2])",
+        "rootof(x+2,x^2-2)",
+        "rootof(y+2,y^2-2)",
+        "rootof(x^4+x+1)",
+        "rootof([],[1,0,-2])",
+        "rootof([3],[1,0,-2])",
+        "rootof([1,0],[1,0,-2])+1",
+        "rootof([1,0],[1,0,-2])^2",
+    ]);
+}
+
+/// `fcoeff`, `homogeneize`, `total_degree` and `factor_xn` (CAS-540).
+#[test]
+fn forms() {
+    check(&[
+        "fcoeff([1,2,-1,1])",
+        "fcoeff([1,2,0,1,3,-1])",
+        "fcoeff([1,2,0,1,3,-1],y)",
+        "fcoeff([])",
+        "fcoeff([1/2,1])",
+        "fcoeff([1,0])",
+        "fcoeff([2,3])",
+        "fcoeff([sqrt(2),1])",
+        "homogeneize(x^2-y,z)",
+        "homogeneize(x^2-1)",
+        "homogeneize(x*y-1,y)",
+        "homogeneize(x^3+x*y+1,z)",
+        "homogeneize(x^2+y^3)",
+        "homogeneize(x^2-1,z^2)",
+        "homogeneize(5)",
+        "homogeneize(x^2+x+1/2)",
+        "homogeneize(1/x+1)",
+        "total_degree(x^2*y+y,[x,y])",
+        "total_degree(x^3*y+x*y,[x,y])",
+        "total_degree(x^2*y*z+y,[x,y])",
+        "total_degree(x^2*y+y)",
+        "total_degree(x^2*y+y,x)",
+        "total_degree(x^2*y+y,[z])",
+        "total_degree(0,[x,y])",
+        "total_degree(7,[x,y])",
+        "factor_xn(x^3+x^2)",
+        "factor_xn(x^4-1)",
+        "factor_xn(x^4+12*x^3+54*x^2+108*x+81)",
+        "factor_xn(2*x+1)",
+        "factor_xn(x^2*y+y)",
+        "factor_xn(y^2+y)",
+        "factor_xn(5)",
+        "factor_xn(0)",
+    ]);
+}
+
+/// `bezoutian` (CAS-543), in `x`, the other symbols coefficients.
+#[test]
+fn bezoutians() {
+    check(&[
+        "bezoutian(5x^3-x,3x^2+1)",
+        "bezoutian(x^2+1,x+2)",
+        "bezoutian([1,0,1],[1,2])",
+        "bezoutian(x^3+1,x^3+x)",
+        "bezoutian(x+1,x+2)",
+        "bezoutian(3,x+2)",
+        "bezoutian(x^2+y,x+y)",
+        "bezoutian(x^2+1,y+2)",
+        "bezoutian(y^2+x,y+x)",
+        "bezoutian(a*x^2+1,x+a)",
+        "bezoutian(x^3-2*x+1,x^2-1)",
+    ]);
+}
+
+/// `is_irreducible` (CAS-543), over ℚ.
+#[test]
+fn irreducibility() {
+    check(&[
+        "is_irreducible(x^2+1)",
+        "is_irreducible(x^2-1)",
+        "is_irreducible(x^2-2)",
+        "is_irreducible(x^4+4)",
+        "is_irreducible(4*x^2-4)",
+        "is_irreducible(x^2)",
+        "is_irreducible(x)",
+        "is_irreducible(2*x+2)",
+        "is_irreducible(x^2*y^2-1)",
+        "is_irreducible(y^2-1)",
+        "is_irreducible(x^2+y^2)",
+        "is_irreducible(x^2*y+1)",
+        "is_irreducible(x^2+1,x)",
+        "is_irreducible(5)",
+        "is_irreducible(0)",
+    ]);
+}
+
+/// Where this CAS departs from giac on purpose: giac's answer as it
+/// prints it (caseval's text for an error, cookbook C0007), and this
+/// CAS's as decided.
+#[test]
+fn departures() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let cases = [
+        // No algebraic-number type (R1.2-003): rootof stays a call.
+        (
+            "normal(1/rootof([1,0],[1,0,10,0,1]))",
+            "rootof([[-1,0,-10,0],[1,0,10,0,1]])",
+            "1/rootof([1,0],[1,0,10,0,1])",
+        ),
+        (
+            "evalf(rootof([1,0],[1,0,-2]))",
+            "1.41421356237",
+            "rootof([1,0],[1,0,-2])",
+        ),
+        // One list is the minimal polynomial; giac's caseval gives undef
+        // (its command line infinity).
+        ("rootof([1,0])", "undef", "rootof([1,0],[1,0])"),
+        // giac errs on a symbolic minimal polynomial and on one not monic;
+        // ours takes the first and leaves the second.
+        (
+            "rootof([1,0],x^2-2)",
+            "GIAC_ERROR: rootof minimal polynomial must be unitary Error: Bad Argument Value",
+            "rootof([1,0],[1,0,-2])",
+        ),
+        (
+            "rootof([1,0],[2,0,-4])",
+            "GIAC_ERROR: rootof minimal polynomial must be unitary Error: Bad Argument Value",
+            "rootof([1,0],[2,0,-4])",
+        ),
+        // No polynomial in the variables: the call stays.
+        ("factor_xn(1/x+1)", "1+x^-1", "factor_xn(1/x+1)"),
+        (
+            "total_degree(1/x+y,[x,y])",
+            "1",
+            "total_degree(1/x+y,[x,y])",
+        ),
+        (
+            "is_irreducible(1/x)",
+            "GIAC_ERROR: is_irreducible(1/x) \n Error: Bad Argument Type",
+            "is_irreducible(1/x)",
+        ),
+        // giac's sequence of the answer and the extra argument; a list.
+        ("factor_xn(x^2+x,y)", "x^2*(1+x^-1),y", "factor_xn(x^2+x,y)"),
+        (
+            "homogeneize([x^2-1,x],z)",
+            "[x^2-1,x]",
+            "homogeneize([x^2-1,x],z)",
+        ),
+        // giac rejects a variable; ours leaves the call.
+        (
+            "bezoutian(x^2+1,x+2,x)",
+            "GIAC_ERROR: bezoutian(x^2+1,x+2,x) \n Error: Bad Argument Value",
+            "bezoutian(x^2+1,x+2,x)",
+        ),
+        // x y has two factors: giac's 1 is wrong.
+        ("is_irreducible(x*y)", "1", "0"),
+        ("is_irreducible(x*y+x)", "1", "0"),
+    ];
+    let mut wrong = Vec::new();
+    for (input, answer, decided) in cases {
+        let printed = giac.eval(input).unwrap();
+        if printed != answer {
+            wrong.push(format!("{input}: giac prints {printed}, recorded {answer}"));
+        }
+        if ours(input) != ours(decided) {
+            wrong.push(format!("{input}: ours is not {decided}"));
+        }
+        if giac.agrees(input).is_ok() {
+            wrong.push(format!("{input} agrees now"));
+        }
+    }
+    // giac's `mod` suffix: the language does not read it.
+    let modular = "is_irreducible(x^3+x+1 mod 7)";
+    if giac.eval(modular).unwrap() != "1" {
+        wrong.push(format!("{modular}: giac's answer changed"));
+    }
+    if ours(modular).is_ok() {
+        wrong.push(format!("{modular}: the language reads it now"));
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}

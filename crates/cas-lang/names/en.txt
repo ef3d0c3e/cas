@@ -199,6 +199,14 @@ ComplexFactor: cfactor
 CompleteSquare: canonical_form
 DigitPolynomial: genpoly
 BerlekampMassey: berlekamp_massey
+# Polynomial tools III (CAS-540, CAS-543), Xcas's.
+RootOf: rootof
+FactoredFromRoots: fcoeff
+Homogenize: homogeneize
+TotalDegree: total_degree
+FactorXn: factor_xn
+BezoutMatrix: bezoutian
+IrreduciblePolynomialQ: is_irreducible
 # Matrix decompositions and functions (CAS-DOC-30, CAS-344 to CAS-347).
 LUDecomposition: lu
 QRDecomposition: qr

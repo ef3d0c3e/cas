@@ -69,7 +69,7 @@ use crate::symbol::Symbol;
 
 type Native = Result<Option<Expr>, EvalError>;
 
-fn is_list(e: &Expr) -> bool {
+pub(super) fn is_list(e: &Expr) -> bool {
     e.head() == Some(&Expr::from(Symbol::LIST))
 }
 
@@ -390,7 +390,7 @@ fn extended(ring: &DenseRing<Rationals>, a: &Poly, b: &Poly) -> (Poly, Poly, Pol
     (s0, t0, r0)
 }
 
-fn answer(ev: &mut Eval<'_>, name: &'static str, e: &Expr, result: &Expr) -> Native {
+pub(super) fn answer(ev: &mut Eval<'_>, name: &'static str, e: &Expr, result: &Expr) -> Native {
     let result = ev.eval(result)?;
     ev.step(name, e, &result);
     Ok(Some(result))

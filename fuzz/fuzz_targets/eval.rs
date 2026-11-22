@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 449] = [
+const BUILTINS: [&str; 456] = [
     "Plus",
     "Times",
     "Power",
@@ -243,6 +243,14 @@ const BUILTINS: [&str; 449] = [
     "CompleteSquare",
     "DigitPolynomial",
     "BerlekampMassey",
+    // Polynomial tools III (CAS-540, CAS-543).
+    "RootOf",
+    "FactoredFromRoots",
+    "Homogenize",
+    "TotalDegree",
+    "FactorXn",
+    "BezoutMatrix",
+    "IrreduciblePolynomialQ",
     // Statistics II (CAS-DOC-50).
     "Frequencies",
     "CumulatedFrequencies",

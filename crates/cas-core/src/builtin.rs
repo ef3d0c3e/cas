@@ -253,6 +253,14 @@ builtins! {
     COMPLETE_SQUARE = "CompleteSquare" [PROTECTED];
     DIGIT_POLYNOMIAL = "DigitPolynomial" [PROTECTED];
     BERLEKAMP_MASSEY = "BerlekampMassey" [PROTECTED];
+    // Polynomial tools III (CAS-540, CAS-543).
+    ROOT_OF = "RootOf" [PROTECTED];
+    FACTORED_FROM_ROOTS = "FactoredFromRoots" [PROTECTED];
+    HOMOGENIZE = "Homogenize" [PROTECTED];
+    TOTAL_DEGREE = "TotalDegree" [PROTECTED];
+    FACTOR_XN = "FactorXn" [PROTECTED];
+    BEZOUT_MATRIX = "BezoutMatrix" [PROTECTED];
+    IRREDUCIBLE_POLYNOMIAL_Q = "IrreduciblePolynomialQ" [PROTECTED];
     // Matrix decompositions and functions (CAS-DOC-30).
     LU_DECOMPOSITION = "LUDecomposition" [PROTECTED];
     QR_DECOMPOSITION = "QRDecomposition" [PROTECTED];

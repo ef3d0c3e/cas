@@ -85,6 +85,62 @@ fn constructions() {
     ]);
 }
 
+/// giac's bezoutians (CAS-543), and their determinants against the
+/// resultant: `±lc(f)^(deg f − deg g) Res(f, g)`.
+#[test]
+fn bezout_matrices() {
+    check(&[
+        (
+            "BezoutMatrix[Plus[Times[5, Power[x, 3]], Times[-1, x]], Plus[Times[3, Power[x, 2]], 1]]",
+            "List[List[1, 0, -5], List[0, -8, 0], List[-5, 0, -15]]",
+        ),
+        (
+            "BezoutMatrix[Plus[Power[x, 2], 1], Plus[x, 2]]",
+            "List[List[1, -2], List[-2, -1]]",
+        ),
+        (
+            "BezoutMatrix[List[1, 0, 1], List[1, 2]]",
+            "List[List[1, -2], List[-2, -1]]",
+        ),
+        (
+            "BezoutMatrix[Plus[Power[x, 3], 1], Plus[Power[x, 3], x]]",
+            "List[List[1, 0, 1], List[0, 1, -1], List[1, -1, 0]]",
+        ),
+        ("BezoutMatrix[Plus[x, 1], Plus[x, 2]]", "List[List[-1]]"),
+        ("BezoutMatrix[3, Plus[x, 2]]", "List[List[3]]"),
+        (
+            "BezoutMatrix[Plus[Power[x, 2], y], Plus[x, y]]",
+            "List[List[y, Times[-1, y]], List[Times[-1, y], -1]]",
+        ),
+        (
+            "BezoutMatrix[Plus[Power[x, 2], 1], Plus[y, 2]]",
+            "List[List[0, Plus[-2, Times[-1, y]]], List[Plus[-2, Times[-1, y]], 0]]",
+        ),
+        (
+            "BezoutMatrix[Plus[Power[x, 3], Times[-2, x], 1], Plus[Power[x, 2], -1]]",
+            "List[List[-2, 1, 1], List[1, -1, 0], List[1, 0, -1]]",
+        ),
+        // A third argument and constants leave the call.
+        (
+            "BezoutMatrix[Plus[Power[x, 2], 1], Plus[x, 2], x]",
+            "BezoutMatrix[Plus[Power[x, 2], 1], Plus[x, 2], x]",
+        ),
+        ("BezoutMatrix[3, 5]", "BezoutMatrix[3, 5]"),
+        (
+            "Det[BezoutMatrix[Plus[Times[5, Power[x, 3]], Times[-1, x]], Plus[Times[3, Power[x, 2]], 1]]]",
+            "Times[5, Resultant[Plus[Times[5, Power[x, 3]], Times[-1, x]], Plus[Times[3, Power[x, 2]], 1], x]]",
+        ),
+        (
+            "Det[BezoutMatrix[Plus[Power[x, 3], 1], Plus[Power[x, 3], x]]]",
+            "Resultant[Plus[Power[x, 3], 1], Plus[Power[x, 3], x], x]",
+        ),
+        (
+            "Det[BezoutMatrix[Plus[Power[x, 2], 1], Plus[x, 2]]]",
+            "Times[-1, Resultant[Plus[Power[x, 2], 1], Plus[x, 2], x]]",
+        ),
+    ]);
+}
+
 /// `L D Lᵀ`, positive definiteness and inertia (CAS-477).
 #[test]
 fn symmetric_matrices() {

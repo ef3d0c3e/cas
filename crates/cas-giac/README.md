@@ -134,6 +134,20 @@ repeated root (giac's spurious `[0,1]`), the sign of a `sturmseq` factor
 when the highest multiplicity is even, and the order of rational roots
 within a multiplicity.
 
+`tests/polytools_three.rs`, polynomial tools III (CAS-540, CAS-543):
+giac's `rootof`, `fcoeff`, `homogeneize`, `total_degree`, `factor_xn`,
+`bezoutian` and `is_irreducible` read back and compared with ours; and the
+departures, each with giac's answer: `rootof` stays a call, as there is no
+algebraic-number type (R1.2-003: giac's `normal` and `evalf` of one, and
+`undef` for `rootof([1,0])`); a symbolic minimal polynomial is read as its
+list and one not monic left (giac errs on both); `factor_xn`,
+`total_degree` and `is_irreducible` leave a non-polynomial (giac's
+`1+x^-1`, `1`, an error); `factor_xn` with a second argument and
+`homogeneize` of a list stay (giac echoes them); `bezoutian` with a
+variable stays (giac errs); `is_irreducible(x*y)` and `(x*y+x)` are 0, where
+giac's 1 is wrong; and `is_irreducible(... mod 7)` is giac's 1, as the
+language does not read `mod`.
+
 `tests/all_trig_solutions.rs` and `tests/with_sqrt.rs`, giac's settings
 (CAS-545), one setting a file, as giac's instance is shared by the tests of
 a file and giac's input sets and resets it within one call:
