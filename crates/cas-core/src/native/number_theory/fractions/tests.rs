@@ -100,3 +100,21 @@ fn back() {
         ),
     ]);
 }
+
+/// A zero quotient can make the convergent's denominator zero:
+/// `{-2, -1, 0, 1}` is `-2 + 1/0`, which is `ComplexInfinity` as `1/0` is.
+/// The `eval` fuzz target (run 42057178575) found it panicking in
+/// `Rational::new` from within the expression below (CAS-525).
+#[test]
+fn a_zero_denominator_is_complex_infinity() {
+    check(&[
+        (
+            "FromContinuedFraction[List[-2, -1, 0, 1]]",
+            "ComplexInfinity",
+        ),
+        ("FromContinuedFraction[List[0, 0]]", "ComplexInfinity"),
+    ]);
+    let found = "ZTest[SinIntegral[BetaPDF[CosToSinTan[MatchQ[a, E]]]], b, \
+                 Median[Median[FromContinuedFraction[Table[x, x, -2, 1]]]]]";
+    let _ = Context::new().eval(&read(found));
+}

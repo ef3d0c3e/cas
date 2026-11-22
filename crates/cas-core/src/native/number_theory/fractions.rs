@@ -267,6 +267,14 @@ pub(in crate::native) fn from_continued_fraction(_: &mut Eval<'_>, e: &Expr) -> 
         if prefix.is_empty() {
             return Ok(None);
         }
+        // A zero quotient can make q zero ({-2, -1, 0, 1} is -2 + 1/0): p/0
+        // goes to the evaluator, which gives ComplexInfinity as for 1/0
+        // (eval fuzz, CAS-525).
+        if q.is_zero() {
+            return Ok(Some(
+                Expr::from(p) * Expr::from(q).pow(Expr::from(Integer::from(-1))),
+            ));
+        }
         return Ok(Some(Expr::from(Rational::new(p, q))));
     };
     let Some(period) = integers(period) else {
