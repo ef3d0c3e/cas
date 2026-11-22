@@ -1,0 +1,13 @@
+# Phase history
+
+Built by `tools/phaseend_index.py history` from the PhaseEnds and rebuilt at each close; never edited by hand. Each phase's PhaseEnd holds the rest.
+
+## Phases
+
+- 1.1 | 2026-11-22 | Green master | Phase 1.1 Green master: master's CI and Fuzz are green again on fa9ae22 (CI run 45047911216, all five jobs; Fuzz run 45047911210, all 55 targets).
+
+## This generation's recaps (1, newest first)
+
+### 1.1: Green master (2026-11-22)
+
+Phase 1.1 Green master: master's CI and Fuzz are green again on fa9ae22 (CI run 45047911216, all five jobs; Fuzz run 45047911210, all 55 targets). The eval fuzz crash came from FromContinuedFraction (CAS-424), not CAS-517..524: a zero last denominator (-2 + 1/0) reached Rational::new; it now gives ComplexInfinity, under a regression test in cas-core (CAS-525). boundary_values now checks BVPSolve against closed forms on small grids and giac only at step 1/20; giac's n=4 error (0.044) is a recorded departure, and the accuracy comments were corrected (CAS-520). giac_gap.sh moved to scripts/ with an output-folder argument; the card lists Numerical analysis and Signal processing. CAS-517..525 are done in Lific. Decided during the phase: agents push master themselves when CI needs to run (card 705b703, after the developer removed the never-push fail-safe from CLAUDE.md). Open: .claude/settings.json has a trailing comma from the developer's edit (his to fix); the generation plan's standing constraints still describe a push stop, so each later phase brief says agents push; lific issue list caps at 500, so ticket checks use issue get; checkout@v4 Node 20 deprecation warning.
