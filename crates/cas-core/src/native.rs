@@ -473,6 +473,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::L_INFINITY_NORM,
             matrix::decompose::norms::l_infinity_norm,
         ),
+        (Symbol::MAX_NORM, matrix::decompose::norms::max_norm),
         (
             Symbol::CONDITION_NUMBER,
             matrix::decompose::norms::condition_number,
@@ -890,6 +891,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::ROW_ADD, matrix::slicing::row_add),
         (Symbol::ROW_SWAP, matrix::slicing::row_swap),
         (Symbol::COLUMN_SWAP, matrix::slicing::column_swap),
+        (Symbol::ROW_SPACE, matrix::row_space),
+        (Symbol::COL_SPACE, matrix::col_space),
+        (Symbol::INTERSECTION_BASIS, matrix::intersection_basis),
+        (Symbol::SYSTEM_MATRIX, matrix::system_matrix),
         (Symbol::SIMPLIFY, simplify::simplify),
         (Symbol::TRIG_EXPAND, trig::trig_expand),
         (Symbol::TRIG_REDUCE, trig::trig_reduce),

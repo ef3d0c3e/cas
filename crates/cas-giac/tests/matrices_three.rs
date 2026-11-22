@@ -3,6 +3,7 @@
 //! CAS's, and the departures, each with giac's answer as it prints it and
 //! this CAS's as decided.
 
+use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
 
 /// The shared library, or `None` with a note: the checks skip.
@@ -169,6 +170,146 @@ fn departures() {
         };
         if !recorded {
             wrong.push(format!("{input}: giac prints {printed}, recorded {answer}"));
+        }
+        if ours(input) != ours(decided) {
+            wrong.push(format!("{input}: ours is not {decided}"));
+        }
+        if giac.agrees(input).is_ok() {
+            wrong.push(format!("{input} agrees now"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+#[test]
+fn norms_and_systems() {
+    check(&[
+        "maxnorm([[1,2],[3,-4]])",
+        "maxnorm([1,-5,3])",
+        "maxnorm([[1,2],[3,-4*i]])",
+        "maxnorm([3+4*i,1])",
+        "maxnorm(5)",
+        "maxnorm([[1,2],[3,x]])",
+        "rowNorm([[1,2],[3,-4]])",
+        "rownorm([[1.5,-2],[3,0]])",
+        "colNorm([[1,2],[3,-4]])",
+        "colnorm([[1,2],[3,4*i]])",
+        "syst2mat([x-y=1,x+2*y],[x,y])",
+        "syst2mat([2*x+3*y=5,x-y=a],[x,y])",
+        "syst2mat([x+y+z=1],[x,y,z])",
+        "syst2mat([x+y=1,x-y=2*x],[x,y])",
+        "syst2mat([x*y=1],[x,y])",
+        "syst2mat([x+y],[x,y,z])",
+    ]);
+}
+
+/// Where giac's answers are already in reduced row echelon form.
+#[test]
+fn spaces() {
+    check(&[
+        "rowspace([[1,2,3],[1,2,3],[1,2,4],[1,2,5]])",
+        "rowspace([[2,4],[1,2]])",
+        "rowspace([[0,0],[0,0]])",
+        "colspace([[1,2,3],[1,2,3],[1,2,4],[1,2,5]])",
+        "colspace([[1,2],[2,4],[3,7]])",
+        "ibasis([[1,0,0],[0,1,0]],[[1,1,0],[0,0,1]])",
+        "ibasis([[1,0,0],[0,1,0]],[[2,2,0],[0,0,1]])",
+        "ibasis([[1,0,0],[0,1,0],[0,0,1]],[[1,1,1],[0,0,2]])",
+        "ibasis([[1,0,0],[0,1,0]],[[1,0,0],[0,2,0]])",
+        "ibasis([[1,2,3],[0,1,1]],[[1,3,4],[2,1,0]])",
+        "ibasis([[1,0],[0,1]],[[1,0],[0,1]])",
+        "ibasis([[2,4,6]],[[1,2,3]])",
+        "ibasis([[1,2]],[[2,4]])",
+    ]);
+}
+
+/// The vectors of `e`, a list or a set, in reduced row echelon form.
+fn reduced(e: &Expr) -> Option<Expr> {
+    let vectors = Expr::apply(&Symbol::LIST.into(), e.args());
+    let rref = Expr::apply(&Symbol::ROW_REDUCE.into(), &[vectors]);
+    Context::new().eval(&rref).ok()
+}
+
+/// Where giac's rows are fraction-free multiples, or of another sign: the
+/// same span, giac's answer and this CAS's having one reduced row echelon
+/// form.
+#[test]
+fn same_spans() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let inputs = [
+        "rowspace([[2,3],[4,1]])",
+        "rowspace([[2,1],[4,1]])",
+        "rowspace([[3,1,2],[6,2,5]])",
+        "rowspace([[a,1],[1,a]])",
+        "rowspace([[1/2,1/3],[1,2/3]])",
+        "colspace([[3,1],[1,2],[2,5]])",
+        "colspace([[2,4],[1,2]])",
+        "ibasis([[1,0,0],[0,1,0]],[[1,1,1],[0,0,1]])",
+        "ibasis([[1,0,0],[0,1,0]],[[3,6,0],[0,0,1]])",
+        "ibasis([[1,0,0],[0,0,1]],[[1,1,0],[0,1,1]])",
+        "ibasis([[1/2,0,0],[0,1,0]],[[1,1,1],[0,0,1]])",
+        "ibasis([[1,0],[0,1]],[[a,1]])",
+    ];
+    let mut wrong = Vec::new();
+    for input in inputs {
+        let spanned = |e: &Expr| {
+            if input.starts_with("colspace") {
+                // The columns span: reduce the transpose.
+                Context::new()
+                    .eval(&Expr::apply(
+                        &Symbol::TRANSPOSE.into(),
+                        std::slice::from_ref(e),
+                    ))
+                    .ok()
+                    .and_then(|t| reduced(&t))
+            } else {
+                reduced(e)
+            }
+        };
+        let theirs = giac.value(input).ok().and_then(|e| spanned(&e));
+        let mine = ours(input).ok().and_then(|e| spanned(&e));
+        if theirs.is_none() || theirs != mine {
+            wrong.push(format!("{input}: giac's span {theirs:?}, ours {mine:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Departures of CAS-532 and CAS-534: giac errs (its error text by `rror`,
+/// or no answer), or keeps a dimension in a variable; this CAS's as decided.
+#[test]
+fn space_departures() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let cases = [
+        // The norms of a vector, where giac errs.
+        ("rownorm([1,-2,3])", None, "3"),
+        ("colnorm([1,-2,3])", None, "6"),
+        // No intersection is the empty set, where giac errs.
+        ("ibasis([[1,0,0],[0,1,0]],[[0,0,1]])", None, "{}"),
+        // A dimension variable stays, where giac stores the dimension.
+        (
+            "rowspace([[1,2,3],[1,2,3],[1,2,4],[1,2,5]],d)",
+            Some("[[1,2,0],[0,0,1]]"),
+            "rowspace([[1,2,3],[1,2,3],[1,2,4],[1,2,5]],d)",
+        ),
+    ];
+    let mut wrong = Vec::new();
+    for (input, answer, decided) in cases {
+        let printed = giac.eval(input);
+        let recorded = match (answer, &printed) {
+            (None, Ok(p)) => p.contains("rror"),
+            (None, Err(_)) => true,
+            (Some(a), Ok(p)) => p.replace("matrix[", "[").replace(' ', "") == a,
+            (Some(_), Err(_)) => false,
+        };
+        if !recorded {
+            wrong.push(format!(
+                "{input}: giac prints {printed:?}, recorded {answer:?}"
+            ));
         }
         if ours(input) != ours(decided) {
             wrong.push(format!("{input}: ours is not {decided}"));

@@ -229,8 +229,9 @@ LDLDecomposition: ldl
 PositiveDefiniteQ: isposdef
 Inertia: inertia
 MatrixNorm: matrix_norm
-L1Norm: l1norm
-LInfinityNorm: linfnorm
+L1Norm: l1norm colNorm colnorm
+LInfinityNorm: linfnorm rowNorm rownorm
+MaxNorm: maxnorm
 ConditionNumber: cond
 GramSchmidt: gramschmidt
 SingularValues: svl
@@ -326,6 +327,10 @@ ScaleRow: scale SCALE
 RowAdd: rowAdd
 RowSwap: rowSwap swaprow rowswap SWAPROW
 ColumnSwap: colSwap swapcol colswap SWAPCOL
+RowSpace: rowspace
+ColSpace: colspace
+IntersectionBasis: ibasis
+SystemMatrix: syst2mat
 # Sums and products (CAS-DOC-13, CAS-224, CAS-225).
 Sum: sum
 Product: product mul

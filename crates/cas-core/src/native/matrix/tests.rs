@@ -681,3 +681,112 @@ fn row_operations() {
     let input = format!("RowSwap[{M2}, 0, 2]");
     assert_eq!(ctx.eval(&read(&input)), Err(EvalError::IndexOutOfRange));
 }
+
+/// giac's `maxnorm` (CAS-534), as giac 2.0 answers, and what stays.
+#[test]
+fn max_norms() {
+    check(&[
+        ("MaxNorm[List[List[1, 2], List[3, -4]]]", "4"),
+        ("MaxNorm[List[1, -5, 3]]", "5"),
+        ("MaxNorm[List[Plus[3, Times[4, I]], 1]]", "5"),
+        ("MaxNorm[List[List[1, 2], List[3, Times[-4, I]]]]", "4"),
+        ("MaxNorm[5]", "5"),
+        ("MaxNorm[List[List[1, 2], List[3, x]]]", "Max[2, 3, Abs[x]]"),
+        ("MaxNorm[List[]]", "MaxNorm[List[]]"),
+        (
+            "MaxNorm[List[List[1, 2], List[3]]]",
+            "MaxNorm[List[List[1, 2], List[3]]]",
+        ),
+    ]);
+}
+
+const M43: &str = "List[List[1, 2, 3], List[1, 2, 3], List[1, 2, 4], List[1, 2, 5]]";
+
+/// giac's `rowspace`, `colspace` and `ibasis` (CAS-532), in reduced row
+/// echelon form, and what stays.
+#[test]
+fn spaces() {
+    check(&[
+        (
+            &format!("RowSpace[{M43}]"),
+            "List[List[1, 2, 0], List[0, 0, 1]]",
+        ),
+        (
+            "RowSpace[List[List[2, 3], List[4, 1]]]",
+            "List[List[1, 0], List[0, 1]]",
+        ),
+        ("RowSpace[List[List[2, 4], List[1, 2]]]", "List[List[1, 2]]"),
+        ("RowSpace[List[List[0, 0], List[0, 0]]]", "List[]"),
+        (
+            &format!("RowSpace[{M43}, d]"),
+            &format!("RowSpace[{M43}, d]"),
+        ),
+        (
+            &format!("ColSpace[{M43}]"),
+            "List[List[1, 0], List[1, 0], List[0, 1], List[-1, 2]]",
+        ),
+        (
+            "ColSpace[List[List[2, 4], List[1, 2]]]",
+            "List[List[1], List[1/2]]",
+        ),
+        ("ColSpace[List[List[0, 0], List[0, 0]]]", "List[]"),
+        ("ColSpace[x]", "ColSpace[x]"),
+        (
+            "IntersectionBasis[List[List[1, 0, 0], List[0, 1, 0]], List[List[1, 1, 0], List[0, 0, 1]]]",
+            "FiniteSet[List[1, 1, 0]]",
+        ),
+        (
+            "IntersectionBasis[List[List[1, 0, 0], List[0, 1, 0]], List[List[1, 1, 1], List[0, 0, 1]]]",
+            "FiniteSet[List[1, 1, 0]]",
+        ),
+        (
+            "IntersectionBasis[List[List[1, 0, 0], List[0, 1, 0], List[0, 0, 1]], List[List[1, 1, 1], List[0, 0, 2]]]",
+            "FiniteSet[List[1, 1, 0], List[0, 0, 1]]",
+        ),
+        (
+            "IntersectionBasis[List[List[1, 2]], List[List[2, 4]]]",
+            "FiniteSet[List[1, 2]]",
+        ),
+        (
+            "IntersectionBasis[List[List[1, 0], List[0, 1]], List[List[a, 1]]]",
+            "FiniteSet[List[1, Power[a, -1]]]",
+        ),
+        // None, where giac errs.
+        (
+            "IntersectionBasis[List[List[1, 0, 0], List[0, 1, 0]], List[List[0, 0, 1]]]",
+            "FiniteSet[]",
+        ),
+        (
+            "IntersectionBasis[List[List[1, 0], List[0, 1]], List[List[1, 2, 3]]]",
+            "IntersectionBasis[List[List[1, 0], List[0, 1]], List[List[1, 2, 3]]]",
+        ),
+    ]);
+}
+
+/// giac's `syst2mat` (CAS-532), as giac 2.0 answers, and what stays.
+#[test]
+fn system_matrices() {
+    check(&[
+        (
+            "SystemMatrix[List[Equal[Plus[x, Times[-1, y]], 1], Plus[x, Times[2, y]]], List[x, y]]",
+            "List[List[1, -1, -1], List[1, 2, 0]]",
+        ),
+        (
+            "SystemMatrix[List[Equal[Times[x, y], 1]], List[x, y]]",
+            "List[List[y, x, -1]]",
+        ),
+        (
+            "SystemMatrix[List[Equal[Plus[Times[2, x], Times[3, y]], 5], Equal[Plus[x, Times[-1, y]], a]], List[x, y]]",
+            "List[List[2, 3, -5], List[1, -1, Times[-1, a]]]",
+        ),
+        (
+            "SystemMatrix[List[Plus[x, y]], List[x, y, z]]",
+            "List[List[1, 1, 0, 0]]",
+        ),
+        (
+            "SystemMatrix[List[x], List[1]]",
+            "SystemMatrix[List[x], List[1]]",
+        ),
+        ("SystemMatrix[x, List[x]]", "SystemMatrix[x, List[x]]"),
+    ]);
+}

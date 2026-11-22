@@ -285,6 +285,7 @@ builtins! {
     MATRIX_NORM = "MatrixNorm" [PROTECTED];
     L1_NORM = "L1Norm" [PROTECTED];
     L_INFINITY_NORM = "LInfinityNorm" [PROTECTED];
+    MAX_NORM = "MaxNorm" [PROTECTED];
     CONDITION_NUMBER = "ConditionNumber" [PROTECTED];
     GRAM_SCHMIDT = "GramSchmidt" [PROTECTED];
     SINGULAR_VALUES = "SingularValues" [PROTECTED];
@@ -339,6 +340,10 @@ builtins! {
     ROW_ADD = "RowAdd" [PROTECTED];
     ROW_SWAP = "RowSwap" [PROTECTED];
     COLUMN_SWAP = "ColumnSwap" [PROTECTED];
+    ROW_SPACE = "RowSpace" [PROTECTED];
+    COL_SPACE = "ColSpace" [PROTECTED];
+    INTERSECTION_BASIS = "IntersectionBasis" [PROTECTED];
+    SYSTEM_MATRIX = "SystemMatrix" [PROTECTED];
     // Sums and products (CAS-DOC-13).
     SUM = "Sum" [PROTECTED];
     PRODUCT = "Product" [PROTECTED];

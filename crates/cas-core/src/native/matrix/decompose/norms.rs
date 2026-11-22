@@ -5,7 +5,10 @@
 //!   column sum of `|a_ij|`; `Infinity`, the largest row sum; `frobenius`,
 //!   `√Σ|a_ij|²`; `2`, the largest singular value. `L1Norm` and
 //!   `LInfinityNorm`, `l1norm` and `linfnorm`: those of a matrix, and of a
-//!   vector the sum and the largest of `|vᵢ|`.
+//!   vector the sum and the largest of `|vᵢ|`; giac's `colNorm` and
+//!   `rowNorm` of a matrix are those, named as aliases (CAS-534).
+//! - **`MaxNorm[A]`** (CAS-534), `maxnorm`: the largest `|a_ij|` of a matrix
+//!   or `|vᵢ|` of a vector, `|x|` of a scalar, as `Max` of `Abs`.
 //! - **`ConditionNumber[A, k]`**, `cond`: `‖A‖ ‖A⁻¹‖`, the 1-norm by
 //!   default, giac's `cond([[1,2],[3,4]])` being 21; `Infinity` for a
 //!   singular `A`.
@@ -174,6 +177,33 @@ pub(in crate::native) fn l1_norm(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// `LInfinityNorm[A]`.
 pub(in crate::native) fn l_infinity_norm(ev: &mut Eval<'_>, e: &Expr) -> Native {
     vector_or_matrix(ev, e, Kind::Infinity, "linfnorm")
+}
+
+/// `MaxNorm[A]`.
+pub(in crate::native) fn max_norm(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [a] = e.args() else {
+        return Ok(None);
+    };
+    let n = if a.head() == Some(&Expr::from(Symbol::LIST)) {
+        let is_row = |x: &Expr| x.head() == Some(&Expr::from(Symbol::LIST));
+        let parts: Vec<Expr> = if a.args().iter().any(is_row) {
+            let Some(m) = rows(a) else {
+                return Ok(None);
+            };
+            m.iter().flatten().map(abs).collect()
+        } else {
+            a.args().iter().map(abs).collect()
+        };
+        if parts.is_empty() {
+            return Ok(None);
+        }
+        max(parts)
+    } else {
+        abs(a)
+    };
+    let result = ev.eval(&n)?;
+    ev.step("maxnorm", e, &result);
+    Ok(Some(result))
 }
 
 /// `ConditionNumber[A]`, `ConditionNumber[A, k]`.

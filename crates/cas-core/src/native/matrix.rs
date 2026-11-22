@@ -38,6 +38,10 @@
 //!   [`constructors`]; dimensions, rows, columns, submatrices and row
 //!   operations (`rowdim`, `row`, `subMat`, `delrows`, `mRowAdd`, `rowSwap`,
 //!   …, CAS-532, CAS-533) in [`slicing`].
+//! - `RowSpace`, Xcas's `rowspace`; `ColSpace`, `colspace`;
+//!   `IntersectionBasis`, `ibasis`: bases by the reduced row echelon form,
+//!   where giac's are fraction-free multiples; `SystemMatrix`, `syst2mat`:
+//!   the augmented matrix of linear equations (CAS-532).
 //!
 //! A matrix of modular values of one modulus goes to `modular::matrices`
 //! first (CAS-DOC-44 §2).
@@ -657,6 +661,15 @@ pub(super) fn column_space(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some(m) = matrix_argument(e) else {
         return Ok(None);
     };
+    let Some(rows) = image(ev, e, m)? else {
+        return Ok(None);
+    };
+    stepped(ev, "image", e, list(rows.into_iter().map(list)))
+}
+
+/// The nonzero rows of the reduced row echelon form of the transpose of the
+/// matrix `m`; `None` as [`reduced`].
+fn image(ev: &mut Eval<'_>, e: &Expr, m: &Expr) -> Result<Option<Vec<Vec<Expr>>>, EvalError> {
     let Some(Shape::Matrix(rows, columns)) = shape(m) else {
         return Ok(None);
     };
@@ -665,12 +678,149 @@ pub(super) fn column_space(ev: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(None);
     };
     let rank = r.pivots.len();
+    Ok(Some(r.rows.into_iter().take(rank).collect()))
+}
+
+/// `RowSpace[m]`, Xcas's `rowspace`: the nonzero rows of the reduced row
+/// echelon form, where giac's are fraction-free multiples; `[]` for a zero
+/// matrix.
+pub(super) fn row_space(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some(m) = matrix_argument(e) else {
+        return Ok(None);
+    };
+    let Some(r) = reduced(ev, e, m)? else {
+        return Ok(None);
+    };
+    let rank = r.pivots.len();
     stepped(
         ev,
-        "image",
+        "rowspace",
         e,
         list(r.rows.into_iter().take(rank).map(list)),
     )
+}
+
+/// `ColSpace[m]`, Xcas's `colspace`: the transpose of `ColumnSpace[m]`, its
+/// columns spanning those of `m`, as giac's
+/// `colspace([[1,2,3],[1,2,3],[1,2,4],[1,2,5]])` is
+/// `[[1,0],[1,0],[0,1],[-1,2]]`.
+pub(super) fn col_space(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some(m) = matrix_argument(e) else {
+        return Ok(None);
+    };
+    let Some(rows) = image(ev, e, m)? else {
+        return Ok(None);
+    };
+    let n = m.args().len();
+    let result = if rows.is_empty() {
+        list([])
+    } else {
+        list((0..n).map(|i| list(rows.iter().map(|r| r[i].clone()))))
+    };
+    stepped(ev, "colspace", e, result)
+}
+
+/// `IntersectionBasis[a, b]`, Xcas's `ibasis`, of two lists of vectors of
+/// one length: for each kernel vector `v` of the matrix whose columns are
+/// those of `a` then `b` (as `NullSpace` builds them), `Σ_{i<|a|} vᵢ aᵢ`;
+/// the set of the nonzero rows of the reduced row echelon form of those,
+/// `{}` for none (where giac errs).
+pub(super) fn intersection_basis(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [a, b] = e.args() else {
+        return Ok(None);
+    };
+    let (Some(Shape::Matrix(p, n)), Some(Shape::Matrix(q, k))) = (shape(a), shape(b)) else {
+        return Ok(None);
+    };
+    if n != k {
+        return Ok(None);
+    }
+    let stacked: Vec<&Expr> = a.args().iter().chain(b.args()).collect();
+    let columns = list((0..n).map(|j| list(stacked.iter().map(|v| v.args()[j].clone()))));
+    let Some(r) = reduced(ev, e, &columns)? else {
+        return Ok(None);
+    };
+    let vectors: Vec<Expr> = (0..p + q)
+        .filter(|j| !r.pivots.contains(j))
+        .map(|f| {
+            let mut v = vec![Expr::from(0); p + q];
+            v[f] = Expr::from(-1);
+            for (i, &c) in r.pivots.iter().enumerate() {
+                v[c] = r.rows[i][f].clone();
+            }
+            list((0..n).map(|j| {
+                Expr::call(
+                    Symbol::PLUS,
+                    (0..p)
+                        .map(|i| Expr::call(Symbol::TIMES, [v[i].clone(), entry(a, i, j).clone()]))
+                        .collect::<Vec<_>>(),
+                )
+            }))
+        })
+        .collect();
+    if vectors.is_empty() {
+        return stepped(
+            ev,
+            "ibasis",
+            e,
+            Expr::call(Symbol::FINITE_SET, Vec::<Expr>::new()),
+        );
+    }
+    let vectors = ev.eval(&list(vectors))?;
+    let Some(r) = reduced(ev, e, &vectors)? else {
+        return Ok(None);
+    };
+    let rank = r.pivots.len();
+    stepped(
+        ev,
+        "ibasis",
+        e,
+        Expr::call(
+            Symbol::FINITE_SET,
+            r.rows.into_iter().take(rank).map(list).collect::<Vec<_>>(),
+        ),
+    )
+}
+
+/// `SystemMatrix[eqns, vars]`, Xcas's `syst2mat`: a row per equation
+/// `l = r` (or expression `l`, as `l = 0`), the derivatives of `l − r` in
+/// the unknowns then `l − r` at 0, as giac's `syst2mat([x*y=1],[x,y])` is
+/// `[[y,x,-1]]`.
+pub(super) fn system_matrix(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [eqns, vars] = e.args() else {
+        return Ok(None);
+    };
+    if !is_list(eqns) || !is_list(vars) || eqns.args().is_empty() || vars.args().is_empty() {
+        return Ok(None);
+    }
+    if vars.args().iter().any(|v| v.as_symbol().is_none()) {
+        return Ok(None);
+    }
+    let zeros: Vec<(Expr, Expr)> = vars
+        .args()
+        .iter()
+        .map(|v| (v.clone(), Expr::from(0)))
+        .collect();
+    let rows = eqns.args().iter().map(|eq| {
+        let f = match eq.args() {
+            [l, r] if eq.head() == Some(&Expr::from(Symbol::EQUAL)) => Expr::call(
+                Symbol::PLUS,
+                [
+                    l.clone(),
+                    Expr::call(Symbol::TIMES, [Expr::from(-1), r.clone()]),
+                ],
+            ),
+            _ => eq.clone(),
+        };
+        let mut row: Vec<Expr> = vars
+            .args()
+            .iter()
+            .map(|v| Expr::call(Symbol::D, [f.clone(), v.clone()]))
+            .collect();
+        row.push(f.substitute(&zeros));
+        list(row)
+    });
+    stepped(ev, "syst2mat", e, list(rows.collect::<Vec<_>>()))
 }
 
 /// `LinSolve[eqns, vars]` and `LinSolve[a, b]`, Xcas's `linsolve`: the

@@ -190,8 +190,8 @@ a file and giac's input sets and resets it within one call:
   part (giac's `x^4+1` and `sin(x)=2` orders), and `cfsolve(exp(x)=0,x)`
   is `[]` where giac gives `[undef]`.
 
-`tests/matrices_three.rs`, matrix constructors, slices and row operations
-(CAS-531, CAS-532, CAS-533):
+`tests/matrices_three.rs`, matrix constructors, slices, row operations,
+spaces and norms (CAS-531, CAS-532, CAS-533, CAS-534):
 - giac's `matrix`, `makemat`, `list2mat`, `mat2list`, `blockmatrix`,
   `JordanBlock`, `BlockDiagonal`, `rowdim`, `coldim`, `row`, `col`,
   `subMat`, `delrows`, `delcols`, `mRow`, `mRowAdd`, `scaleadd`, `scale`,
@@ -202,7 +202,14 @@ a file and giac's input sets and resets it within one call:
   reversed bounds stays (giac's `[[9]]`); a negative row in `mRow` counts
   from the end, as every index does (giac errs); and where giac errs,
   `rowDim` of a vector, `JordanBlock(2,0)`, `BlockDiagonal` of non-square
-  blocks and `blockmatrix` of non-matrices stay.
+  blocks and `blockmatrix` of non-matrices stay;
+- `maxnorm`, `rowNorm`, `colNorm`, `syst2mat`, and `rowspace`, `colspace`
+  and `ibasis` where giac's answer is in reduced row echelon form, read
+  back and compared; where giac's rows are fraction-free multiples, the
+  same span (one reduced row echelon form of both answers);
+- the departures of these: `rownorm` and `colnorm` of a vector answer
+  (giac errs), `ibasis` with no intersection is `{}` (giac errs), and
+  `rowspace(A,d)` stays (giac stores the dimension in `d`).
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
