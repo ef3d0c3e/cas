@@ -117,19 +117,48 @@ fn linear_programs() {
     ]);
 }
 
+/// giac's answer to `input` with its random generator seeded (42: every
+/// input below then succeeds; seed 0 fails the first) first, in the
+/// same call: `nlpsolve` starts from random points, so its answer (and
+/// whether it finds one: `nlpsolve(x^2+y^2,[x+y=1],maximize=false)` fails
+/// in about 1 order in 20 of this binary's tests) depends on the draws
+/// the tests running before it made in the shared instance (T5).
+fn seeded(giac: &Giac, input: &str) -> Option<Expr> {
+    let answer = giac.eval(&format!("srand(42);{input}")).ok()?;
+    let mut depth = 0i32;
+    let mut start = 0;
+    for (i, c) in answer.char_indices() {
+        match c {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth -= 1,
+            ',' if depth == 0 => start = i + 1,
+            _ => {}
+        }
+    }
+    ours(&answer[start..].replace("list[", "[")).ok()
+}
+
 /// Nonlinear programs (CAS-519): giac's examples that its `nlpsolve`
 /// solves, its answers good to about 10⁻⁷ (COBYLA's tolerance), ours
-/// certified.
+/// certified; giac seeded ([`seeded`]).
 #[test]
 fn nonlinear_programs() {
-    check_within(
-        &[
-            "nlpsolve(sin(x1+x2)+(x1-x2)^2-1.5x1+2.5x2+1,x1=-1.5..4,x2=-3..3)",
-            "nlpsolve(sin(x)*cos(y),[x=0..3,y=0..3])",
-            "nlpsolve(x^2+y^2,[x+y=1],maximize=false)",
-            "nlpsolve(x*y,[x+y=2],maximize)",
-            "nlpsolve((x-2)^2,[x=0..1])",
-        ],
-        100_000,
-    );
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in [
+        "nlpsolve(sin(x1+x2)+(x1-x2)^2-1.5x1+2.5x2+1,x1=-1.5..4,x2=-3..3)",
+        "nlpsolve(sin(x)*cos(y),[x=0..3,y=0..3])",
+        "nlpsolve(x^2+y^2,[x+y=1],maximize=false)",
+        "nlpsolve(x*y,[x+y=2],maximize)",
+        "nlpsolve((x-2)^2,[x=0..1])",
+    ] {
+        match (seeded(giac, input), ours(input)) {
+            (Some(theirs), Ok(ours)) if same(&ctx, &ours, &theirs, 100_000) => {}
+            (theirs, ours) => wrong.push(format!("{input}: ours {ours:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
