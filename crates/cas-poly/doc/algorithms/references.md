@@ -141,6 +141,10 @@ algorithm here is taken from, or is compared with, are listed.
   places the last element; products of two word-sized coefficients add
   into a three-word array, the others through GMP, and the two sums meet
   at the end of each term.
+- <a id="my73"></a>**[MY73]** Joel Moses and David Y. Y. Yun, "The EZ GCD
+  algorithm", in *Proceedings of the ACM Annual Conference (ACM '73)*, ACM,
+  1973, 159–166. The gcd of the images at a point of all variables but
+  one, lifted back by Hensel's construction.
 - <a id="par05"></a>**[Par05]** Bernard Parisse, "A correct proof of the
   heuristic GCD algorithm", note, Institut Fourier, Grenoble, January 2005;
   an earlier version is arXiv:cs/0206032 (2002). Theorem 1: for integers
@@ -177,6 +181,9 @@ algorithm here is taken from, or is compared with, are listed.
   polynomial factoring algorithm", *Mathematics of Computation* 32 (144)
   (1978), 1215–1231. Evaluation points, the leading coefficients of the
   factors found before lifting, and lifting one variable at a time.
+- <a id="wang80"></a>**[Wang80]** Paul S. Wang, "The EEZ-GCD algorithm",
+  *ACM SIGSAM Bulletin* 14 (2) (1980), 50–60. EZ-GCD with the leading
+  coefficients imposed before lifting, and sparse lifting.
 - <a id="yun76"></a>**[Yun76]** David Y. Y. Yun, "On square-free
   decomposition algorithms", in *Proceedings of the Third ACM Symposium on
   Symbolic and Algebraic Computation (SYMSAC '76)*, ACM, 1976, 26–35. The

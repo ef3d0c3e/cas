@@ -16,6 +16,7 @@
     reason = "the names of the identities: a = g x, b = g y"
 )]
 
+mod ezgcd;
 mod gaussian;
 mod heuristic;
 mod modular;
@@ -68,6 +69,12 @@ pub enum GcdMethod {
     /// ℤ, from the form of a first prime's image, and ℚ through the
     /// numerators. It can give up.
     Zippel,
+    /// EZ-GCD \[MY73, Wang80, GCL92 §7.6\]: images at integer points of
+    /// the variables other than the main one, their univariate gcd, and
+    /// multivariate Hensel lifting back to the gcd (CAS-526). Over ℤ, sparse
+    /// in several variables, Brown's algorithm in one, and ℚ through the
+    /// numerators. It can give up.
+    EzGcd,
 }
 
 mod sealed {
@@ -773,7 +780,7 @@ impl GcdDomain for Integers {
     ) -> Result<Option<Cofactors<Dense<Integer>>>, Cancelled> {
         match method {
             GcdMethod::Heuristic => heuristic::dense(ring, a, b, cancel),
-            GcdMethod::Modular => Ok(Some(modular::dense(ring, a, b, cancel)?)),
+            GcdMethod::Modular | GcdMethod::EzGcd => Ok(Some(modular::dense(ring, a, b, cancel)?)),
             GcdMethod::Subresultant => Ok(Some(subres::dense_gcd(ring, a, b, cancel)?)),
             GcdMethod::Zippel => Ok(None),
         }
@@ -805,7 +812,9 @@ impl GcdDomain for Integers {
     ) -> Result<Option<Cofactors<Sparse<Integer>>>, Cancelled> {
         match method {
             GcdMethod::Heuristic => heuristic::sparse(ring, a, b, cancel),
-            GcdMethod::Modular => Ok(Some(modular::sparse(ring, a, b, cancel)?)),
+            GcdMethod::EzGcd if several_variables(a, b) => ezgcd::integers(ring, a, b, cancel),
+            // EZ-GCD in one variable: Brown's algorithm.
+            GcdMethod::Modular | GcdMethod::EzGcd => Ok(Some(modular::sparse(ring, a, b, cancel)?)),
             GcdMethod::Subresultant => Ok(Some(subres::sparse_gcd(ring, a, b, cancel)?)),
             GcdMethod::Zippel => zippel::integers(ring, a, b, cancel),
         }
@@ -858,7 +867,7 @@ impl GcdDomain for GaussianIntegers {
     ) -> Result<Option<Cofactors<Dense<Complex>>>, Cancelled> {
         match method {
             GcdMethod::Heuristic => heuristic::dense(ring, a, b, cancel),
-            GcdMethod::Modular | GcdMethod::Zippel => Ok(None),
+            GcdMethod::Modular | GcdMethod::Zippel | GcdMethod::EzGcd => Ok(None),
             GcdMethod::Subresultant => Ok(Some(subres::dense_gcd(ring, a, b, cancel)?)),
         }
     }
@@ -888,7 +897,7 @@ impl GcdDomain for GaussianIntegers {
         match method {
             GcdMethod::Heuristic => heuristic::sparse(ring, a, b, cancel),
             GcdMethod::Modular => Ok(Some(gaussian::sparse(ring, a, b, cancel)?)),
-            GcdMethod::Zippel => Ok(None),
+            GcdMethod::Zippel | GcdMethod::EzGcd => Ok(None),
             GcdMethod::Subresultant => Ok(Some(subres::sparse_gcd(ring, a, b, cancel)?)),
         }
     }
@@ -1121,7 +1130,10 @@ macro_rules! prime_field {
             ) -> Result<Option<Cofactors<Dense<Self::Elem>>>, Cancelled> {
                 match method {
                     GcdMethod::Subresultant => Ok(Some(subres::dense_gcd(ring, a, b, cancel)?)),
-                    GcdMethod::Heuristic | GcdMethod::Modular | GcdMethod::Zippel => Ok(None),
+                    GcdMethod::Heuristic
+                    | GcdMethod::Modular
+                    | GcdMethod::Zippel
+                    | GcdMethod::EzGcd => Ok(None),
                 }
             }
 
@@ -1151,7 +1163,7 @@ macro_rules! prime_field {
                     },
                     GcdMethod::Subresultant => Ok(Some(subres::sparse_gcd(ring, a, b, cancel)?)),
                     GcdMethod::Zippel => zippel_cofactors(ring, a, b, cancel),
-                    GcdMethod::Heuristic => Ok(None),
+                    GcdMethod::Heuristic | GcdMethod::EzGcd => Ok(None),
                 }
             }
 

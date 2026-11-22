@@ -178,13 +178,27 @@ fn with_lead(rings: &Rings, p: &Sparse<Residue>, lead: &Sparse<Residue>) -> Spar
 }
 
 /// `x` modulo `P` in `(−P/2, P/2]`.
-fn symmetric(field: &BigPrimeField, x: &Residue, prime: &Natural) -> Integer {
+pub(crate) fn symmetric(field: &BigPrimeField, x: &Residue, prime: &Natural) -> Integer {
     let n = field.ring().to_natural(x);
     if &n + &n > *prime {
         Integer::from(n) - Integer::from(prime)
     } else {
         Integer::from(n)
     }
+}
+
+/// A prime above twice `2^(Σ deg) ‖g‖₂`, summing the degrees in every
+/// variable. The coefficients of any factor `h` of `g` are within
+/// `2^(Σ deg h) M(h) ≤ 2^(Σ deg g) M(g) ≤ 2^(Σ deg g) ‖g‖₂` by Mahler's and
+/// Landau's inequalities, `M` the Mahler measure, which is at least 1 for a
+/// non-zero integer polynomial.
+pub(crate) fn lifting_prime(g: &Sparse<Integer>) -> Natural {
+    let squares = g.coeffs().iter().fold(Natural::ZERO, |acc, c| {
+        let a = c.unsigned_abs();
+        &acc + &(&a * &a)
+    });
+    let degrees: u64 = g.degrees().iter().sum();
+    ((squares.isqrt() + 1) << (degrees + 1)).next_prime()
 }
 
 /// The lift of `f(x, a) = ∏ uᵢ(x)` to `f = ∏ Uᵢ` with `lc_x(Uᵢ) = lcs[i]`

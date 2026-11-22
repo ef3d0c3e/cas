@@ -11,7 +11,7 @@ mod finite;
 
 pub use finite::FactorsMod;
 mod hensel;
-mod lifting;
+pub(crate) mod lifting;
 mod lll;
 mod squarefree;
 mod trager;

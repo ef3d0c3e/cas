@@ -649,16 +649,16 @@ pub(super) fn gcd<F: Field + Coefficients + Clone>(
 
 /// `a` and `b` as `cₐ pₐ` and `c_b p_b`, `cₐ` and `c_b` their contents in
 /// the main variable, by gcds in fewer variables, and `c` the gcd of those.
-struct Contents<E> {
-    ca: Sparse<E>,
-    cb: Sparse<E>,
-    c: Sparse<E>,
-    pa: Sparse<E>,
-    pb: Sparse<E>,
+pub(super) struct Contents<E> {
+    pub(super) ca: Sparse<E>,
+    pub(super) cb: Sparse<E>,
+    pub(super) c: Sparse<E>,
+    pub(super) pa: Sparse<E>,
+    pub(super) pb: Sparse<E>,
 }
 
 impl<E> Contents<E> {
-    fn of<R: GcdDomain<Elem = E>>(
+    pub(super) fn of<R: GcdDomain<Elem = E>>(
         ring: &SparseRing<R>,
         [a, b]: [&Sparse<E>; 2],
         main: usize,
@@ -683,7 +683,7 @@ impl<E> Contents<E> {
 }
 
 /// `p / q`, which is exact.
-fn exact<R: GcdDomain>(
+pub(super) fn exact<R: GcdDomain>(
     ring: &SparseRing<R>,
     p: &Sparse<R::Elem>,
     q: &Sparse<R::Elem>,
@@ -693,7 +693,7 @@ fn exact<R: GcdDomain>(
 }
 
 /// The first variable of `a` or `b`, the main one.
-fn main_variable<E>(ring_vars: usize, a: &Sparse<E>, b: &Sparse<E>) -> Option<usize> {
+pub(super) fn main_variable<E>(ring_vars: usize, a: &Sparse<E>, b: &Sparse<E>) -> Option<usize> {
     let (da, db) = (a.degrees(), b.degrees());
     (0..ring_vars).find(|&v| da[v] > 0 || db[v] > 0)
 }

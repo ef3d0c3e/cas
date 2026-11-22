@@ -60,6 +60,11 @@ through the numerators, and prime fields of at least `2^31` elements
 (CAS-191). Over ℤ, `gcd` takes it in several variables when the heuristic
 gives up; when it gives up too, Brown's algorithm.
 
+`GcdMethod::EzGcd` runs EZ-GCD (CAS-526) over ℤ, sparse, in several
+variables, Brown's algorithm in one (sparse in one variable, and dense), and
+ℚ through the numerators; over ℤ\[i\], ℚ(i) and the prime fields it does not
+apply. `gcd` does not choose it.
+
 Resultants:
 
 | Domain | Method |
@@ -274,6 +279,60 @@ evaluated:
   the largest coefficient and total degree): an image wrong in a way the
   checks missed would keep the combination changing.
 
+## EZ-GCD [MY73, Wang80, GCL92]
+
+`src/gcd/ezgcd.rs` (CAS-526), Moses and Yun's EZ-GCD with Wang's leading
+coefficients [GCL92 §7.6], on the multivariate Hensel lifting of Wang's
+factoring (`src/factor/lifting.rs`, CAS-183). Brown's algorithm needs
+`deg_y + 1` images for each variable `y`, and Zippel's as many as the gcd
+has terms; EZ-GCD needs one point, whose univariate gcd lifts back one
+variable at a time.
+
+**The base algorithm**, over ℤ, for `a` and `b` in two or more variables
+between them:
+1. The contents in the main variable `x`, the first that `a` or `b` has,
+   come out, by gcds in fewer variables (the integer contents with them).
+   A primitive part that is a constant leaves the gcd of the contents.
+2. Integer points `α` of the other variables are drawn from a fixed seed in
+   `[−r, r]`, `r` growing from 1 by one a round; a point keeps `lc_x(a)` and
+   `lc_x(b)` non-zero, so the images keep their degrees in `x`. Of two
+   points a round, the univariate gcd `g` of lower degree is kept.
+3. `deg g = 0`: the primitive parts are coprime, since `g(α)` divides the
+   image gcd and keeps the gcd's degree. `deg g = deg_x a`: `a` divides `b`,
+   or the point is unlucky; likewise for `b`. Both are checked by division.
+4. Otherwise `f` is the first of `a`, `b`, `a + k b` (`k` = 1, 2, 3) whose
+   image `f(α) = g h` keeps its degree in `x` and has `h` coprime to `g`.
+5. `γ f = G H` lifts from the point, with `lc_x G = γ` and `lc_x H = lc_x f`
+   (below). The primitive part of `G` in `x` is the gcd when it divides `a`
+   and `b` exactly.
+- After 16 rounds without a gcd it gives up, `None`.
+
+**The leading coefficient** [Wang80]. The lifting needs the leading
+coefficients of its factors in `x`, which the images lose. `γ`, the gcd of
+`lc_x(a)` and `lc_x(b)`, is a multiple of the gcd's leading coefficient, so
+`γ f = (γ / lc_x g') g' · lc_x g' (f / g')`, `g'` the gcd, factors with the
+leading coefficients `γ` and `lc_x f`, both known. The univariate factors
+take them modulo the prime: `u = γ(α) g / lc(g)` and `v = lc(g) h`, so that
+`u v = γ(α) f(α)`. The content `γ / lc_x g'` of `G` in `x` goes with its
+primitive part.
+
+**The prime.** The lifting works modulo a prime above twice
+`2^(Σ deg) ‖γ f‖₂`, the degrees summed over every variable: Wang's bound on
+the coefficients of any factor of `γ f` by Mahler's and Landau's
+inequalities (`lifting_prime`, shared with Wang's factoring). The symmetric
+residues of the lifts are then the factors over ℤ, and the lifting checks
+that they multiply to `γ f`.
+
+**Unlucky points.** At a point where the images have a common factor that
+the inputs do not, `g` has too high a degree: the second point of the round
+usually shows a lower one; otherwise the lifting fails, or its `G` does not
+divide, and the next round draws new points in a wider range. Images whose
+cofactors share a factor with `g` for every `f` tried, or a prime that
+divides `lc(g)`, also pass to the next round.
+
+Giac's commands `heugcd`, `modgcd`, `psrgcd` and `ezgcd` correspond to
+`GcdMethod::Heuristic`, `Modular`, `Subresultant` and `EzGcd`.
+
 ## Resultants
 
 - **Over a field**, by Euclid's algorithm:
@@ -402,6 +461,9 @@ from 0.25 s to 0.18 s. Zippel's algorithm against Brown's, on one commit
     and multiple scaling, a content in `x`, and Fateman's gcd at the fourth
     power.
   - Over ℤ, against subresultants in the gcd properties.
+- **EZ-GCD** (CAS-526): against the default gcd on random products in two
+  and three variables, with the gcd properties; `x + y`, `xy + 1`, `xy − y`
+  and `2` from small examples with a content in `x` and an integer content.
   - The fuzz target `poly_gcd`: every method that applies, and the
     default, against subresultants over ℤ and modulo `2^61 − 1`, on
     products with a common factor in one to three variables.

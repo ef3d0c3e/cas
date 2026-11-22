@@ -28,7 +28,8 @@ the tickets. This documentation describes the code as it is.
 - [gcd.md](gcd.md): greatest common divisors, resultants and discriminants
   (CAS-137). The subresultant reference; the heuristic gcd, with Parisse's
   theorem behind its check; Brown's modular algorithm over ℤ and its dense
-  evaluation over prime fields; resultants modulo primes within Hadamard's
+  evaluation over prime fields; EZ-GCD by multivariate Hensel lifting;
+  resultants modulo primes within Hadamard's
   bound; the domains and their choices; the benchmarks against giac.
 - [factor.md](factor.md): factoring (CAS-142, planned in CAS-PLAN-1). The
   constant-and-powers form of a factorisation; square-free decomposition by

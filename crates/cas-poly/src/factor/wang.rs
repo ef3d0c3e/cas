@@ -16,7 +16,7 @@ use std::collections::HashSet;
 use cas_num::algebra::{Integers, Rationals, Ring};
 use cas_num::{Integer, Natural, Rational};
 
-use super::lifting::lift_variables;
+use super::lifting::{lift_variables, lifting_prime};
 use super::zassenhaus;
 use super::{FactorError, Factors, Search, unbounded};
 use crate::cancel::{Cancel, Cancelled, Never, uncancelled};
@@ -307,20 +307,6 @@ fn leading_coefficients(
         factors.iter().map(|h| zx.scale(h, &content)).collect(),
         lcs.iter().map(|l| ring.scale(l, &content)).collect(),
     ))
-}
-
-/// A prime above twice `2^(Σ deg) ‖g‖₂`, summing the degrees in every
-/// variable. The coefficients of any factor `h` of `g` are within
-/// `2^(Σ deg h) M(h) ≤ 2^(Σ deg g) M(g) ≤ 2^(Σ deg g) ‖g‖₂` by Mahler's and
-/// Landau's inequalities, `M` the Mahler measure, which is at least 1 for a
-/// non-zero integer polynomial.
-fn lifting_prime(g: &Sparse<Integer>) -> Natural {
-    let squares = g.coeffs().iter().fold(Natural::ZERO, |acc, c| {
-        let a = c.unsigned_abs();
-        &acc + &(&a * &a)
-    });
-    let degrees: u64 = g.degrees().iter().sum();
-    ((squares.isqrt() + 1) << (degrees + 1)).next_prime()
 }
 
 /// The irreducible factors of `f`, primitive over ℤ and in `x`, square-free,

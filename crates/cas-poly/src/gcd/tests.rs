@@ -425,6 +425,62 @@ proptest! {
     }
 }
 
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(100))]
+
+    /// EZ-GCD (CAS-526) in two and three variables against the default gcd.
+    #[test]
+    fn ezgcds_in_several_variables(
+        (n, [f, g, h]) in (2usize..=3).prop_flat_map(|n| (Just(n), [terms(n, 4), terms(n, 5), terms(n, 5)])),
+    ) {
+        let ring = SparseRing::new(Integers, n);
+        let (f, g, h) = (build(&ring, &f), build(&ring, &g), build(&ring, &h));
+        let d = ring.gcd(&ring.mul(&f, &g), &ring.mul(&f, &h));
+        prop_assert_eq!(check_gcd(&ring, &f, &g, &h, GcdMethod::EzGcd)?, Some(d));
+    }
+}
+
+/// EZ-GCD on small examples: a common linear factor, a factor of
+/// `x²y² − 1`, a gcd with a content in `x`, and an integer content alone.
+#[test]
+fn ezgcd_examples() {
+    let ring = SparseRing::new(Integers, 2);
+    let (x, y) = (ring.var(0), ring.var(1));
+    let int = |n: i64| ring.constant(Integer::from(n));
+    let xy = ring.mul(&x, &y);
+    let cases = [
+        (
+            ring.mul(&ring.add(&x, &y), &ring.add(&ring.sub(&x, &y), &int(1))),
+            ring.mul(&ring.add(&x, &y), &ring.add(&x, &ring.mul(&int(2), &y))),
+            ring.add(&x, &y),
+        ),
+        (
+            ring.sub(&ring.mul(&xy, &xy), &int(1)),
+            ring.add(&xy, &int(1)),
+            ring.add(&xy, &int(1)),
+        ),
+        (
+            ring.sub(&ring.mul(&x, &xy), &y),
+            ring.sub(&ring.mul(&xy, &y), &ring.mul(&y, &y)),
+            ring.sub(&xy, &y),
+        ),
+        (
+            ring.sub(&ring.mul(&int(2), &xy), &int(2)),
+            ring.add(&ring.mul(&int(4), &xy), &ring.mul(&int(4), &y)),
+            int(2),
+        ),
+    ];
+    for (a, b, expected) in cases {
+        let (g, qa, qb) = ring
+            .gcd_by(&a, &b, GcdMethod::EzGcd, &Never)
+            .unwrap()
+            .expect("EZ-GCD applies");
+        assert_eq!(g, expected);
+        assert_eq!(ring.mul(&g, &qa), a);
+        assert_eq!(ring.mul(&g, &qb), b);
+    }
+}
+
 /// A constant's gcd with a polynomial is its gcd with the content,
 /// normalised, at once whatever the degree (CAS-156): the contents reduce
 /// the constant to a unit before any evaluation.
@@ -970,6 +1026,7 @@ fn gcd_workload() {
         "modular" => Some(GcdMethod::Modular),
         "subresultant" => Some(GcdMethod::Subresultant),
         "zippel" => Some(GcdMethod::Zippel),
+        "ezgcd" => Some(GcdMethod::EzGcd),
         "auto" | "inputs" => None,
         other => panic!("unknown method {other}"),
     };
