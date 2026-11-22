@@ -21,7 +21,10 @@ fn is_list(e: &Expr) -> bool {
 }
 
 /// Whether two numbers, or lists of them in order, agree within `10⁻⁹ (1 +
-/// |b|)`.
+/// |b|)` in the real and the imaginary part of `N[a − b]`. Not by `Abs` of
+/// the gap: a complex ball's modulus is `sqrt(re² + im²)`, indeterminate
+/// when that ball holds 0, as it does when the two agree; a real ball's
+/// `Abs` is `[|m| ± r]`, which `Less` decides against the bound.
 fn near(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     if is_list(a) || is_list(b) {
         return is_list(a)
@@ -30,15 +33,28 @@ fn near(ctx: &Context, a: &Expr, b: &Expr) -> bool {
             && a.args().iter().zip(b.args()).all(|(u, v)| near(ctx, u, v));
     }
     let scale = Expr::from(1) + Expr::call(Symbol::ABS, [b.clone()]);
-    let bound = scale / Expr::from(1_000_000_000_i64);
-    let gap = Expr::call(Symbol::ABS, [a.clone() - b.clone()]);
-    ctx.eval(&Expr::call(
-        Symbol::LESS,
-        [Expr::call(Symbol::N, [gap]), Expr::call(Symbol::N, [bound])],
-    ))
-    .ok()
-    .and_then(|e| e.as_symbol())
-        == Some(Symbol::TRUE)
+    let bound = Expr::call(Symbol::N, [scale / Expr::from(1_000_000_000_i64)]);
+    let gap = Expr::call(Symbol::N, [a.clone() - b.clone()]);
+    [Symbol::RE, Symbol::IM].into_iter().all(|part| {
+        let size = Expr::call(Symbol::ABS, [Expr::call(part, [gap.clone()])]);
+        ctx.eval(&Expr::call(Symbol::LESS, [size, bound.clone()]))
+            .ok()
+            .and_then(|e| e.as_symbol())
+            == Some(Symbol::TRUE)
+    })
+}
+
+/// Whether two lists hold, in order, values whose differences `Expand` to
+/// 0: closed forms written differently, `(-1 + i√3)/2` and `-1/2 + i√3/2`.
+fn expands_same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    is_list(a)
+        && is_list(b)
+        && a.args().len() == b.args().len()
+        && a.args().iter().zip(b.args()).all(|(u, v)| {
+            ctx.eval(&Expr::call(Symbol::EXPAND, [u.clone() - v.clone()]))
+                .ok()
+                == Some(Expr::from(0))
+        })
 }
 
 /// Whether two lists hold the same numbers or tuples in any order, each
@@ -135,7 +151,6 @@ fn agreements() {
     let mut wrong = Vec::new();
     for input in [
         "zeros(x^2+1,x)",
-        "cZeros(x^3-1,x)",
         "surd(-8,3)",
         "surd(8,3)",
         "surd(2,3)",
@@ -146,6 +161,12 @@ fn agreements() {
         if let Err(e) = giac.agrees(input) {
             wrong.push(format!("{e:?}"));
         }
+    }
+    // giac's `(-1 + i√3)/2` is our `-1/2 + i√3/2`, in the same order.
+    let input = "cZeros(x^3-1,x)";
+    match (giac.value(input), ours(input)) {
+        (Ok(theirs), Ok(ours)) if expands_same(&ctx, &ours, &theirs) => {}
+        (theirs, ours) => wrong.push(format!("{input}: ours {ours:?}, giac's {theirs:?}")),
     }
     // giac's principal fourth root, `(√2/2 + i√2/2) 16^(1/4)`, by value.
     let input = "surd(-16,4)";
