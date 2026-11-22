@@ -56,24 +56,25 @@ fn departures() {
         // The leading coefficient positive, where psrgcd keeps the sign of
         // its remainders.
         ("psrgcd(x^2-1,x^2+2*x+1)", "-x-1", "x+1"),
-        // EZ-GCD gives up where giac's does not, or Brown's in one variable.
+        // giac's EZ-GCD gives up where ours answers; in one variable giac
+        // rejects the call, ours runs Brown's algorithm.
         (
             "ezgcd(x^2*y^2-1,x*y+1)",
-            "GCD not successful Error: Bad Argument Value",
+            "GIAC_ERROR: GCD not successful Error: Bad Argument Value",
             "x*y+1",
         ),
         (
             "ezgcd(x^2*y-y,x*y^2-y^2)",
-            "GCD not successful Error: Bad Argument Value",
+            "GIAC_ERROR: GCD not successful Error: Bad Argument Value",
             "x*y-y",
         ),
         (
             "ezgcd(x^2-1,x+1)",
-            "Args must be multivariate polynomials Error: Bad Argument Value",
+            "GIAC_ERROR: Args must be multivariate polynomials Error: Bad Argument Value",
             "x+1",
         ),
     ];
-    // giac prints an error as a string, quoted.
+    // caseval prints an error as `GIAC_ERROR: <message>`; quotes dropped.
     let unquoted = |s: &str| s.trim_matches('"').to_owned();
     let mut wrong = Vec::new();
     for (input, answer, decided) in cases {
