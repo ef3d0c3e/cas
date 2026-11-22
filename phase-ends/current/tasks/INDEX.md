@@ -7,3 +7,4 @@ T4 | done | local gate green | - | tasks/T4.md | logs/T4.md | -
 T5 | review | push stop: developer pushes master | - | tasks/T5.md | logs/T5.md | -
 T6 | done | CI check on the pushed head | - | tasks/T6.md | logs/T6.md | -
 T7 | done | close CAS-517..524 and the fix's ticket in Lific | - | tasks/T7.md | logs/T7.md | -
+T8 | done | phase cleanup | - | tasks/T8.md | logs/T8.md | -
