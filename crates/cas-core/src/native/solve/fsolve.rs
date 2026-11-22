@@ -21,6 +21,9 @@
 //!   the call stays with a warning.
 //! - With parameters, `f` no number at a point, the call stays.
 //! - A list of equations is a system, by [`systems`] (CAS-518).
+//! - `CFSolve`, Xcas's `cfsolve`, the complex roots, is [`complex`]
+//!   (CAS-536): a polynomial's by `polynomial_roots` as here, others by
+//!   Newton's iteration certified on the system of real and imaginary parts.
 //! - A last argument names giac's method (CAS-517), each answer certified
 //!   as above whatever found it. The bracketing ones, `bisection_solver`,
 //!   `falsepos_solver` (Illinois) and `brent_solver`, refine each sign
@@ -37,7 +40,7 @@
 use std::cmp::Ordering;
 
 use cas_num::algebra::Integers;
-use cas_num::ball::{Ball, Float, Round, polynomial_roots};
+use cas_num::ball::{Ball, ComplexBall, Float, Round, polynomial_roots};
 use cas_num::{Complex, Integer, Rational};
 use cas_poly::{Cancel, Sparse, SparseRing};
 
@@ -50,6 +53,7 @@ use crate::poly::{Bounds, Fraction, Polynomials};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
 
+pub(in crate::native) mod complex;
 pub(in crate::native) mod systems;
 
 type Native = Result<Option<Expr>, EvalError>;
@@ -174,7 +178,7 @@ pub(in crate::native) fn fsolve(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// The answer without a method: polynomial roots, a scan, or Newton's.
 fn unmethodical(ev: &mut Eval<'_>, f: &Expr, x: &Expr, place: Where<'_>, bits: u64) -> Native {
     Ok(Some(match place {
-        Where::Everywhere => match polynomial(ev, f, x, bits)? {
+        Where::Everywhere => match polynomial(ev, f, x, bits, false)? {
             Some(mut roots) if roots.len() == 1 => roots.pop().expect("one root"),
             Some(roots) => list(roots),
             None => list(scanned(
@@ -190,7 +194,7 @@ fn unmethodical(ev: &mut Eval<'_>, f: &Expr, x: &Expr, place: Where<'_>, bits: u
             let Some((a, b)) = ends(ev.context(), a, b) else {
                 return Ok(None);
             };
-            match polynomial(ev, f, x, bits)? {
+            match polynomial(ev, f, x, bits, false)? {
                 Some(roots) => list(roots.into_iter().filter(|r| within(r, &a, &b)).collect()),
                 None => list(scanned(
                     ev.context(),
@@ -353,12 +357,15 @@ fn within(root: &Expr, a: &Rational, b: &Rational) -> bool {
 
 /// The real roots of `f` when it is a rational function of `x` alone with
 /// exact coefficients, ascending; `None` when it is not one, or a factor
-/// is past [`MAX_NUMERIC_DEGREE`] or its roots are not validated.
+/// is past [`MAX_NUMERIC_DEGREE`] or its roots are not validated. When
+/// `complex`, all its roots, by real part then imaginary part, the real
+/// ones real balls.
 fn polynomial(
     ev: &Eval<'_>,
     f: &Expr,
     x: &Expr,
     bits: u64,
+    complex: bool,
 ) -> Result<Option<Vec<Expr>>, EvalError> {
     let ctx = ev.context();
     let cancel: &dyn Cancel = ctx.interrupt_flag();
@@ -381,22 +388,40 @@ fn polynomial(
         .number_bits
         .min(bits.saturating_mul(16).max(MAX_ROOT_BITS))
         .max(bits);
-    let Some(mut roots) = real_roots(&ring, num, den, bits, max_bits, cancel)? else {
+    let Some(mut roots) = numerator_roots(&ring, num, den, bits, max_bits, cancel, complex)? else {
         return Ok(None);
     };
-    roots.sort_by(|a, b| a.mid().cmp(b.mid()));
-    Ok(Some(roots.into_iter().map(Expr::from).collect()))
+    roots.sort_by(|a, b| {
+        a.re()
+            .mid()
+            .cmp(b.re().mid())
+            .then_with(|| a.im().mid().cmp(b.im().mid()))
+    });
+    Ok(Some(
+        roots
+            .into_iter()
+            .map(|z| {
+                if z.is_real() {
+                    Expr::from(z.re().clone())
+                } else {
+                    Expr::from(z)
+                }
+            })
+            .collect(),
+    ))
 }
 
-/// The real roots of `num / den` in its one variable, as balls.
-fn real_roots(
+/// The real roots of `num / den` in its one variable, as balls; all its
+/// roots when `complex`.
+fn numerator_roots(
     ring: &SparseRing<Integers>,
     num: &Sparse<Integer>,
     den: &Sparse<Integer>,
     bits: u64,
     max_bits: u64,
     cancel: &dyn Cancel,
-) -> Result<Option<Vec<Ball>>, EvalError> {
+    complex: bool,
+) -> Result<Option<Vec<ComplexBall>>, EvalError> {
     let (_, num, _) = ring
         .gcd_cofactors_with(num, den, cancel)
         .map_err(|_| EvalError::Interrupted)?;
@@ -422,8 +447,17 @@ fn real_roots(
         roots.extend(
             found
                 .into_iter()
-                .filter(cas_num::ball::ComplexBall::is_real)
-                .map(|z| z.re().round_to_accuracy(bits)),
+                .filter(|z| complex || z.is_real())
+                .map(|z| {
+                    if z.is_real() {
+                        ComplexBall::from_real(z.re().round_to_accuracy(bits))
+                    } else {
+                        ComplexBall::new(
+                            z.re().round_to_accuracy(bits),
+                            z.im().round_to_accuracy(bits),
+                        )
+                    }
+                }),
         );
     }
     Ok(Some(roots))

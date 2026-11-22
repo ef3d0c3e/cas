@@ -1,4 +1,5 @@
-//! `Plus`, `Times`, `Power`, `Sqrt` and `DirectedInfinity` (CAS-DOC-4 §6.1).
+//! `Plus`, `Times`, `Power`, `Sqrt` and `DirectedInfinity` (CAS-DOC-4 §6.1),
+//! and `Surd`, Xcas's `surd`, the real `n`-th root (CAS-537).
 //!
 //! Each receives an application the evaluator has normalised: `Plus` and
 //! `Times` are flat and sorted, so like terms and equal bases are adjacent
@@ -912,6 +913,36 @@ pub(super) fn sqrt(_: &mut Eval<'_>, e: &Expr) -> Native {
     };
     let half = Expr::from(Rational::new(1.into(), 2.into()));
     Ok(Some(apply(Symbol::POWER, &[x.clone(), half])))
+}
+
+/// `Surd[x, n]`, Xcas's `surd`, for an integer `n ≥ 1`: of a real `x`
+/// and an odd `n` the real root `sign(x) |x|^(1/n)`, as giac's
+/// `surd(-8,3)` is `-8^(1/3)`, that is `-2`; of an even `n`, `x^(1/n)`.
+/// An odd root of `x` of unknown sign, or another `n`, stays.
+pub(super) fn surd(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x, n] = e.args() else {
+        return Ok(None);
+    };
+    let Some(n) = n
+        .to_rational()
+        .filter(|q| q.is_integer() && q.is_positive())
+    else {
+        return Ok(None);
+    };
+    let exponent = Expr::from(Rational::new(1.into(), n.numer().clone()));
+    let root = |x: Expr| apply(Symbol::POWER, &[x, exponent.clone()]);
+    if !n.numer().unsigned_abs().bit(0) {
+        return Ok(Some(root(x.clone())));
+    }
+    Ok(match assume::sign_of(ev.context(), x) {
+        Sign::Positive | Sign::NonNegative | Sign::Zero => Some(root(x.clone())),
+        Sign::Negative | Sign::NonPositive => {
+            let minus_one = Expr::from(-1);
+            let opposite = apply(Symbol::TIMES, &[minus_one.clone(), x.clone()]);
+            Some(apply(Symbol::TIMES, &[minus_one, root(opposite)]))
+        }
+        Sign::Nonzero | Sign::Unknown => None,
+    })
 }
 
 /// `DirectedInfinity[d]` with its direction of modulus 1: `Infinity` for

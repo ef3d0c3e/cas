@@ -19,11 +19,15 @@
 //!   inside `X` it proves one root there, and holds it. The box's radius
 //!   starts a few bits past `q`'s and widens sixteenfold up to four times;
 //!   no inclusion leaves the call with a warning.
+//! - A complex system (`CFSolve`, [`super::complex`], CAS-536) is the
+//!   real one of `2n` unknowns `F(a, b) = (Re f(a + ib), Im f(a + ib))`,
+//!   its Jacobian from the complex one by Cauchy–Riemann,
+//!   `[[Re J, −Im J], [Im J, Re J]]`: the same iteration and test.
 //! - Parameters, a system that is not square, or unknowns that are not
 //!   distinct symbols leave the call.
 
 use cas_num::ball::Ball;
-use cas_num::{Integer, Rational};
+use cas_num::{Complex, Integer, Rational};
 use cas_poly::Cancel;
 
 use super::super::super::approximation;
@@ -50,13 +54,74 @@ const METHODS: [&str; 7] = [
 ];
 
 /// The most unknowns.
-const MAX_UNKNOWNS: usize = 16;
+pub(super) const MAX_UNKNOWNS: usize = 16;
 
-/// A square system: its functions `F_i`, unknowns and Jacobian.
+/// A square system: its functions `F_i`, unknowns and Jacobian; when
+/// `complex`, of complex unknowns, each two real ones, `Re` then `Im`.
 struct System {
     fs: Vec<Expr>,
     vars: Vec<Expr>,
     jacobian: Vec<Vec<Expr>>,
+    complex: bool,
+}
+
+impl System {
+    /// The substitution of the point `p`, its real coordinates numbers or
+    /// balls: `x_k = p_2k + i p_2k+1` for a complex system.
+    fn substitution(&self, p: &[Expr]) -> Vec<(Expr, Expr)> {
+        if self.complex {
+            let i = Expr::from(Complex::I);
+            at(
+                &self.vars,
+                p.chunks(2).map(|c| c[0].clone() + i.clone() * c[1].clone()),
+            )
+        } else {
+            at(&self.vars, p.iter().cloned())
+        }
+    }
+
+    /// The `F_i` at `p` as real balls: `Re` and `Im` of each for a complex
+    /// system.
+    fn values(&self, ctx: &Context, p: &[Expr], prec: u64) -> Option<Vec<Ball>> {
+        let rules = self.substitution(p);
+        let mut out = Vec::with_capacity(p.len());
+        for f in &self.fs {
+            let v = f.substitute(&rules);
+            if self.complex {
+                let (re, im) = complex(ctx, &v, prec)?;
+                out.extend([re, im]);
+            } else {
+                out.push(real(ctx, &v, prec)?);
+            }
+        }
+        Some(out)
+    }
+
+    /// The real Jacobian at `p`: of a complex system by Cauchy–Riemann,
+    /// each complex entry `d` the block `[[Re d, −Im d], [Im d, Re d]]`.
+    fn jacobian_at(&self, ctx: &Context, p: &[Expr], prec: u64) -> Option<Vec<Vec<Ball>>> {
+        let rules = self.substitution(p);
+        let mut rows = Vec::with_capacity(p.len());
+        for row in &self.jacobian {
+            if self.complex {
+                let mut re_row = Vec::with_capacity(p.len());
+                let mut im_row = Vec::with_capacity(p.len());
+                for d in row {
+                    let (re, im) = complex(ctx, &d.substitute(&rules), prec)?;
+                    re_row.extend([re.clone(), im.neg()]);
+                    im_row.extend([im, re]);
+                }
+                rows.extend([re_row, im_row]);
+            } else {
+                rows.push(
+                    row.iter()
+                        .map(|d| real(ctx, &d.substitute(&rules), prec))
+                        .collect::<Option<Vec<_>>>()?,
+                );
+            }
+        }
+        Some(rows)
+    }
 }
 
 /// `FSolve[{eqns}, {vars}]` or `FSolve[{eqns}, {vars}, {x0, …}]`, with a
@@ -139,6 +204,18 @@ pub(in crate::native) fn certified_root(
     vars: &[Expr],
     start: Vec<Rational>,
 ) -> Result<Option<Vec<Expr>>, EvalError> {
+    Ok(certified(ev, fs, vars, start, false)?.map(|r| r.into_iter().map(Expr::from).collect()))
+}
+
+/// [`certified_root`] as balls; of the complex system when `complex`, from
+/// `start` `[Re x_0, Im x_0, …]`, its root's balls in that order.
+pub(super) fn certified(
+    ev: &mut Eval<'_>,
+    fs: Vec<Expr>,
+    vars: &[Expr],
+    start: Vec<Rational>,
+    complex: bool,
+) -> Result<Option<Vec<Ball>>, EvalError> {
     let mut jacobian = Vec::with_capacity(fs.len());
     for f in &fs {
         let mut row = Vec::with_capacity(vars.len());
@@ -151,17 +228,18 @@ pub(in crate::native) fn certified_root(
         fs,
         vars: vars.to_vec(),
         jacobian,
+        complex,
     };
     let bits = ev.context().working_precision();
     let ctx = ev.context();
     Ok(newton(ctx, &system, start, bits).and_then(|q| krawczyk(ctx, &system, &q, bits)))
 }
 
-fn listed(e: &Expr) -> Option<&[Expr]> {
+pub(super) fn listed(e: &Expr) -> Option<&[Expr]> {
     (e.head().and_then(Expr::as_symbol) == Some(Symbol::LIST)).then(|| e.args())
 }
 
-fn distinct_symbols(vars: &[Expr]) -> bool {
+pub(super) fn distinct_symbols(vars: &[Expr]) -> bool {
     vars.iter()
         .enumerate()
         .all(|(i, v)| v.as_symbol().is_some() && !vars[..i].contains(v))
@@ -193,6 +271,16 @@ fn real(ctx: &Context, e: &Expr, bits: u64) -> Option<Ball> {
         View::ComplexBall(z) if z.is_finite() && z.im().contains_rational(&Rational::ZERO) => {
             Some(z.re().clone())
         }
+        _ => None,
+    }
+}
+
+/// `e`'s value as the finite balls of its real and imaginary parts at
+/// `bits`.
+pub(super) fn complex(ctx: &Context, e: &Expr, bits: u64) -> Option<(Ball, Ball)> {
+    match approximation(ctx, e, bits).ok()?.view() {
+        View::Ball(b) if b.is_finite() => Some((b.clone(), Ball::ZERO)),
+        View::ComplexBall(z) if z.is_finite() => Some((z.re().clone(), z.im().clone())),
         _ => None,
     }
 }
@@ -256,20 +344,15 @@ fn midpoints(
     q: &[Rational],
     prec: u64,
 ) -> Option<(Vec<Rational>, Vec<Vec<Rational>>, bool)> {
-    let rules = at(&system.vars, q.iter().cloned().map(Expr::from));
-    let mut zeros = true;
-    let mut fv = Vec::with_capacity(system.fs.len());
-    for f in &system.fs {
-        let b = real(ctx, &f.substitute(&rules), prec)?;
-        zeros &= b.contains_rational(&Rational::ZERO);
-        fv.push(b.mid().to_rational());
-    }
-    let mid = |e: &Expr| real(ctx, &e.substitute(&rules), prec).map(|b| b.mid().to_rational());
+    let p: Vec<Expr> = q.iter().cloned().map(Expr::from).collect();
+    let values = system.values(ctx, &p, prec)?;
+    let zeros = values.iter().all(|b| b.contains_rational(&Rational::ZERO));
+    let fv = values.iter().map(|b| b.mid().to_rational()).collect();
     let jv = system
-        .jacobian
+        .jacobian_at(ctx, &p, prec)?
         .iter()
-        .map(|row| row.iter().map(mid).collect::<Option<Vec<_>>>())
-        .collect::<Option<Vec<_>>>()?;
+        .map(|row| row.iter().map(|b| b.mid().to_rational()).collect())
+        .collect();
     Some((fv, jv, zeros))
 }
 
@@ -367,17 +450,17 @@ fn ball(mid: &Rational, rad: &Rational) -> Expr {
 }
 
 /// Krawczyk's test about `q`: balls that each hold one root's part.
-fn krawczyk(ctx: &Context, system: &System, q: &[Rational], bits: u64) -> Option<Vec<Expr>> {
+fn krawczyk(ctx: &Context, system: &System, q: &[Rational], bits: u64) -> Option<Vec<Ball>> {
     let prec = bits.saturating_add(32);
     let n = q.len();
     let (_, jv, _) = midpoints(ctx, system, q, prec)?;
     let c = inverse(&jv, prec)?;
-    let exact = at(&system.vars, q.iter().cloned().map(Expr::from));
-    let fq = system
-        .fs
-        .iter()
-        .map(|f| real(ctx, &f.substitute(&exact), prec).map(Expr::from))
-        .collect::<Option<Vec<_>>>()?;
+    let exact: Vec<Expr> = q.iter().cloned().map(Expr::from).collect();
+    let fq: Vec<Expr> = system
+        .values(ctx, &exact, prec)?
+        .into_iter()
+        .map(Expr::from)
+        .collect();
     let exponent = i64::try_from(bits).unwrap_or(i64::MAX);
     let two = Rational::from(Integer::from(2));
     let scale = q
@@ -388,16 +471,12 @@ fn krawczyk(ctx: &Context, system: &System, q: &[Rational], bits: u64) -> Option
         .max(two.pow(-exponent));
     let mut r = &scale * &two.pow(4 - exponent);
     'widen: for _ in 0..4 {
-        let boxed = at(&system.vars, q.iter().map(|qi| ball(qi, &r)));
-        let jx = system
-            .jacobian
-            .iter()
-            .map(|row| {
-                row.iter()
-                    .map(|d| real(ctx, &d.substitute(&boxed), prec).map(Expr::from))
-                    .collect::<Option<Vec<_>>>()
-            })
-            .collect::<Option<Vec<_>>>()?;
+        let boxed: Vec<Expr> = q.iter().map(|qi| ball(qi, &r)).collect();
+        let jx: Vec<Vec<Expr>> = system
+            .jacobian_at(ctx, &boxed, prec)?
+            .into_iter()
+            .map(|row| row.into_iter().map(Expr::from).collect())
+            .collect();
         let deviation = ball(&Rational::ZERO, &r);
         let mut found = Vec::with_capacity(n);
         for i in 0..n {
@@ -424,7 +503,7 @@ fn krawczyk(ctx: &Context, system: &System, q: &[Rational], bits: u64) -> Option
                 r = &r * &Rational::from(Integer::from(16));
                 continue 'widen;
             }
-            found.push(Expr::from(b.round_to_accuracy(bits)));
+            found.push(b.round_to_accuracy(bits));
         }
         return Some(found);
     }

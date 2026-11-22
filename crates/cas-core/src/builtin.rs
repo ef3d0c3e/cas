@@ -122,6 +122,7 @@ builtins! {
     // The box, giac's `rect` (CAS-DOC-41 §1).
     UNIT_BOX = "UnitBox" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     SQRT = "Sqrt" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    SURD = "Surd" [PROTECTED];
     FACTORIAL = "Factorial" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     // Calculus (CAS-DOC-4 §8): the derivative, as system rules, and the
     // derivative of a function, `Derivative[n][f]`; integrals (CAS-DOC-9).
@@ -290,6 +291,7 @@ builtins! {
     SOLVE = "Solve" [PROTECTED];
     CSOLVE = "CSolve" [PROTECTED];
     FSOLVE = "FSolve" [PROTECTED];
+    CFSOLVE = "CFSolve" [PROTECTED];
     // Linear algebra (CAS-DOC-12), next to the products of lists.
     TRANSPOSE = "Transpose" [PROTECTED];
     IDENTITY_MATRIX = "IdentityMatrix" [PROTECTED];

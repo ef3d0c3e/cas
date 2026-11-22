@@ -51,6 +51,10 @@
 //!
 //! Each call that solves takes one step, `"Solve"` or `"CSolve"`, which the
 //! trace leaves unchecked: the roots' order follows the parameters' values.
+//!
+//! Xcas's `zeros` and `cZeros` are names of `Solve` and `CSolve` (CAS-536),
+//! in their orders; `CFSolve`, `cfsolve`, finds complex roots by number
+//! ([`fsolve::complex`]).
 
 #![allow(
     clippy::many_single_char_names,

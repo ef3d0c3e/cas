@@ -150,6 +150,20 @@ a file and giac's input sets and resets it within one call:
   phase 1.6 (CAS-546); a setting's bare name reads its value here, 0 or 1,
   where giac gives the symbol.
 
+`tests/complex_solving.rs`, complex roots by number and real roots
+(CAS-536, CAS-537):
+- giac's `cfsolve` (polynomials, `exp(x)=-1`, `sin(x)=2`, a system, start
+  points) read back and compared with ours as sets within `10⁻⁹ (1 + |b|)`,
+  giac's 12 digits; ours against closed forms first (`iπ`,
+  `π/2 ± i ln(2+√3)`, the eighth roots of unity, `i√2/2`);
+- `zeros` and `cZeros`, and `surd` (`surd(-8,3)` is `-2`, `surd(x,3)` stays,
+  `surd(-16,4)` by value) where giac's answer is ours;
+- the departures, each with giac's answer: `zeros` keeps `Solve`'s order
+  (giac's `[1,-1]`, `[3,2,1]` and its tuples reversed), `cZeros` keeps
+  `CSolve`'s (giac's `[-i,i]`), `cfsolve` orders by real then imaginary
+  part (giac's `x^4+1` and `sin(x)=2` orders), and `cfsolve(exp(x)=0,x)`
+  is `[]` where giac gives `[undef]`.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

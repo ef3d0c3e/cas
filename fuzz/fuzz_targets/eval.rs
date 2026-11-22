@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 447] = [
+const BUILTINS: [&str; 449] = [
     "Plus",
     "Times",
     "Power",
@@ -57,6 +57,7 @@ const BUILTINS: [&str; 447] = [
     "Positive",
     "ElementwiseTimes",
     "Sqrt",
+    "Surd",
     "DirectedInfinity",
     "IntegerQ",
     "FreeQ",
@@ -171,6 +172,7 @@ const BUILTINS: [&str; 447] = [
     "Solve",
     "CSolve",
     "FSolve",
+    "CFSolve",
     // Differential equations (CAS-259).
     "DSolve",
     // Laplace transforms (CAS-274).

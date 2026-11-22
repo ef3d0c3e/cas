@@ -80,6 +80,7 @@ HeavisideTheta: Heaviside
 DiracDelta: Dirac
 UnitBox: rect
 Sqrt: sqrt
+Surd: surd
 Factorial: factorial
 Pi: pi
 E: e
@@ -274,9 +275,10 @@ DiscreteFourierTransform: fft
 InverseDiscreteFourierTransform: ifft
 Convolution: convolution
 # Equations (CAS-DOC-11, CAS-210, CAS-214).
-Solve: solve
-CSolve: csolve
+Solve: solve zeros
+CSolve: csolve cZeros
 FSolve: fsolve
+CFSolve: cfsolve
 # Linear algebra (CAS-DOC-12, CAS-218 to CAS-222).
 Transpose: tran transpose
 IdentityMatrix: idn identity

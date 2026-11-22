@@ -164,6 +164,23 @@ fn powers() {
     ]);
 }
 
+/// `Surd` (CAS-537): the real odd root of a real number, the principal
+/// even one; an unknown sign or a non-integer index stays.
+#[test]
+fn surds() {
+    check(&[
+        ("Surd[-8, 3]", "-2"),
+        ("Surd[8, 3]", "2"),
+        ("Surd[2, 3]", "Power[2, 1/3]"),
+        ("Surd[-2, 3]", "Times[-1, Power[2, 1/3]]"),
+        ("Surd[0, 3]", "0"),
+        ("Surd[x, 2]", "Power[x, 1/2]"),
+        ("Surd[-16, 4]", "Power[-16, 1/4]"),
+        ("Surd[x, 3]", "Surd[x, 3]"),
+        ("Surd[2, 1/2]", "Surd[2, 1/2]"),
+    ]);
+}
+
 #[test]
 fn radicals() {
     check(&[

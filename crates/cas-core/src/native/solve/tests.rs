@@ -891,6 +891,104 @@ fn numeric_systems() {
     }
 }
 
+/// Complex roots by number (CAS-536): a polynomial's by
+/// `polynomial_roots`, real ones real; others from `CSolve`'s solutions or
+/// a start point, certified on the real and imaginary parts; `[]` when
+/// `CSolve` finds none; parameters stay.
+#[test]
+fn complex_numeric_solutions() {
+    let h = 3.0_f64.sqrt() / 2.0;
+    let (pi, half_pi) = (std::f64::consts::PI, std::f64::consts::FRAC_PI_2);
+    let acosh2 = 1.316_957_896_924_816_6;
+    check_values(&[
+        (
+            "CFSolve[Plus[1, Power[x, 2]], x]",
+            &[(0.0, -1.0), (0.0, 1.0)],
+        ),
+        (
+            "CFSolve[Equation[Plus[-1, Power[x, 3]], 0], x]",
+            &[(-0.5, -h), (-0.5, h), (1.0, 0.0)],
+        ),
+        ("CFSolve[Equation[Exp[x], -1], x]", &[(0.0, pi)]),
+        (
+            "CFSolve[Equation[Sin[x], 2], x]",
+            &[(half_pi, acosh2), (half_pi, -acosh2)],
+        ),
+        (
+            "CFSolve[Equation[Exp[x], 2], x]",
+            &[(std::f64::consts::LN_2, 0.0)],
+        ),
+        ("CFSolve[Equation[Exp[x], 0], x]", &[]),
+    ]);
+    let found = Context::new()
+        .eval(&read("CFSolve[Equation[Exp[x], 2], x]"))
+        .unwrap();
+    assert!(
+        matches!(found.args()[0].view(), crate::View::Ball(_)),
+        "{found:?}"
+    );
+    for (input, x0) in [
+        (
+            "CFSolve[Plus[1, Power[x, 2]], Equation[x, Complex[1, 1]]]",
+            (0.0, 1.0),
+        ),
+        (
+            "CFSolve[Plus[-1, Power[x, 3]], Equation[x, Complex[-1, 1]]]",
+            (-0.5, h),
+        ),
+        ("CFSolve[Plus[-1, Power[x, 3]], Equation[x, 1]]", (1.0, 0.0)),
+    ] {
+        let (a, b) = bare_value(input);
+        assert!(
+            (a - x0.0).abs() < 1e-12 && (b - x0.1).abs() < 1e-12,
+            "{input}"
+        );
+    }
+    // A system, from CSolve and from a real start moved off the axis.
+    let s = std::f64::consts::FRAC_1_SQRT_2;
+    for (input, expected) in [
+        (
+            "CFSolve[List[Equation[Plus[Power[x, 2], Power[y, 2]], -1], Equation[x, y]], \
+             List[x, y]]",
+            vec![(0.0, s), (0.0, s), (0.0, -s), (0.0, -s)],
+        ),
+        (
+            "CFSolve[List[Equation[Plus[Power[x, 2], Power[y, 2]], -1], Equation[x, y]], \
+             List[Equation[x, 1], Equation[y, 1]]]",
+            vec![(0.0, s), (0.0, s)],
+        ),
+    ] {
+        let found = Context::new().eval(&read(input)).unwrap();
+        let mut parts = Vec::new();
+        let mut stack = vec![found.clone()];
+        while let Some(e) = stack.pop() {
+            match e.view() {
+                crate::View::ComplexBall(z) => {
+                    parts.push((z.re().mid().to_f64(), z.im().mid().to_f64()));
+                }
+                _ if e.head() == Some(&Expr::from(crate::Symbol::LIST)) => {
+                    stack.extend(e.args().iter().rev().cloned());
+                }
+                _ => panic!("{input}: {found:?}"),
+            }
+        }
+        assert_eq!(parts.len(), expected.len(), "{input}: {found:?}");
+        for (p, q) in parts.iter().zip(&expected) {
+            assert!(
+                (p.0 - q.0).abs() < 1e-12 && (p.1 - q.1).abs() < 1e-12,
+                "{input}: {found:?}"
+            );
+        }
+    }
+    for input in [
+        "CFSolve[Plus[a, Power[x, 2]], x]",
+        "CFSolve[Plus[y, Power[x, 2]], List[x, y]]",
+        "CFSolve[List[x, y], List[x]]",
+    ] {
+        check(&[(input, input)]);
+    }
+}
+
 /// Two polynomial equations in two unknowns (CAS-215), by the resultant.
 #[test]
 fn polynomial_systems() {
