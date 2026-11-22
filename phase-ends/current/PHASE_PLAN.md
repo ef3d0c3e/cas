@@ -61,7 +61,7 @@ Approved: 2026-11-22   Planner: claude-opus-5-5/medium   Plan-hash: 62a88689aaec
   Cookbook: C0004 (one `gh run watch --interval 60` per run; logs via `gh api repos/ef3d0c3e/cas/actions/jobs/<id>/logs`, grep'd). Fuzz takes about 45 minutes. No research needed.
 - T7 | done | title: close CAS-517..524 and the fix's ticket in Lific | deps: T6 | coder: none | done-when: `lific issue list --project CAS --backend http --json` shows CAS-517..524 and T1's ticket at status `done`
   No research needed. CAS-519 sits in backlog; set it `done` like the rest.
-- T8 | next | title: phase cleanup | deps: T7 | done-when: what the project still needs from .run/1.1/ is in its proper place in the repo
+- T8 | done | title: phase cleanup | deps: T7 | done-when: what the project still needs from .run/1.1/ is in its proper place in the repo
   Also note in the summary that `.run/logs/gen1-gap/` is regenerable by `scripts/giac_gap.sh` (T3); leave it for later phases unless the developer says otherwise. No research needed.
 
 ## Risks
@@ -79,3 +79,4 @@ Approved: 2026-11-22   Planner: claude-opus-5-5/medium   Plan-hash: 62a88689aaec
 - 2026-11-22 router: T5 next -> done
 - 2026-11-22 router: T6 next -> done
 - 2026-11-22 router: T7 next -> done
+- 2026-11-22 router: T8 next -> done
