@@ -97,5 +97,14 @@ and `set[…]` is `{…}`.
   `normal` gives giac's answer the sign of §15 detail 5, and `gcd` up to the
   sign, which giac takes from its inputs. 2000 cases each agree.
 
+`tests/ndsolve.rs`, `NDSolve` and `BVPSolve` (CAS-DOC-35 §5, CAS-520):
+- giac's `odesolve` within `10⁻⁸`, relative;
+- `bvpsolve` on grids of 4 and 2 intervals against the closed forms
+  (`sin x / sin 1`, `(sinh(1-x) + 2 sinh x) / sinh 1`, `x² + 16/x`), and
+  against giac at a step of `1/20`, where giac's error (about `h⁴`) is
+  inside the `10⁻⁴ (1 + |y|)` tolerance;
+- the departure: at `n = 4` giac's step `1/2` errs by `4·10⁻²` on
+  `x² + 16/x`, recorded with its values, where ours is the closed form.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.

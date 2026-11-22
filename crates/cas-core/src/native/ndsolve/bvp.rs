@@ -19,8 +19,10 @@
 //! - The curve is integrated from that interval of slopes, so each value
 //!   holds the solution's: `{{x_k, y_k}, …}` at `n + 1` points evenly from
 //!   `a` to `b`, the ends' values the given ones, as giac's list
-//!   `[[1.0,17.0],[1.1,15.7554961579],…]` (its values good to about 10⁻⁵,
-//!   ours to the working precision).
+//!   `[[1.0,17.0],[1.1,15.7554961579],…]` for `y = x² + 16/x` on `[1, 3]`
+//!   at `n = 20`; ours to the working precision, giac's off by its fixed
+//!   step's error, about `h⁴`: `4·10⁻⁵` there (`y(1.1) = 15.7554545…`),
+//!   `4·10⁻²` at `n = 4`.
 //! - A shooting that does not converge, or an integration that fails,
 //!   leaves the call with a warning.
 
