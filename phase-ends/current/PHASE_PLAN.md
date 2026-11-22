@@ -55,7 +55,7 @@ Approved: 2026-11-22   Planner: claude-opus-5-5/medium   Plan-hash: 62a88689aaec
   Research: R1.1-005 (script's hardcoded paths). The card is edited by hand at the one line (HOW_WE_WORK.md ## Developer); keep it under its cap.
 - T4 | done | title: local gate green | deps: T1, T2, T3 | done-when: `cargo fmt --all --check` and `cargo clippy --workspace --all-targets -- -D warnings` pass with the stable toolchain's bin dir first on PATH (C0003), `cargo check --all-targets` in `fuzz/` passes on nightly, and the tree is committed clean | verify: bash tools/run.sh gate11 -- cargo clippy --workspace --all-targets -- -D warnings
   Cookbook: C0003. No research needed (commands only).
-- T5 | next | title: push stop: developer pushes master | deps: T4 | review: yes | coder: none | done-when: the developer says master is pushed and `git status -sb` shows master level with origin/master
+- T5 | done | title: push stop: developer pushes master | deps: T4 | review: yes | coder: none | done-when: the developer says master is pushed and `git status -sb` shows master level with origin/master
   No research needed. Present the commits since `866047b` in one short list with their tickets.
 - T6 | title: CI check on the pushed head | deps: T5 | coder: none | done-when: `gh run list --branch master --limit 2` shows CI and Fuzz green on the pushed head; a red job is fixed in this phase (fuzz finding: regression test in its owning crate) and goes back through T5 as T5.1 | verify: gh run list --branch master --limit 2
   Cookbook: C0004 (one `gh run watch --interval 60` per run; logs via `gh api repos/ef3d0c3e/cas/actions/jobs/<id>/logs`, grep'd). Fuzz takes about 45 minutes. No research needed.
@@ -76,3 +76,4 @@ Approved: 2026-11-22   Planner: claude-opus-5-5/medium   Plan-hash: 62a88689aaec
 - 2026-11-22 router: T2 next -> done
 - 2026-11-22 router: T3 next -> done
 - 2026-11-22 router: T4 next -> done
+- 2026-11-22 router: T5 next -> done
