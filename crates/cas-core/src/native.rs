@@ -988,6 +988,9 @@ pub(crate) fn value(context: &Context, s: Symbol) -> Option<Expr> {
             let digits = crate::print::shown_digits(context.working_precision());
             Some(Expr::from(i64::try_from(digits).unwrap_or(i64::MAX)))
         }
+        // CAS-545.
+        Symbol::ALL_TRIG_SOLUTIONS => Some(Expr::from(i64::from(context.all_trig_solutions()))),
+        Symbol::WITH_SQRT => Some(Expr::from(i64::from(context.with_sqrt()))),
         _ => None,
     }
 }

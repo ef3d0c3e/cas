@@ -382,9 +382,12 @@ IntegerSolve: isolve
 # (D4, CAS-148).
 Ball: ball
 Exact: exact
-# The working precision in decimal digits, Xcas's `Digits` (CAS-151): the
-# one builtin name an assignment sets.
+# The working precision in decimal digits, Xcas's `Digits` (CAS-151), and
+# Xcas's settings `all_trig_solutions` and `with_sqrt` (CAS-545): the
+# builtin names an assignment sets.
 Digits: Digits
+AllTrigSolutions: all_trig_solutions
+WithSqrt: with_sqrt
 # Numeric evaluation with balls, Xcas's evalf (CAS-DOC-5 §9.2, CAS-84).
 N: evalf approx
 # Polynomials, phase 1 (CAS-DOC-8 §10, §15 detail 1; CAS-140).

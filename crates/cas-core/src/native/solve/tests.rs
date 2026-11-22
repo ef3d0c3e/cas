@@ -1003,3 +1003,83 @@ fn lambert() {
         ),
     ]);
 }
+
+/// With Xcas's `all_trig_solutions` on (CAS-545), giac's general solutions
+/// of trigonometric equations, in giac's order, a parameter `n_k` for each
+/// root of the substitution.
+#[test]
+fn all_trig_solutions() {
+    use crate::Symbol;
+    let mut ctx = Context::new();
+    ctx.set_all_trig_solutions(true);
+    let n = |k: u32| Expr::from(Symbol::new(&format!("n_{k}")));
+    let pi = || Expr::from(Symbol::PI);
+    let q = |a: i64, b: i64| Expr::from(a) / Expr::from(b) * pi();
+    let turns = |k: u32, m: i64| Expr::from(m) * n(k) * pi();
+    let cases = [
+        // giac: [n*pi].
+        ("Solve[Equation[Sin[x], 0], x]", vec![turns(0, 1)]),
+        (
+            "Solve[Equation[Sin[x], 1/2], x]",
+            vec![turns(0, 2) + q(1, 6), turns(0, 2) + q(5, 6)],
+        ),
+        ("Solve[Equation[Sin[x], 1], x]", vec![turns(0, 2) + q(1, 2)]),
+        (
+            "Solve[Equation[Cos[x], 1/2], x]",
+            vec![turns(0, 2) + q(1, 3), turns(0, 2) - q(1, 3)],
+        ),
+        ("Solve[Equation[Cos[x], 1], x]", vec![turns(0, 2)]),
+        // giac: [-1/2*(-2*n*pi-pi)].
+        ("Solve[Equation[Cos[x], 0], x]", vec![turns(0, 1) + q(1, 2)]),
+        // Not merged, as giac's.
+        (
+            "Solve[Equation[Cos[x], -1], x]",
+            vec![turns(0, 2) + pi(), turns(0, 2) - pi()],
+        ),
+        ("Solve[Equation[Tan[x], 1], x]", vec![turns(0, 1) + q(1, 4)]),
+        (
+            "Solve[Equation[Sin[Times[2, x]], 0], x]",
+            vec![turns(0, 1) / Expr::from(2)],
+        ),
+        (
+            "Solve[Equation[Power[Sin[x], 2], 1/4], x]",
+            vec![
+                turns(0, 2) + q(1, 6),
+                turns(0, 2) + q(5, 6),
+                turns(1, 2) - q(1, 6),
+                turns(1, 2) + q(7, 6),
+            ],
+        ),
+        // Unchanged.
+        (
+            "Solve[Equation[Exp[x], 2], x]",
+            vec![Expr::call(Symbol::LOG, [Expr::from(2)])],
+        ),
+    ];
+    let mut wrong = Vec::new();
+    for (input, expected) in &cases {
+        let found = ctx.eval(&read(input)).unwrap();
+        let expected = ctx
+            .eval(&Expr::call(Symbol::LIST, expected.iter().cloned()))
+            .unwrap();
+        if found != expected {
+            wrong.push(format!("{input}: {found:?}, expected {expected:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    // sin(x) = n_0: a name of the input is skipped, the parameter is n_1.
+    let input = Expr::call(
+        Symbol::SOLVE,
+        [
+            Expr::call(
+                Symbol::EQUATION,
+                [Expr::call(Symbol::SIN, [read("x")]), n(0)],
+            ),
+            read("x"),
+        ],
+    );
+    let found = ctx.eval(&input).unwrap();
+    assert!(found.contains(&n(1)), "{found:?}");
+    // Off, the principal solutions.
+    check(&[("Solve[Equation[Sin[x], 0], x]", "List[0, Pi]")]);
+}

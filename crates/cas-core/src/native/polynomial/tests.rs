@@ -901,6 +901,29 @@ fn factor_over_square_roots() {
     ]);
 }
 
+/// Xcas's `with_sqrt` off (CAS-545): `Factor` stays over ℚ, as giac's
+/// `with_sqrt(0); factor(x^2-2)` is `x^2-2`.
+#[test]
+fn factor_without_square_roots() {
+    let mut ctx = Context::new();
+    ctx.set_with_sqrt(false);
+    for (input, expected) in [
+        ("Factor[Plus[Power[x, 2], -2]]", "Plus[Power[x, 2], -2]"),
+        (
+            "Factor[Plus[Times[3, Power[x, 2]], -6]]",
+            "Times[3, Plus[Power[x, 2], -2]]",
+        ),
+        (
+            "Factor[Plus[Power[x, 2], -4]]",
+            "Times[Plus[x, -2], Plus[x, 2]]",
+        ),
+    ] {
+        let (found, warnings) = eval(&ctx, input);
+        let (expected, _) = eval(&ctx, expected);
+        assert_eq!((found, warnings), (expected, Vec::new()), "{input}");
+    }
+}
+
 /// Over ℚ(i) when a coefficient is complex (CAS-186), as giac's `factor`.
 #[test]
 fn factor_over_gaussian_rationals() {

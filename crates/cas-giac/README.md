@@ -134,6 +134,22 @@ repeated root (giac's spurious `[0,1]`), the sign of a `sturmseq` factor
 when the highest multiplicity is even, and the order of rational roots
 within a multiplicity.
 
+`tests/all_trig_solutions.rs` and `tests/with_sqrt.rs`, giac's settings
+(CAS-545), one setting a file, as giac's instance is shared by the tests of
+a file and giac's input sets and resets it within one call:
+- `all_trig_solutions(1)`: giac's general solutions of `solve` (`sin`, `cos`,
+  `tan`, `sin(2x)`, `sin(x)^2=1/4`, and `exp(x)=2` unchanged), giac's
+  parameters `n_k` renamed `n_0`, `n_1`, … in their order, compared in
+  giac's order after `Expand` of the difference (giac writes `nπ + π/2` as
+  `-1/2*(-2*n*pi-pi)`); ours in a session with the flag set, and the
+  principal solutions back with it off;
+- `with_sqrt(0)` (giac refuses `with_sqrt:=0`, a reserved word): giac's
+  `factor` over ℚ read back and compared by value; `factor` splits over
+  square roots again with it back on;
+- the departures: giac's `increasing_power` changes printing and is left for
+  phase 1.6 (CAS-546); a setting's bare name reads its value here, 0 or 1,
+  where giac gives the symbol.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

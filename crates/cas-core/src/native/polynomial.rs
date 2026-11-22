@@ -1580,9 +1580,11 @@ pub(super) fn factored<R: Factoring>(
 /// is `(sin(x)-1)*(sin(x)+1)`, and `factor(x^2+(1+2*i)*x+2*i)` is
 /// `(x+1)*(x+2*i)`. As giac's default, a quadratic factor in one generator
 /// then splits over square roots ([`split_quadratic`]): `factor(x^2-2)` is
-/// `(x-sqrt(2))*(x+sqrt(2))`. An infinity is given back.
+/// `(x-sqrt(2))*(x+sqrt(2))`; not with Xcas's `with_sqrt` off (CAS-545),
+/// as [`factor_rational`]. An infinity is given back.
 pub(super) fn factor(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    factoring(ev, e, true)
+    let roots = ev.context().with_sqrt();
+    factoring(ev, e, roots)
 }
 
 /// `FactorRational[e]`, Xcas's `collect` (CAS-187): [`factor`] without the

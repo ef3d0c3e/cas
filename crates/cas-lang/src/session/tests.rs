@@ -168,3 +168,35 @@ fn decimals_take_the_precision_of_their_statement() {
     let [difference] = shown(&mut session, "g(1) - 1.1").try_into().unwrap();
     assert!(difference.starts_with("ball(0.0, "), "{difference}");
 }
+
+/// Xcas's settings `all_trig_solutions` and `with_sqrt` (CAS-545): set by
+/// assignment or giac's call, read back by name, 0 or 1 only.
+#[test]
+fn settings_are_set_both_ways() {
+    let mut session = Session::new();
+    assert_eq!(
+        results(&session.run("all_trig_solutions\nwith_sqrt")),
+        [Some("0"), Some("1")]
+    );
+    assert_eq!(
+        results(&session.run("all_trig_solutions := 1\nsolve(sin(x) = 0, x)")),
+        [Some("1"), Some("[n_0*pi]")]
+    );
+    assert!(session.context().all_trig_solutions());
+    assert_eq!(
+        results(&session.run("all_trig_solutions(0);\nsolve(sin(x) = 0, x)")),
+        [None, Some("[0, pi]")]
+    );
+    assert_eq!(
+        results(&session.run("with_sqrt(false)\nfactor(x^2 - 2)\nwith_sqrt")),
+        [Some("false"), Some("-2 + x^2"), Some("0")]
+    );
+    assert!(!session.context().with_sqrt());
+    let outputs = session.run("with_sqrt := 2");
+    assert_eq!(results(&outputs), [None]);
+    assert_eq!(
+        outputs[0].messages[0].text,
+        "with_sqrt takes 0 or 1, false or true"
+    );
+    assert!(!session.context().with_sqrt());
+}

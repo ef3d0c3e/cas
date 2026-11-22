@@ -590,6 +590,10 @@ builtins! {
     // The decimal digits the working precision shows, Xcas's `Digits`: its
     // value is read from the context; the session sets it (CAS-151).
     DIGITS = "Digits" [PROTECTED];
+    // Xcas's `all_trig_solutions` and `with_sqrt`, flags of the context
+    // read as 0 or 1; the session sets them (CAS-545).
+    ALL_TRIG_SOLUTIONS = "AllTrigSolutions" [PROTECTED];
+    WITH_SQRT = "WithSqrt" [PROTECTED];
     // Logical values, infinities and nothing (CAS-DOC-4 §6.1, R14).
     TRUE = "True" [PROTECTED];
     FALSE = "False" [PROTECTED];

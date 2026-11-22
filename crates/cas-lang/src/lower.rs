@@ -450,6 +450,17 @@ impl Lowerer<'_> {
         self.names.target(&name_of(node))
     }
 
+    /// The setting `node` names, which an assignment sets: `Digits`,
+    /// `all_trig_solutions` or `with_sqrt`.
+    fn setting(&self, node: &SyntaxNode) -> Option<Symbol> {
+        match self.target(node)? {
+            &Target::Builtin(
+                s @ (Symbol::DIGITS | Symbol::ALL_TRIG_SOLUTIONS | Symbol::WITH_SQRT),
+            ) => Some(s),
+            _ => None,
+        }
+    }
+
     // Definitions and assignments (CAS-DOC-7 §4).
 
     fn definition(&mut self, node: &SyntaxNode) -> Lowering {
@@ -469,13 +480,15 @@ impl Lowerer<'_> {
             }
         }
         match lhs.kind() {
-            // `Digits := n`, the working precision, which only the session
-            // sets (CAS-151).
-            K::Name if self.target(&lhs) == Some(&Target::Builtin(Symbol::DIGITS)) => {
+            // `Digits := n`, the working precision (CAS-151), and the
+            // settings `all_trig_solutions := v`, `with_sqrt := v`
+            // (CAS-545), which only the session sets.
+            K::Name if self.setting(&lhs).is_some() => {
                 if self.scope.is_some() {
                     return self.fail(range, LowerErrorKind::DefinitionInBlock);
                 }
-                let target = (Expr::from(Symbol::DIGITS), Spans::leaf(self::range(&lhs)));
+                let s = self.setting(&lhs).expect("a setting");
+                let target = (Expr::from(s), Spans::leaf(self::range(&lhs)));
                 let value = self.expr(&rhs);
                 apply(Symbol::SET, vec![target, value], range)
             }

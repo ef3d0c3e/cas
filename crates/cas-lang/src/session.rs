@@ -12,7 +12,11 @@
 //!   builtin an up-rule on each user name at level 1 (`define_up_delayed`);
 //! - `assume(…)` replaces the context with a scope that assumes the facts,
 //!   and keeps it; `purge(…)` clears the names and forgets the assumptions
-//!   on them, as in Xcas.
+//!   on them, as in Xcas;
+//! - `Digits := n` sets the working precision (CAS-151), and
+//!   `all_trig_solutions := v`, `with_sqrt := v` or giac's calls
+//!   `all_trig_solutions(v)`, `with_sqrt(v)` the context's flags, `v` 0 or
+//!   1 (CAS-545).
 //!
 //! Each statement gives an [`Output`]: the result unless `;` follows it or
 //! it is a definition, and [`Message`]s: the parser's and lowering's
@@ -279,6 +283,13 @@ impl Session {
                     }
                 }
             }
+            // `all_trig_solutions(v)`, `with_sqrt(v)`: giac's form of
+            // setting them (CAS-545).
+            (Some(s @ (Symbol::ALL_TRIG_SOLUTIONS | Symbol::WITH_SQRT)), [_]) => {
+                if let Some(value) = self.evaluate(statement, &[1], out) {
+                    self.set_flag(statement, s, &value, &[1], out);
+                }
+            }
             (Some(Symbol::ASSUME), facts) => {
                 for fact in facts {
                     self.context = self.context.assuming(fact.clone());
@@ -328,6 +339,42 @@ impl Session {
         }
     }
 
+    /// `all_trig_solutions := v` or `with_sqrt := v`, or their calls
+    /// (CAS-545): the flag `s` of the context set, for the statements after
+    /// it; `v` is 0, 1, `false` or `true`, at `path` in the statement.
+    fn set_flag(
+        &mut self,
+        statement: &Statement,
+        s: Symbol,
+        value: &Expr,
+        path: &[usize],
+        out: &mut Output,
+    ) {
+        let name = if s == Symbol::ALL_TRIG_SOLUTIONS {
+            "all_trig_solutions"
+        } else {
+            "with_sqrt"
+        };
+        let on = match (value.as_i64(), value.as_symbol()) {
+            (Some(0), _) | (_, Some(Symbol::FALSE)) => false,
+            (Some(1), _) | (_, Some(Symbol::TRUE)) => true,
+            _ => {
+                let message = format!("{name} takes 0 or 1, false or true");
+                out.messages
+                    .push(error(statement.spans.find(path), message));
+                return;
+            }
+        };
+        if s == Symbol::ALL_TRIG_SOLUTIONS {
+            self.context.set_all_trig_solutions(on);
+        } else {
+            self.context.set_with_sqrt(on);
+        }
+        if !statement.quiet {
+            self.show(value, statement.spans.range(), out);
+        }
+    }
+
     /// `Set[target, value]`: the value evaluated once, then assigned to a
     /// name, or element by element to a list of names.
     fn assign(&mut self, statement: &Statement, target: &Expr, out: &mut Output) {
@@ -336,6 +383,10 @@ impl Session {
         };
         if target.as_symbol() == Some(Symbol::DIGITS) {
             self.set_digits(statement, &value, out);
+            return;
+        }
+        if let Some(s @ (Symbol::ALL_TRIG_SOLUTIONS | Symbol::WITH_SQRT)) = target.as_symbol() {
+            self.set_flag(statement, s, &value, &[2], out);
             return;
         }
         let spans = &statement.spans;

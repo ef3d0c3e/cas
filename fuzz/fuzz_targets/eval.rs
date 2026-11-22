@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 445] = [
+const BUILTINS: [&str; 447] = [
     "Plus",
     "Times",
     "Power",
@@ -531,6 +531,9 @@ const BUILTINS: [&str; 445] = [
     "IntegerSolveLinear",
     "PrimeSumOfSquares",
     "IntegerSolve",
+    // Settings (CAS-545).
+    "AllTrigSolutions",
+    "WithSqrt",
 ];
 
 /// Builtins that apply something to parts, only in the expression

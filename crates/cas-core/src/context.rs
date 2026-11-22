@@ -1,4 +1,8 @@
 //! The evaluation context: everything semantic about expressions.
+//!
+//! Besides values, rules, attributes and assumptions, a context holds the
+//! settings evaluation reads: the working precision (Xcas's `Digits`),
+//! `all_trig_solutions` and `with_sqrt` (CAS-545), which the session sets.
 
 use std::fmt;
 use std::num::NonZeroU64;
@@ -134,6 +138,12 @@ struct State {
     /// Whether comparisons of balls decide only what they prove: in the
     /// contexts `N` evaluates in (CAS-DOC-5 §9.4).
     strict_comparisons: bool,
+    /// Xcas's `all_trig_solutions` (CAS-545): trigonometric equations
+    /// solved to their general solutions, with integer parameters.
+    all_trig_solutions: bool,
+    /// Xcas's `with_sqrt` (CAS-545): `Factor` splits quadratics over
+    /// square roots.
+    with_sqrt: bool,
 }
 
 /// The working precision of a new context: 53 bits, a double's.
@@ -151,6 +161,8 @@ impl Default for State {
             limits: Limits::default(),
             working_precision: DEFAULT_WORKING_PRECISION,
             strict_comparisons: false,
+            all_trig_solutions: false,
+            with_sqrt: true,
         }
     }
 }
@@ -592,6 +604,31 @@ impl Context {
     /// Sets the working precision, in bits, at least 2.
     pub fn set_working_precision(&mut self, bits: u64) {
         self.state_mut().working_precision = bits.max(2);
+    }
+
+    /// Whether `Solve` and `CSolve` give the general solutions of
+    /// trigonometric equations, Xcas's `all_trig_solutions` (CAS-545):
+    /// false by default, the principal ones.
+    #[must_use]
+    pub fn all_trig_solutions(&self) -> bool {
+        self.state.all_trig_solutions
+    }
+
+    /// Sets [`Context::all_trig_solutions`].
+    pub fn set_all_trig_solutions(&mut self, on: bool) {
+        self.state_mut().all_trig_solutions = on;
+    }
+
+    /// Whether `Factor` splits quadratics over square roots, Xcas's
+    /// `with_sqrt` (CAS-545): true by default.
+    #[must_use]
+    pub fn with_sqrt(&self) -> bool {
+        self.state.with_sqrt
+    }
+
+    /// Sets [`Context::with_sqrt`].
+    pub fn set_with_sqrt(&mut self, on: bool) {
+        self.state_mut().with_sqrt = on;
     }
 
     /// The context `N` evaluates in at `bits` bits (CAS-DOC-5 §9.4): this

@@ -13,7 +13,14 @@
 //!   `±c`; `a^(±1/n) = c` is `a = c^(±n)`, none for an even `n` and `c < 0`.
 //!   Then `a = v` solved for `x` in turn: `exp(2x) − 3exp(x) + 2` is
 //!   `u² − 3u + 2` in `u = eˣ`, so `x = 0` or `ln 2`; `sin(x)² = 1/4` gives
-//!   `±π/6`, `5π/6` and `7π/6`.
+//!   `±π/6`, `5π/6` and `7π/6`. With Xcas's `all_trig_solutions` on
+//!   (CAS-545), `sin`, `cos` and `tan` give the general solutions, in a
+//!   fresh integer parameter `n_k` per root `c` (the first not in the
+//!   equation): `2nπ + v` for each principal `v`, `nπ + v` when the two
+//!   differ by `π`, one when they are one, as giac's: `sin x = 0` is `nπ`,
+//!   `sin x = 1/2` is `2nπ + π/6` and `2nπ + 5π/6`, `cos x = 0` is
+//!   `nπ + π/2`, `tan a = c` is `nπ + atan c`; `sin(x)² = 1/4` takes `n_0`
+//!   for `1/2` and `n_1` for `−1/2`.
 //! - **Radicals**: with a root `s = r^(1/n)` of something in `x` among the
 //!   generators, the numerator as `A + B s` (for a square root, every power
 //!   of `s` reduced by `s² = r`) and `(−A)ⁿ − Bⁿ r = 0` solved, repeated
@@ -210,9 +217,16 @@ fn substituted(ev: &mut Eval<'_>, goal: &Goal<'_>, p: &Polynomials, j: usize, de
     if values.contains(&u) {
         return Ok(None);
     }
-    let mut found = Vec::new();
+    let mut found: Vec<Expr> = Vec::new();
     for c in values {
-        let Some(equations) = invert(ev, g, &c, goal)? else {
+        // A parameter of its own for each root (CAS-545).
+        let n = (0..u64::MAX)
+            .map(|k| Expr::from(Symbol::new(&format!("n_{k}"))))
+            .find(|n| {
+                !goal.e.contains(n) && !built.contains(n) && !found.iter().any(|r| r.contains(n))
+            })
+            .expect("a fresh name");
+        let Some(equations) = invert(ev, g, &c, &n, goal)? else {
             return Ok(None);
         };
         for (a, v) in equations {
@@ -251,14 +265,18 @@ fn outside(ev: &mut Eval<'_>, c: &Expr, lo: Expr, hi: Expr, open: bool) -> Resul
 
 /// The equations `a = v` that `g = c` comes to, `g` a function of the
 /// unknown: none when it has no solution, the real ones when only real
-/// ones are wanted; `None` when `g` is no function inverted here.
+/// ones are wanted; `None` when `g` is no function inverted here. With
+/// `all_trig_solutions`, those of `sin`, `cos` and `tan` in the integer
+/// parameter `n` ([`general`]).
 fn invert(
     ev: &mut Eval<'_>,
     g: &Expr,
     c: &Expr,
+    n: &Expr,
     goal: &Goal<'_>,
 ) -> Result<Option<Vec<(Expr, Expr)>>, EvalError> {
     let real = goal.real;
+    let all = ev.context().all_trig_solutions();
     let pi = || Expr::from(Symbol::PI);
     let half_pi = || Expr::from(Rational::new(Integer::ONE, Integer::from(2))) * pi();
     let Some(head) = g.head().and_then(Expr::as_symbol) else {
@@ -275,7 +293,12 @@ fn invert(
                 Vec::new()
             } else {
                 let asin = call(Symbol::ARC_SIN, c.clone());
-                vec![(a.clone(), asin.clone()), (a.clone(), pi() - asin)]
+                let values = [asin.clone(), pi() - asin];
+                if all {
+                    general(ev, a, values, n)?
+                } else {
+                    values.map(|v| (a.clone(), v)).to_vec()
+                }
             }
         }
         (Symbol::COS, [a]) => {
@@ -283,10 +306,22 @@ fn invert(
                 Vec::new()
             } else {
                 let acos = call(Symbol::ARC_COS, c.clone());
-                vec![(a.clone(), acos.clone()), (a.clone(), -acos)]
+                let values = [acos.clone(), -acos];
+                if all {
+                    general(ev, a, values, n)?
+                } else {
+                    values.map(|v| (a.clone(), v)).to_vec()
+                }
             }
         }
-        (Symbol::TAN, [a]) => vec![(a.clone(), call(Symbol::ARC_TAN, c.clone()))],
+        (Symbol::TAN, [a]) => {
+            let atan = call(Symbol::ARC_TAN, c.clone());
+            if all {
+                vec![(a.clone(), n.clone() * pi() + atan)]
+            } else {
+                vec![(a.clone(), atan)]
+            }
+        }
         (Symbol::ARC_SIN, [a]) => {
             if real && outside(ev, c, -half_pi(), half_pi(), false)? {
                 Vec::new()
@@ -322,6 +357,27 @@ fn invert(
         _ => return Ok(None),
     };
     Ok(Some(equations))
+}
+
+/// The general solutions of `a = v₁` and `a = v₂` modulo `2π`, in the
+/// integer `n`, as giac's: `a = 2nπ + v₁` alone when `v₁ = v₂`, `a = nπ +
+/// v₁` when they differ by `π`, else `a = 2nπ + v₁` and `a = 2nπ + v₂`.
+fn general(
+    ev: &mut Eval<'_>,
+    a: &Expr,
+    [v1, v2]: [Expr; 2],
+    n: &Expr,
+) -> Result<Vec<(Expr, Expr)>, EvalError> {
+    let pi = Expr::from(Symbol::PI);
+    let difference = ev.eval(&(v1.clone() - v2.clone()))?;
+    let turns = |k: i64| Expr::from(k) * n.clone() * pi.clone();
+    Ok(if difference == Expr::from(0) {
+        vec![(a.clone(), turns(2) + v1)]
+    } else if difference == pi || ev.eval(&-difference)? == pi {
+        vec![(a.clone(), turns(1) + v1)]
+    } else {
+        vec![(a.clone(), turns(2) + v1), (a.clone(), turns(2) + v2)]
+    })
 }
 
 /// `b^q = c`: an exponential, `b` free of the unknown, or a root of it,
