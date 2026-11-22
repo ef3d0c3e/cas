@@ -360,6 +360,78 @@ fn gcd_and_lcm() {
     ]);
 }
 
+/// giac 2.0's `heugcd`, `modgcd`, `psrgcd`, `ezgcd` and `icontent`
+/// (CAS-526); `psrgcd` with a positive leading coefficient, `ezgcd`
+/// univariate where giac refuses.
+#[test]
+fn gcd_methods_and_integer_content() {
+    check(&[
+        (
+            "HeuristicGCD[Plus[Power[x, 2], -1], Plus[Power[x, 2], Times[2, x], 1]]",
+            "Plus[1, x]",
+        ),
+        (
+            "ModularGCD[Plus[Power[x, 2], -1], Plus[Power[x, 2], Times[2, x], 1]]",
+            "Plus[1, x]",
+        ),
+        (
+            "HeuristicGCD[Plus[Times[6, Power[x, 2]], -6], Plus[Times[4, x], 4]]",
+            "Plus[2, Times[2, x]]",
+        ),
+        (
+            "ModularGCD[Plus[Times[x, y], Times[-1, y]], Plus[Times[Power[x, 2], y], Times[-1, y]]]",
+            "Plus[Times[-1, y], Times[x, y]]",
+        ),
+        (
+            "HeuristicGCD[Plus[Times[x, y], Times[-1, y]], Plus[Times[Power[x, 2], y], Times[-1, y]]]",
+            "Plus[Times[-1, y], Times[x, y]]",
+        ),
+        (
+            "SubresultantGCD[Plus[Times[2, Power[x, 2]], -2], Plus[Times[4, x], 4]]",
+            "Plus[2, Times[2, x]]",
+        ),
+        (
+            "SubresultantGCD[Plus[Power[x, 3], -1], Plus[Power[x, 2], -1]]",
+            "Plus[-1, x]",
+        ),
+        (
+            "SubresultantGCD[Plus[Power[x, 2], -1], Plus[Power[x, 2], Times[2, x], 1]]",
+            "Plus[1, x]",
+        ),
+        (
+            "SubresultantGCD[Plus[Times[Power[x, 2], y], Times[-1, y]], Plus[Times[x, y], Times[-1, y]]]",
+            "Plus[Times[-1, y], Times[x, y]]",
+        ),
+        (
+            "EZGCD[Times[Plus[x, y], Plus[x, Times[-1, y], 1]], Times[Plus[x, y], Plus[x, Times[2, y]]]]",
+            "Plus[x, y]",
+        ),
+        (
+            "EZGCD[Plus[Times[2, x, y], -2], Plus[Times[4, x, y], Times[4, y]]]",
+            "2",
+        ),
+        (
+            "EZGCD[Plus[Times[Power[x, 2], Power[y, 2]], -1], Plus[Times[x, y], 1]]",
+            "Plus[1, Times[x, y]]",
+        ),
+        (
+            "EZGCD[Plus[Times[Power[x, 2], y], Times[-1, y]], Plus[Times[x, Power[y, 2]], Times[-1, Power[y, 2]]]]",
+            "Plus[Times[-1, y], Times[x, y]]",
+        ),
+        // Univariate: giac refuses, ours is Brown's answer.
+        ("EZGCD[Plus[Power[x, 2], -1], Plus[x, 1]]", "Plus[1, x]"),
+        ("HeuristicGCD[12, 18]", "6"),
+        (
+            "IntegerContent[Plus[Times[6, Power[x, 2]], Times[4, x], 2]]",
+            "2",
+        ),
+        ("IntegerContent[Plus[Times[6, x, y], Times[4, y]]]", "2"),
+        ("IntegerContent[Plus[Times[3/2, x], 3]]", "3"),
+        ("IntegerContent[Plus[Times[-6, x], -4]]", "2"),
+        ("IntegerContent[12]", "12"),
+    ]);
+}
+
 /// A high degree where no algorithm goes dense (CAS-156): a constant's
 /// gcd, a polynomial's normal form, a division by a constant in the
 /// variable, a content in that variable. Over ℤ\[i\] too, whose gcd goes

@@ -358,6 +358,17 @@ fn departures() {
         ),
         // Signs as factor's, where giac keeps -x+1.
         ("sqrfree(-2*x^2+4*x-2)", "-2*(-x+1)^2", "-2*(x-1)^2"),
+        // CAS-527: giac's inert capitalised forms stay unevaluated user
+        // calls here; an alias would evaluate.
+        ("Gcd(x^2-1,x-1)", "gcd(x^2-1,x-1)", "Gcd(x^2-1,x-1)"),
+        ("Quo(x^3+1,x+2)", "quo(x^3+1,x+2)", "Quo(x^3+1,x+2)"),
+        ("Rem(x^3+1,x+2)", "rem(x^3+1,x+2)", "Rem(x^3+1,x+2)"),
+        (
+            "Resultant(x^2+1,x+2,x)",
+            "resultant(x^2+1,x+2,x)",
+            "Resultant(x^2+1,x+2,x)",
+        ),
+        ("Factor(x^2+1)", "factor(x^2+1)", "Factor(x^2+1)"),
     ];
     let normal = |s: &str| s.replace("poly1[", "[").replace("list[", "[");
     let mut wrong = Vec::new();

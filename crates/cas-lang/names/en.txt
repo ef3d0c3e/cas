@@ -379,6 +379,11 @@ N: evalf approx
 Expand: expand
 Together: normal
 GCD: gcd
+# The gcd algorithms by name (CAS-526).
+HeuristicGCD: heugcd
+ModularGCD: modgcd
+SubresultantGCD: psrgcd
+EZGCD: ezgcd
 LCM: lcm
 PolynomialQuotient: quo
 PolynomialRemainder: rem
@@ -389,6 +394,7 @@ LeadingCoefficient: lcoeff
 Numerator: numer
 Denominator: denom
 Content: content
+IntegerContent: icontent
 PrimitivePart: primpart
 Resultant: resultant
 Discriminant: discriminant

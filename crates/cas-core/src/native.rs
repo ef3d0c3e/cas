@@ -225,6 +225,11 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::TOGETHER, polynomial::together),
         (Symbol::GCD, polynomial::gcd),
         (Symbol::LCM, polynomial::lcm),
+        (Symbol::HEURISTIC_GCD, polynomial::heuristic_gcd),
+        (Symbol::MODULAR_GCD, polynomial::modular_gcd),
+        (Symbol::SUBRESULTANT_GCD, polynomial::subresultant_gcd),
+        (Symbol::EZ_GCD, polynomial::ez_gcd),
+        (Symbol::INTEGER_CONTENT, polynomial::integer_content),
         (Symbol::POLYNOMIAL_QUOTIENT, polynomial::polynomial_quotient),
         (
             Symbol::POLYNOMIAL_REMAINDER,

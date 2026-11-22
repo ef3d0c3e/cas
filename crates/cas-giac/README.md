@@ -89,13 +89,20 @@ and `set[…]` is `{…}`.
 - the departures of CAS-DOC-8 §15, each with giac's answer and this CAS's as
   decided: gcds normalised, `resultant(c, b) = c^(deg b)`, `degree(0)`, the
   inferred variable, the degree in `sin(x)`, an expanded `lcm`, one
-  expanded denominator a term in `expand`, and the main variable;
+  expanded denominator a term in `expand`, and the main variable; and giac's
+  inert capitalised forms (`Gcd`, `Quo`, `Rem`, `Resultant`, `Factor`),
+  which stay unevaluated user calls here (CAS-527);
 - a few hundred random inputs a run (128 cases each) to `expand` (products,
   powers, a product over a polynomial, two fractions), `normal` (a sum of two
   fractions) and `gcd` (two products with a common factor). In one variable
   giac's answer is this CAS's; in two, `normal` is compared once this CAS's
   `normal` gives giac's answer the sign of §15 detail 5, and `gcd` up to the
   sign, which giac takes from its inputs. 2000 cases each agree.
+
+`tests/gcd_methods.rs`, the gcd algorithms by name (CAS-526): giac's
+`heugcd`, `modgcd`, `psrgcd`, `ezgcd` and `icontent` read back, and the
+departures: `psrgcd` with a positive leading coefficient, `ezgcd` where giac
+gives up or refuses one variable, with giac's message.
 
 `tests/ndsolve.rs`, `NDSolve` and `BVPSolve` (CAS-DOC-35 §5, CAS-520):
 - giac's `odesolve` within `10⁻⁸`, relative;

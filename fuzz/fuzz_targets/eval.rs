@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 429] = [
+const BUILTINS: [&str; 434] = [
     "Plus",
     "Times",
     "Power",
@@ -88,6 +88,10 @@ const BUILTINS: [&str; 429] = [
     "Expand",
     "Together",
     "GCD",
+    "HeuristicGCD",
+    "ModularGCD",
+    "SubresultantGCD",
+    "EZGCD",
     "LCM",
     "PolynomialQuotient",
     "PolynomialRemainder",
@@ -98,6 +102,7 @@ const BUILTINS: [&str; 429] = [
     "Numerator",
     "Denominator",
     "Content",
+    "IntegerContent",
     "PrimitivePart",
     "Resultant",
     "Discriminant",

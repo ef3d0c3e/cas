@@ -624,6 +624,13 @@ builtins! {
     TOGETHER = "Together" [LISTABLE, PROTECTED];
     GCD = "GCD" [FLAT, ORDERLESS, ONE_IDENTITY, LISTABLE, PROTECTED];
     LCM = "LCM" [FLAT, ORDERLESS, ONE_IDENTITY, LISTABLE, PROTECTED];
+    // The gcd algorithms by name (CAS-526): Xcas's `heugcd`, `modgcd`,
+    // `psrgcd`, `ezgcd` and `icontent`.
+    HEURISTIC_GCD = "HeuristicGCD" [PROTECTED];
+    MODULAR_GCD = "ModularGCD" [PROTECTED];
+    SUBRESULTANT_GCD = "SubresultantGCD" [PROTECTED];
+    EZ_GCD = "EZGCD" [PROTECTED];
+    INTEGER_CONTENT = "IntegerContent" [LISTABLE, PROTECTED];
     POLYNOMIAL_QUOTIENT = "PolynomialQuotient" [PROTECTED];
     POLYNOMIAL_REMAINDER = "PolynomialRemainder" [PROTECTED];
     POLYNOMIAL_QUOTIENT_REMAINDER = "PolynomialQuotientRemainder" [PROTECTED];

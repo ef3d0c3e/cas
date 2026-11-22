@@ -26,8 +26,8 @@ use std::borrow::Cow;
 use cas_num::algebra::{EuclideanDomain, GaussianIntegers, Integers, Ring};
 use cas_num::{Complex, Integer, Natural, Rational};
 use cas_poly::{
-    Cancel, Cancelled, CharacteristicZero, DenseRing, FactorError, Factors, GcdDomain, Sparse,
-    SparseRing,
+    Cancel, Cancelled, CharacteristicZero, DenseRing, FactorError, Factors, GcdDomain, GcdMethod,
+    Sparse, SparseRing,
 };
 
 use crate::attributes::Attributes;
@@ -419,10 +419,41 @@ pub(super) fn gcd(ev: &mut Eval<'_>, e: &Expr) -> Native {
     if let Some(g) = super::modular::polynomials::gcd(ev, e)? {
         return Ok(Some(g));
     }
+    gcd_of(ev, e, None, "gcd")
+}
+
+/// `HeuristicGCD[a, b, …]`, Xcas's `heugcd` (CAS-526): [`gcd`] by the
+/// heuristic gcd, unevaluated when it gives up.
+pub(super) fn heuristic_gcd(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    gcd_of(ev, e, Some(GcdMethod::Heuristic), "heugcd")
+}
+
+/// `ModularGCD[a, b, …]`, Xcas's `modgcd` (CAS-526): [`gcd`] by Brown's
+/// modular algorithm.
+pub(super) fn modular_gcd(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    gcd_of(ev, e, Some(GcdMethod::Modular), "modgcd")
+}
+
+/// `SubresultantGCD[a, b, …]`, Xcas's `psrgcd` (CAS-526): [`gcd`] by
+/// subresultant remainder sequences, its leading coefficient positive
+/// (giac's `psrgcd` keeps the sign of its remainders).
+pub(super) fn subresultant_gcd(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    gcd_of(ev, e, Some(GcdMethod::Subresultant), "psrgcd")
+}
+
+/// `EZGCD[a, b, …]`, Xcas's `ezgcd` (CAS-526): [`gcd`] by EZ-GCD, over ℤ
+/// only, unevaluated when it gives up; univariate too (giac refuses).
+pub(super) fn ez_gcd(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    gcd_of(ev, e, Some(GcdMethod::EzGcd), "ezgcd")
+}
+
+/// [`gcd`] without the prime-field path, by `method` when given;
+/// unevaluated when the method gives up or does not apply.
+fn gcd_of(ev: &mut Eval<'_>, e: &Expr, method: Option<GcdMethod>, step: &'static str) -> Native {
     let args = e.args();
     if let Some(values) = numbers(args) {
         return Ok(
-            number_fold(&values, rational_gcd, gaussian_gcd).inspect(|g| ev.step("gcd", e, g))
+            number_fold(&values, rational_gcd, gaussian_gcd).inspect(|g| ev.step(step, e, g))
         );
     }
     let Some(p) = convert(ev, e, args, false)? else {
@@ -434,11 +465,13 @@ pub(super) fn gcd(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let cancel = ev.context().interrupt_flag();
     let n = p.generators().len();
     let result = match p.fractions()[0] {
-        Fraction::Integers { .. } => fold_gcd::<Integers>(&p, n, cancel)?,
-        Fraction::GaussianIntegers { .. } => fold_gcd::<GaussianIntegers>(&p, n, cancel)?,
+        Fraction::Integers { .. } => fold_gcd::<Integers>(&p, n, method, cancel)?,
+        Fraction::GaussianIntegers { .. } => fold_gcd::<GaussianIntegers>(&p, n, method, cancel)?,
     };
-    ev.step("gcd", e, &result);
-    Ok(Some(result))
+    if let Some(result) = &result {
+        ev.step(step, e, result);
+    }
+    Ok(result)
 }
 
 /// The numerators of `p`'s fractions over `R`.
@@ -470,16 +503,29 @@ impl Numerator<GaussianIntegers> for Polynomials {
     }
 }
 
-fn fold_gcd<R: Numbers>(p: &Polynomials, n: usize, cancel: &dyn Cancel) -> Result<Expr, EvalError>
+/// The gcd of `p`'s numerators, by `method` when given; `None` when the
+/// method gives up or does not apply.
+fn fold_gcd<R: Numbers>(
+    p: &Polynomials,
+    n: usize,
+    method: Option<GcdMethod>,
+    cancel: &dyn Cancel,
+) -> Result<Option<Expr>, EvalError>
 where
     Polynomials: Numerator<R>,
 {
     let ring = SparseRing::new(R::default(), n);
     let mut g = ring.zero();
     for (num, _) in Numerator::<R>::numerators(p) {
-        g = ring.gcd_with(&g, &num, cancel).map_err(interrupted)?;
+        g = match method {
+            None => ring.gcd_with(&g, &num, cancel).map_err(interrupted)?,
+            Some(method) => match ring.gcd_by(&g, &num, method, cancel).map_err(interrupted)? {
+                Some((g, _, _)) => g,
+                None => return Ok(None),
+            },
+        };
     }
-    Ok(p.polynomial_expr(&g))
+    Ok(Some(p.polynomial_expr(&g)))
 }
 
 /// The gcd of Gaussian rationals that are Gaussian integers, in normal
@@ -902,6 +948,37 @@ fn normal_lead<R: Numbers>(
 
 pub(super) fn content(ev: &mut Eval<'_>, e: &Expr) -> Native {
     content_or_part(ev, e, true)
+}
+
+/// `IntegerContent[p]`, Xcas's `icontent` (CAS-526): the gcd of the integer
+/// coefficients of `p`'s numerator over its common denominator, an integer
+/// (`icontent(3*x/2+3)` is 3); of a rational, its numerator's absolute
+/// value. Exact polynomials over ℤ only; unevaluated otherwise.
+pub(super) fn integer_content(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [arg] = e.args() else {
+        return Ok(None);
+    };
+    if let Some(value) = arg.to_complex() {
+        if !value.is_real() {
+            return Ok(None);
+        }
+        let result = Expr::from(value.re().numer().abs());
+        ev.step("icontent", e, &result);
+        return Ok(Some(result));
+    }
+    let Some(p) = convert(ev, e, std::slice::from_ref(arg), false)? else {
+        return Ok(None);
+    };
+    if polynomials(ev, e, &p).is_none() {
+        return Ok(None);
+    }
+    let Fraction::Integers { num, .. } = &p.fractions()[0] else {
+        return Ok(None);
+    };
+    let ring = SparseRing::new(Integers, p.generators().len());
+    let result = Expr::from(ring.content(num).abs());
+    ev.step("icontent", e, &result);
+    Ok(Some(result))
 }
 
 pub(super) fn primitive_part(ev: &mut Eval<'_>, e: &Expr) -> Native {
