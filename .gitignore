@@ -3,3 +3,8 @@
 # Local MCP config contains a live Lific API token — never commit.
 .mcp.json
 .claude/settings.local.json
+
+# Project Architect 3.0
+.run/
+__pycache__/
+.claude-state/journal/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/

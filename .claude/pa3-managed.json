@@ -1,0 +1,345 @@
+{
+  "files": {
+    ".claude/agents/auditor.md": {
+      "base": "3.32.8",
+      "sha": "c70d1066ad807729bdd7a6311ef83680c21e72f0535798f30765694fd49153b8",
+      "user": null
+    },
+    ".claude/agents/memory-curator.md": {
+      "base": "3.32.12",
+      "sha": "1c8093b4b19180b757b32bd1a698aa370679b17c2c9bceca50781da4534126df",
+      "user": null
+    },
+    ".claude/agents/pa-claude.md": {
+      "base": "3.32.23",
+      "sha": "ccac56a55ea6871a5665c257ad0534b9e0e5dc565079c0dc5567ea821255f84a",
+      "user": null
+    },
+    ".claude/agents/pa-coder.md": {
+      "base": "3.32.7",
+      "sha": "2c61d7e4b8d115cde4f1a840d613173fbca2c94ce356c8fe19ce7e8204cf9e51",
+      "user": null
+    },
+    ".claude/agents/pa-expert.md": {
+      "base": "3.32.8",
+      "sha": "ca7ca67a494fc4ad90e5d541cee587b367a9cefdbc57f814b7dfc0d8df2b0dbd",
+      "user": null
+    },
+    ".claude/agents/pa-planner.md": {
+      "base": "3.32.8",
+      "sha": "b348fa819b384b594a00065d86320cfdcc4da1415dc57c8d5b2902b86b535655",
+      "user": null
+    },
+    ".claude/agents/pa-thinker.md": {
+      "base": "3.25.0",
+      "sha": "740c1e0644814d70a1b6f915dc9ecc49c088a8f411a917b75d59e3f044190067",
+      "user": null
+    },
+    ".claude/agents/retriever-code.md": {
+      "base": "3.27.5",
+      "sha": "91bc899be73bcc7370d5f70fe387e99f67efa0b554d9fb25e2065ba5c516a80b",
+      "user": null
+    },
+    ".claude/agents/retriever-digest.md": {
+      "base": "3.32.6",
+      "sha": "7c8e1c5609a429d025d8c3976208e853146ff3b31c925728da3ac9d926ad8512",
+      "user": null
+    },
+    ".claude/agents/retriever-web.md": {
+      "base": "3.27.5",
+      "sha": "198b6ff481f06aef97b6e98de2bdb00742879dc386bcd15dd90603a4ef0fc626",
+      "user": null
+    },
+    ".claude/commands/bench.md": {
+      "base": null,
+      "sha": "8d365bb2312fc5ba88d36fbb538df587ee26caf4029d2072a5e3639ba1b787eb",
+      "user": null
+    },
+    ".claude/commands/pa-bugreport.md": {
+      "base": null,
+      "sha": "77eb82c1a0b5d348ccbed1061921714fbe014667235837de1f94df3659455371",
+      "user": null
+    },
+    ".claude/skills/pa-external-agents/SKILL.md": {
+      "base": null,
+      "sha": "d93321fe6c385fbd2d622ec70420d12a6c72a79f36392f7a781aaae9ef15d852",
+      "user": null
+    },
+    ".claude/skills/pa-planning/SKILL.md": {
+      "base": null,
+      "sha": "d1f77b56b8a2d890400741e7fd5ffb9e3eb493354af6f48beadf42f4b0ac0495",
+      "user": null
+    },
+    ".claude/skills/project-architect/SKILL.md": {
+      "base": null,
+      "sha": "26cc810c59a4684e0bbf876f44f2de8b3ff32f199eefd4f7a81343bb2f4ee6c7",
+      "user": null
+    },
+    "docs/project-architect.md": {
+      "base": null,
+      "sha": "eb14b255e9990c820d6b3faba3cdd8ab9751e964780e1c099ec180332123e9e0",
+      "user": null
+    },
+    "templates/CLAUDE.template.md": {
+      "base": null,
+      "sha": "480cb180447529133aa7b8da54cbd40a034fd77f9eb8e6541ea2aa17369d9fc6",
+      "user": null
+    },
+    "templates/GENERATION_PLAN.template.md": {
+      "base": null,
+      "sha": "0e6ad8e031af61fe6f800f2caf2c023481f95c5deaf7c6ae39b0580aee52d956",
+      "user": null
+    },
+    "templates/GenerationEnd.template.md": {
+      "base": null,
+      "sha": "eef0480b6d83493daebaa0baf85b8c94caa1b27d5eb45c79717fcdc4138583af",
+      "user": null
+    },
+    "templates/HISTORY.json": {
+      "base": null,
+      "sha": "711782f2237c30f68ea28b9b3b9d4211bfe488470e1b295b3234019f62894bf2",
+      "user": null
+    },
+    "templates/HOW_WE_WORK.template.md": {
+      "base": null,
+      "sha": "a598abc3d6410c5b218d79842749983b246c409e3196ecb7340ee407e0137a2b",
+      "user": null
+    },
+    "templates/INBOX.template.md": {
+      "base": null,
+      "sha": "45600caef4d16f649c0706b544cd7fe1a1585f7ea9bc43c6d05d7c2f04e7d1b3",
+      "user": null
+    },
+    "templates/INDEX.cookbook.md": {
+      "base": null,
+      "sha": "195604d51b656ee1f070be9dc4bb0810b2d67b87b6a8fa4953e3dd21542b0c0c",
+      "user": null
+    },
+    "templates/INDEX.research.md": {
+      "base": null,
+      "sha": "525f94ed6a7f63d11664ad06873dc1dea2aafffa70d722a3beca8caf1603ddaa",
+      "user": null
+    },
+    "templates/INDEX.rules.md": {
+      "base": null,
+      "sha": "ddaab916e3b7d94566dd4d25d187c2c925db445359b33f737e57e597ba2e4502",
+      "user": null
+    },
+    "templates/INDEX.tasks.md": {
+      "base": null,
+      "sha": "dce33e01803fe54684edd315b001b5ab82f5ec64e92350994494b57eb981b6f9",
+      "user": null
+    },
+    "templates/MEMORY.stub.md": {
+      "base": null,
+      "sha": "47be17bc8143b4f57b687964c1ec284f62e1ab58c9f6a68e964d78f98afea500",
+      "user": null
+    },
+    "templates/PHASE_PLAN.template.md": {
+      "base": null,
+      "sha": "62a1d58e8bd63cfe0a164be45a4d8805cea0b940838629284a8f29a753e74613",
+      "user": null
+    },
+    "templates/PROJECT_CONTEXT.skeleton.md": {
+      "base": null,
+      "sha": "786d189d043c5bf9ff56aad23f3233e11ae38c363a82947f5653f2cc057b39c8",
+      "user": null
+    },
+    "templates/PhaseEnd.template.md": {
+      "base": null,
+      "sha": "38db6a459ffe52977519eae27a2b428f49bc9702178d8b80d1e7eae63fadb854",
+      "user": null
+    },
+    "templates/REPLAN.template.md": {
+      "base": null,
+      "sha": "3cf7555e2303aa745ae6c1e3078e39b64eb1fbbff5ba77c37a84cbcfe2b2ff3b",
+      "user": null
+    },
+    "templates/REVIEW.template.md": {
+      "base": null,
+      "sha": "243c63931a37c9c433367cd5c3fc5fa543d69323ef505dcd2677d8dd0b2a4f93",
+      "user": null
+    },
+    "templates/TASK_PROGRESS.template.md": {
+      "base": null,
+      "sha": "7cab5e70fd65b1ab732102f724e2574eb01d83d17d3fe8cdddc13a2854d3c786",
+      "user": null
+    },
+    "templates/log.template.md": {
+      "base": null,
+      "sha": "7209380123395327818e0fcde798ce59d8beebee72f818506500941e45013cf5",
+      "user": null
+    },
+    "templates/pa.json.template": {
+      "base": null,
+      "sha": "2bd9cbc2495cc3317af6d0440733adfb5195d5a7e48769f2e170e1c9f7fd7c5f",
+      "user": null
+    },
+    "templates/phase-ends-README.md": {
+      "base": null,
+      "sha": "7d06958700bc31720293fc1007a8ae69881cc1b88ffb6eecb76bf32cf8e1f8d6",
+      "user": null
+    },
+    "templates/research.template.md": {
+      "base": null,
+      "sha": "f1360b877650f08a046813cb05068273c42f294ed764ddcfc63d231a17518545",
+      "user": null
+    },
+    "templates/task.template.md": {
+      "base": null,
+      "sha": "4cea0dbd5601fb5afe8739dab107089a459be2473695b2e29f1f81669a95f37f",
+      "user": null
+    },
+    "tools/_bench_grade.py": {
+      "base": null,
+      "sha": "74f0716adaeec53285efbc297e07e5e4529e938105b1a241bf57e6794cf4e534",
+      "user": null
+    },
+    "tools/_credit.py": {
+      "base": null,
+      "sha": "086265ec8571afab94ed80f459ea93732e88bedd69627f38dddcb509c1603aee",
+      "user": null
+    },
+    "tools/_genplan.py": {
+      "base": null,
+      "sha": "5558a4805476aed0ffb605008ca6752b440d3468713a4f07d9825417a05c78a5",
+      "user": null
+    },
+    "tools/bench.py": {
+      "base": null,
+      "sha": "6159ea51265ce013b34480d41f14a072863bb871bdd99b1ef0b68e5827e50533",
+      "user": null
+    },
+    "tools/card.py": {
+      "base": null,
+      "sha": "2d1b982d42d193a3427d8d3c8bf36066693ad0954971fe4330fac96bd08af63e",
+      "user": null
+    },
+    "tools/commit_task.sh": {
+      "base": null,
+      "sha": "f50eb4112c2cfff4c0580ff8e62f3af5c009ff1907a0690bb2ebf939a02c923a",
+      "user": null
+    },
+    "tools/cookbook_add.sh": {
+      "base": null,
+      "sha": "f07cee11c41065a1f19889932774e7351615d8c60ffa55074bca41eb1fe929db",
+      "user": null
+    },
+    "tools/curate.py": {
+      "base": null,
+      "sha": "e8d4fc928050b92f3161234b4158975c8733e6f2283ee4dc14c4717cae26f478",
+      "user": null
+    },
+    "tools/discussion.py": {
+      "base": null,
+      "sha": "3d572c8bfb653cfba8486c7aa2304475d54c1bc300cd3f8fd582f116446c337b",
+      "user": null
+    },
+    "tools/genend_index.py": {
+      "base": null,
+      "sha": "aea4c1291c60f2a22e47e7d8df40944dd622109693faa0ad0dbbb69775f4d023",
+      "user": null
+    },
+    "tools/history.py": {
+      "base": null,
+      "sha": "b600371cdb958f7c5d62eb184f63420dbb9e59b2ed8203eb437010324368d8ef",
+      "user": null
+    },
+    "tools/journal_rollup.py": {
+      "base": null,
+      "sha": "5ad62ec7c1a0a10897f3f2f6c1c4521d8e2f5858041cfbbf46f86f0f40180e80",
+      "user": null
+    },
+    "tools/launch.py": {
+      "base": null,
+      "sha": "f674252e335fc6e4cdae606d1e624130415ef2d009377d57a4504fcccce14521",
+      "user": null
+    },
+    "tools/managed.py": {
+      "base": null,
+      "sha": "a038146e1368716154988188db9d359c7a68054a8eac013f13850488dda132f0",
+      "user": null
+    },
+    "tools/outline.py": {
+      "base": null,
+      "sha": "3950e1c3e54eadf638af21d12ff6cb8289fe5ad6e928a1da5a509d4e17b70671",
+      "user": null
+    },
+    "tools/pa3_update.py": {
+      "base": null,
+      "sha": "09ec6c51ce47c60e1d7df60da305428b08b40db117ddec2519148300336c5de3",
+      "user": null
+    },
+    "tools/pa_bugreport.py": {
+      "base": null,
+      "sha": "e9ae45e022f51bca70e62885a8f707dd1ace28dab84954dd21d38122e25b08cb",
+      "user": null
+    },
+    "tools/pa_ext.py": {
+      "base": null,
+      "sha": "8351f49b959edb9efda6e3cb7e428bea48b850c31599a3be03ac23fa077fea85",
+      "user": null
+    },
+    "tools/phaseend_index.py": {
+      "base": null,
+      "sha": "3de4121b2ce0b669367c23be0a8da82f48e0d5e3cabadc7a84f303e47b997285",
+      "user": null
+    },
+    "tools/plan_edit.py": {
+      "base": null,
+      "sha": "72096b2a2bde9a79641e94e3ccdaec378191937a36445fc387f232ec9c8406aa",
+      "user": null
+    },
+    "tools/records.py": {
+      "base": null,
+      "sha": "cde36512d636b59809a2198b5f43bc3f2fa1ac4a25e4793f5ab88852b2c1f0a9",
+      "user": null
+    },
+    "tools/research_add.py": {
+      "base": null,
+      "sha": "e3ff6d6831866f4337b5684b7cc68f3596a31b9bc413ce3ca591bdc84520a655",
+      "user": null
+    },
+    "tools/rules_add.py": {
+      "base": null,
+      "sha": "1653138df558fcd23e9b179ddbab80b9de30d9bed87694456e27c653c424525f",
+      "user": null
+    },
+    "tools/run.ps1": {
+      "base": null,
+      "sha": "7de4cc2f3e870fe5abf3151faf94b5d7210945da923a090f0e0e7585fc38085d",
+      "user": null
+    },
+    "tools/run.sh": {
+      "base": null,
+      "sha": "32ca4bd3d65a42129151185b3b6f21cb51515d197b7b57bf0521bd0230d93142",
+      "user": null
+    },
+    "tools/run_cleanup.py": {
+      "base": null,
+      "sha": "729b6ad134ef6a3ed792cbeeca26cec3bcd8bfe3711ebd4f5493226fbef49e27",
+      "user": null
+    },
+    "tools/skill_add.py": {
+      "base": null,
+      "sha": "eca5db29d104738aa957e91d8e7c73291500c782053a701d8d55a754257b06d4",
+      "user": null
+    },
+    "tools/status.py": {
+      "base": null,
+      "sha": "a77e8e84fdeb9af37cb6b22add145f359bbcc66341f2db2c3ed306659636e49c",
+      "user": null
+    },
+    "tools/task_log.py": {
+      "base": null,
+      "sha": "dc9250b23686915a798f35d7834c46bcafb1609ab79c7e7b7b7b78e38679a9aa",
+      "user": null
+    }
+  },
+  "format": 1,
+  "git": "10891f1",
+  "installed": "2026-11-22T07:24:53Z",
+  "package": null,
+  "phase": "3.32.23",
+  "upstream_version": "3.32.23"
+}

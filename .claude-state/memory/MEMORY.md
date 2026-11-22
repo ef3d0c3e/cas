@@ -1,0 +1,7 @@
+- [CI on GitHub](ci-on-github.md) — tests/fuzz only on GitHub Actions (public repo), read logs with gh, mind memory limits; lint with the stable toolchain's PATH as CI does
+- [Lific is remote-only](lific-is-remote-only.md) — tracker at lific.pundalik.org; never run local lific; CLI needs --backend http
+- [CI diagnostics with gdb](ci-diagnostics-with-gdb.md) — slow/hanging/OOM fuzz inputs: read the timeout trace, then a diag worktree branch with gdb backtraces, input printing and threshold panics
+- [Work on master](work-on-master.md) — commit and push straight to master, no branches; failing builds OK until a release
+- [Benchmarks on CI](benchmarks-on-ci.md) — Workload workflow A/B timings (base=<commit>); runner has no perf, ~4/3 dev-machine time
+- [Focus on CAS features](focus-on-cas-features.md) — CAS-30 (SIMD/unsafe kernels) deferred; prefer features/builtins over kernel speedups
+- [Areas in my order](autonomous-areas.md) — go on to the next area without asking; ask only when a brand new Lific module is needed
