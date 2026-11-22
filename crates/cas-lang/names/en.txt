@@ -303,6 +303,29 @@ LinSolve: linsolve
 CharacteristicPolynomial: charpoly pcar pcar_hessenberg
 Eigenvalues: eigenvals
 Eigenvectors: eigenvects egv
+# giac's matrix constructors, slices and row operations (CAS-531, CAS-532,
+# CAS-533).
+Matrix: matrix
+MakeMatrix: makemat
+ListToMatrix: list2mat
+MatrixToList: mat2list
+BlockMatrix: blockmatrix
+JordanBlock: JordanBlock
+BlockDiagonalMatrix: BlockDiagonal
+RowDimension: rowdim nrows rowDim
+ColumnDimension: coldim ncols colDim
+MatrixRow: row
+MatrixColumn: col
+SubMatrix: subMat
+DeleteRows: delrows
+DeleteColumns: delcols
+MultiplyRow: mRow
+MultiplyRowAdd: mRowAdd
+ScaleRowAdd: scaleadd SCALEADD
+ScaleRow: scale SCALE
+RowAdd: rowAdd
+RowSwap: rowSwap swaprow rowswap SWAPROW
+ColumnSwap: colSwap swapcol colswap SWAPCOL
 # Sums and products (CAS-DOC-13, CAS-224, CAS-225).
 Sum: sum
 Product: product mul

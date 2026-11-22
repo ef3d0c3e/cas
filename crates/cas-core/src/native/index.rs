@@ -29,7 +29,7 @@ type Native = Result<Option<Expr>, EvalError>;
 
 /// What an index selects in a list.
 #[derive(Clone, Debug, PartialEq, Eq)]
-enum Index {
+pub(in crate::native) enum Index {
     /// One element.
     One(usize),
     /// The elements of a slice, in a list.
@@ -53,7 +53,7 @@ fn integer(e: &Expr) -> Option<i128> {
 impl Index {
     /// What `index` selects in a list of `len` elements; `None` when it is
     /// neither an integer nor a slice of integers.
-    fn of(index: &Expr, len: usize) -> Result<Option<Index>, EvalError> {
+    pub(in crate::native) fn of(index: &Expr, len: usize) -> Result<Option<Index>, EvalError> {
         let len = i128::try_from(len).expect("fits");
         let from_end = |k: i128| if k < 0 { k + len } else { k };
         if let Some(k) = integer(index) {

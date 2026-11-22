@@ -463,3 +463,221 @@ fn eigenvectors() {
         }
     }
 }
+
+const M32: &str = "List[List[1, 2], List[3, 4], List[5, 6]]";
+
+/// giac's constructors (CAS-531), as giac 2.0 answers.
+#[test]
+fn constructors() {
+    let jk = "Function[List[j, k], Plus[j, k]]";
+    check(&[
+        (
+            &format!("Matrix[3, 2, {jk}]"),
+            "List[List[0, 1], List[1, 2], List[2, 3]]",
+        ),
+        ("Matrix[2, 3]", "List[List[0, 0, 0], List[0, 0, 0]]"),
+        ("Matrix[2, 2, 7]", "List[List[7, 7], List[7, 7]]"),
+        (
+            "Matrix[2, 3, List[1, 2, 3, 4, 5, 6]]",
+            "List[List[1, 2, 3], List[4, 5, 6]]",
+        ),
+        (
+            "Matrix[2, 2, List[1, 2, 3]]",
+            "List[List[1, 2], List[3, 0]]",
+        ),
+        ("Matrix[2, 2, List[1, 2, 3, 4, 5]]", M2),
+        (
+            &format!("MakeMatrix[{jk}, 3, 2]"),
+            "List[List[0, 1], List[1, 2], List[2, 3]]",
+        ),
+        ("MakeMatrix[2, 2, 3]", "List[List[2, 2, 2], List[2, 2, 2]]"),
+        (
+            "ListToMatrix[List[1, 8, 4, 9, 5], 2]",
+            "List[List[1, 8], List[4, 9], List[5, 0]]",
+        ),
+        (
+            "ListToMatrix[List[1, 8, 4, 9], 1]",
+            "List[List[1], List[8], List[4], List[9]]",
+        ),
+        ("ListToMatrix[List[], 2]", "List[]"),
+        (
+            "MatrixToList[List[List[1, 8], List[4, 9]]]",
+            "List[1, 8, 4, 9]",
+        ),
+        ("MatrixToList[List[1, 2, 3]]", "List[1, 2, 3]"),
+        (
+            "MatrixToList[List[List[1, List[2, 3]], List[4, 5]]]",
+            "List[1, List[2, 3], 4, 5]",
+        ),
+        (
+            "BlockMatrix[2, 1, List[List[List[1, 2]], List[List[3, 4]]]]",
+            M2,
+        ),
+        (
+            "BlockMatrix[1, 2, List[List[List[1], List[2]], List[List[3], List[4]]]]",
+            "List[List[1, 3], List[2, 4]]",
+        ),
+        (
+            "JordanBlock[7, 3]",
+            "List[List[7, 1, 0], List[0, 7, 1], List[0, 0, 7]]",
+        ),
+        ("JordanBlock[a, 1]", "List[List[a]]"),
+        (
+            "BlockDiagonalMatrix[List[List[1, 2], List[3, 4]]]",
+            "List[1, 4]",
+        ),
+        (
+            "BlockDiagonalMatrix[List[1, 2, 3]]",
+            "List[List[1, 0, 0], List[0, 2, 0], List[0, 0, 3]]",
+        ),
+        (
+            "BlockDiagonalMatrix[List[List[List[1]], List[List[2, 3], List[4, 5]]]]",
+            "List[List[1, 0, 0], List[0, 2, 3], List[0, 4, 5]]",
+        ),
+    ]);
+    // What stays.
+    check(&[
+        ("Matrix[0, 2]", "Matrix[0, 2]"),
+        ("Matrix[2, x]", "Matrix[2, x]"),
+        (
+            "ListToMatrix[List[1, 2, 3], 0]",
+            "ListToMatrix[List[1, 2, 3], 0]",
+        ),
+        (
+            "BlockMatrix[2, 2, List[1, 2, 3, 4]]",
+            "BlockMatrix[2, 2, List[1, 2, 3, 4]]",
+        ),
+        ("JordanBlock[2, 0]", "JordanBlock[2, 0]"),
+        (
+            "BlockDiagonalMatrix[List[List[List[1, 2]], List[List[3], List[4]]]]",
+            "BlockDiagonalMatrix[List[List[List[1, 2]], List[List[3], List[4]]]]",
+        ),
+    ]);
+}
+
+/// Dimensions, rows, columns and submatrices (CAS-532).
+#[test]
+fn slices() {
+    check(&[
+        (&format!("RowDimension[{M23}]"), "2"),
+        (&format!("ColumnDimension[{M23}]"), "3"),
+        ("RowDimension[List[1, 2, 3]]", "RowDimension[List[1, 2, 3]]"),
+        (
+            "ColumnDimension[List[1, 2, 3]]",
+            "ColumnDimension[List[1, 2, 3]]",
+        ),
+        (&format!("MatrixRow[{M32}, 0]"), "List[1, 2]"),
+        (&format!("MatrixRow[{M32}, -1]"), "List[5, 6]"),
+        (
+            &format!("MatrixRow[{M32}, Range[1, 2]]"),
+            "List[List[3, 4], List[5, 6]]",
+        ),
+        ("MatrixRow[List[1, 2, 3], 0]", "1"),
+        (&format!("MatrixColumn[{M33}, 1]"), "List[2, 5, 8]"),
+        (&format!("MatrixColumn[{M2}, -1]"), "List[2, 4]"),
+        (
+            &format!("MatrixColumn[{M33}, Range[0, 1]]"),
+            "List[List[1, 4, 7], List[2, 5, 8]]",
+        ),
+        (
+            &format!("SubMatrix[{M32}, 1, 0, 2, 1]"),
+            "List[List[3, 4], List[5, 6]]",
+        ),
+        (
+            &format!("SubMatrix[{M33}, 1, 1]"),
+            "List[List[5, 6], List[8, 9]]",
+        ),
+        (&format!("SubMatrix[{M33}]"), M33),
+        (
+            &format!("SubMatrix[{M33}, 2, 2, 0, 0]"),
+            &format!("SubMatrix[{M33}, 2, 2, 0, 0]"),
+        ),
+        (
+            &format!("DeleteRows[{M32}, Range[1, 2]]"),
+            "List[List[1, 2]]",
+        ),
+        (
+            &format!("DeleteRows[{M33}, 1]"),
+            "List[List[1, 2, 3], List[7, 8, 9]]",
+        ),
+        (&format!("DeleteRows[{M2}, Range[0, 1]]"), "List[]"),
+        (
+            &format!("DeleteColumns[{M33}, 1]"),
+            "List[List[1, 3], List[4, 6], List[7, 9]]",
+        ),
+        (
+            &format!("DeleteColumns[{M33}, Range[0, 1]]"),
+            "List[List[3], List[6], List[9]]",
+        ),
+        (&format!("DeleteColumns[{M2}, Range[0, 1]]"), "List[]"),
+    ]);
+    let ctx = Context::new();
+    for input in [
+        format!("MatrixRow[{M32}, 3]"),
+        format!("MatrixColumn[{M2}, -3]"),
+        format!("SubMatrix[{M2}, 0, 0, 2, 1]"),
+        format!("DeleteRows[{M2}, 2]"),
+    ] {
+        assert_eq!(
+            ctx.eval(&read(&input)),
+            Err(EvalError::IndexOutOfRange),
+            "{input}"
+        );
+    }
+}
+
+/// Row operations (CAS-533).
+#[test]
+fn row_operations() {
+    check(&[
+        (
+            &format!("MultiplyRow[12, {M32}, 0]"),
+            "List[List[12, 24], List[3, 4], List[5, 6]]",
+        ),
+        (
+            &format!("ScaleRow[{M32}, 12, 0]"),
+            "List[List[12, 24], List[3, 4], List[5, 6]]",
+        ),
+        (
+            &format!("MultiplyRow[2, {M2}, -1]"),
+            "List[List[1, 2], List[6, 8]]",
+        ),
+        (
+            &format!("MultiplyRowAdd[12, {M32}, 0, 2]"),
+            "List[List[1, 2], List[3, 4], List[17, 30]]",
+        ),
+        (
+            &format!("ScaleRowAdd[{M32}, 12, 0, 2]"),
+            "List[List[1, 2], List[3, 4], List[17, 30]]",
+        ),
+        (
+            &format!("MultiplyRowAdd[x, {M2}, 1, 0]"),
+            "List[List[Plus[Times[3, x], 1], Plus[Times[4, x], 2]], List[3, 4]]",
+        ),
+        (
+            &format!("RowAdd[{M32}, 1, 2]"),
+            "List[List[1, 2], List[3, 4], List[8, 10]]",
+        ),
+        (
+            &format!("RowAdd[{M2}, 0, 0]"),
+            "List[List[2, 4], List[3, 4]]",
+        ),
+        (
+            &format!("RowSwap[{M32}, 1, 2]"),
+            "List[List[1, 2], List[5, 6], List[3, 4]]",
+        ),
+        (&format!("RowSwap[{M2}, 0, 0]"), M2),
+        (
+            &format!("ColumnSwap[{M32}, 0, 1]"),
+            "List[List[2, 1], List[4, 3], List[6, 5]]",
+        ),
+        ("RowSwap[List[1, 2], 0, 1]", "RowSwap[List[1, 2], 0, 1]"),
+        (
+            &format!("RowAdd[{M2}, Range[0, 1], 1]"),
+            &format!("RowAdd[{M2}, Range[0, 1], 1]"),
+        ),
+    ]);
+    let ctx = Context::new();
+    let input = format!("RowSwap[{M2}, 0, 2]");
+    assert_eq!(ctx.eval(&read(&input)), Err(EvalError::IndexOutOfRange));
+}

@@ -33,6 +33,12 @@
 //!   as often as its multiplicity; `Eigenvectors`, `eigenvects`, by
 //!   [`eigen`].
 //!
+//! - Constructors (`matrix`, `makemat`, `list2mat`, `mat2list`,
+//!   `blockmatrix`, `JordanBlock`, `BlockDiagonal`, CAS-531) in
+//!   [`constructors`]; dimensions, rows, columns, submatrices and row
+//!   operations (`rowdim`, `row`, `subMat`, `delrows`, `mRowAdd`, `rowSwap`,
+//!   …, CAS-532, CAS-533) in [`slicing`].
+//!
 //! A matrix of modular values of one modulus goes to `modular::matrices`
 //! first (CAS-DOC-44 §2).
 //!
@@ -941,6 +947,7 @@ pub(super) mod constructors;
 pub(super) mod decompose;
 mod eigen;
 mod elimination;
+pub(super) mod slicing;
 #[cfg(test)]
 mod tests;
 pub(super) mod verified;

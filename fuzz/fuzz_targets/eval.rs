@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 459] = [
+const BUILTINS: [&str; 480] = [
     "Plus",
     "Times",
     "Power",
@@ -380,6 +380,27 @@ const BUILTINS: [&str; 459] = [
     "CharacteristicPolynomial",
     "Eigenvalues",
     "Eigenvectors",
+    "Matrix",
+    "MakeMatrix",
+    "ListToMatrix",
+    "MatrixToList",
+    "BlockMatrix",
+    "JordanBlock",
+    "BlockDiagonalMatrix",
+    "RowDimension",
+    "ColumnDimension",
+    "MatrixRow",
+    "MatrixColumn",
+    "SubMatrix",
+    "DeleteRows",
+    "DeleteColumns",
+    "MultiplyRow",
+    "MultiplyRowAdd",
+    "ScaleRowAdd",
+    "ScaleRow",
+    "RowAdd",
+    "RowSwap",
+    "ColumnSwap",
     // Sums and products (CAS-224, CAS-225).
     "Sum",
     "Product",

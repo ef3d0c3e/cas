@@ -316,6 +316,29 @@ builtins! {
     CHARACTERISTIC_POLYNOMIAL = "CharacteristicPolynomial" [PROTECTED];
     EIGENVALUES = "Eigenvalues" [PROTECTED];
     EIGENVECTORS = "Eigenvectors" [PROTECTED];
+    // giac's matrix constructors, slices and row operations (CAS-531,
+    // CAS-532, CAS-533).
+    MATRIX = "Matrix" [PROTECTED];
+    MAKE_MATRIX = "MakeMatrix" [PROTECTED];
+    LIST_TO_MATRIX = "ListToMatrix" [PROTECTED];
+    MATRIX_TO_LIST = "MatrixToList" [PROTECTED];
+    BLOCK_MATRIX = "BlockMatrix" [PROTECTED];
+    JORDAN_BLOCK = "JordanBlock" [PROTECTED];
+    BLOCK_DIAGONAL_MATRIX = "BlockDiagonalMatrix" [PROTECTED];
+    ROW_DIMENSION = "RowDimension" [PROTECTED];
+    COLUMN_DIMENSION = "ColumnDimension" [PROTECTED];
+    MATRIX_ROW = "MatrixRow" [PROTECTED];
+    MATRIX_COLUMN = "MatrixColumn" [PROTECTED];
+    SUB_MATRIX = "SubMatrix" [PROTECTED];
+    DELETE_ROWS = "DeleteRows" [PROTECTED];
+    DELETE_COLUMNS = "DeleteColumns" [PROTECTED];
+    MULTIPLY_ROW = "MultiplyRow" [PROTECTED];
+    MULTIPLY_ROW_ADD = "MultiplyRowAdd" [PROTECTED];
+    SCALE_ROW_ADD = "ScaleRowAdd" [PROTECTED];
+    SCALE_ROW = "ScaleRow" [PROTECTED];
+    ROW_ADD = "RowAdd" [PROTECTED];
+    ROW_SWAP = "RowSwap" [PROTECTED];
+    COLUMN_SWAP = "ColumnSwap" [PROTECTED];
     // Sums and products (CAS-DOC-13).
     SUM = "Sum" [PROTECTED];
     PRODUCT = "Product" [PROTECTED];

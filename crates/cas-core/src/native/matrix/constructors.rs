@@ -8,7 +8,23 @@
 //!   as giac's;
 //! - `Norm[v]` (`l2norm`): `√(Σ |v_i|²)`, and `FrobeniusNorm[A]`
 //!   (`frobenius_norm`) over every entry, `|z|² = z z̄` with the conjugate
-//!   of each entry known (CAS-DOC-12).
+//!   of each entry known (CAS-DOC-12);
+//!
+//! and giac's constructors (CAS-531), for `1 ≤ p, q` with `p q` entries
+//! within `Limits::terms`, else the call stays:
+//!
+//! - `Matrix[p, q, a]` (`matrix`) and `MakeMatrix[a, p, q]` (`makemat`):
+//!   zeros without `a`; `a[j, k]`, 0-based, for a function; a vector's
+//!   entries row by row, padded with 0, extras dropped; `a` everywhere
+//!   otherwise;
+//! - `ListToMatrix[l, n]` (`list2mat`): `l` in rows of `n ≥ 1`, padded with
+//!   0; `MatrixToList[A]` (`mat2list`): the rows of `A` one after the
+//!   other, a vector itself;
+//! - `BlockMatrix[n, m, l]` (`blockmatrix`): the `n m` matrices of `l` as
+//!   `n` block rows of `m`, whose shapes must fit;
+//! - `JordanBlock[a, n]` (`JordanBlock`): `a` on the diagonal, 1 above it;
+//! - `BlockDiagonalMatrix[l]` (`BlockDiagonal`): the square matrices of `l`
+//!   along the diagonal; as `diag` for a matrix or a vector.
 
 use super::conjugate;
 use crate::context::EvalError;
@@ -148,6 +164,211 @@ pub(in crate::native) fn frobenius_norm(ev: &mut Eval<'_>, e: &Expr) -> Native {
         .flat_map(|r| r.args().iter().cloned())
         .collect();
     root_of_squares(ev, &entries)
+}
+
+fn index(i: usize) -> Expr {
+    Expr::from(i64::try_from(i).expect("a size in memory"))
+}
+
+/// An integer `1 ≤ n`.
+fn positive(n: &Expr) -> Option<usize> {
+    usize::try_from(n.as_i64()?).ok().filter(|&n| n >= 1)
+}
+
+/// Whether `n` entries are within `Limits::terms`.
+fn within(ev: &Eval<'_>, n: Option<usize>) -> bool {
+    n.is_some_and(|n| n <= ev.context().limits().terms)
+}
+
+/// The `p × q` matrix of `a`: zeros without it, `a[j, k]` for a function,
+/// a vector's entries row by row padded with 0, or `a` everywhere.
+fn filled(ev: &mut Eval<'_>, p: &Expr, q: &Expr, a: Option<&Expr>) -> Native {
+    let (Some(p), Some(q)) = (positive(p), positive(q)) else {
+        return Ok(None);
+    };
+    if !within(ev, p.checked_mul(q)) {
+        return Ok(None);
+    }
+    let zero = Expr::from(0);
+    let a = a.unwrap_or(&zero);
+    if a.head() == Some(&Expr::from(Symbol::FUNCTION)) {
+        let mut rows = Vec::with_capacity(p);
+        for j in 0..p {
+            let mut row = Vec::with_capacity(q);
+            for k in 0..q {
+                row.push(ev.eval(&Expr::apply(a, &[index(j), index(k)]))?);
+            }
+            rows.push(list(row));
+        }
+        return Ok(Some(list(rows)));
+    }
+    if is_list(a) && a.args().iter().any(is_list) {
+        return Ok(None);
+    }
+    let entry = |i: usize| {
+        if is_list(a) {
+            a.args().get(i).cloned().unwrap_or_else(|| zero.clone())
+        } else {
+            a.clone()
+        }
+    };
+    let rows = (0..p)
+        .map(|j| list((0..q).map(|k| entry(j * q + k)).collect()))
+        .collect();
+    Ok(Some(list(rows)))
+}
+
+pub(in crate::native) fn matrix(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    match e.args() {
+        [p, q] => filled(ev, p, q, None),
+        [p, q, a] => filled(ev, p, q, Some(a)),
+        _ => Ok(None),
+    }
+}
+
+pub(in crate::native) fn make_matrix(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [a, p, q] = e.args() else {
+        return Ok(None);
+    };
+    filled(ev, p, q, Some(a))
+}
+
+pub(in crate::native) fn list_to_matrix(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [l, n] = e.args() else {
+        return Ok(None);
+    };
+    let Some(n) = positive(n) else {
+        return Ok(None);
+    };
+    if !is_list(l) {
+        return Ok(None);
+    }
+    let items = l.args();
+    let rows = items.len().div_ceil(n);
+    if !within(ev, rows.checked_mul(n)) {
+        return Ok(None);
+    }
+    let rows = (0..rows)
+        .map(|i| {
+            list(
+                (0..n)
+                    .map(|k| {
+                        items
+                            .get(i * n + k)
+                            .cloned()
+                            .unwrap_or_else(|| Expr::from(0))
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
+    Ok(Some(list(rows)))
+}
+
+pub(in crate::native) fn matrix_to_list(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [m] = e.args() else {
+        return Ok(None);
+    };
+    if is_matrix(m) {
+        return Ok(Some(list(
+            m.args()
+                .iter()
+                .flat_map(|r| r.args().iter().cloned())
+                .collect(),
+        )));
+    }
+    Ok((is_list(m) && !m.args().iter().any(is_list)).then(|| m.clone()))
+}
+
+pub(in crate::native) fn block_matrix(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [n, m, l] = e.args() else {
+        return Ok(None);
+    };
+    let (Some(n), Some(m)) = (positive(n), positive(m)) else {
+        return Ok(None);
+    };
+    if !is_list(l) || Some(l.args().len()) != n.checked_mul(m) || !l.args().iter().all(is_matrix) {
+        return Ok(None);
+    }
+    let mut rows = Vec::new();
+    let mut width = None;
+    for blocks in l.args().chunks(m) {
+        let height = blocks[0].args().len();
+        if blocks.iter().any(|b| b.args().len() != height) {
+            return Ok(None);
+        }
+        let w: usize = blocks.iter().map(|b| b.args()[0].args().len()).sum();
+        if *width.get_or_insert(w) != w {
+            return Ok(None);
+        }
+        for r in 0..height {
+            rows.push(list(
+                blocks
+                    .iter()
+                    .flat_map(|b| b.args()[r].args().iter().cloned())
+                    .collect(),
+            ));
+        }
+    }
+    Ok(Some(list(rows)))
+}
+
+pub(in crate::native) fn jordan_block(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [a, n] = e.args() else {
+        return Ok(None);
+    };
+    let Some(n) = size(ev, n) else {
+        return Ok(None);
+    };
+    let entry = |i: usize, j: usize| {
+        if i == j {
+            a.clone()
+        } else {
+            Expr::from(i64::from(j == i + 1))
+        }
+    };
+    let rows = (0..n)
+        .map(|i| list((0..n).map(|j| entry(i, j)).collect()))
+        .collect();
+    Ok(Some(list(rows)))
+}
+
+pub(in crate::native) fn block_diagonal_matrix(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [l] = e.args() else {
+        return Ok(None);
+    };
+    if !is_list(l) || l.args().is_empty() {
+        return Ok(None);
+    }
+    let blocks = l.args();
+    if blocks.iter().all(is_matrix) {
+        if blocks
+            .iter()
+            .any(|b| b.args().len() != b.args()[0].args().len())
+        {
+            return Ok(None);
+        }
+        let total: usize = blocks.iter().map(|b| b.args().len()).sum();
+        if !within(ev, total.checked_mul(total)) {
+            return Ok(None);
+        }
+        let mut rows = Vec::with_capacity(total);
+        let mut at = 0;
+        for b in blocks {
+            let k = b.args().len();
+            for r in b.args() {
+                let mut row = vec![Expr::from(0); total];
+                row[at..at + k].clone_from_slice(r.args());
+                rows.push(list(row));
+            }
+            at += k;
+        }
+        return Ok(Some(list(rows)));
+    }
+    if is_matrix(l) || !blocks.iter().any(is_list) {
+        return diagonal_matrix(ev, e);
+    }
+    Ok(None)
 }
 
 #[cfg(test)]

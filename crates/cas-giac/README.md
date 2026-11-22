@@ -190,6 +190,20 @@ a file and giac's input sets and resets it within one call:
   part (giac's `x^4+1` and `sin(x)=2` orders), and `cfsolve(exp(x)=0,x)`
   is `[]` where giac gives `[undef]`.
 
+`tests/matrices_three.rs`, matrix constructors, slices and row operations
+(CAS-531, CAS-532, CAS-533):
+- giac's `matrix`, `makemat`, `list2mat`, `mat2list`, `blockmatrix`,
+  `JordanBlock`, `BlockDiagonal`, `rowdim`, `coldim`, `row`, `col`,
+  `subMat`, `delrows`, `delcols`, `mRow`, `mRowAdd`, `scaleadd`, `scale`,
+  `rowAdd`, `rowSwap` and `colSwap` (with aliases) read back and compared;
+- the departures, each with giac's answer: `row` and `col` of a range a
+  list (giac's is a sequence); `makemat(1,0,2)` and `list2mat(l,0)` stay,
+  as a dimension is at least 1 (giac takes 0 for 1); `subMat` with
+  reversed bounds stays (giac's `[[9]]`); a negative row in `mRow` counts
+  from the end, as every index does (giac errs); and where giac errs,
+  `rowDim` of a vector, `JordanBlock(2,0)`, `BlockDiagonal` of non-square
+  blocks and `blockmatrix` of non-matrices stay.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 
