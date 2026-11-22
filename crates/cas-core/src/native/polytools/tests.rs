@@ -20,6 +20,63 @@ fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     ctx.eval(&difference) == Ok(Expr::from(0))
 }
 
+/// giac's `cpartfrac`, `propfrac`, `f2nd` and `ratnormal`: the same value.
+#[test]
+fn complex_and_proper_fractions() {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, expected) in [
+        // giac's i/2/(x+i)+1/(2*i)/(x-i).
+        (
+            "ComplexApart[Power[Plus[Power[x, 2], 1], -1]]",
+            "Plus[Times[Complex[0, 1/2], Power[Plus[x, Complex[0, 1]], -1]], Times[Complex[0, -1/2], Power[Plus[x, Complex[0, -1]], -1]]]",
+        ),
+        // giac's x-1/2/(x+i)-1/2/(x-i).
+        (
+            "ComplexApart[Times[Power[x, 3], Power[Plus[Power[x, 2], 1], -1]]]",
+            "Plus[x, Times[-1/2, Power[Plus[x, Complex[0, 1]], -1]], Times[-1/2, Power[Plus[x, Complex[0, -1]], -1]]]",
+        ),
+        // A negative discriminant: roots ±i√2.
+        (
+            "ComplexApart[Power[Plus[Power[x, 2], 2], -1]]",
+            "Plus[Times[Complex[0, -1/4], Power[2, 1/2], Power[Plus[x, Times[Complex[0, -1], Power[2, 1/2]]], -1]], Times[Complex[0, 1/4], Power[2, 1/2], Power[Plus[x, Times[Complex[0, 1], Power[2, 1/2]]], -1]]]",
+        ),
+        // giac's x-x/(x^2+1) and x^2-y*x+y^2+(-y^3+y)/(x+y).
+        (
+            "ProperFraction[Times[Power[x, 3], Power[Plus[Power[x, 2], 1], -1]]]",
+            "Plus[x, Times[-1, x, Power[Plus[Power[x, 2], 1], -1]]]",
+        ),
+        (
+            "ProperFraction[Times[Plus[Power[x, 3], y], Power[Plus[x, y], -1]]]",
+            "Plus[Power[x, 2], Times[-1, y, x], Power[y, 2], Times[Plus[y, Times[-1, Power[y, 3]]], Power[Plus[x, y], -1]]]",
+        ),
+        ("ProperFraction[28/12]", "7/3"),
+        // giac's [x^2+1,x], [1,2].
+        (
+            "NumeratorDenominator[Plus[x, Power[x, -1]]]",
+            "List[Plus[Power[x, 2], 1], x]",
+        ),
+        ("NumeratorDenominator[1/2]", "List[1, 2]"),
+    ] {
+        let found = ctx.eval(&read(input)).unwrap();
+        let expected = read(expected);
+        let ok = if expected.head() == Some(&Expr::from(Symbol::LIST)) {
+            found == ctx.eval(&expected).unwrap()
+        } else {
+            same(&ctx, &found, &expected)
+        };
+        if !ok {
+            wrong.push(format!("{input}: {found:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    // x⁴ + 1 over ℚ(i): x² ∓ i stay whole, two terms.
+    let terms = ctx
+        .eval(&read("ComplexApart[Power[Plus[Power[x, 4], 1], -1]]"))
+        .unwrap();
+    assert_eq!(terms.args().len(), 2, "{terms:?}");
+}
+
 /// giac's `partfrac`: the same value, and no fraction left whole.
 #[test]
 fn partial_fractions() {

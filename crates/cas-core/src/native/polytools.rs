@@ -13,6 +13,18 @@
 //!   each factor `g^e` and `j ≤ e`; `r = Σ A_{g,j} q/g^j` is solved power by
 //!   power (`LinSolve`), and `f = Q + Σ A_{g,j}/g^j`. A denominator free of
 //!   `x` gives `f`; one of a degree above [`MAX_DEGREE`] leaves the call.
+//! - **`ComplexApart[f, x]`** (CAS-529), giac's `cpartfrac`: the same over
+//!   ℚ(i), `q` factored as `ComplexFactor` does (`FactorList` of `i q`, the
+//!   `i` divided back into the constant), and each quadratic with rational
+//!   coefficients split, a negative discriminant `d` with the roots
+//!   `(−b ± i √(−d))/(2a)`. A quadratic with other coefficients, as the
+//!   `x² ± i` of `x⁴ + 1`, stays whole, where giac splits it too.
+//! - **`ProperFraction[f, x]`** (CAS-529), giac's `propfrac`: `f` put
+//!   together as `p/q`, then `Q + R/q` with the quotient and the remainder
+//!   of `p` by `q` in `x`; a `q` free of `x` gives `p/q`, so `28/12` is
+//!   `7/3`, giac's `2+1/3` read back. **`NumeratorDenominator[f]`**
+//!   (CAS-540), giac's `f2nd` and `fxnd`: `{Numerator[t], Denominator[t]}`
+//!   of `t = Together[f]`.
 //! - **`CoefficientList[p, x]`** and **`FromCoefficients[l, x]`**
 //!   (CAS-340): the coefficients from the leading one down, as giac's
 //!   `poly1[1,0,-2,1]`, and back. **`TrailingCoefficient`** and
@@ -46,6 +58,9 @@ use crate::expr::Expr;
 use crate::symbol::Symbol;
 
 type Native = Result<Option<Expr>, EvalError>;
+
+/// The factors `(g, k)` of a denominator, `g^k` each.
+type Factors = Vec<(Expr, i64)>;
 
 /// The largest degree of a denominator `Apart` takes apart.
 const MAX_DEGREE: i64 = 64;
@@ -106,12 +121,14 @@ fn coefficients(ev: &mut Eval<'_>, p: &Expr, x: &Expr) -> Result<Option<Vec<Expr
 
 /// The roots `(−b ± √d)/(2a)` of `a x² + b x + c` with rational
 /// coefficients and a positive discriminant `d` that is no square: the
-/// split of an irreducible quadratic, as giac's `partfrac`; `None` for
-/// another factor.
+/// split of an irreducible quadratic, as giac's `partfrac`; with `complex`,
+/// a negative `d` too, `√d` being `i √(−d)`, as giac's `cpartfrac`; `None`
+/// for another factor.
 fn radical_roots(
     ev: &mut Eval<'_>,
     g: &Expr,
     x: &Expr,
+    complex: bool,
 ) -> Result<Option<(Expr, [Expr; 2])>, EvalError> {
     let Some(cs) = coefficients(ev, g, x)? else {
         return Ok(None);
@@ -124,13 +141,14 @@ fn radical_roots(
     };
     let four = Rational::from(Integer::from(4));
     let d = &(&b * &b) - &(&four * &(&a * &c));
-    if !d.is_positive() {
+    let half = Expr::from(Rational::new(Integer::from(1), Integer::from(2)));
+    let root = if d.is_positive() {
+        Expr::from(d).pow(half)
+    } else if complex && d.is_negative() {
+        Expr::from(Complex::new(Rational::ZERO, Rational::ONE)) * Expr::from(-d).pow(half)
+    } else {
         return Ok(None);
-    }
-    let root = Expr::from(d).pow(Expr::from(Rational::new(
-        Integer::from(1),
-        Integer::from(2),
-    )));
+    };
     let two_a = Expr::from(&Rational::from(Integer::from(2)) * &a);
     let mut roots = Vec::with_capacity(2);
     for s in [-1, 1] {
@@ -143,6 +161,62 @@ fn radical_roots(
 }
 
 pub(super) fn apart(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    split(ev, e, false)
+}
+
+/// `ComplexApart[f, x]`: `Apart` over ℚ(i).
+pub(super) fn complex_apart(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    split(ev, e, true)
+}
+
+/// The constant and the factors `(g, k)` of `q` with `x`, quadratics
+/// split by [`radical_roots`].
+fn factors(
+    ev: &mut Eval<'_>,
+    q: &Expr,
+    x: &Expr,
+    complex: bool,
+) -> Result<Option<(Expr, Factors)>, EvalError> {
+    // The factors of q with x, and the constant; over ℚ(i) those of i q,
+    // as `ComplexFactor`, the i divided back into the constant.
+    let i = Complex::new(Rational::ZERO, Rational::ONE);
+    let (listed, mut lead) = if complex {
+        let listed = ev.eval(&call(Symbol::FACTOR_LIST, vec![Expr::from(i) * q.clone()]))?;
+        (
+            listed,
+            Expr::from(Complex::new(Rational::ZERO, -Rational::ONE)),
+        )
+    } else {
+        let listed = ev.eval(&call(Symbol::FACTOR_LIST, vec![q.clone()]))?;
+        (listed, Expr::from(1))
+    };
+    let mut factors: Factors = Vec::new();
+    for pair in listed.args().chunks(2) {
+        let [g, k] = pair else {
+            return Ok(None);
+        };
+        let Some(k) = k.as_i64().filter(|k| *k >= 1) else {
+            return Ok(None);
+        };
+        if !g.contains(x) {
+            lead *= g.pow(k);
+            continue;
+        }
+        if degree(ev, g, x)? == Some(2)
+            && let Some((a, [r1, r2])) = radical_roots(ev, g, x, complex)?
+        {
+            lead *= a.pow(k);
+            factors.push((x.clone() - r1, k));
+            factors.push((x.clone() - r2, k));
+        } else {
+            factors.push((g.clone(), k));
+        }
+    }
+    Ok(Some((lead, factors)))
+}
+
+/// The partial fractions of `Apart`, over ℚ(i) with `complex`.
+fn split(ev: &mut Eval<'_>, e: &Expr, complex: bool) -> Native {
     let Some((f, x)) = with_variable(e.args()) else {
         return Ok(None);
     };
@@ -155,31 +229,9 @@ pub(super) fn apart(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some(n) = degree(ev, &q, &x)?.filter(|n| *n <= MAX_DEGREE) else {
         return Ok(None);
     };
-    // The factors of q with x, and the constant.
-    let listed = ev.eval(&call(Symbol::FACTOR_LIST, vec![q.clone()]))?;
-    let mut lead = Expr::from(1);
-    let mut factors: Vec<(Expr, i64)> = Vec::new();
-    for pair in listed.args().chunks(2) {
-        let [g, k] = pair else {
-            return Ok(None);
-        };
-        let Some(k) = k.as_i64().filter(|k| *k >= 1) else {
-            return Ok(None);
-        };
-        if !g.contains(&x) {
-            lead *= g.pow(k);
-            continue;
-        }
-        if degree(ev, g, &x)? == Some(2)
-            && let Some((a, [r1, r2])) = radical_roots(ev, g, &x)?
-        {
-            lead *= a.pow(k);
-            factors.push((x.clone() - r1, k));
-            factors.push((x.clone() - r2, k));
-        } else {
-            factors.push((g.clone(), k));
-        }
-    }
+    let Some((lead, factors)) = factors(ev, &q, &x, complex)? else {
+        return Ok(None);
+    };
     let quotient = ev.eval(&call(
         Symbol::POLYNOMIAL_QUOTIENT,
         vec![p.clone(), q.clone(), x.clone()],
@@ -243,7 +295,46 @@ pub(super) fn apart(ev: &mut Eval<'_>, e: &Expr) -> Native {
         }
     }
     let result = ev.eval(&Expr::call(Symbol::PLUS, terms))?;
-    ev.step("Apart", e, &result);
+    ev.step(if complex { "ComplexApart" } else { "Apart" }, e, &result);
+    Ok(Some(result))
+}
+
+/// `ProperFraction[f, x]`.
+pub(super) fn proper_fraction(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some((f, x)) = with_variable(e.args()) else {
+        return Ok(None);
+    };
+    let together = ev.eval(&call(Symbol::TOGETHER, vec![f.clone()]))?;
+    let p = ev.eval(&call(Symbol::NUMERATOR, vec![together.clone()]))?;
+    let q = ev.eval(&call(Symbol::DENOMINATOR, vec![together.clone()]))?;
+    let result = if q.contains(&x) {
+        let quotient = ev.eval(&call(
+            Symbol::POLYNOMIAL_QUOTIENT,
+            vec![p.clone(), q.clone(), x.clone()],
+        ))?;
+        let rest = ev.eval(&call(Symbol::POLYNOMIAL_REMAINDER, vec![p, q.clone(), x]))?;
+        ev.eval(&(quotient + rest / q))?
+    } else {
+        together
+    };
+    ev.step("ProperFraction", e, &result);
+    Ok(Some(result))
+}
+
+/// `NumeratorDenominator[f]`.
+pub(super) fn numerator_denominator(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [f] = e.args() else {
+        return Ok(None);
+    };
+    let together = ev.eval(&call(Symbol::TOGETHER, vec![f.clone()]))?;
+    let result = ev.eval(&call(
+        Symbol::LIST,
+        vec![
+            call(Symbol::NUMERATOR, vec![together.clone()]),
+            call(Symbol::DENOMINATOR, vec![together]),
+        ],
+    ))?;
+    ev.step("NumeratorDenominator", e, &result);
     Ok(Some(result))
 }
 

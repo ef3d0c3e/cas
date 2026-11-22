@@ -1,4 +1,5 @@
-//! Bits, digits and falling factorials (CAS-DOC-45 §3, CAS-464).
+//! Bits, digits and falling factorials (CAS-DOC-45 §3, CAS-464), and
+//! `Convert`'s other options (CAS-529, CAS-540).
 //!
 //! - `BitAnd`, `BitOr` and `BitXor`, Xcas's `bitand`, `bitor` and
 //!   `bitxor`: of two or more integers, folded, in two's complement for
@@ -11,7 +12,12 @@
 //! - `Convert[n, base, b]`, Xcas's `convert(n, base, b)`, `b ≥ 2`: the
 //!   digits of `|n|`, lowest first, negated for a negative `n`, giac's
 //!   `convert(-255,base,16)` being `[-15,-15]` and `convert(0,base,2)`
-//!   `[0]`; `Convert[{d₀, d₁, …}, base, b]` is `Σ dᵢ bⁱ`.
+//!   `[0]`; `Convert[{d₀, d₁, …}, base, b]` is `Σ dᵢ bⁱ`. The other
+//!   options (CAS-529, CAS-540): `partfrac`, `parfrac` and `fullparfrac`
+//!   give `Apart[x]`; `confrac` gives `ContinuedFraction[x]`, a third
+//!   argument (giac's variable to store it in) accepted and not assigned;
+//!   `polynom` gives `x` with each `OrderSize[_]` 0, a series' polynomial
+//!   part, and any other `x` itself.
 //! - `FactorialPower[n, k]`, Xcas's `perm(n, k)`: `n (n − 1) ⋯ (n − k + 1)`
 //!   for an integer `0 ≤ k`, a product for a symbol up to [`MAX_SYMBOLIC`]
 //!   factors; 0 for an integer `0 ≤ n < k`. A product of numbers estimated
@@ -127,8 +133,15 @@ pub(super) fn hamming_distance(ev: &mut Eval<'_>, e: &Expr) -> Native {
     Ok(Some(result))
 }
 
-/// `Convert[n, base, b]` and `Convert[{d₀, d₁, …}, base, b]`.
+/// `Convert[n, base, b]`, `Convert[{d₀, d₁, …}, base, b]`, and
+/// `Convert[x, option]` for the other options.
 pub(super) fn convert(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    if let [x, option, ..] = e.args()
+        && let Some(found) = convert_to(ev, x, option, e.args().len())?
+    {
+        ev.step("convert", e, &found);
+        return Ok(Some(found));
+    }
     let [x, option, b] = e.args() else {
         return Ok(None);
     };
@@ -170,6 +183,38 @@ pub(super) fn convert(ev: &mut Eval<'_>, e: &Expr) -> Native {
     };
     ev.step("convert", e, &result);
     Ok(Some(result))
+}
+
+/// `Convert[x, option]` with `partfrac`, `parfrac`, `fullparfrac`,
+/// `polynom`, and `confrac` (a third argument too, ignored); `None` for
+/// another option or count.
+fn convert_to(ev: &mut Eval<'_>, x: &Expr, option: &Expr, count: usize) -> Native {
+    let name = option.as_symbol().map(Symbol::name);
+    let found = match (name, count) {
+        // `partfrac` reads as `Apart`, its builtin.
+        (Some("partfrac" | "parfrac" | "fullparfrac" | "Apart"), 2) => {
+            Expr::call(Symbol::APART, [x.clone()])
+        }
+        (Some("confrac"), 2 | 3) => Expr::call(Symbol::CONTINUED_FRACTION, [x.clone()]),
+        (Some("polynom"), 2) => Expr::call(
+            Symbol::REPLACE_ALL,
+            [
+                x.clone(),
+                Expr::call(
+                    Symbol::RULE,
+                    [
+                        Expr::call(
+                            Symbol::ORDER_SIZE,
+                            [Expr::call(Symbol::BLANK, Vec::<Expr>::new())],
+                        ),
+                        Expr::from(0),
+                    ],
+                ),
+            ],
+        ),
+        _ => return Ok(None),
+    };
+    Ok(Some(ev.eval(&found)?))
 }
 
 /// `FactorialPower[n, k]`.

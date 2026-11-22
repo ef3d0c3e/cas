@@ -104,6 +104,17 @@ and `set[…]` is `{…}`.
 departures: `psrgcd` with a positive leading coefficient, `ezgcd` where giac
 gives up or refuses one variable, with giac's message.
 
+`tests/partial_fractions.rs`, partial fractions and fraction forms
+(CAS-529, CAS-540, CAS-544): giac's `cpartfrac`, `convert` with `partfrac`,
+`parfrac`, `fullparfrac`, `confrac` and `polynom`, `propfrac`, `f2nd`,
+`fxnd` and `ratnormal`, read back and compared after `Expand` and
+`Together` of the difference; and the departures, each with giac's answer:
+`cpartfrac(1/(x^4+1))`, whose `x^2±i` giac splits and ours keeps whole;
+`convert(…,confrac)` as `dfc`: `355/113` is `[3,7,16]` (giac `[3,7,15,1]`),
+`-7/3` is `[-3,1,2]` (giac `[2,3]`, the sign lost), `sqrt(2)` the period
+`[1,[2]]` (giac 15 quotients), `pi` stays `dfc(pi)` (giac 9 quotients); and
+a third argument (giac's `'L'`, which giac assigns) taken and not assigned.
+
 `tests/ndsolve.rs`, `NDSolve` and `BVPSolve` (CAS-DOC-35 §5, CAS-520):
 - giac's `odesolve` within `10⁻⁸`, relative;
 - `bvpsolve` on grids of 4 and 2 intervals against the closed forms

@@ -219,6 +219,9 @@ builtins! {
     ACCUMULATE = "Accumulate" [PROTECTED];
     // Polynomial tools (CAS-DOC-29).
     APART = "Apart" [PROTECTED];
+    COMPLEX_APART = "ComplexApart" [PROTECTED];
+    PROPER_FRACTION = "ProperFraction" [PROTECTED];
+    NUMERATOR_DENOMINATOR = "NumeratorDenominator" [PROTECTED];
     COEFFICIENT_LIST = "CoefficientList" [PROTECTED];
     FROM_COEFFICIENTS = "FromCoefficients" [PROTECTED];
     TRAILING_COEFFICIENT = "TrailingCoefficient" [PROTECTED];

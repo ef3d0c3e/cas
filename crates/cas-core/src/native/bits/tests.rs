@@ -69,3 +69,37 @@ fn digits_and_falling_factorials() {
         ("FactorialPower[1/2, 2]", "-1/4"),
     ]);
 }
+
+#[test]
+fn convert_options() {
+    check(&[
+        // giac's 1/2/(x-1)-1/2/(x+1) for partfrac, parfrac and fullparfrac.
+        (
+            "Convert[Power[Plus[Power[x, 2], -1], -1], parfrac]",
+            "Apart[Power[Plus[Power[x, 2], -1], -1]]",
+        ),
+        (
+            "Convert[Power[Plus[Power[x, 2], -1], -1], fullparfrac]",
+            "Plus[Times[1/2, Power[Plus[x, -1], -1]], Times[-1/2, Power[Plus[x, 1], -1]]]",
+        ),
+        // `partfrac` reads as `Apart`.
+        (
+            "Convert[Power[Plus[Power[x, 2], -1], -1], Apart]",
+            "Apart[Power[Plus[Power[x, 2], -1], -1]]",
+        ),
+        // giac's [3,2], [0,3]; dfc's [3,7,16]; the third argument ignored.
+        ("Convert[7/2, confrac]", "List[3, 2]"),
+        ("Convert[1/3, confrac]", "List[0, 3]"),
+        ("Convert[355/113, confrac, L]", "List[3, 7, 16]"),
+        // giac's x-1/6*x^3+1/120*x^5, and x^2+1 itself.
+        (
+            "Convert[Series[Sin[x], List[x, 0, 5]], polynom]",
+            "Plus[x, Times[-1/6, Power[x, 3]], Times[1/120, Power[x, 5]]]",
+        ),
+        (
+            "Convert[Plus[Power[x, 2], 1], polynom]",
+            "Plus[Power[x, 2], 1]",
+        ),
+        ("Convert[x, other]", "Convert[x, other]"),
+    ]);
+}

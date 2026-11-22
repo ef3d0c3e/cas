@@ -325,6 +325,12 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::ZIP, lists::zip),
         (Symbol::ACCUMULATE, lists::accumulate),
         (Symbol::APART, polytools::apart),
+        (Symbol::COMPLEX_APART, polytools::complex_apart),
+        (Symbol::PROPER_FRACTION, polytools::proper_fraction),
+        (
+            Symbol::NUMERATOR_DENOMINATOR,
+            polytools::numerator_denominator,
+        ),
         (Symbol::COEFFICIENT_LIST, polytools::coefficient_list),
         (Symbol::FROM_COEFFICIENTS, polytools::from_coefficients),
         (

@@ -165,6 +165,9 @@ Zip: zip
 Accumulate: cumsum
 # Polynomial tools (CAS-DOC-29, CAS-339 to CAS-341).
 Apart: partfrac
+ComplexApart: cpartfrac
+ProperFraction: propfrac propFrac
+NumeratorDenominator: f2nd fxnd
 CoefficientList: symb2poly coeffs e2r
 FromCoefficients: poly2symb r2e
 TrailingCoefficient: tcoeff
@@ -377,7 +380,7 @@ Digits: Digits
 N: evalf approx
 # Polynomials, phase 1 (CAS-DOC-8 §10, §15 detail 1; CAS-140).
 Expand: expand
-Together: normal
+Together: normal ratnormal
 GCD: gcd
 # The gcd algorithms by name (CAS-526).
 HeuristicGCD: heugcd
