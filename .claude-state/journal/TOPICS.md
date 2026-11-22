@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-22T17:12:50.532Z
+# filed through: 2026-11-22T18:08:45.630Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22/084638-013r-claude-record.md
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22/084638-013r-claude-record.md
@@ -21,3 +21,9 @@ R17 | 2026-11-22 | finding | in force | Agents push | Side branches for parallel
 R18 | 2026-11-22 | open | in force | Agents push | .claude/settings.json is invalid JSON (trailing comma after the allow list's `]`) -> the developer… | .claude-state/journal/2026-11-22/182814-042r-claude-record.md
 R19 | 2026-11-22 | open | in force | Agents push | PA3's skill and agent definitions still say never push; an update restores them -> the developer ra… | .claude-state/journal/2026-11-22/182814-042r-claude-record.md
 R20 | 2026-11-22 | open | in force | Agents push | GENERATION_PLAN.md standing constraints still describe a push stop per phase -> each phase planner… | .claude-state/journal/2026-11-22/182814-042r-claude-record.md
+R21 | 2026-11-22 | finding | in force | Phase 1.1 Green master | Master is green on fa9ae22: CI run 45047911216 passed all five jobs, and Fuzz run 45047911210 passe… | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
+R22 | 2026-11-22 | finding | in force | Phase 1.1 Green master | boundary_values now checks small grids against closed forms and compares with giac only at step 1/2… | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
+R23 | 2026-11-22 | finding | in force | Phase 1.1 Green master | `lific issue list` returns 50 issues by default and at most 500, so a check on specific tickets use… | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
+R24 | 2026-11-22 | open | in force | Phase 1.1 Green master | checkout@v4 shows a Node 20 deprecation warning in CI. | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
+R25 | 2026-11-22 | open | in force | Phase 1.1 Green master | .run/logs/gen1-gap/ sits outside .run/<phase>/ and was kept for later phases; it can be rebuilt wit… | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
+R26 | 2026-11-22 | open | in force | Phase 1.2 Algebra and polynomials parity | phase 1.2 draft in progress by pa-planner -> present with plan(kind: phase) when its report arrives | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
