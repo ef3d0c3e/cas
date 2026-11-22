@@ -5,3 +5,4 @@ T2 | done | boundary_values checks BVPSolve against the closed form (CAS-520) | 
 T3 | done | baseline chores: giac_gap.sh into scripts/, modules on the card | - | tasks/T3.md | logs/T3.md | R1.1-005
 T4 | done | local gate green | - | tasks/T4.md | logs/T4.md | -
 T5 | review | push stop: developer pushes master | - | tasks/T5.md | logs/T5.md | -
+T6 | done | CI check on the pushed head | - | tasks/T6.md | logs/T6.md | -
