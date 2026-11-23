@@ -326,6 +326,14 @@ only, giac's `@` and `@@` forms.
 `assume` and `purge` in one input: ours, without the assumption, compared
 with giac's at a point with `y > 0`.
 
+`tests/function_study.rs`, Xcas's `domain` and `convex` (CAS-581, CAS-583):
+`domain` in mode 0 compared as a set of points (every end of either answer,
+the midpoints, a point beyond each extreme) and by its shape, a list or one
+condition; in mode 1 as a set of values; `convex` condition by condition,
+each comparison's difference under `Together`; and the departures, each with
+giac's answer: `asinh` (giac's `[]`), giac's assumption `0 <= x <= 2π` for a
+periodic `f` other than one of `tan(c x)` alone, and variables `u(t)`.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

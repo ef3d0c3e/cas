@@ -26,6 +26,7 @@ mod expressions;
 mod factorial;
 mod fourier;
 mod fourier_transform;
+mod function_study;
 mod groebner;
 mod incomplete;
 mod index;
@@ -1052,6 +1053,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::EULER_LAGRANGE, dsolve::euler_lagrange),
         (Symbol::JACOBI_EQUATION, dsolve::jacobi_equation),
         (Symbol::CONJUGATE_EQUATION, dsolve::conjugate_equation),
+        (Symbol::FUNCTION_DOMAIN, function_study::function_domain),
+        (Symbol::CONVEX, function_study::convex),
         (Symbol::GRAD, vector::grad),
         (Symbol::DIVERGENCE, vector::divergence),
         (Symbol::CURL, vector::curl),

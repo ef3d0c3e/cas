@@ -479,6 +479,9 @@ WZCertificate: wz_certificate
 EulerLagrange: euler_lagrange
 JacobiEquation: jacobi_equation
 ConjugateEquation: conjugate_equation
+# Function study: domains and convexity (CAS-581, CAS-583), Xcas's.
+FunctionDomain: domain
+Convex: convex
 # Vector calculus (CAS-DOC-37): the differential operators (CAS-408).
 Grad: grad
 Divergence: divergence

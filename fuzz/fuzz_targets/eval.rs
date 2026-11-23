@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 565] = [
+const BUILTINS: [&str; 567] = [
     "Plus",
     "Times",
     "Power",
@@ -593,6 +593,8 @@ const BUILTINS: [&str; 565] = [
     "EulerLagrange",
     "JacobiEquation",
     "ConjugateEquation",
+    "FunctionDomain",
+    "Convex",
     // Vector calculus (CAS-408).
     "Grad",
     "Divergence",
