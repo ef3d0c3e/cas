@@ -124,6 +124,22 @@ a third argument (giac's `'L'`, which giac assigns) taken and not assigned.
 - the departure: at `n = 4` giac's step `1/2` errs by `4·10⁻²` on
   `x² + 16/x`, recorded with its values, where ours is the closed form.
 
+`tests/area.rs`, `area` (CAS-588, CAS-589):
+- giac's `area` with a count and a rule within `10⁻¹⁰`, relative: every rule
+  by name and its French one (`trapeze`, `point_milieu`, `rectangle_gauche`,
+  `rectangle_droit`), `rombergt` and `rombergm` at depths 0 to 3 and 5,
+  Simpson's odd counts, `gauss15`, reversed bounds, `sqrt(x)` at 0;
+- without a count the exact integral, compared after `Expand` and `Together`
+  of the difference; no panels is giac's `undef`, ours `Indeterminate`;
+- the departures, each with giac's answer as libgiac prints it: a count
+  without a rule (giac's polygon branch answers an equation, ours stays
+  unevaluated); `gauss15` below 4 panels on `1/x` over `1..100` (giac a pair,
+  its estimate second, ours a ball around `ln(100)`); a symbolic
+  integrand (giac's sum of decimals, ours exactly `a/2`, both `1.5` at
+  `a = 3`); a negative count (giac steps over `[0,-1]` to `-0.5`, ours
+  unevaluated); `rombergt` on a symbolic integrand (giac `6.1e306`, ours
+  `a/2`).
+
 `tests/real_roots.rs`, real roots (CAS-538, CAS-539): giac's `VAS`,
 `VAS_positive`, `posubLMQ`, `poslbdLMQ`, `sturmseq`, `sturm` with bounds,
 `rationalroot` and `crationalroot` read back and compared by value;
