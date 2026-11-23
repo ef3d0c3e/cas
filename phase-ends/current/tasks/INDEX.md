@@ -6,3 +6,4 @@ T3 | done | solvers: fsolve's twelve named solvers, newton, nSolve and convert's
 T4 | done | sampling, interpolation and numerical derivatives | - | tasks/T4.md | logs/T4.md | R1.4-003,R1.4-004,R1.4-002,R1.4-005
 T5 | done | B-splines and least-squares fits: bspline, fitspline, fitpoly | - | tasks/T5.md | logs/T5.md | R1.4-003,R1.4-002
 T6 | done | transportation problems: tpsolve | - | tasks/T6.md | logs/T6.md | R1.4-003
+T7 | done | minimax approximation by Remez's algorithm: minimax | - | tasks/T7.md | logs/T7.md | R1.4-003,R1.4-001,R1.4-002,R1.4-005
