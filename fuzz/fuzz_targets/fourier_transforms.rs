@@ -140,13 +140,18 @@ fn run(u: &mut Unstructured<'_>) -> Result<()> {
             Expr::call(Symbol::NINTEGRATE, [kernel(Symbol::COS), bounds.clone()]),
             Expr::call(Symbol::NINTEGRATE, [-kernel(Symbol::SIN), bounds]),
         ];
-        let mut values = Vec::new();
+        // f may be complex (the modulation e^(i k x)): F = I1 + i I2 with
+        // both integrals complex (Fuzz run 45178885251 kept their real
+        // parts only).
+        let mut parts = Vec::new();
         for integral in &integrals {
-            let Some((value, _)) = complex(&ctx, integral) else {
+            let Some(value) = complex(&ctx, integral) else {
                 return Ok(());
             };
-            values.push(value);
+            parts.push(value);
         }
+        let ((r1, i1), (r2, i2)) = (&parts[0], &parts[1]);
+        let values = [r1.sub(i2, 128), i1.add(r2, 128)];
         assert!(
             close(&re, &values[0]) && close(&im, &values[1]),
             "{call:?} is {image:?}, at {s0:?} {re:?} + i {im:?}, but NIntegrate gives {:?} + i {:?}",
