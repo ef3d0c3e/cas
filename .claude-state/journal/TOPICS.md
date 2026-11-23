@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-23T02:51:52.280Z
+# filed through: 2026-11-23T03:07:51.655Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22/084638-013r-claude-record.md
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22/084638-013r-claude-record.md
@@ -39,7 +39,10 @@ R35 | 2026-11-23 | open | in force | Phase 1.2 Algebra and polynomials parity | 
 R36 | 2026-11-23 | decision | in force | Phase 1.2 Algebra and polynomials parity | Phase 1.2 is closed; master is green on 5680a2c and CAS-526..547 are done. | .claude-state/journal/2026-11-23/034141-067r-claude-record.md
 R37 | 2026-11-23 | open | superseded by R39 | Phase 1.3 Calculus, expressions and integers parity | phase 1.3 draft in progress by pa-planner -> present with plan(kind: phase) when its report arrives | .claude-state/journal/2026-11-23/034141-067r-claude-record.md
 R38 | 2026-11-23 | open | superseded by R40 | Phase 1.3 Calculus, expressions and integers parity | the Abs complex-ball fix (R34) is offered to 1.3 if cheap, else 1.4 -> check the 1.3 draft | .claude-state/journal/2026-11-23/034141-067r-claude-record.md
-R39 | 2026-11-23 | open | in force | Phase 1.3 Calculus, expressions and integers parity | phase 1.3 plan presented with plan(kind: phase), waiting for the developer's decision -> on approva… | .claude-state/journal/2026-11-23/040718-069r-claude-record.md
+R39 | 2026-11-23 | open | superseded by R43 | Phase 1.3 Calculus, expressions and integers parity | phase 1.3 plan presented with plan(kind: phase), waiting for the developer's decision -> on approva… | .claude-state/journal/2026-11-23/040718-069r-claude-record.md
 R40 | 2026-11-23 | decision | in force | Phase 1.3 Calculus, expressions and integers parity | The Abs-of-complex-ball fix rides 1.3's T2 (Balls module, one unit test). | .claude-state/journal/2026-11-23/040718-069r-claude-record.md
-R41 | 2026-11-23 | open | in force | Phase 1.3 Calculus, expressions and integers parity | changebase, semi_augment (Algebra) and divis (Polynomials) were missed by 1.2's list; the draft lea… | .claude-state/journal/2026-11-23/040718-069r-claude-record.md
-R42 | 2026-11-23 | open | in force | Phase 1.3 Calculus, expressions and integers parity | .run/logs/gen1-gap/ is kept until 1.8 because GENERATION_PLAN.md:57 cites it as R0-004's raw inputs… | .claude-state/journal/2026-11-23/040718-069r-claude-record.md
+R41 | 2026-11-23 | open | superseded by R44 | Phase 1.3 Calculus, expressions and integers parity | changebase, semi_augment (Algebra) and divis (Polynomials) were missed by 1.2's list; the draft lea… | .claude-state/journal/2026-11-23/040718-069r-claude-record.md
+R42 | 2026-11-23 | open | superseded by R45 | Phase 1.3 Calculus, expressions and integers parity | .run/logs/gen1-gap/ is kept until 1.8 because GENERATION_PLAN.md:57 cites it as R0-004's raw inputs… | .claude-state/journal/2026-11-23/040718-069r-claude-record.md
+R43 | 2026-11-23 | decision | in force | Phase 1.3 Calculus, expressions and integers parity | The phase 1.3 plan is installed and runs on its own; the developer's touchpoints are the approval a… | .claude-state/journal/2026-11-23/042306-074r-claude-record.md
+R44 | 2026-11-23 | decision | in force | Phase 1.3 Calculus, expressions and integers parity | changebase, semi_augment and divis stay out of 1.3 and are accounted for in 1.8's gap check. | .claude-state/journal/2026-11-23/042306-074r-claude-record.md
+R45 | 2026-11-23 | decision | in force | Phase 1.3 Calculus, expressions and integers parity | .run/logs/gen1-gap/ is kept until 1.8's cleanup, as R0-004's raw inputs. | .claude-state/journal/2026-11-23/042306-074r-claude-record.md
