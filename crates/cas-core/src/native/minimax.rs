@@ -58,11 +58,13 @@
 //!   p(I)/q(I)`, `p`, `q` and their derivatives by Taylor shifts at `m` in
 //!   balls; the lower bound `L` the largest `|e|` at a centre; pieces below
 //!   `L` dropped, the others bisected while the largest upper bound `U >
-//!   L(1 + 2^−20)`, at most `min(terms/N², 2^16)` pieces (`terms` of the
+//!   L(1 + 2^−20)`, at most `min(4 terms/N², 2^16)` pieces (`terms` of the
 //!   context's limits, which also bound `N²·limit·reps`). `q` vanishing on `[a, b]` (giac
 //!   answers with a mean error by area and a warning) and a bound not found
 //!   leave the call, with a warning.
 //! - `rand` draws from the context's generator.
+//! - `Min[u, v]` and `Max[u, v]` in `f` are taken as `(u + v ∓ |u − v|)/2`
+//!   (more arguments folded), so that `f` compiles.
 
 #![allow(
     clippy::many_single_char_names,
@@ -822,6 +824,34 @@ fn coefficients(
     Some((round(&p, big_m, &tau), round(&q, big_m, &tau)))
 }
 
+/// `f` with `Min[u, v]` as `(u + v − |u − v|)/2` and `Max[u, v]` as `(u +
+/// v + |u − v|)/2`, more arguments folded from the left, inside out; a
+/// `Min` or `Max` of a list, or of one argument, kept.
+fn min_max(f: &Expr) -> Expr {
+    if !(f.may_contain(Symbol::MIN) || f.may_contain(Symbol::MAX)) {
+        return f.clone();
+    }
+    let Some(head) = f.head() else {
+        return f.clone();
+    };
+    let args: Vec<Expr> = f.args().iter().map(min_max).collect();
+    let list = Expr::from(Symbol::LIST);
+    match head.as_symbol() {
+        Some(s @ (Symbol::MIN | Symbol::MAX))
+            if args.len() >= 2 && args.iter().all(|a| a.head() != Some(&list)) =>
+        {
+            let sign = if s == Symbol::MIN { -1 } else { 1 };
+            args.into_iter()
+                .reduce(|u, v| {
+                    let gap = Expr::call(Symbol::ABS, [&u - &v]);
+                    (u + v + sign * gap) / 2
+                })
+                .expect("two arguments at least")
+        }
+        _ => Expr::apply(head, &args),
+    }
+}
+
 /// `Σ c_k x^k`, the zero terms left out.
 fn poly(x: &Expr, c: Vec<Ball>) -> Expr {
     let terms: Vec<Expr> = c
@@ -852,7 +882,8 @@ pub(in crate::native) fn minimax_approximation(ev: &mut Eval<'_>, e: &Expr) -> N
         warn(ev, e, "minimax: past the limits");
         return Ok(None);
     }
-    let cap = (terms / (big_n * big_n)).min(MAX_PIECES);
+    // 4: min(1/cosh(3 sin x), sin(9x/10)) degree 30 on [-3, 4] needs 2469.
+    let cap = (terms.saturating_mul(4) / (big_n * big_n)).min(MAX_PIECES); // was terms / N²
     let wp = ev.context().working_precision() + GUARD;
     let (Some(lo), Some(hi)) = (ball(ev, a, wp), ball(ev, b, wp)) else {
         return Ok(None);
@@ -871,6 +902,13 @@ pub(in crate::native) fn minimax_approximation(ev: &mut Eval<'_>, e: &Expr) -> N
     if !(c.is_finite() && h.is_finite() && hq.is_positive()) {
         return Ok(None);
     }
+    // Min and Max through Abs, which Node compiles (CAS-599).
+    let rewritten = min_max(f);
+    let f = &if rewritten == *f {
+        rewritten
+    } else {
+        ev.eval(&rewritten)?
+    };
     let Some(tree) = Node::compile(ev.context(), f, x, wp) else {
         return Ok(None);
     };

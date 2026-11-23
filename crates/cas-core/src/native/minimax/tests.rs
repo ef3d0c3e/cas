@@ -220,3 +220,16 @@ fn limit_warns() {
     assert_eq!(found.unwrap().head(), e.head());
     assert!(!report.warnings.is_empty());
 }
+
+/// `Min` through `Abs`: giac's `minimax(min(1/cosh(3*sin(x)),sin(9*x/10)),
+/// x=-3..4,30)` evaluates, its error within `10⁻³` of `0.0319105` (a
+/// 200001-point sampling gives `0.0319148`), relatively.
+#[test]
+fn min_compiles() {
+    let ctx = Context::new();
+    let input = "MinimaxApproximation[Min[Power[Cosh[Times[3, Sin[x]]], -1], \
+                 Sin[Times[9, Power[10, -1], x]]], Equation[x, Range[-3, 4]], 30]";
+    let (mid, _, p) = answer(&ctx, input);
+    assert!((mid - 0.031_910_5).abs() <= 1e-3 * 0.031_910_5, "{mid}");
+    assert!(p.len() <= 31, "{p:?}");
+}

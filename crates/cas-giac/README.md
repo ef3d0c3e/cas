@@ -462,6 +462,26 @@ where ours has degree 5 near the prototype's; `abs(x)` on `-1..1`, giac's
 coefficients off ours by up to `1.3·10⁻⁶` (its doubles in the degree-15
 expansion), where ours is near the prototype's.
 
+`tests/minimax.rs`, Xcas's `minimax` (CAS-599): giac's converged rows
+(`exp(x)` on `0..1` degree 3, `sin(x)` on `0..1` `[2,1]`,
+`abs(x)*sqrt(abs(x))` on `-2..2` degree 15, `abs(x)` on `-1..1` degree 3,
+`x^3` on `-1..1` degree 2), ours' error within 2% of giac's and our `p`
+within twice giac's error of giac's at 51 points (polynomials of balls by
+value, never by `CoefficientList`); closed forms, `E` within `10⁻⁶ E` and
+`p` within `10⁻⁸` at 51 points: `x^3` degree 2 (`3/4*x`, `1/4`), `abs(x)`
+degrees 2 and 3 (`x^2+1/8`, `1/8`), `exp(x)` degree 1 (`(e-1)*x+1-E`,
+`E = (1-(e-1)*(1-ln(e-1)))/2`). Departures, each with giac's answer as
+caseval prints it: `abs(x)` degree 2 (giac's `0.213388376846`, its exchange
+losing the alternation), and `exp(x)` degree 1 (`0.106657010751`, its stop
+at `max |e| ≤ 1.02 min |e|`), where ours is the closed form;
+`min(1/cosh(3*sin(x)),sin(9*x/10))` on `-3..4` degree 30 (`0.0946608433887`,
+its exchange stalling), where ours is `0.0319105`, `|f − p| ≤ E (1 + 10⁻³)`
+at 51 points. `tests/minimax_rand.rs`, its own file as it seeds giac:
+`x*exp(-x)` on `0..10` `[5,3]` with `rand=30`, giac seeded with
+`srand(42)` in the same call (`0.000287329610301`; unseeded `0.000256`),
+where ours, seeded the same way, is `4.35626e-5`, `|f − p/q| ≤ E` at 51
+points.
+
 `tests/optimization.rs`, besides `extrema`, `minimize`, `maximize`,
 `lpsolve` and `nlpsolve`:
 - `tpsolve` (CAS-598): giac's 23 probe rows (zero supplies, balanced, unbalanced with a
