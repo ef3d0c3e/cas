@@ -21,3 +21,4 @@ C0018 | Exact oracle text from libgiac via Python ctypes caseval (no cargo test)
 C0019 | Fuzz timeout with no limit hit: bound the product of limits | fuzz,timeout,limits,polynomial,power | 2026-11-23 | 1.2/T11 | CAS-547
 C0020 | Porting giac's C integer code: truncated %, signed invmod, standalone rustc check | giac,port,prototype,integer,rustc | 2026-11-23 | 1.3/T2 | CAS-552 bernoulli_mod, CAS-548 chrem
 C0021 | libgiac PARI failures abort the process after the call: test risky rows alone | giac,oracle,pari,crash,libgiac | 2026-11-23 | 1.3/T2 | CAS-551 is_prime
+C0022 | Stays-unevaluated tests: write the input in canonical orderless order | test,unevaluated,orderless,cas-core | 2026-11-23 | 1.3/T2 | CAS-548 chrem stays row
