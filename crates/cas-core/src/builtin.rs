@@ -232,6 +232,13 @@ builtins! {
     NEW_LIST = "NewList" [PROTECTED];
     ENUMERATE = "Enumerate" [PROTECTED];
     COPY = "Copy" [PROTECTED];
+    // Xcas's list commands (CAS-558, CAS-559).
+    APPLY_EACH = "ApplyEach" [PROTECTED];
+    FOLD_LEFT = "FoldLeft" [PROTECTED];
+    FOLD_RIGHT = "FoldRight" [PROTECTED];
+    MULTIPLY = "Multiply" [PROTECTED];
+    INSERT_AT = "InsertAt" [PROTECTED];
+    SUBSTITUTE_OPERANDS = "SubstituteOperands" [PROTECTED];
     // Polynomial tools (CAS-DOC-29).
     APART = "Apart" [PROTECTED];
     COMPLEX_APART = "ComplexApart" [PROTECTED];

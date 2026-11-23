@@ -178,6 +178,13 @@ MakeSequence: makesuite
 NewList: newList
 Enumerate: enumerate
 Copy: copy
+# Xcas's list commands (CAS-558, CAS-559).
+ApplyEach: apply
+FoldLeft: foldl
+FoldRight: foldr
+Multiply: multiply
+InsertAt: insert
+SubstituteOperands: subsop
 # Polynomial tools (CAS-DOC-29, CAS-339 to CAS-341).
 Apart: partfrac
 ComplexApart: cpartfrac
@@ -691,8 +698,8 @@ Modular
 # (CAS-DOC-32 §3).
 Union Intersection Complement
 # Predicates, structure and rules without a surface name. Xcas has none with
-# these meanings (its `has`, `op`, `part` and `apply` differ), and none is
-# needed yet (CAS-123); a ticket that needs one adds it.
+# these meanings (its `has`, `op` and `part` differ; its `apply` is `ApplyEach`,
+# which maps), and none is needed yet (CAS-123); a ticket that needs one adds it.
 SameQ FreeQ Part Apply Replace ReplaceRepeated MatchQ Slot
 # D maps over the values of a Piecewise with it (CAS-514).
 PiecewiseMap

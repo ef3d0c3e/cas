@@ -1,4 +1,4 @@
-//! Tests of Xcas's list commands (CAS-555 to CAS-557): giac's answers from
+//! Tests of Xcas's list commands (CAS-555 to CAS-559): giac's answers from
 //! the phase 1.3 probes, and the calls its errors leave.
 
 use crate::{Context, Expr};
@@ -160,5 +160,134 @@ fn builders() {
         "NewList[2, 3]",
         "NewList[65537]",
         "Enumerate[x]",
+    ]);
+}
+
+#[test]
+fn maps_and_folds() {
+    check(&[
+        (
+            "ApplyEach[Function[List[x], Power[x, 3]], List[1, 2, 3]]",
+            "List[1, 8, 27]",
+        ),
+        (
+            "ApplyEach[Function[List[x], Plus[x, 1]], List[List[1, 2, 3], List[1, 2, 3]], Matrix]",
+            "List[List[2, 3, 4], List[2, 3, 4]]",
+        ),
+        ("ApplyEach[f, List[1, 2]]", "List[f[1], f[2]]"),
+        ("ApplyEach[f, List[], Matrix]", "List[]"),
+        ("FoldLeft[F, i, a, b, c]", "F[F[F[i, a], b], c]"),
+        ("FoldRight[F, i, a, b, c]", "F[a, F[b, F[c, i]]]"),
+        ("FoldLeft[F, i, a]", "F[i, a]"),
+        (
+            "FoldLeft[Function[List[x, y], Plus[x, y]], 0, 1, 2, 3]",
+            "6",
+        ),
+        (
+            "FoldRight[Function[List[x, y], Plus[x, Times[-1, y]]], 0, 1, 2, 3]",
+            "2",
+        ),
+    ]);
+    stays(&[
+        "ApplyEach[f, x]",
+        "ApplyEach[f, List[1, 2], Matrix]",
+        "ApplyEach[f, List[List[1, 2], List[3]], Matrix]",
+        "ApplyEach[f, List[1, 2], List[3, 4]]",
+        "FoldLeft[F]",
+        "FoldLeft[F, i]",
+        "FoldRight[]",
+    ]);
+}
+
+#[test]
+fn products() {
+    check(&[
+        ("Multiply[List[1, 2], List[3, 4, 5]]", "11"),
+        ("Multiply[List[4, 1], List[-4, 2]]", "-14"),
+        (
+            "Multiply[List[List[4, 1], List[-4, 1]], List[List[4, 1], List[-4, 1]]]",
+            "List[List[12, 5], List[-20, -3]]",
+        ),
+        (
+            "Multiply[List[1, 2], List[List[1, 0], List[0, 1]]]",
+            "List[1, 2]",
+        ),
+        (
+            "Multiply[List[List[1, 2], List[3, 4]], List[5, 6]]",
+            "List[17, 39]",
+        ),
+        ("Multiply[2, List[1, 2]]", "List[2, 4]"),
+        (
+            "Multiply[List[1, 2], List[3, 4], List[5, 6]]",
+            "List[55, 66]",
+        ),
+        ("Multiply[2, 3, 4]", "24"),
+        ("Multiply[List[1, 2]]", "2"),
+        ("Multiply[]", "1"),
+        ("Multiply[x, y]", "Times[x, y]"),
+    ]);
+    stays(&["Multiply[List[List[1, 2], List[3, 4]], List[List[1, 2, 3]]]"]);
+}
+
+#[test]
+fn insertions_and_substitutions() {
+    check(&[
+        ("InsertAt[List[0, 1, 2, 3], 2, 5]", "List[0, 1, 5, 2, 3]"),
+        ("InsertAt[List[0, 1, 2, 3], 0, 5]", "List[5, 0, 1, 2, 3]"),
+        ("InsertAt[List[0, 1, 2, 3], 4, 5]", "List[0, 1, 2, 3, 5]"),
+        ("InsertAt[List[], 0, 5]", "List[5]"),
+        (
+            "SubstituteOperands[List[0, 1, 2, 3, 4], Equation[2, Plus[Sqrt[2], 1]]]",
+            "List[0, 1, Plus[Sqrt[2], 1], 3, 4]",
+        ),
+        (
+            "SubstituteOperands[List[List[1, 2], List[3, 4]], Equation[List[1, 1], 5]]",
+            "List[List[1, 2], List[3, 5]]",
+        ),
+        (
+            "SubstituteOperands[List[0, 1, 2, 3], Equation[1, Null]]",
+            "List[0, 2, 3]",
+        ),
+        (
+            "SubstituteOperands[List[0, 1, 2, 3], Equation[0, Null], Equation[1, Null]]",
+            "List[2, 3]",
+        ),
+        (
+            "SubstituteOperands[List[0, 1, 2, 3], Equation[1, Null], Equation[1, 9]]",
+            "List[0, 9, 2, 3]",
+        ),
+        (
+            "SubstituteOperands[List[List[1, 2], List[3, 4]], Equation[List[1, 1], Null]]",
+            "List[List[1, 2], List[3]]",
+        ),
+        (
+            "SubstituteOperands[List[0, 1, 2, 3], Equation[-1, 9]]",
+            "List[0, 1, 2, 9]",
+        ),
+        (
+            "SubstituteOperands[List[0, 1, 2, 3], 1, 9]",
+            "List[0, 9, 2, 3]",
+        ),
+        (
+            "SubstituteOperands[List[0, 1, 2, 3], Equation[x, 9], a]",
+            "List[0, 1, 2, 3]",
+        ),
+        (
+            "SubstituteOperands[List[0, 1, 2, 3], Equation[List[1, 0], 9]]",
+            "List[0, 1, 2, 3]",
+        ),
+    ]);
+    stays(&[
+        "InsertAt[List[0, 1, 2, 3], 5, 5]",
+        "InsertAt[List[0, 1, 2, 3], -1, 5]",
+        "InsertAt[List[0, 1], x, 5]",
+        "InsertAt[x, 0, 1]",
+        "InsertAt[List[0, 1], 0]",
+        "SubstituteOperands[List[0, 1, 2, 3], Equation[4, 9]]",
+        "SubstituteOperands[List[0, 1, 2, 3], Equation[-5, 9]]",
+        "SubstituteOperands[List[0, 1, 2, 3], Equation[List[], 9]]",
+        "SubstituteOperands[List[List[1, 2], List[3, 4]], Equation[List[1, 5], 9]]",
+        "SubstituteOperands[List[0, 1, 2, 3]]",
+        "SubstituteOperands[5, Equation[1, 2]]",
     ]);
 }

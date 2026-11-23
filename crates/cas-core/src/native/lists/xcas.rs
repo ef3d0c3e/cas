@@ -1,6 +1,7 @@
-//! Xcas's list commands (CAS-555 to CAS-557), giac's answers: positions
-//! from 0, counts, differences and the small builders. giac's errors leave
-//! the call, with the error as a warning.
+//! Xcas's list commands (CAS-555 to CAS-559), giac's answers: positions
+//! from 0, counts, differences, the small builders, maps, folds, products,
+//! insertions and substitutions. giac's errors leave the call, with the
+//! error as a warning.
 //!
 //! - `FindPositions[x, l]` (`find`, CAS-555): the positions of `x` in `l`,
 //!   from 0 (misc.cc `_find`); the arguments exchanged when only the first
@@ -33,11 +34,35 @@
 //!   most [`MAX_ELEMENTS`] (giac's `LIST_SIZE_LIMIT`, larger). `Enumerate[l,
 //!   s]` (`enumerate`, misc.cc): `[[s + k, l_k]]`, `s` 0 by default.
 //!   `Copy[x]` (`copy`) is `x`.
+//! - `ApplyEach[f, l]` (`apply`, CAS-558, prog.cc `_apply`): `Map`'s list
+//!   of `f(x)`, giac's order of arguments; with `matrix` (`Matrix`, C0008)
+//!   `f` of every entry of a matrix, giac's Bad Argument Type on another
+//!   list. A vector's square is giac's dot product and ours stays a power
+//!   (`apply(x->x^2,[[1,2],[3,4]])` is giac's `[5,25]`); several lists stay.
+//! - `FoldLeft[f, init, a, …]`, `FoldRight[f, init, a, …]` (`foldl`,
+//!   `foldr`, graphtheory.cc): `f(f(init, a), b)…` and `f(a, f(b, …
+//!   init))`, built for the evaluator, a symbol `f` staying a call; fewer
+//!   than three arguments are giac's errors.
+//! - `Multiply[a, …]` (`multiply`, giac's `_prod`): `*` from the left, two
+//!   vectors giving their dot product over the shorter
+//!   (`multiply([1,2],[3,4,5])` is 11), vectors and matrices the products
+//!   of `*` ([`linear::dot`], no conjugate); one list multiplies its
+//!   elements. Dimensions that do not fit are giac's Invalid dimension.
+//! - `InsertAt[l, k, x]` (`insert`, misc.cc `_insert`): `x` before the
+//!   position `k` from 0, `0 ≤ k ≤ length`.
+//! - `SubstituteOperands[l, k = v, …]` (`subsop`, prog.cc `subsop`): the
+//!   element at `k` from 0, negative from the end, or at the nested
+//!   position `[i, j, …]`, replaced by `v`, deleted for `NULL`; each rule
+//!   acts on the original positions, so `subsop([0,1,2,3],0=NULL,1=NULL)`
+//!   is `[2,3]`. `subsop(l, k, v)` is one rule; a rule that is not an
+//!   equation with an integer position is skipped, as giac's. A first
+//!   argument that is not a list stays (giac's operands of a call differ).
 
 use super::{MAX_ELEMENTS, is_list, list};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
+use crate::native::linear::{self, Shape, shape};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
 
@@ -49,6 +74,7 @@ type Native = Result<Option<Expr>, EvalError>;
 const BAD_VALUE: &str = "bad argument value";
 const BAD_TYPE: &str = "bad argument type";
 const SIZE_LIMIT: &str = "calculation size limit exceeded";
+const INVALID_DIMENSION: &str = "invalid dimension";
 
 /// giac's error for `e`: the call stays, with `why` as a warning.
 fn refuse(ev: &mut Eval<'_>, e: &Expr, why: &'static str) -> Native {
@@ -224,7 +250,7 @@ pub(in crate::native) fn differences(ev: &mut Eval<'_>, e: &Expr) -> Native {
         return refuse(ev, e, BAD_VALUE);
     }
     if l.args().len() < 2 {
-        return refuse(ev, e, "invalid dimension");
+        return refuse(ev, e, INVALID_DIMENSION);
     }
     let mut out = Vec::with_capacity(l.args().len() - 1);
     for pair in l.args().windows(2) {
@@ -336,4 +362,225 @@ pub(in crate::native) fn copy(_: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(None);
     };
     Ok(Some(x.clone()))
+}
+
+/// `ApplyEach[f, l]`.
+pub(in crate::native) fn apply_each(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let each = |f: &Expr, l: &Expr| {
+        list(
+            l.args()
+                .iter()
+                .map(|x| Expr::apply(f, std::slice::from_ref(x)))
+                .collect(),
+        )
+    };
+    match e.args() {
+        [f, l] if is_list(l) => Ok(Some(each(f, l))),
+        [f, m, option] if is_matrix_option(option) => {
+            if is_list(m) && m.args().is_empty() {
+                Ok(Some(m.clone()))
+            } else if is_matrix(m) {
+                Ok(Some(list(m.args().iter().map(|r| each(f, r)).collect())))
+            } else {
+                refuse(ev, e, BAD_TYPE)
+            }
+        }
+        _ => Ok(None),
+    }
+}
+
+/// Whether `option` is giac's `matrix` (`Matrix`, C0008).
+fn is_matrix_option(option: &Expr) -> bool {
+    option
+        .as_symbol()
+        .is_some_and(|s| s == Symbol::MATRIX || s.name() == "matrix")
+}
+
+/// `f` folded over `e`'s arguments `f, init, a, …` from the left or the
+/// right, unevaluated.
+fn fold(ev: &mut Eval<'_>, e: &Expr, left: bool) -> Native {
+    let why = if e.args().len() == 1 {
+        BAD_TYPE
+    } else {
+        BAD_VALUE
+    };
+    let [f, init, items @ ..] = e.args() else {
+        return refuse(ev, e, why);
+    };
+    if items.is_empty() {
+        return refuse(ev, e, why);
+    }
+    let folded = if left {
+        items
+            .iter()
+            .fold(init.clone(), |acc, x| Expr::apply(f, &[acc, x.clone()]))
+    } else {
+        items
+            .iter()
+            .rev()
+            .fold(init.clone(), |acc, x| Expr::apply(f, &[x.clone(), acc]))
+    };
+    Ok(Some(folded))
+}
+
+/// `FoldLeft[f, init, a, …]`.
+pub(in crate::native) fn fold_left(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    fold(ev, e, true)
+}
+
+/// `FoldRight[f, init, a, …]`.
+pub(in crate::native) fn fold_right(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    fold(ev, e, false)
+}
+
+/// giac's `a*b`, evaluated: two vectors give their dot product over the
+/// shorter, vectors and matrices their product ([`linear::dot`]), anything
+/// else `Times`; `None` for dimensions that do not fit.
+fn product(ev: &mut Eval<'_>, a: &Expr, b: &Expr) -> Result<Option<Expr>, EvalError> {
+    let unevaluated = match (shape(a), shape(b)) {
+        (Some(Shape::Vector(n)), Some(Shape::Vector(k))) => {
+            let n = n.min(k);
+            linear::dot(&list(a.args()[..n].to_vec()), &list(b.args()[..n].to_vec()))
+        }
+        (Some(_), Some(_)) => linear::dot(a, b),
+        _ => Ok(Expr::call(Symbol::TIMES, [a.clone(), b.clone()])),
+    };
+    match unevaluated {
+        Ok(p) => Ok(Some(ev.eval(&p)?)),
+        Err(EvalError::Shape) => Ok(None),
+        Err(err) => Err(err),
+    }
+}
+
+/// `Multiply[a, …]`.
+pub(in crate::native) fn multiply(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let factors = match e.args() {
+        [l] if is_list(l) => l.args(),
+        args => args,
+    };
+    let Some((first, rest)) = factors.split_first() else {
+        return Ok(Some(Expr::from(1)));
+    };
+    let mut out = first.clone();
+    for x in rest {
+        match product(ev, &out, x)? {
+            Some(p) => out = p,
+            None => return refuse(ev, e, INVALID_DIMENSION),
+        }
+    }
+    Ok(Some(out))
+}
+
+/// `InsertAt[l, k, x]`.
+pub(in crate::native) fn insert_at(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [l, k, x] = e.args() else {
+        return refuse(ev, e, BAD_VALUE);
+    };
+    if is_string(l) {
+        return Ok(None);
+    }
+    let Some(k) = k.as_i64() else {
+        return refuse(ev, e, BAD_VALUE);
+    };
+    if !is_list(l) {
+        return refuse(ev, e, BAD_VALUE);
+    }
+    let Some(k) = usize::try_from(k).ok().filter(|&k| k <= l.args().len()) else {
+        return refuse(ev, e, INVALID_DIMENSION);
+    };
+    let mut out = l.args().to_vec();
+    out.insert(k, x.clone());
+    Ok(Some(list(out)))
+}
+
+/// Whether `v` deletes in a `subsop` rule: `NULL` (the language's user
+/// symbol `$NULL`), giac's empty sequence.
+fn is_null(v: &Expr) -> bool {
+    v.as_symbol()
+        .is_some_and(|s| s == Symbol::NULL || s.name() == "$NULL")
+        || v.head().and_then(Expr::as_symbol) == Some(Symbol::SEQUENCE) && v.args().is_empty()
+}
+
+/// The two sides of an equation `a = b`.
+fn sides(rule: &Expr) -> Option<(&Expr, &Expr)> {
+    match (rule.head().and_then(Expr::as_symbol), rule.args()) {
+        (Some(Symbol::EQUATION | Symbol::EQUAL), [a, b]) => Some((a, b)),
+        _ => None,
+    }
+}
+
+/// The position `i` of a list of `len` elements, a negative one from the end.
+fn position(i: &Expr, len: usize) -> Option<usize> {
+    let i = i.as_i64()?;
+    let len = i64::try_from(len).ok()?;
+    let i = if i < 0 { i + len } else { i };
+    (0..len)
+        .contains(&i)
+        .then(|| usize::try_from(i).expect("in range"))
+}
+
+/// The elements `items` with the substitutions `(position, value)` of
+/// `rules` made at their original positions, `None` for those deleted
+/// (prog.cc `subsop`); `Err(())` for giac's Invalid dimension. A rule that
+/// is not an equation with an integer or a list of integers on the left
+/// is skipped; a nested position inside an element that is not a list
+/// leaves it.
+fn substituted(items: &[Expr], rules: &[(Expr, Expr)]) -> Result<Vec<Option<Expr>>, ()> {
+    let mut out: Vec<Option<Expr>> = items.iter().cloned().map(Some).collect();
+    for (at, value) in rules {
+        let at = if is_list(at) {
+            match at.args() {
+                [] => return Err(()),
+                [i] => i,
+                [i, rest @ ..] => {
+                    let Some(i) = position(i, out.len()) else {
+                        return Err(());
+                    };
+                    let Some(element) = &out[i] else {
+                        continue;
+                    };
+                    if is_list(element) {
+                        let inner =
+                            substituted(element.args(), &[(list(rest.to_vec()), value.clone())])?;
+                        out[i] = Some(list(inner.into_iter().flatten().collect()));
+                    }
+                    continue;
+                }
+            }
+        } else {
+            at
+        };
+        if at.as_i64().is_none() {
+            continue;
+        }
+        let Some(i) = position(at, out.len()) else {
+            return Err(());
+        };
+        out[i] = (!is_null(value)).then(|| value.clone());
+    }
+    Ok(out)
+}
+
+/// `SubstituteOperands[l, k = v, …]`.
+pub(in crate::native) fn substitute_operands(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [l, rules @ ..] = e.args() else {
+        return refuse(ev, e, INVALID_DIMENSION);
+    };
+    if rules.is_empty() {
+        return refuse(ev, e, INVALID_DIMENSION);
+    }
+    if !is_list(l) {
+        return Ok(None);
+    }
+    let rules: Vec<(Expr, Expr)> = match rules {
+        [k, v] if sides(k).is_none() => vec![(k.clone(), v.clone())],
+        _ => rules
+            .iter()
+            .filter_map(|r| sides(r).map(|(a, b)| (a.clone(), b.clone())))
+            .collect(),
+    };
+    match substituted(l.args(), &rules) {
+        Ok(out) => Ok(Some(list(out.into_iter().flatten().collect()))),
+        Err(()) => refuse(ev, e, INVALID_DIMENSION),
+    }
 }

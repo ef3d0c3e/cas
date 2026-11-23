@@ -240,7 +240,7 @@ whose `n - 1` ours does not factor far enough to prove them
 (`is_prime(2^607-1)`, a 62-digit `2*96*p*q+1`): giac answers 1 through
 PARI's APRCL where PARI does not fail, ours leaves the call with a warning.
 
-`tests/list_commands.rs`, Xcas's list commands (CAS-555 to CAS-557): giac's
+`tests/list_commands.rs`, Xcas's list commands (CAS-555 to CAS-559): giac's
 `find` and `index` from 0 (`1` found at `1.0`), `count_eq`, `count_inf` and
 `count_sup` flattened and with `row` and `col`, `deltalist` of lists and of
 matrices, `accumulate_head_tail`, `sizes`, `makevector`, `makesuite`
@@ -250,7 +250,16 @@ arguments and types, fewer than two elements for `deltalist`, a size that
 is not an integer), where ours leaves the call with a warning; the string
 forms of `find` and `index` (phase 1.6), `find`'s start position and
 `enumerate` of three arguments, which stay; and `newList(65537)`, past
-giac's `LIST_SIZE_LIMIT` here, which stays with a warning.
+giac's `LIST_SIZE_LIMIT` here, which stays with a warning. Then `apply`
+with and without `matrix`, `foldl` and `foldr`, `multiply` (dot products
+over the shorter vector, matrix products), `insert` and `subsop` (by
+position, nested position and `NULL`, giac's quoted `'1=NULL'` written
+`1=NULL`); their departures: giac's errors (fewer than three arguments to
+`foldl`, positions out of range, dimensions that do not fit), the forms
+that stay (several lists to `apply`, a decimal position, strings, a first
+argument of `subsop` that is not a list), `apply` of `x^2` to the rows of a
+matrix (giac's dot products), of `x+1` (giac's `poly1[…]`, ours an error)
+and a nested `NULL`, which deletes where giac's unquoted one does not.
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
