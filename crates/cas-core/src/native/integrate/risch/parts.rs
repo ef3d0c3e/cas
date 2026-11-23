@@ -6,7 +6,7 @@ use cas_num::algebra::Ring;
 use cas_num::{Complex, Integer};
 
 use super::tower::{Frac, P, Tower};
-use super::{Step, call, derive, has_i, kernel, kernel_arg, rde, together, within, zero};
+use super::{Step, call, derive, has_i, kernel, kernel_arg, note, rde, together, within, zero};
 use crate::eval::Eval;
 use crate::expr::Expr;
 use crate::symbol::Symbol;
@@ -254,7 +254,7 @@ pub(super) fn risch_poly_part(
             if s == 0 {
                 return Ok(true);
             }
-            let arg = kernel_arg(xk).clone();
+            let arg = kernel_arg(xk);
             let dx = {
                 let d = derive(ev, xk, &x)?;
                 together(ev, &d)?
@@ -286,7 +286,7 @@ pub(super) fn risch_poly_part(
             Ok(r.ok)
         }
         Some(true) => {
-            let y = kernel_arg(xk).clone();
+            let y = kernel_arg(xk);
             let dy = derive(ev, &y, &x)?;
             let mut eprim = vec![zero(); s];
             for j in (0..s).rev() {
@@ -322,7 +322,13 @@ pub(super) fn risch_poly_part(
                         acc.add_remains(shifted * rem);
                         continue;
                     }
+                    note(|| format!("integrate_ei: no answer for {coeff:?} exp({pa:?} x)"));
                 }
+                note(|| {
+                    format!(
+                        "risch_poly_part: y′ + {f:?} y = {coeff:?} unsolved; {coeff:?} {xk:?}^{pui} remains"
+                    )
+                });
                 acc.add_remains(coeff * xk.pow(Expr::from(pui)));
                 acc.ok = false;
                 eprim[idx] = zero();
@@ -474,14 +480,24 @@ fn giac_gcd_norm(c: &Tower, a: &P, b: &P) -> P {
     if used == 0 {
         return r.one();
     }
-    let pa = if ext { a.clone() } else { primitive(a) };
-    let pa = without_monomial(r, &pa);
+    // giac's `_gcd` drops the integer content of `a` with complex
+    // coefficients too, and tests `a | b` over ℚ(i): `ln(x² + 1)` has
+    // `p₁(i) = −2 − 2ix` and giac's `ln(−1 − ix)` (CAS-585 T9.c6; the
+    // prototype kept `a` whole, and ℤ[i] division sent it to the monic gcd
+    // `x − i`). Over ℚ(i), `a | b` exactly when `a | b · N(lc a)` over ℤ[i]:
+    // the Gaussian content of `a` divides the norm of its leading
+    // coefficient (Gauss's lemma).
+    let pa = without_monomial(r, &primitive(a));
     let pb = without_monomial(r, b);
+    let scaled = match c.lex_lead(&pa, &order) {
+        Some(l) if ext => r.mul(&pb, &r.constant(l * &l.conj())),
+        _ => pb.clone(),
+    };
     // `a = 0` when `p₁` vanishes at the root (any `f′/f`): giac's `_gcd(0, b)`
     // is `b`, the prototype's `pb.div(pa)` raises and falls back to the gcd;
     // dividing by `pa` there was T9.c3's division by zero (CAS-585).
     if !pa.is_zero()
-        && let Some(q) = r.div_exact(&pb, &pa)
+        && let Some(q) = r.div_exact(&scaled, &pa)
     {
         if used >= 2 && q.term_count() == 1 {
             return pa;
@@ -566,6 +582,9 @@ pub(super) fn integrate_ei(
             if c.ring.degree(fac, c.top()) != Some(1) {
                 // risch.cc:640 (kept): the original fraction remains.
                 let part = over_power(ev, &c, ni, f, m)?;
+                note(|| {
+                    format!("integrate_ei: a non-linear factor, {part:?} exp({a:?} x) remains")
+                });
                 remains += expax.clone() * part;
                 break;
             }

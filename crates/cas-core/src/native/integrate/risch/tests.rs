@@ -11,7 +11,8 @@
 // departure: 1/(x^3+1) — a degree-2 resultant factor over Q(i) needs a sqrt(3) split, not ported
 // departure: 1/(x^4+1) — degree-2 resultant factors need a sqrt(2) split, not ported
 // departure: x^3/(x^2+x+1) — a degree-2 resultant factor needs a sqrt(3) split, not ported
-// departure: exp(x)/(x^2+1) — giac writes re/im of Ei(x ± i) in its re(halftan) form with tan(1/2)
+// departure: exp(x)/(x^2+1) — giac writes re/im of Ei(x ± i) in its re(halftan) form with tan(1/2);
+//   ours integrates and passes D (`ei_at_complex_roots`)
 // departure: 1/(exp(x)+exp(-x)) — giac's -pi+atan(exp(x)) carries the constant of its re(halftan) step
 // departure: exp(x)/(exp(2*x)+1) — the same: giac's -pi+atan(exp(x)), a constant apart at best
 // departure: tower-size ties — kernels of one size keep our canonical order (Exp before Log, as giac's
@@ -21,6 +22,7 @@ use std::panic::{self, AssertUnwindSafe};
 use std::sync::Once;
 
 use crate::context::Context;
+use crate::eval::Eval;
 use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 
@@ -76,16 +78,24 @@ fn exps(e: &Expr) -> Expr {
     })
 }
 
-/// Whether `d` is 0: by `Together`, or after `TrigToExp` and
-/// `TranscendentalSimplify`.
+/// Whether `d` is 0: by `Together`, after `TrigToExp` and
+/// `TranscendentalSimplify`, or over independent exponential generators,
+/// the D check's own test ([`super::vanishes`], CAS-585 T9.c6).
 fn vanishes(ctx: &Context, d: &Expr) -> bool {
     let d = exps(&eval(ctx, d));
-    if eval(ctx, &Expr::call(Symbol::TOGETHER, [d.clone()])) == Expr::from(0) {
-        return true;
+    let mut ev = Eval::new(ctx, ctx.limits().recursion);
+    matches!(super::vanishes(&mut ev, &d), Ok(true))
+}
+
+/// The steps the traced `Risch[f, x]` noted (why a row stays or the D
+/// check refused it), one line.
+fn why(ctx: &Context, f: &Expr) -> String {
+    let mut ev = Eval::new(ctx, ctx.limits().recursion);
+    let (_, notes) = super::traced(&mut ev, f, &read("x"));
+    if notes.is_empty() {
+        return "no step noted".to_owned();
     }
-    let t = exps(&eval(ctx, &Expr::call(Symbol::TRIG_TO_EXP, [d])));
-    let t = eval(ctx, &Expr::call(Symbol::TRANSCENDENTAL_SIMPLIFY, [t]));
-    eval(ctx, &Expr::call(Symbol::TOGETHER, [t])) == Expr::from(0)
+    notes.join("; ")
 }
 
 /// Whether `D[prim, x] + rem − f` is 0.
@@ -132,13 +142,17 @@ fn integrated(rows: &[(&str, &str)]) {
             let found = risch(ctx, &f);
             let expected = eval(ctx, &read(expected));
             if found.distinct().any(is_risch) {
-                return Some(format!("{input}: left {found:?}, expected {expected:?}"));
+                let why = why(ctx, &f);
+                return Some(format!(
+                    "{input}: left {found:?}, expected {expected:?}\n    why: {why}"
+                ));
             }
             let equal = vanishes(ctx, &(found.clone() - expected.clone()));
             let derivative = derivative_holds(ctx, &found, &Expr::from(0), &f);
             (!equal || !derivative).then(|| {
+                let why = why(ctx, &f);
                 format!(
-                    "{input}: {found:?}, expected {expected:?} (equal {equal}, derivative {derivative})"
+                    "{input}: {found:?}, expected {expected:?} (equal {equal}, derivative {derivative})\n    why: {why}"
                 )
             })
         }));
@@ -194,14 +208,35 @@ fn partial_rows() {
             let rem_equal = vanishes(ctx, &(rem.clone() - grem.clone()));
             let derivative = derivative_holds(ctx, &prim, &rem, &f);
             (rem == Expr::from(0) || !prim_equal || !rem_equal || !derivative).then(|| {
+                let why = why(ctx, &f);
                 format!(
                     "{input}: {found:?}, expected {gprim:?} + Risch[{grem:?}, x] \
-                     (prim {prim_equal}, rem {rem_equal}, derivative {derivative})"
+                     (prim {prim_equal}, rem {rem_equal}, derivative {derivative})\n    why: {why}"
                 )
             })
         }));
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// exp(x)/(x^2+1) (probe row 54, a departure: giac's re/im form with
+/// tan(1/2)): ours integrates fully, by `Ei(x ± i)` at the roots ±i, and
+/// its derivative is the integrand.
+#[test]
+fn ei_at_complex_roots() {
+    backtrace_hook();
+    let mut ctx = Context::new();
+    let input = "Times[Exp[x], Power[Plus[1, Power[x, 2]], -1]]";
+    let failure = row(&mut ctx, input, |ctx| {
+        let f = eval(ctx, &read(input));
+        let found = risch(ctx, &f);
+        let derivative = derivative_holds(ctx, &found, &Expr::from(0), &f);
+        (found.distinct().any(is_risch) || !derivative).then(|| {
+            let why = why(ctx, &f);
+            format!("{input}: {found:?} (derivative {derivative})\n    why: {why}")
+        })
+    });
+    assert!(failure.is_none(), "{}", failure.unwrap_or_default());
 }
 
 /// The required rows (`PHASE_PLAN` T9): `(f, giac's answer)`.

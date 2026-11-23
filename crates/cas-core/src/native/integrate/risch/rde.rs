@@ -114,7 +114,7 @@ fn spde(
     if usize::try_from(ydeg).unwrap_or(usize::MAX) < tdeg {
         return Ok(None);
     }
-    let z = kernel_arg(z_kernel).clone();
+    let z = ev.eval(&kernel_arg(z_kernel))?;
     let dz = derive(ev, &z, x)?;
     let b = c.r2e(ev, &c.div(&c.lc(&s), &rr))?;
     let mut previous = zero();
@@ -180,7 +180,7 @@ pub(super) fn risch_desolve(
         let mut alpha: i64 = 0;
         let beta = fnumv - fdenv;
         let gamma = gnumv - gdenv;
-        let dzr_e = derive(ev, kernel_arg(z_kernel), &x)?;
+        let dzr_e = derive(ev, &kernel_arg(z_kernel), &x)?;
         let Some(dzr) = c.e2r(ev, &dzr_e)? else {
             return Ok(None);
         };
@@ -290,7 +290,7 @@ pub(super) fn risch_desolve(
         let Some(is_exp) = kind else {
             return Ok(None);
         };
-        let z = kernel_arg(z_kernel).clone();
+        let z = ev.eval(&kernel_arg(z_kernel))?;
         ydeg = td - rd.max(sd);
         if is_exp {
             if rd == sd && !ss.num.is_zero() {

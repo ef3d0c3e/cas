@@ -71,6 +71,10 @@ mod rde;
 mod tests;
 mod tower;
 
+use std::cell::RefCell;
+
+use cas_num::{Integer, Rational};
+
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
@@ -97,6 +101,42 @@ type Step<T> = Result<T, Stop>;
 /// Passes over a remainder that still integrates before the call stays.
 const ROUNDS: usize = 3;
 
+thread_local! {
+    /// The steps that left a remainder or refused an answer, collected
+    /// while a [`traced`] call runs on this thread (CAS-585 T9.c6).
+    static TRACE: RefCell<Option<Vec<String>>> = const { RefCell::new(None) };
+}
+
+/// Notes a step for [`traced`]; nothing is built when no traced call runs.
+fn note(message: impl FnOnce() -> String) {
+    TRACE.with(|t| {
+        if let Some(v) = t.borrow_mut().as_mut() {
+            v.push(message());
+        }
+    });
+}
+
+/// `Risch[f, x]`'s answer, as [`risch`] gives it, and the steps noted on
+/// the way: which step left the remainder, or that the D check refused
+/// the primitive (the tests name the step of a failing row).
+#[cfg(test)]
+pub(super) fn traced(ev: &mut Eval<'_>, f: &Expr, x: &Expr) -> (Option<Expr>, Vec<String>) {
+    TRACE.with(|t| *t.borrow_mut() = Some(Vec::new()));
+    let r = answer(ev, f, x);
+    let mut notes = TRACE.with(|t| t.borrow_mut().take()).unwrap_or_default();
+    match r {
+        Ok(a) => (a, notes),
+        Err(Stop::Eval(e)) => {
+            notes.push(format!("error: {e:?}"));
+            (None, notes)
+        }
+        Err(Stop::Limit) => {
+            notes.push("the limits".into());
+            (None, notes)
+        }
+    }
+}
+
 /// `Risch[f, x]`, `Risch[f]` in `x` (risch.cc:1018).
 pub(in crate::native) fn risch(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let (f, x) = match e.args() {
@@ -122,6 +162,7 @@ pub(in crate::native) fn risch(ev: &mut Eval<'_>, e: &Expr) -> Native {
 fn answer(ev: &mut Eval<'_>, f: &Expr, x: &Expr) -> Step<Option<Expr>> {
     let (mut prim, mut rem) = risch_top(ev, f, x)?;
     if prim == zero() {
+        note(|| format!("risch_top: nothing integrates, remains {rem:?}"));
         return Ok(None);
     }
     let mut stable = false;
@@ -138,9 +179,16 @@ fn answer(ev: &mut Eval<'_>, f: &Expr, x: &Expr) -> Step<Option<Expr>> {
         prim = ev.eval(&(prim + p))?;
         rem = r;
     }
-    if !stable || !verified(ev, f, &prim, &rem, x)? {
+    if !stable {
+        note(|| format!("answer: the remainder still integrates after {ROUNDS} rounds: {rem:?}"));
         return Ok(None);
     }
+    if !verified(ev, f, &prim, &rem, x)? {
+        note(|| format!("guard: D[prim] + rem − f ≠ 0 for prim {prim:?}, rem {rem:?}"));
+        return Ok(None);
+    }
+    // giac's form of `a^u` in the answer: `exp(u ln a)` (pow2expln).
+    let prim = ev.eval(&exp_of_powers(&prim, x))?;
     if rem == zero() {
         return Ok(Some(prim));
     }
@@ -151,13 +199,130 @@ fn answer(ev: &mut Eval<'_>, f: &Expr, x: &Expr) -> Step<Option<Expr>> {
 fn verified(ev: &mut Eval<'_>, f: &Expr, prim: &Expr, rem: &Expr, x: &Expr) -> Step<bool> {
     let d = derive(ev, prim, x)?;
     let difference = ev.eval(&(d + rem.clone() - f.clone()))?;
-    let difference = exps(ev, &difference)?;
-    if together(ev, &difference)? == zero() {
+    vanishes(ev, &difference)
+}
+
+/// Whether `d` is 0: by `Together`; after `TrigToExp` and
+/// `TranscendentalSimplify`; or, the exponentials written over
+/// independent generators ([`exp_generators`]), by `Together` of that
+/// rational function. Each test is an identity of values, so a non-zero
+/// `d` is never accepted; evaluation alone merges no `Exp[1] Exp[x − 1]`
+/// (CAS-585 T9.c6).
+pub(super) fn vanishes(ev: &mut Eval<'_>, d: &Expr) -> Step<bool> {
+    let d = exps(ev, d)?;
+    if together(ev, &d)? == zero() {
         return Ok(true);
     }
-    let t = call(ev, Symbol::TRIG_TO_EXP, [difference])?;
-    let t = call(ev, Symbol::TRANSCENDENTAL_SIMPLIFY, [t])?;
-    Ok(together(ev, &t)? == zero())
+    let t0 = call(ev, Symbol::TRIG_TO_EXP, [d])?;
+    let t = call(ev, Symbol::TRANSCENDENTAL_SIMPLIFY, [t0.clone()])?;
+    if together(ev, &t)? == zero() {
+        return Ok(true);
+    }
+    let g = exp_generators(ev, &t0)?;
+    Ok(together(ev, &g)? == zero())
+}
+
+/// `e` with `E^u`, `E` and `a^u` (`a` a number other than `E`, `u` not a
+/// number) as `Exp`, then each `Exp[u]` as `Π Z_t^(q L_t)`: `u` expanded
+/// into terms `q t`, `q` rational (an imaginary `q i` is `q` times the atom
+/// `i t`), `L_t` the lcm of the denominators of the `q` of the atom `t`, and
+/// `Z_t` a fresh symbol standing for `Exp[t / L_t]`; evaluated.
+fn exp_generators(ev: &mut Eval<'_>, e: &Expr) -> Step<Expr> {
+    fn as_exp(e: &Expr) -> Expr {
+        e.replace(|z| {
+            if z.as_symbol() == Some(Symbol::E) {
+                return Some(Expr::call(Symbol::EXP, [Expr::from(1)]));
+            }
+            let View::Apply { head, args: [b, u] } = z.view() else {
+                return None;
+            };
+            if head.as_symbol() != Some(Symbol::POWER) {
+                return None;
+            }
+            if b.as_symbol() == Some(Symbol::E) {
+                return Some(Expr::call(Symbol::EXP, [as_exp(u)]));
+            }
+            if b.is_number() && !u.is_number() {
+                let l = Expr::call(Symbol::LOG, [b.clone()]);
+                return Some(Expr::call(Symbol::EXP, [as_exp(u) * l]));
+            }
+            None
+        })
+    }
+    let e = ev.eval(&as_exp(e))?;
+    let exps: Vec<Expr> = e
+        .distinct()
+        .filter(|z| z.head() == Some(&Expr::from(Symbol::EXP)) && z.args().len() == 1)
+        .cloned()
+        .collect();
+    if exps.is_empty() {
+        return Ok(e);
+    }
+    // Each exponential's terms `(q, t)`, and the atoms with their lcm.
+    let mut split = Vec::with_capacity(exps.len());
+    let mut atoms: Vec<(Expr, Integer)> = Vec::new();
+    for k in &exps {
+        let u = call(ev, Symbol::EXPAND, [k.args()[0].clone()])?;
+        let terms: Vec<Expr> = if u.head() == Some(&Expr::from(Symbol::PLUS)) {
+            u.args().to_vec()
+        } else {
+            vec![u]
+        };
+        let mut qs = Vec::with_capacity(terms.len());
+        for term in &terms {
+            let (q, t) = rational_part(ev, term)?;
+            let den = q.denom().clone();
+            match atoms.iter_mut().find(|(a, _)| *a == t) {
+                Some((_, l)) => *l = l.lcm(&den),
+                None => atoms.push((t.clone(), den)),
+            }
+            qs.push((q, t));
+        }
+        split.push(qs);
+    }
+    let rules: Vec<(Expr, Expr)> = exps
+        .iter()
+        .zip(&split)
+        .map(|(k, qs)| {
+            let factors: Vec<Expr> = qs
+                .iter()
+                .map(|(q, t)| {
+                    let j = atoms.iter().position(|(a, _)| a == t).expect("an atom");
+                    let z = Expr::from(Symbol::new(&format!("Risch$z{j}")));
+                    let n = q * &Rational::from(&atoms[j].1);
+                    z.pow(Expr::from(n))
+                })
+                .collect();
+            (k.clone(), Expr::call(Symbol::TIMES, factors))
+        })
+        .collect();
+    Ok(ev.eval(&e.substitute(&rules))?)
+}
+
+/// A term `q t` of an expanded exponent: `q` rational, `t` the rest (`1`
+/// for a rational term, `i t′` for an imaginary coefficient).
+fn rational_part(ev: &mut Eval<'_>, term: &Expr) -> Step<(Rational, Expr)> {
+    let (c, rest) = match term.view() {
+        View::Apply { head, args }
+            if head.as_symbol() == Some(Symbol::TIMES) && !args.is_empty() =>
+        {
+            match args[0].to_complex() {
+                Some(c) => (c, ev.eval(&Expr::call(Symbol::TIMES, args[1..].to_vec()))?),
+                None => return Ok((Rational::from(Integer::from(1)), term.clone())),
+            }
+        }
+        _ => match term.to_complex() {
+            Some(c) => (c, Expr::from(1)),
+            None => return Ok((Rational::from(Integer::from(1)), term.clone())),
+        },
+    };
+    if c.im().is_zero() {
+        return Ok((c.re().clone(), rest));
+    }
+    if c.re().is_zero() {
+        return Ok((c.im().clone(), ev.eval(&(i() * rest))?));
+    }
+    Ok((Rational::from(Integer::from(1)), term.clone()))
 }
 
 // ---------------------------------------------------------------- risch.cc:951-1016
@@ -208,6 +373,7 @@ fn risch_top(ev: &mut Eval<'_>, e_orig: &Expr, x: &Expr) -> Step<(Expr, Expr)> {
         let tmp = call(ev, Symbol::COMPLEX_EXPAND, [tmp])?;
         let tmp = together(ev, &tmp)?;
         if has_i(&tmp) {
+            note(|| format!("risch_top: the remainder {remains:?} is not real"));
             return Ok((zero(), e_orig.clone()));
         }
         remains = tmp;
@@ -233,8 +399,13 @@ fn risch_top(ev: &mut Eval<'_>, e_orig: &Expr, x: &Expr) -> Step<(Expr, Expr)> {
 }
 
 /// giac's `risch_lin` (:878): `(prim, remains)` of one integrand.
+#[allow(
+    clippy::too_many_lines,
+    reason = "one step of giac's code after another"
+)]
 fn risch_lin(ev: &mut Eval<'_>, e_orig: &Expr, x: &Expr) -> Step<(Expr, Expr)> {
     let Some(chk) = rlvarx(ev, e_orig, x)? else {
+        note(|| format!("risch_lin: no polynomial form of {e_orig:?}"));
         return Ok((zero(), e_orig.clone()));
     };
     let mut chk1 = Vec::new();
@@ -253,7 +424,10 @@ fn risch_lin(ev: &mut Eval<'_>, e_orig: &Expr, x: &Expr) -> Step<(Expr, Expr)> {
                         Expr::call(Symbol::POWER, [bb.clone(), rr.clone() * r.clone()]),
                     ));
                 }
-                _ => return Ok((zero(), e_orig.clone())),
+                _ => {
+                    note(|| format!("risch_lin: the fractional power {k:?} in {e_orig:?}"));
+                    return Ok((zero(), e_orig.clone()));
+                }
             }
         }
     }
@@ -298,6 +472,7 @@ fn risch_lin(ev: &mut Eval<'_>, e_orig: &Expr, x: &Expr) -> Step<(Expr, Expr)> {
         e = ev.eval(&e.substitute(&sub))?;
     }
     let Some((e, v)) = risch_tower(ev, &e, x)? else {
+        note(|| format!("risch_tower: no exp/ln tower of {e:?}"));
         return Ok((zero(), e_orig.clone()));
     };
     if v.is_empty() {
@@ -306,6 +481,14 @@ fn risch_lin(ev: &mut Eval<'_>, e_orig: &Expr, x: &Expr) -> Step<(Expr, Expr)> {
     let r = parts::in_risch(ev, &e, &v, &zero())?;
     let mut prim = ev.eval(&r.prim)?;
     let mut remains = ev.eval(&r.remains)?;
+    if !r.ok || remains != zero() {
+        note(|| {
+            format!(
+                "in_risch: {e:?} in the tower {v:?} leaves {remains:?} (ok {})",
+                r.ok
+            )
+        });
+    }
     if has_any(&prim, &[Symbol::SIN_INTEGRAL]) {
         prim = together(ev, &prim)?;
         if has_i(&prim) {
@@ -653,18 +836,48 @@ fn has_any(e: &Expr, heads: &[Symbol]) -> bool {
     })
 }
 
-/// `Some(true)` for `exp(u)`, `Some(false)` for `ln(u)`, `None` otherwise.
+/// `Some(true)` for `exp(u)` and for `a^u`, `a` a number other than `E` and
+/// `u` not a number (the exponential `exp(u ln a)`, which evaluation may
+/// write back as `a^u`; CAS-585 T9.c6), `Some(false)` for `ln(u)`, `None`
+/// otherwise.
 fn kernel(k: &Expr) -> Option<bool> {
-    match (k.head().and_then(Expr::as_symbol), k.args().len()) {
-        (Some(Symbol::EXP), 1) => Some(true),
-        (Some(Symbol::LOG), 1) => Some(false),
+    match (k.head().and_then(Expr::as_symbol), k.args()) {
+        (Some(Symbol::EXP), [_]) => Some(true),
+        (Some(Symbol::LOG), [_]) => Some(false),
+        (Some(Symbol::POWER), [a, u]) if power_kernel(a, u) => Some(true),
         _ => None,
     }
 }
 
-/// The argument of a kernel `exp(u)` or `ln(u)`.
-fn kernel_arg(k: &Expr) -> &Expr {
-    &k.args()[0]
+/// Whether `a^u` is an exponential kernel: `a` a number other than `E`, `u`
+/// not a number.
+fn power_kernel(a: &Expr, u: &Expr) -> bool {
+    a.is_number() && a.as_symbol() != Some(Symbol::E) && !u.is_number()
+}
+
+/// The argument of a kernel: `u` of `exp(u)` or `ln(u)`, `u ln a` of `a^u`.
+fn kernel_arg(k: &Expr) -> Expr {
+    match k.args() {
+        [a, u] => u.clone() * Expr::call(Symbol::LOG, [a.clone()]),
+        args => args[0].clone(),
+    }
+}
+
+/// `e` with each `a^u` (`a` a number other than `E`, `u` with `x`) written
+/// `exp(u ln a)`, giac's form of an answer; built.
+fn exp_of_powers(e: &Expr, x: &Expr) -> Expr {
+    e.replace(|z| match z.view() {
+        View::Apply { head, args: [a, u] }
+            if head.as_symbol() == Some(Symbol::POWER) && power_kernel(a, u) && u.contains(x) =>
+        {
+            let u = exp_of_powers(u, x);
+            Some(Expr::call(
+                Symbol::EXP,
+                [u * Expr::call(Symbol::LOG, [a.clone()])],
+            ))
+        }
+        _ => None,
+    })
 }
 
 /// Whether the polynomial-and-kernel sizes stay within `Limits::terms`

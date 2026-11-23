@@ -206,6 +206,8 @@ fn agreements() {
             "risch(exp(x)+exp(-x),x)",                      // 35
             "risch(exp(2*x)/exp(x),x)",                     // 36
             "risch(exp(x)*exp(2*x),x)",                     // 37
+            "risch(1/(exp(x)+exp(-x)),x)",                  // 38
+            "risch(exp(x)/(exp(2*x)+1),x)",                 // 39
             "risch(1/(exp(x)-1),x)",                        // 40
             "risch(exp(3*x)/(exp(x)+1),x)",                 // 41
             "risch(exp(-2*x)+x*exp(-x),x)",                 // 42
@@ -275,7 +277,7 @@ enum Decided {
 }
 
 /// The departure rows: `(input, giac's text, ours as decided)`.
-const DEPARTURES: [(&str, &str, Decided); 22] = [
+const DEPARTURES: [(&str, &str, Decided); 20] = [
     // giac leaves these (probe rows 9-13, 43, 69, 70, 87) and prints
     // `integrate(f,x)`, which our `Integrate` evaluates on reading back;
     // ours stays `risch(f,x)`.
@@ -335,22 +337,12 @@ const DEPARTURES: [(&str, &str, Decided); 22] = [
         Decided::Holds,
     ),
     // giac's last step re(halftan(…)) writes re/im of Ei(x ± i) with
-    // tan(1/2), and carries -pi before atan(exp(x)): ours integrates
-    // without that step (probe rows 54, 38, 39).
+    // tan(1/2): ours integrates without that step (probe row 54; rows 38
+    // and 39, giac's -pi+atan(exp(x)), agree since CI 45163844465).
     (
         "risch(exp(x)/(x^2+1),x)",
         "(im(Ei(x+i))*tan(1/2)^2-im(Ei(x+i))-im(Ei(x-i))*tan(1/2)^2+im(Ei(x-i))+\
          2*re(Ei(x+i))*tan(1/2)+2*re(Ei(x-i))*tan(1/2))/(2*tan(1/2)^2+2)",
-        Decided::Integrates,
-    ),
-    (
-        "risch(1/(exp(x)+exp(-x)),x)",
-        "-pi+atan(exp(x))",
-        Decided::Integrates,
-    ),
-    (
-        "risch(exp(x)/(exp(2*x)+1),x)",
-        "-pi+atan(exp(x))",
         Decided::Integrates,
     ),
     // Tower ties (T9.c1 batch rows 19 and 89): kernels of one size
