@@ -10,3 +10,4 @@ T7 | done | Gröbner: in_ideal, syzygy, gbasis_vars and gbasis's rur option; gia
 T8 | done | matrix constructors, shape, slicing, row operations, norms and subspaces | - | tasks/T8.md | logs/T8.md | R1.2-004,R1.2-006
 T9 | done | elimination and canonical forms: det_minor, adjoint_matrix, ref, pivot, keep_pivot, egvl, gauss, rat_jordan; matrix inert forms as departures | - | tasks/T9.md | logs/T9.md | R1.2-004,R1.2-001,R1.2-006
 T10 | done | push master for the phase's final CI and Fuzz runs | - | tasks/T10.md | logs/T10.md | -
+T11 | done | CI and Fuzz check on the pushed head; tickets done and CAS-DOC-54 in step | - | tasks/T11.md | logs/T11.md | -
