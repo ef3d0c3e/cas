@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-22T18:37:20.936Z
+# filed through: 2026-11-23T01:44:25.374Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22/084638-013r-claude-record.md
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22/084638-013r-claude-record.md
@@ -18,7 +18,7 @@ R14 | 2026-11-22 | finding | in force | Phase 1.1 Green master | The eval fuzz c
 R15 | 2026-11-22 | finding | in force | Phase 1.1 Green master | Master was pushed 866047b..fa9ae22 to start CI on the T1-T4 work; T5 is done and T6 checks CI and F… | .claude-state/journal/2026-11-22/182814-042r-claude-record.md
 R16 | 2026-11-22 | decision | in force | Agents push | Agents push master themselves (`git push origin master`) when CI needs to run; no push stop for the… | .claude-state/journal/2026-11-22/182814-042r-claude-record.md
 R17 | 2026-11-22 | finding | in force | Agents push | Side branches for parallel CI runs were proposed by the developer but conflict with the work-on-mas… | .claude-state/journal/2026-11-22/182814-042r-claude-record.md
-R18 | 2026-11-22 | open | in force | Agents push | .claude/settings.json is invalid JSON (trailing comma after the allow list's `]`) -> the developer… | .claude-state/journal/2026-11-22/182814-042r-claude-record.md
+R18 | 2026-11-22 | open | retired by .claude-state/journal/2026-11-23/025950-061r-claude-record.md (.claude/settings.json is valid JSON again (checked 2026-11-23)) | Agents push | .claude/settings.json is invalid JSON (trailing comma after the allow list's `]`) -> the developer… | .claude-state/journal/2026-11-22/182814-042r-claude-record.md
 R19 | 2026-11-22 | open | in force | Agents push | PA3's skill and agent definitions still say never push; an update restores them -> the developer ra… | .claude-state/journal/2026-11-22/182814-042r-claude-record.md
 R20 | 2026-11-22 | open | in force | Agents push | GENERATION_PLAN.md standing constraints still describe a push stop per phase -> each phase planner… | .claude-state/journal/2026-11-22/182814-042r-claude-record.md
 R21 | 2026-11-22 | finding | in force | Phase 1.1 Green master | Master is green on fa9ae22: CI run 45047911216 passed all five jobs, and Fuzz run 45047911210 passe… | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
@@ -28,3 +28,11 @@ R24 | 2026-11-22 | open | in force | Phase 1.1 Green master | checkout@v4 shows 
 R25 | 2026-11-22 | open | in force | Phase 1.1 Green master | .run/logs/gen1-gap/ sits outside .run/<phase>/ and was kept for later phases; it can be rebuilt wit… | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
 R26 | 2026-11-22 | open | superseded by R27 | Phase 1.2 Algebra and polynomials parity | phase 1.2 draft in progress by pa-planner -> present with plan(kind: phase) when its report arrives | .claude-state/journal/2026-11-22/192417-050r-claude-record.md
 R27 | 2026-11-22 | decision | in force | Phase 1.2 Algebra and polynomials parity | The phase 1.2 plan is installed and runs on its own; the developer's touchpoints are the approval a… | .claude-state/journal/2026-11-22/195238-056r-claude-record.md
+R28 | 2026-11-23 | finding | in force | Phase 1.2 Algebra and polynomials parity | On the final head 5680a2c, CI run 45091838361 and Fuzz run 45091838357 (43 min) are both green. | .claude-state/journal/2026-11-23/025950-061r-claude-record.md
+R29 | 2026-11-23 | finding | in force | Phase 1.2 Algebra and polynomials parity | The flaky nlpsolve oracle row (crates/cas-giac/tests/optimization.rs:73) failed because giac's rand… | .claude-state/journal/2026-11-23/025950-061r-claude-record.md
+R30 | 2026-11-23 | finding | in force | Phase 1.2 Algebra and polynomials parity | When giac's exact output hinges on its own conventions (VAS, LMQ bounds, Sturm signs, ref/keep_pivo… | .claude-state/journal/2026-11-23/025950-061r-claude-record.md
+R31 | 2026-11-23 | finding | in force | Phase 1.2 Algebra and polynomials parity | `Abs` of a complex ball that contains 0 comes out indeterminate, so tests compare real and imaginar… | .claude-state/journal/2026-11-23/025950-061r-claude-record.md
+R32 | 2026-11-23 | finding | in force | Phase 1.2 Algebra and polynomials parity | Whether agents may run a throwaway local example program to print our own answers is unsettled. | .claude-state/journal/2026-11-23/025950-061r-claude-record.md
+R33 | 2026-11-23 | open | in force | Phase 1.2 Algebra and polynomials parity | allow small one-off example programs that print a few answers locally, while test suites, fuzzing a… | .claude-state/journal/2026-11-23/025950-061r-claude-record.md
+R34 | 2026-11-23 | open | in force | Phase 1.2 Algebra and polynomials parity | a cas-num ticket so that Abs of a complex ball containing 0 returns [0, upper] as Arb does -> a lat… | .claude-state/journal/2026-11-23/025950-061r-claude-record.md
+R35 | 2026-11-23 | open | in force | Phase 1.2 Algebra and polynomials parity | six log and doc commits are unpushed on purpose, because a push restarts Fuzz -> they go with the n… | .claude-state/journal/2026-11-23/025950-061r-claude-record.md
