@@ -246,8 +246,9 @@ PARI's APRCL where PARI does not fail, ours leaves the call with a warning.
 matrices, `accumulate_head_tail`, `sizes`, `makevector`, `makesuite`
 (bracketed to be read), `newList`, `enumerate` and `copy`, read back and
 compared; and the departures, each with giac's answer: its errors (bad
-arguments and types, fewer than two elements for `deltalist`, a size that
-is not an integer), where ours leaves the call with a warning; the string
+arguments and types, fewer than two elements for `deltalist`), where ours
+leaves the call with a warning (`newList` of a non-integer is ours-only:
+giac reads stray bits before its type test and its error varies); the string
 forms of `find` and `index` (phase 1.6), `find`'s start position and
 `enumerate` of three arguments, which stay; and `newList(65537)`, past
 giac's `LIST_SIZE_LIMIT` here, which stays with a warning. Then `apply`

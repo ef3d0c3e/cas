@@ -264,7 +264,7 @@ fn permutations() {
 
 /// Where this CAS departs from giac: the input, giac's answer as it prints
 /// it, ours as decided.
-const DEPARTURES: [(&str, &str, &str); 68] = [
+const DEPARTURES: [(&str, &str, &str); 65] = [
     // giac's errors; ours leaves the call, with the error as a warning.
     (
         "index([1,2],5)",
@@ -336,21 +336,9 @@ const DEPARTURES: [(&str, &str, &str); 68] = [
         "GIAC_ERROR: sizes(5) \n Error: Bad Argument Type",
         "sizes(5)",
     ),
-    (
-        "newList(x)",
-        "GIAC_ERROR: newList(x) \n Error: Bad Argument Value",
-        "newList(x)",
-    ),
-    (
-        "newList(3/2)",
-        "GIAC_ERROR: newList(3/2) \n Error: calculation size limit exceeded",
-        "newList(3/2)",
-    ),
-    (
-        "newList(2,3)",
-        "GIAC_ERROR: newList(2,3) \n Error: calculation size limit exceeded",
-        "newList(2,3)",
-    ),
+    // newList of a non-integer: giac reads `g.val` before its type test
+    // (ti89.cc `_newList`), stray bits whose error differs between runs
+    // (CI 45113559662: newList(x) gave both errors): ours-only, in cas-core.
     (
         "enumerate(x)",
         "GIAC_ERROR: enumerate(x) \n Error: Bad Argument Type",
