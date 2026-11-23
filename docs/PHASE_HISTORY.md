@@ -6,8 +6,13 @@ Built by `tools/phaseend_index.py history` from the PhaseEnds and rebuilt at eac
 
 - 1.1 | 2026-11-22 | Green master | Phase 1.1 Green master: master's CI and Fuzz are green again on fa9ae22 (CI run 45047911216, all five jobs; Fuzz run 45047911210, all 55 targets).
 - 1.2 | 2026-11-23 | Algebra and polynomials parity | Phase 1.2 Algebra and polynomials parity: CAS-DOC-54 sorts 89 giac entries (66 built, 1 alias, 5 options, 2 settings, 15 recorded departures); tickets CAS-526..547 done.
+- 1.3 | 2026-11-23 | Calculus, expressions and integers parity | Phase 1.3 Calculus, expressions and integers parity: CAS-DOC-55 sorts 81 giac entries; tickets CAS-548..585 are done.
 
 ## This generation's recaps (1, newest first)
+
+### 1.3: Calculus, expressions and integers parity (2026-11-23)
+
+Phase 1.3 Calculus, expressions and integers parity: CAS-DOC-55 sorts 81 giac entries; tickets CAS-548..585 are done. Built: integers (chrem, lgcd, fracmod/iratrecon, a certified is_prime with a BLS75 n-1 prover above 2^64 and giac's certificate, bernoulli_mod, icomp) and the Abs fix for a complex ball containing 0 (CAS-554, [0,u] as Arb gives); 25 list commands (find, counts, folds, subsop, heaps, permutations); 33 expression commands (powexpand returned held, comDenom, algsubs, part, eval, compare, linstep, simplifyDirac, periodic); calculus tools (ibpdv/ibpu, preval, function_diff, revert, sum_riemann, wz_certificate, euler_lagrange, domain, convex, tabsign/tabvar); kovacicsols (Kovacic cases 1-3); risch for exp/ln towers ported from giac's risch.cc, checking each answer by differentiation; Int is a departure. All were ported from giac source, most checked by a Python prototype first. Recorded departures include four places where giac is wrong (wz_certificate, euler_lagrange with coupled unknowns, Kovacic case 3 with y', linstep) and two wrong giac answers in risch. The final gate is green on f3fab1f (CI 45185597012, Fuzz 45185596994) after three fixes: Fourier rules now require a real pole (CAS-441; cost: θ(x-a) with symbolic a stays unevaluated), the risch arity guard, and the fourier_transforms harness comparing both parts. scripts/caseval.py and scripts/aide.py are kept in the repo. Cookbook C0020-C0043. Open: the developer's ruling on local throwaway example programs (R33; T9 needed 6 CI rounds); backlog CAS-586 (APRCL) and CAS-587 (risch sqrt split); the card's dangling docs/ops/INDEX.md pointer; docs-only commits unpushed until the next phase's first push.
 
 ### 1.2: Algebra and polynomials parity (2026-11-23)
 

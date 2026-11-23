@@ -20,3 +20,15 @@
 1.2 | T10 | done | push master for the phase's final CI and Fuzz runs | - | phase-1.2/tasks/T10.md | phase-1.2/logs/T10.md | -
 1.2 | T11 | done | CI and Fuzz check on the pushed head; tickets done and CAS-DOC-54 in step | - | phase-1.2/tasks/T11.md | phase-1.2/logs/T11.md | -
 1.2 | T12 | done | phase cleanup | - | phase-1.2/tasks/T12.md | phase-1.2/logs/T12.md | -
+1.3 | T1 | done | design page CAS-DOC-55 and one ticket per family | - | phase-1.3/tasks/T1.md | phase-1.3/logs/T1.md | R1.3-007
+1.3 | T2 | done | integers: chrem, lgcd, fracmod, a certified is_prime, bernoulli_mod, icomp; Abs of a complex ball containing 0 | - | phase-1.3/tasks/T2.md | phase-1.3/logs/T2.md | R1.3-003,R1.3-007
+1.3 | T3 | done | list commands: find, index, counts, deltas, sequences, folds, insert, subsop, heaps, permutations | - | phase-1.3/tasks/T3.md | phase-1.3/logs/T3.md | R1.3-004,R1.3-007
+1.3 | T4 | done | expressions: power expansion, common denominators, numerators, logarithms in a base, angles, unit vectors, algsubs, regroup | - | phase-1.3/tasks/T4.md | phase-1.3/logs/T4.md | R1.3-002,R1.3-007
+1.3 | T5 | done | expressions: variable lists, operands, evaluation, predicates, equation and list conversions, steps, Dirac, periodic | - | phase-1.3/tasks/T5.md | phase-1.3/logs/T5.md | R1.3-002,R1.3-007
+1.3 | T6 | done | calculus tools: ibpdv, ibpu, preval, function_diff, revert, sum_riemann, wz_certificate, euler_lagrange, jacobi_equation, conjugate_equation | - | phase-1.3/tasks/T6.md | phase-1.3/logs/T6.md | R1.3-001,R1.3-007
+1.3 | T7 | done | function study: domain, sign and variation tables, convexity | - | phase-1.3/tasks/T7.md | phase-1.3/logs/T7.md | R1.3-001,R1.3-005,R1.3-007
+1.3 | T8 | done | Kovacic's algorithm: kovacicsols | - | phase-1.3/tasks/T8.md | phase-1.3/logs/T8.md | R1.3-001,R1.3-007
+1.3 | T9 | done | Risch integration of exp and ln towers: risch; Int as a departure | - | phase-1.3/tasks/T9.md | phase-1.3/logs/T9.md | R1.3-008,R1.3-005,R1.2-001,R1.3-007
+1.3 | T10 | done | push master for the phase's final CI and Fuzz runs | - | phase-1.3/tasks/T10.md | phase-1.3/logs/T10.md | -
+1.3 | T11 | done | CI and Fuzz check on the pushed head; tickets done and CAS-DOC-55 in step | - | phase-1.3/tasks/T11.md | phase-1.3/logs/T11.md | -
+1.3 | T12 | done | phase cleanup | - | phase-1.3/tasks/T12.md | phase-1.3/logs/T12.md | -
