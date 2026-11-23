@@ -418,7 +418,9 @@ fn departures() {
     ];
     let mut wrong = Vec::new();
     for (input, answer, decided) in cases {
+        // giac prints a lambda with a leading space: ` (` x`)->...`.
         let printed = giac.eval(input).unwrap();
+        let printed = printed.trim();
         if printed != answer {
             wrong.push(format!("{input}: giac prints {printed}, recorded {answer}"));
         }
@@ -438,7 +440,9 @@ fn departures() {
         ),
         ("(function_diff @@3)(ln)('x')", "2/x^3"),
     ] {
+        // giac prints a lambda with a leading space: ` (` x`)->...`.
         let printed = giac.eval(input).unwrap();
+        let printed = printed.trim();
         if printed != answer {
             wrong.push(format!("{input}: giac prints {printed}, recorded {answer}"));
         }
