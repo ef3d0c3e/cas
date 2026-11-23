@@ -271,6 +271,14 @@ and giac's errors (not a list, not a permutation, `heappop([])`). giac's
 `heappop([9,6,5,1,1,4,2,3])`): no giac row, unit tests of ours (the heap
 after the pop) in `cas-core`.
 
+`tests/expressions.rs`, Xcas's expression commands (CAS-562 to CAS-567):
+giac's `pow`, `comDenom` (with a variable), `getNum` and `getDenom`, `simp2`,
+`regroup`, `sq`, `logb`, `log2`, `log10`, `alog10`, `normalize` and `unitV`
+read back and compared; and the departures, each with giac's answer:
+`powexpand`, held in ours (its value released is giac's, and where the
+canonical order is giac's it prints `hold(` giac's text `)`), and `radians`
+and `degrees`, exact in ours, within giac's 12 digits at `x = 1`.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

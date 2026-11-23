@@ -8,7 +8,10 @@
 //! The answer is evaluated, as every native's is.
 //!
 //! - [`exponential`]: `HyperbolicToExp`, `ExpToPower`, `PowerToExp`,
-//!   `ExpExpand`, `LogExpand` and `LogCombine` (§2).
+//!   `ExpExpand`, `LogExpand` and `LogCombine` (§2), and `PowerExpand`
+//!   (CAS-562), whose answer is held: `Hold[2^x*2^y]` for `2^(x+y)`, which
+//!   evaluation would merge back, and the argument itself when no power
+//!   changes.
 //! - [`substitution`]: `HalfTan`, `HalfTanHyperbolicToExp`, `TanToSinCos`,
 //!   `SinToCosTan`, `CosToSinTan`, `TanToSinCos2` and `TanToCosSin2` (§3).
 //! - [`pythagorean`]: `TrigToCos`, `TrigToSin` and `TrigToTan` (§4), which
@@ -173,6 +176,21 @@ pub(super) fn log_expand(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// `LogCombine[x]`, Xcas's `lncollect`.
 pub(super) fn log_combine(ev: &mut Eval<'_>, e: &Expr) -> Native {
     rewrite(ev, e, "LogCombine", exponential::log_combine)
+}
+
+/// `PowerExpand[x]`, Xcas's `powexpand`: the powers expanded, held.
+pub(super) fn power_expand(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    let expanded = apply(ev, x, exponential::power_expand)?;
+    let result = if expanded == *x {
+        expanded
+    } else {
+        Expr::call(Symbol::HOLD, [expanded])
+    };
+    ev.step("PowerExpand", e, &result);
+    Ok(Some(result))
 }
 
 /// `HalfTan[x]`, Xcas's `halftan`.

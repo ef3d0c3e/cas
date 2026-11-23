@@ -9,6 +9,9 @@
 //! - `Norm[v]` (`l2norm`): `√(Σ |v_i|²)`, and `FrobeniusNorm[A]`
 //!   (`frobenius_norm`) over every entry, `|z|² = z z̄` with the conjugate
 //!   of each entry known (CAS-DOC-12);
+//! - `Normalize[v]` (`normalize`, `unitV`, CAS-564): `v/Norm[v]` for a
+//!   vector, `z/Abs[z]` otherwise, as giac's `normalize(x)` is `x/abs(x)`;
+//!   the call stays where the norm does or is 0;
 //!
 //! and giac's constructors (CAS-531), for `1 ≤ p, q` with `p q` entries
 //! within `Limits::terms`, else the call stays:
@@ -149,6 +152,24 @@ pub(in crate::native) fn norm(ev: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(None);
     }
     root_of_squares(ev, v.args())
+}
+
+pub(in crate::native) fn normalize(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [v] = e.args() else {
+        return Ok(None);
+    };
+    let size = if is_list(v) {
+        match norm(ev, &Expr::call(Symbol::NORM, [v.clone()]))? {
+            Some(n) => n,
+            None => return Ok(None),
+        }
+    } else {
+        ev.eval(&Expr::call(Symbol::ABS, [v.clone()]))?
+    };
+    if size == Expr::from(0) {
+        return Ok(None);
+    }
+    Ok(Some(v / size))
 }
 
 pub(in crate::native) fn frobenius_norm(ev: &mut Eval<'_>, e: &Expr) -> Native {

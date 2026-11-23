@@ -198,3 +198,47 @@ fn logarithms_combined() {
         ],
     );
 }
+
+/// `PowerExpand` (CAS-562), giac's `powexpand` forms held, and what stays
+/// as given.
+#[test]
+fn power_expand() {
+    check(&[
+        (
+            "PowerExpand[Power[2, Plus[x, y]]]",
+            "Hold[Times[Power[2, x], Power[2, y]]]",
+        ),
+        (
+            "PowerExpand[Power[3, Times[2, x]]]",
+            "Hold[Power[Power[3, x], 2]]",
+        ),
+        (
+            "PowerExpand[Power[x, Plus[1, Times[2, y]]]]",
+            "Hold[Times[Power[x, 1], Power[Power[x, y], 2]]]",
+        ),
+        (
+            "PowerExpand[Power[a, Times[3, x, y]]]",
+            "Hold[Power[Power[a, Times[x, y]], 3]]",
+        ),
+        (
+            "PowerExpand[Power[2, Plus[Times[-1, x], Times[-1, y]]]]",
+            "Hold[Times[Power[Power[2, x], -1], Power[Power[2, y], -1]]]",
+        ),
+        (
+            "PowerExpand[Plus[1, Power[2, Plus[x, y]]]]",
+            "Hold[Plus[1, Times[Power[2, x], Power[2, y]]]]",
+        ),
+        (
+            "PowerExpand[Equation[Power[2, Plus[x, y]], 3]]",
+            "Hold[Equation[Times[Power[2, x], Power[2, y]], 3]]",
+        ),
+        // What stays: exponentials, and exponents without a sum or an
+        // integer factor.
+        ("PowerExpand[Exp[Plus[x, y]]]", "Exp[Plus[x, y]]"),
+        ("PowerExpand[Power[x, y]]", "Power[x, y]"),
+        (
+            "PowerExpand[Power[x, Times[1/2, y]]]",
+            "Power[x, Times[1/2, y]]",
+        ),
+    ]);
+}

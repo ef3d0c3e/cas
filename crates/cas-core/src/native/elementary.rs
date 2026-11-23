@@ -7,6 +7,18 @@
 //! one, `Indeterminate` with a warning, and `-Infinity` for the logarithm of
 //! `0.0`. Exact arguments have their special values first (CAS-200,
 //! `special`), `Sin[Pi/6]` is `1/2`; others stay as they are.
+//!
+//! Xcas's logarithms to a base and angle conversions, rewritten exactly,
+//! listable:
+//!
+//! - `LogB[x, b]` (`logb`, CAS-565), giac's: `ln(x)/ln(b)`, and for an
+//!   integer `x ≠ 0` and an integer `b > 1` the `n` factors `b` of `x`
+//!   taken out first, `ln(x/b^n)/ln(b) + n`, so `logb(24, 2)` is
+//!   `ln(3)/ln(2) + 3`; `LogB[x]` is `Log[x]`. `Log2[x]` (`log2`) and
+//!   `Log10[x]` (`log10`) are `LogB[x, 2]` and `LogB[x, 10]`; `Exp10[x]`
+//!   (`alog10`) is `10^x`.
+//! - `Radians[x]` (`radians`, CAS-564) is `π x/180` and `Degrees[x]`
+//!   (`degrees`) `180 x/π`, exact where giac's are decimals.
 
 use cas_num::ball::{Ball, ComplexBall};
 use cas_num::{Integer, Rational};
@@ -147,6 +159,55 @@ pub(super) fn reciprocal(_: &mut Eval<'_>, e: &Expr) -> Native {
             Expr::from(Rational::new(Integer::ONE, Integer::from(2))) * Expr::from(Symbol::PI)
         }
         Symbol::ARC_COT => call(Symbol::ARC_TAN, inverse()),
+        _ => return Ok(None),
+    }))
+}
+
+/// `LogB[x, b]`, `LogB[x]`, `Log2[x]` and `Log10[x]`.
+pub(super) fn log_b(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let base = match e.head().and_then(Expr::as_symbol) {
+        Some(Symbol::LOG2) => Some(Expr::from(2)),
+        Some(Symbol::LOG10) => Some(Expr::from(10)),
+        _ => None,
+    };
+    let (x, b) = match (base, e.args()) {
+        (Some(b), [x]) => (x.clone(), b),
+        (None, [x]) => return Ok(Some(Expr::call(Symbol::LOG, [x.clone()]))),
+        (None, [x, b]) => (x.clone(), b.clone()),
+        _ => return Ok(None),
+    };
+    let (mut x, mut n) = (x, 0_u64);
+    if let (Some(mut m), Some(base)) = (x.to_integer(), b.to_integer())
+        && base > Integer::ONE
+        && !m.is_zero()
+    {
+        while m.is_divisible_by(&base) {
+            m = m.div_exact(&base);
+            n += 1;
+        }
+        x = Expr::from(m);
+    }
+    let log = |u: Expr| Expr::call(Symbol::LOG, [u]);
+    Ok(Some(log(x) / log(b) + Expr::from(Integer::from(n))))
+}
+
+/// `Exp10[x]`: `10^x`.
+pub(super) fn exp10(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    Ok(Some(Expr::from(10).pow(x.clone())))
+}
+
+/// `Radians[x]` and `Degrees[x]`.
+pub(super) fn angle(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    let ratio = Expr::from(Rational::new(Integer::ONE, Integer::from(180))) * Symbol::PI;
+    Ok(Some(match e.head().and_then(Expr::as_symbol) {
+        Some(Symbol::RADIANS) => x * ratio,
+        Some(Symbol::DEGREES) => x / ratio,
         _ => return Ok(None),
     }))
 }

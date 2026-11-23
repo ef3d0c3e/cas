@@ -1625,3 +1625,65 @@ fn poly_workload() {
     let result = Context::new().eval(&read(&text)).unwrap();
     eprintln!("{spec}: {} terms", result.args().len());
 }
+
+/// giac's `comDenom`, `getNum`, `getDenom` and `simp2` (CAS-563): each
+/// `(input, expected)` the same value.
+#[test]
+fn fraction_forms() {
+    let ctx = Context::new();
+    for (input, expected) in [
+        (
+            "CommonDenominator[Plus[1, Power[x, -1], Power[y, -2]]]",
+            "Times[Plus[x, Power[y, 2], Times[x, Power[y, 2]]], Power[x, -1], Power[y, -2]]",
+        ),
+        (
+            "CommonDenominator[Plus[1, Power[x, -1], Power[y, -2]], x]",
+            "Times[Plus[x, Power[y, 2], Times[x, Power[y, 2]]], Power[x, -1], Power[y, -2]]",
+        ),
+        (
+            "CommonDenominator[Plus[Power[Plus[x, 1], -1], Power[Plus[x, -1], -1]]]",
+            "Times[2, x, Power[Plus[-1, Power[x, 2]], -1]]",
+        ),
+        (
+            "RawNumerator[Times[Plus[Power[x, 3], -1], Power[Plus[Power[x, 2], -1], -1]]]",
+            "Plus[Power[x, 3], -1]",
+        ),
+        (
+            "RawDenominator[Times[Plus[Power[x, 3], -1], Power[Plus[Power[x, 2], -1], -1]]]",
+            "Plus[Power[x, 2], -1]",
+        ),
+        (
+            "RawNumerator[Plus[1, Times[Plus[Power[x, 3], -1], Power[x, -2]]]]",
+            "Plus[1, Times[Plus[Power[x, 3], -1], Power[x, -2]]]",
+        ),
+        (
+            "RawDenominator[Plus[1, Times[Plus[Power[x, 3], -1], Power[x, -2]]]]",
+            "1",
+        ),
+        ("RawNumerator[25/15]", "5"),
+        ("RawDenominator[25/15]", "3"),
+        ("RawNumerator[Times[2/3, x, Power[y, -1]]]", "Times[2, x]"),
+        ("RawDenominator[Times[2/3, x, Power[y, -1]]]", "Times[3, y]"),
+        ("RawNumerator[Times[-1, x, Power[y, -1]]]", "Times[-1, x]"),
+        ("RawNumerator[List[Power[x, -1], 2/3]]", "List[1, 2]"),
+        // A power that is not to a negative integer stays above the bar.
+        (
+            "RawNumerator[Times[y, Power[x, -1/2]]]",
+            "Times[y, Power[x, -1/2]]",
+        ),
+        ("RawDenominator[Times[y, Power[x, -1/2]]]", "1"),
+        ("CancelPair[12, 18]", "List[2, 3]"),
+        ("CancelPair[4, 6]", "List[2, 3]"),
+        ("CancelPair[2/3, 4/9]", "List[3, 2]"),
+        (
+            "CancelPair[Plus[Power[x, 3], -1], Plus[Power[x, 2], -1]]",
+            "List[Plus[1, x, Power[x, 2]], Plus[1, x]]",
+        ),
+    ] {
+        assert_eq!(
+            ctx.eval(&read(input)).unwrap(),
+            ctx.eval(&read(expected)).unwrap(),
+            "{input}"
+        );
+    }
+}

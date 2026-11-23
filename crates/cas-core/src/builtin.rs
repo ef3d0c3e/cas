@@ -243,6 +243,21 @@ builtins! {
     HEAPIFY = "Heapify" [PROTECTED];
     HEAP_PUSH = "HeapPush" [PROTECTED];
     HEAP_POP = "HeapPop" [PROTECTED];
+    // Xcas's expression commands (CAS-562 to CAS-567).
+    POWER_EXPAND = "PowerExpand" [PROTECTED];
+    COMMON_DENOMINATOR = "CommonDenominator" [PROTECTED];
+    RAW_NUMERATOR = "RawNumerator" [LISTABLE, PROTECTED];
+    RAW_DENOMINATOR = "RawDenominator" [LISTABLE, PROTECTED];
+    CANCEL_PAIR = "CancelPair" [PROTECTED];
+    REGROUP = "Regroup" [PROTECTED];
+    SUM_OF_SQUARES = "SumOfSquares" [PROTECTED];
+    LOG_B = "LogB" [LISTABLE, PROTECTED];
+    LOG2 = "Log2" [LISTABLE, PROTECTED];
+    LOG10 = "Log10" [LISTABLE, PROTECTED];
+    EXP10 = "Exp10" [LISTABLE, PROTECTED];
+    RADIANS = "Radians" [LISTABLE, PROTECTED];
+    DEGREES = "Degrees" [LISTABLE, PROTECTED];
+    NORMALIZE = "Normalize" [PROTECTED];
     // Polynomial tools (CAS-DOC-29).
     APART = "Apart" [PROTECTED];
     COMPLEX_APART = "ComplexApart" [PROTECTED];

@@ -27,6 +27,13 @@
 //!   of the denominators of the `r`s, the sign out when every `r` is
 //!   negative. A group of one term changes only when its numerator is not
 //!   ±1: `2*ln(x)` is `ln(x^2)`, `-ln(x)` stays.
+//! - `PowerExpand` (`powexpand`, CAS-562), giac's `powtopowexpand`:
+//!   `b^(Σ t) = Π b^t` and `b^(k r) = (b^r)^k` for an integer `k` and `r`
+//!   the rest of the product, recursively, so `2^(-x-y)` is
+//!   `(2^x)^-1*(2^y)^-1` and `x^(2*y+1)` is `(x^y)^2*x^1`. Every other
+//!   exponent stays, and so do `E^u` and `Exp[u]`, as giac's
+//!   `powexpand(exp(x+y))`. Evaluation would merge the powers again, so
+//!   the native holds its answer (`rewrite::power_expand`).
 
 use cas_num::{Complex, Integer, Rational};
 
@@ -340,6 +347,33 @@ pub(super) fn log_combine(_: &mut Eval<'_>, part: &Expr) -> Found {
         Some(Symbol::TIMES) => combined(std::slice::from_ref(part)),
         _ => None,
     })
+}
+
+/// `b^u` by `PowerExpand`'s rule, built: a sum in the exponent the
+/// product of the powers of its terms, a product `k r` with an integer `k`
+/// the power `(b^r)^k`, any other exponent `b^u` itself.
+fn power_expanded(b: &Expr, u: &Expr) -> Expr {
+    match (head(u), u.args()) {
+        (Some(Symbol::PLUS), ts) => product(ts.iter().map(|t| power_expanded(b, t)).collect()),
+        (Some(Symbol::TIMES), [k, rest @ ..])
+            if !rest.is_empty() && matches!(k.view(), View::Int(_) | View::Integer(_)) =>
+        {
+            power_expanded(b, &product(rest.to_vec())).pow(k.clone())
+        }
+        _ => b.pow(u.clone()),
+    }
+}
+
+/// `PowerExpand`'s rule: powers but those of `E`.
+pub(super) fn power_expand(_: &mut Eval<'_>, part: &Expr) -> Found {
+    let (Some(Symbol::POWER), [b, u]) = (head(part), part.args()) else {
+        return Ok(None);
+    };
+    if b.as_symbol() == Some(Symbol::E) {
+        return Ok(None);
+    }
+    let result = power_expanded(b, u);
+    Ok((result != *part).then_some(result))
 }
 
 #[cfg(test)]

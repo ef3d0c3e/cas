@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 523] = [
+const BUILTINS: [&str; 537] = [
     "Plus",
     "Times",
     "Power",
@@ -343,6 +343,20 @@ const BUILTINS: [&str; 523] = [
     "Heapify",
     "HeapPush",
     "HeapPop",
+    "PowerExpand",
+    "CommonDenominator",
+    "RawNumerator",
+    "RawDenominator",
+    "CancelPair",
+    "Regroup",
+    "SumOfSquares",
+    "LogB",
+    "Log2",
+    "Log10",
+    "Exp10",
+    "Radians",
+    "Degrees",
+    "Normalize",
     "Apart",
     "ComplexApart",
     "ProperFraction",

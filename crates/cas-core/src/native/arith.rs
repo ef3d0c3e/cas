@@ -1,5 +1,8 @@
 //! `Plus`, `Times`, `Power`, `Sqrt` and `DirectedInfinity` (CAS-DOC-4 §6.1),
-//! and `Surd`, Xcas's `surd`, the real `n`-th root (CAS-537).
+//! and `Surd`, Xcas's `surd`, the real `n`-th root (CAS-537), and
+//! `SumOfSquares`, Xcas's `sq` (CAS-567): `a^2` of one argument that is
+//! not a list, the sum of the squares of several or of a list's entries,
+//! `sq(1,2,3) = sq([1,2,3]) = 14`.
 //!
 //! Each receives an application the evaluator has normalised: `Plus` and
 //! `Times` are flat and sorted, so like terms and equal bases are adjacent
@@ -948,6 +951,17 @@ pub(super) fn surd(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// `DirectedInfinity[d]` with its direction of modulus 1: `Infinity` for
 /// the direction 1, `ComplexInfinity` for none or 0. A complex direction
 /// whose modulus is not rational stays as it is.
+/// `SumOfSquares[a]`, `SumOfSquares[a, b, …]`, `SumOfSquares[{a, b, …}]`.
+pub(super) fn sum_of_squares(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let squares = |xs: &[Expr]| Expr::call(Symbol::PLUS, xs.iter().map(|x| x.pow(2)));
+    Ok(Some(match e.args() {
+        [] => return Ok(None),
+        [v] if has_head(v, Symbol::LIST) => squares(v.args()),
+        [x] => x.pow(2),
+        xs => squares(xs),
+    }))
+}
+
 pub(super) fn directed_infinity(_: &mut Eval<'_>, e: &Expr) -> Native {
     match e.args() {
         [] => Ok(Some(Symbol::COMPLEX_INFINITY.into())),

@@ -806,7 +806,7 @@ fn locales() {
 
 #[test]
 fn errors() {
-    let [x, y] = ["x", "y"].map(sym);
+    let x = sym("x");
     let blank = app(Symbol::BLANK, []);
     let cases = [
         // Internal builtins have no name.
@@ -831,11 +831,6 @@ fn errors() {
         // Operators with another number of arguments, patterns, statements.
         (times([x.clone()]), times([x.clone()]), K::NoSyntax),
         (plus([]), plus([]), K::NoSyntax),
-        (
-            app(Symbol::POWER, [x.clone(), y.clone(), int(2)]),
-            app(Symbol::POWER, [x.clone(), y.clone(), int(2)]),
-            K::NoSyntax,
-        ),
         (
             app(Symbol::PATTERN, [x.clone(), blank.clone()]),
             app(Symbol::PATTERN, [x.clone(), blank.clone()]),

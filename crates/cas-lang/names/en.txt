@@ -189,6 +189,22 @@ SubstituteOperands: subsop
 Heapify: heapify
 HeapPush: heappush
 HeapPop: heappop
+# Xcas's expression commands (CAS-562 to CAS-567).
+Power: pow
+PowerExpand: powexpand
+CommonDenominator: comDenom
+RawNumerator: getNum
+RawDenominator: getDenom
+CancelPair: simp2
+Regroup: regroup
+SumOfSquares: sq
+LogB: logb
+Log2: log2
+Log10: log10
+Exp10: alog10
+Radians: radians
+Degrees: degrees
+Normalize: normalize unitV
 # Polynomial tools (CAS-DOC-29, CAS-339 to CAS-341).
 Apart: partfrac
 ComplexApart: cpartfrac
@@ -688,7 +704,7 @@ symbol: symbol
 
 [internal]
 # Operators and brackets.
-Plus Times Power List
+Plus Times List
 # The imaginary unit's symbol, which the language skips: its `i` lowers to the
 # complex number itself. The head of complex numbers in full form.
 I Complex

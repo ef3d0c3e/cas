@@ -42,3 +42,23 @@ fn constructors_and_norms() {
         assert_eq!(ctx.eval(&e).unwrap().head(), e.head(), "{input}");
     }
 }
+
+/// `Normalize` (CAS-564), giac's `normalize` and `unitV`: a vector over its
+/// norm, anything else over its modulus.
+#[test]
+fn normalized() {
+    let ctx = Context::new();
+    for (input, expected) in [
+        ("Normalize[List[3, 4]]", "List[3/5, 4/5]"),
+        ("Normalize[Complex[3, 4]]", "Complex[3/5, 4/5]"),
+        ("Normalize[x]", "Times[x, Power[Abs[x], -1]]"),
+    ] {
+        assert_eq!(
+            ctx.eval(&read(input)).unwrap(),
+            ctx.eval(&read(expected)).unwrap(),
+            "{input}"
+        );
+    }
+    let e = read("Normalize[List[0, 0]]");
+    assert_eq!(ctx.eval(&e).unwrap().head(), e.head());
+}

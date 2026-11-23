@@ -21,6 +21,11 @@
 //!   arguments keeps them as they are.
 //!
 //! One step a call, `"simplify"`.
+//!
+//! `Regroup[e]`, Xcas's `regroup` (CAS-566), is `e` as evaluation leaves
+//! it, which has collected its like terms and powers: giac's
+//! `regroup(x+3*x+5*4/x)` is `4*x+20/x`, and `regroup((x^2-1)/(x-1))` and
+//! `regroup(sin(x)^2+cos(x)^2)` stay as given. Not `Simplify`.
 
 use std::collections::HashMap;
 
@@ -66,6 +71,14 @@ pub(super) fn simplify(ev: &mut Eval<'_>, e: &Expr) -> Native {
 }
 
 /// `Simplify[e]` evaluated, a level of its own.
+/// `Regroup[e]`: `e`.
+pub(super) fn regroup(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    Ok(Some(x.clone()))
+}
+
 fn nested(ev: &mut Eval<'_>, e: &Expr) -> Result<Expr, EvalError> {
     if e.head().is_none() {
         return Ok(e.clone());

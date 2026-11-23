@@ -305,3 +305,22 @@ fn shared_subexpressions() {
     let _ = ctx.eval(&Expr::call(crate::symbol::Symbol::SIMPLIFY, [e]));
     assert!(start.elapsed().as_secs() < 20, "{:?}", start.elapsed());
 }
+
+/// `Regroup` (CAS-566): its argument as evaluated, never simplified.
+#[test]
+fn regroup() {
+    check(&[
+        (
+            "Regroup[Plus[x, Times[3, x], Times[5, 4, Power[x, -1]]]]",
+            "Plus[Times[4, x], Times[20, Power[x, -1]]]",
+        ),
+        (
+            "Regroup[Times[Plus[Power[x, 2], -1], Power[Plus[x, -1], -1]]]",
+            "Times[Plus[Power[x, 2], -1], Power[Plus[x, -1], -1]]",
+        ),
+        (
+            "Regroup[Plus[Power[Sin[x], 2], Power[Cos[x], 2]]]",
+            "Plus[Power[Sin[x], 2], Power[Cos[x], 2]]",
+        ),
+    ]);
+}

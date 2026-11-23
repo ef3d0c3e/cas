@@ -20,6 +20,20 @@
 //!   with a warning (§15 detail 3). The interrupt stops the long loops.
 //! - Each call takes one step, for the trace: `Expand` and `Together` claim
 //!   identities, which `Trace::verify` checks; the others are formal.
+//!
+//! And Xcas's forms of fractions (CAS-563), over evaluation:
+//!
+//! - `CommonDenominator[e]` (`comDenom`): `Together`, its numerator and
+//!   denominator expanded; a variable after `e` is accepted, as giac only
+//!   orders by it.
+//! - `RawNumerator[e]` and `RawDenominator[e]` (`getNum`, `getDenom`),
+//!   giac's `prod2frac`, not normalising: the factors of a product, a power
+//!   to a negative integer exponent `b^(-n)` as `b^n` under the bar, a
+//!   rational number split; anything else above it, so `getNum(1 +
+//!   (x^3-1)/x^2)` is the sum and `x^(-1/2)` stays above. Listable.
+//! - `CancelPair[a, b]` (`simp2`): `d = GCD[a, b]`, then `{Together[a/d],
+//!   Together[b/d]}`, so `simp2(2/3, 4/9)` is `[3, 2]`; the call stays when
+//!   the gcd does or is 0.
 
 use std::borrow::Cow;
 
@@ -891,6 +905,92 @@ pub(super) fn numerator(ev: &mut Eval<'_>, e: &Expr) -> Native {
 
 pub(super) fn denominator(ev: &mut Eval<'_>, e: &Expr) -> Native {
     numerator_or_denominator(ev, e, false)
+}
+
+/// `CommonDenominator[e]`, `CommonDenominator[e, v]`.
+pub(super) fn common_denominator(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let ([x] | [x, _]) = e.args() else {
+        return Ok(None);
+    };
+    let mut parts = Vec::with_capacity(2);
+    for part in [Symbol::NUMERATOR, Symbol::DENOMINATOR] {
+        let p = ev.eval(&Expr::call(part, [x.clone()]))?;
+        if p.head().and_then(Expr::as_symbol) == Some(part) {
+            return Ok(None);
+        }
+        parts.push(ev.eval(&Expr::call(Symbol::EXPAND, [p]))?);
+    }
+    let [n, d] = <[Expr; 2]>::try_from(parts).expect("two parts");
+    Ok(Some(n / d))
+}
+
+/// The factors of `e` above and below the fraction bar, as giac's
+/// `prod2frac` reads them.
+fn raw_fraction(e: &Expr) -> (Vec<Expr>, Vec<Expr>) {
+    let factors = match e.head().and_then(Expr::as_symbol) {
+        Some(Symbol::TIMES) => e.args(),
+        _ => std::slice::from_ref(e),
+    };
+    let (mut num, mut den) = (Vec::new(), Vec::new());
+    for f in factors {
+        if let View::Rational(q) = f.view() {
+            num.push(Expr::from(q.numer()));
+            den.push(Expr::from(q.denom()));
+            continue;
+        }
+        match (f.head().and_then(Expr::as_symbol), f.args()) {
+            (Some(Symbol::POWER), [b, n]) if n.to_integer().is_some_and(|n| n.is_negative()) => {
+                den.push(b.pow(-n));
+            }
+            _ => num.push(f.clone()),
+        }
+    }
+    (num, den)
+}
+
+/// The product of `factors` built, 1 for none.
+fn product_of(factors: Vec<Expr>) -> Expr {
+    if factors.is_empty() {
+        Expr::from(1)
+    } else {
+        Expr::call(Symbol::TIMES, factors)
+    }
+}
+
+/// `RawNumerator[e]`.
+pub(super) fn raw_numerator(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    Ok(Some(product_of(raw_fraction(x).0)))
+}
+
+/// `RawDenominator[e]`.
+pub(super) fn raw_denominator(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [x] = e.args() else {
+        return Ok(None);
+    };
+    Ok(Some(product_of(raw_fraction(x).1)))
+}
+
+/// `CancelPair[a, b]`.
+pub(super) fn cancel_pair(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [a, b] = e.args() else {
+        return Ok(None);
+    };
+    let list = Expr::from(Symbol::LIST);
+    if a.head() == Some(&list) || b.head() == Some(&list) {
+        return Ok(None);
+    }
+    let d = ev.eval(&Expr::call(Symbol::GCD, [a.clone(), b.clone()]))?;
+    if d.head().and_then(Expr::as_symbol) == Some(Symbol::GCD) || d == Expr::from(0) {
+        return Ok(None);
+    }
+    let mut pair = Vec::with_capacity(2);
+    for x in [a, b] {
+        pair.push(ev.eval(&Expr::call(Symbol::TOGETHER, [x / &d]))?);
+    }
+    Ok(Some(Expr::call(Symbol::LIST, pair)))
 }
 
 /// `Content[p, x]` and `PrimitivePart[p, x]`, Xcas's `content` and

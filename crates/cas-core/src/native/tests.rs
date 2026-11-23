@@ -932,3 +932,39 @@ fn integer_division_and_parity() {
         ("EvenQ[List[1, 2]]", "List[False, True]"),
     ]);
 }
+
+/// Xcas's `sq` (CAS-567), `logb`, `log2`, `log10` and `alog10` (CAS-565),
+/// `radians` and `degrees` (CAS-564), exact: each `(input, expected)` the
+/// same value.
+#[test]
+fn squares_logarithms_and_angles() {
+    let ctx = Context::new();
+    for (input, expected) in [
+        ("SumOfSquares[x]", "Power[x, 2]"),
+        ("SumOfSquares[5]", "25"),
+        ("SumOfSquares[1, 2, 3]", "14"),
+        ("SumOfSquares[List[1, 2, 3]]", "14"),
+        ("SumOfSquares[x, y]", "Plus[Power[x, 2], Power[y, 2]]"),
+        ("LogB[x, b]", "Times[Log[x], Power[Log[b], -1]]"),
+        ("LogB[x]", "Log[x]"),
+        ("LogB[24, 2]", "Plus[3, Times[Log[3], Power[Log[2], -1]]]"),
+        ("LogB[5, 2]", "Times[Log[5], Power[Log[2], -1]]"),
+        ("Log2[8]", "3"),
+        ("Log2[x]", "Times[Log[x], Power[Log[2], -1]]"),
+        ("Log10[10]", "1"),
+        ("Log10[2000]", "Plus[3, Times[Log[2], Power[Log[10], -1]]]"),
+        ("Log10[List[10, 100]]", "List[1, 2]"),
+        ("Exp10[3]", "1000"),
+        ("Exp10[x]", "Power[10, x]"),
+        ("Radians[180]", "Pi"),
+        ("Radians[x]", "Times[1/180, Pi, x]"),
+        ("Degrees[Pi]", "180"),
+        ("Degrees[1]", "Times[180, Power[Pi, -1]]"),
+    ] {
+        assert_eq!(
+            ctx.eval(&read(input)).unwrap(),
+            ctx.eval(&read(expected)).unwrap(),
+            "{input}"
+        );
+    }
+}
