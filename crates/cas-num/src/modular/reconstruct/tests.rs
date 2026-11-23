@@ -4,9 +4,9 @@
 use proptest::prelude::*;
 use rug::Integer;
 
-use super::{rational_reconstruction, rational_reconstruction_with_bounds};
+use super::{fracmod, rational_reconstruction, rational_reconstruction_with_bounds};
 use crate::testkit::{Mag, ToRug, strategy};
-use crate::{Natural, Rational};
+use crate::{Integer as Int, Natural, Rational};
 
 /// Every `n/d` with `n ≡ a d (mod m)`, `|n| <= nb`, `0 < d <= db` and
 /// `gcd(d, m) = 1`, by trying each `d`.
@@ -140,4 +140,49 @@ fn large_bounds_panic() {
     let five = Natural::from(5u64);
     let _ =
         rational_reconstruction_with_bounds(&Natural::one(), &Natural::from(50u64), &five, &five);
+}
+
+/// giac's answers (`fracmod`, phase 1.3 probes): `a` not reduced, signs
+/// kept, no denominator bound.
+#[test]
+fn fracmod_matches_giac() {
+    let q = |n: i64, d: i64| Some(Rational::new(Int::from(n), Int::from(d)));
+    let cases: [(i64, u64, Option<Rational>); 10] = [
+        (13, 121, q(-4, 9)),
+        (41, 121, q(2, 3)),
+        (3, 7, q(-1, 2)),
+        (10, 7, q(-1, 2)),
+        (-3, 7, q(1, 2)),
+        (0, 7, q(0, 1)),
+        (5, 1, q(0, 1)),
+        (2, 4, None),
+        (5, 8, None),
+        (1, 0, None),
+    ];
+    for (a, m, expected) in cases {
+        assert_eq!(
+            fracmod(&Int::from(a), &Natural::from(m)),
+            expected,
+            "fracmod({a}, {m})"
+        );
+    }
+    let m = Natural::from(10u64).pow(20) + Natural::from(39u64);
+    assert_eq!(fracmod(&Int::from(123_456_789), &m), q(123_456_789, 1));
+}
+
+/// Every answer `r/t` has `r ≡ t a (mod m)`, `|r| <= ⌊√⌊m/2⌋⌋` and `t`
+/// prime to `m`.
+#[test]
+fn fracmod_congruence() {
+    for m in 1..=150i64 {
+        let bound = (m / 2).isqrt();
+        for a in -m..2 * m {
+            let Some(f) = fracmod(&Int::from(a), &Natural::from(m.unsigned_abs())) else {
+                continue;
+            };
+            let (r, t) = (f.numer().to_i64().unwrap(), f.denom().to_i64().unwrap());
+            assert!(r.abs() <= bound, "fracmod({a}, {m}) = {r}/{t}");
+            assert_eq!((r - t * a).rem_euclid(m), 0, "fracmod({a}, {m}) = {r}/{t}");
+        }
+    }
 }

@@ -56,6 +56,7 @@
 
 pub(super) mod diophantine;
 pub(super) mod fractions;
+pub(super) mod integers;
 pub(super) mod residues;
 
 use cas_num::ball::bernoulli;

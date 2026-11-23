@@ -375,6 +375,12 @@ builtins! {
     BERNOULLI_B = "BernoulliB" [LISTABLE, PROTECTED];
     PRIME = "Prime" [LISTABLE, PROTECTED];
     PRIME_PI = "PrimePi" [LISTABLE, PROTECTED];
+    // Xcas's integer functions (CAS-DOC-55, CAS-548 to CAS-553).
+    CHINESE_REMAINDER_LISTS = "ChineseRemainderLists" [PROTECTED];
+    LIST_GCD = "ListGCD" [PROTECTED];
+    FRACTION_MOD = "FractionMod" [PROTECTED];
+    INTEGER_COMPOSITIONS = "IntegerCompositions" [PROTECTED];
+    BERNOULLI_MOD = "BernoulliMod" [PROTECTED];
     // Permutations (CAS-DOC-45 §2): giac's lists of 0, …, n − 1.
     PERMUTATION_Q = "PermutationQ" [PROTECTED];
     PERMUTATION_CYCLES = "PermutationCycles" [PROTECTED];

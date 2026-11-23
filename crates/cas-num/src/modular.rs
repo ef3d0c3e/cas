@@ -14,7 +14,8 @@
 //!   and division for even ones.
 //! - [`crt`] combines two congruences; [`CrtBasis`] reconstructs a value from
 //!   its residues modulo many coprime word-size moduli.
-//! - [`rational_reconstruction`] recovers a fraction `n/d` from `n d^(-1) mod m`.
+//! - [`rational_reconstruction`] recovers a fraction `n/d` from `n d^(-1) mod m`;
+//!   [`fracmod`] is Xcas's variant, without a denominator bound.
 
 mod crt;
 mod double;
@@ -28,7 +29,7 @@ pub(crate) use double::{ModDouble, pow_mod_even};
 #[cfg(test)]
 pub(crate) use fixed::FIXED_MAX;
 pub(crate) use fixed::{Fixed, ModFixed};
-pub use reconstruct::{rational_reconstruction, rational_reconstruction_with_bounds};
+pub use reconstruct::{fracmod, rational_reconstruction, rational_reconstruction_with_bounds};
 pub(crate) use ring::RingWork;
 pub use ring::{ModRing, Residue};
 pub use word::ModWord;

@@ -258,6 +258,12 @@ LegendreSymbol: legendre_symbol
 BernoulliB: bernoulli
 Prime: ithprime
 PrimePi: nprimes
+# Xcas's integer functions (CAS-DOC-55, CAS-548 to CAS-553).
+ChineseRemainderLists: chrem
+ListGCD: lgcd
+FractionMod: fracmod iratrecon
+IntegerCompositions: icomp
+BernoulliMod: bernoulli_mod
 # Permutations (CAS-DOC-45 §2, CAS-463).
 PermutationQ: is_permu
 PermutationCycles: permu2cycles

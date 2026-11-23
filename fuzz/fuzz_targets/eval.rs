@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 492] = [
+const BUILTINS: [&str; 497] = [
     "Plus",
     "Times",
     "Power",
@@ -365,6 +365,11 @@ const BUILTINS: [&str; 492] = [
     "BernoulliB",
     "Prime",
     "PrimePi",
+    "ChineseRemainderLists",
+    "ListGCD",
+    "FractionMod",
+    "IntegerCompositions",
+    "BernoulliMod",
     // Linear algebra (CAS-218 to CAS-222).
     "Transpose",
     "IdentityMatrix",

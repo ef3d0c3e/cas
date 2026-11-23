@@ -522,6 +522,20 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::BERNOULLI_B, number_theory::bernoulli_b),
         (Symbol::PRIME, number_theory::prime),
         (Symbol::PRIME_PI, number_theory::prime_pi_native),
+        (
+            Symbol::CHINESE_REMAINDER_LISTS,
+            number_theory::integers::chinese_remainder_lists,
+        ),
+        (Symbol::LIST_GCD, number_theory::integers::list_gcd),
+        (Symbol::FRACTION_MOD, number_theory::integers::fraction_mod),
+        (
+            Symbol::INTEGER_COMPOSITIONS,
+            number_theory::integers::integer_compositions,
+        ),
+        (
+            Symbol::BERNOULLI_MOD,
+            number_theory::integers::bernoulli_mod_native,
+        ),
         (Symbol::PERMUTATION_Q, permutations::permutation_q),
         (Symbol::PERMUTATION_CYCLES, permutations::permutation_cycles),
         (Symbol::CYCLES_PERMUTATION, permutations::cycles_permutation),
