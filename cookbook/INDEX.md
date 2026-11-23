@@ -36,3 +36,5 @@ C0033 | Reading giac calculus answers back: diff(f,x,2), $K_n constants, sequenc
 C0034 | giac tabvar/tabsign: step_func_ reductions, columns and dedupe | giac,tabvar,tabsign,variation,port,source | 2026-11-23 | 1.3/T7 | CAS-582 T7.c2 prototype
 C0035 | giac convex: symbolic Bunch-Kaufman ldl; giac's ldl command as oracle | giac,convex,ldl,bunch-kaufman,hessian,port,oracle | 2026-11-23 | 1.3/T7 | CAS-583 T7.c1
 C0036 | Oracle cell compares: giac <>, Exp vs E^u, Solve on quotients, primitive conditions | giac,oracle,compare,unequal,exp,solve,format | 2026-11-23 | 1.3/T7 | CAS-581..583 T7.c3
+C0037 | giac port traps: coeff highest-first, quoted '/' in lists, return false prints 0 | giac,port,coeff,quote,kovacic,prototype | 2026-11-23 | 1.3/T8 | CAS-584 T8.c1
+C0038 | Kovacic port: list-form oracle rows, algebraic poles, systems by monomials | giac,oracle,dsolve,kovacic,quote,together,limits | 2026-11-23 | 1.3/T8 | CAS-584 T8.c2
