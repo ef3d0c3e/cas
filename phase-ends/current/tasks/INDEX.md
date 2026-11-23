@@ -7,3 +7,4 @@ T4 | done | sampling, interpolation and numerical derivatives | - | tasks/T4.md 
 T5 | done | B-splines and least-squares fits: bspline, fitspline, fitpoly | - | tasks/T5.md | logs/T5.md | R1.4-003,R1.4-002
 T6 | done | transportation problems: tpsolve | - | tasks/T6.md | logs/T6.md | R1.4-003
 T7 | done | minimax approximation by Remez's algorithm: minimax | - | tasks/T7.md | logs/T7.md | R1.4-003,R1.4-001,R1.4-002,R1.4-005
+T8 | done | push master for the phase's final CI and Fuzz runs | - | tasks/T8.md | logs/T8.md | -
