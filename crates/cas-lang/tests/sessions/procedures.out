@@ -23,14 +23,14 @@
 = 21
 > euclid(2^40 - 1, 2^30 - 1)
 = 1023
-> newton(steps) := begin
+> heron(steps) := begin
 .   x := 1
 .   for k in 1..steps do
 .     x := x - (x^2 - 2)/(2x)
 .   end
 .   x
 . end
-> newton(4)
+> heron(4)
 = 665857/470832
 > fib(0) := 0
 > fib(1) := 1

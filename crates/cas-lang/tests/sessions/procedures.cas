@@ -22,14 +22,14 @@ end
 euclid(1071, 462)
 euclid(2^40 - 1, 2^30 - 1)
 // Newton's method for the square root of 2, exactly.
-newton(steps) := begin
+heron(steps) := begin
   x := 1
   for k in 1..steps do
     x := x - (x^2 - 2)/(2x)
   end
   x
 end
-newton(4)
+heron(4)
 // Recursion through rules, a procedure in between.
 fib(0) := 0
 fib(1) := 1
