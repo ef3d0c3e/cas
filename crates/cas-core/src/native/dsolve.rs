@@ -332,6 +332,7 @@ mod bessel;
 mod conditions;
 mod euler;
 mod first;
+mod kovacic;
 mod linear;
 mod particular;
 mod reduced;
@@ -341,4 +342,5 @@ mod variational;
 #[cfg(test)]
 mod tests;
 
+pub(super) use kovacic::kovacicsols;
 pub(super) use variational::{conjugate_equation, euler_lagrange, jacobi_equation};

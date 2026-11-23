@@ -341,6 +341,16 @@ periodic `f` other than one of `tan(c x)` alone, and variables `u(t)`.
 (`y'=(…)` is `"y'" = …`, `(y')'` the string `"(y')'"`) and giac's parametric
 `tabvar([f, g], t)`, which stays.
 
+`tests/kovacic.rs`, Xcas's `kovacicsols` (CAS-584): giac's examples and
+equations with no Liouvillian solution read back, cases 1 and 2, `[]` and
+giac's `0`, the equations given as `[a,b,c]` written without `/` (giac quotes
+its arguments: `y''` does not read here, `diff(y(x),x,x)` does not there);
+case 2's radicals by each solution's ratio to giac's, the same at two points;
+and the departures, each with giac's answer: case 3 with a `y'` term (giac's
+reversed polynomial), poles `±√2` (giac's `[]`), a cubic pole (ours stays),
+a `/` in the list (giac's `0`), equations in `diff(y(x),x,x)` (giac's error)
+and the errors, which stay here.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

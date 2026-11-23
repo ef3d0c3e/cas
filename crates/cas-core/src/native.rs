@@ -264,6 +264,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::SERIES, series::series),
         (Symbol::LIMIT, limit::limit),
         (Symbol::DSOLVE, dsolve::dsolve),
+        (Symbol::KOVACICSOLS, dsolve::kovacicsols),
         (Symbol::LAPLACE_TRANSFORM, laplace::laplace_transform),
         (
             Symbol::FOURIER_TRANSFORM,

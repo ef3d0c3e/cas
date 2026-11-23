@@ -114,6 +114,8 @@ Limit: limit
 OrderSize: order_size
 # Differential equations (CAS-DOC-16, CAS-259).
 DSolve: desolve
+# Liouvillian solutions by Kovacic's algorithm (CAS-584), Xcas's.
+KovacicSols: kovacicsols
 # Laplace transforms (CAS-DOC-18, CAS-274, CAS-275).
 LaplaceTransform: laplace
 InverseLaplaceTransform: ilaplace

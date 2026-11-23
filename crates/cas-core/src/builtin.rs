@@ -136,6 +136,8 @@ builtins! {
     ORDER_SIZE = "OrderSize" [PROTECTED];
     // Differential equations (CAS-DOC-16).
     DSOLVE = "DSolve" [PROTECTED];
+    // Liouvillian solutions by Kovacic's algorithm (CAS-584), Xcas's.
+    KOVACICSOLS = "KovacicSols" [PROTECTED];
     // Numerical solutions of initial value problems (CAS-DOC-35).
     NDSOLVE = "NDSolve" [PROTECTED];
     BVP_SOLVE = "BVPSolve" [PROTECTED];
