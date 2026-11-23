@@ -29,3 +29,7 @@ C0026 | giac forms the evaluator re-merges: return Hold, oracle by value after r
 C0027 | giac epsilon is 1e-12 by default; its boundary drifts in the shared oracle | giac,oracle,epsilon,float,epsilon2zero | 2026-11-23 | 1.3/T5 | T5.c1 CAS-569
 C0028 | Fuzz-fed natives: compare decimals by to_f64 and total_cmp, never Float::to_rational | fuzz,float,panic,clippy,native | 2026-11-23 | 1.3/T5 | T5.c1 CAS-569
 C0029 | Expression shapes natives meet: Range in x=a..b, Dirac derivatives, Abs of products, Times[-1,Plus] | native,cas-core,lowering,dirac,abs,range | 2026-11-23 | 1.3/T5 | T5.c2 CAS-570/572/573
+C0030 | giac function answers: compare them applied, not printed (hidden ` x` param) | giac,oracle,function,lambda,clippy | 2026-11-23 | 1.3/T6 | T6.c1 CAS-577
+C0031 | Gosper with symbolic parameters: per-factor resultants, B-A degree; WZ certificate via multiplier | gosper,sum,resultant,wz,performance | 2026-11-23 | 1.3/T6 | T6.c2 CAS-580
+C0032 | Oracle rows on factored/signed rational answers: compare normal(ours - giac) | giac,oracle,equal,rational | 2026-11-23 | 1.3/T6 | T6.c2
+C0033 | Reading giac calculus answers back: diff(f,x,2), $K_n constants, sequences, Together on radicals | giac,oracle,diff,symbols,together | 2026-11-23 | 1.3/T6 | T6.c3 CAS-575
