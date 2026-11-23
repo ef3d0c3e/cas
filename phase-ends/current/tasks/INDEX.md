@@ -8,3 +8,4 @@ T5 | done | expressions: variable lists, operands, evaluation, predicates, equat
 T6 | done | calculus tools: ibpdv, ibpu, preval, function_diff, revert, sum_riemann, wz_certificate, euler_lagrange, jacobi_equation, conjugate_equation | - | tasks/T6.md | logs/T6.md | R1.3-001,R1.3-007
 T7 | done | function study: domain, sign and variation tables, convexity | - | tasks/T7.md | logs/T7.md | R1.3-001,R1.3-005,R1.3-007
 T8 | done | Kovacic's algorithm: kovacicsols | - | tasks/T8.md | logs/T8.md | R1.3-001,R1.3-007
+T9 | done | Risch integration of exp and ln towers: risch; Int as a departure | - | tasks/T9.md | logs/T9.md | R1.3-008,R1.3-005,R1.2-001,R1.3-007
