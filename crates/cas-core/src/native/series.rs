@@ -896,8 +896,10 @@ fn expansion_to(
 
 mod bessel;
 mod builtin;
+mod revert;
 mod special;
 #[cfg(test)]
 mod tests;
 
 pub(crate) use builtin::{Point, fresh, series};
+pub(crate) use revert::revert;

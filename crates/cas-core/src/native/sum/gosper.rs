@@ -10,7 +10,8 @@
 //!   is no hypergeometric term here.
 //! - `r = (a(k)/b(k)) (c(k + 1)/c(k))` with `gcd(a(k), b(k + h)) = 1` for
 //!   every integer `h ≥ 0`: the shifts `h` are the nonnegative integer
-//!   roots of `res_k(a(k), b(k + h))`, from its linear factors, and for
+//!   roots of `res_k(a(k), b(k + h))`, from its linear factors, taken
+//!   over the pairs of factors of `a` and `b` (CAS-580), and for
 //!   each `g = gcd(a(k), b(k + h))` leaves `a` and `g(k − h)` leaves `b`
 //!   for `c (g(k − 1) ⋯ g(k − h))`.
 //! - A polynomial `x(k)` with `a(k) x(k + 1) − b(k − 1) x(k) = c(k)`, of
@@ -139,6 +140,25 @@ pub(super) fn antidifference(
     t: &Expr,
     k: &Expr,
 ) -> Result<Option<Expr>, EvalError> {
+    let Some(fraction) = multiplier(ev, e, t, k)? else {
+        return Ok(None);
+    };
+    // Together, c against the factors of t: k 2^k has T = (k − 2)/k · k 2^k,
+    // which at k = 0 would be 0/0.
+    Ok(Some(ev.eval(&Expr::call(
+        Symbol::TOGETHER,
+        [fraction * t.clone()],
+    ))?))
+}
+
+/// The rational function `y(k) = b(k − 1) x(k)/c(k)` of [`antidifference`],
+/// `T = y t`, built; `None` when Gosper's algorithm finds none.
+pub(super) fn multiplier(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    t: &Expr,
+    k: &Expr,
+) -> Result<Option<Expr>, EvalError> {
     let Some(r) = ratio(ev, t, k)? else {
         return Ok(None);
     };
@@ -177,13 +197,7 @@ pub(super) fn antidifference(
     let Some(x) = solved(ev, e, &p, &[&a, &b1, &c], k, d)? else {
         return Ok(None);
     };
-    // Together, c against the factors of t: k 2^k has T = (k − 2)/k · k 2^k,
-    // which at k = 0 would be 0/0.
-    let fraction = p.polynomial_expr(&b1) * x / p.polynomial_expr(&c);
-    Ok(Some(ev.eval(&Expr::call(
-        Symbol::TOGETHER,
-        [fraction * t.clone()],
-    ))?))
+    Ok(Some(p.polynomial_expr(&b1) * x / p.polynomial_expr(&c)))
 }
 
 /// The Gosper–Petkovšek form `(a, b, c)` of `num/den` in `kv`, the shift
@@ -203,23 +217,45 @@ fn decomposed(
     cancel: &dyn Cancel,
 ) -> Result<Option<Form>, EvalError> {
     let kk = ring.var(kv);
-    let shifted = ring.substitute(&b, kv, &ring.add(&kk, &ring.var(hv)));
-    let resultant = ring
-        .resultant_with(&a, &shifted, kv, cancel)
-        .map_err(|_| EvalError::Interrupted)?;
     let mut c = ring.one();
-    if resultant.is_zero() {
-        return Ok(None);
-    }
-    let Some(powers) = factored(ev, e, ring, &resultant, &ring.one())? else {
+    // The resultant factor by factor, `res(Π a_i, Π b_j) = Π res(a_i, b_j)`:
+    // one of `a` and `b` whole takes far longer with parameters
+    // (wz_certificate's (a+k)!(b+k)!…, CAS-580).
+    let in_k = |ev: &mut Eval<'_>, p: &Sparse<Integer>| -> Result<_, EvalError> {
+        Ok(factored(ev, e, ring, p, &ring.one())?.map(|powers| {
+            powers
+                .factors
+                .into_iter()
+                .map(|(f, _)| f)
+                .filter(|f| ring.degree(f, kv).unwrap_or(0) > 0)
+                .collect::<Vec<_>>()
+        }))
+    };
+    let (Some(a_factors), Some(b_factors)) = (in_k(ev, &a)?, in_k(ev, &b)?) else {
         return Ok(None);
     };
-    let mut shifts: Vec<i64> = powers
-        .factors
-        .iter()
-        .filter_map(|(f, _)| integer_root(ring, f, hv))
-        .filter(|&h| (0..=MAX_SHIFT).contains(&h))
-        .collect();
+    let mut shifts = Vec::new();
+    for fa in &a_factors {
+        for fb in &b_factors {
+            let shifted = ring.substitute(fb, kv, &ring.add(&kk, &ring.var(hv)));
+            let resultant = ring
+                .resultant_with(fa, &shifted, kv, cancel)
+                .map_err(|_| EvalError::Interrupted)?;
+            if resultant.is_zero() {
+                return Ok(None);
+            }
+            let Some(powers) = factored(ev, e, ring, &resultant, &ring.one())? else {
+                return Ok(None);
+            };
+            shifts.extend(
+                powers
+                    .factors
+                    .iter()
+                    .filter_map(|(f, _)| integer_root(ring, f, hv))
+                    .filter(|&h| (0..=MAX_SHIFT).contains(&h)),
+            );
+        }
+    }
     shifts.sort_unstable();
     shifts.dedup();
     for h in shifts {
@@ -275,7 +311,7 @@ fn integer_root(ring: &SparseRing<Integers>, f: &Sparse<Integer>, hv: usize) -> 
 /// when the degrees or the leading coefficients of `a` and `b(k − 1)`
 /// differ; otherwise the larger of `deg c − deg a + 1` and
 /// `(B − A)/lead`, `A` and `B` their coefficients of degree one less, when
-/// it is an integer. `None` for a negative bound or one past
+/// it is an integer (0 when `B − A` is, whatever the parameters in them). `None` for a negative bound or one past
 /// [`MAX_DEGREE`].
 fn degree_bound(
     ring: &SparseRing<Integers>,
@@ -301,14 +337,19 @@ fn degree_bound(
             p.coeffs().first().map(|c| Rational::from(c.clone()))
         };
         let candidate = if da >= 1 {
-            let l = number(lead(a, da));
-            let (x, y) = (number(lead(a, da - 1)), number(lead(b1, db - 1)));
-            match (l, x, y) {
-                (Some(l), Some(x), Some(y)) if !l.is_zero() => {
-                    let q = &(&y - &x) / &l;
-                    q.is_integer().then(|| q.numer().to_i64()).flatten()
+            // B − A taken whole: with parameters each may be a polynomial
+            // and their difference 0 (wz_certificate, CAS-580).
+            let difference = ring.sub(&lead(b1, db - 1), &lead(a, da - 1));
+            if difference.is_zero() {
+                Some(0)
+            } else {
+                match (number(lead(a, da)), number(difference)) {
+                    (Some(l), Some(y)) if !l.is_zero() => {
+                        let q = &y / &l;
+                        q.is_integer().then(|| q.numer().to_i64()).flatten()
+                    }
+                    _ => None,
                 }
-                _ => None,
             }
         } else {
             None

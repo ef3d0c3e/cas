@@ -5,7 +5,7 @@ use cas_num::{Integer, Rational};
 
 use super::{Series, expansion, log_t};
 use crate::eval::{Eval, run};
-use crate::{Context, Expr};
+use crate::{Context, Expr, Symbol};
 
 fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
@@ -248,5 +248,71 @@ fn the_builtin() {
     ] {
         let e = ctx.eval(&read(input)).unwrap();
         assert_eq!(e.head(), read(input).head(), "{input}: {e:?}");
+    }
+}
+
+/// `(input, expected)` in full form: the difference brought `Together` is 0.
+fn check_together(cases: &[(&str, &str)]) {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, expected) in cases {
+        let found = ctx.eval(&read(input)).unwrap();
+        let difference = Expr::call(Symbol::TOGETHER, [found.clone() - read(expected)]);
+        if ctx.eval(&difference).unwrap() != Expr::from(0) {
+            wrong.push(format!("{input}: {found:?}, expected {expected}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `Revert` (CAS-579): giac's `revert`, polynomials to their degree, other
+/// functions to the default order, Puiseux inverses, and what stays.
+#[test]
+fn reversion() {
+    check_together(&[
+        (
+            "Revert[Plus[x, Power[x, 2], Power[x, 4]]]",
+            "Plus[x, Times[-1, Power[x, 2]], Times[2, Power[x, 3]], Times[-6, Power[x, 4]]]",
+        ),
+        (
+            "Revert[Plus[x, Times[-1/6, Power[x, 3]]]]",
+            "Plus[x, Times[1/6, Power[x, 3]]]",
+        ),
+        ("Revert[Plus[1, x]]", "x"),
+        (
+            "Revert[Plus[Times[2, x], Power[x, 2]]]",
+            "Plus[Times[1/2, x], Times[-1/8, Power[x, 2]]]",
+        ),
+        (
+            "Revert[Plus[x, Power[x, 2]], x, 8]",
+            "Plus[x, Times[-1, Power[x, 2]]]",
+        ),
+        (
+            "Revert[Sin[x]]",
+            "Plus[x, Times[1/6, Power[x, 3]], Times[3/40, Power[x, 5]]]",
+        ),
+        (
+            "Revert[Plus[Times[a, t], Power[t, 2]], t]",
+            "Plus[Times[t, Power[a, -1]], Times[-1, Power[t, 2], Power[a, -3]]]",
+        ),
+        ("Revert[Power[x, 2]]", "Power[x, 1/2]"),
+        (
+            "Revert[Plus[Power[x, 2], Power[x, 3]]]",
+            "Plus[Power[x, 1/2], Times[-1/2, x], Times[5/8, Power[x, 3/2]], \
+             Times[-1, Power[x, 2]], Times[231/128, Power[x, 5/2]], Times[-7/2, Power[x, 3]], \
+             Times[7293/1024, Power[x, 7/2]]]",
+        ),
+    ]);
+    let ctx = Context::new();
+    for input in [
+        "Revert[0]",
+        "Revert[5]",
+        "Revert[Power[x, -1]]",
+        "Revert[Plus[x, Power[x, 2]], y]",
+        "Revert[Plus[x, Power[x, 2]], x, 0]",
+        "Revert[Sin[x], x, 1000]",
+    ] {
+        let found = ctx.eval(&read(input)).unwrap();
+        assert_eq!(found.head(), Some(&Expr::from(Symbol::REVERT)), "{input}");
     }
 }

@@ -381,5 +381,10 @@ mod gosper;
 mod infinite;
 mod product;
 mod rational;
+mod riemann;
 #[cfg(test)]
 mod tests;
+mod wz;
+
+pub(super) use riemann::sum_riemann;
+pub(super) use wz::wz_certificate;

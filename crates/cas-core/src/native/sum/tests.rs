@@ -415,3 +415,87 @@ fn infinite_sums() {
         "Sum[c, k, 1, Infinity]",
     ]);
 }
+
+/// `SumRiemann` (CAS-576): giac's examples, and a sum that is not one.
+#[test]
+fn riemann_sums() {
+    check_values(&[
+        ("SumRiemann[Power[Plus[n, k], -1], List[n, k]]", "Log[2]"),
+        (
+            "SumRiemann[Times[n, Power[Plus[Power[n, 2], Power[k, 2]], -1]], List[n, k]]",
+            "Times[1/4, Pi]",
+        ),
+        (
+            "SumRiemann[Times[Power[n, -1], Sin[Times[k, Pi, Power[n, -1]]]], List[n, k]]",
+            "Times[2, Power[Pi, -1]]",
+        ),
+        (
+            "SumRiemann[Times[Power[k, 2], Power[n, -3]], List[n, k]]",
+            "1/3",
+        ),
+        (
+            "SumRiemann[Times[Exp[Times[k, Power[n, -1]]], Power[n, -1]], List[n, k]]",
+            "Plus[-1, E]",
+        ),
+    ]);
+    check(&[(
+        "SumRiemann[Power[Plus[n, Power[k, 2]], -1], List[n, k]]",
+        "\"Probably not a Riemann sum\"",
+    )]);
+}
+
+/// `(input, expected)` in full form: the difference brought `Together` is 0.
+fn check_together(cases: &[(&str, &str)]) {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, expected) in cases {
+        let found = ctx.eval(&read(input)).unwrap();
+        let difference = Expr::call(Symbol::TOGETHER, [found.clone() - read(expected)]);
+        if ctx.eval(&difference).unwrap() != Expr::from(0) {
+            wrong.push(format!("{input}: {found:?}, expected {expected}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `WZCertificate` (CAS-580): giac's examples, the argument forms, 0 when
+/// there is none, and a certificate giac misses.
+#[test]
+fn wz_certificates() {
+    check_together(&[
+        (
+            "WZCertificate[Times[Power[-1, k], Binomial[n, k], Power[Binomial[Plus[k, a], k], -1]], \
+             Times[a, Power[Plus[n, a], -1]], n, k]",
+            "Times[k, Power[Plus[a, n], -1]]",
+        ),
+        (
+            "WZCertificate[Times[Power[-1, k], Binomial[n, k], Binomial[Times[2, k], k], \
+             Power[4, Plus[n, Times[-1, k]]]], Binomial[Times[2, n], n], n, k]",
+            "Times[Plus[Times[2, k], -1], Power[Plus[Times[2, n], 1], -1]]",
+        ),
+        (
+            "WZCertificate[Power[Binomial[n, k], 2], Binomial[Times[2, n], n], n, k]",
+            "Times[Plus[Times[2, k], Times[-3, n], -3], Power[Times[2, Plus[Times[2, n], 1]], -1]]",
+        ),
+        ("WZCertificate[Binomial[n, k], Power[2, n]]", "-1/2"),
+        (
+            "WZCertificate[Times[Binomial[n, k], Power[2, Times[-1, n]]]]",
+            "-1/2",
+        ),
+        ("WZCertificate[Binomial[m, j], Power[2, m], m, j]", "-1/2"),
+        ("WZCertificate[Power[k, -1], n, k]", "0"),
+        ("WZCertificate[k, 1, n, k]", "0"),
+        // giac answers 0; this is a certificate: F(n+1,k) − F(n,k) =
+        // G(n,k+1) − G(n,k) with G = R F(n,k−1).
+        (
+            "WZCertificate[Times[Factorial[Plus[a, k]], Factorial[Plus[b, k]], \
+             Factorial[Plus[c, n, Times[-1, k], Times[-1, a], Times[-1, b], -1]], \
+             Power[Factorial[Plus[k, 1]], -1], Power[Factorial[Plus[n, Times[-1, k]]], -1], \
+             Power[Factorial[Plus[c, k]], -1]], \
+             Times[Factorial[Plus[c, n, Times[-1, a]]], Factorial[Plus[c, n, Times[-1, b]]], \
+             Power[Factorial[Plus[n, 1]], -1], Power[Factorial[Plus[c, n]], -1]], n, k]",
+            "Times[-1, Plus[a, k], Plus[b, k], Power[Plus[a, Times[-1, c], Times[-1, n], -1], -1], \
+             Power[Plus[b, Times[-1, c], Times[-1, n], -1], -1]]",
+        ),
+    ]);
+}

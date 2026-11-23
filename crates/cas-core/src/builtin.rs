@@ -639,6 +639,11 @@ builtins! {
     INTEGRATE_BY_PARTS_U = "IntegrateByPartsU" [PROTECTED];
     PREVAL = "Preval" [PROTECTED];
     FUNCTION_DIFF = "FunctionDiff" [PROTECTED];
+    // Series reversion, Riemann sums and WZ certificates (CAS-576,
+    // CAS-579, CAS-580).
+    REVERT = "Revert" [PROTECTED];
+    SUM_RIEMANN = "SumRiemann" [PROTECTED];
+    WZ_CERTIFICATE = "WZCertificate" [PROTECTED];
     // Vector calculus (CAS-DOC-37): the differential operators (§2).
     GRAD = "Grad" [PROTECTED];
     DIVERGENCE = "Divergence" [PROTECTED];

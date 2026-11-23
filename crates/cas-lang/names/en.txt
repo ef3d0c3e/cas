@@ -470,6 +470,11 @@ IntegrateByPartsDV: ibpdv
 IntegrateByPartsU: ibpu
 Preval: preval
 FunctionDiff: function_diff fonction_derivee
+# Series reversion, Riemann sums and WZ certificates (CAS-576, CAS-579,
+# CAS-580).
+Revert: revert
+SumRiemann: sum_riemann
+WZCertificate: wz_certificate
 # Vector calculus (CAS-DOC-37): the differential operators (CAS-408).
 Grad: grad
 Divergence: divergence
