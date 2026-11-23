@@ -154,6 +154,11 @@ Gauss15: gauss15
 InterpolatingPolynomial: lagrange interp
 Spline: spline
 ThieleInterpolation: thiele
+# Sampling and intervals (CAS-593), Xcas's.
+LinSpace: linspace
+LinearInterpolate: linear_interpolate
+IntervalToCenter: interval2center
+CenterToInterval: center2interval
 LegendreP: legendre
 HermiteH: hermite
 LaguerreL: laguerre

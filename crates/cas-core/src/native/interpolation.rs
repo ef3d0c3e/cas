@@ -32,6 +32,9 @@
 //!   `(−1/2, −9)` and `(2, −9)` it is `(t + 1)(−9)/(t + 1)`, which giac
 //!   answers as `-9` (found by the fuzz target).
 //!
+//! Sampling the polygonal line through points, and the centres of ranges
+//! and the ranges of centres, are [`sampling`]'s (CAS-593).
+//!
 //! Lists of unequal lengths, a repeated abscissa (a division by 0), and
 //! for `Spline` abscissas not shown increasing, leave the call. Each call
 //! that answers takes one step, its builtin's name.
@@ -46,6 +49,8 @@ use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
 use crate::symbol::Symbol;
+
+pub(super) mod sampling;
 
 type Native = Result<Option<Expr>, EvalError>;
 

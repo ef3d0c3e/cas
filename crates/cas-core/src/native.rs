@@ -312,6 +312,19 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::THIELE_INTERPOLATION,
             interpolation::thiele_interpolation,
         ),
+        (Symbol::LIN_SPACE, lists::lin_space),
+        (
+            Symbol::LINEAR_INTERPOLATE,
+            interpolation::sampling::linear_interpolate,
+        ),
+        (
+            Symbol::INTERVAL_TO_CENTER,
+            interpolation::sampling::interval_to_center,
+        ),
+        (
+            Symbol::CENTER_TO_INTERVAL,
+            interpolation::sampling::center_to_interval,
+        ),
         (Symbol::LEGENDRE_P, orthogonal::legendre_p),
         (Symbol::HERMITE_H, orthogonal::hermite_h),
         (Symbol::LAGUERRE_L, orthogonal::laguerre_l),

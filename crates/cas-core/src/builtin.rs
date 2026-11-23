@@ -207,6 +207,11 @@ builtins! {
     INTERPOLATING_POLYNOMIAL = "InterpolatingPolynomial" [PROTECTED];
     SPLINE = "Spline" [PROTECTED];
     THIELE_INTERPOLATION = "ThieleInterpolation" [PROTECTED];
+    // Sampling and intervals (CAS-593).
+    LIN_SPACE = "LinSpace" [PROTECTED];
+    LINEAR_INTERPOLATE = "LinearInterpolate" [PROTECTED];
+    INTERVAL_TO_CENTER = "IntervalToCenter" [PROTECTED];
+    CENTER_TO_INTERVAL = "CenterToInterval" [PROTECTED];
     LEGENDRE_P = "LegendreP" [PROTECTED];
     HERMITE_H = "HermiteH" [PROTECTED];
     LAGUERRE_L = "LaguerreL" [PROTECTED];

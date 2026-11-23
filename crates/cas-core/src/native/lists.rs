@@ -6,6 +6,10 @@
 //!   within `b`, `s` 1 by default and negative to count down;
 //!   `MakeList[g, a, b, s]` (`makelist`) applies `g`. The bounds and the
 //!   step are rationals, `s ≠ 0`, with at most [`MAX_ELEMENTS`] elements.
+//!   `LinSpace[a, b, n]` (`linspace`, giac misc.cc `_linspace`, CAS-593)
+//!   is `a + i(b − a)/(n − 1)` for `i` from 0 to `n − 1`, evaluated, `n`
+//!   100 by default, an integer from 2 to [`MAX_ELEMENTS`]: exact on exact
+//!   ends, decimals on decimal ones, symbolic ends as they are.
 //!   `Table` holds its arguments, as giac's `seq` does (CAS-DOC-33 §2,
 //!   CAS-370): `f` is evaluated anew at each value, so that `seq(rand(), k,
 //!   1, 3)` draws three numbers and `seq(int(x^k, x), k, -1, 1)` integrates
@@ -217,6 +221,26 @@ fn real_ball(ev: &Eval<'_>, e: &Expr) -> Option<Ball> {
         View::Ball(b) if b.is_finite() => Some(b.clone()),
         _ => None,
     }
+}
+
+/// `LinSpace[a, b]` and `LinSpace[a, b, n]`.
+pub(super) fn lin_space(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let (a, b, n) = match e.args() {
+        [a, b] => (a, b, 100),
+        [a, b, n] => match n.as_i64() {
+            Some(n) if (2..=MAX_ELEMENTS).contains(&n) => (a, b, n),
+            _ => return Ok(None),
+        },
+        _ => return Ok(None),
+    };
+    let step = ev.eval(&((b.clone() - a.clone()) / Expr::from(n - 1)))?;
+    let mut items = Vec::with_capacity(usize::try_from(n).unwrap_or(0));
+    for i in 0..n {
+        items.push(ev.eval(&(a.clone() + Expr::from(i) * step.clone()))?);
+    }
+    let result = list(items);
+    ev.step("LinSpace", e, &result);
+    Ok(Some(result))
 }
 
 pub(super) fn sort(ev: &mut Eval<'_>, e: &Expr) -> Native {

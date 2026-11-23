@@ -36,6 +36,20 @@ fn check(cases: &[(&str, &str)]) {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// `(input, expected)`, both evaluated: the same expression.
+fn check_exact(cases: &[(&str, &str)]) {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, expected) in cases {
+        let found = ctx.eval(&read(input)).unwrap();
+        let expected = ctx.eval(&read(expected)).unwrap();
+        if found != expected {
+            wrong.push(format!("{input}: {found:?}, expected {expected:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 /// giac's `lagrange([1,2,3],[4,8,14])`, `(x-2+4)*(x-1)+4`, in its forms;
 /// symbolic values; Newton's nested form.
 #[test]
@@ -136,6 +150,60 @@ fn thiele() {
     ]);
 }
 
+/// giac's `linear_interpolate` (CAS-593), exact where giac answers
+/// doubles: its `6.33333333333` is `19/3`; unsorted points, a negative
+/// step, the last point sampled.
+#[test]
+fn linear_interpolation() {
+    let points = "List[List[1, 2, 6, 9], List[3, 4, 6, 7]]";
+    check_exact(&[
+        (
+            &format!("LinearInterpolate[{points}, 1, 9, 1]"),
+            "List[List[1, 2, 3, 4, 5, 6, 7, 8, 9], \
+             List[3, 4, 9/2, 5, 11/2, 6, 19/3, 20/3, 7]]",
+        ),
+        (
+            &format!("LinearInterpolate[{points}, 1, 9, 3]"),
+            "List[List[1, 4, 7], List[3, 5, 19/3]]",
+        ),
+        (
+            "LinearInterpolate[List[List[0, 2, 3], List[1, 5, 4]], 0, 3, 1/2]",
+            "List[List[0, 1/2, 1, 3/2, 2, 5/2, 3], List[1, 2, 3, 4, 5, 9/2, 4]]",
+        ),
+        (
+            "LinearInterpolate[List[List[3, 0, 2], List[4, 1, 5]], 0, 3, -1]",
+            "List[List[0, 1, 2, 3], List[1, 3, 5, 4]]",
+        ),
+    ]);
+}
+
+/// giac's `interval2center` and `center2interval` (CAS-593): giac's
+/// `[1.0 .. 3.5,3.5 .. 7.0,7.0 .. 11.0]` exact.
+#[test]
+fn centres_and_intervals() {
+    check_exact(&[
+        ("IntervalToCenter[Range[2, 5]]", "7/2"),
+        ("IntervalToCenter[3]", "3"),
+        ("IntervalToCenter[x]", "x"),
+        (
+            "IntervalToCenter[List[Range[1, 3], List[Range[5, 7]], 4]]",
+            "List[2, List[6], 4]",
+        ),
+        (
+            "List[CenterToInterval[List[2, 5, 9], 1]]",
+            "List[Range[1, 7/2], Range[7/2, 7], Range[7, 11]]",
+        ),
+        (
+            "List[CenterToInterval[List[2, 5, 8]]]",
+            "List[Range[1/2, 7/2], Range[7/2, 13/2], Range[13/2, 19/2]]",
+        ),
+        (
+            "List[CenterToInterval[List[1, 2, 4]]]",
+            "List[Range[1/2, 3/2], Range[3/2, 3], Range[3, 5]]",
+        ),
+    ]);
+}
+
 /// What stays: a repeated abscissa, lists of unequal lengths, abscissas
 /// not increasing, Thiele's differences vanishing at some points only, a
 /// degree 0.
@@ -151,6 +219,19 @@ fn what_stays() {
         "ThieleInterpolation[List[1, 2, 3], List[1, 2, 1], x]",
         // An unattainable point (crash-9952273f of the fuzz target).
         "ThieleInterpolation[List[-1, -1/2, 2], List[0, -9, -9], x]",
+        // Sampling (CAS-593): past the points, a step 0, xmax < xmin, a
+        // repeated abscissa, a value not real, too many samples.
+        "LinearInterpolate[List[List[0, 2, 3], List[1, 5, 4]], -1, 4, 1]",
+        "LinearInterpolate[List[List[0, 2, 3], List[1, 5, 4]], 0, 3, 0]",
+        "LinearInterpolate[List[List[0, 2, 3], List[1, 5, 4]], 2, 1, 1]",
+        "LinearInterpolate[List[List[0, 0, 3], List[1, 5, 4]], 0, 3, 1]",
+        "LinearInterpolate[List[List[0, 2, 3], List[1, y, 4]], 0, 3, 1]",
+        "LinearInterpolate[List[List[0, 2, 3], List[1, 5, 4]], 0, 3, 1/100000]",
+        "LinearInterpolate[List[List[0, 1], List[0, 1]], 0, 1, 0x1p-40]",
+        "CenterToInterval[List[3]]",
+        "CenterToInterval[List[1, x]]",
+        "CenterToInterval[List[1, 2, 4], 5]",
+        "CenterToInterval[List[2, 1]]",
     ] {
         let e = read(input);
         let found = ctx.eval(&e).unwrap();

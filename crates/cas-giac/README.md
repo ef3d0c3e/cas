@@ -407,6 +407,15 @@ derivative check); giac's wrong answers (two seeded rows whose primitive
 fails differentiation, risch.cc:693), where ours stays; and `Int`, giac's
 `integrate` unevaluated, here the user's call (R1.2-001).
 
+`tests/sampling.rs`, Xcas's `linspace`, `linear_interpolate`,
+`interval2center` and `center2interval` (CAS-593): giac's answers read back
+and compared element by element within `10⁻¹⁰` relatively, since ours are
+exact where giac answers doubles (`19/3` for `6.33333333333`), `center2interval`
+bracketed (C0023). Departures, each with giac's error as caseval prints it:
+`linspace(1,2,1)` (Invalid dimension), a range past the points of
+`linear_interpolate` (Values out of range) and one centre for
+`center2interval` (Bad Argument Value), where ours stays.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

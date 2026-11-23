@@ -1,7 +1,7 @@
 //! Tests of the list operations (CAS-DOC-28): giac's answers to each, and
 //! what stays.
 
-use crate::{Context, Expr};
+use crate::{Context, Expr, Rational, View};
 
 fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
@@ -43,6 +43,33 @@ fn building() {
             "List[1, 9, 25, 49, 81]",
         ),
     ]);
+}
+
+/// giac's `linspace` (CAS-593): exact, symbolic and decimal ends.
+#[test]
+fn lin_space() {
+    check(&[
+        ("LinSpace[1, 2, 3]", "List[1, 3/2, 2]"),
+        ("LinSpace[2, 1, 3]", "List[2, 3/2, 1]"),
+        ("LinSpace[0, 1, 5]", "List[0, 1/4, 1/2, 3/4, 1]"),
+        ("LinSpace[a, b, 2]", "List[a, b]"),
+    ]);
+    let ctx = Context::new();
+    let found = ctx.eval(&read("LinSpace[0, 1]")).unwrap();
+    assert_eq!(found.args().len(), 100);
+    assert_eq!(
+        found.args()[1],
+        Expr::from(Rational::new(1.into(), 99.into()))
+    );
+    let found = ctx.eval(&read("LinSpace[0x1p+0, 0x1p+1, 3]")).unwrap();
+    assert!(
+        found.args().len() == 3
+            && found
+                .args()
+                .iter()
+                .all(|x| matches!(x.view(), View::Ball(_))),
+        "{found:?}"
+    );
 }
 
 /// giac's `sort`, `revlist`, `rotate`, `concat`, `append`, `prepend`,
@@ -136,6 +163,10 @@ fn what_stays() {
         "Sort[List[3, 1], Function[List[a, b], f[a, b]]]",
         "Reverse[x]",
         "Dimensions[x]",
+        "LinSpace[1, 2, 1]",
+        "LinSpace[1, 2, 5/2]",
+        "LinSpace[1, 2, 100000]",
+        "LinSpace[1]",
     ] {
         let e = read(input);
         let found = ctx.eval(&e).unwrap();
