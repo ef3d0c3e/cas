@@ -259,6 +259,21 @@ builtins! {
     DEGREES = "Degrees" [LISTABLE, PROTECTED];
     NORMALIZE = "Normalize" [PROTECTED];
     ALGEBRAIC_SUBSTITUTE = "AlgebraicSubstitute" [PROTECTED];
+    // Xcas's expression commands, second part (CAS-568 to CAS-571).
+    IDENTIFIERS = "Identifiers" [PROTECTED];
+    KERNELS = "Kernels" [PROTECTED];
+    ALGEBRAIC_VARIABLES = "AlgebraicVariables" [PROTECTED];
+    REORDER = "Reorder" [PROTECTED];
+    EVALUATE = "Evaluate" [PROTECTED];
+    EVALUATE_BOOLEAN = "EvaluateBoolean" [PROTECTED];
+    EPSILON_TO_ZERO = "EpsilonToZero" [HOLD_ALL, PROTECTED];
+    INFINITE_Q = "InfiniteQ" [PROTECTED];
+    INDETERMINATE_Q = "IndeterminateQ" [PROTECTED];
+    COMPARE = "Compare" [PROTECTED];
+    EQUATION_TO_DIFFERENCE = "EquationToDifference" [PROTECTED];
+    EQUATION_TO_LIST = "EquationToList" [PROTECTED];
+    LIST_TO_EQUATIONS = "ListToEquations" [PROTECTED];
+    EQUATIONS_TO_LIST = "EquationsToList" [PROTECTED];
     // Polynomial tools (CAS-DOC-29).
     APART = "Apart" [PROTECTED];
     COMPLEX_APART = "ComplexApart" [PROTECTED];

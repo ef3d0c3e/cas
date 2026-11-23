@@ -280,6 +280,17 @@ compared; and the departures, each with giac's answer:
 canonical order is giac's it prints `hold(` giac's text `)`), and `radians`
 and `degrees`, exact in ours, within giac's 12 digits at `x = 1`.
 
+`tests/expressions_two.rs`, Xcas's expression commands, second part (CAS-568
+to CAS-571): giac's `lname`, `indets`, `lvar`, `algvar`, `reorder`, `part`,
+`eval`, `evalm`, `evalb`, `epsilon2zero`, `isinf`, `isnan`, `compare`,
+`equal2diff`, `equal2list` (bracketed), `list2exp` and `exp2list` read back
+and compared, kernels, identifiers and a sum's operands as sets where giac's
+order is not our canonical one; and the departures, each with giac's answer:
+`part` of a sum in our order, of index 0 (the head, giac's name string), of
+an atom, past the end, of a list and of `f(x,y)` (giac's `of`);
+`equal2diff(equal(x,2))`, as the language has no `equal`; and `compare`
+between two heads, by name in ours, by operator address in giac.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

@@ -21,6 +21,7 @@ mod dsolve;
 mod elementary;
 mod erf;
 mod expint;
+mod expressions;
 mod factorial;
 mod fourier;
 mod fourier_transform;
@@ -371,6 +372,26 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::DEGREES, elementary::angle),
         (Symbol::NORMALIZE, matrix::constructors::normalize),
         (Symbol::ALGEBRAIC_SUBSTITUTE, replace::algebraic_substitute),
+        (Symbol::IDENTIFIERS, expressions::identifiers),
+        (Symbol::KERNELS, expressions::kernels),
+        (
+            Symbol::ALGEBRAIC_VARIABLES,
+            expressions::algebraic_variables,
+        ),
+        (Symbol::REORDER, expressions::reorder),
+        (Symbol::EVALUATE, expressions::evaluate),
+        (Symbol::EVALUATE_BOOLEAN, expressions::evaluate_boolean),
+        (Symbol::EPSILON_TO_ZERO, expressions::epsilon_to_zero),
+        (Symbol::INFINITE_Q, expressions::infinite_q),
+        (Symbol::INDETERMINATE_Q, expressions::indeterminate_q),
+        (Symbol::COMPARE, expressions::compare),
+        (
+            Symbol::EQUATION_TO_DIFFERENCE,
+            expressions::equation_to_difference,
+        ),
+        (Symbol::EQUATION_TO_LIST, expressions::equation_to_list),
+        (Symbol::LIST_TO_EQUATIONS, expressions::list_to_equations),
+        (Symbol::EQUATIONS_TO_LIST, expressions::equations_to_list),
         (Symbol::APART, polytools::apart),
         (Symbol::COMPLEX_APART, polytools::complex_apart),
         (Symbol::PROPER_FRACTION, polytools::proper_fraction),

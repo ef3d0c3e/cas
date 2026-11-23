@@ -206,6 +206,23 @@ Radians: radians
 Degrees: degrees
 Normalize: normalize unitV
 AlgebraicSubstitute: algsubs
+# Xcas's expression commands, second part (CAS-568 to CAS-571), and its
+# `part`, the `Part` convention, 0 the head.
+Identifiers: lname indets
+Kernels: lvar
+AlgebraicVariables: algvar
+Reorder: reorder
+Part: part
+Evaluate: eval evalm
+EvaluateBoolean: evalb
+EpsilonToZero: epsilon2zero
+InfiniteQ: isinf
+IndeterminateQ: isnan
+Compare: compare
+EquationToDifference: equal2diff
+EquationToList: equal2list
+ListToEquations: list2exp
+EquationsToList: exp2list
 # Polynomial tools (CAS-DOC-29, CAS-339 to CAS-341).
 Apart: partfrac
 ComplexApart: cpartfrac
@@ -722,9 +739,10 @@ Modular
 # (CAS-DOC-32 §3).
 Union Intersection Complement
 # Predicates, structure and rules without a surface name. Xcas has none with
-# these meanings (its `has`, `op` and `part` differ; its `apply` is `ApplyEach`,
-# which maps), and none is needed yet (CAS-123); a ticket that needs one adds it.
-SameQ FreeQ Part Apply Replace ReplaceRepeated MatchQ Slot
+# these meanings (its `has` and `op` differ; its `apply` is `ApplyEach`, which
+# maps), and none is needed yet (CAS-123); a ticket that needs one adds it.
+# `Part` is Xcas's `part` (CAS-570), in [builtins].
+SameQ FreeQ Apply Replace ReplaceRepeated MatchQ Slot
 # D maps over the values of a Piecewise with it (CAS-514).
 PiecewiseMap
 # Signs and number sets, for assumptions (CAS-DOC-4 §7); the session's

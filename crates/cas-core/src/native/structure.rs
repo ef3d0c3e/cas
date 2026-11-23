@@ -1,5 +1,10 @@
 //! `Length`, `Part`, `Map` and `Apply` (CAS-DOC-4 §6.1); `FiniteSet` and
 //! `Unapply` (CAS-DOC-7 §4, §9).
+//!
+//! `Part` is Xcas's `part` (CAS-570), in its own convention: 0 the head
+//! itself where giac's is its name as a string, an atom or an index out of
+//! range staying where giac's are errors, and a list's entries where giac
+//! has none.
 
 use crate::context::EvalError;
 use crate::eval::Eval;

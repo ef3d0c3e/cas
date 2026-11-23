@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 538] = [
+const BUILTINS: [&str; 552] = [
     "Plus",
     "Times",
     "Power",
@@ -358,6 +358,20 @@ const BUILTINS: [&str; 538] = [
     "Degrees",
     "Normalize",
     "AlgebraicSubstitute",
+    "Identifiers",
+    "Kernels",
+    "AlgebraicVariables",
+    "Reorder",
+    "Evaluate",
+    "EvaluateBoolean",
+    "EpsilonToZero",
+    "InfiniteQ",
+    "IndeterminateQ",
+    "Compare",
+    "EquationToDifference",
+    "EquationToList",
+    "ListToEquations",
+    "EquationsToList",
     "Apart",
     "ComplexApart",
     "ProperFraction",
