@@ -41,3 +41,5 @@ C0038 | Kovacic port: list-form oracle rows, algebraic poles, systems by monomia
 C0039 | giac risch port: helper behaviours, the :693 flaw, tower ties | giac,risch,port,prototype,integrate,tower,gcd | 2026-11-23 | 1.3/T9 | CAS-585 T9.c1
 C0040 | CI-only tests of a big port: one test per row group collecting every failure | tests,ci,port,oracle,risch,commit | 2026-11-23 | 1.3/T9 | CAS-585 T9.c3
 C0041 | Zero-testing exp expressions: exponent atoms to fresh symbols, then Together | exp,zero-test,together,integrate,risch,derivative | 2026-11-23 | 1.3/T9 | CAS-585 T9.c6
+C0042 | Ported natives indexing arguments: guard kernel arity at entry | fuzz,eval,panic,arity,risch,native | 2026-11-23 | 1.3/T11 | Fuzz 45172144522 risch Exp[]
+C0043 | Fuzz numeric mismatch: check the harness side first; complex integrands by both parts | fuzz,harness,complex,fourier,nintegrate,triage | 2026-11-23 | 1.3/T11 | Fuzz 45178885251, 45136885779

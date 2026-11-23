@@ -10,3 +10,4 @@ T7 | done | function study: domain, sign and variation tables, convexity | - | t
 T8 | done | Kovacic's algorithm: kovacicsols | - | tasks/T8.md | logs/T8.md | R1.3-001,R1.3-007
 T9 | done | Risch integration of exp and ln towers: risch; Int as a departure | - | tasks/T9.md | logs/T9.md | R1.3-008,R1.3-005,R1.2-001,R1.3-007
 T10 | done | push master for the phase's final CI and Fuzz runs | - | tasks/T10.md | logs/T10.md | -
+T11 | done | CI and Fuzz check on the pushed head; tickets done and CAS-DOC-55 in step | - | tasks/T11.md | logs/T11.md | -
