@@ -337,6 +337,14 @@ fn numeric_methods() {
         "fsolve(cos(x)=x,x=0..1,secant_solver)",
         "fsolve(x^2-2,x=0..2,falsepos_solver)",
         "fsolve(cos(x)=x,x,newton_solver)",
+        // giac's aide examples (CAS-590): the names are option builtins.
+        "fsolve(cos(x)=x,x,0..1,bisection_solver)",
+        "fsolve(cos(x)=x,x,0..1,falsepos_solver)",
+        "fsolve(cos(x)=x,x,0..1,brent_solver)",
+        "fsolve(cos(x)=x,x,0,secant_solver)",
+        "fsolve(cos(x)=x,x,0,steffenson_solver)",
+        "fsolve(x^2-2,x=1..2,falsepos_solver)",
+        "fsolve(x^2-2,x,1..2,bisection_solver)",
     ]);
 }
 
@@ -352,6 +360,14 @@ fn numeric_systems() {
         "fsolve([x^2+y^2+z^2=3,x=y,y=z],[x,y,z],[2,2,2])",
         "fsolve([x^2+y^2=1,x=y],[x,y])",
         "fsolve([x^2+y^2=4,x*y=1],[x,y])",
+        // giac's aide examples (CAS-590), every multivariate name.
+        "fsolve([x^2+y-2,x+y^2-2],[x,y],[2,2],dnewton_solver)",
+        "fsolve([x^2+y-2,x+y^2-2],[x,y],[2,2],hybrid_solver)",
+        "fsolve([x^2+y-2,x+y^2-2],[x,y],[2,2],hybrids_solver)",
+        "fsolve([x^2+y-2,x+y^2-2],[x,y],[2,2],hybridj_solver)",
+        "fsolve([x^2+y-2,x+y^2-2],[x,y],[2,2],hybridsj_solver)",
+        "fsolve([x^2+y-2,x+y^2-2],[x,y],[2,2],newtonj_solver)",
+        "fsolve([x^2+y^2=4,x*y=1],[x,y],[2,0],hybrids_solver)",
     ]);
 }
 

@@ -361,6 +361,8 @@ BitOr: bitor
 BitXor: bitxor
 HammingDistance: hamdist
 Convert: convert
+# convert's option `interval` (CAS-592).
+Interval: interval
 FactorialPower: perm
 # The discrete Fourier transform (CAS-DOC-45 §4, CAS-465).
 DiscreteFourierTransform: fft
@@ -371,6 +373,19 @@ Solve: solve zeros
 CSolve: csolve cZeros
 FSolve: fsolve
 CFSolve: cfsolve
+# FSolve's methods, Xcas's (CAS-590): options, no function.
+BisectionSolver: bisection_solver
+FalsePositionSolver: falsepos_solver
+BrentSolver: brent_solver
+NewtonSolver: newton_solver
+SecantSolver: secant_solver
+SteffensenSolver: steffenson_solver
+DNewtonSolver: dnewton_solver
+HybridSolver: hybrid_solver
+HybridsSolver: hybrids_solver
+HybridjSolver: hybridj_solver
+HybridsjSolver: hybridsj_solver
+NewtonjSolver: newtonj_solver
 # Linear algebra (CAS-DOC-12, CAS-218 to CAS-222).
 Transpose: tran transpose
 IdentityMatrix: idn identity

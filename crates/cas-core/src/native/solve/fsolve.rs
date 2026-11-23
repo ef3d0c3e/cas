@@ -24,7 +24,8 @@
 //! - `CFSolve`, Xcas's `cfsolve`, the complex roots, is [`complex`]
 //!   (CAS-536): a polynomial's by `polynomial_roots` as here, others by
 //!   Newton's iteration certified on the system of real and imaginary parts.
-//! - A last argument names giac's method (CAS-517), each answer certified
+//! - A last argument names giac's method (CAS-517), an option builtin
+//!   (CAS-590) by Xcas's name, each answer certified
 //!   as above whatever found it. The bracketing ones, `bisection_solver`,
 //!   `falsepos_solver` (Illinois) and `brent_solver`, refine each sign
 //!   change of the scan, on the range or the whole line, into a list, as
@@ -94,21 +95,17 @@ enum Method {
 }
 
 impl Method {
-    const NAMES: [(&'static str, Self); 6] = [
-        ("bisection_solver", Self::Bisection),
-        ("falsepos_solver", Self::FalsePosition),
-        ("brent_solver", Self::Brent),
-        ("newton_solver", Self::Newton),
-        ("secant_solver", Self::Secant),
-        ("steffenson_solver", Self::Steffensen),
-    ];
-
+    /// The method an option builtin names (CAS-590).
     fn named(e: &Expr) -> Option<Self> {
-        e.as_symbol()?;
-        Self::NAMES
-            .iter()
-            .find(|(name, _)| *e == Expr::symbol(name))
-            .map(|&(_, m)| m)
+        Some(match e.as_symbol()? {
+            Symbol::BISECTION_SOLVER => Self::Bisection,
+            Symbol::FALSE_POSITION_SOLVER => Self::FalsePosition,
+            Symbol::BRENT_SOLVER => Self::Brent,
+            Symbol::NEWTON_SOLVER => Self::Newton,
+            Symbol::SECANT_SOLVER => Self::Secant,
+            Symbol::STEFFENSEN_SOLVER => Self::Steffensen,
+            _ => return None,
+        })
     }
 
     fn bracketing(self) -> bool {

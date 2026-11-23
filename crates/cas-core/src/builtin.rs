@@ -371,6 +371,19 @@ builtins! {
     CSOLVE = "CSolve" [PROTECTED];
     FSOLVE = "FSolve" [PROTECTED];
     CFSOLVE = "CFSolve" [PROTECTED];
+    // FSolve's methods, options (CAS-590).
+    BISECTION_SOLVER = "BisectionSolver" [PROTECTED];
+    FALSE_POSITION_SOLVER = "FalsePositionSolver" [PROTECTED];
+    BRENT_SOLVER = "BrentSolver" [PROTECTED];
+    NEWTON_SOLVER = "NewtonSolver" [PROTECTED];
+    SECANT_SOLVER = "SecantSolver" [PROTECTED];
+    STEFFENSEN_SOLVER = "SteffensenSolver" [PROTECTED];
+    DNEWTON_SOLVER = "DNewtonSolver" [PROTECTED];
+    HYBRID_SOLVER = "HybridSolver" [PROTECTED];
+    HYBRIDS_SOLVER = "HybridsSolver" [PROTECTED];
+    HYBRIDJ_SOLVER = "HybridjSolver" [PROTECTED];
+    HYBRIDSJ_SOLVER = "HybridsjSolver" [PROTECTED];
+    NEWTONJ_SOLVER = "NewtonjSolver" [PROTECTED];
     // Linear algebra (CAS-DOC-12), next to the products of lists.
     TRANSPOSE = "Transpose" [PROTECTED];
     IDENTITY_MATRIX = "IdentityMatrix" [PROTECTED];
@@ -476,6 +489,8 @@ builtins! {
     BIT_XOR = "BitXor" [LISTABLE, PROTECTED];
     HAMMING_DISTANCE = "HammingDistance" [LISTABLE, PROTECTED];
     CONVERT = "Convert" [PROTECTED];
+    // convert's option `interval` (CAS-592).
+    INTERVAL = "Interval" [PROTECTED];
     FACTORIAL_POWER = "FactorialPower" [LISTABLE, PROTECTED];
     // The discrete Fourier transform (CAS-DOC-45 §4).
     DISCRETE_FOURIER_TRANSFORM = "DiscreteFourierTransform" [PROTECTED];

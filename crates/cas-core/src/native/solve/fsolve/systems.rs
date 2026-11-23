@@ -7,7 +7,8 @@
 //!   or every function's ball holds 0 (an inexact constant's radius); the
 //!   limit as a list of balls,
 //!   certified by Krawczyk's test, giac's `[1.93185165258,0.517638090205]`.
-//!   giac's multivariate method names (`newton_solver`, `dnewton_solver`,
+//!   giac's multivariate methods, option builtins by Xcas's names
+//!   (`newton_solver`, `dnewton_solver`,
 //!   `newtonj_solver`, `hybrid_solver`, `hybrids_solver`, `hybridj_solver`,
 //!   `hybridsj_solver`) may follow; each is this iteration.
 //! - Without a start point, a polynomial system's real solutions by
@@ -42,15 +43,16 @@ use crate::trace::Warning;
 
 type Native = Result<Option<Expr>, EvalError>;
 
-/// giac's multivariate root finders' names: all Newton's iteration here.
-const METHODS: [&str; 7] = [
-    "newton_solver",
-    "dnewton_solver",
-    "newtonj_solver",
-    "hybrid_solver",
-    "hybrids_solver",
-    "hybridj_solver",
-    "hybridsj_solver",
+/// giac's multivariate root finders, option builtins (CAS-590): all
+/// Newton's iteration here.
+const METHODS: [Symbol; 7] = [
+    Symbol::NEWTON_SOLVER,
+    Symbol::DNEWTON_SOLVER,
+    Symbol::NEWTONJ_SOLVER,
+    Symbol::HYBRID_SOLVER,
+    Symbol::HYBRIDS_SOLVER,
+    Symbol::HYBRIDJ_SOLVER,
+    Symbol::HYBRIDSJ_SOLVER,
 ];
 
 /// The most unknowns.
@@ -129,7 +131,7 @@ impl System {
 pub(in crate::native) fn system(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let args = match e.args() {
         [rest @ .., last]
-            if rest.len() >= 2 && METHODS.iter().any(|m| *last == Expr::symbol(m)) =>
+            if rest.len() >= 2 && last.as_symbol().is_some_and(|s| METHODS.contains(&s)) =>
         {
             rest
         }

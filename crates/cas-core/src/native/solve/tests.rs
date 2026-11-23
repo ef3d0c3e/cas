@@ -715,15 +715,15 @@ fn numeric_methods() {
     let dottie = 0.739_085_133_215_160_7;
     let close = |(a, b): (f64, f64), x: f64| (a - x).abs() < 1e-12 && b == 0.0;
     for (input, root) in [
-        ("FSolve[Equation[Cos[x], x], x, 0, newton_solver]", dottie),
-        ("FSolve[Equation[Cos[x], x], x, 1/2, secant_solver]", dottie),
+        ("FSolve[Equation[Cos[x], x], x, 0, NewtonSolver]", dottie),
+        ("FSolve[Equation[Cos[x], x], x, 1/2, SecantSolver]", dottie),
         (
-            "FSolve[Equation[Cos[x], x], x, List[0, 1], secant_solver]",
+            "FSolve[Equation[Cos[x], x], x, List[0, 1], SecantSolver]",
             dottie,
         ),
-        ("FSolve[Equation[Cos[x], x], x, newton_solver]", dottie),
+        ("FSolve[Equation[Cos[x], x], x, NewtonSolver]", dottie),
         (
-            "FSolve[Plus[-2, Power[x, 3]], x, 1, steffenson_solver]",
+            "FSolve[Plus[-2, Power[x, 3]], x, 1, SteffensenSolver]",
             1.259_921_049_894_873_2,
         ),
     ] {
@@ -733,56 +733,56 @@ fn numeric_methods() {
     let pi = std::f64::consts::PI;
     check_values(&[
         (
-            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], bisection_solver]",
+            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], BisectionSolver]",
             &[(dottie, 0.0)],
         ),
         (
-            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], falsepos_solver]",
+            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], FalsePositionSolver]",
             &[(dottie, 0.0)],
         ),
         (
-            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], brent_solver]",
+            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], BrentSolver]",
             &[(dottie, 0.0)],
         ),
         (
-            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], newton_solver]",
+            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], NewtonSolver]",
             &[(dottie, 0.0)],
         ),
         (
-            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], secant_solver]",
+            "FSolve[Equation[Cos[x], x], Equation[x, Range[0, 1]], SecantSolver]",
             &[(dottie, 0.0)],
         ),
         (
-            "FSolve[Equation[Cos[x], x], x, bisection_solver]",
+            "FSolve[Equation[Cos[x], x], x, BisectionSolver]",
             &[(dottie, 0.0)],
         ),
         (
-            "FSolve[Equation[Sin[x], 0], Equation[x, Range[2, 10]], brent_solver]",
+            "FSolve[Equation[Sin[x], 0], Equation[x, Range[2, 10]], BrentSolver]",
             &[(pi, 0.0), (2.0 * pi, 0.0), (3.0 * pi, 0.0)],
         ),
         (
-            "FSolve[Plus[-2, Power[x, 2]], Equation[x, Range[0, 2]], falsepos_solver]",
+            "FSolve[Plus[-2, Power[x, 2]], Equation[x, Range[0, 2]], FalsePositionSolver]",
             &[(r2, 0.0)],
         ),
         (
-            "FSolve[Plus[-2, Power[x, 2]], x, List[0, 2], brent_solver]",
+            "FSolve[Plus[-2, Power[x, 2]], x, List[0, 2], BrentSolver]",
             &[(r2, 0.0)],
         ),
         // Newton's from 4 runs to √2, outside [3, 5]: no root there.
         (
-            "FSolve[Plus[-2, Power[x, 2]], Equation[x, Range[3, 5]], newton_solver]",
+            "FSolve[Plus[-2, Power[x, 2]], Equation[x, Range[3, 5]], NewtonSolver]",
             &[],
         ),
     ]);
     // A bracketing method needs a range; x^2 + 1 has no root to iterate to.
     check(&[
         (
-            "FSolve[Equation[Cos[x], x], x, 0, bisection_solver]",
-            "FSolve[Equation[Cos[x], x], x, 0, bisection_solver]",
+            "FSolve[Equation[Cos[x], x], x, 0, BisectionSolver]",
+            "FSolve[Equation[Cos[x], x], x, 0, BisectionSolver]",
         ),
         (
-            "FSolve[Plus[1, Power[x, 2]], x, 1, secant_solver]",
-            "FSolve[Plus[1, Power[x, 2]], x, 1, secant_solver]",
+            "FSolve[Plus[1, Power[x, 2]], x, 1, SecantSolver]",
+            "FSolve[Plus[1, Power[x, 2]], x, 1, SecantSolver]",
         ),
     ]);
 }
@@ -847,7 +847,7 @@ fn numeric_systems() {
         ),
         (
             "FSolve[List[Equation[Plus[Power[x, 2], Power[y, 2]], 4], Equation[Times[x, y], 1]], \
-             List[x, y], List[1, 0], dnewton_solver]",
+             List[x, y], List[1, 0], DNewtonSolver]",
             vec![big, small],
         ),
         (
