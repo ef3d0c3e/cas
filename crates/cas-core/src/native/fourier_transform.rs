@@ -31,6 +31,10 @@
 //!     principal value: `(1/p) e^(i σ q/p) (−i π sign σ)`;
 //!   - the box `UnitBox[p x + q]`, giac's `rect`: `(1/|p|) e^(i σ q/p) 2
 //!     sin(σ/(2p))/(σ/p)`.
+//!
+//!   Each wants its jump, pole or kink `c = −q/p` real (the box and
+//!   `|p x + q|` also `p`); a complex pole is the residues' or stays
+//!   (CAS-441).
 //! - **Rational functions** without real poles, by residues ([`rational`],
 //!   §4, CAS-441), before the table.
 //!
@@ -259,6 +263,12 @@ fn parts(ev: &mut Eval<'_>, b: &Expr) -> Result<(Expr, Expr), EvalError> {
     Ok((re, im))
 }
 
+/// Whether `b`'s imaginary part evaluates to 0: a pole `−q/p` or a scale
+/// `p` on the real line. A symbolic one is not known real and fails.
+fn real(ev: &mut Eval<'_>, b: &Expr) -> Result<bool, EvalError> {
+    Ok(ev.eval(&call(Symbol::IM, b.clone()))? == Expr::from(0))
+}
+
 /// The table on `f`: its exponentials, exponents summed, and at most one
 /// other factor.
 fn table(ev: &mut Eval<'_>, f: &Expr, x: &Expr, s: &Expr) -> Found {
@@ -357,6 +367,10 @@ fn two_sided(ev: &mut Eval<'_>, w: &Expr, absolute: &Expr, x: &Expr, s: &Expr) -
     let Some((slope, c)) = linear(ev, &remainder, x)? else {
         return Ok(None);
     };
+    // |p x + q| as |p| |x − c| needs p and q real.
+    if !real(ev, &p)? || !real(ev, &q)? {
+        return Ok(None);
+    }
     let (re, b) = parts(ev, &slope)?;
     if re != Expr::from(0) {
         return Ok(None);
@@ -389,11 +403,13 @@ fn with_factor(ev: &mut Eval<'_>, h: &Expr, w: &Expr, x: &Expr, s: &Expr) -> Fou
     let (re, im) = parts(ev, &b)?;
     let sigma = s.clone() - im;
     let (Some(g), [u]) = (head(h), h.args()) else {
-        // 1/(p x + q), the principal value.
+        // 1/(p x + q), the principal value, for a real pole −q/p only: a
+        // complex one is the residues' (CAS-441) or stays.
         if let (Some(Symbol::POWER), [base, n]) = (head(h), h.args())
             && *n == Expr::from(-1)
             && re == Expr::from(0)
             && let Some((p, q)) = linear(ev, base, x)?
+            && real(ev, &(q.clone() / p.clone()))?
         {
             return Ok(Some(
                 exp(c) / p.clone()
@@ -406,13 +422,17 @@ fn with_factor(ev: &mut Eval<'_>, h: &Expr, w: &Expr, x: &Expr, s: &Expr) -> Fou
     let Some((p, q)) = linear(ev, u, x)? else {
         return Ok(None);
     };
+    // The step, sign and box jump at c = −q/p, a point of the real line.
+    if !real(ev, &(q.clone() / p.clone()))? {
+        return Ok(None);
+    }
     let shift = exp(i() * sigma.clone() * q.clone() / p.clone());
     match g {
         Symbol::HEAVISIDE_THETA => step(ev, &b, &c, &re, &sigma, &p, &q, s),
         Symbol::SIGN if re == Expr::from(0) => Ok(Some(
             exp(c) * call(Symbol::SIGN, p) * shift * Expr::from(-2) * i() / sigma,
         )),
-        Symbol::UNIT_BOX if re == Expr::from(0) => {
+        Symbol::UNIT_BOX if re == Expr::from(0) && real(ev, &p)? => {
             let scaled = sigma / p.clone();
             Ok(Some(
                 exp(c) / call(Symbol::ABS, p)

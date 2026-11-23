@@ -358,3 +358,43 @@ fn unit_box() {
         ),
     ]);
 }
+
+/// A complex pole is not the principal value's (Fuzz, `fourier_transforms`
+/// `Sg==`): `ifourier` of `F = 3/2 e^(−2(−1−i s))/(−1−i s)`, the transform
+/// of `f = −3/2 e^(−x) θ(x+2)`, was `3/4 e^(−x) sign(−2−x)`, nonzero at
+/// `x = −3` where `f` is 0; `1/(x − i)`'s, `2πi e^s θ(−s)`, was a sign.
+/// Each is `f`, `F`, or stays.
+#[test]
+fn complex_poles_are_not_principal_values() {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, head, expected, v, points) in [
+        (
+            "InverseFourierTransform[Times[3/2, Exp[Times[-2, Plus[-1, Times[-1, I, s]]]], \
+             Power[Plus[-1, Times[-1, I, s]], -1]], s, x]",
+            Symbol::INVERSE_FOURIER_TRANSFORM,
+            "Times[-3/2, Exp[Times[-1, x]], HeavisideTheta[Plus[x, 2]]]",
+            "x",
+            [(-3, 1), (3, 7), (5, 2)],
+        ),
+        (
+            "FourierTransform[Power[Plus[x, Times[-1, I]], -1], x, s]",
+            Symbol::FOURIER_TRANSFORM,
+            "Times[2, Pi, I, Exp[s], HeavisideTheta[Times[-1, s]]]",
+            "s",
+            [(3, 7), (5, 2), (-4, 3)],
+        ),
+    ] {
+        let found = ctx.eval(&read(input)).unwrap();
+        let stays = found.contains(&Expr::from(head));
+        if found.contains(&Expr::from(Symbol::SIGN))
+            || !stays
+                && !points
+                    .into_iter()
+                    .all(|(p, q)| agree_in(&ctx, &found, &read(expected), v, p, q))
+        {
+            wrong.push(format!("{input}: {found:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
