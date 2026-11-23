@@ -41,7 +41,7 @@ fn positions() {
         ("FindPositions[5, List[1, 2]]", "List[]"),
         ("FindPositions[1, List[List[1, 2], 1]]", "List[1]"),
         ("FindPositions[List[1, 2, 1], 1]", "List[0, 2]"),
-        ("FindPositions[1, List[1.0, 2, 1]]", "List[0, 2]"),
+        ("FindPositions[1, List[0x1p+0, 2, 1]]", "List[0, 2]"),
         ("FirstPosition[List[3, x, 1, 2, 1, 3], 1]", "2"),
         ("FirstPosition[List[0, 1, 3, 2, 4, 2, 5], 2]", "3"),
         ("FirstPosition[1, List[3, 1]]", "1"),
@@ -77,7 +77,7 @@ fn counts() {
         ("CountLess[x, List[1, 2]]", "0"),
         ("CountGreater[0, List[Sqrt[2], Times[-1, Pi], x]]", "1"),
         ("CountGreater[0, List[List[1, 2], List[3]]]", "3"),
-        ("CountEqual[1, List[1.0, 1]]", "2"),
+        ("CountEqual[1, List[0x1p+0, 1]]", "2"),
         ("CountEqual[1, 1]", "1"),
         ("CountEqual[1, List[]]", "0"),
     ]);

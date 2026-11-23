@@ -262,12 +262,13 @@ matrix (giac's dot products), of `x+1` (giac's `poly1[…]`, ours an error)
 and a nested `NULL`, which deletes where giac's unquoted one does not.
 Then `heappush`, by `<` and by a comparator, `nextperm` and `prevperm`
 (`undef` past the ends) and `groupermu` in giac's order; their departures:
-`heapify` and `heappop`, which change giac's variable in place and print 1
-and the element past the end where ours returns the heap, `heappush` of a
-symbol, which giac orders and ours leaves, and giac's errors (not a list,
-not a permutation, `heappop([])`). libgiac crashes on `heappop` of a list
-that is not a heap (`heappop([9,6,5,1,1,4,2,3])`): no giac row, a unit test
-of ours in `cas-core`.
+`heapify`, which changes giac's variable in place and prints 1 where ours
+returns the heap, `heappush` of a symbol, which giac orders and ours leaves,
+and giac's errors (not a list, not a permutation, `heappop([])`). giac's
+`heappop` of a non-empty list reads the element past the end (undefined:
+0 in a fresh process, a crash in the oracle's shared one or on
+`heappop([9,6,5,1,1,4,2,3])`): no giac row, unit tests of ours (the heap
+after the pop) in `cas-core`.
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.

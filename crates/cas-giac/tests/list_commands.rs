@@ -264,7 +264,7 @@ fn permutations() {
 
 /// Where this CAS departs from giac: the input, giac's answer as it prints
 /// it, ours as decided.
-const DEPARTURES: [(&str, &str, &str); 69] = [
+const DEPARTURES: [(&str, &str, &str); 68] = [
     // giac's errors; ours leaves the call, with the error as a warning.
     (
         "index([1,2],5)",
@@ -496,12 +496,13 @@ const DEPARTURES: [(&str, &str, &str); 69] = [
         "[[1,2],[3]]",
     ),
     ("subsop([[1,2],[3,4]],[1]=NULL)", "[[1,2],[3,4]]", "[[1,2]]"),
-    // Heaps (CAS-560): giac works in place and prints 1 for heapify, the
-    // element past the end for heappop; ours returns the heap. giac orders
-    // symbols where `Less` does not decide: ours stays.
+    // Heaps (CAS-560): giac works in place and prints 1 for heapify; ours
+    // returns the heap. giac orders symbols where `Less` does not decide:
+    // ours stays. heappop of a non-empty list reads past the end in giac
+    // (undefined: 0 in a fresh process, SIGSEGV in this shared one, CI
+    // 45112693111): no giac row, ours in cas-core's unit tests.
     ("heapify([3,1,4,1,5,9,2,6])", "1", "[9,6,4,1,5,3,2,1]"),
     ("heapify([])", "1", "[]"),
-    ("heappop([5,3,4,1])", "0", "[4,3,1]"),
     ("heappush([5,3],x)", "[x,3,5]", "heappush([5,3],x)"),
     ("heapify([x,y])", "1", "heapify([x,y])"),
     // giac's errors on heaps and permutations (CAS-560, CAS-561); ours
