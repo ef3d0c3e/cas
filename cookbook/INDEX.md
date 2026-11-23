@@ -35,3 +35,4 @@ C0032 | Oracle rows on factored/signed rational answers: compare normal(ours - g
 C0033 | Reading giac calculus answers back: diff(f,x,2), $K_n constants, sequences, Together on radicals | giac,oracle,diff,symbols,together | 2026-11-23 | 1.3/T6 | T6.c3 CAS-575
 C0034 | giac tabvar/tabsign: step_func_ reductions, columns and dedupe | giac,tabvar,tabsign,variation,port,source | 2026-11-23 | 1.3/T7 | CAS-582 T7.c2 prototype
 C0035 | giac convex: symbolic Bunch-Kaufman ldl; giac's ldl command as oracle | giac,convex,ldl,bunch-kaufman,hessian,port,oracle | 2026-11-23 | 1.3/T7 | CAS-583 T7.c1
+C0036 | Oracle cell compares: giac <>, Exp vs E^u, Solve on quotients, primitive conditions | giac,oracle,compare,unequal,exp,solve,format | 2026-11-23 | 1.3/T7 | CAS-581..583 T7.c3
