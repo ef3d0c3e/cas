@@ -1262,6 +1262,27 @@ fn the_limit_on_bits() {
     assert_eq!(warnings, Vec::<String>::new());
 }
 
+/// A power whose terms and coefficients are each within the limits but
+/// not together is not computed: the rewrite fuzz target's
+/// `TranscendentalSimplify[(1 + x^2/4)^46656]` made 46657 terms of about
+/// 140000 bits each in `Together` and timed out (CAS-547).
+#[test]
+fn the_limit_on_a_power_as_a_whole() {
+    let ctx = Context::new();
+    let power = "Power[Plus[1, Times[1/4, Power[x, 2]]], 46656]";
+    let (found, warnings) = eval(&ctx, &format!("TranscendentalSimplify[{power}]"));
+    assert_eq!(found, read(&format!("Together[{power}]")));
+    assert!(
+        warnings
+            .iter()
+            .any(|w| w.contains("could pass 1000000 terms")),
+        "{warnings:?}"
+    );
+    let (found, warnings) = eval(&ctx, "Expand[Power[Plus[1, Times[1/4, Power[x, 2]]], 100]]");
+    assert_eq!(found.args().len(), 101);
+    assert_eq!(warnings, Vec::<String>::new());
+}
+
 /// The interrupt stops a polynomial builtin, raised before it starts.
 #[test]
 fn the_interrupt_stops_them() {

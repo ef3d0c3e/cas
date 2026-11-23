@@ -917,10 +917,33 @@ fn product_terms<E>(a: &Sparse<E>, b: &Sparse<E>, degrees: &[u64]) -> usize {
     });
     let bound = pairs.min(boxed);
     let total = total_degree(a).saturating_add(total_degree(b));
+    simplex(total, present.len(), bound)
+}
+
+/// A bound on the terms of `p^e` (CAS-547): the least of the monomials of
+/// its multinomial expansion, `C(e + t - 1, t - 1)` for `t` terms; those
+/// within its degrees, `∏ (e d_i + 1)`; and those of total degree at most
+/// `D = e tdeg p` in its `n` variables, `C(n + D, n)`. Saturating.
+fn power_terms<E>(p: &Sparse<E>, e: u64) -> usize {
+    let present: Vec<u64> = p
+        .degrees()
+        .iter()
+        .map(|&d| d.saturating_mul(e))
+        .filter(|&d| d > 0)
+        .collect();
+    let boxed = present.iter().fold(1usize, |acc, &d| {
+        acc.saturating_mul(usize::try_from(d).unwrap_or(usize::MAX).saturating_add(1))
+    });
+    let bound = simplex(e, p.term_count().saturating_sub(1), boxed);
+    simplex(total_degree(p).saturating_mul(e), present.len(), bound)
+}
+
+/// `C(D + n, n)`, or `bound` when less.
+fn simplex(total: u64, n: usize, bound: usize) -> usize {
     // C(D + k, k) for k = 1, …, n, each step exact, until it passes the
     // other bounds.
     let mut simplex: u128 = 1;
-    for k in 1..=present.len() as u128 {
+    for k in 1..=n as u128 {
         simplex = simplex.saturating_mul(u128::from(total) + k) / k;
         if simplex > bound as u128 {
             return bound;
@@ -1256,8 +1279,18 @@ impl<N: Numbers> Converter<'_, N> {
                 // multinomial coefficients add, each factor.
                 let spread =
                     u64::from(usize::BITS - p.term_count().saturating_sub(1).leading_zeros());
-                if largest.saturating_add(spread).saturating_mul(e) > self.max_bits {
+                let bits = largest.saturating_add(spread).saturating_mul(e);
+                if bits > self.max_bits {
                     return Err(PolyError::Bits);
+                }
+                // The whole power, by the same estimate: its terms, each
+                // counted once per 64 bits of its coefficients, within the
+                // bound on terms (CAS-547), as `(1 + x^2/4)^46656` from
+                // `TranscendentalSimplify` made 46657 terms of about
+                // 140000 bits each and took minutes.
+                let words = usize::try_from(bits.div_ceil(64)).unwrap_or(usize::MAX);
+                if power_terms(p, e).saturating_mul(words) > self.max_terms {
+                    return Err(PolyError::TooLarge);
                 }
             }
             let mut result = self.ring.one();

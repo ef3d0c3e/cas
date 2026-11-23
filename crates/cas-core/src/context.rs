@@ -284,7 +284,9 @@ pub struct Limits {
     /// The terms a product may make in a polynomial builtin (CAS-DOC-8 §15
     /// detail 3), bounded before it is taken by the least of the factors'
     /// products of terms, the monomials within its degrees and those within
-    /// its total degree; powers are products by squaring. A call past it
+    /// its total degree; powers are products by squaring, bounded first as
+    /// a whole, each term counted once per 64 bits of its estimated
+    /// coefficients (CAS-547). A call past it
     /// stays unevaluated, with a warning. Sums are not limited: their terms
     /// were in the input.
     pub terms: usize,
