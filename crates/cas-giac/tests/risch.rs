@@ -153,7 +153,8 @@ fn derivative_holds(ctx: &Context, answer: &Expr, f: &Expr) -> bool {
     let (prim, rem) = split(answer);
     let d = Expr::call(Symbol::D, [prim, Expr::symbol("x")]);
     let difference = d + rem - f.clone();
-    vanishes(ctx, &difference) || numerically_zero(ctx, &difference)
+    // The derivative is taken before `x` is replaced by numbers.
+    vanishes(ctx, &difference) || eval(ctx, &difference).is_some_and(|d| numerically_zero(ctx, &d))
 }
 
 /// Whether `e` holds a `Risch` call.
