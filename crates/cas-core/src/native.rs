@@ -370,6 +370,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::RADIANS, elementary::angle),
         (Symbol::DEGREES, elementary::angle),
         (Symbol::NORMALIZE, matrix::constructors::normalize),
+        (Symbol::ALGEBRAIC_SUBSTITUTE, replace::algebraic_substitute),
         (Symbol::APART, polytools::apart),
         (Symbol::COMPLEX_APART, polytools::complex_apart),
         (Symbol::PROPER_FRACTION, polytools::proper_fraction),

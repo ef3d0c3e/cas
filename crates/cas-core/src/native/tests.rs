@@ -968,3 +968,42 @@ fn squares_logarithms_and_angles() {
         );
     }
 }
+
+/// Xcas's `algsubs` (CAS-566), giac's answers: each `(input, expected)` the
+/// same value, their difference 0 under `Together`.
+#[test]
+fn algebraic_substitution() {
+    let ctx = Context::new();
+    for (input, expected) in [
+        (
+            "AlgebraicSubstitute[Equation[Power[x, 2], u], Plus[1, Power[x, 2], Power[x, 4]]]",
+            "Plus[Power[u, 2], u, 1]",
+        ),
+        (
+            "AlgebraicSubstitute[Equation[Times[a, b, Power[c, -1]], d], \
+             Times[2, a, Power[b, 2], Power[c, -1]]]",
+            "Times[2, b, d]",
+        ),
+        (
+            "AlgebraicSubstitute[Equation[Times[2, a], Plus[Power[p, 2], Times[-1, Power[q, 2]]]], \
+             AlgebraicSubstitute[Equation[Times[2, c], Plus[Power[p, 2], Power[q, 2]]], \
+             Plus[Power[c, 2], Times[-1, Power[a, 2]]]]]",
+            "Times[Power[p, 2], Power[q, 2]]",
+        ),
+        (
+            "AlgebraicSubstitute[Equation[Times[x, y], u], Plus[Times[Power[x, 2], Power[y, 2]], x]]",
+            "Times[Plus[Times[Power[u, 2], y], u], Power[y, -1]]",
+        ),
+        (
+            "AlgebraicSubstitute[Equation[Plus[x, y], u], Plus[Power[Plus[x, y], 2], x, y]]",
+            "Plus[Power[u, 2], u]",
+        ),
+    ] {
+        let got = ctx.eval(&read(input)).unwrap();
+        let difference = got.clone() - read(expected);
+        let zero = ctx
+            .eval(&Expr::call(Symbol::TOGETHER, [difference]))
+            .unwrap();
+        assert_eq!(zero, Expr::from(0), "{input}: {got:?}");
+    }
+}

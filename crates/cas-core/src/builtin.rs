@@ -258,6 +258,7 @@ builtins! {
     RADIANS = "Radians" [LISTABLE, PROTECTED];
     DEGREES = "Degrees" [LISTABLE, PROTECTED];
     NORMALIZE = "Normalize" [PROTECTED];
+    ALGEBRAIC_SUBSTITUTE = "AlgebraicSubstitute" [PROTECTED];
     // Polynomial tools (CAS-DOC-29).
     APART = "Apart" [PROTECTED];
     COMPLEX_APART = "ComplexApart" [PROTECTED];

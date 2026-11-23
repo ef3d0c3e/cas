@@ -1,6 +1,6 @@
 //! Xcas's expression commands against giac (CAS-562 to CAS-567): `pow`,
 //! `comDenom`, `getNum`, `getDenom`, `simp2`, `regroup`, `sq`, `logb`,
-//! `log2`, `log10`, `alog10`, `normalize` and `unitV`, giac's answers read
+//! `log2`, `log10`, `alog10`, `normalize`, `unitV` and `algsubs`, giac's answers read
 //! back and compared with ours (`Giac::agrees`); and the departures, each
 //! with giac's answer as it prints it: `powexpand`, whose answer ours
 //! holds, as evaluation would merge the powers again, and `radians` and
@@ -96,6 +96,18 @@ fn regroup_squares_logarithms_and_norms() {
         "normalize(x)",
         "unitV([3,4])",
         "unitV(3+4*i)",
+    ]);
+}
+
+/// `algsubs` (CAS-566): giac's elimination of an algebraic relation.
+#[test]
+fn algebraic_substitution() {
+    check(&[
+        "algsubs(x^2=u,1+x^2+x^4)",
+        "algsubs(a*b/c=d,2*a*b^2/c)",
+        "algsubs(2*a=p^2-q^2,algsubs(2*c=p^2+q^2,c^2-a^2))",
+        "algsubs(x*y=u,x^2*y^2+x)",
+        "algsubs(x+y=u,(x+y)^2+x+y)",
     ]);
 }
 

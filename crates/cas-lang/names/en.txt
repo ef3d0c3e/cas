@@ -205,6 +205,7 @@ Exp10: alog10
 Radians: radians
 Degrees: degrees
 Normalize: normalize unitV
+AlgebraicSubstitute: algsubs
 # Polynomial tools (CAS-DOC-29, CAS-339 to CAS-341).
 Apart: partfrac
 ComplexApart: cpartfrac
