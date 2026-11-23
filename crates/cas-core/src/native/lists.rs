@@ -42,6 +42,8 @@ use std::cmp::Ordering;
 
 use cas_num::ball::Ball;
 
+pub(super) mod xcas;
+
 use super::approximation;
 use crate::context::EvalError;
 use crate::eval::Eval;

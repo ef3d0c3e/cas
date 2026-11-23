@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 498] = [
+const BUILTINS: [&str; 511] = [
     "Plus",
     "Times",
     "Power",
@@ -318,6 +318,19 @@ const BUILTINS: [&str; 498] = [
     "MemberIndex",
     "Zip",
     "Accumulate",
+    "FindPositions",
+    "FirstPosition",
+    "CountEqual",
+    "CountLess",
+    "CountGreater",
+    "Differences",
+    "AccumulateHeadTail",
+    "Lengths",
+    "MakeVector",
+    "MakeSequence",
+    "NewList",
+    "Enumerate",
+    "Copy",
     "Apart",
     "ComplexApart",
     "ProperFraction",

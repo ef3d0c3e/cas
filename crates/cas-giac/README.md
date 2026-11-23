@@ -240,6 +240,18 @@ whose `n - 1` ours does not factor far enough to prove them
 (`is_prime(2^607-1)`, a 62-digit `2*96*p*q+1`): giac answers 1 through
 PARI's APRCL where PARI does not fail, ours leaves the call with a warning.
 
+`tests/list_commands.rs`, Xcas's list commands (CAS-555 to CAS-557): giac's
+`find` and `index` from 0 (`1` found at `1.0`), `count_eq`, `count_inf` and
+`count_sup` flattened and with `row` and `col`, `deltalist` of lists and of
+matrices, `accumulate_head_tail`, `sizes`, `makevector`, `makesuite`
+(bracketed to be read), `newList`, `enumerate` and `copy`, read back and
+compared; and the departures, each with giac's answer: its errors (bad
+arguments and types, fewer than two elements for `deltalist`, a size that
+is not an integer), where ours leaves the call with a warning; the string
+forms of `find` and `index` (phase 1.6), `find`'s start position and
+`enumerate` of three arguments, which stay; and `newList(65537)`, past
+giac's `LIST_SIZE_LIMIT` here, which stays with a warning.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

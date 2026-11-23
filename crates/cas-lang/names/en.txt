@@ -164,6 +164,20 @@ Count: count
 MemberIndex: member
 Zip: zip
 Accumulate: cumsum
+# Xcas's list commands (CAS-555 to CAS-557).
+FindPositions: find
+FirstPosition: index
+CountEqual: count_eq
+CountLess: count_inf
+CountGreater: count_sup
+Differences: deltalist
+AccumulateHeadTail: accumulate_head_tail
+Lengths: sizes
+MakeVector: makevector
+MakeSequence: makesuite
+NewList: newList
+Enumerate: enumerate
+Copy: copy
 # Polynomial tools (CAS-DOC-29, CAS-339 to CAS-341).
 Apart: partfrac
 ComplexApart: cpartfrac

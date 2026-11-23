@@ -218,6 +218,20 @@ builtins! {
     MEMBER_INDEX = "MemberIndex" [PROTECTED];
     ZIP = "Zip" [PROTECTED];
     ACCUMULATE = "Accumulate" [PROTECTED];
+    // Xcas's list commands (CAS-555 to CAS-557).
+    FIND_POSITIONS = "FindPositions" [PROTECTED];
+    FIRST_POSITION = "FirstPosition" [PROTECTED];
+    COUNT_EQUAL = "CountEqual" [PROTECTED];
+    COUNT_LESS = "CountLess" [PROTECTED];
+    COUNT_GREATER = "CountGreater" [PROTECTED];
+    DIFFERENCES = "Differences" [PROTECTED];
+    ACCUMULATE_HEAD_TAIL = "AccumulateHeadTail" [PROTECTED];
+    LENGTHS = "Lengths" [PROTECTED];
+    MAKE_VECTOR = "MakeVector" [PROTECTED];
+    MAKE_SEQUENCE = "MakeSequence" [PROTECTED];
+    NEW_LIST = "NewList" [PROTECTED];
+    ENUMERATE = "Enumerate" [PROTECTED];
+    COPY = "Copy" [PROTECTED];
     // Polynomial tools (CAS-DOC-29).
     APART = "Apart" [PROTECTED];
     COMPLEX_APART = "ComplexApart" [PROTECTED];
