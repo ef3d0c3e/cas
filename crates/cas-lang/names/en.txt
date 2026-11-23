@@ -159,6 +159,9 @@ LinSpace: linspace
 LinearInterpolate: linear_interpolate
 IntervalToCenter: interval2center
 CenterToInterval: center2interval
+# Rational and trigonometric interpolation (CAS-594), Xcas's.
+RationalInterpolation: ratinterp
+TrigonometricInterpolation: triginterp
 LegendreP: legendre
 HermiteH: hermite
 LaguerreL: laguerre

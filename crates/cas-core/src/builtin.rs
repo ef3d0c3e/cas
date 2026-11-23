@@ -212,6 +212,9 @@ builtins! {
     LINEAR_INTERPOLATE = "LinearInterpolate" [PROTECTED];
     INTERVAL_TO_CENTER = "IntervalToCenter" [PROTECTED];
     CENTER_TO_INTERVAL = "CenterToInterval" [PROTECTED];
+    // Rational and trigonometric interpolation (CAS-594).
+    RATIONAL_INTERPOLATION = "RationalInterpolation" [PROTECTED];
+    TRIGONOMETRIC_INTERPOLATION = "TrigonometricInterpolation" [PROTECTED];
     LEGENDRE_P = "LegendreP" [PROTECTED];
     HERMITE_H = "HermiteH" [PROTECTED];
     LAGUERRE_L = "LaguerreL" [PROTECTED];

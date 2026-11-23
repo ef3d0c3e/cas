@@ -325,6 +325,14 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::CENTER_TO_INTERVAL,
             interpolation::sampling::center_to_interval,
         ),
+        (
+            Symbol::RATIONAL_INTERPOLATION,
+            interpolation::interpolants::rational_interpolation,
+        ),
+        (
+            Symbol::TRIGONOMETRIC_INTERPOLATION,
+            interpolation::interpolants::trigonometric_interpolation,
+        ),
         (Symbol::LEGENDRE_P, orthogonal::legendre_p),
         (Symbol::HERMITE_H, orthogonal::hermite_h),
         (Symbol::LAGUERRE_L, orthogonal::laguerre_l),

@@ -204,6 +204,119 @@ fn centres_and_intervals() {
     ]);
 }
 
+/// giac's `ratinterp` (CAS-594): its default `d`, `d = 1` and `d = 0`, the
+/// matrix form, values at points, a symbolic abscissa.
+#[test]
+fn rational_interpolation() {
+    let (xs, ys) = ("List[1, 3, 5, 8]", "List[2, -1, 3, 4]");
+    let cubic = "Plus[Times[-29/168, Power[x, 3]], Times[17/7, Power[x, 2]], \
+                 Times[-1507/168, x], 61/7]";
+    check(&[
+        (&format!("RationalInterpolation[{xs}, {ys}, x]"), cubic),
+        (
+            "RationalInterpolation[List[List[1, 2], List[3, -1], List[5, 3], List[8, 4]], x]",
+            cubic,
+        ),
+        (
+            "RationalInterpolation[List[List[1, 2], List[3, -1], List[5, 3], List[8, 4]]]",
+            cubic,
+        ),
+        (
+            &format!("RationalInterpolation[{xs}, {ys}, x, 1]"),
+            "Times[Plus[Times[-19, Power[x, 3]], Times[288, Power[x, 2]], Times[-1133, x], 1200], \
+             Power[Plus[Times[6, Power[x, 2]], Times[-48, x], 210], -1]]",
+        ),
+        (
+            "RationalInterpolation[List[0, 1, 2, 3, 4], List[1, 2, 1, 2, 1], x, 1]",
+            "Times[Plus[Times[-1, Power[x, 4]], Times[8, Power[x, 3]], Times[-19, Power[x, 2]], \
+             Times[12, x], 6], Power[Plus[Power[x, 2], Times[-4, x], 6], -1]]",
+        ),
+        (
+            "RationalInterpolation[List[0, 1, 2, 3, 4], List[1, 2, 1, 2, 1], x, 0]",
+            "Times[Plus[Times[-1, Power[x, 4]], Times[8, Power[x, 3]], Times[-15, Power[x, 2]], \
+             Times[-4, x], 24], Power[Plus[Power[x, 4], Times[-8, Power[x, 3]], \
+             Times[25, Power[x, 2]], Times[-36, x], 24], -1]]",
+        ),
+        (
+            "RationalInterpolation[List[0, 1, 2, 3], List[1, 0, 1, 0], t, 1]",
+            "Times[Plus[Times[-3, Power[t, 3]], Times[14, Power[t, 2]], Times[-17, t], 6], \
+             Power[Plus[Power[t, 2], Times[-3, t], 6], -1]]",
+        ),
+        (
+            "RationalInterpolation[List[1, 2, 3], List[1, 4, 9]]",
+            "Power[x, 2]",
+        ),
+        (
+            "RationalInterpolation[List[1, 2, 3], List[1, 4, 9], List[0, 1/2, 4]]",
+            "List[0, 1/4, 16]",
+        ),
+        (
+            "RationalInterpolation[List[1, 2, 3], List[1, 4, 9], 5/2, 1]",
+            "25/4",
+        ),
+        (
+            "RationalInterpolation[List[List[1, 2], List[3, -1], List[5, 3], List[8, 4]], \
+             List[2, 4], 1]",
+            "List[-11/23, 10/19]",
+        ),
+        (
+            "RationalInterpolation[List[0, a], List[1, 2], x]",
+            "Plus[1, Times[x, Power[a, -1]]]",
+        ),
+    ]);
+}
+
+/// giac's `triginterp` (CAS-594) in its two forms, odd and even `n`.
+#[test]
+fn trigonometric_interpolation() {
+    let eight = "List[11, 10, 17, 24, 32, 26, 23, 19]";
+    let answer = "Plus[81/4, \
+         Times[21/8, Plus[-2, Times[-1, Sqrt[2]]], Cos[Times[1/12, Pi, x]]], \
+         Times[1/8, Plus[-12, Times[-11, Sqrt[2]]], Sin[Times[1/12, Pi, x]]], \
+         Times[3/4, Cos[Times[1/6, Pi, x]]], Times[-7/4, Sin[Times[1/6, Pi, x]]], \
+         Times[21/8, Plus[-2, Sqrt[2]], Cos[Times[1/4, Pi, x]]], \
+         Times[1/8, Plus[12, Times[-11, Sqrt[2]]], Sin[Times[1/4, Pi, x]]], \
+         Times[1/2, Cos[Times[1/3, Pi, x]]]]";
+    check(&[
+        (
+            "TrigonometricInterpolation[List[1, 2, 3], Equation[x, Range[0, 2]]]",
+            "Plus[2, Times[-1, Cos[Times[2/3, Pi, x]]], \
+             Times[-1/3, Sqrt[3], Sin[Times[2/3, Pi, x]]]]",
+        ),
+        (
+            &format!("TrigonometricInterpolation[{eight}, Equation[x, Range[0, 21]]]"),
+            answer,
+        ),
+        (
+            &format!("TrigonometricInterpolation[{eight}, 0, 21, x]"),
+            answer,
+        ),
+        (
+            "TrigonometricInterpolation[List[1, 0, 1, 0], Equation[x, Range[0, 3]]]",
+            "Plus[1/2, Times[1/2, Cos[Times[Pi, x]]]]",
+        ),
+        (
+            "TrigonometricInterpolation[List[0, 1, 0, -1], Equation[x, Range[0, 3]]]",
+            "Sin[Times[1/2, Pi, x]]",
+        ),
+        (
+            "TrigonometricInterpolation[List[1, 2], Equation[t, Range[0, 1]]]",
+            "Plus[3/2, Times[-1/2, Cos[Times[Pi, t]]]]",
+        ),
+    ]);
+    // A decimal: the result numerically, as giac's evalf.
+    let ctx = Context::new();
+    let found = ctx
+        .eval(&read(
+            "TrigonometricInterpolation[List[0x1p+0, 2, 3], Equation[x, Range[0, 2]]]",
+        ))
+        .unwrap();
+    assert!(
+        found.may_contain(Symbol::COS) && !found.may_contain(Symbol::PI),
+        "{found:?}"
+    );
+}
+
 /// What stays: a repeated abscissa, lists of unequal lengths, abscissas
 /// not increasing, Thiele's differences vanishing at some points only, a
 /// degree 0.
@@ -232,6 +345,18 @@ fn what_stays() {
         "CenterToInterval[List[1, x]]",
         "CenterToInterval[List[1, 2, 4], 5]",
         "CenterToInterval[List[2, 1]]",
+        // Interpolants (CAS-594): d out of range, d = n + 1 (giac's undef),
+        // a repeated abscissa, one point, a matrix not of two columns; one
+        // value, a = b, a variable not a symbol.
+        "RationalInterpolation[List[1, 2, 3], List[1, 4, 9], x, 5]",
+        "RationalInterpolation[List[1, 2, 3], List[1, 4, 9], x, 3]",
+        "RationalInterpolation[List[1, 2, 3], List[1, 4, 9], x, -1]",
+        "RationalInterpolation[List[1, 1, 3], List[1, 4, 9], x]",
+        "RationalInterpolation[List[1], List[1], x]",
+        "RationalInterpolation[List[List[1, 2, 3], List[4, 5, 6]], x]",
+        "TrigonometricInterpolation[List[1], Equation[x, Range[0, 2]]]",
+        "TrigonometricInterpolation[List[1, 2, 3], Equation[x, Range[1, 1]]]",
+        "TrigonometricInterpolation[List[1, 2, 3], 0, 2, 3]",
     ] {
         let e = read(input);
         let found = ctx.eval(&e).unwrap();

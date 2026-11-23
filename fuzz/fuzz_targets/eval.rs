@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 578] = [
+const BUILTINS: [&str; 580] = [
     "Plus",
     "Times",
     "Power",
@@ -308,6 +308,8 @@ const BUILTINS: [&str; 578] = [
     "LinearInterpolate",
     "IntervalToCenter",
     "CenterToInterval",
+    "RationalInterpolation",
+    "TrigonometricInterpolation",
     "LegendreP",
     "HermiteH",
     "LaguerreL",

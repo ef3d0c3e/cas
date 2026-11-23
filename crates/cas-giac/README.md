@@ -416,6 +416,14 @@ bracketed (C0023). Departures, each with giac's error as caseval prints it:
 `linear_interpolate` (Values out of range) and one centre for
 `center2interval` (Bad Argument Value), where ours stays.
 
+`tests/interpolation.rs`, besides `lagrange`, `spline`, `thiele` and the
+orthogonal polynomials, Xcas's `ratinterp` and `triginterp` (CAS-594):
+compared by `Expand` and `Together` of the difference, decimal `triginterp`
+by value at three points within `10⁻¹⁰`. Departures, each with giac's answer
+as caseval prints it: `d` out of `0 … |X|` and one point for `ratinterp`,
+one value for `triginterp` (giac's errors), and `d = |X|`, a repeated
+abscissa and `a = b` (giac's `undef`), where ours stays.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 
