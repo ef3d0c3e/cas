@@ -742,7 +742,8 @@ impl<R: GcdDomain> SparseRing<R> {
     /// quotient comes from [`SparseRing::pseudo_div_rem`], each piece from
     /// [`SparseRing::abcuv`] against the product of the factors after it.
     /// `None` when the factors do not divide `den` with a cofactor `κ`
-    /// without `x_var`, or two of them are not coprime.
+    /// without `x_var` (a zero factor among them), or two of them are not
+    /// coprime.
     ///
     /// # Panics
     ///
@@ -755,6 +756,10 @@ impl<R: GcdDomain> SparseRing<R> {
         factors: &[(Sparse<R::Elem>, u64)],
         var: usize,
     ) -> Option<PartialFractions<R::Elem>> {
+        // A zero factor divides no non-zero `den`; its product is no divisor.
+        if factors.iter().any(|(f, _)| f.is_zero()) {
+            return None;
+        }
         let powers: Vec<Sparse<R::Elem>> = factors.iter().map(|(f, m)| self.pow(f, *m)).collect();
         let product = powers.iter().fold(self.one(), |p, f| self.mul(&p, f));
         let kappa = self.div_exact(den, &product)?;

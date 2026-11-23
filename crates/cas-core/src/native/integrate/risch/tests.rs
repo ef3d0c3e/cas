@@ -2,7 +2,9 @@
 //! (.run/1.3/T9/probe.out, giac 2.0.0.21): each answer equals giac's as a
 //! value and its derivative is the integrand; partial answers split into
 //! the primitive and `Risch[rem, x]`, both giac's; what giac leaves stays.
-//! Each test collects every failing row and panics once with the list.
+//! Each test collects every failing row and panics once with the list; a
+//! row that panics is one failure, with its message, and the hook prints
+//! the panic's backtrace (CAS-585 T9.c4).
 //!
 //! Departures, not tested (the port cannot reach giac's answer by design):
 // departure: 1/(x^2-2) — the resultant factor 8t^2-1 needs a sqrt split (giac's with_sqrt), not ported
@@ -15,9 +17,44 @@
 // departure: tower-size ties — kernels of one size keep our canonical order (Exp before Log, as giac's
 //   printout for exp/ln; ln(2x-1)/ln(3x-1) and exp(2x)/ln(x-2) ties of T9.c1's batch differ), not probe rows
 
+use std::panic::{self, AssertUnwindSafe};
+use std::sync::Once;
+
 use crate::context::Context;
 use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
+
+/// A panic hook printing each panic with a forced backtrace, installed once
+/// per test binary, so a CI log names the panicking frame.
+fn backtrace_hook() {
+    static HOOK: Once = Once::new();
+    HOOK.call_once(|| {
+        panic::set_hook(Box::new(|info| {
+            eprintln!("{info}\n{}", std::backtrace::Backtrace::force_capture());
+        }));
+    });
+}
+
+/// `check` on one row under `catch_unwind`: its failure, or the row's panic
+/// as one; the context is made anew after a panic.
+fn row(
+    ctx: &mut Context,
+    input: &str,
+    check: impl FnOnce(&Context) -> Option<String>,
+) -> Option<String> {
+    match panic::catch_unwind(AssertUnwindSafe(|| check(&*ctx))) {
+        Ok(failure) => failure,
+        Err(payload) => {
+            *ctx = Context::new();
+            let message = payload
+                .downcast_ref::<&str>()
+                .map(|m| (*m).to_owned())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_else(|| "a panic without a message".to_owned());
+            Some(format!("{input}: panicked: {message}"))
+        }
+    }
+}
 
 fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
@@ -86,23 +123,25 @@ fn split(e: &Expr) -> (Expr, Expr) {
 /// Each `(f, giac's answer)` integrates to giac's value, with `f` as its
 /// derivative.
 fn integrated(rows: &[(&str, &str)]) {
-    let ctx = Context::new();
+    backtrace_hook();
+    let mut ctx = Context::new();
     let mut wrong = Vec::new();
     for (input, expected) in rows {
-        let f = eval(&ctx, &read(input));
-        let found = risch(&ctx, &f);
-        let expected = eval(&ctx, &read(expected));
-        if found.distinct().any(is_risch) {
-            wrong.push(format!("{input}: left {found:?}, expected {expected:?}"));
-            continue;
-        }
-        let equal = vanishes(&ctx, &(found.clone() - expected.clone()));
-        let derivative = derivative_holds(&ctx, &found, &Expr::from(0), &f);
-        if !equal || !derivative {
-            wrong.push(format!(
-                "{input}: {found:?}, expected {expected:?} (equal {equal}, derivative {derivative})"
-            ));
-        }
+        wrong.extend(row(&mut ctx, input, |ctx| {
+            let f = eval(ctx, &read(input));
+            let found = risch(ctx, &f);
+            let expected = eval(ctx, &read(expected));
+            if found.distinct().any(is_risch) {
+                return Some(format!("{input}: left {found:?}, expected {expected:?}"));
+            }
+            let equal = vanishes(ctx, &(found.clone() - expected.clone()));
+            let derivative = derivative_holds(ctx, &found, &Expr::from(0), &f);
+            (!equal || !derivative).then(|| {
+                format!(
+                    "{input}: {found:?}, expected {expected:?} (equal {equal}, derivative {derivative})"
+                )
+            })
+        }));
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
@@ -123,14 +162,16 @@ fn other_probe_rows() {
 /// other rows giac leaves stay `Risch[f, x]`.
 #[test]
 fn unevaluated_rows() {
-    let ctx = Context::new();
+    backtrace_hook();
+    let mut ctx = Context::new();
     let mut wrong = Vec::new();
     for input in UNEVALUATED {
-        let f = eval(&ctx, &read(input));
-        let found = risch(&ctx, &f);
-        if !is_risch(&found) || found.args() != [f.clone(), read("x")] {
-            wrong.push(format!("{input}: {found:?}, expected it to stay"));
-        }
+        wrong.extend(row(&mut ctx, input, |ctx| {
+            let f = eval(ctx, &read(input));
+            let found = risch(ctx, &f);
+            (!is_risch(&found) || found.args() != [f.clone(), read("x")])
+                .then(|| format!("{input}: {found:?}, expected it to stay"))
+        }));
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
@@ -139,23 +180,26 @@ fn unevaluated_rows() {
 /// `D[prim] + rem = f`.
 #[test]
 fn partial_rows() {
-    let ctx = Context::new();
+    backtrace_hook();
+    let mut ctx = Context::new();
     let mut wrong = Vec::new();
     for (input, expected) in PARTIAL {
-        let f = eval(&ctx, &read(input));
-        let found = risch(&ctx, &f);
-        let (prim, rem) = split(&found);
-        let (gprim, grem) = split(&read(expected));
-        let (gprim, grem) = (eval(&ctx, &gprim), eval(&ctx, &grem));
-        let prim_equal = vanishes(&ctx, &(prim.clone() - gprim.clone()));
-        let rem_equal = vanishes(&ctx, &(rem.clone() - grem.clone()));
-        let derivative = derivative_holds(&ctx, &prim, &rem, &f);
-        if rem == Expr::from(0) || !prim_equal || !rem_equal || !derivative {
-            wrong.push(format!(
-                "{input}: {found:?}, expected {gprim:?} + Risch[{grem:?}, x] \
-                 (prim {prim_equal}, rem {rem_equal}, derivative {derivative})"
-            ));
-        }
+        wrong.extend(row(&mut ctx, input, |ctx| {
+            let f = eval(ctx, &read(input));
+            let found = risch(ctx, &f);
+            let (prim, rem) = split(&found);
+            let (gprim, grem) = split(&read(expected));
+            let (gprim, grem) = (eval(ctx, &gprim), eval(ctx, &grem));
+            let prim_equal = vanishes(ctx, &(prim.clone() - gprim.clone()));
+            let rem_equal = vanishes(ctx, &(rem.clone() - grem.clone()));
+            let derivative = derivative_holds(ctx, &prim, &rem, &f);
+            (rem == Expr::from(0) || !prim_equal || !rem_equal || !derivative).then(|| {
+                format!(
+                    "{input}: {found:?}, expected {gprim:?} + Risch[{grem:?}, x] \
+                     (prim {prim_equal}, rem {rem_equal}, derivative {derivative})"
+                )
+            })
+        }));
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }

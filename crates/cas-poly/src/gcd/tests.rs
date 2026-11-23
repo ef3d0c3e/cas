@@ -1208,3 +1208,20 @@ fn partial_fractions_over_a_squarefree_decomposition() {
         None
     );
 }
+
+/// A zero factor gives `None`, not a division by zero (CAS-585 T9.c4).
+#[test]
+fn partial_fractions_with_a_zero_factor() {
+    let ring = SparseRing::new(Integers, 1);
+    let x = ring.var(0);
+    let f = ring.sub(&x, &ring.one());
+    let den = ring.mul(&f, &x);
+    assert_eq!(
+        ring.partial_fractions(&ring.one(), &den, &[(f, 1), (ring.zero(), 1)], 0),
+        None
+    );
+    assert_eq!(
+        ring.partial_fractions(&ring.one(), &den, &[(ring.zero(), 2)], 0),
+        None
+    );
+}

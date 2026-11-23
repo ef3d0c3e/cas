@@ -431,18 +431,22 @@ impl Tower {
 
     /// The partial fractions of `num / den` over `factors` from
     /// [`Tower::sqff`] (giac's `Tpartfrac`): each factor's numerator over
-    /// its power, and the polynomial part.
-    pub(super) fn partfrac(&self, num: &P, den: &P, factors: &[(P, u64)]) -> (Vec<Frac>, Frac) {
+    /// its power, and the polynomial part; `None` when cas-poly finds the
+    /// factors no decomposition of `den` (never for [`Tower::sqff`]'s).
+    pub(super) fn partfrac(
+        &self,
+        num: &P,
+        den: &P,
+        factors: &[(P, u64)],
+    ) -> Option<(Vec<Frac>, Frac)> {
         let r = &self.ring;
-        let pf = r
-            .partial_fractions(num, den, factors, self.top())
-            .expect("a square-free decomposition of the denominator");
+        let pf = r.partial_fractions(num, den, factors, self.top())?;
         let pieces = pf
             .pieces
             .into_iter()
             .map(|(n, d)| self.frac(n, d))
             .collect();
-        (pieces, self.frac(pf.quotient, pf.quotient_den))
+        Some((pieces, self.frac(pf.quotient, pf.quotient_den)))
     }
 
     // ---------------------------------------------------------------- the resultant's variable

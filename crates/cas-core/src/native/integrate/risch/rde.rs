@@ -93,6 +93,10 @@ fn spde(
     }
     let v1 = &v[1..];
     let rr = c.lc(&r);
+    if rr.num.is_zero() {
+        // R = 0 leaves no equation to divide by (rischde_simplify keeps R ≠ 0).
+        return Ok(None);
+    }
     let mut tc = Vec::new();
     for cf in c.coeffs(&t) {
         tc.push(c.r2e(ev, &c.div(&cf, &rr))?);
@@ -181,6 +185,10 @@ pub(super) fn risch_desolve(
             return Ok(None);
         };
         let lnc = |c: &Tower| {
+            // z′ = 0: the prototype's −f0/dzr is not an integer, no bound.
+            if dzr.num.is_zero() {
+                return None;
+            }
             let f0 = c.div(&c.const_coeff(&fnum), &c.const_coeff(&fdenred));
             let q = c.neg(&c.div(&f0, &dzr));
             Tower::integer(&q).and_then(|n| i64::try_from(n).ok())

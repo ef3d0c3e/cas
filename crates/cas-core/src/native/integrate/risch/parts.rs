@@ -100,7 +100,10 @@ pub(super) fn in_risch(ev: &mut Eval<'_>, e: &Expr, v: &[Expr], allowed: &Expr) 
     within(ev, v.len(), degree, 1)?;
     let restricted = *allowed != zero();
     let vden = c.sqff(&r.den, true);
-    let (pfs, ip) = c.partfrac(&r.num, &r.den, &vden);
+    let Some((pfs, ip)) = c.partfrac(&r.num, &r.den, &vden) else {
+        acc.remains = e.clone();
+        return Ok(acc.failed());
+    };
     let is_exp = kernel(&v[0]) == Some(true);
     let mut ipshift = c.zero();
     for (ni, (f, m)) in pfs.iter().zip(&vden) {
@@ -474,7 +477,12 @@ fn giac_gcd_norm(c: &Tower, a: &P, b: &P) -> P {
     let pa = if ext { a.clone() } else { primitive(a) };
     let pa = without_monomial(r, &pa);
     let pb = without_monomial(r, b);
-    if let Some(q) = r.div_exact(&pb, &pa) {
+    // `a = 0` when `p₁` vanishes at the root (any `f′/f`): giac's `_gcd(0, b)`
+    // is `b`, the prototype's `pb.div(pa)` raises and falls back to the gcd;
+    // dividing by `pa` there was T9.c3's division by zero (CAS-585).
+    if !pa.is_zero()
+        && let Some(q) = r.div_exact(&pb, &pa)
+    {
         if used >= 2 && q.term_count() == 1 {
             return pa;
         }
@@ -528,7 +536,9 @@ pub(super) fn integrate_ei(
     };
     let r = &fr[0];
     let vden = c.sqff(&r.den, false);
-    let (pfs, ip) = c.partfrac(&r.num, &r.den, &vden);
+    let Some((pfs, ip)) = c.partfrac(&r.num, &r.den, &vden) else {
+        return Ok(None);
+    };
     let mut prim = zero();
     if !ip.num.is_zero() {
         let p = c.r2e(ev, &ip)?;
