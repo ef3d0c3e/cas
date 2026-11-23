@@ -2,6 +2,7 @@
 //! in one symbol, Xcas's `integrate` and `int`, without a constant of
 //! integration.
 //!
+//! - `Integrate[f]` is `Integrate[f, x]`, as giac's `int(f)` (CAS-578).
 //! - Lists thread over the integrand (CAS-194).
 //! - What is free of the variable `x` is `f x`.
 //! - Sums go term by term, and the terms that do not integrate stay under
@@ -86,6 +87,11 @@ fn parts(e: &Expr) -> Option<Parts<'_>> {
 }
 
 pub(super) fn integrate(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    if let [f] = e.args() {
+        // giac's `int(f)` integrates in `x` (CAS-578).
+        let x = Expr::from(Symbol::new("x"));
+        return integrate(ev, &Expr::call(Symbol::INTEGRATE, [f.clone(), x]));
+    }
     let Some((f, x, bounds)) = parts(e) else {
         return Ok(None);
     };

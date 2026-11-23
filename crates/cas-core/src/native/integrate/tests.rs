@@ -40,6 +40,17 @@ fn check(cases: &[(&str, &str)]) {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// One argument: the variable is `x`, as giac's `int(f)` (CAS-578).
+#[test]
+fn in_x_by_default() {
+    check(&[
+        ("Integrate[x]", "Times[1/2, Power[x, 2]]"),
+        ("Integrate[Sin[x]]", "Times[-1, Cos[x]]"),
+        ("Integrate[y]", "Times[x, y]"),
+        ("Preval[Integrate[x], 0, 1]", "1/2"),
+    ]);
+}
+
 /// giac's answers (CAS-DOC-9 §2), as values.
 #[test]
 fn antiderivatives() {
