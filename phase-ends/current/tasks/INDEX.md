@@ -7,3 +7,4 @@ T4 | done | expressions: power expansion, common denominators, numerators, logar
 T5 | done | expressions: variable lists, operands, evaluation, predicates, equation and list conversions, steps, Dirac, periodic | - | tasks/T5.md | logs/T5.md | R1.3-002,R1.3-007
 T6 | done | calculus tools: ibpdv, ibpu, preval, function_diff, revert, sum_riemann, wz_certificate, euler_lagrange, jacobi_equation, conjugate_equation | - | tasks/T6.md | logs/T6.md | R1.3-001,R1.3-007
 T7 | done | function study: domain, sign and variation tables, convexity | - | tasks/T7.md | logs/T7.md | R1.3-001,R1.3-005,R1.3-007
+T8 | done | Kovacic's algorithm: kovacicsols | - | tasks/T8.md | logs/T8.md | R1.3-001,R1.3-007
