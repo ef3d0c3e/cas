@@ -1071,13 +1071,22 @@ fn check(mut u: Unstructured<'_>, recursion: u32) {
     // A first evaluation stopped by a limit leaves the fixpoint stamps of
     // the parts it finished on the context, so a second one may take fewer
     // levels and finish: then a third agrees with it.
-    let limited = matches!(
-        plain,
-        Err(EvalError::RecursionLimit | EvalError::IterationLimit | EvalError::MatchLimit)
-    );
+    let limit = |r: &Result<Expr, EvalError>| {
+        matches!(
+            r,
+            Err(EvalError::RecursionLimit | EvalError::IterationLimit | EvalError::MatchLimit)
+        )
+    };
+    // The other way round, a stamp may take a second one more levels: a
+    // native's first call of a part at a shallow level that finished as a
+    // stamped fixpoint memoised the parts it evaluated (`D[1/x, x]` inside
+    // `Integrate`), which the native met again deeper; the second takes
+    // the stamp hit, memoises nothing, and evaluates them in full at the
+    // deep level, past the limit. Without caches the input stops there too.
+    let limited = limit(&plain);
     if limited && let Ok(t) = &traced {
         assert_eq!(ctx.eval(&e).as_ref(), Ok(t), "{e:?} after a limit");
-    } else {
+    } else if !(plain.is_ok() && limit(&traced)) {
         assert_eq!(
             traced.is_ok(),
             plain.is_ok(),
