@@ -40,3 +40,4 @@ C0037 | giac port traps: coeff highest-first, quoted '/' in lists, return false 
 C0038 | Kovacic port: list-form oracle rows, algebraic poles, systems by monomials | giac,oracle,dsolve,kovacic,quote,together,limits | 2026-11-23 | 1.3/T8 | CAS-584 T8.c2
 C0039 | giac risch port: helper behaviours, the :693 flaw, tower ties | giac,risch,port,prototype,integrate,tower,gcd | 2026-11-23 | 1.3/T9 | CAS-585 T9.c1
 C0040 | CI-only tests of a big port: one test per row group collecting every failure | tests,ci,port,oracle,risch,commit | 2026-11-23 | 1.3/T9 | CAS-585 T9.c3
+C0041 | Zero-testing exp expressions: exponent atoms to fresh symbols, then Together | exp,zero-test,together,integrate,risch,derivative | 2026-11-23 | 1.3/T9 | CAS-585 T9.c6
