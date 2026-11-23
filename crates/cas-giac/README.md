@@ -141,6 +141,13 @@ a third argument (giac's `'L'`, which giac assigns) taken and not assigned.
   number that changes between runs, `6.1e306` or `4.8e306`, so its text is
   not compared; ours `a/2`).
 
+`tests/interval.rs`, `convert(…,interval)` (CAS-592): giac's intervals
+`[lo..hi]`, found by their text, each widened by a unit of its last printed
+digit, overlap our balls in the same places (`sqrt(2)`, with 20 digits,
+`exp(1)` with 30, `1/3`, `[1/3,pi]`, `x+1`, `sqrt(2)*sin(2)+sqrt(2)*cos(2)`
+with 20), and the rest, intervals and balls as symbols, is the same
+expression. A departure in form only: giac prints an interval, ours a ball.
+
 `tests/real_roots.rs`, real roots (CAS-538, CAS-539): giac's `VAS`,
 `VAS_positive`, `posubLMQ`, `poslbdLMQ`, `sturmseq`, `sturm` with bounds,
 `rationalroot` and `crationalroot` read back and compared by value;

@@ -137,7 +137,7 @@ pub(super) fn hamming_distance(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// `Convert[x, option]` for the other options.
 pub(super) fn convert(ev: &mut Eval<'_>, e: &Expr) -> Native {
     if let [x, option, ..] = e.args()
-        && let Some(found) = convert_to(ev, x, option, e.args().len())?
+        && let Some(found) = convert_to(ev, x, option, &e.args()[2..])?
     {
         ev.step("convert", e, &found);
         return Ok(Some(found));
@@ -185,18 +185,19 @@ pub(super) fn convert(ev: &mut Eval<'_>, e: &Expr) -> Native {
     Ok(Some(result))
 }
 
-/// `Convert[x, option]` with `partfrac`, `parfrac`, `fullparfrac`,
-/// `polynom`, and `confrac` (a third argument too, ignored); `None` for
-/// another option or count.
-fn convert_to(ev: &mut Eval<'_>, x: &Expr, option: &Expr, count: usize) -> Native {
+/// `Convert[x, option, rest…]` with `partfrac`, `parfrac`, `fullparfrac`,
+/// `polynom`, `confrac` (a third argument too, ignored), and `interval`
+/// (CAS-592), `N[x]` or with a positive integer `d` `N[x, d]`: giac's
+/// interval as a ball; `None` for another option or count.
+fn convert_to(ev: &mut Eval<'_>, x: &Expr, option: &Expr, rest: &[Expr]) -> Native {
     let name = option.as_symbol().map(Symbol::name);
-    let found = match (name, count) {
+    let found = match (name, rest) {
         // `partfrac` reads as `Apart`, its builtin.
-        (Some("partfrac" | "parfrac" | "fullparfrac" | "Apart"), 2) => {
+        (Some("partfrac" | "parfrac" | "fullparfrac" | "Apart"), []) => {
             Expr::call(Symbol::APART, [x.clone()])
         }
-        (Some("confrac"), 2 | 3) => Expr::call(Symbol::CONTINUED_FRACTION, [x.clone()]),
-        (Some("polynom"), 2) => Expr::call(
+        (Some("confrac"), [] | [_]) => Expr::call(Symbol::CONTINUED_FRACTION, [x.clone()]),
+        (Some("polynom"), []) => Expr::call(
             Symbol::REPLACE_ALL,
             [
                 x.clone(),
@@ -212,6 +213,11 @@ fn convert_to(ev: &mut Eval<'_>, x: &Expr, option: &Expr, count: usize) -> Nativ
                 ),
             ],
         ),
+        // `interval` reads as `Interval`, its builtin.
+        (Some("interval" | "Interval"), []) => Expr::call(Symbol::N, [x.clone()]),
+        (Some("interval" | "Interval"), [d]) if d.to_integer().is_some_and(|d| d.is_positive()) => {
+            Expr::call(Symbol::N, [x.clone(), d.clone()])
+        }
         _ => return Ok(None),
     };
     Ok(Some(ev.eval(&found)?))

@@ -101,5 +101,14 @@ fn convert_options() {
             "Plus[Power[x, 2], 1]",
         ),
         ("Convert[x, other]", "Convert[x, other]"),
+        // giac's interval as a ball (CAS-592): `N`, with digits too.
+        ("Convert[Power[2, 1/2], Interval]", "N[Power[2, 1/2]]"),
+        (
+            "Convert[Power[2, 1/2], Interval, 20]",
+            "N[Power[2, 1/2], 20]",
+        ),
+        ("Convert[List[1/3, Pi], Interval]", "N[List[1/3, Pi]]"),
+        ("Convert[Plus[x, 1], Interval]", "N[Plus[x, 1]]"),
+        ("Convert[2, Interval, 0]", "Convert[2, Interval, 0]"),
     ]);
 }
