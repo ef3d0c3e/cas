@@ -424,6 +424,16 @@ as caseval prints it: `d` out of `0 … |X|` and one point for `ratinterp`,
 one value for `triginterp` (giac's errors), and `d = |X|`, a repeated
 abscissa and `a = b` (giac's `undef`), where ours stays.
 
+`tests/derivatives.rs`, Xcas's `numdiff` and `nDeriv` (CAS-595): exact
+`numdiff` by `Expand` and `Together` of the difference; giac's aide example
+of decimals within `4·10⁻⁷` of the closed form `f″(1/π)` and `10⁻⁹` of giac;
+`nDeriv` by value at three points within `10⁻¹⁰` (ours exact, `h = 1/1000`),
+and `nDeriv(f(x),x,h)` symbolically, giac's `0.5` read as `1/2`. Departures,
+each with giac's answer as caseval prints it: an order not a nonnegative
+integer, unequal lists and two arguments (giac's errors), a repeated
+abscissa (`undef`), and `nDeriv` of a variable not a symbol (`0.0`), where
+ours stays.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

@@ -162,6 +162,9 @@ CenterToInterval: center2interval
 # Rational and trigonometric interpolation (CAS-594), Xcas's.
 RationalInterpolation: ratinterp
 TrigonometricInterpolation: triginterp
+# Numerical derivatives (CAS-595), Xcas's.
+NumericalDerivative: numdiff
+NDeriv: nDeriv
 LegendreP: legendre
 HermiteH: hermite
 LaguerreL: laguerre

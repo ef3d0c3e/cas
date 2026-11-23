@@ -33,7 +33,7 @@
 
 use cas_num::Rational;
 
-use super::{MAX_POINTS, Native, is_list};
+use super::{MAX_POINTS, Native, is_list, vanishes};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
@@ -48,16 +48,8 @@ const MAX_RATIONAL_WORK: usize = 1 << 16;
 const MAX_TRIG_TERMS: usize = 1 << 13;
 
 /// Whether a ball occurs in `x`.
-fn has_ball(x: &Expr) -> bool {
+pub(super) fn has_ball(x: &Expr) -> bool {
     matches!(x.view(), View::Ball(_) | View::ComplexBall(_)) || x.args().iter().any(has_ball)
-}
-
-/// Whether the evaluated `x` is 0: exactly, or a decimal of midpoint 0.
-fn vanishes(x: &Expr) -> bool {
-    match x.view() {
-        View::Ball(b) => (b.mid().to_f64() + 0.0).total_cmp(&0.0).is_eq(),
-        _ => *x == Expr::from(0),
-    }
 }
 
 /// The rows of a matrix: a nonempty list of lists of one nonzero length.

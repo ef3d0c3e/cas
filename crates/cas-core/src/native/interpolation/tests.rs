@@ -317,6 +317,61 @@ fn trigonometric_interpolation() {
     );
 }
 
+/// giac's `numdiff` and `nDeriv` (CAS-595): orders, several at once, an
+/// order past the degree, symbolic values, the difference quotient.
+#[test]
+fn numerical_derivatives() {
+    check(&[
+        (
+            "NumericalDerivative[List[1, 3, 4], List[3, 0, 1], 2]",
+            "-3/2",
+        ),
+        (
+            "NumericalDerivative[List[0, 1, 2, 3], List[0, 1, 8, 27], 3/2, 2]",
+            "9",
+        ),
+        ("NumericalDerivative[List[0, 1, 2], List[0, 1, 4], 1]", "2"),
+        (
+            "NumericalDerivative[List[0, 1, 2, 3], List[0, 1, 8, 27], 1, 3]",
+            "6",
+        ),
+        ("NumericalDerivative[List[1, 2], List[3, 4], 1, 0]", "3"),
+        (
+            "NumericalDerivative[List[0, 1/2, 1], List[1, 2, 5], 1/4]",
+            "2",
+        ),
+        (
+            "NumericalDerivative[List[0, 1, 2], List[0, 1, 4], 1, 1, 2, 5]",
+            "List[2, 2, 0]",
+        ),
+        (
+            "NumericalDerivative[List[0, 1, 2], List[a, b, c], t]",
+            "Plus[Times[1/2, Plus[Times[2, t], -3], a], Times[Plus[2, Times[-2, t]], b], \
+             Times[1/2, Plus[Times[2, t], -1], c]]",
+        ),
+        ("NDeriv[Power[x, 2], x]", "Times[2, x]"),
+        (
+            "NDeriv[Power[x, 3], x, 1/2]",
+            "Plus[Times[3, Power[x, 2]], 1/4]",
+        ),
+        (
+            "NDeriv[f[x], x, h]",
+            "Times[1/2, Power[h, -1], Plus[f[Plus[x, h]], Times[-1, f[Plus[x, Times[-1, h]]]]]]",
+        ),
+    ]);
+    // A decimal: the result numerically, as giac's evalf.
+    let ctx = Context::new();
+    let found = ctx
+        .eval(&read(
+            "NumericalDerivative[List[0, 1, 2], List[0, 1, 4], 0x1p+0]",
+        ))
+        .unwrap();
+    let gap = Expr::call(Symbol::ABS, [found.clone() - Expr::from(2)]);
+    let close = Expr::call(Symbol::LESS, [gap, Expr::from(10).pow(-10)]);
+    assert!(found != Expr::from(2), "{found:?}");
+    assert_eq!(ctx.eval(&close), Ok(Expr::from(Symbol::TRUE)), "{found:?}");
+}
+
 /// What stays: a repeated abscissa, lists of unequal lengths, abscissas
 /// not increasing, Thiele's differences vanishing at some points only, a
 /// degree 0.
@@ -357,6 +412,18 @@ fn what_stays() {
         "TrigonometricInterpolation[List[1], Equation[x, Range[0, 2]]]",
         "TrigonometricInterpolation[List[1, 2, 3], Equation[x, Range[1, 1]]]",
         "TrigonometricInterpolation[List[1, 2, 3], 0, 2, 3]",
+        // Numerical derivatives (CAS-595): too few arguments, unequal
+        // lengths, an order not a nonnegative integer, a repeated abscissa,
+        // exact and decimal; a variable not a symbol, h = 0, no variable.
+        "NumericalDerivative[List[1, 2], List[3, 4]]",
+        "NumericalDerivative[List[1, 2, 3], List[3, 4], 1]",
+        "NumericalDerivative[List[1, 2], List[3, 4], 1, 1/2]",
+        "NumericalDerivative[List[1, 2], List[3, 4], 1, -1]",
+        "NumericalDerivative[List[1, 1], List[3, 4], 1]",
+        "NumericalDerivative[List[0x1p+0, 0x1p+0], List[3, 4], 1]",
+        "NDeriv[Power[x, 2], 2, 1/10]",
+        "NDeriv[Power[x, 2], x, 0]",
+        "NDeriv[Power[x, 2]]",
     ] {
         let e = read(input);
         let found = ctx.eval(&e).unwrap();

@@ -35,7 +35,9 @@
 //! Sampling the polygonal line through points, and the centres of ranges
 //! and the ranges of centres, are [`sampling`]'s (CAS-593); Floater and
 //! Hormann's rational interpolants and trigonometric interpolation,
-//! [`interpolants`]' (CAS-594).
+//! [`interpolants`]' (CAS-594); derivatives of the interpolating
+//! polynomial at a point, and the central difference quotient,
+//! [`derivatives`]' (CAS-595).
 //!
 //! Lists of unequal lengths, a repeated abscissa (a division by 0), and
 //! for `Spline` abscissas not shown increasing, leave the call. Each call
@@ -49,9 +51,10 @@
 use super::solve::linear_system;
 use crate::context::EvalError;
 use crate::eval::Eval;
-use crate::expr::Expr;
+use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 
+pub(super) mod derivatives;
 pub(super) mod interpolants;
 pub(super) mod sampling;
 
@@ -96,20 +99,31 @@ fn points(args: &[Expr]) -> Option<(Vec<Expr>, Vec<Expr>, Expr)> {
     (xs.len() == ys.len() && !xs.is_empty() && xs.len() <= MAX_POINTS).then_some((xs, ys, t))
 }
 
+/// Whether the evaluated `x` is 0: exactly, or a decimal of midpoint 0.
+fn vanishes(x: &Expr) -> bool {
+    match x.view() {
+        View::Ball(b) => (b.mid().to_f64() + 0.0).total_cmp(&0.0).is_eq(),
+        _ => *x == Expr::from(0),
+    }
+}
+
 /// `a/b` evaluated; `None` when `b` is 0.
 fn quotient(ev: &mut Eval<'_>, a: &Expr, b: &Expr) -> Result<Option<Expr>, EvalError> {
     let b = ev.eval(b)?;
-    if b == Expr::from(0) {
+    if vanishes(&b) {
         return Ok(None);
     }
     ev.eval(&(a.clone() / b)).map(Some)
 }
 
-pub(super) fn interpolating_polynomial(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    let Some((xs, ys, t)) = points(e.args()) else {
-        return Ok(None);
-    };
-    // Divided differences, in place: c_i = f[x_{i−j}, …, x_i].
+/// Newton's divided differences `c_k = f[x_0, …, x_k]`, evaluated; `None`
+/// for a repeated abscissa.
+fn divided_differences(
+    ev: &mut Eval<'_>,
+    xs: &[Expr],
+    ys: Vec<Expr>,
+) -> Result<Option<Vec<Expr>>, EvalError> {
+    // In place: c_i = f[x_{i−j}, …, x_i].
     let mut c = ys;
     let n = c.len();
     for j in 1..n {
@@ -125,6 +139,17 @@ pub(super) fn interpolating_polynomial(ev: &mut Eval<'_>, e: &Expr) -> Native {
             c[i] = d;
         }
     }
+    Ok(Some(c))
+}
+
+pub(super) fn interpolating_polynomial(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let Some((xs, ys, t)) = points(e.args()) else {
+        return Ok(None);
+    };
+    let Some(c) = divided_differences(ev, &xs, ys)? else {
+        return Ok(None);
+    };
+    let n = c.len();
     let mut p = c[n - 1].clone();
     for i in (0..n - 1).rev() {
         p = c[i].clone() + (t.clone() - xs[i].clone()) * p;

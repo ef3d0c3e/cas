@@ -215,6 +215,9 @@ builtins! {
     // Rational and trigonometric interpolation (CAS-594).
     RATIONAL_INTERPOLATION = "RationalInterpolation" [PROTECTED];
     TRIGONOMETRIC_INTERPOLATION = "TrigonometricInterpolation" [PROTECTED];
+    // Numerical derivatives (CAS-595).
+    NUMERICAL_DERIVATIVE = "NumericalDerivative" [PROTECTED];
+    N_DERIV = "NDeriv" [PROTECTED];
     LEGENDRE_P = "LegendreP" [PROTECTED];
     HERMITE_H = "HermiteH" [PROTECTED];
     LAGUERRE_L = "LaguerreL" [PROTECTED];

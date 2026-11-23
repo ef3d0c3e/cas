@@ -333,6 +333,11 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::TRIGONOMETRIC_INTERPOLATION,
             interpolation::interpolants::trigonometric_interpolation,
         ),
+        (
+            Symbol::NUMERICAL_DERIVATIVE,
+            interpolation::derivatives::numerical_derivative,
+        ),
+        (Symbol::N_DERIV, interpolation::derivatives::n_deriv),
         (Symbol::LEGENDRE_P, orthogonal::legendre_p),
         (Symbol::HERMITE_H, orthogonal::hermite_h),
         (Symbol::LAGUERRE_L, orthogonal::laguerre_l),
