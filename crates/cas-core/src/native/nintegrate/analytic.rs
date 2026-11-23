@@ -47,7 +47,7 @@ const MAX_EXPONENT: i64 = 1 << 16;
 
 /// A switch of the real integrand.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Switch {
+pub(in crate::native) enum Switch {
     Abs,
     Sign,
     Step,
@@ -55,7 +55,7 @@ pub(super) enum Switch {
 
 /// A function of one argument.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Function {
+pub(in crate::native) enum Function {
     Exp,
     Log,
     Sin,
@@ -96,14 +96,14 @@ impl Function {
 
 /// How a tree is evaluated (the module's two modes).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Mode {
+pub(in crate::native) enum Mode {
     Analytic,
     Real,
 }
 
 /// An integrand as ball operations.
 #[derive(Clone, Debug)]
-pub(super) enum Node {
+pub(in crate::native) enum Node {
     Variable,
     Constant(ComplexBall),
     Sum(Vec<Node>),
@@ -168,7 +168,7 @@ impl Node {
     /// `f` in the variable `x` as a tree at `prec` bits; `None` for a head
     /// without a ball function here, or a part free of `x` that is no
     /// number.
-    pub(super) fn compile(ctx: &Context, f: &Expr, x: &Expr, prec: u64) -> Option<Node> {
+    pub(in crate::native) fn compile(ctx: &Context, f: &Expr, x: &Expr, prec: u64) -> Option<Node> {
         if f == x {
             return Some(Node::Variable);
         }
@@ -276,7 +276,12 @@ impl Node {
 
     /// The tree at `z` in `mode` (the module's rules); `None` where the
     /// mode's conditions fail or the value is not finite.
-    pub(super) fn eval(&self, z: &ComplexBall, mode: Mode, prec: u64) -> Option<ComplexBall> {
+    pub(in crate::native) fn eval(
+        &self,
+        z: &ComplexBall,
+        mode: Mode,
+        prec: u64,
+    ) -> Option<ComplexBall> {
         let analytic = mode == Mode::Analytic;
         let value = match self {
             Node::Variable => z.clone(),

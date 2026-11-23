@@ -340,6 +340,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::N_DERIV, interpolation::derivatives::n_deriv),
         (Symbol::B_SPLINE, interpolation::splines::b_spline),
         (Symbol::SPLINE_FIT, interpolation::splines::spline_fit),
+        (Symbol::POLYNOMIAL_FIT, interpolation::fits::polynomial_fit),
         (Symbol::LEGENDRE_P, orthogonal::legendre_p),
         (Symbol::HERMITE_H, orthogonal::hermite_h),
         (Symbol::LAGUERRE_L, orthogonal::laguerre_l),

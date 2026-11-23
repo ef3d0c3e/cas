@@ -97,7 +97,7 @@ fn count(n: usize) -> Rational {
 
 /// A real number exactly, and whether it was a decimal; `None` for another
 /// expression, or a decimal past [`MAX_DECIMAL_BITS`] (C0028).
-fn real(e: &Expr) -> Option<(Rational, bool)> {
+pub(super) fn real(e: &Expr) -> Option<(Rational, bool)> {
     if let Some(q) = e.to_rational() {
         return Some((q, false));
     }
@@ -619,7 +619,7 @@ fn values_at(
 }
 
 /// `v` exactly, or as a ball at `prec` bits when `decimal`.
-fn number(v: Rational, decimal: bool, prec: u64) -> Expr {
+pub(super) fn number(v: Rational, decimal: bool, prec: u64) -> Expr {
     if decimal {
         Expr::from(Ball::from_rational(&v, prec))
     } else {

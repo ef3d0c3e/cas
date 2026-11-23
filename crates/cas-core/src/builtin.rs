@@ -221,6 +221,8 @@ builtins! {
     // B-splines and spline fits (CAS-596).
     B_SPLINE = "BSpline" [PROTECTED];
     SPLINE_FIT = "SplineFit" [PROTECTED];
+    // Polynomial fits (CAS-597).
+    POLYNOMIAL_FIT = "PolynomialFit" [PROTECTED];
     LEGENDRE_P = "LegendreP" [PROTECTED];
     HERMITE_H = "HermiteH" [PROTECTED];
     LAGUERRE_L = "LaguerreL" [PROTECTED];

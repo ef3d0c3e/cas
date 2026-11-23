@@ -519,6 +519,141 @@ fn spline_fit_normal_equations() {
     }
 }
 
+/// giac's `fitpoly` rows exactly: exact data answer exactly, the
+/// coefficients without a variable highest first, a decimal outside the
+/// range leaves the answer exact.
+#[test]
+fn polynomial_fits() {
+    let squares = "List[0, 1, 4, 9, 16, 25, 36, 49, 64, 163/2]";
+    let tens = "List[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]";
+    let eight = "List[0, 1, 2, 3, 4, 5, 6, 7], List[1, 3, 2, 5, 4, 7, 6, 9]";
+    let quadratic = "Plus[7/110, Times[-3/40, x], Times[89/88, Power[x, 2]]]";
+    check_exact(&[
+        (
+            "PolynomialFit[List[0, 1, 2, 3], List[1, 2, 5, 10], x]",
+            "Plus[1, Power[x, 2]]",
+        ),
+        (
+            "PolynomialFit[List[0, 1, 2, 3], List[1, 2, 5, 10]]",
+            "List[1, 0, 1]",
+        ),
+        (
+            "PolynomialFit[List[List[0, 1], List[1, 2], List[2, 5], List[3, 10]], x]",
+            "Plus[1, Power[x, 2]]",
+        ),
+        (
+            "PolynomialFit[List[0, 1, 2, 3, 4], List[1, 2, 5, 10, 35/2], x]",
+            "Plus[1, Times[-1/8, x], Times[59/48, Power[x, 2]], Times[-1/8, Power[x, 3]], \
+             Times[1/48, Power[x, 4]]]",
+        ),
+        (
+            &format!("PolynomialFit[{eight}, x, Equation[Exponent, 2]]"),
+            "Plus[11/8, Times[121/168, x], Times[1/24, Power[x, 2]]]",
+        ),
+        (&format!("PolynomialFit[{tens}, {squares}, x]"), quadratic),
+        (
+            &format!("PolynomialFit[{tens}, {squares}, x, Equation[len, 3]]"),
+            quadratic,
+        ),
+        (
+            &format!(
+                "PolynomialFit[{tens}, List[0, 1, 4, 9, 16, 25, 36, 49, 64, 0x1.46p+6], \
+                 Equation[x, Range[2, 7]]]"
+            ),
+            "Power[x, 2]",
+        ),
+    ]);
+    // Eight points, eight steps: the interpolating polynomial.
+    check(&[(
+        &format!("PolynomialFit[{eight}, x]"),
+        &format!("Expand[InterpolatingPolynomial[{eight}, x]]"),
+    )]);
+    // A decimal: balls near the exact fit.
+    let ctx = Context::new();
+    let found = ctx
+        .eval(&read(
+            "PolynomialFit[List[0, 1, 2, 3, 4], List[1, 2, 5, 10, 0x1.18p+4], x]",
+        ))
+        .unwrap();
+    let exact = read(
+        "Plus[1, Times[-1/8, x], Times[59/48, Power[x, 2]], Times[-1/8, Power[x, 3]], \
+         Times[1/48, Power[x, 4]]]",
+    );
+    let gap = Expr::call(
+        Symbol::ABS,
+        [Expr::call(
+            Symbol::N,
+            [Expr::call(Symbol::EXPAND, [found.clone() - exact])
+                .substitute(&[(Expr::symbol("x"), Expr::from(3))])],
+        )],
+    );
+    let close = Expr::call(Symbol::LESS, [gap, Expr::from(10).pow(-12)]);
+    assert!(found.to_rational().is_none(), "{found:?}");
+    assert_eq!(ctx.eval(&close), Ok(Expr::from(Symbol::TRUE)), "{found:?}");
+}
+
+/// A data fit's coefficients solve the normal equations `(VᵀV) c = Vᵀy` of
+/// its degree.
+#[test]
+fn polynomial_fit_normal_equations() {
+    use super::fits::fit_data;
+    use cas_num::Rational;
+    let r = |n: i64| Rational::from(n);
+    let xs: Vec<Rational> = [-3, -1, 0, 2, 3, 5, 8, 9, 12].into_iter().map(r).collect();
+    let ys: Vec<Rational> = [2, -1, 0, 3, 5, 4, 4, 7, 1].into_iter().map(r).collect();
+    for degree in 0..=4 {
+        let c = fit_data(&xs, &ys, &r(0), -degree, 15);
+        let n = c.len();
+        assert_eq!(n, usize::try_from(degree).unwrap() + 1);
+        let power = |x: &Rational, k: usize| (0..k).fold(r(1), |p, _| &p * x);
+        for i in 0..n {
+            let mut left = r(0);
+            let mut right = r(0);
+            for (x, y) in xs.iter().zip(&ys) {
+                for (j, cj) in c.iter().enumerate() {
+                    left = &left + &(&(&power(x, i) * &power(x, j)) * cj);
+                }
+                right = &right + &(&power(x, i) * y);
+            }
+            assert_eq!(left, right, "degree {degree}, row {i}");
+        }
+    }
+}
+
+/// A function's fit: certified balls that hold the prototype's
+/// coefficients of `exp` on `[0, 1]` (Chebyshev's sum on 64 exact nodes,
+/// degree 3, to 28 decimals).
+#[test]
+fn polynomial_fit_function() {
+    use crate::expr::View;
+    use cas_num::{Integer, Rational};
+    let ctx = Context::new();
+    let found = ctx
+        .eval(&read("PolynomialFit[Exp[x], Equation[x, Range[0, 1]]]"))
+        .unwrap();
+    let list = ctx
+        .eval(&Expr::call(
+            Symbol::COEFFICIENT_LIST,
+            [found.clone(), Expr::symbol("x")],
+        ))
+        .unwrap();
+    let expected = [
+        "2791073514660980515716119686",
+        "4230085218483483250662041596",
+        "10161116437138066846558795930",
+        "9994825894939007903780512587",
+    ];
+    assert_eq!(list.args().len(), expected.len(), "{found:?}");
+    let ten = Integer::from(10).pow(28);
+    for (c, digits) in list.args().iter().zip(expected) {
+        let q = Rational::new(digits.parse::<Integer>().unwrap(), ten.clone());
+        let View::Ball(b) = c.view() else {
+            panic!("{c:?} is not a ball");
+        };
+        assert!(b.contains_rational(&q), "{c:?} misses {digits}e-28");
+    }
+}
+
 /// What stays: a repeated abscissa, lists of unequal lengths, abscissas
 /// not increasing, Thiele's differences vanishing at some points only, a
 /// degree 0.
@@ -592,6 +727,22 @@ fn what_stays() {
          List[1], foo]",
         "SplineFit[List[List[0, 0], List[1, y], List[2, 0], List[3, 1], List[4, 0], List[5, 1]], \
          List[1]]",
+        // Polynomial fits (CAS-597): a range a > b, a variable without a
+        // range, an unknown option, a limit 0, unequal lists, one point,
+        // data not numbers; a function without a range, of two symbols,
+        // of another variable, a bare variable, not real at the nodes.
+        "PolynomialFit[List[0, 1, 2, 3], List[1, 2, 5, 10], Equation[x, Range[3, 1]]]",
+        "PolynomialFit[List[0, 1, 2, 3], List[1, 2, 5, 10], Equation[x, 3]]",
+        "PolynomialFit[List[0, 1, 2, 3], List[1, 2, 5, 10], x, Equation[foo, 2]]",
+        "PolynomialFit[List[0, 1, 2, 3], List[1, 2, 5, 10], x, Equation[Limit, 0]]",
+        "PolynomialFit[List[0, 1, 2], List[1, 2, 5, 10], x]",
+        "PolynomialFit[List[0], List[1], x]",
+        "PolynomialFit[List[0, 1, 2, 3], List[1, y, 5, 10], x]",
+        "PolynomialFit[Exp[x], x]",
+        "PolynomialFit[Exp[Times[x, y]], Equation[x, Range[0, 1]]]",
+        "PolynomialFit[Exp[x], Equation[y, Range[0, 1]]]",
+        "PolynomialFit[x, Equation[x, Range[0, 1]]]",
+        "PolynomialFit[Log[x], Equation[x, Range[-1, 1]]]",
     ] {
         let e = read(input);
         let found = ctx.eval(&e).unwrap();

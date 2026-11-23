@@ -35,7 +35,7 @@
     reason = "the names of quadrature: f in x from a to b, m ± h, n points, weights w"
 )]
 
-mod analytic;
+pub(super) mod analytic;
 pub(super) mod area;
 
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};

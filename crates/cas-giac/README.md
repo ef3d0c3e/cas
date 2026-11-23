@@ -447,7 +447,20 @@ ours stays; `derive=1` (giac's rows of one,
 `[227/378,-109/378]`; a variable with `breakpoint=` (giac builds on equal
 intervals), where ours builds on the breakpoints and equals the points form
 at a point of each piece; and too few knots (`Expected a variable`), where
-ours stays.
+ours stays. `fitpoly` (CAS-597) coefficient by coefficient within
+`10⁻⁹ max(1, max |c|)` of giac's, a coefficient giac leaves out taken as 0:
+functions (`exp`, `x*cos(x)`, `sin`, `x^2`, Runge's `1/(1+25*x^2)`, where
+ours keeps degree 15 with odd coefficients holding 0 and giac prints 14;
+`degree=` and `limit=`), and data with a variable, also against the closed
+form (exact data exactly, decimals within the tolerance). Departures, each
+with giac's answer as caseval prints it: no variable (giac's internal
+`poly1[1,0,1.0]`, and for the aide's data
+`poly1[-8.20707070707,-0.800116550117,8.89355089355,0.244755244755]`),
+where ours is the coefficient list, highest first; `cos(x)` on `0..2` with
+`1e-8` (giac's degree 15, its `gaussquad` of the weighted norm being off),
+where ours has degree 5 near the prototype's; `abs(x)` on `-1..1`, giac's
+coefficients off ours by up to `1.3·10⁻⁶` (its doubles in the degree-15
+expansion), where ours is near the prototype's.
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.

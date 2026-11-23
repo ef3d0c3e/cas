@@ -168,6 +168,8 @@ NDeriv: nDeriv
 # B-splines and spline fits (CAS-596), Xcas's.
 BSpline: bspline
 SplineFit: fitspline
+# Polynomial fits (CAS-597), Xcas's.
+PolynomialFit: fitpoly
 LegendreP: legendre
 HermiteH: hermite
 LaguerreL: laguerre
