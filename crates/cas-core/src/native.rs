@@ -261,6 +261,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::SYZYGIES, groebner::syzygies),
         (Symbol::GROEBNER_VARIABLES, groebner::groebner_variables),
         (Symbol::INTEGRATE, integrate::integrate),
+        (Symbol::RISCH, integrate::risch),
         (Symbol::SERIES, series::series),
         (Symbol::LIMIT, limit::limit),
         (Symbol::DSOLVE, dsolve::dsolve),

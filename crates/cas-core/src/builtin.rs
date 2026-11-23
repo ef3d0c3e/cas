@@ -129,6 +129,8 @@ builtins! {
     D = "D" [PROTECTED];
     DERIVATIVE = "Derivative" [PROTECTED];
     INTEGRATE = "Integrate" [PROTECTED];
+    // Risch integration of elementary functions (CAS-585), giac's `risch`.
+    RISCH = "Risch" [PROTECTED];
     // Series and limits (CAS-DOC-10): `OrderSize[u]`, giac's `order_size`,
     // a bounded function of `u`, inert.
     SERIES = "Series" [PROTECTED];

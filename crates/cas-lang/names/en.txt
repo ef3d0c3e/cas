@@ -109,6 +109,8 @@ OddQ: odd
 # Calculus (CAS-DOC-4 §8, CAS-59), and integrals (CAS-DOC-9, CAS-194).
 D: diff
 Integrate: integrate int
+# Risch integration of elementary functions (CAS-585), giac's.
+Risch: risch
 Series: series taylor
 Limit: limit
 OrderSize: order_size

@@ -853,6 +853,9 @@ mod definite;
 mod heuristics;
 mod piecewise;
 mod rationalise;
+mod risch;
 mod special;
 #[cfg(test)]
 mod tests;
+
+pub(super) use risch::risch;
