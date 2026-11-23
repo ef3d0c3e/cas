@@ -34,3 +34,5 @@ M11 | Provenance on every imported datum | provenance | active | seed-2.0
 M12 | Preserve the raw record | archive, raw-record | active | seed-2.0
 
 L1 | CAS features before kernel speedups; no new unsafe | priorities,unsafe,scope | active | gen3.2 memory focus-on-cas-features.md
+
+T9 | an expert's coder brief names logs/T<n>.c<k>.progress.md as the coder's handoff file, never TASK_PROGRESS.md. | - | active | phase 1.4 plan
