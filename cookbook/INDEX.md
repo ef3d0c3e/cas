@@ -46,3 +46,5 @@ C0043 | Fuzz numeric mismatch: check the harness side first; complex integrands 
 C0044 | giac garbage answers change between runs: departure rows check ours only | giac,oracle,departures,nondeterministic,garbage | 2026-11-23 | 1.4/T2 | CAS-589 rombergt on a*x
 C0045 | Oracle rows comparing our balls with giac's [lo..hi] intervals | giac,interval,ball,oracle,convert,overlap | 2026-11-23 | 1.4/T3 | T3.c2 CAS-592 convert interval
 C0046 | Porting a float iteration to rounded Rationals: round every repeated factor | port,giac,newton,rational,rounding,iteration | 2026-11-23 | 1.4/T3 | T3.c3 CAS-591 newton
+C0047 | Decimals in full-form unit tests as hex floats; caseval's ' | ' is a newline | tests,float,decimal,fullform,caseval,departures | 2026-11-23 | 1.4/T4 | T4.c1 CAS-593
+C0048 | Recurrences over Expr on symbolic inputs: cap the point count, not only the work | fuzz,timeout,limits,interpolation,symbolic | 2026-11-23 | 1.4/T4 | T4.c3 CAS-595
