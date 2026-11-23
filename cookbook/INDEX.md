@@ -26,3 +26,6 @@ C0023 | Oracle rows for a sequence-valued builtin: bracket the input | oracle,gi
 C0024 | giac list ports: no conjugation in vector products; NULL unquoted in oracle rows | giac,oracle,dot,multiply,subsop,NULL | 2026-11-23 | 1.3/T3 | CAS-558
 C0025 | giac in-place heap commands: port libstdc++ stl_heap, return the stored value | giac,port,heap,in-place,crash | 2026-11-23 | 1.3/T3 | CAS-560
 C0026 | giac forms the evaluator re-merges: return Hold, oracle by value after release | giac,oracle,hold,evaluator,departures | 2026-11-23 | 1.3/T4 | CAS-562 powexpand
+C0027 | giac epsilon is 1e-12 by default; its boundary drifts in the shared oracle | giac,oracle,epsilon,float,epsilon2zero | 2026-11-23 | 1.3/T5 | T5.c1 CAS-569
+C0028 | Fuzz-fed natives: compare decimals by to_f64 and total_cmp, never Float::to_rational | fuzz,float,panic,clippy,native | 2026-11-23 | 1.3/T5 | T5.c1 CAS-569
+C0029 | Expression shapes natives meet: Range in x=a..b, Dirac derivatives, Abs of products, Times[-1,Plus] | native,cas-core,lowering,dirac,abs,range | 2026-11-23 | 1.3/T5 | T5.c2 CAS-570/572/573
