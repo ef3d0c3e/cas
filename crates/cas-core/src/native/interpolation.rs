@@ -37,7 +37,8 @@
 //! Hormann's rational interpolants and trigonometric interpolation,
 //! [`interpolants`]' (CAS-594); derivatives of the interpolating
 //! polynomial at a point, and the central difference quotient,
-//! [`derivatives`]' (CAS-595).
+//! [`derivatives`]' (CAS-595); B-splines and least-squares spline fits,
+//! [`splines`]' (CAS-596).
 //!
 //! Lists of unequal lengths, a repeated abscissa (a division by 0), and
 //! for `Spline` abscissas not shown increasing, leave the call. Each call
@@ -57,6 +58,7 @@ use crate::symbol::Symbol;
 pub(super) mod derivatives;
 pub(super) mod interpolants;
 pub(super) mod sampling;
+pub(super) mod splines;
 
 type Native = Result<Option<Expr>, EvalError>;
 

@@ -53,7 +53,7 @@ pub(super) fn has_ball(x: &Expr) -> bool {
 }
 
 /// The rows of a matrix: a nonempty list of lists of one nonzero length.
-fn matrix_rows(m: &Expr) -> Option<&[Expr]> {
+pub(super) fn matrix_rows(m: &Expr) -> Option<&[Expr]> {
     let rows = m.args();
     let width = rows.first().filter(|r| is_list(r))?.args().len();
     (is_list(m) && width > 0 && rows.iter().all(|r| is_list(r) && r.args().len() == width))

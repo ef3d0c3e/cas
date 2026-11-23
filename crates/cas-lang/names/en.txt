@@ -165,6 +165,9 @@ TrigonometricInterpolation: triginterp
 # Numerical derivatives (CAS-595), Xcas's.
 NumericalDerivative: numdiff
 NDeriv: nDeriv
+# B-splines and spline fits (CAS-596), Xcas's.
+BSpline: bspline
+SplineFit: fitspline
 LegendreP: legendre
 HermiteH: hermite
 LaguerreL: laguerre

@@ -434,6 +434,21 @@ integer, unequal lists and two arguments (giac's errors), a repeated
 abscissa (`undef`), and `nDeriv` of a variable not a symbol (`0.0`), where
 ours stays.
 
+`tests/fits.rs`, Xcas's `bspline` and `fitspline` (CAS-596): `bspline` by
+`Expand` and `Together` of the difference element by element (C0032), with
+`piecewise` branch by branch, conditions by their truth at points (giac's
+`1>x` is our `x<1`); `fitspline` at points, ours exact equal to the closed
+form and within `10⁻¹⁰` of giac's doubles; with a variable, each piece by
+value at three points of its interval within `10⁻⁹`. Departures, each with
+giac's answer as caseval prints it: points outside the data (`[7]` and
+`[-1]`, giac's `[0.936507936508]`, its last polynomial continued), where
+ours stays; `derive=1` (giac's rows of one,
+`[[0.600529100529],[-0.28835978836]]`), where ours is flat,
+`[227/378,-109/378]`; a variable with `breakpoint=` (giac builds on equal
+intervals), where ours builds on the breakpoints and equals the points form
+at a point of each piece; and too few knots (`Expected a variable`), where
+ours stays.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

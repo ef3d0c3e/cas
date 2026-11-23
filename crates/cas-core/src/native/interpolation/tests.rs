@@ -372,6 +372,153 @@ fn numerical_derivatives() {
     assert_eq!(ctx.eval(&close), Ok(Expr::from(Symbol::TRUE)), "{found:?}");
 }
 
+/// giac's `bspline` (CAS-596): knots on `[0, 1]`, `[a, b]` and given,
+/// complex, symbolic and matrix control points, the collapse of one column,
+/// `piecewise`.
+#[test]
+fn b_splines() {
+    check_exact(&[
+        (
+            "BSpline[List[1, 2, 3, 4, 5], Equation[x, Range[0, 1]], 2]",
+            "List[List[Plus[1, Times[6, x], Times[-9/2, Power[x, 2]]], 0], \
+             List[Plus[3/2, Times[3, x]], 0], \
+             List[Plus[7/2, Times[-3, x], Times[9/2, Power[x, 2]]], 0]]",
+        ),
+        (
+            "BSpline[List[0, 1, 0], x, 1]",
+            "List[List[Times[2, x], 0], List[Plus[2, Times[-2, x]], 0]]",
+        ),
+        (
+            "BSpline[List[List[1, 2], List[3, 4], List[5, 6]], x, 1]",
+            "List[List[Plus[1, Times[4, x]], Plus[2, Times[4, x]]], \
+             List[Plus[1, Times[4, x]], Plus[2, Times[4, x]]]]",
+        ),
+        (
+            "BSpline[List[1, 2, 3], Equation[x, List[0, 1/2, 1]], 1]",
+            "List[List[Plus[1, Times[2, x]], 0], List[Plus[1, Times[2, x]], 0]]",
+        ),
+        ("BSpline[List[List[1], List[2]], x, 1]", "Plus[1, x]"),
+        (
+            "BSpline[List[List[1], List[2], List[3]], x, 1]",
+            "List[Plus[1, Times[2, x]], Plus[1, Times[2, x]]]",
+        ),
+        (
+            "BSpline[List[1, 2, 3, 4], x, 3, Piecewise]",
+            "List[Piecewise[And[GreaterEqual[x, 0], Less[x, 1]], Plus[1, Times[3, x]]], \
+             Piecewise[And[GreaterEqual[x, 0], Less[x, 1]], 0]]",
+        ),
+    ]);
+    check(&[
+        (
+            "BSpline[List[a, b, c], x, 1]",
+            "List[List[Plus[a, Times[-2, a, x], Times[2, b, x]], 0], \
+             List[Plus[Times[2, b], Times[-1, c], Times[-2, b, x], Times[2, c, x]], 0]]",
+        ),
+        (
+            "BSpline[List[Complex[0, 2], Complex[1, -2], Complex[5, -1], Complex[6, -4], \
+             Complex[8, 2], Complex[5, 1]], Equation[x, Range[0, 15]]]",
+            "List[List[Plus[Times[3/5, x], Times[3/25, Power[x, 2]], Times[-11/750, Power[x, 3]]], \
+             Plus[2, Times[-12/5, x], Times[27/50, Power[x, 2]], Times[-21/500, Power[x, 3]]]], \
+             List[Plus[-3, Times[12/5, x], Times[-6/25, Power[x, 2]], Times[7/750, Power[x, 3]]], \
+             Plus[-6, Times[12/5, x], Times[-21/50, Power[x, 2]], Times[11/500, Power[x, 3]]]], \
+             List[Plus[41, Times[-54/5, x], Times[27/25, Power[x, 2]], Times[-13/375, Power[x, 3]]], \
+             Plus[64, Times[-93/5, x], Times[42/25, Power[x, 2]], Times[-6/125, Power[x, 3]]]]]",
+        ),
+    ]);
+    // Clamped: the first piece starts at the first control point and the
+    // last ends at the last.
+    let ctx = Context::new();
+    let x = Expr::symbol("x");
+    let pieces = ctx
+        .eval(&read(
+            "BSpline[List[3, 1, 4, 1, 5, 9], Equation[x, Range[2, 7]], 3]",
+        ))
+        .unwrap();
+    let at = |piece: &Expr, v: i64| ctx.eval(&piece.substitute(&[(x.clone(), Expr::from(v))]));
+    let (first, last) = (&pieces.args()[0], pieces.args().last().unwrap());
+    assert_eq!(at(first, 2), Ok(read("List[3, 0]")), "{pieces:?}");
+    assert_eq!(at(last, 7), Ok(read("List[9, 0]")), "{pieces:?}");
+}
+
+/// giac's `fitspline` (CAS-596): exact least squares at points, the options,
+/// several series, the variable form; decimals answer balls.
+#[test]
+fn spline_fits() {
+    let six = "List[List[0, 0], List[1, 1], List[2, 0], List[3, 1], List[4, 0], List[5, 1]]";
+    let seven = "List[List[0, 0], List[1, 1], List[2, 0], List[3, 1], List[4, 0], List[5, 1], \
+                 List[6, 0]]";
+    let half = "List[1/2, 5/2]";
+    check_exact(&[
+        (&format!("SplineFit[{six}, {half}]"), "List[61/126, 1/2]"),
+        (&format!("SplineFit[{seven}, List[3]]"), "List[169/553]"),
+        (
+            &format!("SplineFit[{six}, {half}, Equation[breakpoint, List[0, 2, 5]]]"),
+            "List[2053/3276, 61/156]",
+        ),
+        (
+            &format!("SplineFit[{six}, {half}, Equation[Exponent, 2]]"),
+            "List[135/334, 1/2]",
+        ),
+        (
+            &format!("SplineFit[{six}, {half}, 3]"),
+            "List[229/170, 1/2]",
+        ),
+        (
+            &format!("SplineFit[{six}, {half}, Equation[derive, 1]]"),
+            "List[227/378, -109/378]",
+        ),
+        (
+            "SplineFit[List[List[0, 0, 1], List[1, 1, 2], List[2, 0, 3], List[3, 1, 4], \
+             List[4, 0, 5], List[5, 1, 6], List[6, 0, 8]], List[1/2, 5/2]]",
+            "List[List[1461/2212, 106861/70784], List[783/2212, 247775/70784]]",
+        ),
+        (
+            &format!("SplineFit[{six}, x, Equation[breakpoint, List[0, 1, 5]]]"),
+            "List[Plus[Times[138/35, x], Times[-163/35, Power[x, 2]], Times[8/5, Power[x, 3]]], \
+             Plus[8/5, Times[-6/7, x], Times[1/7, Power[x, 2]]]]",
+        ),
+    ]);
+    // A decimal: balls near the exact fit.
+    let ctx = Context::new();
+    let found = ctx
+        .eval(&read(&format!("SplineFit[{six}, List[0x1p-1, 5/2]]")))
+        .unwrap();
+    let gap = Expr::call(Symbol::ABS, [found.args()[0].clone() - read("61/126")]);
+    let close = Expr::call(Symbol::LESS, [gap, Expr::from(10).pow(-12)]);
+    assert!(found.args()[0].to_rational().is_none(), "{found:?}");
+    assert_eq!(ctx.eval(&close), Ok(Expr::from(Symbol::TRUE)), "{found:?}");
+}
+
+/// A fit's control points solve its normal equations `(AᵀA) Q = AᵀY`.
+#[test]
+fn spline_fit_normal_equations() {
+    use super::splines::{basis, least_squares, padded};
+    use cas_num::Rational;
+    let r = |n: i64| Rational::from(n);
+    let s: Vec<Rational> = (0..9).map(r).collect();
+    let ys: Vec<Vec<Rational>> = [2, -1, 0, 3, 5, 4, 4, 7, 1]
+        .into_iter()
+        .map(|y| vec![r(y), r(y * y)])
+        .collect();
+    let t = padded(&[r(0), r(3), r(5), r(8)], 3);
+    let n = 5;
+    let q = least_squares(&s, &ys, &t, n, 3).unwrap();
+    let a: Vec<Vec<Rational>> = s.iter().map(|u| basis(n, 3, u, &t).unwrap()).collect();
+    for i in 0..=n {
+        for k in 0..2 {
+            let mut left = r(0);
+            let mut right = r(0);
+            for (row, y) in a.iter().zip(&ys) {
+                for (j, qj) in q.iter().enumerate() {
+                    left = &left + &(&(&row[i] * &row[j]) * &qj[k]);
+                }
+                right = &right + &(&row[i] * &y[k]);
+            }
+            assert_eq!(left, right, "row {i}, series {k}");
+        }
+    }
+}
+
 /// What stays: a repeated abscissa, lists of unequal lengths, abscissas
 /// not increasing, Thiele's differences vanishing at some points only, a
 /// degree 0.
@@ -424,6 +571,27 @@ fn what_stays() {
         "NDeriv[Power[x, 2], 2, 1/10]",
         "NDeriv[Power[x, 2], x, 0]",
         "NDeriv[Power[x, 2]]",
+        // B-splines and fits (CAS-596): too few knots, knots not ascending,
+        // a degree 0, decimal knots, a list in a list of points; a point
+        // outside the data, derive ≥ p, n + p − 1 ≥ m, breakpoints not
+        // covering the data, an unknown option, data not numbers.
+        "BSpline[List[0, 1, 0, 1, 0], Equation[x, List[0, 1/2, 1]], 2]",
+        "BSpline[List[1, 2, 3], Equation[x, List[0, 1, 1/2]], 1]",
+        "BSpline[List[1, 2, 3], x, 0]",
+        "BSpline[List[1, 2, 3], Equation[x, Range[0, 0x1p+0]], 1]",
+        "BSpline[List[1, List[2], 3], x, 1]",
+        "SplineFit[List[List[0, 0], List[1, 1], List[2, 0], List[3, 1], List[4, 0], List[5, 1]], \
+         List[7]]",
+        "SplineFit[List[List[0, 0], List[1, 1], List[2, 0], List[3, 1], List[4, 0], List[5, 1]], \
+         List[1], Equation[derive, 3]]",
+        "SplineFit[List[List[0, 0], List[1, 1], List[2, 0], List[3, 1], List[4, 0], List[5, 1]], \
+         List[1], 4]",
+        "SplineFit[List[List[0, 0], List[1, 1], List[2, 0], List[3, 1], List[4, 0], List[5, 1]], \
+         List[1], Equation[breakpoint, List[1, 2, 5]]]",
+        "SplineFit[List[List[0, 0], List[1, 1], List[2, 0], List[3, 1], List[4, 0], List[5, 1]], \
+         List[1], foo]",
+        "SplineFit[List[List[0, 0], List[1, y], List[2, 0], List[3, 1], List[4, 0], List[5, 1]], \
+         List[1]]",
     ] {
         let e = read(input);
         let found = ctx.eval(&e).unwrap();

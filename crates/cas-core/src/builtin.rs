@@ -218,6 +218,9 @@ builtins! {
     // Numerical derivatives (CAS-595).
     NUMERICAL_DERIVATIVE = "NumericalDerivative" [PROTECTED];
     N_DERIV = "NDeriv" [PROTECTED];
+    // B-splines and spline fits (CAS-596).
+    B_SPLINE = "BSpline" [PROTECTED];
+    SPLINE_FIT = "SplineFit" [PROTECTED];
     LEGENDRE_P = "LegendreP" [PROTECTED];
     HERMITE_H = "HermiteH" [PROTECTED];
     LAGUERRE_L = "LaguerreL" [PROTECTED];
