@@ -644,6 +644,10 @@ builtins! {
     REVERT = "Revert" [PROTECTED];
     SUM_RIEMANN = "SumRiemann" [PROTECTED];
     WZ_CERTIFICATE = "WZCertificate" [PROTECTED];
+    // The calculus of variations (CAS-575).
+    EULER_LAGRANGE = "EulerLagrange" [PROTECTED];
+    JACOBI_EQUATION = "JacobiEquation" [PROTECTED];
+    CONJUGATE_EQUATION = "ConjugateEquation" [PROTECTED];
     // Vector calculus (CAS-DOC-37): the differential operators (§2).
     GRAD = "Grad" [PROTECTED];
     DIVERGENCE = "Divergence" [PROTECTED];

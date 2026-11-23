@@ -368,3 +368,114 @@ fn bessel_and_airy() {
         assert_eq!(found, ctx.eval(&read(expected)).unwrap(), "{input}");
     }
 }
+
+/// The calculus of variations (CAS-575): `EulerLagrange`'s argument forms
+/// and constants, `JacobiEquation`, `ConjugateEquation`, and what stays.
+#[test]
+fn variational() {
+    let ctx = Context::new();
+    let arc = "Sqrt[Plus[1, Power[D[y[x], x], 2]]]";
+    let first = "Power[Plus[1, Power[Derivative[1][y][x], 2]], -1/2]";
+    let cauchy = "Equation[Plus[Times[2, y[x]], Times[-4, x, Derivative[1][y][x]], \
+                  Times[-2, Power[x, 2], Derivative[2][y][x]]], 0]";
+    let jacobi = "Plus[Times[-1/2, Power[D[y[t], t], 2]], Times[1/2, Power[y[t], 2]]]";
+    let sine = "Plus[Times[A, Sin[t]], Times[B, Cos[t]]]";
+    for (input, expected) in [
+        (
+            format!("EulerLagrange[{arc}, x, y]"),
+            format!(
+                "List[Equation[Times[-1, {first}], $K_0], \
+                 Equation[Times[{first}, Derivative[1][y][x]], $K_1]]"
+            ),
+        ),
+        // A bare y stands for y[x]; x by default.
+        (
+            "EulerLagrange[Plus[Times[Power[x, 2], Power[D[y[x], x], 2]], Power[y, 2]]]".to_owned(),
+            cauchy.to_owned(),
+        ),
+        (
+            "EulerLagrange[Plus[Times[Power[x, 2], Power[D[y[x], x], 2]], Power[y[x], 2]], y[x]]"
+                .to_owned(),
+            cauchy.to_owned(),
+        ),
+        // t when L has no x.
+        (
+            "EulerLagrange[Plus[Power[D[y[t], t], 2], Times[-1, Power[y[t], 2]]]]".to_owned(),
+            "List[Equation[Plus[Power[y[t], 2], Power[Derivative[1][y][t], 2]], $K_0], \
+             Equation[Times[-2, Plus[y[t], Derivative[2][y][t]]], 0]]"
+                .to_owned(),
+        ),
+        // d/dt L_v′ in every unknown: −u′ (giac's leaves it out).
+        (
+            "EulerLagrange[Plus[Power[D[u[t], t], 2], Times[u[t], D[v[t], t]], Power[v[t], 2]], \
+             t, List[u, v]]"
+                .to_owned(),
+            "List[Equation[Plus[Derivative[1][v][t], Times[-2, Derivative[2][u][t]]], 0], \
+             Equation[Plus[Times[2, v[t]], Times[-1, Derivative[1][u][t]]], 0]]"
+                .to_owned(),
+        ),
+        (
+            "EulerLagrange[Times[x, Power[D[y[x], x], 2]]]".to_owned(),
+            "Equation[Times[2, x, Derivative[1][y][x]], $K_0]".to_owned(),
+        ),
+        // The constants skip the call's names.
+        (
+            "EulerLagrange[Plus[Power[D[y[x], x], 2], $K_0]]".to_owned(),
+            "List[Equation[Plus[Times[-1, $K_0], Power[Derivative[1][y][x], 2]], $K_1], \
+             Equation[Times[2, Derivative[1][y][x]], $K_2]]"
+                .to_owned(),
+        ),
+        (
+            format!("JacobiEquation[{jacobi}, t, y, Sin[t], h, 0]"),
+            "Sequence[Equation[Plus[Times[-1, h[t]], Times[-1, Derivative[2][h][t]]], 0], \
+             Times[c_1, Sin[t]]]"
+                .to_owned(),
+        ),
+        (
+            "JacobiEquation[Power[D[y[t], t], 2], y[t], t, h, 0]".to_owned(),
+            "Sequence[Equation[Times[2, Derivative[2][h][t]], 0], Times[c_1, t]]".to_owned(),
+        ),
+        // L_y′y′ = 0: whether d = 0.
+        (
+            "JacobiEquation[Power[y[t], 2], t, y, t, h, 0]".to_owned(),
+            "False".to_owned(),
+        ),
+        (
+            "JacobiEquation[Times[y[t], D[y[t], t]], t, y, t, h, 0]".to_owned(),
+            "True".to_owned(),
+        ),
+        (
+            format!("ConjugateEquation[{sine}, List[A, B], List[1, 0], t, 0]"),
+            "Sin[t]".to_owned(),
+        ),
+        (
+            "ConjugateEquation[Plus[Times[A, Power[E, t]], Times[B, Power[E, Times[-1, t]]]], \
+             List[A, B], List[1, 1], t, 0]"
+                .to_owned(),
+            "Times[Power[E, Times[-1, t]], Plus[-1, Power[E, t]], Plus[1, Power[E, t]]]".to_owned(),
+        ),
+        // Stays: y″ in L, a number for t, a symbol for a, an atom for y.
+        (
+            "EulerLagrange[Power[D[y[x], x, x], 2]]".to_owned(),
+            "EulerLagrange[Power[Derivative[2][y][x], 2]]".to_owned(),
+        ),
+        (
+            "EulerLagrange[Power[D[y[x], x], 2], 2]".to_owned(),
+            "EulerLagrange[Power[Derivative[1][y][x], 2], 2]".to_owned(),
+        ),
+        (
+            "JacobiEquation[Power[D[y[t], t], 2], t, y, t, h, a]".to_owned(),
+            "JacobiEquation[Power[Derivative[1][y][t], 2], t, y, t, h, a]".to_owned(),
+        ),
+        (
+            "ConjugateEquation[x, List[A, B], List[1, 0], t, 0]".to_owned(),
+            "ConjugateEquation[x, List[A, B], List[1, 0], t, 0]".to_owned(),
+        ),
+    ] {
+        assert_eq!(
+            format!("{:?}", ctx.eval(&read(&input)).unwrap()),
+            expected,
+            "{input}"
+        );
+    }
+}

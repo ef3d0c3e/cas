@@ -336,6 +336,9 @@ mod linear;
 mod particular;
 mod reduced;
 mod system;
+mod variational;
 
 #[cfg(test)]
 mod tests;
+
+pub(super) use variational::{conjugate_equation, euler_lagrange, jacobi_equation};

@@ -305,15 +305,26 @@ with 0), `preval` (with a variable, `x=a`, a removable singularity, and
 applied to a variable, a list and a number; `revert` of polynomials, of
 functions to the default order and of `x^2+x^3` (a Puiseux inverse);
 `sum_riemann` on giac's examples and a sum that is not one; and
-`wz_certificate` in its argument forms, read back and compared; and the
-departures, each with giac's answer: `function_diff(sin+id)`,
+`wz_certificate` in its argument forms, read back and compared; the calculus
+of variations (CAS-575): `euler_lagrange` in its argument forms and
+`jacobi_equation`, compared by value (giac's `diff(f,t,2)` read as a second
+derivative, its constants `K_n`, counted across its calls, renumbered from
+`K_0` as ours per call; an equation `= 0` up to its sign; the Jacobi solution
+up to its constant), and `conjugate_equation`; and the departures, each with
+giac's answer: `function_diff(sin+id)`,
 as the language has no `id`; `function_diff(ln)(x,y)`, the arguments past
 the parameter ignored in ours; `function_diff(sin)`, giac's hidden parameter
 `` ` x` `` against our `x`; `revert(x*exp(x))`, giac's series a term longer;
 `sum_riemann(1/sqrt(n^2+k^2),[n,k])`, where ours keeps `sqrt(n^2(1+x^2))`
 whole; giac's fourth `wz_certificate` example, 0 in giac and a certificate in
-ours, checked by giac's `simplify` of the WZ equation; and in print only,
-giac's `@` and `@@` forms.
+ours, checked by giac's `simplify` of the WZ equation; `euler_lagrange` with
+two coupled unknowns, where giac's d/dt of `L_v'` leaves out `u`; and in print
+only, giac's `@` and `@@` forms.
+
+`tests/euler_lagrange_assume.rs`, giac's `euler_lagrange` example under
+`assume(y>=0)` (CAS-575), alone in its binary as giac's assumptions are global,
+`assume` and `purge` in one input: ours, without the assumption, compared
+with giac's at a point with `y > 0`.
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.

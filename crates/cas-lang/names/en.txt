@@ -475,6 +475,10 @@ FunctionDiff: function_diff fonction_derivee
 Revert: revert
 SumRiemann: sum_riemann
 WZCertificate: wz_certificate
+# The calculus of variations (CAS-575).
+EulerLagrange: euler_lagrange
+JacobiEquation: jacobi_equation
+ConjugateEquation: conjugate_equation
 # Vector calculus (CAS-DOC-37): the differential operators (CAS-408).
 Grad: grad
 Divergence: divergence

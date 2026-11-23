@@ -1,10 +1,13 @@
 //! Xcas's calculus helpers against giac (CAS-574, CAS-576 to CAS-580):
 //! `ibpdv` and `ibpu` (one step, the bounds, the finish), `preval` and
 //! `int` of one argument, `function_diff` (`fonction_derivee`) applied,
-//! `revert`, `sum_riemann` and `wz_certificate`, giac's answers read back
-//! and compared with ours (`Giac::agrees`); and the departures, each with
-//! giac's answer as libgiac prints it.
+//! `revert`, `sum_riemann` and `wz_certificate`, `euler_lagrange`,
+//! `jacobi_equation` and `conjugate_equation` (CAS-575), giac's answers read
+//! back and compared with ours (`Giac::agrees`, or by value through
+//! [`compare`]); and the departures, each with giac's answer as libgiac
+//! prints it.
 
+use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
 
 /// The shared library, or `None` with a note: the comparisons skip.
@@ -25,6 +28,83 @@ fn check(inputs: &[&str]) {
         .filter_map(|input| giac.agrees(input).err().map(|e| format!("{e}")))
         .collect();
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// giac's answer to `input`, written for this CAS: its second derivatives
+/// `diff(f,v,2)` as `diff(f,v,v)` (ours would differentiate in 2), and its
+/// constants `K_n`, numbered by a counter global to giac's session, as
+/// `K_0`, `K_1`, … in the order they appear, as ours number them per call.
+fn giac_text(giac: &Giac, input: &str) -> String {
+    let mut text = giac.eval(input).unwrap();
+    for v in ["x", "t"] {
+        text = text.replace(&format!(",{v},2)"), &format!(",{v},{v})"));
+    }
+    let mut seen: Vec<String> = Vec::new();
+    let mut out = String::new();
+    let mut rest = text.as_str();
+    while let Some(at) = rest.find("K_") {
+        out.push_str(&rest[..at]);
+        let digits = rest[at + 2..]
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(rest.len() - at - 2);
+        let name = &rest[at..at + 2 + digits];
+        let k = seen.iter().position(|s| s == name).unwrap_or_else(|| {
+            seen.push(name.to_owned());
+            seen.len() - 1
+        });
+        out.push_str("K_");
+        out.push_str(&k.to_string());
+        rest = &rest[at + 2 + digits..];
+    }
+    out.push_str(rest);
+    out
+}
+
+fn zero(e: Expr) -> bool {
+    Context::new().eval(&Expr::call(Symbol::SIMPLIFY, [e])).ok() == Some(Expr::from(0))
+}
+
+fn minus(a: &Expr, b: &Expr) -> Expr {
+    Expr::call(
+        Symbol::PLUS,
+        [
+            a.clone(),
+            Expr::call(Symbol::TIMES, [Expr::from(-1), b.clone()]),
+        ],
+    )
+}
+
+/// Whether `a` and `b` are the same answer: lists of the same length
+/// elementwise; equations `l = r` by `l − r` equal, or opposite when both
+/// right sides are 0 (`E = 0` and `−E = 0` are one equation; giac's sign
+/// varies with its `radsimp`); other expressions by a 0 difference.
+fn equivalent(a: &Expr, b: &Expr) -> bool {
+    let head = |e: &Expr| e.head().and_then(Expr::as_symbol);
+    match (head(a), head(b)) {
+        (Some(Symbol::LIST), Some(Symbol::LIST)) => {
+            a.args().len() == b.args().len()
+                && a.args().iter().zip(b.args()).all(|(a, b)| equivalent(a, b))
+        }
+        (Some(Symbol::EQUATION), Some(Symbol::EQUATION)) => {
+            let ([la, ra], [lb, rb]) = (a.args(), b.args()) else {
+                return false;
+            };
+            let (da, db) = (minus(la, ra), minus(lb, rb));
+            let homogeneous = *ra == Expr::from(0) && *rb == Expr::from(0);
+            zero(minus(&da, &db)) || homogeneous && zero(Expr::call(Symbol::PLUS, [da, db]))
+        }
+        _ => zero(minus(a, b)),
+    }
+}
+
+/// giac's answer to `theirs` against ours to `input` (`input` writes
+/// giac's `y'` as `diff(y(t),t)`).
+fn compare(giac: &Giac, theirs: &str, input: &str) -> Result<(), String> {
+    let text = giac_text(giac, theirs);
+    match (ours(&text), ours(input)) {
+        (Ok(t), Ok(o)) if equivalent(&o, &t) => Ok(()),
+        (t, o) => Err(format!("{input}: ours {o:?}, giac's {text} ({t:?})")),
+    }
 }
 
 /// `ibpdv` and `ibpu` (CAS-574): giac's examples.
@@ -157,6 +237,140 @@ fn wz_certificates() {
     ]);
 }
 
+/// `euler_lagrange` (CAS-575): giac's examples and the argument forms,
+/// compared by value ([`compare`]): giac's `diff(f,t,2)` does
+/// not read back, and its constants `K_n` count across its calls. The
+/// first input is giac's, the second ours where the language lacks `y'`.
+#[test]
+fn euler_lagrange_equations() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let same = |input: &str| (input.to_owned(), input.to_owned());
+    let cases = [
+        same("euler_lagrange(sqrt(1+diff(y(x),x)^2),x,y)"),
+        (
+            "euler_lagrange(x^2*y'^2+y^2)".to_owned(),
+            "euler_lagrange(x^2*diff(y(x),x)^2+y^2)".to_owned(),
+        ),
+        same("euler_lagrange(x^2*diff(y(x),x)^2+y(x)^2)"),
+        same("euler_lagrange(x^2*diff(y(x),x)^2+y(x)^2,y(x))"),
+        same("euler_lagrange(diff(y(t),t)^2-y(t)^2,t,y)"),
+        same("euler_lagrange(diff(y(t),t)^2-y(t)^2,y(t))"),
+        same("euler_lagrange(diff(y(t),t)^2-y(t)^2)"),
+        (
+            "euler_lagrange(sqrt(x'^2+y'^2),[x(t),y(t)])".to_owned(),
+            "euler_lagrange(sqrt(diff(x(t),t)^2+diff(y(t),t)^2),[x(t),y(t)])".to_owned(),
+        ),
+        same("euler_lagrange(sqrt(diff(u(t),t)^2+diff(v(t),t)^2),t,[u,v])"),
+        same("euler_lagrange(diff(y(x),x)^2+x*y(x))"),
+        same("euler_lagrange(diff(y(x),x)^2+y(x)*sin(x))"),
+        same("euler_lagrange(sqrt(1+diff(y(x),x)^2)/y(x))"),
+        same("euler_lagrange(y(x)*sqrt(1+diff(y(x),x)^2))"),
+        same("euler_lagrange(x*diff(y(x),x)^2)"),
+        same("euler_lagrange(y(x)^2)"),
+        same("euler_lagrange(exp(x)*(diff(y(x),x)^2+y(x)^2))"),
+    ];
+    let wrong: Vec<String> = cases
+        .iter()
+        .filter_map(|(theirs, input)| compare(giac, theirs, input).err())
+        .collect();
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `jacobi_equation` (CAS-575): the equation by value, the solution up to
+/// its constant (`DSolve`'s name may differ from giac's: their ratio is
+/// free of `t`); with `L_y'y' = 0`, `true` or `false`.
+#[test]
+fn jacobi_equations() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let cases = [
+        (
+            "jacobi_equation(-1/2*y'(t)^2+y(t)^2/2,t,y,sin(t),h,0)",
+            "jacobi_equation(-1/2*diff(y(t),t)^2+y(t)^2/2,t,y,sin(t),h,0)",
+        ),
+        (
+            "jacobi_equation(-1/2*diff(y(t),t)^2+y(t)^2/2,y(t),sin(t),h,0)",
+            "jacobi_equation(-1/2*diff(y(t),t)^2+y(t)^2/2,y(t),sin(t),h,0)",
+        ),
+        (
+            "jacobi_equation(diff(y(t),t)^2,t,y,t,h,0)",
+            "jacobi_equation(diff(y(t),t)^2,t,y,t,h,0)",
+        ),
+        (
+            "jacobi_equation(diff(y(t),t)^2-y(t)^2,t,y,sin(t),h,0)",
+            "jacobi_equation(diff(y(t),t)^2-y(t)^2,t,y,sin(t),h,0)",
+        ),
+    ];
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (theirs, input) in cases {
+        let text = giac_text(giac, theirs);
+        // giac's sequence `equation,solution`, split at its one comma
+        // outside parentheses.
+        let mut depth = 0;
+        let comma = text.char_indices().find_map(|(i, c)| {
+            match c {
+                '(' | '[' => depth += 1,
+                ')' | ']' => depth -= 1,
+                ',' if depth == 0 => return Some(i),
+                _ => {}
+            }
+            None
+        });
+        let found = ours(input).ok();
+        let parts = found.as_ref().map(Expr::args);
+        let ok = match (comma, parts) {
+            (Some(i), Some([equation, solution])) => {
+                let (eq, sol) = (ours(&text[..i]), ours(&text[i + 1..]));
+                match (eq, sol) {
+                    (Ok(eq), Ok(sol)) => {
+                        let ratio = Expr::call(
+                            Symbol::D,
+                            [
+                                Expr::call(
+                                    Symbol::TIMES,
+                                    [
+                                        solution.clone(),
+                                        Expr::call(Symbol::POWER, [sol, Expr::from(-1)]),
+                                    ],
+                                ),
+                                Expr::symbol("t"),
+                            ],
+                        );
+                        let ratio = Expr::call(Symbol::SIMPLIFY, [ratio]);
+                        equivalent(equation, &eq) && ctx.eval(&ratio).ok() == Some(Expr::from(0))
+                    }
+                    _ => false,
+                }
+            }
+            _ => false,
+        };
+        if !ok {
+            wrong.push(format!("{input}: ours {found:?}, giac's {text}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    check(&[
+        "jacobi_equation(y(t)^2,t,y,t,h,0)",
+        "jacobi_equation(y(t)*diff(y(t),t),t,y,t,h,0)",
+    ]);
+}
+
+/// `conjugate_equation` (CAS-575): giac's example and others.
+#[test]
+fn conjugate_points() {
+    check(&[
+        "conjugate_equation(A*sin(t)+B*cos(t),[A,B],[1,0],t,0)",
+        "conjugate_equation(A*exp(t)+B*exp(-t),[A,B],[1,1],t,0)",
+        "conjugate_equation(A*t+B,[A,B],[1,0],t,0)",
+        "conjugate_equation(A*sinh(t)+B*cosh(t),[A,B],[1,0],t,0)",
+        "conjugate_equation(A*sin(t)+B*cos(t),[A,B],[2,3],t,1)",
+    ]);
+}
+
 /// Where this CAS departs from giac: the input, giac's answer as it prints
 /// it, ours as decided.
 #[test]
@@ -194,6 +408,13 @@ fn departures() {
         // giac's sum with the parameters a, b, c finds no antidifference
         // and answers 0; ours is a certificate, checked below.
         (WZ_FOURTH, "0", WZ_FOURTH_OURS),
+        // giac's d/dt L_u' differentiates only the unknown of its equation
+        // (u stays a constant in v's); ours in every unknown: 2v - u' = 0.
+        (
+            "euler_lagrange(diff(u(t),t)^2+u(t)*diff(v(t),t)+v(t)^2,t,[u,v])",
+            "[-2*diff(u(t),t,2)+diff(v(t),t)=0,2*v(t)=0]",
+            "[diff(v(t),t)-2*diff(u(t),t,t)=0,2*v(t)-diff(u(t),t)=0]",
+        ),
     ];
     let mut wrong = Vec::new();
     for (input, answer, decided) in cases {
