@@ -77,6 +77,29 @@ fn constant(ctx: &Context, d: &Expr) -> bool {
     })
 }
 
+/// Whether `d` is below 10⁻⁹ at `x = 7/2` and `x = 9/2`, with `a = 2/3`,
+/// its real and imaginary parts apart (C0013): the departure rows' check
+/// where `vanishes` cannot merge `Exp[1] Exp[x - 1]`-type products (C0041);
+/// the unit tests check those rows exactly.
+fn numerically_zero(ctx: &Context, d: &Expr) -> bool {
+    let (x, a) = (Expr::symbol("x"), Expr::symbol("a"));
+    let bound = Expr::call(Symbol::N, [Expr::from(1) / Expr::from(1_000_000_000_i64)]);
+    [7, 9].into_iter().all(|v| {
+        let at = Expr::call(
+            Symbol::N,
+            [d.substitute(&[
+                (x.clone(), Expr::from(v) / Expr::from(2)),
+                (a.clone(), Expr::from(2) / Expr::from(3)),
+            ])],
+        );
+        [Symbol::RE, Symbol::IM].into_iter().all(|part| {
+            let size = Expr::call(Symbol::ABS, [Expr::call(part, [at.clone()])]);
+            eval(ctx, &Expr::call(Symbol::LESS, [size, bound.clone()])).and_then(|e| e.as_symbol())
+                == Some(Symbol::TRUE)
+        })
+    })
+}
+
 /// Whether `e` is a remainder: ours `Risch[rem, x]`, giac's
 /// `integrate(rem,x)` read as `remains(rem,x)`.
 fn is_remainder(e: &Expr) -> bool {
@@ -129,7 +152,8 @@ fn integrand(input: &str) -> Result<Expr, String> {
 fn derivative_holds(ctx: &Context, answer: &Expr, f: &Expr) -> bool {
     let (prim, rem) = split(answer);
     let d = Expr::call(Symbol::D, [prim, Expr::symbol("x")]);
-    vanishes(ctx, &(d + rem - f.clone()))
+    let difference = d + rem - f.clone();
+    vanishes(ctx, &difference) || numerically_zero(ctx, &difference)
 }
 
 /// Whether `e` holds a `Risch` call.
