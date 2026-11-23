@@ -173,7 +173,7 @@ fn exact_answers() {
     let found = ball(&ctx, &area("Exp[x]", "0", "1", "0", "RombergTrapezoid"));
     assert!((found.re().mid().to_f64() - 1.859_140_914_229_522_5).abs() < 1e-12);
     // A rational or decimal n is floored: 5/2 and 2.7 are 2.
-    for n in ["Times[5, Power[2, -1]]", "2.7"] {
+    for n in ["Times[5, Power[2, -1]]", "N[Times[27, Power[10, -1]]]"] {
         let found = ball(&ctx, &area("Power[x, 2]", "0", "1", n, "LeftRectangle"));
         assert!(found.re().contains_rational(&q(1, 8)), "{n}: {found:?}");
     }
