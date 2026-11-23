@@ -21,8 +21,21 @@
 //!   `PermutationSignature`, `signature`: `(−1)^(n − c)` for `c` cycles,
 //!   fixed points among them.
 //! - `PermutationMatrix`, `permu2mat`: 1 at `(i, p(i))`.
+//! - `NextPermutation` and `PreviousPermutation`, `nextperm` and `prevperm`
+//!   (CAS-561, permu.cc): the next and previous permutation in
+//!   lexicographic order (`std::next_permutation`), `undef` after the last
+//!   and before the first.
+//! - `PermutationGroup[p, q]`, `groupermu`, also of the list `[p, q]`: the
+//!   group `p` and `q` generate, giac's order (permu.cc `groupermu`): `p`
+//!   and `q`, the shorter fixing the points it lacks, then breadth first
+//!   `p ∘ s` and `q ∘ s` for each `s` found, new ones appended; `p = q`
+//!   stays twice. More than lists.rs's `MAX_ELEMENTS` entries in all leave
+//!   the call (C0019).
 //!
 //! Arguments of another form leave the call; `PermutationQ` says `False`.
+//! For the three of CAS-561, giac's error, Bad Argument Type for what is
+//! not a list (of two lists for `groupermu`) and Bad Argument Value for a
+//! list that is not a permutation, is a warning.
 
 #![allow(
     clippy::many_single_char_names,
@@ -34,9 +47,15 @@ use cas_num::Integer;
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
+use crate::native::lists::MAX_ELEMENTS;
 use crate::symbol::Symbol;
+use crate::trace::Warning;
 
 type Native = Result<Option<Expr>, EvalError>;
+
+const BAD_VALUE: &str = "bad argument value";
+const BAD_TYPE: &str = "bad argument type";
+const SIZE_LIMIT: &str = "calculation size limit exceeded";
 
 /// The entries of a list of nonnegative integers that fit an index.
 fn naturals(e: &Expr) -> Option<Vec<usize>> {
@@ -283,6 +302,110 @@ pub(super) fn permutation_matrix(ev: &mut Eval<'_>, e: &Expr) -> Native {
         .iter()
         .map(|&j| list((0..p.len()).map(|k| Expr::from(i64::from(k == j)))));
     answered(ev, "permu2mat", e, list(rows))
+}
+
+/// giac's error for `e`: the call stays, with `why` as a warning.
+fn refuse(ev: &mut Eval<'_>, e: &Expr, why: &'static str) -> Native {
+    ev.warn(Warning::Native {
+        message: why.into(),
+        expr: e.clone(),
+    });
+    Ok(None)
+}
+
+/// `std::next_permutation`, or `prev_permutation` when `!next`: whether
+/// there was one.
+fn step(p: &mut [usize], next: bool) -> bool {
+    let after = |a: usize, b: usize| if next { a < b } else { a > b };
+    let Some(i) = (1..p.len()).rev().find(|&i| after(p[i - 1], p[i])) else {
+        p.reverse();
+        return false;
+    };
+    let j = (i..p.len())
+        .rev()
+        .find(|&j| after(p[i - 1], p[j]))
+        .expect("p[i] follows");
+    p.swap(i - 1, j);
+    p[i..].reverse();
+    true
+}
+
+/// `NextPermutation[p]` and `PreviousPermutation[p]`.
+fn neighbour(ev: &mut Eval<'_>, e: &Expr, next: bool, name: &'static str) -> Native {
+    let Some(arg) = one_argument(e) else {
+        return refuse(ev, e, BAD_TYPE);
+    };
+    if arg.head().and_then(Expr::as_symbol) != Some(Symbol::LIST) {
+        return refuse(ev, e, BAD_TYPE);
+    }
+    let Some(mut p) = permutation(arg) else {
+        return refuse(ev, e, BAD_VALUE);
+    };
+    let result = if step(&mut p, next) {
+        indices(&p)
+    } else {
+        Expr::from(Symbol::INDETERMINATE)
+    };
+    answered(ev, name, e, result)
+}
+
+/// `NextPermutation[p]`.
+pub(super) fn next_permutation(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    neighbour(ev, e, true, "nextperm")
+}
+
+/// `PreviousPermutation[p]`.
+pub(super) fn previous_permutation(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    neighbour(ev, e, false, "prevperm")
+}
+
+/// `PermutationGroup[p, q]` or `PermutationGroup[{p, q}]`.
+pub(super) fn permutation_group(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let is_list = |x: &Expr| x.head().and_then(Expr::as_symbol) == Some(Symbol::LIST);
+    let (p, q) = match e.args() {
+        [p, q] => (p, q),
+        [pq] if is_list(pq) && pq.args().len() == 2 => (&pq.args()[0], &pq.args()[1]),
+        _ => return refuse(ev, e, BAD_TYPE),
+    };
+    if !is_list(p) || !is_list(q) {
+        return refuse(ev, e, BAD_TYPE);
+    }
+    let (Some(mut a), Some(mut b)) = (permutation(p), permutation(q)) else {
+        return refuse(ev, e, BAD_VALUE);
+    };
+    let n = a.len().max(b.len());
+    a.extend(a.len()..n);
+    b.extend(b.len()..n);
+    let fits = |count: usize| {
+        count
+            .checked_mul(n)
+            .and_then(|total| i64::try_from(total).ok())
+            .is_some_and(|total| total <= MAX_ELEMENTS)
+    };
+    if !fits(2) {
+        return refuse(ev, e, SIZE_LIMIT);
+    }
+    // giac's `est_dans` looks through every element found so far.
+    let mut found: std::collections::HashSet<Vec<usize>> = [a.clone(), b.clone()].into();
+    let mut s = vec![a.clone(), b.clone()];
+    let mut first = 0;
+    while first < s.len() {
+        let end = s.len();
+        for j in first..end {
+            for g in [&a, &b] {
+                let r = compose(g, &s[j]);
+                if !found.contains(&r) {
+                    if !fits(s.len() + 1) {
+                        return refuse(ev, e, SIZE_LIMIT);
+                    }
+                    found.insert(r.clone());
+                    s.push(r);
+                }
+            }
+        }
+        first = end;
+    }
+    answered(ev, "groupermu", e, list(s.iter().map(|r| indices(r))))
 }
 
 #[cfg(test)]

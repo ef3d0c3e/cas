@@ -240,7 +240,7 @@ whose `n - 1` ours does not factor far enough to prove them
 (`is_prime(2^607-1)`, a 62-digit `2*96*p*q+1`): giac answers 1 through
 PARI's APRCL where PARI does not fail, ours leaves the call with a warning.
 
-`tests/list_commands.rs`, Xcas's list commands (CAS-555 to CAS-559): giac's
+`tests/list_commands.rs`, Xcas's list commands (CAS-555 to CAS-561): giac's
 `find` and `index` from 0 (`1` found at `1.0`), `count_eq`, `count_inf` and
 `count_sup` flattened and with `row` and `col`, `deltalist` of lists and of
 matrices, `accumulate_head_tail`, `sizes`, `makevector`, `makesuite`
@@ -260,6 +260,14 @@ that stay (several lists to `apply`, a decimal position, strings, a first
 argument of `subsop` that is not a list), `apply` of `x^2` to the rows of a
 matrix (giac's dot products), of `x+1` (giac's `poly1[…]`, ours an error)
 and a nested `NULL`, which deletes where giac's unquoted one does not.
+Then `heappush`, by `<` and by a comparator, `nextperm` and `prevperm`
+(`undef` past the ends) and `groupermu` in giac's order; their departures:
+`heapify` and `heappop`, which change giac's variable in place and print 1
+and the element past the end where ours returns the heap, `heappush` of a
+symbol, which giac orders and ours leaves, and giac's errors (not a list,
+not a permutation, `heappop([])`). libgiac crashes on `heappop` of a list
+that is not a heap (`heappop([9,6,5,1,1,4,2,3])`): no giac row, a unit test
+of ours in `cas-core`.
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.

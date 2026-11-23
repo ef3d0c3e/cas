@@ -53,7 +53,7 @@ use crate::symbol::Symbol;
 type Native = Result<Option<Expr>, EvalError>;
 
 /// The most elements `Table` and `MakeList` build.
-const MAX_ELEMENTS: i64 = 1 << 16;
+pub(in crate::native) const MAX_ELEMENTS: i64 = 1 << 16;
 
 /// The bits of the balls that order numbers in `Sort`.
 const BITS: u64 = 128;

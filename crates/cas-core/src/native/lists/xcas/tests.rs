@@ -1,4 +1,4 @@
-//! Tests of Xcas's list commands (CAS-555 to CAS-559): giac's answers from
+//! Tests of Xcas's list commands (CAS-555 to CAS-560): giac's answers from
 //! the phase 1.3 probes, and the calls its errors leave.
 
 use crate::{Context, Expr};
@@ -289,5 +289,69 @@ fn insertions_and_substitutions() {
         "SubstituteOperands[List[List[1, 2], List[3, 4]], Equation[List[1, 5], 9]]",
         "SubstituteOperands[List[0, 1, 2, 3]]",
         "SubstituteOperands[5, Equation[1, 2]]",
+    ]);
+}
+
+/// libstdc++'s heaps: giac's lists after `heapify` and `heappop` in place,
+/// its `heappush` answers (CAS-560).
+#[test]
+fn heaps() {
+    check(&[
+        (
+            "Heapify[List[3, 1, 4, 1, 5, 9, 2, 6]]",
+            "List[9, 6, 4, 1, 5, 3, 2, 1]",
+        ),
+        (
+            "Heapify[List[1, 2, 3, 4, 5, 6, 7]]",
+            "List[7, 5, 6, 4, 2, 1, 3]",
+        ),
+        ("Heapify[List[]]", "List[]"),
+        (
+            "Heapify[List[1, 2, 3], Function[List[a, b], Greater[a, b]]]",
+            "List[1, 2, 3]",
+        ),
+        ("HeapPop[List[5, 3, 4, 1]]", "List[4, 3, 1]"),
+        (
+            "HeapPop[List[9, 7, 5, 6, 1, 4, 2, 3, 1]]",
+            "List[7, 6, 5, 3, 1, 4, 2, 1]",
+        ),
+        ("HeapPop[List[7]]", "List[]"),
+        // libgiac crashes here; the port of pop_heap on a list that is not
+        // a heap.
+        (
+            "HeapPop[List[9, 6, 5, 1, 1, 4, 2, 3]]",
+            "List[6, 3, 5, 1, 1, 4, 2]",
+        ),
+        (
+            "HeapPush[List[9, 6, 5, 1, 1, 4, 2, 3], 7]",
+            "List[9, 7, 5, 6, 1, 4, 2, 3, 1]",
+        ),
+        (
+            "HeapPush[List[9, 6, 5, 1, 1, 4, 2, 3], 10]",
+            "List[10, 9, 5, 6, 1, 4, 2, 3, 1]",
+        ),
+        ("HeapPush[List[1], 7]", "List[7, 1]"),
+        ("HeapPush[List[], 7]", "List[7]"),
+        (
+            "HeapPush[List[3, 1], 2, Function[List[a, b], Greater[a, b]]]",
+            "List[2, 1, 3]",
+        ),
+        (
+            "HeapPush[List[1, 3, 2], 0, Function[List[a, b], Greater[a, b]]]",
+            "List[0, 1, 2, 3]",
+        ),
+        (
+            "HeapPush[List[Power[2, -1], Power[3, -1]], Times[2, Power[3, -1]]]",
+            "List[Times[2, Power[3, -1]], Power[3, -1], Power[2, -1]]",
+        ),
+    ]);
+    stays(&[
+        "HeapPush[List[5, 3], x]",
+        "Heapify[List[x, y]]",
+        "Heapify[5]",
+        "HeapPush[5, 1]",
+        "HeapPush[List[1]]",
+        "HeapPop[5]",
+        "HeapPop[List[]]",
     ]);
 }

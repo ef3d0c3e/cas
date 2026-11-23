@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 517] = [
+const BUILTINS: [&str; 523] = [
     "Plus",
     "Times",
     "Power",
@@ -205,6 +205,9 @@ const BUILTINS: [&str; 517] = [
     "PermutationOrder",
     "PermutationSignature",
     "PermutationMatrix",
+    "NextPermutation",
+    "PreviousPermutation",
+    "PermutationGroup",
     "BitAnd",
     "BitOr",
     "BitXor",
@@ -337,6 +340,9 @@ const BUILTINS: [&str; 517] = [
     "Multiply",
     "InsertAt",
     "SubstituteOperands",
+    "Heapify",
+    "HeapPush",
+    "HeapPop",
     "Apart",
     "ComplexApart",
     "ProperFraction",

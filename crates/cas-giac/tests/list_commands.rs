@@ -1,8 +1,9 @@
-//! Xcas's list commands against giac (CAS-555 to CAS-559): `find` and
+//! Xcas's list commands against giac (CAS-555 to CAS-561): `find` and
 //! `index` from 0, `count_eq`, `count_inf` and `count_sup` with `row` and
 //! `col`, `deltalist`, `accumulate_head_tail`, `sizes`, `makevector`,
 //! `makesuite`, `newList`, `enumerate`, `copy`, `apply`, `foldl`, `foldr`,
-//! `multiply`, `insert` and `subsop`, giac's answers read back
+//! `multiply`, `insert`, `subsop`, `heappush`, `nextperm`, `prevperm` and
+//! `groupermu`, giac's answers read back
 //! and compared with ours (`Giac::agrees`); and the departures, each with
 //! giac's answer as it prints it: its errors, where ours leaves the call
 //! with a warning, and the forms ours leaves.
@@ -218,9 +219,52 @@ fn insertions_and_substitutions() {
     ]);
 }
 
+/// `heappush`, libstdc++'s `push_heap`, by `<` or a comparator (CAS-560);
+/// `heapify` and `heappop` are departures.
+#[test]
+fn heaps() {
+    check(&[
+        "heappush([9,6,5,1,1,4,2,3],7)",
+        "heappush([9,6,5,1,1,4,2,3],10)",
+        "heappush([1],7)",
+        "heappush([],7)",
+        "heappush([3,1],2,(a,b)->a>b)",
+        "heappush([1,3,2],0,(a,b)->a>b)",
+        "heappush([9,6,5,1,1,4,2,3],7,(a,b)->a<b)",
+        "heappush([1/2,1/3],2/3)",
+        "heappush([2.5,1],3)",
+    ]);
+}
+
+/// `nextperm`, `prevperm` and `groupermu`, giac's order (CAS-561).
+#[test]
+fn permutations() {
+    check(&[
+        "nextperm([0,2,1,3])",
+        "nextperm([0,3,2,1])",
+        "nextperm([0,1,2])",
+        "nextperm([2,1,0])",
+        "nextperm([])",
+        "nextperm([0,1,2,3])",
+        "prevperm([0,1,3,2])",
+        "prevperm([0,1,2,3])",
+        "prevperm([2,1,0])",
+        "prevperm([1,0,2])",
+        "prevperm([3,2,1,0])",
+        "groupermu([1,0,2],[0,2,1])",
+        "groupermu([[1,0,2],[0,2,1]])",
+        "groupermu([1,2,0],[3,1,2,0])",
+        "groupermu([0,1],[1,0])",
+        "groupermu([1,0],[0,1,2])",
+        "groupermu([0,1,2],[0,1,2])",
+        "groupermu([],[])",
+        "groupermu([0],[])",
+    ]);
+}
+
 /// Where this CAS departs from giac: the input, giac's answer as it prints
 /// it, ours as decided.
-const DEPARTURES: [(&str, &str, &str); 49] = [
+const DEPARTURES: [(&str, &str, &str); 69] = [
     // giac's errors; ours leaves the call, with the error as a warning.
     (
         "index([1,2],5)",
@@ -452,6 +496,91 @@ const DEPARTURES: [(&str, &str, &str); 49] = [
         "[[1,2],[3]]",
     ),
     ("subsop([[1,2],[3,4]],[1]=NULL)", "[[1,2],[3,4]]", "[[1,2]]"),
+    // Heaps (CAS-560): giac works in place and prints 1 for heapify, the
+    // element past the end for heappop; ours returns the heap. giac orders
+    // symbols where `Less` does not decide: ours stays.
+    ("heapify([3,1,4,1,5,9,2,6])", "1", "[9,6,4,1,5,3,2,1]"),
+    ("heapify([])", "1", "[]"),
+    ("heappop([5,3,4,1])", "0", "[4,3,1]"),
+    ("heappush([5,3],x)", "[x,3,5]", "heappush([5,3],x)"),
+    ("heapify([x,y])", "1", "heapify([x,y])"),
+    // giac's errors on heaps and permutations (CAS-560, CAS-561); ours
+    // leaves the call, with the error as a warning.
+    (
+        "heappush(5,1)",
+        "GIAC_ERROR: heappush(5,1) \n Error: Bad Argument Value",
+        "heappush(5,1)",
+    ),
+    (
+        "heappush([1])",
+        "GIAC_ERROR: heappush([1]) \n Error: Bad Argument Value",
+        "heappush([1])",
+    ),
+    (
+        "heapify(5)",
+        "GIAC_ERROR: heapify(5) \n Error: Bad Argument Value",
+        "heapify(5)",
+    ),
+    (
+        "heappop(5)",
+        "GIAC_ERROR: heappop(5) \n Error: Bad Argument Value",
+        "heappop(5)",
+    ),
+    (
+        "heappop([])",
+        "GIAC_ERROR: heappop([]) \n Error: Invalid dimension",
+        "heappop([])",
+    ),
+    (
+        "nextperm([1,2,3])",
+        "GIAC_ERROR: nextperm([1,2,3]) \n Error: Bad Argument Value",
+        "nextperm([1,2,3])",
+    ),
+    (
+        "nextperm([1,1,0])",
+        "GIAC_ERROR: nextperm([1,1,0]) \n Error: Bad Argument Value",
+        "nextperm([1,1,0])",
+    ),
+    (
+        "nextperm(5)",
+        "GIAC_ERROR: nextperm(5) \n Error: Bad Argument Type",
+        "nextperm(5)",
+    ),
+    (
+        "prevperm(x)",
+        "GIAC_ERROR: prevperm(x) \n Error: Bad Argument Type",
+        "prevperm(x)",
+    ),
+    (
+        "groupermu([1,1],[0,1])",
+        "GIAC_ERROR: groupermu([1,1],[0,1]) \n Error: Bad Argument Value",
+        "groupermu([1,1],[0,1])",
+    ),
+    (
+        "groupermu([1,0,2,3])",
+        "GIAC_ERROR: groupermu([1,0,2,3]) \n Error: Bad Argument Type",
+        "groupermu([1,0,2,3])",
+    ),
+    (
+        "groupermu([1,2,0])",
+        "GIAC_ERROR: groupermu([1,2,0]) \n Error: Bad Argument Type",
+        "groupermu([1,2,0])",
+    ),
+    (
+        "groupermu([1,0,2],[0,2,1],[1,2,0])",
+        "GIAC_ERROR: groupermu([1,0,2],[0,2,1],[1,2,0]) \n Error: Bad Argument Type",
+        "groupermu([1,0,2],[0,2,1],[1,2,0])",
+    ),
+    (
+        "groupermu(1,[0])",
+        "GIAC_ERROR: groupermu(1,[0]) \n Error: Bad Argument Type",
+        "groupermu(1,[0])",
+    ),
+    (
+        "groupermu([1,0],[0,2])",
+        "GIAC_ERROR: groupermu([1,0],[0,2]) \n Error: Bad Argument Value",
+        "groupermu([1,0],[0,2])",
+    ),
 ];
 
 /// The departures of [`DEPARTURES`], then `newList` beyond this CAS's

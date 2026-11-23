@@ -185,6 +185,10 @@ FoldRight: foldr
 Multiply: multiply
 InsertAt: insert
 SubstituteOperands: subsop
+# Xcas's heaps (CAS-560).
+Heapify: heapify
+HeapPush: heappush
+HeapPop: heappop
 # Polynomial tools (CAS-DOC-29, CAS-339 to CAS-341).
 Apart: partfrac
 ComplexApart: cpartfrac
@@ -300,6 +304,9 @@ CycleProduct: c1oc2
 PermutationOrder: permuorder
 PermutationSignature: signature
 PermutationMatrix: permu2mat
+NextPermutation: nextperm
+PreviousPermutation: prevperm
+PermutationGroup: groupermu
 # Bits, digits and falling factorials (CAS-DOC-45 §3, CAS-464).
 BitAnd: bitand
 BitOr: bitor

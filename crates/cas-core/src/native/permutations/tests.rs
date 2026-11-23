@@ -21,6 +21,19 @@ fn check(cases: &[(&str, &str)]) {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// Each input in full form stays as it is written (giac's errors).
+fn stays(inputs: &[&str]) {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in inputs {
+        let found = ctx.eval(&read(input)).unwrap();
+        if found != read(input) {
+            wrong.push(format!("{input}: {found:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 #[test]
 fn cycles() {
     check(&[
@@ -108,5 +121,53 @@ fn invariants() {
             "PermutationMatrix[List[1, 2, 0]]",
             "List[List[0, 1, 0], List[0, 0, 1], List[1, 0, 0]]",
         ),
+    ]);
+}
+
+/// giac's `nextperm`, `prevperm` and `groupermu` (CAS-561).
+#[test]
+fn neighbours_and_groups() {
+    check(&[
+        ("NextPermutation[List[0, 2, 1, 3]]", "List[0, 2, 3, 1]"),
+        ("NextPermutation[List[0, 3, 2, 1]]", "List[1, 0, 2, 3]"),
+        ("NextPermutation[List[0, 1, 2]]", "List[0, 2, 1]"),
+        ("NextPermutation[List[2, 1, 0]]", "Indeterminate"),
+        ("NextPermutation[List[]]", "Indeterminate"),
+        ("PreviousPermutation[List[0, 1, 3, 2]]", "List[0, 1, 2, 3]"),
+        ("PreviousPermutation[List[0, 1, 2, 3]]", "Indeterminate"),
+        ("PreviousPermutation[List[2, 1, 0]]", "List[2, 0, 1]"),
+        ("PreviousPermutation[List[1, 0, 2]]", "List[0, 2, 1]"),
+        (
+            "PermutationGroup[List[1, 0, 2], List[0, 2, 1]]",
+            "List[List[1, 0, 2], List[0, 2, 1], List[0, 1, 2], List[2, 0, 1], \
+             List[1, 2, 0], List[2, 1, 0]]",
+        ),
+        (
+            "PermutationGroup[List[List[1, 0, 2], List[0, 2, 1]]]",
+            "List[List[1, 0, 2], List[0, 2, 1], List[0, 1, 2], List[2, 0, 1], \
+             List[1, 2, 0], List[2, 1, 0]]",
+        ),
+        (
+            "PermutationGroup[List[1, 0], List[0, 1, 2]]",
+            "List[List[1, 0, 2], List[0, 1, 2]]",
+        ),
+        (
+            "PermutationGroup[List[0, 1, 2], List[0, 1, 2]]",
+            "List[List[0, 1, 2], List[0, 1, 2]]",
+        ),
+        ("PermutationGroup[List[], List[]]", "List[List[], List[]]"),
+    ]);
+    stays(&[
+        "NextPermutation[List[1, 2, 3]]",
+        "NextPermutation[List[0, 1, 1]]",
+        "NextPermutation[5]",
+        "PreviousPermutation[x]",
+        "PermutationGroup[List[1, 1], List[0, 1]]",
+        "PermutationGroup[List[1, 0, 2, 3]]",
+        "PermutationGroup[1, List[0]]",
+        "PermutationGroup[List[1, 0, 2], List[0, 2, 1], List[1, 2, 0]]",
+        // The symmetric group on 9 points: 9! permutations, past
+        // MAX_ELEMENTS entries.
+        "PermutationGroup[List[1, 0, 2, 3, 4, 5, 6, 7, 8], List[1, 2, 3, 4, 5, 6, 7, 8, 0]]",
     ]);
 }

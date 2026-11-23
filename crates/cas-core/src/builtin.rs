@@ -239,6 +239,10 @@ builtins! {
     MULTIPLY = "Multiply" [PROTECTED];
     INSERT_AT = "InsertAt" [PROTECTED];
     SUBSTITUTE_OPERANDS = "SubstituteOperands" [PROTECTED];
+    // Xcas's heaps (CAS-560).
+    HEAPIFY = "Heapify" [PROTECTED];
+    HEAP_PUSH = "HeapPush" [PROTECTED];
+    HEAP_POP = "HeapPop" [PROTECTED];
     // Polynomial tools (CAS-DOC-29).
     APART = "Apart" [PROTECTED];
     COMPLEX_APART = "ComplexApart" [PROTECTED];
@@ -417,6 +421,10 @@ builtins! {
     PERMUTATION_ORDER = "PermutationOrder" [PROTECTED];
     PERMUTATION_SIGNATURE = "PermutationSignature" [PROTECTED];
     PERMUTATION_MATRIX = "PermutationMatrix" [PROTECTED];
+    // giac's nextperm, prevperm and groupermu (CAS-561).
+    NEXT_PERMUTATION = "NextPermutation" [PROTECTED];
+    PREVIOUS_PERMUTATION = "PreviousPermutation" [PROTECTED];
+    PERMUTATION_GROUP = "PermutationGroup" [PROTECTED];
     // Bits, digits and falling factorials (CAS-DOC-45 §3).
     BIT_AND = "BitAnd" [LISTABLE, PROTECTED];
     BIT_OR = "BitOr" [LISTABLE, PROTECTED];

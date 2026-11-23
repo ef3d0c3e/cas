@@ -1,7 +1,7 @@
-//! Xcas's list commands (CAS-555 to CAS-559), giac's answers: positions
+//! Xcas's list commands (CAS-555 to CAS-560), giac's answers: positions
 //! from 0, counts, differences, the small builders, maps, folds, products,
-//! insertions and substitutions. giac's errors leave the call, with the
-//! error as a warning.
+//! insertions, substitutions and heaps. giac's errors leave the call, with
+//! the error as a warning.
 //!
 //! - `FindPositions[x, l]` (`find`, CAS-555): the positions of `x` in `l`,
 //!   from 0 (misc.cc `_find`); the arguments exchanged when only the first
@@ -57,6 +57,17 @@
 //!   is `[2,3]`. `subsop(l, k, v)` is one rule; a rule that is not an
 //!   equation with an integer position is skipped, as giac's. A first
 //!   argument that is not a list stays (giac's operands of a call differ).
+//! - `Heapify[l, f]`, `HeapPush[l, x, f]`, `HeapPop[l, f]` (`heapify`,
+//!   `heappush`, `heappop`, CAS-560, prog.cc): libstdc++'s max-heap
+//!   (`stl_heap.h`: `make_heap`, `push_heap`, `pop_heap`, `__adjust_heap`)
+//!   step for step, `a` before `b` when `Less[a, b]`, or the optional
+//!   `f(a, b)`, is `True` (giac's `gen_sort`); a comparison that is neither
+//!   `True` nor `False` leaves the call. giac changes its variable in place
+//!   and ours returns the list: `heapify` the heap (giac prints 1),
+//!   `heappush` the heap with `x` pushed (giac's answer), `heappop` the heap
+//!   without its top (what giac leaves in the variable; it returns the
+//!   element past the end, 0 or a crash). giac's `heapify` and `heappop`
+//!   never read `f`. `heappop([])` is giac's Invalid dimension.
 
 use super::{MAX_ELEMENTS, is_list, list};
 use crate::context::EvalError;
@@ -583,4 +594,174 @@ pub(in crate::native) fn substitute_operands(ev: &mut Eval<'_>, e: &Expr) -> Nat
         Ok(out) => Ok(Some(list(out.into_iter().flatten().collect()))),
         Err(()) => refuse(ev, e, INVALID_DIMENSION),
     }
+}
+
+/// Why a heap operation stopped: a comparison neither `True` nor `False`,
+/// or an error.
+enum Halt {
+    Undecided,
+    Failed(EvalError),
+}
+
+impl From<EvalError> for Halt {
+    fn from(err: EvalError) -> Self {
+        Self::Failed(err)
+    }
+}
+
+/// Whether `a` comes before `b`: `Less[a, b]`, or `f(a, b)`, evaluated.
+fn before(ev: &mut Eval<'_>, f: Option<&Expr>, a: &Expr, b: &Expr) -> Result<bool, Halt> {
+    let test = match f {
+        Some(f) => Expr::apply(f, &[a.clone(), b.clone()]),
+        None => Expr::call(Symbol::LESS, [a.clone(), b.clone()]),
+    };
+    match ev.eval(&test)?.as_symbol() {
+        Some(Symbol::TRUE) => Ok(true),
+        Some(Symbol::FALSE) => Ok(false),
+        _ => Err(Halt::Undecided),
+    }
+}
+
+type Before<'f> = dyn FnMut(&Expr, &Expr) -> Result<bool, Halt> + 'f;
+
+/// libstdc++'s `__push_heap`: `value` up from `hole` to at most `top`.
+fn sift_up(
+    v: &mut [Expr],
+    mut hole: usize,
+    top: usize,
+    value: Expr,
+    less: &mut Before<'_>,
+) -> Result<(), Halt> {
+    while hole > top {
+        let parent = (hole - 1) / 2;
+        if !less(&v[parent], &value)? {
+            break;
+        }
+        v[hole] = v[parent].clone();
+        hole = parent;
+    }
+    v[hole] = value;
+    Ok(())
+}
+
+/// libstdc++'s `__adjust_heap` over the first `len` elements.
+fn adjust(
+    v: &mut [Expr],
+    mut hole: usize,
+    len: usize,
+    value: Expr,
+    less: &mut Before<'_>,
+) -> Result<(), Halt> {
+    let top = hole;
+    let mut second = hole;
+    while second < (len - 1) / 2 {
+        second = 2 * (second + 1);
+        if less(&v[second], &v[second - 1])? {
+            second -= 1;
+        }
+        v[hole] = v[second].clone();
+        hole = second;
+    }
+    if len % 2 == 0 && second == (len - 2) / 2 {
+        second = 2 * (second + 1);
+        v[hole] = v[second - 1].clone();
+        hole = second - 1;
+    }
+    sift_up(v, hole, top, value, less)
+}
+
+/// libstdc++'s `make_heap`.
+fn make_heap(v: &mut [Expr], less: &mut Before<'_>) -> Result<(), Halt> {
+    let len = v.len();
+    if len < 2 {
+        return Ok(());
+    }
+    let mut parent = (len - 2) / 2;
+    loop {
+        let value = v[parent].clone();
+        adjust(v, parent, len, value, less)?;
+        if parent == 0 {
+            return Ok(());
+        }
+        parent -= 1;
+    }
+}
+
+/// libstdc++'s `pop_heap`, then the last element dropped.
+fn pop_heap(v: &mut Vec<Expr>, less: &mut Before<'_>) -> Result<(), Halt> {
+    if v.len() > 1 {
+        let last = v.len() - 1;
+        let value = v[last].clone();
+        v[last] = v[0].clone();
+        adjust(v, 0, last, value, less)?;
+    }
+    v.pop();
+    Ok(())
+}
+
+/// libstdc++'s `push_heap` of `x` appended.
+fn push_heap(v: &mut Vec<Expr>, x: Expr, less: &mut Before<'_>) -> Result<(), Halt> {
+    let hole = v.len();
+    v.push(x.clone());
+    sift_up(v, hole, 0, x, less)
+}
+
+/// `operation` on `l`'s elements ordered by `f`: the list, `None` when a
+/// comparison is undecided.
+fn heap(
+    ev: &mut Eval<'_>,
+    l: &Expr,
+    f: Option<&Expr>,
+    operation: impl FnOnce(&mut Vec<Expr>, &mut Before<'_>) -> Result<(), Halt>,
+) -> Native {
+    let mut v = l.args().to_vec();
+    let mut less = |a: &Expr, b: &Expr| before(ev, f, a, b);
+    match operation(&mut v, &mut less) {
+        Ok(()) => Ok(Some(list(v))),
+        Err(Halt::Undecided) => Ok(None),
+        Err(Halt::Failed(err)) => Err(err),
+    }
+}
+
+/// `Heapify[l, f]`.
+pub(in crate::native) fn heapify(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let (l, f) = match e.args() {
+        [l] => (l, None),
+        [l, f] => (l, Some(f)),
+        _ => return Ok(None),
+    };
+    if !is_list(l) {
+        return refuse(ev, e, BAD_VALUE);
+    }
+    heap(ev, l, f, |v, less| make_heap(v, less))
+}
+
+/// `HeapPush[l, x, f]`.
+pub(in crate::native) fn heap_push(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let (l, x, f) = match e.args() {
+        [l, x] => (l, x, None),
+        [l, x, f] => (l, x, Some(f)),
+        [_] | [] => return refuse(ev, e, BAD_VALUE),
+        _ => return Ok(None),
+    };
+    if !is_list(l) {
+        return refuse(ev, e, BAD_VALUE);
+    }
+    heap(ev, l, f, |v, less| push_heap(v, x.clone(), less))
+}
+
+/// `HeapPop[l, f]`.
+pub(in crate::native) fn heap_pop(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let (l, f) = match e.args() {
+        [l] => (l, None),
+        [l, f] => (l, Some(f)),
+        _ => return Ok(None),
+    };
+    if !is_list(l) {
+        return refuse(ev, e, BAD_VALUE);
+    }
+    if l.args().is_empty() {
+        return refuse(ev, e, INVALID_DIMENSION);
+    }
+    heap(ev, l, f, |v, less| pop_heap(v, less))
 }
