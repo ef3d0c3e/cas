@@ -345,3 +345,36 @@ fn departures() {
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+/// Departures in print only (CAS-572): giac writes a split delta's
+/// coefficients as `series(c,x,z,1)`, ours as `c`; the values agree (the
+/// rows of `steps_deltas_periodic`), so only giac's text is recorded.
+#[test]
+fn printed_departures() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let cases = [
+        (
+            "simplifyDirac(Dirac(x^2-x-6))",
+            "series(1/5,x,-2,1)*Dirac(x+2)+series(1/5,x,3,1)*Dirac(x-3)",
+            "Dirac(x+2)/5+Dirac(x-3)/5",
+        ),
+        (
+            "simplifyDirac(Dirac(2*x),x)",
+            "series(1/2,x,0,1)*Dirac(x)",
+            "Dirac(x)/2",
+        ),
+    ];
+    let mut wrong = Vec::new();
+    for (input, answer, decided) in cases {
+        let printed = giac.eval(input).unwrap();
+        if printed != answer {
+            wrong.push(format!("{input}: giac prints {printed}, recorded {answer}"));
+        }
+        if ours(input).unwrap() != ours(decided).unwrap() {
+            wrong.push(format!("{input}: ours is not {decided}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}

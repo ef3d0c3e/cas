@@ -294,7 +294,9 @@ between two heads, by name in ours, by operator address in giac. With them
 of steps and deltas read back in our canonical order (giac's coefficients
 `series(c,x,z,1)` of a split delta read back as `c`); departures: the step of
 a downward quadratic, minus the box in giac, and `periodic` with a period not
-known positive, a giac error, unevaluated in ours.
+known positive, a giac error, unevaluated in ours; and in print only, giac's
+`series(c,x,z,1)` coefficients of `simplifyDirac(Dirac(x^2-x-6))` and
+`Dirac(2*x)`, recorded as giac prints them.
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
