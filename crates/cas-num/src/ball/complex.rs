@@ -276,17 +276,26 @@ impl ComplexBall {
         ComplexBall::from_real(one()).div(self, prec)
     }
 
-    /// `|self|`, a real ball.
+    /// `|self|`, a real ball; `[0, u]` when the rectangle reaches 0, as Arb's
+    /// `acb_abs` through `arb_sqrtpos` (CAS-554), never indeterminate there.
     #[must_use]
     pub fn abs(&self, prec: u64) -> Ball {
         if self.is_real() {
-            return self.re.abs().round_to_accuracy(prec);
+            let a = self.re.abs();
+            if a.is_finite() && !a.is_exact() && a.sign() != Some(Ordering::Greater) {
+                return hull0(&upper(&a));
+            }
+            return a.round_to_accuracy(prec);
         }
         let wp = prec + 8;
         let n = self
             .re
             .mul(&self.re, wp)
             .add(&self.im.mul(&self.im, wp), wp);
+        if n.is_finite() && n.sign() != Some(Ordering::Greater) {
+            // re² + im² contains 0: [0, √(upper bound)].
+            return hull0(&upper(&n).sqrt());
+        }
         n.sqrt(prec)
     }
 

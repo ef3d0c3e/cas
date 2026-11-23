@@ -365,3 +365,21 @@ fn relative_accuracy_is_that_of_the_larger_part() {
     );
     assert_eq!(ComplexBall::INDETERMINATE.rel_accuracy_bits(), i64::MIN);
 }
+
+#[test]
+fn abs_of_a_ball_around_zero() {
+    // re = 0 ± 1e-3: [0, u] with u >= 1e-3, not indeterminate (CAS-554).
+    let milli = Ball::from_rational(&Rational::new(Integer::from(1), Integer::from(1000)), 64);
+    let around0 = Ball::ZERO.add_error(&Mag::from_float(milli.mid()));
+    let below = Float::from(-1).mul_2exp(&Integer::from(-80));
+    for z in [
+        ComplexBall::new(around0.clone(), Ball::ZERO),
+        ComplexBall::new(around0.clone(), around0.clone()),
+    ] {
+        let a = z.abs(64);
+        assert!(a.is_finite(), "{a:?}");
+        assert!(a.contains(&Float::ZERO), "{a:?}");
+        assert!(a.contains(milli.mid()), "{a:?}");
+        assert!(!a.contains(&below), "{a:?}");
+    }
+}

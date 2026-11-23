@@ -48,6 +48,9 @@ z^w          = exp(w log z)
   subtracts. A real ball takes the real square root only when all of it is
   at or above 0. Across the negative real axis the imaginary part covers
   both signs, `[0 ± t]`.
+- **`abs`.** `√(a^2 + b^2)`; when `a^2 + b^2` (or a real `a`) contains 0
+  the answer is `[0, √u]`, `u` its upper bound, never indeterminate, as
+  Arb's `acb_abs` through `arb_sqrtpos` (CAS-554).
 - **`atan`.** Near 0 the two logarithms are `±iz + O(z^2)` and their sum
   cancels to about `|z|` relative, so they are computed with `|log2 |z||`
   more bits.
