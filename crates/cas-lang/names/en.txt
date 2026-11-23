@@ -140,6 +140,16 @@ FourierSinCoefficient: fourier_bn
 FourierCoefficient: fourier_cn
 # Certified numerical integration (CAS-DOC-26, CAS-324).
 NIntegrate: nInt romberg gaussquad
+# Areas by numeric rules and their options (CAS-588, CAS-589), Xcas's.
+Area: area
+LeftRectangle: left_rectangle rectangle_gauche
+RightRectangle: right_rectangle rectangle_droit
+MiddlePoint: middle_point point_milieu
+Trapezoid: trapezoid trapeze
+Simpson: simpson
+RombergTrapezoid: rombergt
+RombergMidpoint: rombergm
+Gauss15: gauss15
 # Interpolation and orthogonal polynomials (CAS-DOC-27, CAS-328 to CAS-331).
 InterpolatingPolynomial: lagrange interp
 Spline: spline

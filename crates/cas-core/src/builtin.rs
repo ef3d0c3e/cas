@@ -193,6 +193,16 @@ builtins! {
     FOURIER_COEFFICIENT = "FourierCoefficient" [PROTECTED];
     // Certified numerical integration (CAS-DOC-26).
     NINTEGRATE = "NIntegrate" [PROTECTED];
+    // Areas by numeric rules and their options (CAS-588, CAS-589).
+    AREA = "Area" [PROTECTED];
+    LEFT_RECTANGLE = "LeftRectangle" [PROTECTED];
+    RIGHT_RECTANGLE = "RightRectangle" [PROTECTED];
+    MIDDLE_POINT = "MiddlePoint" [PROTECTED];
+    TRAPEZOID = "Trapezoid" [PROTECTED];
+    SIMPSON = "Simpson" [PROTECTED];
+    ROMBERG_TRAPEZOID = "RombergTrapezoid" [PROTECTED];
+    ROMBERG_MIDPOINT = "RombergMidpoint" [PROTECTED];
+    GAUSS15 = "Gauss15" [PROTECTED];
     // Interpolation and orthogonal polynomials (CAS-DOC-27).
     INTERPOLATING_POLYNOMIAL = "InterpolatingPolynomial" [PROTECTED];
     SPLINE = "Spline" [PROTECTED];

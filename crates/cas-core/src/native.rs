@@ -302,6 +302,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         ),
         (Symbol::FOURIER_COEFFICIENT, fourier::fourier_coefficient),
         (Symbol::NINTEGRATE, nintegrate::nintegrate),
+        (Symbol::AREA, nintegrate::area::area),
         (
             Symbol::INTERPOLATING_POLYNOMIAL,
             interpolation::interpolating_polynomial,

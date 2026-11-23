@@ -36,6 +36,7 @@
 )]
 
 mod analytic;
+pub(super) mod area;
 
 use std::sync::atomic::{AtomicBool, Ordering as AtomicOrdering};
 
