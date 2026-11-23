@@ -1,0 +1,2140 @@
+diff --git a/crates/cas-core/src/native/integrate/risch.rs b/crates/cas-core/src/native/integrate/risch.rs
+new file mode 100644
+index 0000000..560bb75
+--- /dev/null
++++ b/crates/cas-core/src/native/integrate/risch.rs
+@@ -0,0 +1,661 @@
++//! `Risch` (CAS-585), Xcas's `risch`: the Risch algorithm for elementary
++//! integrands, ported from giac 2.0.0.21's risch.cc function for function,
++//! after the checked sympy prototype of T9.c1 (Bronstein, Symbolic
++//! Integration I, 2nd ed., Springer 2005, chapters 5 and 6: the
++//! integration of transcendental elementary functions and the Risch
++//! differential equation).
++//!
++//! - `Risch[f, x]`, and `Risch[f]` in `x` as giac's `_risch` (:1018); other
++//!   arguments leave the call. The answer is `prim + Risch[rem, x]`, `rem`
++//!   what the algorithm could not integrate (giac prints
++//!   `integrate(rem, x)`), or the call stays when nothing integrates.
++//! - [`risch`] (:951): trigonometric functions become exponentials
++//!   (`TrigToExp`); [`risch_lin`] (:878) tries the whole integrand, then
++//!   each term of its [`lin`] form (`coeff·exp(expo)`, lin.cc:134) and the
++//!   sum of what they leave. Fractional powers of `x` leave the integrand;
++//!   `atan(g)` is integrated as `i/2 ln((i + g)/(i − g))` and written back;
++//!   the constant part of an exponent is split off (`exp(2x + 1) = exp(1)
++//!   exp(2x)`).
++//! - The tower (risch.cc:56-97, [`risch_tower`]): the kernels of the
++//!   integrand that have `x`, recursively (giac's `rlvarx`), sorted by size
++//!   so that the largest is the top; powers with `x` become `exp(b ln a)`;
++//!   `TranscendentalSimplify` (giac's `tsimplify`) writes exponentials with
++//!   as few generators as it can, and the smaller valid tower wins. Kernels
++//!   of one size keep our canonical order, where giac keeps the order of
++//!   its own printout (T9.c1 notes, tower ties): rows that tie differ in
++//!   shape or split, departures, not bugs.
++//! - [`parts::in_risch`] (:743): the integrand as a rational function of
++//!   the top `T` over the lower field, its denominator's power of `T` apart
++//!   (risch.cc:774); square-free factorisation and partial fractions in `T`;
++//!   Hermite reduction (:517) of the multiple factors; the logarithmic part
++//!   by the Rothstein–Trager resultant (:124) factored over ℚ(i), a root
++//!   free of `x` giving `r ln gcd(p₁(r), f)`; the polynomial part by
++//!   [`parts::risch_poly_part`] (:662), which solves the Risch differential
++//!   equation `y′ + f y = g` ([`rde::risch_desolve`], :323, with
++//!   [`rde::spde`], :238, Rothstein's SPDE) coefficient by coefficient in
++//!   an exponential and integrates the coefficients from the top in a
++//!   logarithm; `exp(a x) · rational` falls back on `Ei`, `Ci` and `Si`
++//!   ([`parts::integrate_ei`], :582).
++//! - Polynomials are giac's: in all of `lv`, the tower's variables and the
++//!   parameters, through cas-core's `Polynomials`, over ℤ\[i\]
++//!   ([`tower`]); quotients in `T` by pseudo-division.
++//! - giac's flaws kept (T9.c1 notes): risch.cc:693 passes 0 for the
++//!   allowed logarithm of the last coefficient of a logarithmic polynomial
++//!   (the fix breaks `ln(ln(x))/x`, T9.c2); :292 passes the lower tower to
++//!   `risch_poly_part` for `y′ = T`; :486 uses `Rr/Ss`; :503 the updated
++//!   `R`. Fixed: :837 leaves the Hermite-reduced fraction, not the original
++//!   one, when a residue is not a constant (giac counted the Hermite part
++//!   twice).
++//! - Departures: the ln-argument unit over ℚ(i) (giac `ln(i x − 1)`, ours
++//!   `ln(x + i)`, a constant apart); resultant factors of degree 2 are not
++//!   split by a square root, so `1/(x² − 2)`, `1/(x³ + 1)` and `1/(x⁴ + 1)`
++//!   leave the call; `tsimplify` is `TranscendentalSimplify`, without
++//!   giac's merging of logarithms.
++//! - Safety: an answer is returned only when `D[prim] + rem − f` is 0 by
++//!   `Together` (or `TranscendentalSimplify`); otherwise the call stays. The
++//!   remainder's own `Risch` integrates nothing: a remainder that still
++//!   integrates is folded in first, so evaluation never loops.
++//! - Bounds (C0019): the tower's height times the degree in its top and the
++//!   degree bound of the differential equation must not exceed
++//!   `Limits::terms`; past it the call stays, with a warning, as
++//!   `Integrate` does at a limit.
++#![allow(
++    clippy::many_single_char_names,
++    reason = "the names of giac's code and Bronstein's book"
++)]
++
++mod parts;
++mod rde;
++#[cfg(test)]
++mod tests;
++mod tower;
++
++use crate::context::EvalError;
++use crate::eval::Eval;
++use crate::expr::{Expr, View};
++use crate::symbol::Symbol;
++use crate::trace::Warning;
++
++type Native = Result<Option<Expr>, EvalError>;
++
++/// Why the algorithm stops: an error of evaluation, or the limits.
++pub(super) enum Stop {
++    Eval(EvalError),
++    Limit,
++}
++
++impl From<EvalError> for Stop {
++    fn from(e: EvalError) -> Stop {
++        Stop::Eval(e)
++    }
++}
++
++/// A step of the algorithm.
++type Step<T> = Result<T, Stop>;
++
++/// Passes over a remainder that still integrates before the call stays.
++const ROUNDS: usize = 3;
++
++/// `Risch[f, x]`, `Risch[f]` in `x` (risch.cc:1018).
++pub(in crate::native) fn risch(ev: &mut Eval<'_>, e: &Expr) -> Native {
++    let (f, x) = match e.args() {
++        [f] => (f.clone(), Expr::from(Symbol::new("x"))),
++        [f, x] if x.as_symbol().is_some() => (f.clone(), x.clone()),
++        _ => return Ok(None),
++    };
++    match answer(ev, &f, &x) {
++        Ok(r) => Ok(r),
++        Err(Stop::Eval(err)) => Err(err),
++        Err(Stop::Limit) => {
++            ev.warn(Warning::Native {
++                message: "the tower and its degrees exceed the limits".into(),
++                expr: e.clone(),
++            });
++            Ok(None)
++        }
++    }
++}
++
++/// `prim + Risch[rem, x]`, checked by differentiation; `None` when nothing
++/// integrates or the check fails.
++fn answer(ev: &mut Eval<'_>, f: &Expr, x: &Expr) -> Step<Option<Expr>> {
++    let (mut prim, mut rem) = risch_top(ev, f, x)?;
++    if prim == zero() {
++        return Ok(None);
++    }
++    let mut stable = false;
++    for _ in 0..ROUNDS {
++        if rem == zero() {
++            stable = true;
++            break;
++        }
++        let (p, r) = risch_top(ev, &rem, x)?;
++        if p == zero() {
++            stable = true;
++            break;
++        }
++        prim = ev.eval(&(prim + p))?;
++        rem = r;
++    }
++    if !stable || !verified(ev, f, &prim, &rem, x)? {
++        return Ok(None);
++    }
++    if rem == zero() {
++        return Ok(Some(prim));
++    }
++    Ok(Some(prim + Expr::call(Symbol::RISCH, [rem, x.clone()])))
++}
++
++/// Whether `D[prim] + rem − f` is 0.
++fn verified(ev: &mut Eval<'_>, f: &Expr, prim: &Expr, rem: &Expr, x: &Expr) -> Step<bool> {
++    let d = derive(ev, prim, x)?;
++    let difference = ev.eval(&(d + rem.clone() - f.clone()))?;
++    let difference = exps(ev, &difference)?;
++    if together(ev, &difference)? == zero() {
++        return Ok(true);
++    }
++    let t = call(ev, Symbol::TRIG_TO_EXP, [difference])?;
++    let t = call(ev, Symbol::TRANSCENDENTAL_SIMPLIFY, [t])?;
++    Ok(together(ev, &t)? == zero())
++}
++
++// ---------------------------------------------------------------- risch.cc:951-1016
++
++/// giac's `risch` (:951): `(prim, rem)` with `∫ e = prim + ∫ rem`.
++fn risch_top(ev: &mut Eval<'_>, e_orig: &Expr, x: &Expr) -> Step<(Expr, Expr)> {
++    if *e_orig == zero() {
++        return Ok((zero(), zero()));
++    }
++    let e = call(ev, Symbol::TRIG_TO_EXP, [e_orig.clone()])?;
++    let (mut res, try1strem) = risch_lin(ev, &e, x)?;
++    let mut remains = zero();
++    if try1strem != zero() {
++        res = zero();
++        let vexp = lin(ev, &e)?;
++        let mut remsum = zero();
++        for (coeff, expo) in &vexp {
++            let term = ev.eval(&(coeff.clone() * Expr::call(Symbol::EXP, [expo.clone()])))?;
++            let (r1, rem) = risch_lin(ev, &term, x)?;
++            res = ev.eval(&(res + r1))?;
++            remsum = ev.eval(&(remsum + rem))?;
++        }
++        if vexp.is_empty() {
++            remains = remsum;
++        } else if remsum != zero() {
++            let (r2, rem) = risch_lin(ev, &remsum, x)?;
++            res = ev.eval(&(res + r2))?;
++            remains = rem;
++        }
++    }
++    // invexptoexpneg (intg.cc:2437): exp(u)^-1 is exp(-u).
++    let res = ev.eval(&res.replace(|z| match z.view() {
++        View::Apply { head, args: [b, k] }
++            if head.as_symbol() == Some(Symbol::POWER)
++                && *k == Expr::from(-1)
++                && b.head() == Some(&Expr::from(Symbol::EXP)) =>
++        {
++            Some(Expr::call(Symbol::EXP, [-b.args()[0].clone()]))
++        }
++        _ => None,
++    }))?;
++    if res == zero() {
++        return Ok((zero(), e_orig.clone()));
++    }
++    let mut res = res;
++    if !has_i(e_orig) && has_i(&remains) {
++        let tmp = call(ev, Symbol::EXP_TO_TRIG, [remains.clone()])?;
++        let tmp = call(ev, Symbol::COMPLEX_EXPAND, [tmp])?;
++        if has_i(&tmp) {
++            return Ok((zero(), e_orig.clone()));
++        }
++        remains = together(ev, &tmp)?;
++    }
++    if has_any(&res, &[Symbol::SIN_INTEGRAL, Symbol::COS_INTEGRAL, Symbol::EXP]) {
++        res = together(ev, &res)?;
++        if !has_i(e_orig) && has_i(&res) {
++            res = call(ev, Symbol::EXP_TO_TRIG, [res])?;
++            res = together(ev, &res)?;
++            if has_i(&res) {
++                // re(halftan(res)) in giac: the real part, x real.
++                let c = call(ev, Symbol::COMPLEX_EXPAND, [res.clone()])?;
++                if !has_i(&c) {
++                    res = together(ev, &c)?;
++                }
++            }
++        }
++    }
++    Ok((res, remains))
++}
++
++/// giac's `risch_lin` (:878): `(prim, remains)` of one integrand.
++fn risch_lin(ev: &mut Eval<'_>, e_orig: &Expr, x: &Expr) -> Step<(Expr, Expr)> {
++    let Some(chk) = rlvarx(ev, e_orig, x)? else {
++        return Ok((zero(), e_orig.clone()));
++    };
++    let mut chk1 = Vec::new();
++    for k in &chk {
++        if let View::Apply { head, args: [b, r] } = k.view()
++            && head.as_symbol() == Some(Symbol::POWER)
++            && r.to_rational().is_some_and(|q| !q.is_integer())
++        {
++            match b.view() {
++                View::Apply { head, args: [bb, rr] } if head.as_symbol() == Some(Symbol::POWER) => {
++                    chk1.push((k.clone(), Expr::call(Symbol::POWER, [bb.clone(), rr.clone() * r.clone()])));
++                }
++                _ => return Ok((zero(), e_orig.clone())),
++            }
++        }
++    }
++    let mut e = e_orig.clone();
++    if !chk1.is_empty() {
++        e = ev.eval(&e.substitute(&chk1))?;
++    }
++    // atan(g) = i/2 ln((i + g)/(i − g)), written back after (:890-905).
++    let vatan: Vec<Expr> = e
++        .distinct()
++        .filter(|z| z.head() == Some(&Expr::from(Symbol::ARC_TAN)) && z.args().len() == 1)
++        .cloned()
++        .collect();
++    let mut vln = Vec::with_capacity(vatan.len());
++    for ga in &vatan {
++        let g = ga.args()[0].clone();
++        vln.push(together(ev, &((i() + g.clone()) / (i() - g)))?);
++    }
++    // The constant part of each exponent apart (:906-925).
++    let exps_of_e: Vec<Expr> = e
++        .distinct()
++        .filter(|z| z.head() == Some(&Expr::from(Symbol::EXP)))
++        .cloned()
++        .collect();
++    let mut sub = Vec::new();
++    for k in exps_of_e {
++        let tmp = k.args()[0].clone();
++        let Some(tmpcst) = constant_part(ev, &tmp, x)? else {
++            continue;
++        };
++        if tmpcst == zero() {
++            continue;
++        }
++        let rest = together(ev, &(tmp - tmpcst.clone()))?;
++        let new = ev.eval(&(Expr::call(Symbol::EXP, [tmpcst]) * Expr::call(Symbol::EXP, [rest])))?;
++        if new != k {
++            sub.push((k, new));
++        }
++    }
++    if !sub.is_empty() {
++        e = ev.eval(&e.substitute(&sub))?;
++    }
++    let Some((e, v)) = risch_tower(ev, &e, x)? else {
++        return Ok((zero(), e_orig.clone()));
++    };
++    if v.is_empty() {
++        return Ok((ev.eval(&(e * x.clone()))?, zero()));
++    }
++    let r = parts::in_risch(ev, &e, &v, &zero())?;
++    let mut prim = ev.eval(&r.prim)?;
++    let mut remains = ev.eval(&r.remains)?;
++    if has_any(&prim, &[Symbol::SIN_INTEGRAL]) {
++        prim = together(ev, &prim)?;
++        if has_i(&prim) {
++            let t = call(ev, Symbol::EXP_TO_TRIG, [prim])?;
++            prim = together(ev, &t)?;
++        }
++    }
++    if !vatan.is_empty() {
++        // subst(prim, vln, vatan): ln((i + g)/(i − g)) is −2i atan(g).
++        let logs: Vec<Expr> = prim
++            .distinct()
++            .filter(|z| z.head() == Some(&Expr::from(Symbol::LOG)) && z.args().len() == 1)
++            .cloned()
++            .collect();
++        let mut back = Vec::new();
++        for l in logs {
++            for (arg, ga) in vln.iter().zip(&vatan) {
++                if together(ev, &(l.args()[0].clone() - arg.clone()))? == zero() {
++                    back.push((l.clone(), Expr::from(-2) * i() * ga.clone()));
++                    break;
++                }
++            }
++        }
++        prim = together(ev, &prim.substitute(&back))?;
++    }
++    if prim == zero() {
++        remains = e_orig.clone();
++    }
++    Ok((prim, remains))
++}
++
++/// The constant part of an exponent, its kernels with `x` at 0 (:906-925):
++/// `None` when that has no value.
++fn constant_part(ev: &mut Eval<'_>, u: &Expr, x: &Expr) -> Step<Option<Expr>> {
++    let Some(v) = rlvarx(ev, u, x)? else {
++        return Ok(None);
++    };
++    if v.is_empty() {
++        return Ok(Some(u.clone()));
++    }
++    let mut kernels = v;
++    kernels.reverse();
++    let Some((c, fr)) = tower::Tower::new(ev, &kernels, std::slice::from_ref(u))? else {
++        return Ok(None);
++    };
++    let r = &c.ring;
++    let zero_at = |p: &tower::P| {
++        let mut p = p.clone();
++        for &var in c.vars() {
++            p = r.eval_var(&p, var, &cas_num::Complex::from(0));
++        }
++        p
++    };
++    let num = zero_at(&fr[0].num);
++    let den = zero_at(&fr[0].den);
++    if den.is_zero() {
++        return Ok(None);
++    }
++    Ok(Some(c.r2e(ev, &c.frac(num, den))?))
++}
++
++// ---------------------------------------------------------------- the tower, risch.cc:50-97
++
++/// giac's `rlvarx` (series.cc:2175, :2214): the kernels of `e` with `x`,
++/// and theirs, recursively, sorted by size (stably; ties by our canonical
++/// order). `None` when `e` has no polynomial form.
++fn rlvarx(ev: &mut Eval<'_>, e: &Expr, x: &Expr) -> Step<Option<Vec<Expr>>> {
++    let mut res = Vec::new();
++    if !collect_kernels(ev, e, x, &mut res)? {
++        return Ok(None);
++    }
++    res.sort_by(|a, b| a.size().cmp(&b.size()).then_with(|| a.cmp(b)));
++    Ok(Some(res))
++}
++
++fn collect_kernels(ev: &mut Eval<'_>, e: &Expr, x: &Expr, res: &mut Vec<Expr>) -> Step<bool> {
++    let Some(gens) = tower::generators(ev, e)? else {
++        return Ok(false);
++    };
++    for k in gens {
++        if !k.contains(x) || res.contains(&k) {
++            continue;
++        }
++        res.push(k.clone());
++        if let View::Apply { head, args } = k.view() {
++            if head.as_symbol() == Some(Symbol::POWER) && args.len() == 2 {
++                let (b, r) = (&args[0], &args[1]);
++                if !collect_kernels(ev, b, x, res)? || !collect_kernels(ev, r, x, res)? {
++                    return Ok(false);
++                }
++                if r.contains(x) {
++                    let l = ev.eval(&Expr::call(Symbol::LOG, [b.clone()]))?;
++                    if !collect_kernels(ev, &l, x, res)? {
++                        return Ok(false);
++                    }
++                }
++            } else {
++                for a in args {
++                    if !collect_kernels(ev, a, x, res)? {
++                        return Ok(false);
++                    }
++                }
++            }
++        }
++    }
++    Ok(true)
++}
++
++/// giac's `in_risch_tower` (:56): `ln(exp(u))` is `u`, normalised; the
++/// tower, the top first, when every kernel but `x` is `exp` or `ln`.
++fn in_risch_tower(ev: &mut Eval<'_>, g: &Expr, x: &Expr) -> Step<Option<(Expr, Vec<Expr>)>> {
++    let g = ev.eval(&g.replace(|z| match z.view() {
++        View::Apply { head, args: [a] }
++            if head.as_symbol() == Some(Symbol::LOG) && a.head() == Some(&Expr::from(Symbol::EXP)) =>
++        {
++            Some(a.args()[0].clone())
++        }
++        _ => None,
++    }))?;
++    let g = together(ev, &g)?;
++    let Some(mut v) = rlvarx(ev, &g, x)? else {
++        return Ok(None);
++    };
++    if v.iter().any(|k| k != x && kernel(k).is_none()) {
++        return Ok(None);
++    }
++    v.reverse();
++    Ok(Some((g, v)))
++}
++
++/// giac's `risch_tower` (:77): of the integrand with powers rewritten and
++/// of its `tsimplify`, the valid tower, the smaller when both are.
++fn risch_tower(ev: &mut Eval<'_>, g: &Expr, x: &Expr) -> Step<Option<(Expr, Vec<Expr>)>> {
++    let g = ev.eval(&pow2expln_x(g, x))?;
++    let g0 = g.clone();
++    let g = tsimplify(ev, &g)?;
++    let first = in_risch_tower(ev, &g0, x)?;
++    let second = in_risch_tower(ev, &g, x)?;
++    Ok(match (first, second) {
++        (None, s) => s,
++        (f, None) => f,
++        (Some(f), Some(s)) => {
++            if f.1.len() < s.1.len() {
++                Some(f)
++            } else {
++                Some(s)
++            }
++        }
++    })
++}
++
++/// giac's `tsimplify` (subst.cc:2098): `atrig2ln`, then
++/// `TranscendentalSimplify`.
++fn tsimplify(ev: &mut Eval<'_>, e: &Expr) -> Step<Expr> {
++    let e = call(ev, Symbol::ARC_TRIG_TO_LOG, [e.clone()])?;
++    call(ev, Symbol::TRANSCENDENTAL_SIMPLIFY, [e])
++}
++
++/// giac's `pow2expln` in `x` (subst.cc:1787): `a^b` with `b` in `x`, or
++/// `a` in `x` and `b` not an integer, is `exp(b ln a)`; built.
++fn pow2expln_x(e: &Expr, x: &Expr) -> Expr {
++    e.replace(|z| match z.view() {
++        View::Apply { head, args: [b, r] }
++            if head.as_symbol() == Some(Symbol::POWER)
++                && (r.contains(x) || (r.to_integer().is_none() && b.contains(x))) =>
++        {
++            let g = pow2expln_x(b, x);
++            let r = pow2expln_x(r, x);
++            if g.head() == Some(&Expr::from(Symbol::EXP)) && g.args().len() == 1 {
++                Some(Expr::call(Symbol::EXP, [g.args()[0].clone() * r]))
++            } else {
++                Some(Expr::call(Symbol::EXP, [r * Expr::call(Symbol::LOG, [g])]))
++            }
++        }
++        _ => None,
++    })
++}
++
++// ---------------------------------------------------------------- lin.cc
++
++/// giac's `lin` (lin.cc:134): `e` as a sum of `coeff · exp(expo)`, the
++/// exponentials of a product merged.
++fn lin(ev: &mut Eval<'_>, e: &Expr) -> Step<Vec<(Expr, Expr)>> {
++    let View::Apply { head, args } = e.view() else {
++        return Ok(vec![(e.clone(), zero())]);
++    };
++    match head.as_symbol() {
++        Some(Symbol::PLUS) => {
++            let mut v = Vec::new();
++            for a in args {
++                v.extend(lin(ev, a)?);
++            }
++            compress(ev, v)
++        }
++        Some(Symbol::TIMES) => {
++            let mut w = lin(ev, &args[0])?;
++            for a in &args[1..] {
++                let l = lin(ev, a)?;
++                w = convolution(ev, &w, &l)?;
++            }
++            Ok(w)
++        }
++        Some(Symbol::POWER) if args.len() == 2 => {
++            let (b, n) = (&args[0], &args[1]);
++            let k = n.as_i64();
++            if let Some(k) = k
++                && k < 0
++            {
++                let pos = ev.eval(&b.pow(Expr::from(-k)))?;
++                let w = lin(ev, &pos)?;
++                if w.len() == 1 {
++                    let (c, ex) = &w[0];
++                    return Ok(vec![(ev.eval(&c.pow(-1))?, ev.eval(&-ex.clone())?)]);
++                }
++                return Ok(vec![(ev.eval(&unlin(&w).pow(-1))?, zero())]);
++            }
++            let w = lin(ev, b)?;
++            if w.len() == 1 {
++                let (mut c0, mut e0) = w[0].clone();
++                if e0 == zero() && c0.to_integer().is_some() {
++                    e0 = Expr::call(Symbol::LOG, [c0]);
++                    c0 = Expr::from(1);
++                }
++                return Ok(vec![(ev.eval(&c0.pow(n.clone()))?, ev.eval(&(e0 * n.clone()))?)]);
++            }
++            if let Some(k) = k {
++                let limit = ev.context().limits().terms;
++                let size = u32::try_from(k).ok().map(|k| w.len().saturating_pow(k));
++                if size.is_some_and(|s| s <= limit) {
++                    let mut r = vec![(Expr::from(1), zero())];
++                    for _ in 0..k {
++                        r = convolution(ev, &r, &w)?;
++                    }
++                    return compress(ev, r);
++                }
++            }
++            Ok(vec![(ev.eval(&unlin(&w).pow(n.clone()))?, zero())])
++        }
++        Some(Symbol::EXP) if args.len() == 1 => Ok(vec![(Expr::from(1), args[0].clone())]),
++        _ => Ok(vec![(e.clone(), zero())]),
++    }
++}
++
++/// lin.cc:52: the terms with one exponent added up.
++fn compress(ev: &mut Eval<'_>, v: Vec<(Expr, Expr)>) -> Step<Vec<(Expr, Expr)>> {
++    let mut out: Vec<(Expr, Expr)> = Vec::new();
++    'terms: for (c, ex) in v {
++        for p in &mut out {
++            if together(ev, &(p.1.clone() - ex.clone()))? == zero() {
++                p.0 = together(ev, &(p.0.clone() + c))?;
++                continue 'terms;
++            }
++        }
++        out.push((c, ex));
++    }
++    Ok(out)
++}
++
++/// lin.cc:89-112: the product of two `lin` forms.
++fn convolution(
++    ev: &mut Eval<'_>,
++    v: &[(Expr, Expr)],
++    w: &[(Expr, Expr)],
++) -> Step<Vec<(Expr, Expr)>> {
++    let mut res = Vec::with_capacity(v.len() * w.len());
++    for (c1, e1) in v {
++        for (c2, e2) in w {
++            let c = ev.eval(&(c1.clone() * c2.clone()))?;
++            let e = together(ev, &(e1.clone() + e2.clone()))?;
++            res.push((c, e));
++        }
++    }
++    compress(ev, res)
++}
++
++/// lin.cc:71: the sum of a `lin` form, built.
++fn unlin(v: &[(Expr, Expr)]) -> Expr {
++    let terms: Vec<Expr> = v
++        .iter()
++        .filter(|(c, _)| *c != zero())
++        .map(|(c, ex)| c.clone() * Expr::call(Symbol::EXP, [ex.clone()]))
++        .collect();
++    Expr::call(Symbol::PLUS, terms)
++}
++
++// ---------------------------------------------------------------- expressions
++
++fn zero() -> Expr {
++    Expr::from(0)
++}
++
++/// The imaginary unit.
++fn i() -> Expr {
++    Expr::from(Symbol::I)
++}
++
++/// `head[args…]`, evaluated.
++fn call<const N: usize>(ev: &mut Eval<'_>, head: Symbol, args: [Expr; N]) -> Step<Expr> {
++    Ok(ev.eval(&Expr::call(head, args))?)
++}
++
++/// `Together[e]`, giac's `ratnormal` and `normal`.
++fn together(ev: &mut Eval<'_>, e: &Expr) -> Step<Expr> {
++    call(ev, Symbol::TOGETHER, [e.clone()])
++}
++
++/// `D[e, x]`, its `E^u` written `Exp[u]` (C0036).
++fn derive(ev: &mut Eval<'_>, e: &Expr, x: &Expr) -> Step<Expr> {
++    let d = call(ev, Symbol::D, [e.clone(), x.clone()])?;
++    exps(ev, &d)
++}
++
++/// `e` with each `E^u` written `Exp[u]`, evaluated.
++fn exps(ev: &mut Eval<'_>, e: &Expr) -> Step<Expr> {
++    let e2 = e.replace(|z| match z.view() {
++        View::Apply { head, args: [b, u] }
++            if head.as_symbol() == Some(Symbol::POWER) && b.as_symbol() == Some(Symbol::E) =>
++        {
++            Some(Expr::call(Symbol::EXP, [u.clone()]))
++        }
++        _ => None,
++    });
++    if e2 == *e {
++        return Ok(e2);
++    }
++    Ok(ev.eval(&e2)?)
++}
++
++/// Whether `e` has a complex number or `I`.
++fn has_i(e: &Expr) -> bool {
++    e.distinct()
++        .any(|z| matches!(z.view(), View::Complex(_)) || z.as_symbol() == Some(Symbol::I))
++}
++
++/// Whether `e` has an application of one of `heads`.
++fn has_any(e: &Expr, heads: &[Symbol]) -> bool {
++    e.distinct()
++        .any(|z| z.head().and_then(Expr::as_symbol).is_some_and(|h| heads.contains(&h)))
++}
++
++/// `Some(true)` for `exp(u)`, `Some(false)` for `ln(u)`, `None` otherwise.
++fn kernel(k: &Expr) -> Option<bool> {
++    match (k.head().and_then(Expr::as_symbol), k.args().len()) {
++        (Some(Symbol::EXP), 1) => Some(true),
++        (Some(Symbol::LOG), 1) => Some(false),
++        _ => None,
++    }
++}
++
++/// The argument of a kernel `exp(u)` or `ln(u)`.
++fn kernel_arg(k: &Expr) -> &Expr {
++    &k.args()[0]
++}
++
++/// Whether the polynomial-and-kernel sizes stay within `Limits::terms`
++/// (C0019): the tower's height times its top degree times the degree bound.
++fn within(ev: &Eval<'_>, height: usize, degree: u64, ydeg: i64) -> Step<()> {
++    let limit = ev.context().limits().terms as u128;
++    let d = u128::from(degree.max(1));
++    let y = u128::try_from(ydeg.max(1)).unwrap_or(1);
++    if (height as u128).saturating_mul(d).saturating_mul(y) > limit {
++        return Err(Stop::Limit);
++    }
++    Ok(())
++}
+diff --git a/crates/cas-core/src/native/integrate/risch/tower.rs b/crates/cas-core/src/native/integrate/risch/tower.rs
+new file mode 100644
+index 0000000..0657269
+--- /dev/null
++++ b/crates/cas-core/src/native/integrate/risch/tower.rs
+@@ -0,0 +1,571 @@
++//! The differential field of a tower (risch.cc's `e2r`, `r2e` and `diff`,
++//! :99): rational functions of the generators `lv` of the expressions, the
++//! tower's kernels among them, as numerators and denominators over ℤ\[i\]
++//! in cas-poly's sparse form, through cas-core's [`Polynomials`]. Elements
++//! of `K[T]`, `K` the field of the lower generators and `T` the top of the
++//! tower, are fractions whose denominator has no `T`; their quotients,
++//! remainders, gcds and extended gcds in `T` are the pseudo-divisions and
++//! cofactors of cas-poly, as giac's `TPseudoDivRem`, `Tabcuv` and `Tpartfrac`
++//! (poly.h) on its own polynomials in `lv`.
++//!
++//! The coefficients are Gaussian integers in every case (giac's are when `i`
++//! appears): the gcds, quotients and resultants are the same over any
++//! extension, and the Rothstein–Trager resultant is factored over ℚ(i) or ℚ
++//! as giac's flags say ([`Tower::factors`]). The ring has one variable more
++//! than the generators, the `t` of the resultant, which never reaches an
++//! expression.
++
++use cas_num::algebra::{GaussianIntegers, Integers, Ring};
++use cas_num::{Complex, Integer};
++use cas_poly::{Cancel, Sparse, SparseRing};
++
++use super::{Stop, Step};
++use crate::eval::Eval;
++use crate::expr::Expr;
++use crate::poly::{Bounds, Fraction, PolyError, Polynomials};
++
++/// A polynomial of the tower's ring.
++pub(super) type P = Sparse<Complex>;
++
++/// `num / den`, without a common factor.
++#[derive(Clone, Debug)]
++pub(super) struct Frac {
++    pub(super) num: P,
++    pub(super) den: P,
++}
++
++/// The tower `v` (its top first, `x` last) and the generators of the
++/// expressions it was made for.
++pub(super) struct Tower {
++    /// The kernels, the top first.
++    pub(super) v: Vec<Expr>,
++    polys: Polynomials,
++    pub(super) ring: SparseRing<GaussianIntegers>,
++    /// The variable of each kernel.
++    vars: Vec<usize>,
++    /// The derivative of each kernel.
++    dv: Vec<Frac>,
++    /// The variable of the Rothstein–Trager resultant.
++    pub(super) t: usize,
++}
++
++/// `exprs` as rational functions of their generators, `None` when they have
++/// none; past the limits, [`Stop::Limit`].
++fn convert(ev: &mut Eval<'_>, exprs: &[Expr]) -> Step<Option<Polynomials>> {
++    let ctx = ev.context();
++    let limits = ctx.limits();
++    let bounds = Bounds {
++        terms: limits.terms,
++        bits: limits.number_bits,
++    };
++    let cancel: &dyn Cancel = ctx.interrupt_flag();
++    match Polynomials::new(exprs, bounds, cancel) {
++        Ok(p) => Ok(Some(p)),
++        Err(PolyError::Interrupted) => Err(Stop::Eval(crate::context::EvalError::Interrupted)),
++        Err(PolyError::TooLarge | PolyError::Bits) => Err(Stop::Limit),
++        Err(_) => Ok(None),
++    }
++}
++
++/// The generators of `e` (giac's `lvar`), `None` when it has no polynomial
++/// form.
++pub(super) fn generators(ev: &mut Eval<'_>, e: &Expr) -> Step<Option<Vec<Expr>>> {
++    Ok(convert(ev, std::slice::from_ref(e))?.map(|p| p.generators().to_vec()))
++}
++
++impl Tower {
++    /// The tower `v` of the expressions `exprs`, with their rational
++    /// functions; `None` when a kernel is not a generator of them (giac's
++    /// `lvar(e, l)` adds the others, risch.cc:750).
++    pub(super) fn new(
++        ev: &mut Eval<'_>,
++        v: &[Expr],
++        exprs: &[Expr],
++    ) -> Step<Option<(Tower, Vec<Frac>)>> {
++        let x = v.last().expect("a tower ends with x").clone();
++        let mut list = exprs.to_vec();
++        list.extend(v.iter().cloned());
++        for k in v {
++            list.push(super::derive(ev, k, &x)?);
++        }
++        let Some(polys) = convert(ev, &list)? else {
++            return Ok(None);
++        };
++        let n = polys.generators().len();
++        let ring = SparseRing::new(GaussianIntegers, n + 1);
++        let Some(vars) = v
++            .iter()
++            .map(|k| polys.variable(k))
++            .collect::<Option<Vec<usize>>>()
++        else {
++            return Ok(None);
++        };
++        let identity: Vec<usize> = (0..n).collect();
++        let mut fracs: Vec<Frac> = polys
++            .fractions()
++            .iter()
++            .map(|f| embed(&ring, f, &identity))
++            .collect();
++        let dv = fracs.split_off(exprs.len() + v.len());
++        fracs.truncate(exprs.len());
++        let tower = Tower {
++            v: v.to_vec(),
++            polys,
++            ring,
++            vars,
++            dv,
++            t: n,
++        };
++        Ok(Some((tower, fracs)))
++    }
++
++    /// The variable of the top of the tower.
++    pub(super) fn top(&self) -> usize {
++        self.vars[0]
++    }
++
++    /// The generators, the variables `0..t`.
++    pub(super) fn generators(&self) -> &[Expr] {
++        self.polys.generators()
++    }
++
++    /// `e` in the tower's generators; `None` when it has another.
++    pub(super) fn e2r(&self, ev: &mut Eval<'_>, e: &Expr) -> Step<Option<Frac>> {
++        let gens = self.polys.generators();
++        let mut list = vec![e.clone()];
++        list.extend(gens.iter().cloned());
++        let Some(p) = convert(ev, &list)? else {
++            return Ok(None);
++        };
++        let Some(map) = p
++            .generators()
++            .iter()
++            .map(|g| gens.iter().position(|h| h == g))
++            .collect::<Option<Vec<usize>>>()
++        else {
++            return Ok(None);
++        };
++        Ok(Some(embed(&self.ring, &p.fractions()[0], &map)))
++    }
++
++    /// The expression of `f`, evaluated.
++    pub(super) fn r2e(&self, ev: &mut Eval<'_>, f: &Frac) -> Step<Expr> {
++        debug_assert!(self.free_of(&f.num, self.t) && self.free_of(&f.den, self.t));
++        Ok(ev.eval(&self.polys.ratio_expr(&f.num, &f.den))?)
++    }
++
++    /// The expression of the polynomial `p`, evaluated.
++    pub(super) fn p2e(&self, ev: &mut Eval<'_>, p: &P) -> Step<Expr> {
++        self.r2e(ev, &self.poly(p.clone()))
++    }
++
++    // ---------------------------------------------------------------- fractions
++
++    /// `p / 1`.
++    pub(super) fn poly(&self, p: P) -> Frac {
++        Frac {
++            num: p,
++            den: self.ring.one(),
++        }
++    }
++
++    pub(super) fn zero(&self) -> Frac {
++        self.poly(self.ring.zero())
++    }
++
++    pub(super) fn one(&self) -> Frac {
++        self.poly(self.ring.one())
++    }
++
++    /// `num / den` without their gcd; `den` non-zero.
++    pub(super) fn frac(&self, num: P, den: P) -> Frac {
++        if num.is_zero() {
++            return self.zero();
++        }
++        let (_, num, den) = self.ring.gcd_cofactors(&num, &den);
++        Frac { num, den }
++    }
++
++    pub(super) fn add(&self, a: &Frac, b: &Frac) -> Frac {
++        if a.num.is_zero() {
++            return b.clone();
++        }
++        if b.num.is_zero() {
++            return a.clone();
++        }
++        let r = &self.ring;
++        if a.den == b.den {
++            return self.frac(r.add(&a.num, &b.num), a.den.clone());
++        }
++        let num = r.add(&r.mul(&a.num, &b.den), &r.mul(&b.num, &a.den));
++        self.frac(num, r.mul(&a.den, &b.den))
++    }
++
++    pub(super) fn neg(&self, a: &Frac) -> Frac {
++        Frac {
++            num: self.ring.neg(&a.num),
++            den: a.den.clone(),
++        }
++    }
++
++    pub(super) fn sub(&self, a: &Frac, b: &Frac) -> Frac {
++        self.add(a, &self.neg(b))
++    }
++
++    pub(super) fn mul(&self, a: &Frac, b: &Frac) -> Frac {
++        let r = &self.ring;
++        self.frac(r.mul(&a.num, &b.num), r.mul(&a.den, &b.den))
++    }
++
++    /// `a / b`, `b` non-zero.
++    pub(super) fn div(&self, a: &Frac, b: &Frac) -> Frac {
++        let r = &self.ring;
++        self.frac(r.mul(&a.num, &b.den), r.mul(&a.den, &b.num))
++    }
++
++    /// `a · n` for an integer `n`.
++    pub(super) fn scale(&self, a: &Frac, n: i64) -> Frac {
++        self.mul(a, &self.poly(self.ring.constant(Complex::from(n))))
++    }
++
++    pub(super) fn pow(&self, a: &Frac, n: u64) -> Frac {
++        Frac {
++            num: self.ring.pow(&a.num, n),
++            den: self.ring.pow(&a.den, n),
++        }
++    }
++
++    /// `T^k`.
++    pub(super) fn top_power(&self, k: u64) -> Frac {
++        let mut e = vec![0; self.t + 1];
++        e[self.top()] = k;
++        self.poly(self.ring.monomial(Complex::from(1), &e))
++    }
++
++    /// Whether `p` has no `x_var`.
++    pub(super) fn free_of(&self, p: &P, var: usize) -> bool {
++        self.ring.degree(p, var).is_none_or(|d| d == 0)
++    }
++
++    /// Whether `f` is an integer, and which.
++    pub(super) fn integer(f: &Frac) -> Option<Integer> {
++        let n = constant(&f.num)?;
++        let d = constant(&f.den)?;
++        if !n.is_real() || !d.is_real() {
++            return None;
++        }
++        let q = n.re() / d.re();
++        q.is_integer().then(|| q.numer().clone())
++    }
++
++    // ---------------------------------------------------------------- the derivation
++
++    /// The derivation of the tower on a polynomial: `Σ ∂p/∂vᵢ · vᵢ′`; the
++    /// other generators are constants (risch.cc:99).
++    pub(super) fn d_poly(&self, p: &P) -> Frac {
++        let mut acc = self.zero();
++        for (var, dv) in self.vars.iter().zip(&self.dv) {
++            let dp = self.ring.derivative(p, *var);
++            if dp.is_zero() || dv.num.is_zero() {
++                continue;
++            }
++            let term = Frac {
++                num: self.ring.mul(&dp, &dv.num),
++                den: dv.den.clone(),
++            };
++            acc = self.add(&acc, &term);
++        }
++        acc
++    }
++
++    /// The derivation on a fraction, `(n′ d − n d′) / d²`.
++    pub(super) fn d(&self, f: &Frac) -> Frac {
++        let dn = self.d_poly(&f.num);
++        if self.free_of_tower(&f.den) {
++            return self.div(&dn, &self.poly(f.den.clone()));
++        }
++        let dd = self.d_poly(&f.den);
++        let n = self.mul(&dn, &self.poly(f.den.clone()));
++        let m = self.mul(&dd, &self.poly(f.num.clone()));
++        let r = &self.ring;
++        self.div(&self.sub(&n, &m), &self.poly(r.mul(&f.den, &f.den)))
++    }
++
++    /// Whether `p` has no variable of the tower.
++    fn free_of_tower(&self, p: &P) -> bool {
++        self.vars.iter().all(|&v| self.free_of(p, v))
++    }
++
++    // ---------------------------------------------------------------- K[T]
++
++    /// The degree in `T`, 0 for zero (sympy's `degree` in the prototype).
++    pub(super) fn deg(&self, f: &Frac) -> u64 {
++        self.ring.degree(&f.num, self.top()).unwrap_or(0)
++    }
++
++    /// The leading coefficient in `T`, 0 for zero.
++    pub(super) fn lc(&self, f: &Frac) -> Frac {
++        self.frac(self.ring.lead_coeff(&f.num, self.top()), f.den.clone())
++    }
++
++    /// The coefficients in `T`, the highest power first; none for zero.
++    pub(super) fn coeffs(&self, f: &Frac) -> Vec<Frac> {
++        let Some(d) = self.ring.degree(&f.num, self.top()) else {
++            return Vec::new();
++        };
++        (0..=d)
++            .rev()
++            .map(|k| self.frac(self.ring.coeff(&f.num, self.top(), k), f.den.clone()))
++            .collect()
++    }
++
++    /// The coefficient of `T^0`.
++    pub(super) fn const_coeff(&self, f: &Frac) -> Frac {
++        self.frac(self.ring.coeff(&f.num, self.top(), 0), f.den.clone())
++    }
++
++    /// The valuation in `T`, 0 for zero.
++    pub(super) fn val(&self, f: &Frac) -> u64 {
++        self.ring.valuation(&f.num, self.top()).unwrap_or(0)
++    }
++
++    /// `f / T^k`, `T^k` dividing it.
++    pub(super) fn shift_down(&self, f: &Frac, k: u64) -> Frac {
++        if k == 0 {
++            return f.clone();
++        }
++        let tk = self.top_power(k).num;
++        Frac {
++            num: self.ring.div_exact(&f.num, &tk).expect("T^k divides"),
++            den: f.den.clone(),
++        }
++    }
++
++    /// The quotient and remainder in `T` over `K`: `l^δ a.num = q b.num +
++    /// r` gives `a / b = q b.den / (a.den l^δ) + r / (a.den l^δ b)`.
++    pub(super) fn quo_rem(&self, a: &Frac, b: &Frac) -> (Frac, Frac) {
++        let r = &self.ring;
++        let top = self.top();
++        let delta = match (r.degree(&a.num, top), r.degree(&b.num, top)) {
++            (Some(m), Some(n)) if m >= n => m - n + 1,
++            _ => 0,
++        };
++        let l = r.pow(&r.lead_coeff(&b.num, top), delta);
++        let (q, rem) = r.pseudo_div_rem(&a.num, &b.num, top);
++        let d = r.mul(&a.den, &l);
++        (
++            self.frac(r.mul(&q, &b.den), d.clone()),
++            self.frac(rem, d),
++        )
++    }
++
++    pub(super) fn quo(&self, a: &Frac, b: &Frac) -> Frac {
++        self.quo_rem(a, b).0
++    }
++
++    /// The gcd in `T` over `K`, primitive in `T` (the prototype's monic
++    /// `tgcd`): zero for two zeros.
++    pub(super) fn tgcd(&self, a: &Frac, b: &Frac) -> Frac {
++        let g = self.ring.gcd(&a.num, &b.num);
++        if g.is_zero() {
++            return self.zero();
++        }
++        self.poly(self.ring.primitive_part_in(&g, self.top()))
++    }
++
++    /// `a / g` for `g` from [`Tower::tgcd`], which divides it.
++    pub(super) fn exquo(&self, a: &Frac, g: &Frac) -> Frac {
++        let num = self.ring.div_exact(&a.num, &g.num).expect("a gcd divides");
++        self.frac(num, a.den.clone())
++    }
++
++    /// The formal derivative in `T`.
++    pub(super) fn diff_top(&self, f: &Frac) -> Frac {
++        self.frac(self.ring.derivative(&f.num, self.top()), f.den.clone())
++    }
++
++    /// The least common multiple in `T` of two polynomials, up to a factor
++    /// without `T`.
++    pub(super) fn lcm(&self, a: &Frac, b: &Frac) -> Frac {
++        self.poly(self.ring.lcm(&a.num, &b.num))
++    }
++
++    /// `(u, v)` with `u a + v b = c`, `deg u < deg b` in `T` (giac's
++    /// `Tabcuv`); `None` when the gcd of `a` and `b` does not divide `c`.
++    pub(super) fn abcuv(&self, a: &Frac, b: &Frac, c: &Frac) -> Option<(Frac, Frac)> {
++        let r = &self.ring;
++        // `u a.num + v b.num = d c.num`, so `(u a.den) a + (v b.den) b = d c.den c`.
++        let (u, v, d) = r.abcuv(&a.num, &b.num, &c.num, self.top())?;
++        let dd = r.mul(&d, &c.den);
++        Some((
++            self.frac(r.mul(&u, &a.den), dd.clone()),
++            self.frac(r.mul(&v, &b.den), dd),
++        ))
++    }
++
++    /// The square-free factors in `T` of `den`, primitive in `T`, one per
++    /// multiplicity; with `zero_apart`, the power of `T` that divides it is
++    /// a last factor of its own (risch.cc:774-783).
++    pub(super) fn sqff(&self, den: &P, zero_apart: bool) -> Vec<(P, u64)> {
++        let r = &self.ring;
++        let top = self.top();
++        let zm = if zero_apart {
++            r.valuation(den, top).unwrap_or(0)
++        } else {
++            0
++        };
++        let dens = if zm > 0 {
++            self.shift_down(&self.poly(den.clone()), zm).num
++        } else {
++            den.clone()
++        };
++        let mut by_multiplicity: std::collections::BTreeMap<u64, P> = Default::default();
++        for (f, m) in r.squarefree(&dens).factors() {
++            if self.free_of(f, top) {
++                continue;
++            }
++            let f = r.primitive_part_in(f, top);
++            let p = by_multiplicity.entry(*m).or_insert_with(|| r.one());
++            *p = r.mul(p, &f);
++        }
++        let mut out: Vec<(P, u64)> = by_multiplicity.into_iter().map(|(m, f)| (f, m)).collect();
++        if zm > 0 {
++            out.push((self.top_power(1).num, zm));
++        }
++        out
++    }
++
++    /// The partial fractions of `num / den` over `factors` from
++    /// [`Tower::sqff`] (giac's `Tpartfrac`): each factor's numerator over
++    /// its power, and the polynomial part.
++    pub(super) fn partfrac(&self, num: &P, den: &P, factors: &[(P, u64)]) -> (Vec<Frac>, Frac) {
++        let r = &self.ring;
++        let pf = r
++            .partial_fractions(num, den, factors, self.top())
++            .expect("a square-free decomposition of the denominator");
++        let pieces = pf
++            .pieces
++            .into_iter()
++            .map(|(n, d)| self.frac(n, d))
++            .collect();
++        (pieces, self.frac(pf.quotient, pf.quotient_den))
++    }
++
++    // ---------------------------------------------------------------- the resultant's variable
++
++    /// `t`, the variable of the resultant.
++    pub(super) fn t_var(&self) -> P {
++        self.ring.var(self.t)
++    }
++
++    /// The factors of `p` that have `t`, over ℚ(i) when `complex` or a
++    /// coefficient is not real, over ℚ otherwise (giac's `factor`).
++    pub(super) fn factors(&self, p: &P, complex: bool) -> Vec<P> {
++        let r = &self.ring;
++        if p.is_zero() || self.free_of(p, self.t) {
++            return Vec::new();
++        }
++        let real = p.coeffs().iter().all(Complex::is_real);
++        let factors: Vec<P> = if complex || !real {
++            r.factor(p)
++                .factors()
++                .iter()
++                .map(|(f, _)| f.clone())
++                .collect()
++        } else {
++            let z = SparseRing::new(Integers, self.t + 1);
++            let pz = z.from_terms(p.terms().map(|(e, c)| (e, c.re().numer().clone())));
++            z.factor(&pz)
++                .factors()
++                .iter()
++                .map(|(f, _)| r.from_terms(f.terms().map(|(e, c)| (e, Complex::from(c.clone())))))
++                .collect()
++        };
++        factors
++            .into_iter()
++            .filter(|f| !self.free_of(f, self.t))
++            .collect()
++    }
++
++    /// The root of a factor `a₁ t + a₀` of degree 1 in `t`, `−a₀ / a₁`;
++    /// `None` for another degree.
++    pub(super) fn linear_root(&self, f: &P) -> Option<Frac> {
++        let r = &self.ring;
++        if r.degree(f, self.t) != Some(1) {
++            return None;
++        }
++        let a1 = r.coeff(f, self.t, 1);
++        let a0 = r.coeff(f, self.t, 0);
++        Some(self.frac(r.neg(&a0), a1))
++    }
++
++    /// `p(t = root)` for a `p` of degree at most 1 in `t`, a fraction
++    /// without `t`.
++    pub(super) fn at_root(&self, p: &P, root: &Frac) -> Frac {
++        let r = &self.ring;
++        let p0 = r.coeff(p, self.t, 0);
++        let p1 = r.coeff(p, self.t, 1);
++        debug_assert!(r.degree(p, self.t).is_none_or(|d| d <= 1));
++        let num = r.add(&r.mul(&p0, &root.den), &r.mul(&p1, &root.num));
++        self.frac(num, root.den.clone())
++    }
++
++    /// The leading coefficient of `p` in lexicographic order with the
++    /// variables `order` first, then the others in theirs.
++    pub(super) fn lex_lead<'p>(&self, p: &'p P, order: &[usize]) -> Option<&'p Complex> {
++        let mut rank: Vec<usize> = order.to_vec();
++        rank.extend((0..=self.t).filter(|v| !order.contains(v)));
++        p.terms()
++            .max_by(|(a, _), (b, _)| {
++                let ka: Vec<u64> = rank.iter().map(|&v| a[v]).collect();
++                let kb: Vec<u64> = rank.iter().map(|&v| b[v]).collect();
++                ka.cmp(&kb)
++            })
++            .map(|(_, c)| c)
++    }
++
++    /// The variables of the tower, the top first, then the other
++    /// generators.
++    pub(super) fn var_order(&self) -> Vec<usize> {
++        let mut order = self.vars.clone();
++        order.extend((0..self.t).filter(|v| !self.vars.contains(v)));
++        order
++    }
++
++    /// The variables of the tower, the top first.
++    pub(super) fn vars(&self) -> &[usize] {
++        &self.vars
++    }
++}
++
++/// The constant of a polynomial without variables.
++fn constant(p: &P) -> Option<&Complex> {
++    match p.term_count() {
++        1 if p.terms().all(|(e, _)| e.iter().all(|&k| k == 0)) => p.coeffs().first(),
++        _ => None,
++    }
++}
++
++/// A conversion's fraction in the tower's ring, its variable `k` the
++/// tower's `map[k]`.
++fn embed(ring: &SparseRing<GaussianIntegers>, f: &Fraction, map: &[usize]) -> Frac {
++    let n = ring.nvars();
++    let remap = |e: Vec<u64>| {
++        let mut out = vec![0; n];
++        for (k, x) in e.into_iter().enumerate() {
++            out[map[k]] = x;
++        }
++        out
++    };
++    let (num, den) = match f {
++        Fraction::Integers { num, den } => (
++            ring.from_terms(num.terms().map(|(e, c)| (remap(e), Complex::from(c.clone())))),
++            ring.from_terms(den.terms().map(|(e, c)| (remap(e), Complex::from(c.clone())))),
++        ),
++        Fraction::GaussianIntegers { num, den } => (
++            ring.from_terms(num.terms().map(|(e, c)| (remap(e), c.clone()))),
++            ring.from_terms(den.terms().map(|(e, c)| (remap(e), c.clone()))),
++        ),
++    };
++    Frac { num, den }
++}
+diff --git a/crates/cas-core/src/native/integrate/risch/parts.rs b/crates/cas-core/src/native/integrate/risch/parts.rs
+new file mode 100644
+index 0000000..aa2f20e
+--- /dev/null
++++ b/crates/cas-core/src/native/integrate/risch/parts.rs
+@@ -0,0 +1,568 @@
++//! The integration of a rational function of the tower (risch.cc:517-876):
++//! `in_risch`, its polynomial part `risch_poly_part`, Hermite reduction, the
++//! Rothstein–Trager resultant and `integrate_ei`.
++
++use cas_num::Complex;
++
++use super::tower::{Frac, P, Tower};
++use super::{Step, call, derive, has_i, kernel, kernel_arg, rde, together, within, zero};
++use crate::eval::Eval;
++use crate::expr::Expr;
++use crate::symbol::Symbol;
++
++/// giac's `lncoeff`: a value, or `inf` where giac divides by `derive(1)`
++/// (risch.cc:495, :292; T9.c1 departure 6).
++#[derive(Clone, Debug)]
++pub(super) enum Lnc {
++    Value(Expr),
++    Infinite,
++}
++
++impl Lnc {
++    /// The value when it is an integer.
++    pub(super) fn integer(&self) -> Option<i64> {
++        match self {
++            Lnc::Value(e) => e.as_i64(),
++            Lnc::Infinite => None,
++        }
++    }
++}
++
++/// What `in_risch` gives: whether it integrated, the primitive, the
++/// coefficient of the allowed logarithm and what remains.
++#[derive(Clone, Debug)]
++pub(super) struct Acc {
++    pub(super) ok: bool,
++    pub(super) prim: Expr,
++    pub(super) lncoeff: Lnc,
++    pub(super) remains: Expr,
++}
++
++impl Acc {
++    fn new() -> Acc {
++        Acc {
++            ok: true,
++            prim: zero(),
++            lncoeff: Lnc::Value(zero()),
++            remains: zero(),
++        }
++    }
++
++    fn add_prim(&mut self, e: Expr) {
++        self.prim = std::mem::replace(&mut self.prim, zero()) + e;
++    }
++
++    fn add_remains(&mut self, e: Expr) {
++        self.remains = std::mem::replace(&mut self.remains, zero()) + e;
++    }
++
++    fn failed(mut self) -> Acc {
++        self.ok = false;
++        self
++    }
++}
++
++/// `p` over `f^m`, as an expression.
++fn over_power(ev: &mut Eval<'_>, c: &Tower, n: &Frac, f: &P, m: u64) -> Step<Expr> {
++    let d = c.pow(&c.poly(f.clone()), m);
++    c.r2e(ev, &c.div(n, &d))
++}
++
++/// The coefficients of `f` in `T`, the highest first, as expressions.
++fn coeff_exprs(ev: &mut Eval<'_>, c: &Tower, f: &Frac) -> Step<Vec<Expr>> {
++    let mut out = Vec::new();
++    for cf in c.coeffs(f) {
++        out.push(c.r2e(ev, &cf)?);
++    }
++    Ok(out)
++}
++
++/// giac's `in_risch` (risch.cc:743): `∫ e` in the tower `v`, the only new
++/// logarithm allowed `ln(allowed)` when `allowed` is not 0.
++pub(super) fn in_risch(ev: &mut Eval<'_>, e: &Expr, v: &[Expr], allowed: &Expr) -> Step<Acc> {
++    let mut acc = Acc::new();
++    let Some((c, fr)) = Tower::new(ev, v, std::slice::from_ref(e))? else {
++        acc.remains = e.clone();
++        return Ok(acc.failed());
++    };
++    let r = &fr[0];
++    let top = c.top();
++    let degree = c
++        .ring
++        .degree(&r.num, top)
++        .unwrap_or(0)
++        .max(c.ring.degree(&r.den, top).unwrap_or(0));
++    within(ev, v.len(), degree, 1)?;
++    let restricted = *allowed != zero();
++    let vden = c.sqff(&r.den, true);
++    let (pfs, ip) = c.partfrac(&r.num, &r.den, &vden);
++    let is_exp = kernel(&v[0]) == Some(true);
++    let mut ipshift = c.zero();
++    for (ni, (f, m)) in pfs.iter().zip(&vden) {
++        let m = *m;
++        if is_exp && f.term_count() == 1 {
++            // The generalised polynomial part ni / T^m (risch.cc:784).
++            let tmp = coeff_exprs(ev, &c, ni)?;
++            let shift = -i64::try_from(m).unwrap_or(i64::MAX);
++            if !risch_poly_part(ev, &tmp, shift, v, allowed, &mut acc)? && restricted {
++                return Ok(acc.failed());
++            }
++            continue;
++        }
++        let mut tnum = ni.clone();
++        if m > 1 {
++            let Some((t, padd)) = hermite_reduce(ev, &c, ni, f, m, &c.zero(), &Expr::from(1))? else {
++                let rest = over_power(ev, &c, ni, f, m)?;
++                acc.add_remains(rest);
++                acc.ok = false;
++                continue;
++            };
++            tnum = t;
++            acc.add_prim(padd);
++        }
++        if tnum.num.is_zero() {
++            continue;
++        }
++        if restricted {
++            // Only ln(allowed) may appear (risch.cc:811-826).
++            if pfs.len() > 1 {
++                return Ok(acc.failed());
++            }
++            let dal = together(ev, &derive(ev, allowed, v.last().expect("x"))?)?;
++            if dal == zero() {
++                acc.lncoeff = Lnc::Infinite;
++                continue;
++            }
++            let part = over_power(ev, &c, ni, f, m)?;
++            let lnc = together(ev, &(allowed.clone() * part / dal))?;
++            acc.lncoeff = Lnc::Value(lnc.clone());
++            let x = v.last().expect("x");
++            if together(ev, &derive(ev, &lnc, x)?)? != zero() {
++                return Ok(acc.failed());
++            }
++            continue;
++        }
++        let (pres, p1) = rothstein_trager_resultant(&c, &tnum, f);
++        let mut add_prim = zero();
++        let mut ok = true;
++        let x = v.last().expect("x").clone();
++        for fac in c.factors(&pres, true) {
++            let Some(root) = c.linear_root(&fac) else {
++                ok = false;
++                break;
++            };
++            let root_e = c.r2e(ev, &root)?;
++            // giac derive(root, x): the true derivative, foreign kernels too.
++            if together(ev, &derive(ev, &root_e, &x)?)? != zero() {
++                ok = false;
++                break;
++            }
++            let tmp1 = c.at_root(&p1, &root);
++            let targ = giac_gcd_norm(&c, &tmp1.num, f);
++            let targ_e = c.p2e(ev, &targ)?;
++            add_prim = add_prim + root_e * Expr::call(Symbol::LOG, [targ_e]);
++            let tp = c.poly(targ);
++            let q = c.quo(&c.d(&tp), &tp);
++            ipshift = c.sub(&ipshift, &c.mul(&root, &q));
++        }
++        if ok {
++            acc.add_prim(add_prim);
++        } else {
++            // risch.cc:837, fixed: the Hermite-reduced fraction remains.
++            let rest = c.r2e(ev, &c.div(&tnum, &c.poly(f.clone())))?;
++            acc.add_remains(rest);
++            acc.ok = false;
++        }
++    }
++    let mut tmp = coeff_exprs(ev, &c, &ip)?;
++    let shift_e = c.r2e(ev, &ipshift)?;
++    match tmp.last_mut() {
++        None => tmp.push(shift_e),
++        Some(last) => *last = ev.eval(&(last.clone() + shift_e))?,
++    }
++    if !risch_poly_part(ev, &tmp, 0, v, allowed, &mut acc)? && restricted {
++        return Ok(acc.failed());
++    }
++    let ok = acc.ok || !restricted;
++    acc.ok = ok;
++    Ok(acc)
++}
++
++/// `Σ e[i] Xk^(s − 1 − i)`, built.
++fn symb_horner(e: &[Expr], xk: &Expr) -> Expr {
++    let s = e.len();
++    let terms: Vec<Expr> = e
++        .iter()
++        .enumerate()
++        .map(|(i, c)| c.clone() * xk.pow(Expr::from(i64::try_from(s - 1 - i).unwrap_or(0))))
++        .collect();
++    Expr::call(Symbol::PLUS, terms)
++}
++
++/// giac's `risch_poly_part` (risch.cc:662): `∫ Σ e[i] T^(s − 1 − i + shift)`
++/// for the coefficients `e` in the lower tower, the highest first.
++pub(super) fn risch_poly_part(
++    ev: &mut Eval<'_>,
++    e: &[Expr],
++    shift: i64,
++    v: &[Expr],
++    allowed: &Expr,
++    acc: &mut Acc,
++) -> Step<bool> {
++    let s = e.len();
++    let x = v.last().expect("x").clone();
++    if v.len() == 1 {
++        let terms: Vec<Expr> = e
++            .iter()
++            .enumerate()
++            .map(|(i, c)| {
++                let k = i64::try_from(s - i).unwrap_or(1);
++                c.clone() * x.pow(Expr::from(k)) / Expr::from(k)
++            })
++            .collect();
++        acc.add_prim(Expr::call(Symbol::PLUS, terms));
++        return Ok(true);
++    }
++    let v1 = &v[1..];
++    let xk = &v[0];
++    match kernel(xk) {
++        Some(false) => {
++            // risch.cc:668-695: the coefficients from the top, each with the
++            // log of the argument allowed, whose coefficient moves up.
++            let arg = kernel_arg(xk).clone();
++            let dx = together(ev, &derive(ev, xk, &x)?)?;
++            let mut eprim = vec![zero(); s + 1];
++            for j in (1..s).rev() {
++                let k = i64::try_from(j + 1).unwrap_or(i64::MAX);
++                let g = ev.eval(&(e[s - 1 - j].clone() - Expr::from(k) * eprim[s - 1 - j].clone() * dx.clone()))?;
++                let r = in_risch(ev, &g, v1, &arg)?;
++                eprim[s - j] = r.prim;
++                if !r.ok {
++                    acc.add_remains(symb_horner(e, xk));
++                    return Ok(false);
++                }
++                if let Lnc::Value(lnc) = &r.lncoeff {
++                    eprim[s - 1 - j] = eprim[s - 1 - j].clone() + lnc.clone() / Expr::from(k);
++                }
++            }
++            let g = ev.eval(&(e[s - 1].clone() - eprim[s - 1].clone() * dx))?;
++            // risch.cc:693 (kept): allowed_lnarg 0.
++            let r = in_risch(ev, &g, v1, &zero())?;
++            acc.add_prim(r.prim + symb_horner(&eprim, xk));
++            acc.add_remains(r.remains);
++            if !r.ok {
++                acc.ok = false;
++            }
++            Ok(r.ok)
++        }
++        Some(true) => {
++            let y = kernel_arg(xk).clone();
++            let dy = derive(ev, &y, &x)?;
++            let mut eprim = vec![zero(); s];
++            for j in (0..s).rev() {
++                let idx = s - 1 - j;
++                let pui = i64::try_from(j).unwrap_or(i64::MAX) + shift;
++                if pui == 0 {
++                    let r = in_risch(ev, &e[idx], v1, allowed)?;
++                    acc.lncoeff = r.lncoeff;
++                    acc.add_prim(r.prim);
++                    acc.add_remains(r.remains);
++                    if !r.ok {
++                        acc.ok = false;
++                        if *allowed != zero() {
++                            return Ok(false);
++                        }
++                    }
++                    continue;
++                }
++                let f = ev.eval(&(Expr::from(pui) * dy.clone()))?;
++                if let Some(sol) = rde::risch_desolve(ev, &f, &e[idx], v1, true)? {
++                    eprim[idx] = sol;
++                    continue;
++                }
++                let coeff = e[idx].clone();
++                if *allowed == zero()
++                    && let Some((a, b)) = is_linear_wrt(ev, &y, &x)?
++                    && rational_in_x(ev, &coeff, &x)?
++                {
++                    let pa = ev.eval(&(Expr::from(pui) * a))?;
++                    if let Some((p, rem)) = integrate_ei(ev, &pa, &coeff, &x)? {
++                        let shifted = Expr::call(Symbol::EXP, [Expr::from(pui) * b]);
++                        acc.add_prim(shifted.clone() * p);
++                        acc.add_remains(shifted * rem);
++                        continue;
++                    }
++                }
++                acc.add_remains(coeff * xk.pow(Expr::from(pui)));
++                acc.ok = false;
++                eprim[idx] = zero();
++                if *allowed != zero() {
++                    return Ok(false);
++                }
++            }
++            acc.add_prim(symb_horner(&eprim, xk) * xk.pow(Expr::from(shift)));
++            Ok(true)
++        }
++        None => Ok(false),
++    }
++}
++
++/// Whether the kernels of `e` with `x` are `x` alone (giac's
++/// `lvarx(e) == [x]`).
++fn rational_in_x(ev: &mut Eval<'_>, e: &Expr, x: &Expr) -> Step<bool> {
++    let Some(gens) = super::tower::generators(ev, e)? else {
++        return Ok(false);
++    };
++    let with_x: Vec<&Expr> = gens.iter().filter(|g| g.contains(x)).collect();
++    Ok(with_x.len() == 1 && with_x[0] == x)
++}
++
++/// giac's `is_linear_wrt` (intg.cc:196): `(a, b)` with `e = a x + b`.
++fn is_linear_wrt(ev: &mut Eval<'_>, e: &Expr, x: &Expr) -> Step<Option<(Expr, Expr)>> {
++    let a = together(ev, &derive(ev, e, x)?)?;
++    if a.contains(x) {
++        return Ok(None);
++    }
++    let b = together(ev, &(e.clone() - a.clone() * x.clone()))?;
++    if b.contains(x) {
++        return Ok(None);
++    }
++    Ok(Some((a, b)))
++}
++
++/// giac's `hermite_reduce` (risch.cc:517): `num / fact^mult · exp(a x)` as
++/// `num′ / fact · exp(a x)` plus an integrated part; `None` when `fact′` and
++/// `fact` are not coprime.
++pub(super) fn hermite_reduce(
++    ev: &mut Eval<'_>,
++    c: &Tower,
++    num: &Frac,
++    fact: &P,
++    mult: u64,
++    a: &Frac,
++    expax: &Expr,
++) -> Step<Option<(Frac, Expr)>> {
++    if mult == 1 {
++        return Ok(Some((num.clone(), zero())));
++    }
++    let f = c.poly(fact.clone());
++    let fprime = c.d_poly(fact);
++    let mut num = num.clone();
++    let mut mult = mult;
++    let mut resexpr = c.zero();
++    while mult > 1 {
++        // Tegcdtoabcuv: fprime v + fact u = num, deg v < deg fact.
++        let Some((v, u)) = c.abcuv(&fprime, &f, &num) else {
++            return Ok(None);
++        };
++        mult -= 1;
++        let k = i64::try_from(mult).unwrap_or(i64::MAX);
++        // diff(v·exp(a x))/exp(a x) / mult (risch.cc:164).
++        let dv = c.add(&c.d(&v), &c.mul(a, &v));
++        let numtemp = c.div(&dv, &c.scale(&c.one(), k));
++        num = c.add(&numtemp, &u);
++        let part = c.div(&v, &c.scale(&c.pow(&f, mult), k));
++        resexpr = c.sub(&resexpr, &part);
++    }
++    let r = c.r2e(ev, &resexpr)?;
++    Ok(Some((num, r * expax.clone())))
++}
++
++/// giac's `rothstein_trager_resultant` (risch.cc:124): `p₁ = num − t den′`
++/// (its numerator, the sign making its leading coefficient in `[T, t, …]`
++/// positive, :140) and `res_T(p₁, den)`.
++fn rothstein_trager_resultant(c: &Tower, num: &Frac, den: &P) -> (P, P) {
++    let r = &c.ring;
++    let dp = c.d_poly(den);
++    let l = r.lcm(&num.den, &dp.den);
++    let a = r.mul(&num.num, &r.div_exact(&l, &num.den).expect("an lcm"));
++    let b = r.mul(
++        &r.mul(&c.t_var(), &dp.num),
++        &r.div_exact(&l, &dp.den).expect("an lcm"),
++    );
++    let mut p1 = r.sub(&a, &b);
++    let mut order = vec![c.top(), c.t];
++    order.extend(c.var_order().into_iter().skip(1));
++    if c.lex_lead(&p1, &order).is_some_and(negative_real) {
++        p1 = r.neg(&p1);
++    }
++    let pres = if c.ring.degree(den, c.top()).is_some_and(|d| d > 0) {
++        r.resultant(&p1, den, c.top())
++    } else {
++        r.one()
++    };
++    (pres, p1)
++}
++
++fn negative_real(z: &Complex) -> bool {
++    z.is_real() && z.re().is_negative()
++}
++
++/// giac's `_gcd` of a log argument (risch.cc:852), as probed (T9.c1 notes):
++/// monomial factors shifted out; `a` itself when it divides `b` (as is
++/// when both are multivariate and `b/a` is a monomial), else the gcd;
++/// primitive over ℤ for real coefficients; negated when its leading
++/// coefficient, the tower's top first, is a negative real.
++fn giac_gcd_norm(c: &Tower, a: &P, b: &P) -> P {
++    let r = &c.ring;
++    let ext = a.coeffs().iter().chain(b.coeffs()).any(|z| !z.is_real());
++    let order = c.var_order();
++    let flip = |p: P| {
++        if c.lex_lead(&p, &order).is_some_and(negative_real) {
++            r.neg(&p)
++        } else {
++            p
++        }
++    };
++    let primitive = |p: &P| {
++        let content = r.content(p);
++        if content.is_one() {
++            p.clone()
++        } else {
++            r.from_terms(p.terms().map(|(e, z)| (e, z / &content)))
++        }
++    };
++    let used = (0..c.t)
++        .filter(|&v| !c.free_of(a, v) || !c.free_of(b, v))
++        .count();
++    if used == 0 {
++        return r.one();
++    }
++    let pa = if ext { a.clone() } else { primitive(a) };
++    let pa = without_monomial(r, &pa);
++    let pb = without_monomial(r, b);
++    if let Some(q) = r.div_exact(&pb, &pa) {
++        if used >= 2 && q.term_count() == 1 {
++            return pa;
++        }
++        return flip(pa);
++    }
++    let g = r.gcd(a, b);
++    flip(if ext { g } else { primitive(&g) })
++}
++
++/// `p` over the greatest monomial dividing it (gausspol.cc:5214).
++fn without_monomial(r: &cas_poly::SparseRing<cas_num::algebra::GaussianIntegers>, p: &P) -> P {
++    let n = r.nvars();
++    let mut low = vec![u64::MAX; n];
++    for (e, _) in p.terms() {
++        for (l, x) in low.iter_mut().zip(&e) {
++            *l = (*l).min(*x);
++        }
++    }
++    if low.iter().all(|&l| l == 0 || l == u64::MAX) {
++        return p.clone();
++    }
++    r.from_terms(p.terms().map(|(e, z)| {
++        let e = e.iter().zip(&low).map(|(x, l)| x - l).collect();
++        (e, z.clone())
++    }))
++}
++
++/// giac's `integrate_ei` (risch.cc:582): `∫ coeff · exp(a x)` for `coeff`
++/// rational in `x`, as `(prim, remains)` both times `exp(a x)` where giac
++/// writes them so: the polynomial part in closed form, Hermite reduction,
++/// then `Ei`, or `Ci` and `Si` for an imaginary `a` and a real root, at the
++/// roots of each factor over ℚ(i).
++pub(super) fn integrate_ei(
++    ev: &mut Eval<'_>,
++    a: &Expr,
++    coeff: &Expr,
++    x: &Expr,
++) -> Step<Option<(Expr, Expr)>> {
++    let expax = ev.eval(&Expr::call(Symbol::EXP, [a.clone() * x.clone()]))?;
++    // re(a) = 0: a = ima i, ima a real number.
++    let ima = match a.to_complex() {
++        Some(z) if z.re().is_zero() && !z.im().is_zero() => Some(Expr::from(z.im().clone())),
++        _ => None,
++    };
++    let v = [x.clone()];
++    let Some((c, fr)) = Tower::new(ev, &v, &[coeff.clone(), a.clone()])? else {
++        return Ok(None);
++    };
++    let Some(af) = c.e2r(ev, a)? else {
++        return Ok(None);
++    };
++    let r = &fr[0];
++    let vden = c.sqff(&r.den, false);
++    let (pfs, ip) = c.partfrac(&r.num, &r.den, &vden);
++    let mut prim = zero();
++    if !ip.num.is_zero() {
++        let p = c.r2e(ev, &ip)?;
++        prim = integrate_poly_exp(ev, &p, a, x, &expax)?;
++    }
++    let mut remains = zero();
++    for (ni, (f, m)) in pfs.iter().zip(&vden) {
++        let m = *m;
++        let mut tnum = ni.clone();
++        if m > 1 {
++            let Some((t, padd)) = hermite_reduce(ev, &c, ni, f, m, &af, &expax)? else {
++                return Ok(None);
++            };
++            tnum = t;
++            prim = prim + padd;
++        }
++        if tnum.num.is_zero() {
++            continue;
++        }
++        let itden = c.diff_top(&c.poly(f.clone()));
++        for fac in c.ring.factor(f).factors().iter().map(|(g, _)| g) {
++            if c.free_of(fac, c.top()) {
++                continue;
++            }
++            if c.ring.degree(fac, c.top()) != Some(1) {
++                // risch.cc:640 (kept): the original fraction remains.
++                let part = over_power(ev, &c, ni, f, m)?;
++                remains = remains + expax.clone() * part;
++                break;
++            }
++            let a1 = c.ring.coeff(fac, c.top(), 1);
++            let a0 = c.ring.coeff(fac, c.top(), 0);
++            let root = c.frac(c.ring.neg(&a0), a1);
++            let root_e = c.r2e(ev, &root)?;
++            let rootn = at(ev, &c, &tnum, &root_e, x)?;
++            let rootd = at(ev, &c, &itden, &root_e, x)?;
++            let rr = together(ev, &(rootn / rootd))?;
++            let shifted = x.clone() - root_e.clone();
++            match &ima {
++                Some(ima) if !has_i(&root_e) => {
++                    let negative = ima.to_rational().is_some_and(|q| q.is_negative());
++                    let aa = if negative { -ima.clone() } else { ima.clone() };
++                    let s = if negative { -super::i() } else { super::i() };
++                    let phase = Expr::call(Symbol::COS, [ima.clone() * root_e.clone()])
++                        + super::i() * Expr::call(Symbol::SIN, [ima.clone() * root_e.clone()]);
++                    let ci = Expr::call(Symbol::COS_INTEGRAL, [aa.clone() * shifted.clone()]);
++                    let si = Expr::call(Symbol::SIN_INTEGRAL, [aa * shifted]);
++                    prim = prim + phase * rr * (ci + s * si);
++                }
++                _ => {
++                    let ei = Expr::call(Symbol::EXP_INTEGRAL_EI, [a.clone() * shifted]);
++                    let e = Expr::call(Symbol::EXP, [a.clone() * root_e]);
++                    prim = prim + rr * e * ei;
++                }
++            }
++        }
++    }
++    Ok(Some((ev.eval(&prim)?, ev.eval(&remains)?)))
++}
++
++/// `f(x = root)`, evaluated.
++fn at(ev: &mut Eval<'_>, c: &Tower, f: &Frac, root: &Expr, x: &Expr) -> Step<Expr> {
++    let e = c.r2e(ev, f)?;
++    Ok(ev.eval(&e.substitute(&[(x.clone(), root.clone())]))?)
++}
++
++/// `∫ p exp(a x) = exp(a x) Σ (−1)^k p^(k) / a^(k + 1)` for a polynomial
++/// `p` (giac's `_integrate` in `integrate_ei`; the same value).
++fn integrate_poly_exp(ev: &mut Eval<'_>, p: &Expr, a: &Expr, x: &Expr, expax: &Expr) -> Step<Expr> {
++    let mut res = Vec::new();
++    let mut q = p.clone();
++    let mut k: i64 = 0;
++    while q != zero() {
++        let sign = if k % 2 == 0 { 1 } else { -1 };
++        res.push(Expr::from(sign) * q.clone() / a.pow(Expr::from(k + 1)));
++        q = call(ev, Symbol::D, [q, x.clone()])?;
++        k += 1;
++    }
++    Ok(Expr::call(Symbol::PLUS, res) * expax.clone())
++}
+diff --git a/crates/cas-core/src/native/integrate/risch/rde.rs b/crates/cas-core/src/native/integrate/risch/rde.rs
+new file mode 100644
+index 0000000..b279cf6
+--- /dev/null
++++ b/crates/cas-core/src/native/integrate/risch/rde.rs
+@@ -0,0 +1,316 @@
++//! The Risch differential equation `y′ + f y = g` (risch.cc:187-515):
++//! `risch_desolve`, which bounds the denominator and the degree of `y`, and
++//! `SPDE`, Rothstein's degree reduction [Bronstein, ch. 6].
++
++use super::parts::{Acc, in_risch, risch_poly_part, rothstein_trager_resultant};
++use super::tower::{Frac, Tower};
++use super::{Step, derive, kernel, kernel_arg, together, tsimplify, within, zero};
++use crate::eval::Eval;
++use crate::expr::Expr;
++use crate::symbol::Symbol;
++
++/// The deepest recursion of [`spde_x`], the prototype's.
++const SPDE_X_DEPTH: usize = 60;
++
++/// giac's `rischde_simplify` (risch.cc:187): `R`, `S`, `T` over their gcd;
++/// `None` when `R` and `S` keep a common factor in `T`.
++fn rischde_simplify(c: &Tower, r: &Frac, s: &Frac, t: &Frac) -> Option<(Frac, Frac, Frac)> {
++    let g = c.tgcd(&c.tgcd(r, s), t);
++    let (r, s, t) = if g.num.is_zero() {
++        (r.clone(), s.clone(), t.clone())
++    } else {
++        (c.exquo(r, &g), c.exquo(s, &g), c.exquo(t, &g))
++    };
++    if c.deg(&c.tgcd(&r, &s)) > 0 {
++        return None;
++    }
++    Some((r, s, t))
++}
++
++/// giac's `spde_x` (risch.cc:197): `N` with `S N + R N′ = T`, `R` without
++/// `T`, by repeated division.
++fn spde_x(c: &Tower, s: &Frac, r: &Frac, t: &Frac, depth: usize) -> Option<Frac> {
++    if t.num.is_zero() {
++        return Some(c.zero());
++    }
++    if s.num.is_zero() || c.deg(t) < c.deg(s) || depth > SPDE_X_DEPTH {
++        return None;
++    }
++    let q = c.quo(t, s);
++    let new_t = c.sub(&c.sub(t, &c.mul(s, &q)), &c.mul(r, &c.d(&q)));
++    let n = spde_x(c, s, r, &new_t, depth + 1)?;
++    Some(c.add(&q, &n))
++}
++
++/// giac's `SPDE` (risch.cc:238): `y` of degree at most `ydeg` with
++/// `R y′ + S y = T`, as an expression; `None` when there is none.
++#[allow(
++    clippy::too_many_arguments,
++    reason = "giac's signature, with the evaluator"
++)]
++fn spde(
++    ev: &mut Eval<'_>,
++    c: &Tower,
++    r: &Frac,
++    s: &Frac,
++    t: &Frac,
++    v: &[Expr],
++    ydeg: i64,
++) -> Step<Option<Expr>> {
++    if t.num.is_zero() {
++        return Ok(Some(zero()));
++    }
++    if ydeg < 0 {
++        return Ok(None);
++    }
++    within(ev, v.len(), c.deg(t), ydeg)?;
++    let Some((r, s, t)) = rischde_simplify(c, r, s, t) else {
++        return Ok(None);
++    };
++    let rd = c.deg(&r);
++    if rd > 0 {
++        // Tabcuv(S, R, T): S V + R U = T, deg V < deg R.
++        let Some((vv, uu)) = c.abcuv(&s, &r, &t) else {
++            return Ok(None);
++        };
++        let new_s = c.add(&s, &c.d(&r));
++        let new_t = c.sub(&uu, &c.d(&vv));
++        let ydeg = ydeg - i64::try_from(rd).unwrap_or(i64::MAX);
++        let Some(prim) = spde(ev, c, &r, &new_s, &new_t, v, ydeg)? else {
++            return Ok(None);
++        };
++        let re = c.r2e(ev, &r)?;
++        let ve = c.r2e(ev, &vv)?;
++        return Ok(Some(ev.eval(&(re * prim + ve))?));
++    }
++    let z_kernel = &v[0];
++    let x = v.last().expect("x");
++    if z_kernel == x || c.deg(&s) > 0 {
++        let Some(n) = spde_x(c, &s, &r, &t, 0) else {
++            return Ok(None);
++        };
++        return Ok(Some(c.r2e(ev, &n)?));
++    }
++    let v1 = &v[1..];
++    let rr = c.lc(&r);
++    let mut tc = Vec::new();
++    for cf in c.coeffs(&t) {
++        tc.push(c.r2e(ev, &c.div(&cf, &rr))?);
++    }
++    if s.num.is_zero() {
++        // risch.cc:292 (kept): the lower tower, allowed_lnarg 1.
++        let mut acc = Acc::empty();
++        let ok = risch_poly_part(ev, &tc, 0, v1, &Expr::from(1), &mut acc)?;
++        return Ok(ok.then_some(acc.prim));
++    }
++    let tdeg = tc.len() - 1;
++    let Some(is_exp) = kernel(z_kernel) else {
++        return Ok(None);
++    };
++    if usize::try_from(ydeg).unwrap_or(usize::MAX) < tdeg {
++        return Ok(None);
++    }
++    let z = kernel_arg(z_kernel).clone();
++    let dz = derive(ev, &z, x)?;
++    let b = c.r2e(ev, &c.div(&c.lc(&s), &rr))?;
++    let mut previous = zero();
++    let mut prim = Vec::new();
++    for k in (0..=tdeg).rev() {
++        let kk = Expr::from(i64::try_from(k).unwrap_or(i64::MAX));
++        let sol = if is_exp {
++            let f = ev.eval(&(kk.clone() * dz.clone() + b.clone()))?;
++            risch_desolve(ev, &f, &tc[tdeg - k], v1, false)?
++        } else {
++            let tmp = tc[tdeg - k].clone()
++                - (kk.clone() + Expr::from(1)) * previous.clone() * dz.clone() / z.clone();
++            let tmp = ev.eval(&tmp)?;
++            risch_desolve(ev, &b, &tmp, v1, false)?
++        };
++        let Some(sol) = sol else {
++            return Ok(None);
++        };
++        prim.push(sol.clone() * z_kernel.pow(kk));
++        previous = sol;
++    }
++    Ok(Some(ev.eval(&Expr::call(Symbol::PLUS, prim))?))
++}
++
++/// giac's `risch_desolve` (risch.cc:323): `y` with `y′ + f y = g` in the
++/// tower `v`; `None` when there is none in it. `f_is_derivative` skips the
++/// bound on the denominator from the simple poles of `f`.
++pub(super) fn risch_desolve(
++    ev: &mut Eval<'_>,
++    f: &Expr,
++    g: &Expr,
++    v: &[Expr],
++    f_is_derivative: bool,
++) -> Step<Option<Expr>> {
++    if *g == zero() {
++        return Ok(Some(zero()));
++    }
++    let z_kernel = &v[0];
++    let x = v.last().expect("x").clone();
++    let Some((c, fr)) = Tower::new(ev, v, &[f.clone(), g.clone()])? else {
++        return Ok(None);
++    };
++    let v1 = &v[1..];
++    let (ff, gg) = (&fr[0], &fr[1]);
++    let fnum = c.poly(ff.num.clone());
++    let fden = c.poly(ff.den.clone());
++    let gnum = c.poly(gg.num.clone());
++    let gden = c.poly(gg.den.clone());
++    let mut fdenred = fden.clone();
++    let mut gdenred = gden.clone();
++    let mut dd = c.one();
++    let kind = kernel(z_kernel);
++    if kind == Some(true) {
++        // The power of T in the denominator (risch.cc:345-383).
++        let val = |p: &Frac| i64::try_from(c.val(p)).unwrap_or(i64::MAX);
++        let (fdenv, fnumv, gdenv, gnumv) = (val(&fden), val(&fnum), val(&gden), val(&gnum));
++        fdenred = c.shift_down(&fden, c.val(&fden));
++        gdenred = c.shift_down(&gden, c.val(&gden));
++        let mut alpha: i64 = 0;
++        let beta = fnumv - fdenv;
++        let gamma = gnumv - gdenv;
++        let dzr_e = derive(ev, kernel_arg(z_kernel), &x)?;
++        let Some(dzr) = c.e2r(ev, &dzr_e)? else {
++            return Ok(None);
++        };
++        let lnc = |c: &Tower| {
++            let f0 = c.div(&c.const_coeff(&fnum), &c.const_coeff(&fdenred));
++            let q = c.neg(&c.div(&f0, &dzr));
++            Tower::integer(&q).and_then(|n| i64::try_from(n).ok())
++        };
++        if gamma < 0 {
++            alpha = gamma;
++            if beta <= 0 {
++                if beta != 0 {
++                    alpha = 0.min(gamma - beta);
++                } else if let Some(n) = lnc(&c) {
++                    alpha = alpha.min(n);
++                }
++            }
++        }
++        if gamma >= 0
++            && beta == 0
++            && let Some(n) = lnc(&c)
++        {
++            alpha = alpha.min(n);
++        }
++        dd = c.top_power(u64::try_from(-alpha).unwrap_or(0));
++    }
++    if !f_is_derivative {
++        // The simple poles of f (risch.cc:386-430).
++        let tmpy = c.diff_top(&fdenred);
++        let tmpw = fdenred.clone();
++        let g1 = c.tgcd(&tmpy, &tmpw);
++        let (tmpy, tmpw) = if g1.num.is_zero() {
++            (tmpy, tmpw)
++        } else {
++            (c.exquo(&tmpy, &g1), c.exquo(&tmpw, &g1))
++        };
++        let tmpy = c.sub(&tmpy, &c.diff_top(&tmpw));
++        let f1 = c.tgcd(&tmpw, &tmpy);
++        if c.deg(&f1) > 0 {
++            let f1cofact = c.quo(&fdenred, &f1);
++            // Tabcuv(f1cofact, f1, fnum): N2 f1cofact ≡ fnum mod f1.
++            if let Some((n2, _)) = c.abcuv(&f1cofact, &f1, &fnum) {
++                let (pres, p1) = rothstein_trager_resultant(&c, &n2, &f1.num);
++                for fac in c.factors(&pres, false) {
++                    let Some(root) = c.linear_root(&fac) else {
++                        continue;
++                    };
++                    let Some(residue) = Tower::integer(&root).and_then(|n| i64::try_from(n).ok())
++                    else {
++                        continue;
++                    };
++                    if residue < 0 {
++                        let tmp1 = c.at_root(&p1, &root);
++                        let p1subst = c.tgcd(&c.poly(tmp1.num), &f1);
++                        let k = u64::try_from(-residue).unwrap_or(0);
++                        dd = c.mul(&dd, &c.pow(&p1subst, k));
++                    }
++                }
++            }
++        }
++    }
++    let cg = c.tgcd(&fdenred, &gdenred);
++    let num = c.tgcd(&gdenred, &c.diff_top(&gdenred));
++    let den = c.tgcd(&cg, &c.diff_top(&cg));
++    dd = c.mul(&dd, &c.quo(&num, &den));
++    let d_d = c.d(&dd);
++    let l = c.lcm(&fden, &gden);
++    let mut r = c.mul(&dd, &l);
++    let mut s = c.sub(&c.mul(&c.mul(ff, &dd), &l), &c.mul(&d_d, &l));
++    let mut t = c.mul(&c.mul(gg, &c.mul(&dd, &dd)), &l);
++    let Some((r1, s1, t1)) = rischde_simplify(&c, &r, &s, &t) else {
++        return Ok(None);
++    };
++    (r, s, t) = (r1, s1, t1);
++    let deg = |p: &Frac| i64::try_from(c.deg(p)).unwrap_or(i64::MAX);
++    let (rd, sd, td) = (deg(&r), deg(&s), deg(&t));
++    let rr = c.lc(&r);
++    let ss = c.lc(&s);
++    let mut ydeg = td - sd;
++    if ydeg == 0 && !ss.num.is_zero() {
++        // A constant ratio T/S (risch.cc:453-466).
++        let tt = c.lc(&t);
++        let chk = c.sub(&c.mul(&s, &tt), &c.mul(&t, &ss));
++        if chk.num.is_zero() {
++            let ratio = c.r2e(ev, &c.div(&tt, &ss))?;
++            if !ratio.contains(&x) {
++                let de = c.r2e(ev, &dd)?;
++                return Ok(Some(together(ev, &(ratio / de))?));
++            }
++        }
++    }
++    let mut expshift = Expr::from(1);
++    if *z_kernel == x {
++        ydeg = td - (rd - 1).max(sd);
++        if rd - 1 == sd && !rr.num.is_zero() {
++            if let Some(n) = Tower::integer(&c.div(&ss, &rr)).and_then(|n| i64::try_from(n).ok())
++                && n > ydeg
++            {
++                ydeg = n;
++            }
++        }
++    } else {
++        let Some(is_exp) = kind else {
++            return Ok(None);
++        };
++        let z = kernel_arg(z_kernel).clone();
++        ydeg = td - rd.max(sd);
++        if is_exp {
++            if rd == sd && !ss.num.is_zero() {
++                // risch.cc:486 (kept): Rr/Ss.
++                let tmp = c.r2e(ev, &c.div(&rr, &ss))?;
++                let r = in_risch(ev, &tmp, v1, &z)?;
++                if r.ok
++                    && let Some(n) = r.lncoeff.integer()
++                {
++                    ydeg = ydeg.max(n);
++                }
++            }
++        } else if rd == sd + 1 && !ss.num.is_zero() {
++            let tmp = c.r2e(ev, &c.div(&rr, &ss))?;
++            let res = in_risch(ev, &tmp, v1, &Expr::from(1))?;
++            if res.ok {
++                let prim = tsimplify(ev, &Expr::call(Symbol::EXP, [res.prim]))?;
++                if let Some(es) = c.e2r(ev, &prim)? {
++                    expshift = prim;
++                    let en = c.poly(es.num);
++                    let ed = c.poly(es.den);
++                    r = c.mul(&c.mul(&r, &rr), &ed);
++                    // risch.cc:503-504 (kept): S with the updated R.
++                    s = c.mul(&c.sub(&c.mul(&s, &rr), &c.mul(&r, &ss)), &ed);
++                    t = c.mul(&c.mul(&t, &rr), &en);
++                }
++            }
++        }
++    }
++    let Some(y) = spde(ev, &c, &r, &s, &t, v, ydeg)? else {
++        return Ok(None);
++    };
++    let de = c.r2e(ev, &dd)?;
++    Ok(Some(together(ev, &(y * expshift / de))?))
++}
