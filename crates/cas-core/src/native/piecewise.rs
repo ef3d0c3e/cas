@@ -16,10 +16,20 @@
 //! A definite integral (CAS-515) is taken of [`indicators`]' rewriting,
 //! which `Integrate` splits at the zeros of the `HeavisideTheta`
 //! arguments (CAS-316).
+//!
+//! [`periodic`]: `Periodic[f, x == a..b]` or `Periodic[f, x, a, b]`, giac's
+//! `periodic` (intg.cc `_periodic`, CAS-573): `f` with `x` replaced by
+//! `x − T ⌊(x − a)/T⌋`, `T = b − a`, so that `f` on `[a, b)` repeats with
+//! period `T`. `f` with no identifier is itself, and so is `f` free of `x` in
+//! the four-argument form; with `T` not known positive the call stays
+//! (giac's `Bad Argument Type`).
 
+use std::cmp::Ordering;
+
+use super::rounding::real_sign;
 use crate::context::EvalError;
 use crate::eval::Eval;
-use crate::expr::Expr;
+use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
 
@@ -156,4 +166,42 @@ fn indicator(c: &Expr, x: &Expr) -> Option<Expr> {
         (Some(Symbol::NOT), [c]) => Some(one() - indicator(c, x)?),
         _ => None,
     }
+}
+
+/// `Periodic[f, x == a..b]` or `Periodic[f, x, a, b]`.
+#[allow(
+    clippy::many_single_char_names,
+    reason = "giac's names: f in x on [a, b]"
+)]
+pub(super) fn periodic(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let head = |e: &Expr| e.head().and_then(Expr::as_symbol);
+    let (f, x, a, b) = match e.args() {
+        [f, eq] => match (head(eq), eq.args()) {
+            (Some(Symbol::EQUATION | Symbol::EQUAL), [x, range])
+                if head(range) == Some(Symbol::RANGE) && range.args().len() == 2 =>
+            {
+                (f, x, &range.args()[0], &range.args()[1])
+            }
+            _ => return Ok(None),
+        },
+        [f, x, a, b] => (f, x, a, b),
+        _ => return Ok(None),
+    };
+    let names = ev.eval(&Expr::call(Symbol::IDENTIFIERS, [f.clone()]))?;
+    if names.args().is_empty() {
+        return Ok(Some(f.clone()));
+    }
+    if !matches!(x.view(), View::Symbol(s) if !s.is_builtin()) {
+        return Ok(None);
+    }
+    if e.args().len() == 4 && !f.contains(x) {
+        return Ok(Some(f.clone()));
+    }
+    let period = ev.eval(&(b.clone() - a.clone()))?;
+    if real_sign(ev.context(), &period) != Some(Ordering::Greater) {
+        return Ok(None);
+    }
+    let turns = Expr::call(Symbol::FLOOR, [(x.clone() - a.clone()) / period.clone()]);
+    let shifted = x.clone() - period * turns;
+    ev.eval(&f.substitute(&[(x.clone(), shifted)])).map(Some)
 }

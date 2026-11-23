@@ -459,6 +459,11 @@ Combine: combine
 TranscendentalSimplify: tsimplify
 SignToHeaviside: sign2Heaviside
 HeavisideToSign: Heaviside2sign
+# Steps, deltas and periodic functions in a variable (CAS-570, CAS-572,
+# CAS-573).
+LinearStep: linstep
+SimplifyDirac: simplifyDirac
+Periodic: periodic
 # Vector calculus (CAS-DOC-37): the differential operators (CAS-408).
 Grad: grad
 Divergence: divergence

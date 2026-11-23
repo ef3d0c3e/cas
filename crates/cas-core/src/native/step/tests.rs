@@ -92,3 +92,104 @@ fn calculus() {
         ],
     );
 }
+
+/// `LinearStep` (CAS-570), giac's answers but the downward quadratic.
+#[test]
+fn linear_step() {
+    let h = |u: &str| format!("HeavisideTheta[{u}]");
+    check(
+        &Context::new(),
+        &[
+            (
+                "LinearStep[Times[HeavisideTheta[Plus[x, -2]], HeavisideTheta[Plus[3, Times[-1, x]]]], x]",
+                "Plus[HeavisideTheta[Plus[x, -2]], Times[-1, HeavisideTheta[Plus[x, -3]]]]",
+            ),
+            (
+                "LinearStep[Piecewise[Less[x, -1], 0, Less[x, 1], Plus[x, 1], Plus[2, Times[-1, Power[Plus[x, -1], 2]]]], x]",
+                "Plus[Times[HeavisideTheta[Plus[x, 1]], Plus[x, 1]], Times[HeavisideTheta[Plus[x, -1]], Plus[x, Times[-1, Power[x, 2]]]]]",
+            ),
+            // The variable defaults to x.
+            (
+                "LinearStep[Abs[x]]",
+                "Plus[Times[2, x, HeavisideTheta[x]], Times[-1, x]]",
+            ),
+            (
+                "LinearStep[Abs[Plus[Abs[x], Times[-1, Abs[Plus[x, -1]]]]]]",
+                &format!(
+                    "Plus[1, Times[-2, x, {}], Times[{}, Plus[2, Times[-2, x]]], Times[{}, Plus[-2, Times[4, x]]]]",
+                    h("x"),
+                    h("Plus[x, -1]"),
+                    h("Plus[x, -1/2]")
+                ),
+            ),
+            (
+                "LinearStep[Times[Sign[Plus[t, -1]], t], t]",
+                "Plus[Times[2, t, HeavisideTheta[Plus[t, -1]]], Times[-1, t]]",
+            ),
+            (
+                "LinearStep[Times[HeavisideTheta[Plus[Times[2, x], -1]], HeavisideTheta[x]], x]",
+                "HeavisideTheta[Plus[x, -1/2]]",
+            ),
+            (
+                "LinearStep[Power[HeavisideTheta[x], 2], x]",
+                "HeavisideTheta[x]",
+            ),
+            (
+                "LinearStep[HeavisideTheta[Plus[Power[x, 2], -1]], x]",
+                "Plus[1, HeavisideTheta[Plus[x, -1]], Times[-1, HeavisideTheta[Plus[x, 1]]]]",
+            ),
+            // giac's box has the opposite sign here.
+            (
+                "LinearStep[HeavisideTheta[Plus[1, Times[-1, Power[x, 2]]]], x]",
+                "Plus[HeavisideTheta[Plus[x, 1]], Times[-1, HeavisideTheta[Plus[x, -1]]]]",
+            ),
+            ("LinearStep[f, 2]", "LinearStep[f, 2]"),
+        ],
+    );
+}
+
+/// `SimplifyDirac` (CAS-572), giac's answers.
+#[test]
+fn simplify_dirac() {
+    check(
+        &Context::new(),
+        &[
+            (
+                "SimplifyDirac[DiracDelta[Times[a, x]], x]",
+                "Times[Power[Abs[a], -1], DiracDelta[x]]",
+            ),
+            (
+                "SimplifyDirac[Times[DiracDelta[x, 1], x]]",
+                "Times[-1, DiracDelta[x]]",
+            ),
+            (
+                "SimplifyDirac[Times[Derivative[1][DiracDelta][x], x]]",
+                "Times[-1, DiracDelta[x]]",
+            ),
+            (
+                "SimplifyDirac[DiracDelta[Plus[Power[x, 2], Times[-1, x], -6]]]",
+                "Plus[Times[1/5, DiracDelta[Plus[x, 2]]], Times[1/5, DiracDelta[Plus[x, -3]]]]",
+            ),
+            ("SimplifyDirac[DiracDelta[Times[-1, x]]]", "DiracDelta[x]"),
+            ("SimplifyDirac[Times[DiracDelta[x], Sin[x]]]", "0"),
+            ("SimplifyDirac[DiracDelta[Plus[Power[x, 2], 1]]]", "0"),
+            (
+                "SimplifyDirac[Times[DiracDelta[Plus[x, -1], 2], Power[x, 3]]]",
+                "Plus[Times[6, DiracDelta[Plus[x, -1]]], Times[-6, DiracDelta[Plus[x, -1], 1]], DiracDelta[Plus[x, -1], 2]]",
+            ),
+            (
+                "SimplifyDirac[Times[DiracDelta[Plus[Times[2, t], -2], 1], Power[t, 2]], t]",
+                "Plus[Times[-1/2, DiracDelta[Plus[t, -1]]], Times[1/4, DiracDelta[Plus[t, -1], 1]]]",
+            ),
+            (
+                "SimplifyDirac[Times[DiracDelta[x], Power[x, -1]]]",
+                "Times[-1, DiracDelta[x, 1]]",
+            ),
+            (
+                "SimplifyDirac[Plus[Times[DiracDelta[x], Cos[x]], Power[Sin[x], 2], Power[Cos[x], 2]]]",
+                "Plus[1, DiracDelta[x]]",
+            ),
+            ("SimplifyDirac[Power[x, 2]]", "Power[x, 2]"),
+        ],
+    );
+}

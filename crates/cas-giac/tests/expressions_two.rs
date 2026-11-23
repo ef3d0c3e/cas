@@ -1,10 +1,11 @@
 //! Xcas's expression commands against giac, second part (CAS-568 to
 //! CAS-571): `lname`, `indets`, `lvar`, `algvar`, `reorder`, `part`,
 //! `eval`, `evalm`, `evalb`, `epsilon2zero`, `isinf`, `isnan`, `compare`,
-//! `equal2diff`, `equal2list`, `list2exp` and `exp2list`, giac's answers
-//! read back and compared with ours (`Giac::agrees`), lists of kernels and
-//! identifiers as sets where giac's order of operands is not ours; and the
-//! departures, each with giac's answer as libgiac prints it.
+//! `equal2diff`, `equal2list`, `list2exp` and `exp2list`, and `linstep`,
+//! `simplifyDirac` and `periodic` (CAS-570, CAS-572, CAS-573), giac's
+//! answers read back and compared with ours (`Giac::agrees`), lists of
+//! kernels and identifiers as sets where giac's order of operands is not
+//! ours; and the departures, each with giac's answer as libgiac prints it.
 
 use cas_core::{Expr, Symbol};
 use cas_giac::{Giac, ours};
@@ -228,6 +229,55 @@ fn equations_and_lists() {
     ]);
 }
 
+/// `linstep`, `simplifyDirac` and `periodic` (CAS-570, CAS-572, CAS-573).
+/// giac's sums of steps and deltas read back in our canonical order; its
+/// coefficients `series(c,x,z,1)` of a split delta read back as `c`.
+#[test]
+fn steps_deltas_periodic() {
+    check(&[
+        "linstep(Heaviside(x-2)*Heaviside(3-x),x)",
+        "linstep(piecewise(x<-1,0,x<1,x+1,2-(x-1)^2),x)",
+        "linstep(abs(abs(x)-abs(x-1)))",
+        "linstep(Heaviside(x),x)",
+        "linstep(x*Heaviside(x-1),x)",
+        "linstep(piecewise(x<0,-x,x),x)",
+        "linstep(Heaviside(x-1)*Heaviside(x-2),x)",
+        "linstep(abs(x),x)",
+        "linstep(Heaviside(x^2-1),x)",
+        "linstep(abs(x^2-1),x)",
+        "linstep(sign(x-1)*x,x)",
+        "linstep(Heaviside(2*x-1)*Heaviside(x),x)",
+        "linstep(Heaviside(x)^2,x)",
+        "linstep(Heaviside(t-1)*t,t)",
+        "linstep(abs(x)*abs(x-1),x)",
+        "simplifyDirac(Dirac(a*x),x)",
+        "simplifyDirac(Dirac(x,1)*x)",
+        "simplifyDirac(Dirac(x^2-x-6))",
+        "simplifyDirac(Dirac(2*x),x)",
+        "simplifyDirac(Dirac(x)*x)",
+        "simplifyDirac(Dirac(x-1)*x^2)",
+        "simplifyDirac(Dirac(x)*sin(x))",
+        "simplifyDirac(Dirac(x,1)*x,x)",
+        "simplifyDirac(Dirac(-x))",
+        "simplifyDirac(Dirac(x^2-1),x)",
+        "simplifyDirac(Dirac(x-1,2)*x^3,x)",
+        "simplifyDirac(Dirac(2*x-2,1)*x^2,x)",
+        "simplifyDirac(Dirac(x^2+1),x)",
+        "simplifyDirac(Dirac(x)*cos(x)+sin(x)^2+cos(x)^2,x)",
+        "simplifyDirac(x^2,x)",
+        "simplifyDirac(Dirac(t-1)*t^2,t)",
+        "simplifyDirac(Dirac(x)/x,x)",
+        "simplifyDirac(diff(Dirac(x),x)*x,x)",
+        "periodic(x^2,x=-1..1)",
+        "periodic(x,x=0..1)",
+        "periodic(x^2,x,-1,1)",
+        "periodic(sin(x),x=0..pi)",
+        "periodic(3,x=0..1)",
+        "periodic(y,x=0..1)",
+        "periodic(x*y,x,0,2)",
+    ]);
+}
+
 /// giac's answers this CAS departs from, as libgiac prints them (C0015),
 /// with ours as decided.
 #[test]
@@ -262,6 +312,23 @@ fn departures() {
         // (CAS-569).
         ("compare(sin(x),cos(x))", "1", "0"),
         ("compare(cos(x),sin(x))", "0", "1"),
+        // giac's step of a downward quadratic is minus the box (CAS-570).
+        (
+            "linstep(Heaviside(1-x^2),x)",
+            "-Heaviside(x+1)+Heaviside(x-1)",
+            "Heaviside(x+1)-Heaviside(x-1)",
+        ),
+        // A period not known positive: giac errs, ours stays (CAS-573).
+        (
+            "periodic(x,x=a..b)",
+            "GIAC_ERROR: periodic(x,x=(a .. b)) \n Error: Bad Argument Type",
+            "periodic(x,x=a..b)",
+        ),
+        (
+            "periodic(x,x=1..0)",
+            "GIAC_ERROR: periodic(x,x=(1 .. 0)) \n Error: Bad Argument Type",
+            "periodic(x,x=1..0)",
+        ),
     ];
     let mut wrong = Vec::new();
     for (input, answer, decided) in cases {

@@ -628,6 +628,11 @@ builtins! {
     TRANSCENDENTAL_SIMPLIFY = "TranscendentalSimplify" [PROTECTED];
     SIGN_TO_HEAVISIDE = "SignToHeaviside" [PROTECTED];
     HEAVISIDE_TO_SIGN = "HeavisideToSign" [PROTECTED];
+    // Steps, deltas and periodic functions in a variable (CAS-570,
+    // CAS-572, CAS-573).
+    LINEAR_STEP = "LinearStep" [PROTECTED];
+    SIMPLIFY_DIRAC = "SimplifyDirac" [PROTECTED];
+    PERIODIC = "Periodic" [PROTECTED];
     // Vector calculus (CAS-DOC-37): the differential operators (§2).
     GRAD = "Grad" [PROTECTED];
     DIVERGENCE = "Divergence" [PROTECTED];

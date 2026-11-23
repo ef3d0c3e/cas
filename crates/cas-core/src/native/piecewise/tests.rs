@@ -152,3 +152,26 @@ fn definite_integrals() {
         ),
     ]);
 }
+
+/// `Periodic` (CAS-573), giac's answers; a period not known positive stays.
+#[test]
+fn periodic() {
+    let square = "Power[Plus[x, Times[-2, Floor[Times[1/2, Plus[x, 1]]]]], 2]";
+    check(&[
+        ("Periodic[Power[x, 2], Equation[x, Range[-1, 1]]]", square),
+        ("Periodic[Power[x, 2], Equal[x, Range[-1, 1]]]", square),
+        ("Periodic[Power[x, 2], x, -1, 1]", square),
+        (
+            "Periodic[Sin[x], Equation[x, Range[0, Pi]]]",
+            "Sin[Plus[x, Times[-1, Pi, Floor[Times[x, Power[Pi, -1]]]]]]",
+        ),
+        ("Periodic[3, Equation[x, Range[0, 1]]]", "3"),
+        ("Periodic[y, Equation[x, Range[0, 1]]]", "y"),
+        ("Periodic[y, x, 0, 1]", "y"),
+        (
+            "Periodic[x, Equation[x, Range[a, b]]]",
+            "Periodic[x, Equation[x, Range[a, b]]]",
+        ),
+        ("Periodic[x, x, 1, 0]", "Periodic[x, x, 1, 0]"),
+    ]);
+}

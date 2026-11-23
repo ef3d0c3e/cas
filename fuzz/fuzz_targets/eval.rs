@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 552] = [
+const BUILTINS: [&str; 555] = [
     "Plus",
     "Times",
     "Power",
@@ -580,6 +580,9 @@ const BUILTINS: [&str; 552] = [
     "TranscendentalSimplify",
     "SignToHeaviside",
     "HeavisideToSign",
+    "LinearStep",
+    "SimplifyDirac",
+    "Periodic",
     // Vector calculus (CAS-408).
     "Grad",
     "Divergence",

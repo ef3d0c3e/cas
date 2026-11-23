@@ -289,7 +289,12 @@ order is not our canonical one; and the departures, each with giac's answer:
 `part` of a sum in our order, of index 0 (the head, giac's name string), of
 an atom, past the end, of a list and of `f(x,y)` (giac's `of`);
 `equal2diff(equal(x,2))`, as the language has no `equal`; and `compare`
-between two heads, by name in ours, by operator address in giac.
+between two heads, by name in ours, by operator address in giac. With them
+`linstep`, `simplifyDirac` and `periodic` (CAS-570, CAS-572, CAS-573), sums
+of steps and deltas read back in our canonical order (giac's coefficients
+`series(c,x,z,1)` of a split delta read back as `c`); departures: the step of
+a downward quadratic, minus the box in giac, and `periodic` with a period not
+known positive, a giac error, unevaluated in ours.
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
