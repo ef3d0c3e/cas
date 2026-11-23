@@ -161,8 +161,9 @@ fn departures() {
         // A negative count: giac steps by (1-0)/-1 over [0,-1]; ours
         // stays unevaluated.
         ("area(x^2,x=0..1,-1,trapezoid)", "-0.5"),
-        // Romberg on a symbolic integrand: giac answers garbage, ours a/2.
-        ("area(a*x,x=0..1,2,rombergt)", "6.10593455919e+306"),
+        // Romberg on a symbolic integrand: giac answers garbage that
+        // changes between runs (6.1e306, 4.8e306: uninitialised doubles),
+        // so no giac text is recorded; ours a/2 is checked below.
     ];
     for (input, answer) in printed {
         match giac.eval(input) {

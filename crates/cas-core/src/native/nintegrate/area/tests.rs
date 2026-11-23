@@ -154,7 +154,7 @@ fn exact_answers() {
         ),
         (
             "Area[Exp[x], Equation[x, Range[0, 1]]]".into(),
-            "Plus[-1, E]",
+            "Plus[-1, Exp[1]]",
         ),
         (
             "Area[Power[x, 2], Equal[x, Range[0, 1]]]".into(),

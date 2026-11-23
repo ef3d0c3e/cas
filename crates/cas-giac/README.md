@@ -137,8 +137,9 @@ a third argument (giac's `'L'`, which giac assigns) taken and not assigned.
   its estimate second, ours a ball around `ln(100)`); a symbolic
   integrand (giac's sum of decimals, ours exactly `a/2`, both `1.5` at
   `a = 3`); a negative count (giac steps over `[0,-1]` to `-0.5`, ours
-  unevaluated); `rombergt` on a symbolic integrand (giac `6.1e306`, ours
-  `a/2`).
+  unevaluated); `rombergt` on a symbolic integrand (giac answers a huge
+  number that changes between runs, `6.1e306` or `4.8e306`, so its text is
+  not compared; ours `a/2`).
 
 `tests/real_roots.rs`, real roots (CAS-538, CAS-539): giac's `VAS`,
 `VAS_positive`, `posubLMQ`, `poslbdLMQ`, `sturmseq`, `sturm` with bounds,
