@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-23T19:02:44.409Z
+# filed through: 2026-11-23T19:22:39.004Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
@@ -60,9 +60,12 @@ R56 | 2026-11-23 | open | in force | Phase 1.3 Calculus, expressions and integer
 R57 | 2026-11-23 | open | in force | Phase 1.3 Calculus, expressions and integers parity | the card's Docs map points at docs/ops/INDEX.md, which does not exist -> a small card fix or a late… | .claude-state/journal/2026-11-23/153454-084r-claude-record.md
 R58 | 2026-11-23 | open | in force | Phase 1.3 Calculus, expressions and integers parity | the log commit 195f42c and later docs-only commits are unpushed -> the next phase's first push carr… | .claude-state/journal/2026-11-23/153454-084r-claude-record.md
 R59 | 2026-11-23 | decision | in force | Phase 1.3 Calculus, expressions and integers parity | Phase 1.3 is closed. | .claude-state/journal/2026-11-23/194921-090r-claude-record.md
-R60 | 2026-11-23 | decision | in force | Phase 1.4 Numerical analysis II | The phase 1.4 plan is drafted by pa-planner to .run/plans/phase-1.4.md, overriding the generation p… | .claude-state/journal/2026-11-23/194921-090r-claude-record.md
+R60 | 2026-11-23 | decision | superseded by R66 | Phase 1.4 Numerical analysis II | The phase 1.4 plan is drafted by pa-planner to .run/plans/phase-1.4.md, overriding the generation p… | .claude-state/journal/2026-11-23/194921-090r-claude-record.md
 R61 | 2026-11-23 | open | superseded by R63 | Phase 1.4 Numerical analysis II | phase 1.4 draft in progress by pa-planner -> present with plan(kind: phase) when its report arrives | .claude-state/journal/2026-11-23/194921-090r-claude-record.md
 R62 | 2026-11-23 | open | in force | Phase 1.4 Numerical analysis II | R33 is asked again at 1.3's close (local throwaway example programs; leaning yes) -> the developer… | .claude-state/journal/2026-11-23/194921-090r-claude-record.md
-R63 | 2026-11-23 | open | in force | Phase 1.4 Numerical analysis II | phase 1.4 plan presented, waiting for the developer's decision -> on approval the mod installs it;… | .claude-state/journal/2026-11-23/201815-095r-claude-record.md
-R64 | 2026-11-23 | open | in force | Phase 1.4 Numerical analysis II | exact answers where giac prints floats (linear_interpolate 19/3 vs giac's 6.33333333333, center2int… | .claude-state/journal/2026-11-23/201815-095r-claude-record.md
-R65 | 2026-11-23 | open | in force | Phase 1.4 Numerical analysis II | proposed rule: a coder's handoff file is logs/T<n>.c<k>.progress.md, never TASK_PROGRESS.md -> the… | .claude-state/journal/2026-11-23/201815-095r-claude-record.md
+R63 | 2026-11-23 | open | superseded by R66 | Phase 1.4 Numerical analysis II | phase 1.4 plan presented, waiting for the developer's decision -> on approval the mod installs it;… | .claude-state/journal/2026-11-23/201815-095r-claude-record.md
+R64 | 2026-11-23 | open | superseded by R67 | Phase 1.4 Numerical analysis II | exact answers where giac prints floats (linear_interpolate 19/3 vs giac's 6.33333333333, center2int… | .claude-state/journal/2026-11-23/201815-095r-claude-record.md
+R65 | 2026-11-23 | open | superseded by R68 | Phase 1.4 Numerical analysis II | proposed rule: a coder's handoff file is logs/T<n>.c<k>.progress.md, never TASK_PROGRESS.md -> the… | .claude-state/journal/2026-11-23/201815-095r-claude-record.md
+R66 | 2026-11-23 | decision | in force | Phase 1.4 Numerical analysis II | The phase 1.4 plan is installed and runs on its own; the developer's touchpoints are the approval a… | .claude-state/journal/2026-11-23/203744-100r-claude-record.md
+R67 | 2026-11-23 | decision | in force | Phase 1.4 Numerical analysis II | Commands that only do rational arithmetic answer exactly on exact input (linear_interpolate 19/3, c… | .claude-state/journal/2026-11-23/203744-100r-claude-record.md
+R68 | 2026-11-23 | decision | in force | Phase 1.4 Numerical analysis II | Rule T9: an expert's coder brief names logs/T<n>.c<k>.progress.md as the coder's handoff file, neve… | .claude-state/journal/2026-11-23/203744-100r-claude-record.md
