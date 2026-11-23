@@ -585,3 +585,22 @@ const UNEVALUATED: &[&str] = &[
     // probe row 87: risch(x^x,x)
     "Power[x, x]",
 ];
+
+/// Fuzz finding (Fuzz run 45172144522, eval target): `Exp[]` inside the
+/// integrand panicked at the exponent's index; malformed kernels stay.
+#[test]
+fn malformed_kernels_stay() {
+    let ctx = Context::new();
+    let x = read("x");
+    let bad = [
+        Expr::call(Symbol::EXP, Vec::<Expr>::new()),
+        Expr::call(Symbol::LOG, Vec::<Expr>::new()),
+        Expr::call(Symbol::ARC_TAN, [x.clone(), x.clone()]),
+        Expr::call(Symbol::POWER, [x.clone()]),
+    ];
+    for k in bad {
+        let f = Expr::call(Symbol::TIMES, [x.clone(), k]);
+        let r = risch(&ctx, &f);
+        assert!(is_risch(&r), "{f:?} gave {r:?}");
+    }
+}

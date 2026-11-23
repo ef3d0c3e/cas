@@ -144,6 +144,9 @@ pub(in crate::native) fn risch(ev: &mut Eval<'_>, e: &Expr) -> Native {
         [f, x] if x.as_symbol().is_some() => (f.clone(), x.clone()),
         _ => return Ok(None),
     };
+    if malformed(&f) {
+        return Ok(None);
+    }
     match answer(ev, &f, &x) {
         Ok(r) => Ok(r),
         Err(Stop::Eval(err)) => Err(err),
@@ -825,6 +828,21 @@ fn exps(ev: &mut Eval<'_>, e: &Expr) -> Step<Expr> {
 fn has_i(e: &Expr) -> bool {
     e.distinct()
         .any(|z| matches!(z.view(), View::Complex(_)) || z.as_symbol() == Some(Symbol::I))
+}
+
+/// Whether `e` has a kernel of the wrong arity (`Exp[]`, `Power[x]`, …):
+/// the port reads their arguments by index, so such an integrand stays
+/// (fuzz finding, Fuzz run 45172144522).
+fn malformed(e: &Expr) -> bool {
+    e.distinct().any(|z| {
+        let n = z.args().len();
+        match z.head().and_then(Expr::as_symbol) {
+            Some(Symbol::EXP | Symbol::ARC_TAN | Symbol::SIN | Symbol::COS) => n != 1,
+            Some(Symbol::LOG) => n == 0,
+            Some(Symbol::POWER) => n != 2,
+            _ => false,
+        }
+    })
 }
 
 /// Whether `e` has an application of one of `heads`.
