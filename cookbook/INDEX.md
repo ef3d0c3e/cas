@@ -49,3 +49,4 @@ C0046 | Porting a float iteration to rounded Rationals: round every repeated fac
 C0047 | Decimals in full-form unit tests as hex floats; caseval's ' | ' is a newline | tests,float,decimal,fullform,caseval,departures | 2026-11-23 | 1.4/T4 | T4.c1 CAS-593
 C0048 | Recurrences over Expr on symbolic inputs: cap the point count, not only the work | fuzz,timeout,limits,interpolation,symbolic | 2026-11-23 | 1.4/T4 | T4.c3 CAS-595
 C0049 | giac piecewise answers in oracle rows: branch pairs, conditions by sampling | giac,oracle,piecewise,conditions,tests | 2026-11-23 | 1.4/T5 | T5.c1 CAS-596 bspline
+C0050 | giac symbolic linsolve: free parameters make comparisons skip, port the skip | giac,port,linsolve,prototype,tpsolve | 2026-11-23 | 1.4/T6 | CAS-598 tpsolve zero supply
