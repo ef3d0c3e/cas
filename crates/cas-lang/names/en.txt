@@ -464,6 +464,12 @@ HeavisideToSign: Heaviside2sign
 LinearStep: linstep
 SimplifyDirac: simplifyDirac
 Periodic: periodic
+# Integration by parts, values at bounds and derivatives of functions
+# (CAS-574, CAS-577, CAS-578).
+IntegrateByPartsDV: ibpdv
+IntegrateByPartsU: ibpu
+Preval: preval
+FunctionDiff: function_diff fonction_derivee
 # Vector calculus (CAS-DOC-37): the differential operators (CAS-408).
 Grad: grad
 Divergence: divergence

@@ -633,6 +633,12 @@ builtins! {
     LINEAR_STEP = "LinearStep" [PROTECTED];
     SIMPLIFY_DIRAC = "SimplifyDirac" [PROTECTED];
     PERIODIC = "Periodic" [PROTECTED];
+    // Integration by parts, values at bounds and derivatives of functions
+    // (CAS-574, CAS-577, CAS-578).
+    INTEGRATE_BY_PARTS_DV = "IntegrateByPartsDV" [PROTECTED];
+    INTEGRATE_BY_PARTS_U = "IntegrateByPartsU" [PROTECTED];
+    PREVAL = "Preval" [PROTECTED];
+    FUNCTION_DIFF = "FunctionDiff" [PROTECTED];
     // Vector calculus (CAS-DOC-37): the differential operators (§2).
     GRAD = "Grad" [PROTECTED];
     DIVERGENCE = "Divergence" [PROTECTED];

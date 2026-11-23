@@ -298,6 +298,16 @@ known positive, a giac error, unevaluated in ours; and in print only, giac's
 `series(c,x,z,1)` coefficients of `simplifyDirac(Dirac(x^2-x-6))` and
 `Dirac(2*x)`, recorded as giac prints them.
 
+`tests/calculus_tools.rs`, Xcas's calculus helpers (CAS-574, CAS-577,
+CAS-578): giac's `ibpdv` and `ibpu` (one step, with bounds, and the finish
+with 0), `preval` (with a variable, `x=a`, a removable singularity) and
+`function_diff` and `fonction_derivee` applied to a variable, a list and a
+number, read back and compared; and the departures, each with giac's answer:
+`preval(int(x),0,1)`, as our `int` needs a variable; `function_diff(sin+id)`,
+as the language has no `id`; `function_diff(ln)(x,y)`, the arguments past
+the parameter ignored in ours; `function_diff(sin)`, giac's hidden parameter
+`` ` x` `` against our `x`; and in print only, giac's `@` and `@@` forms.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

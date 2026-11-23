@@ -16,6 +16,7 @@ mod arith;
 mod ball;
 mod bessel;
 mod bits;
+mod calculus_tools;
 mod dft;
 mod dsolve;
 mod elementary;
@@ -1041,6 +1042,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::LINEAR_STEP, step::linear_step),
         (Symbol::SIMPLIFY_DIRAC, step::simplify_dirac),
         (Symbol::PERIODIC, piecewise::periodic),
+        (Symbol::INTEGRATE_BY_PARTS_DV, calculus_tools::by_parts_dv),
+        (Symbol::INTEGRATE_BY_PARTS_U, calculus_tools::by_parts_u),
+        (Symbol::PREVAL, calculus_tools::preval),
+        (Symbol::FUNCTION_DIFF, calculus_tools::function_diff),
         (Symbol::GRAD, vector::grad),
         (Symbol::DIVERGENCE, vector::divergence),
         (Symbol::CURL, vector::curl),
