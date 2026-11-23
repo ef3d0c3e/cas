@@ -15,9 +15,10 @@
 //!   cost `Σ P·X` over the real cells.
 //! - Departures: exact rationals throughout, `ε = 1/(10¹² (m′n′ + 1))` on
 //!   the sizes with the dummy; the potentials from a walk of the basis tree
-//!   (`u₀ = 0`); each cell rounded to the nearest integer at the end, for
-//!   giac's `epsilon2zero` and `exact`. A plan that uses an `M` cell, a
-//!   basis that does not span, an empty path or more than [`MAX_PIVOTS`]
+//!   (`u₀ = 0`; a zero supply or demand splits the tree, and a reduced
+//!   cost across its parts, symbolic in giac, is never chosen); each cell rounded to the nearest integer at the end, for
+//!   giac's `epsilon2zero` and `exact`. A plan that uses an `M` cell, an
+//!   empty path or more than [`MAX_PIVOTS`]
 //!   steps warns that the problem has no feasible solution and leaves the
 //!   call, as giac errs.
 //! - Caps, before any work: at most [`MAX_CELLS`] cells with the dummy,
@@ -138,47 +139,57 @@ fn stepping_stone(path: &mut Vec<(usize, usize)>, x: &[Vec<Rational>]) -> bool {
     false
 }
 
+/// Potentials, each with the component of the basis it lies in.
+type Potentials = (Vec<(Rational, usize)>, Vec<(Rational, usize)>);
+
 /// The potentials `u`, `v` with `u₀ = 0` and `u_i + v_j = P_ij` on the
-/// basis, by a walk of its tree.
-fn potentials(
-    p: &[Vec<Rational>],
-    x: &[Vec<Rational>],
-) -> Result<(Vec<Rational>, Vec<Rational>), Infeasible> {
+/// basis, by a walk of its tree, each with its component: `0` the one of
+/// `u₀`, and another, when the basis does not span (a zero supply or
+/// demand), rooted at `0` at its first row or else first column. giac's
+/// `linsolve` leaves those potentials free, so a reduced cost across two
+/// components is symbolic and never chosen.
+fn potentials(p: &[Vec<Rational>], x: &[Vec<Rational>]) -> Potentials {
     let (m, n) = (x.len(), x[0].len());
-    let mut u: Vec<Option<Rational>> = vec![None; m];
-    let mut v: Vec<Option<Rational>> = vec![None; n];
-    u[0] = Some(Rational::from(0));
-    let mut changed = true;
-    while changed {
-        changed = false;
-        for i in 0..m {
-            for j in 0..n {
-                if x[i][j].is_zero() {
-                    continue;
-                }
-                match (&u[i], &v[j]) {
-                    (Some(ui), None) => {
-                        v[j] = Some(&p[i][j] - ui);
-                        changed = true;
+    let mut u: Vec<Option<(Rational, usize)>> = vec![None; m];
+    let mut v: Vec<Option<(Rational, usize)>> = vec![None; n];
+    u[0] = Some((Rational::from(0), 0));
+    let mut component = 0;
+    loop {
+        let mut changed = true;
+        while changed {
+            changed = false;
+            for i in 0..m {
+                for j in 0..n {
+                    if x[i][j].is_zero() {
+                        continue;
                     }
-                    (None, Some(vj)) => {
-                        u[i] = Some(&p[i][j] - vj);
-                        changed = true;
+                    match (&u[i], &v[j]) {
+                        (Some((ui, k)), None) => {
+                            v[j] = Some((&p[i][j] - ui, *k));
+                            changed = true;
+                        }
+                        (None, Some((vj, k))) => {
+                            u[i] = Some((&p[i][j] - vj, *k));
+                            changed = true;
+                        }
+                        _ => {}
                     }
-                    _ => {}
                 }
             }
         }
+        component += 1;
+        if let Some(i) = u.iter().position(Option::is_none) {
+            u[i] = Some((Rational::from(0), component));
+        } else if let Some(j) = v.iter().position(Option::is_none) {
+            v[j] = Some((Rational::from(0), component));
+        } else {
+            break;
+        }
     }
-    let u = u
-        .into_iter()
-        .collect::<Option<Vec<_>>>()
-        .ok_or(Infeasible)?;
-    let v = v
-        .into_iter()
-        .collect::<Option<Vec<_>>>()
-        .ok_or(Infeasible)?;
-    Ok((u, v))
+    (
+        u.into_iter().flatten().collect(),
+        v.into_iter().flatten().collect(),
+    )
 }
 
 /// The optimal plan from `x` (giac's `tprob::modi`).
@@ -186,13 +197,13 @@ fn modi(p: &[Vec<Rational>], x: &mut [Vec<Rational>], eps: &Rational) -> Result<
     let (m, n) = (x.len(), x[0].len());
     let half = Rational::new(Integer::from(1), Integer::from(2));
     for _ in 0..MAX_PIVOTS {
-        let (u, v) = potentials(p, x)?;
+        let (u, v) = potentials(p, x);
         let mut least = Rational::from(0);
         let mut best = None;
         for i in 0..m {
             for j in 0..n {
-                if x[i][j].is_zero() {
-                    let c = &p[i][j] - &u[i] - &v[j];
+                if x[i][j].is_zero() && u[i].1 == v[j].1 {
+                    let c = &p[i][j] - &u[i].0 - &v[j].0;
                     if least > c {
                         least = c;
                         best = Some((i, j));

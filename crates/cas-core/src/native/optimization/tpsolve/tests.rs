@@ -26,6 +26,10 @@ fn check(cases: &[(&str, &str)]) {
 fn problems() {
     check(&[
         (
+            "List[TPSolve[List[0, 10], List[5, 5], List[List[1, 2], List[3, 1]]]]",
+            "List[20, List[List[0, 0], List[5, 5]]]",
+        ),
+        (
             "List[TPSolve[List[10, 20], List[15, 15], List[List[1, 2], List[3, 1]]]]",
             "List[40, List[List[10, 0], List[5, 15]]]",
         ),
@@ -82,8 +86,8 @@ fn optimum() {
 }
 
 /// Inputs that leave the call: a decimal cost, a negative supply, `2 M`,
-/// two symbols, a wrong shape, a wrong arity; `M` in the plan and a zero
-/// supply (its basis does not span, as in giac's method) warn and leave.
+/// two symbols, a wrong shape, a wrong arity; `M` in the plan warns and
+/// leaves.
 #[test]
 fn left() {
     let ctx = Context::new();
@@ -97,7 +101,6 @@ fn left() {
         "TPSolve[List[], List[], List[]]",
         "TPSolve[List[10, 20], List[15, 15]]",
         "TPSolve[List[6], List[6], List[List[M]]]",
-        "TPSolve[List[0, 10], List[5, 5], List[List[1, 2], List[3, 1]]]",
     ] {
         let found = ctx.eval(&read(input)).unwrap();
         if found.head().and_then(Expr::as_symbol) != Some(Symbol::TP_SOLVE) {

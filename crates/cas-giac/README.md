@@ -464,7 +464,7 @@ expansion), where ours is near the prototype's.
 
 `tests/optimization.rs`, besides `extrema`, `minimize`, `maximize`,
 `lpsolve` and `nlpsolve`:
-- `tpsolve` (CAS-598): giac's 19 probe rows (balanced, unbalanced with a
+- `tpsolve` (CAS-598): giac's 23 probe rows (zero supplies, balanced, unbalanced with a
   dummy row or column, forbidden routes `M`, degenerate plans), each
   bracketed, cost and plan equal; departures, where ours stays
   `TPSolve[…]`: the two rows giac finds no feasible solution for, a
