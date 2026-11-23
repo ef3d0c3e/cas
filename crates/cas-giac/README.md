@@ -351,6 +351,25 @@ reversed polynomial), poles `±√2` (giac's `[]`), a cubic pole (ours stays),
 a `/` in the list (giac's `0`), equations in `diff(y(x),x,x)` (giac's error)
 and the errors, which stay here.
 
+`tests/risch.rs`, Xcas's `risch` (CAS-585): the probe rows giac integrates
+(logarithms, exponentials, `Ei`, `Si`, `Ci`, trigonometric functions through
+exponentials, parameters, `atan`, residues in ℚ(i)) read back and compared
+with ours, or by value where the forms differ (`Together` of the difference,
+else the same change from `x = 7/2` to `x = 9/2`: giac's `ln(i x − 1)` is
+ours `ln(x + i)`, a constant apart); its partial answers by their parts, the
+primitive and the remainder, giac's `integrate(rem,x)` read as an inert call
+(our `Integrate` would evaluate it). Departures, each with giac's answer:
+what giac leaves prints `integrate(f,x)`, which ours reads back and
+evaluates (ours stays `risch(f,x)`); Rothstein–Trager factors of degree 2
+split by a square root (`1/(x^2-2)`, `1/(x^3+1)`, `1/(x^4+1)`,
+`x^3/(x^2+x+1)`), not ported; giac's final `re(halftan(…))` step
+(`exp(x)/(x^2+1)` in `tan(1/2)`, `-pi+atan(exp(x))`), which ours skips;
+tower-size ties (two seeded rows of T9.c1), where giac keeps its printout's
+order and ours its canonical one, so the split differs (ours passes the
+derivative check); giac's wrong answers (two seeded rows whose primitive
+fails differentiation, risch.cc:693), where ours stays; and `Int`, giac's
+`integrate` unevaluated, here the user's call (R1.2-001).
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

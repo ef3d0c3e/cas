@@ -48,6 +48,12 @@ the tickets. This documentation describes the code as it is.
   Rioboo's arctangents of polynomials; Sturm's count of real roots, on the
   line or between bounds (`src/sturm.rs`), for the absolute values of the
   logarithms and the poles of definite integrals.
+- [risch.md](risch.md): the Risch algorithm for transcendental elementary
+  functions (CAS-585), ported from giac's risch.cc after Bronstein,
+  chapters 5 and 6. The tower of exponentials and logarithms; Hermite's
+  reduction; Rothstein–Trager residues; the polynomial part; the Risch
+  differential equation with Rothstein's SPDE; `Ei`, `Ci` and `Si`; the
+  derivative check that guards giac's flaw; the limits and the departures.
 - [groebner.md](groebner.md): Gröbner bases (CAS-287, planned in
   CAS-PLAN-15). Distributed polynomials over ℚ under lex, deglex and
   degrevlex; division by lists; Buchberger's algorithm with the normal
