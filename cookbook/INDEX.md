@@ -51,3 +51,4 @@ C0048 | Recurrences over Expr on symbolic inputs: cap the point count, not only 
 C0049 | giac piecewise answers in oracle rows: branch pairs, conditions by sampling | giac,oracle,piecewise,conditions,tests | 2026-11-23 | 1.4/T5 | T5.c1 CAS-596 bspline
 C0050 | giac symbolic linsolve: free parameters make comparisons skip, port the skip | giac,port,linsolve,prototype,tpsolve | 2026-11-23 | 1.4/T6 | CAS-598 tpsolve zero supply
 C0051 | Remez exchange: giac's one-peak-per-zero-interval step fails; use a full exchange | remez,minimax,approximation,giac,port | 2026-11-23 | 1.4/T7 | CAS-599
+C0052 | Eval fuzz plain vs traced disagree at a limit: cache order, not a bug | fuzz,eval,harness,recursion-limit,cache,stamps,triage | 2026-11-24 | 1.4/T9 | Fuzz 45285948112, T9.c1 2a70d96
