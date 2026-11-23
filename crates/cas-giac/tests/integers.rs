@@ -3,9 +3,9 @@
 //! `is_prime`, giac's answers read back and compared with ours
 //! (`Giac::agrees`: the same expression, or `==`); and the departures, each
 //! with giac's answer as it prints it: its errors, where ours leaves the
-//! call with a warning, its Horner form, its sign of a polynomial gcd, a
-//! certificate where its ECM finds another factor first, and the inputs
-//! that crash libgiac, checked on our side only.
+//! call with a warning, its Horner form, its sign of a polynomial gcd,
+//! and the inputs that crash libgiac or whose certificate rests on giac's
+//! random ECM, checked on our side only.
 
 use cas_giac::{Giac, ours};
 
@@ -203,7 +203,7 @@ fn primes() {
 
 /// Where this CAS departs from giac: the input, giac's answer as it prints
 /// it, ours as decided.
-const DEPARTURES: [(&str, &str, &str); 31] = [
+const DEPARTURES: [(&str, &str, &str); 30] = [
     // giac's errors; ours leaves the call, with the error as a warning.
     (
         "chrem([2,3],[4,6])",
@@ -353,13 +353,6 @@ const DEPARTURES: [(&str, &str, &str); 31] = [
     // GCD makes the leading coefficient positive; giac keeps the sign
     // of a single polynomial.
     ("lgcd([-2*x-2])", "-2*x-2", "2*x+2"),
-    // giac's Pollard rho gives up on 290240017 * 454197539 and its ECM finds
-    // the larger factor first, ours (other curves) the smaller.
-    (
-        "is_prime(10^30+57,1)",
-        "[[2,5,1],[3,2,1],[79043,2,1],[3998741,2,1],[454197539,2,1]]",
-        "[[2,5,1],[3,2,1],[79043,2,1],[3998741,2,1],[290240017,2,1]]",
-    ),
 ];
 
 /// The departures of [`DEPARTURES`], then giac's Horner form and the
@@ -408,6 +401,13 @@ fn departures() {
             "is_prime(308532104498006741218424255238752343301423685716839787438005313)",
         ),
         ("is_prime(2^607-1)", "is_prime(2^607-1)"),
+        // giac's Pollard rho gives up on 290240017 * 454197539 and its ECM
+        // (random curves) finds either factor first: 454197539 locally,
+        // 290240017 on CI; ours checked alone.
+        (
+            "is_prime(10^30+57,1)",
+            "[[2,5,1],[3,2,1],[79043,2,1],[3998741,2,1],[290240017,2,1]]",
+        ),
     ] {
         if ours(input) != ours(decided) {
             wrong.push(format!("{input}: ours is not {decided}"));

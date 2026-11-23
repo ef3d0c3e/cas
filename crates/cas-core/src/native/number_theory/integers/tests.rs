@@ -128,7 +128,7 @@ fn chinese_remainders_of_polynomials() {
             "List[Plus[x, 1649267441664], 3298534883328]",
         ),
     ]);
-    stays(&["ChineseRemainderLists[List[Plus[Power[x, 2], 1], Times[2, x]], List[3, 6]]"]);
+    stays(&["ChineseRemainderLists[List[Plus[1, Power[x, 2]], Times[2, x]], List[3, 6]]"]);
 }
 
 #[test]
