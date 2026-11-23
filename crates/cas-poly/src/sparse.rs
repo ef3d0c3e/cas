@@ -487,6 +487,58 @@ impl<R: Ring> SparseRing<R> {
         }
     }
 
+    /// The valuation in `x_var`: the least power of `x_var` in a term of
+    /// `p`; `None` for the zero polynomial.
+    #[must_use]
+    pub fn valuation(&self, p: &Sparse<R::Elem>, var: usize) -> Option<u64> {
+        (0..p.coeffs.len())
+            .map(|k| p.layout.get(p.mono(k), var))
+            .min()
+    }
+
+    /// The pseudo-division in `x_var` \[Knu97 §4.6.1 Algorithm R\]: `(q, r)`
+    /// with `l^δ a = q b + r` and `deg r < deg b` in `x_var`, `l` the
+    /// leading coefficient of `b` in `x_var` and `δ = max(deg a − deg b + 1,
+    /// 0)`, so that it needs no division of coefficients. `(0, a)` when `a`
+    /// is zero or of lower degree.
+    ///
+    /// # Panics
+    ///
+    /// If `b` is zero.
+    #[must_use]
+    pub fn pseudo_div_rem(
+        &self,
+        a: &Sparse<R::Elem>,
+        b: &Sparse<R::Elem>,
+        var: usize,
+    ) -> (Sparse<R::Elem>, Sparse<R::Elem>) {
+        let db = self.degree(b, var).expect("a non-zero divisor");
+        let Some(da) = self.degree(a, var).filter(|&da| da >= db) else {
+            return (self.zero(), a.clone());
+        };
+        let l = self.lead_coeff(b, var);
+        let mut left = da - db + 1;
+        let mut q = self.zero();
+        let mut r = a.clone();
+        let mut shift = vec![0; self.nvars];
+        while let Some(dr) = self.degree(&r, var).filter(|&dr| dr >= db) {
+            shift[var] = dr - db;
+            let t = self.mul(
+                &self.lead_coeff(&r, var),
+                &self.monomial(self.base.one(), &shift),
+            );
+            q = self.add(&self.mul(&q, &l), &t);
+            r = self.sub(&self.mul(&r, &l), &self.mul(&t, b));
+            left -= 1;
+        }
+        if left > 0 {
+            let f = self.pow(&l, left);
+            q = self.mul(&q, &f);
+            r = self.mul(&r, &f);
+        }
+        (q, r)
+    }
+
     /// The recursive view: `p` as a polynomial in `x_var` whose
     /// coefficients are polynomials without it, its powers decreasing.
     #[must_use]

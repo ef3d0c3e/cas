@@ -1096,3 +1096,115 @@ fn resultants_skip_primes_of_the_leading_coefficients() {
     assert_eq!(z.resultant(&b, &a), expected);
     assert_eq!(resultant::integers(&a, &b, &Never).unwrap(), expected);
 }
+
+/// `a = (x + y)(x² + y)` and `b = (x + y)(2xy − 3)`, with the gcd `x + y`.
+fn bezout_pair(ring: &SparseRing<Integers>) -> (Sparse<Integer>, Sparse<Integer>) {
+    let (x, y) = (ring.var(0), ring.var(1));
+    let g = ring.add(&x, &y);
+    let a = ring.mul(&g, &ring.add(&ring.mul(&x, &x), &y));
+    let b = ring.mul(&g, &build(ring, &[(vec![1, 1], 2), (vec![0, 0], -3)]));
+    (a, b)
+}
+
+/// `u a + v b = c g` in either variable, `g` the gcd and `c` without the
+/// variable, over ℤ and ℤ\[i\]; two zeros give `(0, 0, 0, 1)`.
+#[test]
+fn extended_gcds_in_one_variable() {
+    let ring = SparseRing::new(Integers, 2);
+    let (a, b) = bezout_pair(&ring);
+    for var in 0..2 {
+        let (g, u, v, c) = ring.extended_gcd(&a, &b, var);
+        assert_eq!(g, ring.gcd(&a, &b));
+        assert_eq!(ring.degree(&c, var), Some(0), "c without x_{var}");
+        let lhs = ring.add(&ring.mul(&u, &a), &ring.mul(&v, &b));
+        assert_eq!(lhs, ring.mul(&c, &g), "in x_{var}");
+    }
+    let (g, u, v, c) = ring.extended_gcd(&ring.zero(), &ring.zero(), 0);
+    assert!(g.is_zero() && u.is_zero() && v.is_zero());
+    assert_eq!(c, ring.one());
+
+    let gauss = SparseRing::new(GaussianIntegers, 1);
+    let x = gauss.var(0);
+    let i = gauss.constant(Complex::new(Rational::ZERO, Rational::ONE));
+    let (a, b) = (
+        gauss.add(&gauss.mul(&x, &x), &gauss.one()),
+        gauss.add(&x, &i),
+    );
+    let (g, u, v, c) = gauss.extended_gcd(&a, &b, 0);
+    assert_eq!(g, gauss.gcd(&a, &b));
+    assert_eq!(gauss.degree(&g, 0), Some(1), "x + i divides x² + 1");
+    let lhs = gauss.add(&gauss.mul(&u, &a), &gauss.mul(&v, &b));
+    assert_eq!(lhs, gauss.mul(&c, &g));
+}
+
+/// `u a + v b = d c` with `deg u < deg b` when the gcd divides `c`, `None`
+/// when it does not.
+#[test]
+fn abcuv_solves_when_the_gcd_divides() {
+    let ring = SparseRing::new(Integers, 2);
+    let (a, b) = bezout_pair(&ring);
+    let (x, y) = (ring.var(0), ring.var(1));
+    let c = ring.mul(&ring.add(&x, &y), &ring.add(&y, &ring.one()));
+    for var in 0..2 {
+        let (u, v, d) = ring.abcuv(&a, &b, &c, var).expect("x + y divides c");
+        assert!(
+            ring.degree(&u, var) < ring.degree(&b, var),
+            "deg u in x_{var}"
+        );
+        assert_eq!(ring.degree(&d, var), Some(0), "d without x_{var}");
+        let lhs = ring.add(&ring.mul(&u, &a), &ring.mul(&v, &b));
+        assert_eq!(lhs, ring.mul(&d, &c), "in x_{var}");
+        assert_eq!(ring.abcuv(&a, &b, &ring.add(&y, &ring.one()), var), None);
+    }
+    let (u, v, d) = ring.abcuv(&a, &b, &ring.zero(), 0).unwrap();
+    assert!(u.is_zero() && v.is_zero());
+    assert_eq!(d, ring.one());
+}
+
+/// `(x⁴ + y) / (3 (x − 1)² (x + y))` in `x`: the pieces over `(x − 1)²`
+/// and `x + y` and the polynomial part add up to it, each numerator of
+/// lower degree than its factor's power; factors that share a factor give
+/// `None`.
+#[test]
+fn partial_fractions_over_a_squarefree_decomposition() {
+    let ring = SparseRing::new(Integers, 2);
+    let (x, y) = (ring.var(0), ring.var(1));
+    let f1 = ring.sub(&x, &ring.one());
+    let f2 = ring.add(&x, &y);
+    let powers = [ring.pow(&f1, 2), f2.clone()];
+    let den = ring.mul(
+        &ring.elem_integer(&Integer::from(3)),
+        &ring.mul(&powers[0], &powers[1]),
+    );
+    let num = ring.add(&ring.pow(&x, 4), &y);
+    let pf = ring
+        .partial_fractions(&num, &den, &[(f1.clone(), 2), (f2.clone(), 1)], 0)
+        .expect("coprime factors of the denominator");
+    assert_eq!(pf.pieces.len(), 2);
+    assert_eq!(ring.degree(&pf.quotient_den, 0), Some(0));
+    // num / den = q / d + Σ nᵢ / (dᵢ Pᵢ), times den · d · Π dᵢ.
+    let ds = pf
+        .pieces
+        .iter()
+        .fold(ring.one(), |p, (_, d)| ring.mul(&p, d));
+    let lhs = ring.mul(&ring.mul(&num, &pf.quotient_den), &ds);
+    let mut rhs = ring.mul(&ring.mul(&pf.quotient, &den), &ds);
+    for ((n, d), p) in pf.pieces.iter().zip(&powers) {
+        assert!(ring.degree(n, 0) < ring.degree(p, 0));
+        assert_eq!(ring.degree(d, 0), Some(0));
+        let cofactor = ring.div_exact(&den, p).unwrap();
+        let others = ring.div_exact(&ds, d).unwrap();
+        let term = ring.mul(
+            &ring.mul(n, &cofactor),
+            &ring.mul(&pf.quotient_den, &others),
+        );
+        rhs = ring.add(&rhs, &term);
+    }
+    assert_eq!(lhs, rhs);
+    let shared = ring.mul(&f1, &f2);
+    let den = ring.mul(&shared, &f1);
+    assert_eq!(
+        ring.partial_fractions(&num, &den, &[(shared, 1), (f1, 1)], 0),
+        None
+    );
+}

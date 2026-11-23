@@ -351,6 +351,30 @@ Giac's commands `heugcd`, `modgcd`, `psrgcd` and `ezgcd` correspond to
   `res(n/d, n′/d′) = res(n, n′) / (d^(deg n′) d′^(deg n))`.
 - **Elsewhere**, by subresultants.
 
+## Extended gcds, `abcuv` and partial fractions in one variable (CAS-585)
+
+The Risch algorithm (cas-core's `Risch`, giac's risch.cc) works with
+multivariate polynomials in the variable of the top of its tower, over ℤ or
+ℤ\[i\], as giac does; these are giac's poly.h templates for it.
+- **`extended_gcd`** (`Tegcdpsr`, `Tegcdtoabcuv`): `u a + v b = c g` for the
+  gcd `g` and a `c` without the variable. The extended Euclidean algorithm on
+  pseudo-remainders [Knu97 §4.6.1, Bro05 ch. 1]: each step
+  `l^δ r₀ = q r₁ + r` carries the cofactors as `l^δ s₀ − q s₁`, and the
+  remainder and its cofactors are divided by the gcd of their contents in the
+  variable, which keeps the coefficients from growing past the subresultants'.
+  The last remainder is `h g₁` for the primitive part `g₁` of the gcd and an
+  `h` without the variable (Gauss's lemma); the content `k` of `g` then turns
+  `s₀ a + t₀ b = h g₁` into `(k s₀) a + (k t₀) b = h g`.
+- **`abcuv`** (`Tabcuv`): `u a + v b = d c` with `deg u < deg b`. From the
+  extended gcd when `g` divides `c` (`l^δ c = w g`), then `u` pseudo-divided
+  by `b`: `l^δ u = q b + u′` gives `u′ a + (l^δ v + q a) b = l^δ d c`.
+- **`partial_fractions`** (`Tpartfrac`) over a square-free decomposition
+  `den = κ f₁^m₁ ⋯ fₖ^mₖ`: the polynomial part by pseudo-division, then one
+  piece at a time, `abcuv(Q, P, rest)` for `P = fᵢ^mᵢ` and `Q` the product of
+  the powers after it, `rest / (c P Q) = u / (c d P) + v / (c d Q)`. Each
+  numerator and its denominator without the variable are divided by their
+  common content. The powers stay whole: Hermite reduction takes them apart.
+
 ## Exact division
 
 `SparseRing::div_exact`, the test of every gcd method, now stops at the first

@@ -719,3 +719,27 @@ fn sparse_workload() {
         p.term_count()
     );
 }
+
+/// `l^δ a = q b + r` with `deg r < deg b` in each variable, `l` the leading
+/// coefficient of `b` in it; a dividend of lower degree is the remainder.
+/// The valuation is the least power of the variable.
+#[test]
+fn pseudo_division_and_valuation() {
+    let ring = SparseRing::new(Integers, 2);
+    // a = x³y + 2x + y², b = 2xy − 3 + y x²: leading coefficients y in x, 2x in y.
+    let a = build(&ring, &[(vec![3, 1], 1), (vec![1, 0], 2), (vec![0, 2], 1)]);
+    let b = build(&ring, &[(vec![1, 1], 2), (vec![0, 0], -3), (vec![2, 1], 1)]);
+    for var in 0..2 {
+        let (q, r) = ring.pseudo_div_rem(&a, &b, var);
+        let delta = ring.degree(&a, var).unwrap() + 1 - ring.degree(&b, var).unwrap();
+        let lhs = ring.mul(&ring.pow(&ring.lead_coeff(&b, var), delta), &a);
+        assert_eq!(lhs, ring.add(&ring.mul(&q, &b), &r), "in x_{var}");
+        assert!(ring.degree(&r, var) < ring.degree(&b, var), "in x_{var}");
+    }
+    let low = ring.var(1);
+    assert_eq!(ring.pseudo_div_rem(&low, &b, 0), (ring.zero(), low.clone()));
+    assert_eq!(ring.valuation(&a, 0), Some(0));
+    assert_eq!(ring.valuation(&ring.mul(&a, &ring.var(0)), 0), Some(1));
+    assert_eq!(ring.valuation(&a, 1), Some(0));
+    assert_eq!(ring.valuation(&ring.zero(), 0), None);
+}

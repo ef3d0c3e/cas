@@ -43,6 +43,13 @@ use crate::sparse::{Sparse, SparseRing};
 /// A gcd and its cofactors: `(g, a / g, b / g)`.
 pub type Cofactors<P> = (P, P, P);
 
+/// `(g, u, v, c)` of an extended gcd, `u a + v b = c g`
+/// ([`SparseRing::extended_gcd`]).
+pub type Bezout<P> = (P, P, P, P);
+
+/// `(u, v, d)` of `u a + v b = d c` ([`SparseRing::abcuv`]).
+pub type Abcuv<P> = (P, P, P);
+
 /// The gcd algorithms. `gcd` chooses among them; `gcd_by` runs one.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub enum GcdMethod {
@@ -638,6 +645,208 @@ impl<R: GcdDomain> SparseRing<R> {
             d
         }))
     }
+
+    /// The extended gcd in `x_var`: `(g, u, v, c)` with `u a + v b = c g`,
+    /// `g` the gcd of [`SparseRing::gcd`] and `c` a non-zero polynomial
+    /// without `x_var`, giac's `Tegcdpsr` and `Tegcdtoabcuv` (poly.h): the
+    /// extended Euclidean algorithm on pseudo-remainders
+    /// ([`SparseRing::pseudo_div_rem`]), each remainder and its two
+    /// cofactors divided by the gcd of their contents in `x_var`. `(0, 0,
+    /// 0, 1)` for two zeros.
+    ///
+    /// # Panics
+    ///
+    /// Never: the gcd divides the last remainder.
+    #[must_use]
+    pub fn extended_gcd(
+        &self,
+        a: &Sparse<R::Elem>,
+        b: &Sparse<R::Elem>,
+        var: usize,
+    ) -> Bezout<Sparse<R::Elem>> {
+        if a.is_zero() && b.is_zero() {
+            return (self.zero(), self.zero(), self.zero(), self.one());
+        }
+        let (mut r0, mut s0, mut t0) = (a.clone(), self.one(), self.zero());
+        let (mut r1, mut s1, mut t1) = (b.clone(), self.zero(), self.one());
+        while !r1.is_zero() {
+            // `l^δ r0 = q r1 + r`, so `r = (l^δ s0 − q s1) a + (l^δ t0 − q t1) b`.
+            let delta = pseudo_exponent(self.degree(&r0, var), self.degree(&r1, var));
+            let f = self.pow(&self.lead_coeff(&r1, var), delta);
+            let (q, r) = self.pseudo_div_rem(&r0, &r1, var);
+            let s = self.sub(&self.mul(&f, &s0), &self.mul(&q, &s1));
+            let t = self.sub(&self.mul(&f, &t0), &self.mul(&q, &t1));
+            let [r, s, t] = self.without_common_content([r, s, t], var);
+            r0 = std::mem::replace(&mut r1, r);
+            s0 = std::mem::replace(&mut s1, s);
+            t0 = std::mem::replace(&mut t1, t);
+        }
+        // `s0 a + t0 b = r0 = h g/k` for `g = k g₁`, `g₁` primitive in
+        // `x_var` and `h`, `k` without it.
+        let g = self.gcd(a, b);
+        let g1 = self.primitive_part_in(&g, var);
+        let h = self
+            .div_exact(&r0, &g1)
+            .expect("the gcd divides the last remainder");
+        let k = self.div_exact(&g, &g1).expect("a primitive part divides");
+        let [u, v, c] = self.without_common_content([self.mul(&s0, &k), self.mul(&t0, &k), h], var);
+        (g, u, v, c)
+    }
+
+    /// `(u, v, d)` with `u a + v b = d c`, `deg u < deg b` in `x_var` when
+    /// `b` has `x_var`, and `d` a non-zero polynomial without `x_var`:
+    /// giac's `Tabcuv` (poly.h), from [`SparseRing::extended_gcd`]. `None`
+    /// when the gcd of `a` and `b` does not divide `c` as polynomials in
+    /// `x_var`.
+    #[must_use]
+    pub fn abcuv(
+        &self,
+        a: &Sparse<R::Elem>,
+        b: &Sparse<R::Elem>,
+        c: &Sparse<R::Elem>,
+        var: usize,
+    ) -> Option<Abcuv<Sparse<R::Elem>>> {
+        if c.is_zero() {
+            return Some((self.zero(), self.zero(), self.one()));
+        }
+        let (g, u0, v0, c0) = self.extended_gcd(a, b, var);
+        if g.is_zero() {
+            return None;
+        }
+        // `l^δ c = w g`, so `u0 w a + v0 w b = c0 l^δ c`.
+        let delta = pseudo_exponent(self.degree(c, var), self.degree(&g, var));
+        let (w, rem) = self.pseudo_div_rem(c, &g, var);
+        if !rem.is_zero() {
+            return None;
+        }
+        let mut d = self.mul(&c0, &self.pow(&self.lead_coeff(&g, var), delta));
+        let (mut u, mut v) = (self.mul(&u0, &w), self.mul(&v0, &w));
+        if self.degree(b, var).is_some_and(|db| db > 0) {
+            // `l^δ u = q b + u′`: `u′ a + (l^δ v + q a) b = l^δ d c`.
+            let delta = pseudo_exponent(self.degree(&u, var), self.degree(b, var));
+            let f = self.pow(&self.lead_coeff(b, var), delta);
+            let (q, r) = self.pseudo_div_rem(&u, b, var);
+            u = r;
+            v = self.add(&self.mul(&f, &v), &self.mul(&q, a));
+            d = self.mul(&f, &d);
+        }
+        let [u, v, d] = self.without_common_content([u, v, d], var);
+        Some((u, v, d))
+    }
+
+    /// The partial fractions of `num / den` in `x_var` over a square-free
+    /// decomposition `den = κ f₁^m₁ ⋯ fₖ^mₖ` of the denominator, `κ`
+    /// without `x_var` and the `fᵢ` pairwise coprime, giac's `Tpartfrac`
+    /// (poly.h): `num / den = q / d + Σ nᵢ / (dᵢ fᵢ^mᵢ)` with
+    /// `deg nᵢ < deg fᵢ^mᵢ` in `x_var` and `d`, `dᵢ` without it. The
+    /// quotient comes from [`SparseRing::pseudo_div_rem`], each piece from
+    /// [`SparseRing::abcuv`] against the product of the factors after it.
+    /// `None` when the factors do not divide `den` with a cofactor `κ`
+    /// without `x_var`, or two of them are not coprime.
+    ///
+    /// # Panics
+    ///
+    /// If `den` is zero.
+    #[must_use]
+    pub fn partial_fractions(
+        &self,
+        num: &Sparse<R::Elem>,
+        den: &Sparse<R::Elem>,
+        factors: &[(Sparse<R::Elem>, u64)],
+        var: usize,
+    ) -> Option<PartialFractions<R::Elem>> {
+        let powers: Vec<Sparse<R::Elem>> = factors.iter().map(|(f, m)| self.pow(f, *m)).collect();
+        let product = powers.iter().fold(self.one(), |p, f| self.mul(&p, f));
+        let kappa = self.div_exact(den, &product)?;
+        if self.degree(&kappa, var).is_some_and(|d| d > 0) {
+            return None;
+        }
+        let delta = pseudo_exponent(self.degree(num, var), self.degree(den, var));
+        let quotient_den = self.pow(&self.lead_coeff(den, var), delta);
+        let (quotient, mut rest) = self.pseudo_div_rem(num, den, var);
+        // `rest / (c · Πⱼ≥ᵢ fⱼ^mⱼ)` remains to split.
+        let mut c = self.mul(&quotient_den, &kappa);
+        let mut after = product;
+        let mut pieces = Vec::with_capacity(factors.len());
+        for (k, p) in powers.iter().enumerate() {
+            if k + 1 == powers.len() {
+                pieces.push(self.reduced_piece(rest, c, var));
+                break;
+            }
+            after = self.div_exact(&after, p).expect("a factor of the product");
+            if self
+                .degree(&self.gcd(&after, p), var)
+                .is_some_and(|d| d > 0)
+            {
+                return None;
+            }
+            let (u, v, d) = self.abcuv(&after, p, &rest, var)?;
+            // `d rest = u Q + v P`: `rest / (c P Q) = u / (c d P) + v / (c d Q)`.
+            c = self.mul(&c, &d);
+            pieces.push(self.reduced_piece(u, c.clone(), var));
+            rest = v;
+        }
+        Some(PartialFractions {
+            quotient,
+            quotient_den,
+            pieces,
+        })
+    }
+
+    /// `n / d` for `d` without `x_var`, both divided by their common
+    /// content.
+    fn reduced_piece(
+        &self,
+        n: Sparse<R::Elem>,
+        d: Sparse<R::Elem>,
+        var: usize,
+    ) -> (Sparse<R::Elem>, Sparse<R::Elem>) {
+        let [n, d] = self.without_common_content([n, d], var);
+        (n, d)
+    }
+
+    /// The polynomials `ps` divided by the gcd of their contents in
+    /// `x_var`; unchanged when all are zero.
+    fn without_common_content<const N: usize>(
+        &self,
+        ps: [Sparse<R::Elem>; N],
+        var: usize,
+    ) -> [Sparse<R::Elem>; N] {
+        let mut g = self.zero();
+        for p in &ps {
+            g = self.gcd(&g, &self.content_in(p, var));
+            if self.is_one(&g) {
+                return ps;
+            }
+        }
+        if g.is_zero() {
+            return ps;
+        }
+        ps.map(|p| self.div_exact(&p, &g).expect("the content divides"))
+    }
+}
+
+/// `max(m − n + 1, 0)` for the degrees `m` and `n` of a pseudo-division, 0
+/// for a zero dividend.
+fn pseudo_exponent(m: Option<u64>, n: Option<u64>) -> u64 {
+    match (m, n) {
+        (Some(m), Some(n)) if m >= n => m - n + 1,
+        _ => 0,
+    }
+}
+
+/// The partial fractions of [`SparseRing::partial_fractions`]: `num / den =
+/// quotient / quotient_den + Σ n / d (f^m)` over its `pieces` `(n, d)`, one a
+/// factor `f^m` in their order.
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct PartialFractions<E> {
+    /// The polynomial part's numerator.
+    pub quotient: Sparse<E>,
+    /// Its denominator, without the variable.
+    pub quotient_den: Sparse<E>,
+    /// `(nᵢ, dᵢ)`: the numerator and the denominator without the variable
+    /// of each factor's piece.
+    pub pieces: Vec<(Sparse<E>, Sparse<E>)>,
 }
 
 impl<N: Numerators> SharedRing<N> {

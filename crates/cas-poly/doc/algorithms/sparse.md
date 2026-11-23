@@ -172,6 +172,16 @@ ring.
   - The coefficient of `x_var^d` keeps the terms with that power, the power
     cleared, in their order.
   - The leading term is the first.
+- **The valuation** in `x_var`: the least power of `x_var` in a term, a
+  scan (CAS-585, for the Risch algorithm's exponential case).
+- **Pseudo-division** in `x_var` [Knu97 §4.6.1 Algorithm R] (CAS-585):
+  `l^δ a = q b + r`, `deg r < deg b`, `l` the leading coefficient of `b` in
+  `x_var` and `δ = deg a − deg b + 1`. Each step multiplies the remainder by
+  `l` and subtracts its leading coefficient times `x_var^(deg r − deg b) b`,
+  so no coefficient is divided and it works in the variable of a
+  multivariate polynomial over any ring; the steps a degree drop skips are
+  made up by `l` to the power left at the end, so `δ` is exact, as giac's
+  `TPseudoDivRem` (poly.h).
 - **The recursive view.** `p = Σ c_d x_var^d`, the coefficients without
   `x_var`, the powers decreasing. `from_recursive` puts it back.
 - **Dense polynomials.** `to_dense` and `from_dense` convert with CAS-135's
