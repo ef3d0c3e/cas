@@ -1,6 +1,6 @@
 //! Optimization against giac (CAS-DOC-38, CAS-PLAN-32): giac's answers to
-//! its examples of `extrema`, `minimize`, `maximize` and `lpsolve`, read
-//! back, are this CAS's by value, lists entry by entry.
+//! its examples of `extrema`, `minimize`, `maximize`, `lpsolve` and `tpsolve`,
+//! read back, are this CAS's by value, lists entry by entry.
 
 use cas_core::{Context, Expr, Symbol, View};
 use cas_giac::{Giac, ours};
@@ -158,6 +158,58 @@ fn nonlinear_programs() {
         match (seeded(giac, input), ours(input)) {
             (Some(theirs), Ok(ours)) if same(&ctx, &ours, &theirs, 100_000) => {}
             (theirs, ours) => wrong.push(format!("{input}: ours {ours:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Transportation problems (CAS-598): giac's probe rows, each bracketed
+/// as the answer is a sequence (C0023).
+#[test]
+fn transportation() {
+    check(&[
+        "[tpsolve([10,20],[15,15],[[1,2],[3,1]])]",
+        "[tpsolve([10,20],[10,10],[[1,2],[3,1]])]",
+        "[tpsolve([12,17,11],[10,10,10,10],[[500,750,300,450],[650,800,400,600],[400,700,500,550]])]",
+        "[tpsolve([95,70,165,165],[195,150,30,45,75],[[15,M,45,M,0],[12,40,M,M,0],[0,15,25,25,0],[M,0,M,12,0]])]",
+        "[tpsolve([1,1,1,1],[1,1,1,1],[[10,12,9,11],[5,10,7,8],[12,14,13,11],[8,15,11,9]])]",
+        "[tpsolve([2,4,6,4],[6,1,2,1,3],[[2,2,M,8,6],[3,2,2,3,0],[9,5,8,6,8],[2,8,5,2,2]])]",
+        "[tpsolve([6,5],[5,6],[[M,0],[5,0]])]",
+        "[tpsolve([3,1],[2,1,1],[[2,0,2],[3,2,M]])]",
+        "[tpsolve([3],[1,1,2,6],[[5,0,3,6]])]",
+        "[tpsolve([3,3,1],[2,3,2],[[3,3,3],[2,0,0],[1,1,0]])]",
+        "[tpsolve([5],[5,6,2,5,5],[[2,0,0,2,0]])]",
+        "[tpsolve([3,1,4,4],[4,1,1,5],[[1,1,2,0],[2,0,2,2],[2,1,1,0],[0,1,2,0]])]",
+        "[tpsolve([3],[2,1],[[0,1]])]",
+        "[tpsolve([1,1,1,1,1],[1,1,1,1,1],[[0,2,0,3,2],[0,0,2,3,3],[0,3,0,3,2],[3,2,2,1,1],[0,2,2,0,2]])]",
+        "[tpsolve([1,1,1,1,1],[1,1,1,1,1],[[1,0,0,0,0],[0,0,0,1,0],[0,1,1,1,0],[0,1,1,1,1],[1,0,0,1,1]])]",
+        "[tpsolve([1,1,1,1,1,1],[1,1,1,1,1,1],[[0,1,1,0,M,M],[1,1,0,0,1,0],[1,M,1,1,0,0],[0,M,0,0,M,1],[0,1,1,0,1,M],[0,1,0,M,0,1]])]",
+        "[tpsolve([1,1,1],[1,1,1],[[14,15,12],[10,15,3],[4,1,15]])]",
+        "[tpsolve([14,8,15,10,9],[18,4,16],[[0,0,0],[1,0,1],[1,M,M],[1,0,1],[0,0,1]])]",
+        "[tpsolve([8,13,17,13,17,8],[4,3,18,2,13,3],[[7,1,16,8,8,8],[7,M,12,11,1,M],[10,5,20,1,M,17],[19,M,0,14,17,14],[13,4,19,9,17,M],[12,3,M,6,11,5]])]",
+    ]);
+}
+
+/// Transportation inputs ours leaves (CAS-598): giac finds no feasible
+/// solution, or takes a decimal cost, a negative supply or `2*M`; ours
+/// stays `TPSolve[…]`.
+#[test]
+fn transportation_departures() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let mut wrong = Vec::new();
+    for input in [
+        "tpsolve([6],[6],[[M]])",
+        "tpsolve([6,4,1],[5,2,1,4],[[M,1,3,3],[M,1,2,2],[2,0,1,0]])",
+        "tpsolve([10,20],[15,15],[[1.5,2],[3,1]])",
+        "tpsolve([10,-20],[15,15],[[1,2],[3,1]])",
+        "tpsolve([10,20],[15,15],[[2*M,2],[3,1]])",
+    ] {
+        let theirs = giac.value(input);
+        match ours(input) {
+            Ok(e) if e.head().and_then(Expr::as_symbol) == Some(Symbol::TP_SOLVE) => {}
+            ours => wrong.push(format!("{input}: ours {ours:?}, giac's {theirs:?}")),
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));

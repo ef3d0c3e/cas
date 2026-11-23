@@ -36,6 +36,7 @@ mod integer;
 pub(super) mod lpsolve;
 pub(super) mod nlpsolve;
 mod simplex;
+pub(super) mod tpsolve;
 
 use std::cmp::Ordering;
 

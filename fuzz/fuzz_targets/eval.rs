@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 585] = [
+const BUILTINS: [&str; 586] = [
     "Plus",
     "Times",
     "Power",
@@ -637,6 +637,7 @@ const BUILTINS: [&str; 585] = [
     "FMax",
     "LPSolve",
     "NLPSolve",
+    "TPSolve",
     "BVPSolve",
     "BartlettHannWindow",
     "BlackmanHarrisWindow",

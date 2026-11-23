@@ -725,6 +725,7 @@ builtins! {
     F_MIN = "FMin" [PROTECTED];
     F_MAX = "FMax" [PROTECTED];
     LP_SOLVE = "LPSolve" [PROTECTED];
+    TP_SOLVE = "TPSolve" [PROTECTED];
     NLP_SOLVE = "NLPSolve" [PROTECTED];
     // Number theory II (CAS-DOC-39).
     QUOTIENT_REMAINDER = "QuotientRemainder" [PROTECTED];

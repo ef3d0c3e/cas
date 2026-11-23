@@ -462,6 +462,14 @@ where ours has degree 5 near the prototype's; `abs(x)` on `-1..1`, giac's
 coefficients off ours by up to `1.3·10⁻⁶` (its doubles in the degree-15
 expansion), where ours is near the prototype's.
 
+`tests/optimization.rs`, besides `extrema`, `minimize`, `maximize`,
+`lpsolve` and `nlpsolve`:
+- `tpsolve` (CAS-598): giac's 19 probe rows (balanced, unbalanced with a
+  dummy row or column, forbidden routes `M`, degenerate plans), each
+  bracketed, cost and plan equal; departures, where ours stays
+  `TPSolve[…]`: the two rows giac finds no feasible solution for, a
+  decimal cost, a negative supply and `2*M`.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 
