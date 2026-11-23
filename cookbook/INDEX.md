@@ -25,3 +25,4 @@ C0022 | Stays-unevaluated tests: write the input in canonical orderless order | 
 C0023 | Oracle rows for a sequence-valued builtin: bracket the input | oracle,giac,sequence,makesuite | 2026-11-23 | 1.3/T3 | CAS-557
 C0024 | giac list ports: no conjugation in vector products; NULL unquoted in oracle rows | giac,oracle,dot,multiply,subsop,NULL | 2026-11-23 | 1.3/T3 | CAS-558
 C0025 | giac in-place heap commands: port libstdc++ stl_heap, return the stored value | giac,port,heap,in-place,crash | 2026-11-23 | 1.3/T3 | CAS-560
+C0026 | giac forms the evaluator re-merges: return Hold, oracle by value after release | giac,oracle,hold,evaluator,departures | 2026-11-23 | 1.3/T4 | CAS-562 powexpand
