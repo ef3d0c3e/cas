@@ -444,6 +444,7 @@ pub(super) fn convex(ev: &mut Eval<'_>, e: &Expr) -> Native {
         }
         let s = strip(ev, sign)?;
         let s = signs.simp(ev, &s)?;
+        let s = primitive(ev, s)?;
         let condition = if negative_coefficient(&s) {
             Expr::call(Symbol::GREATER_EQUAL, [Expr::from(0), ev.eval(&-s)?])
         } else {
@@ -663,6 +664,23 @@ fn strip(ev: &mut Eval<'_>, (c, atoms): Sign) -> Result<Expr, EvalError> {
     let mut factors = vec![Expr::from(i64::from(c))];
     factors.extend(atoms);
     ev.eval(&Expr::call(Symbol::TIMES, factors))
+}
+
+/// giac's form of a condition, its factors' integer-primitive ones: `e`
+/// over a positive rational, coprime integer coefficients (`x^2 − 1/6` is
+/// `6 x^2 − 1`); `e` when its denominator is not a positive rational.
+fn primitive(ev: &mut Eval<'_>, e: Expr) -> Result<Expr, EvalError> {
+    let t = ev.eval(&Expr::call(Symbol::TOGETHER, [e.clone()]))?;
+    let d = ev.eval(&Expr::call(Symbol::DENOMINATOR, [t.clone()]))?;
+    if !d.to_rational().is_some_and(|q| q.is_positive()) {
+        return Ok(e);
+    }
+    let n = ev.eval(&Expr::call(Symbol::NUMERATOR, [t]))?;
+    let c = ev.eval(&Expr::call(Symbol::INTEGER_CONTENT, [n.clone()]))?;
+    if !c.to_rational().is_some_and(|q| q.is_positive()) {
+        return Ok(n);
+    }
+    ev.eval(&(n / c))
 }
 
 /// Whether `e` is known positive (`Some(true)`) or nonnegative

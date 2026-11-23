@@ -74,12 +74,14 @@ pub(crate) fn undo_nws(answer: &str) -> String {
 /// `list[…]`, coefficient lists `poly1[…]` and matrices `matrix[…]` are
 /// `[…]`, its sets `set[…]` are `{…}`, and its signed infinities
 /// `+infinity` and `-infinity`, where they stand alone, are `inf` and
-/// `-inf` (`infinity` alone is unsigned, the language's).
+/// `-inf` (`infinity` alone is unsigned, the language's), and its `<>` is
+/// `!=`.
 pub(crate) fn for_language(answer: &str) -> String {
     let mut s = signed_infinities(answer)
         .replace("list[", "[")
         .replace("poly1[", "[")
-        .replace("matrix[", "[");
+        .replace("matrix[", "[")
+        .replace("<>", "!=");
     while let Some(at) = s.find("set[") {
         let open = at + "set".len();
         let Some(close) = closing(s.as_bytes(), open) else {
@@ -162,5 +164,6 @@ mod tests {
         assert_eq!(for_language("infinity"), "infinity");
         assert_eq!(for_language("list[+infinity,-infinity]"), "[inf,-inf]");
         assert_eq!(for_language("x+infinity"), "x+infinity");
+        assert_eq!(for_language("[((x>0) and (x<>2))]"), "[((x>0) and (x!=2))]");
     }
 }
