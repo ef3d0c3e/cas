@@ -24,7 +24,8 @@ It covers the code of the Balls module (CAS-71 … CAS-104):
 - everything under `ball/`;
 - the Gaussian rationals of `complex/` (CAS-50);
 - the exact functions of [integers.md](integers.md): the factorial
-  (CAS-123), and the simplest rational in an interval (CAS-148).
+  (CAS-123), the simplest rational in an interval (CAS-148), and the
+  primality proof (CAS-551).
 
 The exact integer arithmetic it builds on (the `kernel` multiplication and
 division algorithms, `Natural`, `Integer`) is otherwise outside this
@@ -99,7 +100,7 @@ Every bound is also tested:
 | [complex.md](complex.md) | Complex balls: arithmetic, elementary functions, branch cuts; Gaussian rationals |
 | [machine.md](machine.md) | `MachineBall`: `f64` balls, error-free transformations, double-double kernels and their budgets |
 | [quadrature.md](quadrature.md) | Gauss–Legendre nodes and weights in validated balls, and their cache |
-| [integers.md](integers.md) | Exact integer functions: the factorial |
+| [integers.md](integers.md) | Exact integer functions: the factorial, the simplest rational in an interval, the primality proof |
 | [references.md](references.md) | Bibliography |
 
 ## Keeping it current

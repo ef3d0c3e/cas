@@ -1,10 +1,11 @@
 //! Xcas's integer functions against giac (CAS-548 to CAS-553): `chrem`,
-//! `lgcd`, `fracmod` and `iratrecon`, `icomp` and `bernoulli_mod`, giac's
-//! answers read back and compared with ours (`Giac::agrees`: the same
-//! expression, or `==`); and the departures, each with giac's answer as it
-//! prints it: its errors, where ours leaves the call with a warning, its
-//! Horner form, its sign of a polynomial gcd, and the inputs that crash
-//! libgiac, checked on our side only.
+//! `lgcd`, `fracmod` and `iratrecon`, `icomp`, `bernoulli_mod` and
+//! `is_prime`, giac's answers read back and compared with ours
+//! (`Giac::agrees`: the same expression, or `==`); and the departures, each
+//! with giac's answer as it prints it: its errors, where ours leaves the
+//! call with a warning, its Horner form, its sign of a polynomial gcd, a
+//! certificate where its ECM finds another factor first, and the inputs
+//! that crash libgiac, checked on our side only.
 
 use cas_giac::{Giac, ours};
 
@@ -150,9 +151,59 @@ fn bernoulli_numbers_modulo() {
     ]);
 }
 
+/// `is_prime`'s 0, 1 and 2 and giac's own certificates, `[[q, a, f], …]`
+/// in the order of giac's Pollard rho (CAS-551).
+#[test]
+fn primes() {
+    check(&[
+        "is_prime(2147483647)",
+        "is_prime(2147483659)",
+        "is_prime(4294967311)",
+        "is_prime(-2147483659)",
+        "is_prime(-9856989898997)",
+        "is_prime(0)",
+        "is_prime(1)",
+        "is_prime(2)",
+        "is_prime(-7)",
+        "is_prime(1999)",
+        "is_prime(9856989898997)",
+        "is_prime(9856989898997789789)",
+        "is_prime(4294967297)",
+        "is_prime(1000000007)",
+        "is_prime(1000000007,0)",
+        "is_prime(1000000007,2)",
+        "is_prime(9856989898997,2)",
+        "is_prime(2^64+13)",
+        "is_prime(2^89-1)",
+        "is_prime(2^127-1)",
+        "is_prime(10^30+57)",
+        "is_prime(10^30+57,0)",
+        "is_prime([7,8,9])",
+        "is_prime([2^89-1,4])",
+        "is_prime(2,1)",
+        "is_prime(3,1)",
+        "is_prime(4,1)",
+        "is_prime(1,1)",
+        "is_prime(9,1)",
+        "is_prime(-7,1)",
+        "is_prime(1999,1)",
+        "is_prime(1000000007,1)",
+        "is_prime(9856989898997,1)",
+        "is_prime(9856989898997789789,1)",
+        "is_prime(2147483659,1)",
+        "is_prime(4294967311,1)",
+        "is_prime(4294967297,1)",
+        "is_prime(18446744073709551629,1)",
+        "is_prime(2^31-1,1)",
+        "is_prime(2^61-1,1)",
+        "is_prime(2^89-1,1)",
+        "is_prime(2^127-1,1)",
+    ]);
+}
+
 /// Where this CAS departs from giac: the input, giac's answer as it prints
 /// it, ours as decided.
-const DEPARTURES: [(&str, &str, &str); 24] = [
+const DEPARTURES: [(&str, &str, &str); 31] = [
     // giac's errors; ours leaves the call, with the error as a warning.
     (
         "chrem([2,3],[4,6])",
@@ -269,9 +320,46 @@ const DEPARTURES: [(&str, &str, &str); 24] = [
         "GIAC_ERROR: bernoulli_mod(4,9) \n Error: Bad Argument Type",
         "bernoulli_mod(4,9)",
     ),
+    (
+        "is_prime(x)",
+        "GIAC_ERROR: is_prime(x) \n Error: Bad Argument Type",
+        "is_prime(x)",
+    ),
+    (
+        "is_prime(7/2)",
+        "GIAC_ERROR: is_prime(7/2) \n Error: Bad Argument Type",
+        "is_prime(7/2)",
+    ),
+    (
+        "is_prime(7,x)",
+        "GIAC_ERROR: is_prime(7,x) \n Error: Bad Argument Type",
+        "is_prime(7,x)",
+    ),
+    (
+        "is_prime(x,1)",
+        "GIAC_ERROR: is_probab_prime_p Error: Bad Argument Type",
+        "is_prime(x,1)",
+    ),
+    (
+        "is_prime(7/2,1)",
+        "GIAC_ERROR: is_probab_prime_p Error: Bad Argument Type",
+        "is_prime(7/2,1)",
+    ),
+    (
+        "is_prime([7,8],1)",
+        "GIAC_ERROR: is_probab_prime_p Error: Bad Argument Type",
+        "is_prime([7,8],1)",
+    ),
     // GCD makes the leading coefficient positive; giac keeps the sign
     // of a single polynomial.
     ("lgcd([-2*x-2])", "-2*x-2", "2*x+2"),
+    // giac's Pollard rho gives up on 290240017 * 454197539 and its ECM finds
+    // the larger factor first, ours (other curves) the smaller.
+    (
+        "is_prime(10^30+57,1)",
+        "[[2,5,1],[3,2,1],[79043,2,1],[3998741,2,1],[454197539,2,1]]",
+        "[[2,5,1],[3,2,1],[79043,2,1],[3998741,2,1],[290240017,2,1]]",
+    ),
 ];
 
 /// The departures of [`DEPARTURES`], then giac's Horner form and the
@@ -305,12 +393,21 @@ fn departures() {
     {
         wrong.push(format!("{input}: ours is not giac's expanded"));
     }
-    // libgiac crashes on polynomial moduli and on p = 2, so giac is not
-    // asked: ours folds through chinrem, and leaves bernoulli_mod(2,2).
+    // libgiac crashes on polynomial moduli, on p = 2, on a negative
+    // certificate above 2^31, and in PARI on primes its n - 1 test cannot
+    // prove, so giac is not asked: ours folds through chinrem, leaves
+    // bernoulli_mod(2,2), answers 0, and leaves the unproven primes (n - 1 =
+    // 192 p q, p and q primes near 2^100).
     for (input, decided) in [
         ("chrem([x+1,x],[x^2+1,x+2])", "chinrem([x+1,x^2+1],[x,x+2])"),
         ("chrem([x+1,x],[x^2+1,x-1])", "chinrem([x+1,x^2+1],[x,x-1])"),
         ("bernoulli_mod(2,2)", "bernoulli_mod(2,2)"),
+        ("is_prime(-2147483659,1)", "0"),
+        (
+            "is_prime(308532104498006741218424255238752343301423685716839787438005313)",
+            "is_prime(308532104498006741218424255238752343301423685716839787438005313)",
+        ),
+        ("is_prime(2^607-1)", "is_prime(2^607-1)"),
     ] {
         if ours(input) != ours(decided) {
             wrong.push(format!("{input}: ours is not {decided}"));

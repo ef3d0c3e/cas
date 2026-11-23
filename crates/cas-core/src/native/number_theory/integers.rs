@@ -1,6 +1,7 @@
 //! Xcas's integer functions of CAS-DOC-55: `chrem`, `lgcd`, `fracmod`,
-//! `icomp` and `bernoulli_mod`, ports of giac's code where its answers
-//! depend on it. giac's errors leave the call, with the error as a warning.
+//! `icomp`, `bernoulli_mod` and `is_prime`, ports of giac's code where its
+//! answers depend on it. giac's errors leave the call, with the error as a
+//! warning.
 //!
 //! - `ChineseRemainderLists[{r₁, …}, {m₁, …}]` (`chrem`, CAS-548), or of one
 //!   list `{{r₁, …}, {m₁, …}}`: giac's left fold (misc.cc `_chrem`, usual.cc
@@ -40,13 +41,27 @@
 //!   k` leaves the call (giac's "Not invertible"), `p = 2` too (libgiac
 //!   crashes), and so does a `p` whose `p/2` steps pass `1024
 //!   Limits::terms`.
+//! - `IsPrime[n]` (`is_prime`, CAS-551): giac's 2 for a prime below 2³¹, 1
+//!   above, 0 for every other integer (negatives included); lists map. Every
+//!   prime is proven, by cas-num's `Natural::prove_prime` (deterministic
+//!   below 2⁶⁴, the `n − 1` test of Brillhart, Lehmer and Selfridge above)
+//!   within `IntegerFactorList`'s limits; a prime it does not prove leaves
+//!   the call, with a warning, where giac answers 1 through PARI's APRCL.
+//!   `IsPrime[n, 1]`: giac's own certificate (ifactor.cc `prime_cert`, not
+//!   PARI's): 0 unless `n` is prime, else `[[q, a, f], …]` over the primes
+//!   `q` of `n − 1` that giac's `prime_factors` lists ([`certificate_factors`],
+//!   with giac's Pollard rho ported, so the order is giac's), `a` the least
+//!   base proving `q` (Pocklington), `f` 1 for `q < 2³¹`; where giac's rho
+//!   gives up, its ECM (libecm) and ours may find another factor first
+//!   (`10^30+57`). Any other integer `c` is `IsPrime[n]`; a non-integer `n`
+//!   or `c` leaves the call (giac's Bad Argument Type).
 
 use std::collections::HashMap;
 
 use cas_num::modular::{crt, fracmod};
-use cas_num::{Integer, Natural};
+use cas_num::{Integer, Natural, Proof};
 
-use super::{magnitude, refuse};
+use super::{ECM_B1, effort, magnitude, refuse};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
@@ -585,4 +600,239 @@ fn bernoulli_mod(k: i32, p: i32) -> Option<i32> {
     let res = wrap(2 * i64::from(k) * i64::from(s) % p64);
     let inverse = invmod(1 - powmod(g, u64::try_from(k).expect("k ≥ 2"), p), p)?;
     Some(wrap(i64::from(res) * i64::from(inverse) % p64))
+}
+
+/// giac's primes are `int`s below 2³¹; larger ones it answers 1.
+const INT_LIMIT: i64 = 1 << 31;
+
+/// The most bases a certificate tries for one factor (giac's `RAND_MAX`).
+const MAX_WITNESS: u64 = 10_000;
+
+const UNPROVEN: &str = "primality not proven within the factorisation limits";
+
+/// `IsPrime[n]`, `IsPrime[n, c]`.
+pub(in crate::native) fn is_prime(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let answer = match e.args() {
+        [n] => prime_level(n),
+        [n, c] => match c.to_integer() {
+            Some(c) if c.is_one() => certificate(n),
+            Some(_) => prime_level(n),
+            None => Err("bad argument type"),
+        },
+        _ => return Ok(None),
+    };
+    match answer {
+        Ok(x) => Ok(Some(x)),
+        Err(why) => refuse(ev, e, why),
+    }
+}
+
+/// The proof of `m`'s primality within `IntegerFactorList`'s limits.
+fn prove(m: &Natural) -> Result<bool, &'static str> {
+    let (rho, curves) = effort(m);
+    match m.prove_prime(rho, ECM_B1, curves) {
+        Proof::Proven => Ok(true),
+        Proof::Composite => Ok(false),
+        Proof::Unknown => Err(UNPROVEN),
+    }
+}
+
+/// giac's 0, 1 or 2 for `n`, mapped over lists.
+fn prime_level(n: &Expr) -> Result<Expr, &'static str> {
+    if is_list(n) {
+        return n
+            .args()
+            .iter()
+            .map(prime_level)
+            .collect::<Result<_, _>>()
+            .map(list);
+    }
+    let n = n.to_integer().ok_or("bad argument type")?;
+    if n < Integer::from(2) || !prove(&magnitude(&n))? {
+        return Ok(Expr::from(0));
+    }
+    Ok(Expr::from(if n < Integer::from(INT_LIMIT) { 2 } else { 1 }))
+}
+
+/// giac's `prime_cert` (ifactor.cc): 0 for a number that is not prime, else
+/// `[[q, a, f], …]` over [`certificate_factors`] of `n − 1`, `a` the least
+/// base with `a^(n−1) ≡ 1` and `gcd(a^((n−1)/q) − 1, n) = 1`, `f` 1 for
+/// `q < 2³¹`.
+fn certificate(n: &Expr) -> Result<Expr, &'static str> {
+    let n = n.to_integer().ok_or("bad argument type")?;
+    if n < Integer::from(2) || !prove(&magnitude(&n))? {
+        return Ok(Expr::from(0));
+    }
+    let n = magnitude(&n);
+    let o = &n - 1;
+    let factors = certificate_factors(&o).ok_or("could not partially factor n - 1")?;
+    let mut entries = Vec::with_capacity(factors.len());
+    for q in factors {
+        let cofactor = o.div_exact(&q);
+        let a = (2..2 + MAX_WITNESS)
+            .map(Natural::from)
+            .find(|a| {
+                a.pow_mod(&o, &n).is_one()
+                    && (Integer::from(a.pow_mod(&cofactor, &n)) - Integer::ONE)
+                        .unsigned_abs()
+                        .gcd(&n)
+                        .is_one()
+            })
+            .ok_or("no witness found")?;
+        let small = q < Natural::from(INT_LIMIT.unsigned_abs());
+        entries.push(list(vec![
+            Expr::from(Integer::from(q)),
+            Expr::from(Integer::from(a)),
+            Expr::from(i64::from(small)),
+        ]));
+    }
+    Ok(list(entries))
+}
+
+/// giac's `prime_factors(o, false)` (ifactor.cc): primes of `o` until the
+/// part left is at most `√o`. Trial division to 10⁴, pushing each prime
+/// once; then, while the part `g` left is above `√o` and not a probable
+/// prime (pushed last), a divisor `b` of `g` by [`pollard`], else by the
+/// elliptic curve method, its primes pushed in increasing order, `g / b`.
+/// After trial division, a `g` with `g² ≤ o` is pushed whole. `None` when
+/// a divisor is not found or not factored within the limits.
+fn certificate_factors(o: &Natural) -> Option<Vec<Natural>> {
+    let (rho, curves) = effort(o);
+    let stop = o.isqrt();
+    let mut g = o.clone();
+    let mut found = Vec::new();
+    // A composite d never divides g: its primes are already removed.
+    for d in 2..10_000u64 {
+        let d = Natural::from(d);
+        let (mut quotient, mut rest) = g.div_rem(&d);
+        if !rest.is_zero() {
+            continue;
+        }
+        while rest.is_zero() {
+            g = quotient;
+            (quotient, rest) = g.div_rem(&d);
+        }
+        found.push(d);
+        if stop >= g {
+            return Some(found);
+        }
+        if *o >= &g * &g {
+            found.push(g);
+            return Some(found);
+        }
+    }
+    loop {
+        if stop >= g {
+            return Some(found);
+        }
+        if g.primality().is_probable_prime() {
+            found.push(g);
+            return Some(found);
+        }
+        let b = match pollard(&g, 1, rho) {
+            Some(b) => b,
+            None => g
+                .perfect_power()
+                .map(|(base, _)| base)
+                .or_else(|| g.ecm(ECM_B1, curves, 0))?,
+        };
+        let f = b.factor_with_ecm(rho, ECM_B1, curves);
+        if !f.is_complete() {
+            return None;
+        }
+        found.extend(f.factors().iter().map(|x| x.base().clone()));
+        g = g.div_exact(&b);
+    }
+}
+
+/// giac's `pollard(n, k)` (ifactor.cc): Pollard's rho on `x ↦ x² + k` from
+/// `x = 2`, Brent's cycle detection with a GCD every 64 products and a
+/// backtrack from the last batch; on a GCD of `n` it retries with `k = −1,
+/// 3, 5, …, 49`. At most `max(15000, 1500 · 16^((log₁₀ n − 40)/10))`
+/// iterations, kept under `cap` above 15000 (ours); `None` when they run
+/// out. C's truncated `%` kept.
+fn pollard(n: &Natural, k: i64, cap: u64) -> Option<Natural> {
+    let maxiter = pollard_iterations(n).min(i64::try_from(cap).unwrap_or(i64::MAX).max(15_000));
+    let modulus = Integer::from(n);
+    let k_int = Integer::from(k);
+    let step = |x: &Integer| &(&(x * x) + &k_int) % &modulus;
+    let gcd = |p: &Integer| p.unsigned_abs().gcd(n);
+    let (mut m, mut m1, mut a, mut a1, mut c) = (2i64, 2i64, 1i64, 1i64, 0);
+    let mut g = Natural::one();
+    let mut x = Integer::from(2);
+    let (mut x1, mut y, mut y1, mut p) = (x.clone(), x.clone(), Integer::ZERO, Integer::ONE);
+    while g.is_one() {
+        a = 2 * a + 1;
+        while g.is_one() && a > m {
+            x = step(&x);
+            m += 1;
+            if m > maxiter {
+                return None;
+            }
+            p = &(&p * &(&x1 - &x)) % &modulus;
+            c += 1;
+            if c == 64 {
+                g = gcd(&p);
+                if g.is_one() {
+                    (y, y1, p, a1, m1, c) = (x.clone(), x1.clone(), Integer::ONE, a, m, 0);
+                }
+            }
+        }
+        if g.is_one() {
+            x1 = x.clone();
+            let j = 3 * (a + 1) / 2;
+            for _ in m + 1..=j {
+                x = step(&x);
+            }
+            m = j;
+        }
+    }
+    (x, x1, g, a, m) = (y, y1, Natural::one(), (a1 - 1) / 2, m1);
+    while g.is_one() {
+        a = 2 * a + 1;
+        while g.is_one() && a > m {
+            x = step(&x);
+            m += 1;
+            if m > maxiter {
+                return None;
+            }
+            g = gcd(&(&(&x1 - &x) % &modulus));
+        }
+        if g.is_one() {
+            x1 = x.clone();
+            let j = 3 * (a + 1) / 2;
+            for _ in m + 1..=j {
+                x = step(&x);
+            }
+            m = j;
+        }
+    }
+    if g == *n {
+        return match k {
+            1 => pollard(n, -1, cap),
+            -1 => pollard(n, 3, cap),
+            k if k >= 50 => None,
+            k => pollard(n, k + 2, cap),
+        };
+    }
+    Some(g)
+}
+
+/// giac's `int(1500 · 16^((log₁₀ n − 40)/10))`, at least 15000. Past
+/// 2³¹ (`n` above about 10⁹¹) C's conversion gives `INT_MIN` on x86, so
+/// giac's bound stays 15000.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "giac computes the bound in doubles"
+)]
+fn pollard_iterations(n: &Natural) -> i64 {
+    let shift = n.bit_length().saturating_sub(64);
+    let top = u64::try_from(&(n >> shift)).expect("64 bits");
+    let log10 = (top as f64).log10() + shift as f64 * std::f64::consts::LOG10_2;
+    let bound = 1500.0 * 16f64.powf((log10 - 40.0) / 10.0);
+    if bound >= 2_147_483_648.0 {
+        return 15_000;
+    }
+    (bound as i64).max(15_000)
 }

@@ -44,7 +44,7 @@ pub use error::{OutOfRangeError, ParseErrorKind, ParseNumberError};
 pub use integer::{Integer, Rounding};
 pub use natural::Natural;
 pub use prime::{
-    Factor, Factorization, NTH_PRIME_LIMIT, PRIME_PI_LIMIT, Primality, nth_prime, prime_pi,
+    Factor, Factorization, NTH_PRIME_LIMIT, PRIME_PI_LIMIT, Primality, Proof, nth_prime, prime_pi,
 };
 pub use rational::Rational;
 

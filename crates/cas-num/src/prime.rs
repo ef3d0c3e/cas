@@ -11,6 +11,10 @@
 //!   (Brent's variant), with an effort bound; factors it cannot split stay
 //!   labelled [`Primality::NotPrime`]. [`Natural::factor_with_ecm`] then
 //!   tries the elliptic curve method ([`Natural::ecm`]) on them.
+//! - [`Natural::prove_prime`]: a proof above 2^64 by the `n − 1` test of
+//!   Brillhart, Lehmer and Selfridge over a partial factorisation of
+//!   `n − 1` within given limits; [`Proof::Unknown`] when it is not
+//!   factored far enough.
 //! - [`prime_pi`] and [`nth_prime`]: a segmented sieve of Eratosthenes, to
 //!   [`PRIME_PI_LIMIT`] and [`NTH_PRIME_LIMIT`].
 
@@ -18,11 +22,13 @@ mod ecm;
 mod factor;
 mod jacobi;
 mod probable;
+mod proof;
 mod sieve;
 mod small;
 
 pub use factor::{Factor, Factorization};
 pub(crate) use probable::is_prime_u64;
+pub use proof::Proof;
 pub use sieve::{NTH_PRIME_LIMIT, PRIME_PI_LIMIT, nth_prime, prime_pi};
 
 #[cfg(doc)]

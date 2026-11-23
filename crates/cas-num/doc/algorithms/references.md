@@ -47,6 +47,10 @@ or is checked against, are listed.
   arXiv:1312.0039. Lemma 4 bounds the asymptotic series of `I_0 K_0`; Theorem
   1, Corollary 2 and Remark 2 give the complete error bound and the term
   counts.
+- <a id="bls75"></a>**[BLS75]** John Brillhart, D. H. Lehmer and J. L.
+  Selfridge, "New primality criteria and factorizations of 2^m ± 1",
+  *Mathematics of Computation* 29(130), 1975, pp. 620–647. Pocklington's theorem and
+  Theorem 5: the `n − 1` tests of `Natural::prove_prime`.
 - <a id="bm80"></a>**[BM80]** Richard P. Brent and Edwin M. McMillan, "Some new
   algorithms for high-precision computation of Euler's constant", *Mathematics
   of Computation* 34 (149) (1980), 305–312. Algorithm B3.

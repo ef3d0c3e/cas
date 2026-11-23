@@ -381,6 +381,7 @@ builtins! {
     FRACTION_MOD = "FractionMod" [PROTECTED];
     INTEGER_COMPOSITIONS = "IntegerCompositions" [PROTECTED];
     BERNOULLI_MOD = "BernoulliMod" [PROTECTED];
+    IS_PRIME = "IsPrime" [PROTECTED];
     // Permutations (CAS-DOC-45 §2): giac's lists of 0, …, n − 1.
     PERMUTATION_Q = "PermutationQ" [PROTECTED];
     PERMUTATION_CYCLES = "PermutationCycles" [PROTECTED];

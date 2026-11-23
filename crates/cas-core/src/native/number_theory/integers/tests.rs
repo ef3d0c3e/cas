@@ -1,9 +1,9 @@
 //! Tests of Xcas's integer functions (CAS-548 to CAS-553): giac's answers
 //! from the phase 1.3 probes, and the calls its errors leave.
 
-use super::{bernoulli_mod, compositions, ichinrem, invmod};
+use super::{bernoulli_mod, certificate_factors, compositions, ichinrem, invmod, pollard};
 use crate::{Context, Expr};
-use cas_num::Integer;
+use cas_num::{Integer, Natural};
 
 fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
@@ -267,4 +267,60 @@ fn bernoulli_numbers_modulo() {
         "BernoulliMod[4, -5]",
         "BernoulliMod[4]",
     ]);
+}
+
+/// giac's 0, 1, 2 and certificates (CAS-551); a prime the limits do not
+/// prove stays.
+#[test]
+fn primes() {
+    check(&[
+        ("IsPrime[1999]", "2"),
+        ("IsPrime[2147483647]", "2"),
+        ("IsPrime[2147483659]", "1"),
+        ("IsPrime[Plus[Power[2, 89], -1]]", "1"),
+        ("IsPrime[4294967297]", "0"),
+        ("IsPrime[-7]", "0"),
+        ("IsPrime[1]", "0"),
+        ("IsPrime[List[7, 8, 9]]", "List[2, 0, 0]"),
+        ("IsPrime[1000000007, 2]", "2"),
+        ("IsPrime[2, 1]", "List[]"),
+        ("IsPrime[4, 1]", "0"),
+        ("IsPrime[-7, 1]", "0"),
+        (
+            "IsPrime[1000000007, 1]",
+            "List[List[2, 5, 1], List[500000003, 2, 1]]",
+        ),
+        (
+            "IsPrime[9856989898997, 1]",
+            "List[List[2, 2, 1], List[101, 2, 1], List[24398489849, 2, 0]]",
+        ),
+        (
+            "IsPrime[Plus[Power[2, 127], -1], 1]",
+            "List[List[2, 3, 1], List[3, 5, 1], List[7, 3, 1], List[19, 3, 1], List[43, 3, 1], \
+             List[73, 3, 1], List[127, 2, 1], List[337, 3, 1], List[5419, 3, 1], List[92737, 3, 1]]",
+        ),
+    ]);
+    stays(&[
+        "IsPrime[x]",
+        "IsPrime[x, 1]",
+        "IsPrime[7, x]",
+        "IsPrime[List[7, 8], 1]",
+        "IsPrime[7, 1, 2]",
+        // 2^607 - 1: n - 1 is not factored far enough within the limits.
+        "IsPrime[531137992816767098689588206552468627329593117727031923199444138200403559860852242739162502265229285668889329486246501015346579337652707239409519978766587351943831270835393219031728127]",
+    ]);
+}
+
+/// giac's rho: the factor it finds first decides the certificate's order;
+/// it gives up on `290240017 · 454197539` within 15000 iterations.
+#[test]
+fn giac_pollard() {
+    let n = Natural::from(131_826_301_440_718_163u64);
+    assert_eq!(pollard(&n, 1, 1 << 22), None);
+    let n = Natural::from(101u64 * 103);
+    let b = pollard(&n, 1, 1 << 22).unwrap();
+    assert!(b == Natural::from(101u64) || b == Natural::from(103u64));
+    let o = Natural::from(1_000_000_006u64);
+    let found = certificate_factors(&o).unwrap();
+    assert_eq!(found, [Natural::from(2u64), Natural::from(500_000_003u64)]);
 }

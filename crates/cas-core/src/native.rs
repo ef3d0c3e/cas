@@ -536,6 +536,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::BERNOULLI_MOD,
             number_theory::integers::bernoulli_mod_native,
         ),
+        (Symbol::IS_PRIME, number_theory::integers::is_prime),
         (Symbol::PERMUTATION_Q, permutations::permutation_q),
         (Symbol::PERMUTATION_CYCLES, permutations::permutation_cycles),
         (Symbol::CYCLES_PERMUTATION, permutations::cycles_permutation),

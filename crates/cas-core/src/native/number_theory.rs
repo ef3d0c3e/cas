@@ -156,12 +156,11 @@ const ECM_WORK: u64 = 100 * ECM_B1;
 /// The most divisors `Divisors` lists.
 const MAX_DIVISORS: u64 = 1 << 20;
 
-/// The factorisation of `|n|`, `n ≠ 0`, with an effort that shrinks with
-/// its size; `None` when a composite is left unsplit.
-fn factorization(n: &Integer) -> Option<Factorization> {
-    let m = magnitude(n);
+/// The rho iterations and curves (at [`ECM_B1`]) spent on each composite
+/// in factorising `m`: shrinking as `(128/bits)²` above 128 bits.
+fn effort(m: &Natural) -> (u64, u32) {
     let bits = u128::from(m.bit_length().max(1));
-    let (effort, curves) = if bits <= 128 {
+    if bits <= 128 {
         (RHO_ITERATIONS, ECM_CURVES)
     } else {
         let scaled = u128::from(RHO_ITERATIONS) * 128 * 128 / (bits * bits);
@@ -170,7 +169,14 @@ fn factorization(n: &Integer) -> Option<Factorization> {
             u64::try_from(scaled).unwrap_or(RHO_ITERATIONS).max(1 << 12),
             u32::try_from(curves).unwrap_or(ECM_CURVES).max(2),
         )
-    };
+    }
+}
+
+/// The factorisation of `|n|`, `n ≠ 0`, with an effort that shrinks with
+/// its size; `None` when a composite is left unsplit.
+fn factorization(n: &Integer) -> Option<Factorization> {
+    let m = magnitude(n);
+    let (effort, curves) = effort(&m);
     let f = m.factor_with_ecm(effort, ECM_B1, curves);
     f.is_complete().then_some(f)
 }

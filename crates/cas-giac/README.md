@@ -225,14 +225,21 @@ CAS-528), sums of squares and rational Jordan forms (CAS-535):
 `tests/integers.rs`, Xcas's integer functions (CAS-548 to CAS-553): giac's
 `chrem` of integers and of polynomials with integer moduli (coefficient by
 coefficient, modulo the product), `lgcd`, `fracmod` and `iratrecon`, `icomp`
-with `zeros`, and `bernoulli_mod`'s signed values, read back and compared;
-and the departures, each with giac's answer: its errors (no solution, bad
-arguments, a modulus below 2, a denominator not prime to the modulus,
-`(p-1) | k`), where ours leaves the call with a warning; `chrem`'s Horner
-form `(-5*x+12)*x-5`, ours expanded; `lgcd([-2*x-2])`, `2*x+2` here as
-`GCD`'s sign; and the inputs that crash libgiac, checked on our side only:
-`chrem` with polynomial moduli (ours folds through `chinrem`) and
-`bernoulli_mod(2,2)` (stays).
+with `zeros`, `bernoulli_mod`'s signed values, and `is_prime`'s 0, 1 and 2
+and giac's own certificates `is_prime(n,1)` (CAS-551), read back and
+compared; and the departures, each with giac's answer: its errors (no
+solution, bad arguments, a modulus below 2, a denominator not prime to the
+modulus, `(p-1) | k`, a non-integer `is_prime` argument), where ours leaves
+the call with a warning; `chrem`'s Horner form `(-5*x+12)*x-5`, ours
+expanded; `lgcd([-2*x-2])`, `2*x+2` here as `GCD`'s sign;
+`is_prime(10^30+57,1)`, whose last entry is `454197539` in giac and
+`290240017` here (giac's rho gives up on their product and its ECM finds
+the other factor first); and the inputs that crash libgiac, checked on our
+side only: `chrem` with polynomial moduli (ours folds through `chinrem`),
+`bernoulli_mod(2,2)` (stays), `is_prime(-2147483659,1)` (0), and primes
+whose `n - 1` ours does not factor far enough to prove them
+(`is_prime(2^607-1)`, a 62-digit `2*96*p*q+1`): giac answers 1 through
+PARI's APRCL where PARI does not fail, ours leaves the call with a warning.
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.

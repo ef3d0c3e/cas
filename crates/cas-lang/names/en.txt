@@ -264,6 +264,7 @@ ListGCD: lgcd
 FractionMod: fracmod iratrecon
 IntegerCompositions: icomp
 BernoulliMod: bernoulli_mod
+IsPrime: is_prime
 # Permutations (CAS-DOC-45 §2, CAS-463).
 PermutationQ: is_permu
 PermutationCycles: permu2cycles
