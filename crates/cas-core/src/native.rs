@@ -41,6 +41,7 @@ mod linear;
 mod lists;
 mod logic;
 mod matrix;
+mod minimax;
 mod modular;
 mod ndsolve;
 mod nintegrate;
@@ -341,6 +342,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::B_SPLINE, interpolation::splines::b_spline),
         (Symbol::SPLINE_FIT, interpolation::splines::spline_fit),
         (Symbol::POLYNOMIAL_FIT, interpolation::fits::polynomial_fit),
+        (
+            Symbol::MINIMAX_APPROXIMATION,
+            minimax::minimax_approximation,
+        ),
         (Symbol::LEGENDRE_P, orthogonal::legendre_p),
         (Symbol::HERMITE_H, orthogonal::hermite_h),
         (Symbol::LAGUERRE_L, orthogonal::laguerre_l),

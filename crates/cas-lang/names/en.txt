@@ -170,6 +170,8 @@ BSpline: bspline
 SplineFit: fitspline
 # Polynomial fits (CAS-597), Xcas's.
 PolynomialFit: fitpoly
+# Minimax approximation (CAS-599), Xcas's.
+MinimaxApproximation: minimax
 LegendreP: legendre
 HermiteH: hermite
 LaguerreL: laguerre
