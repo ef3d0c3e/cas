@@ -73,6 +73,7 @@ mod statistics;
 mod step;
 mod structure;
 mod sum;
+mod tables;
 mod trig;
 mod vector;
 mod zeta;
@@ -1055,6 +1056,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::CONJUGATE_EQUATION, dsolve::conjugate_equation),
         (Symbol::FUNCTION_DOMAIN, function_study::function_domain),
         (Symbol::CONVEX, function_study::convex),
+        (Symbol::TAB_VAR, tables::tabvar),
+        (Symbol::TAB_SIGN, tables::tabsign),
         (Symbol::GRAD, vector::grad),
         (Symbol::DIVERGENCE, vector::divergence),
         (Symbol::CURL, vector::curl),

@@ -482,6 +482,9 @@ ConjugateEquation: conjugate_equation
 # Function study: domains and convexity (CAS-581, CAS-583), Xcas's.
 FunctionDomain: domain
 Convex: convex
+# Variation and sign tables (CAS-582), Xcas's.
+TabVar: tabvar
+TabSign: tabsign
 # Vector calculus (CAS-DOC-37): the differential operators (CAS-408).
 Grad: grad
 Divergence: divergence

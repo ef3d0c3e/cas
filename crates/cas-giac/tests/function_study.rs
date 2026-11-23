@@ -3,7 +3,8 @@
 //! the midpoints between and a point beyond each extreme, and by its shape
 //! (a list or one condition); `domain` in mode 1 as sets of values;
 //! `convex` condition by condition, each side's difference under
-//! `Together`; and the departures, each with giac's answer.
+//! `Together`; `tabvar` and `tabsign` row by row past the labels
+//! (CAS-582); and the departures, each with giac's answer.
 
 use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
@@ -68,8 +69,12 @@ fn approximate(ctx: &Context, n: &Expr) -> Option<f64> {
 }
 
 /// Whether two answers, lists of conditions, are one set, sampled at the
-/// ends of both, the midpoints and beyond.
+/// ends of both, the midpoints and beyond; equal answers settle it (ends
+/// with parameters have no value to sample).
 fn same_set(ctx: &Context, a: &Expr, b: &Expr, x: &Expr) -> bool {
+    if a == b {
+        return true;
+    }
     let mut found = Vec::new();
     ends(a, x, &mut found);
     ends(b, x, &mut found);
@@ -285,10 +290,9 @@ fn convexity() {
 
 /// Where this CAS departs from giac: giac's answer as it prints it, and
 /// this CAS's as decided.
-#[test]
-fn departures() {
+fn check_departures() -> Vec<String> {
     let Some(giac) = giac() else {
-        return;
+        return Vec::new();
     };
     let cases = [
         // giac rewrites asinh(x) as ln(x+sqrt(x^2+1)) and its solve of
@@ -299,7 +303,7 @@ fn departures() {
         (
             "domain(1/sin(x))",
             "((x<>0) and (x<>pi) and (x<>(2*pi)))",
-            "((x<>0) and (x<>pi))",
+            "x != 0 and x != pi",
         ),
         // The same assumption; sin(x) >= 0 is not solved here.
         (
@@ -313,6 +317,20 @@ fn departures() {
             "true",
             "convex(u(t)^2+u'(t)^2,u(t))",
         ),
+        // Labels with primes (CAS-582): our parser has none; the row of
+        // f' is labelled "y'" = f', the row of f'' "(y')'".
+        (
+            "tabvar(x^2-2*x,x)[1][0]",
+            "y'=(2*(x-1))",
+            "\"y'\" = 2*(x-1)",
+        ),
+        ("tabvar(x^2-2*x,x)[3][0]", "(y')'", "\"(y')'\""),
+        // giac's parametric table (step_param_) stays here.
+        (
+            "tabvar([sin(2t),cos(3t)])",
+            r#"[[t,0," ",pi/4," ",pi/3," ",pi/2],[x=(sin(2*t)),0,"↑",1,"↓",sqrt(3)/2,"↓",0],[x'=(2*cos(2*t)),2,"+",0,"-",-1,"-",-2],[y=(cos(3*t)),1,"↓",-sqrt(2)/2,"↓",-1,"↑",0],[y'=(-3*sin(3*t)),0,"-",-3*sqrt(2)/2,"-",0,"+",3],[x'*(y')'-y'*(x')',-18,"concav",-6*sqrt(2),"concav",-9,"concav",0]]"#,
+            "tabvar([sin(2t),cos(3t)])",
+        ),
     ];
     let mut wrong = Vec::new();
     for (input, answer, decided) in cases {
@@ -321,11 +339,138 @@ fn departures() {
             wrong.push(format!("{input}: giac prints {printed}, recorded {answer}"));
         }
         if ours(input) != ours(decided) {
-            wrong.push(format!("{input}: ours is not {decided}"));
+            wrong.push(format!(
+                "{input}: ours {:?} is not {decided} ({:?})",
+                ours(input),
+                ours(decided)
+            ));
         }
         if giac.agrees(input).is_ok() {
             wrong.push(format!("{input} agrees now"));
         }
     }
+    wrong
+}
+
+#[test]
+fn departures() {
+    let wrong = check_departures();
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+/// `e` with each `Exp[u]` as `Power[E, u]`.
+fn powers(e: &Expr) -> Expr {
+    if e.is_atom() {
+        return e.clone();
+    }
+    let args: Vec<Expr> = e.args().iter().map(powers).collect();
+    match (e.head(), &args[..]) {
+        (Some(h), [u]) if *h == Expr::from(Symbol::EXP) => {
+            Expr::call(Symbol::POWER, [Expr::from(Symbol::E), u.clone()])
+        }
+        (Some(h), _) => Expr::apply(&powers(h), &args),
+        (None, _) => e.clone(),
+    }
+}
+
+/// Whether two cells of a table are one: the same string, lists cell by
+/// cell, values whose difference `Simplify` makes 0.
+fn same_cell(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    if a == b {
+        return true;
+    }
+    if is_list(a) && is_list(b) {
+        return a.args().len() == b.args().len()
+            && a.args()
+                .iter()
+                .zip(b.args())
+                .all(|(p, q)| same_cell(ctx, p, q));
+    }
+    if a.as_str().is_some() || b.as_str().is_some() {
+        return false;
+    }
+    // exp(-1) and giac's 1/exp(1) as powers of e.
+    let difference = Expr::call(Symbol::SIMPLIFY, [powers(a) - powers(b)]);
+    ctx.eval(&difference)
+        .is_ok_and(|d| d.to_rational().is_some_and(|q| q.is_zero()))
+}
+
+/// giac's `tabvar` and `tabsign` tables and this CAS's: the number of
+/// rows, each row past its label (`tail(t[k])`, giac's `y'=(…)` does not
+/// read back), and the labels that do (`x`, `y = f`, `tabsign`'s `f`);
+/// `undef` as one cell.
+fn check_tables(inputs: &[&str]) -> Vec<String> {
+    let Some(giac) = giac() else {
+        return Vec::new();
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in inputs {
+        let Ok(table) = ours(input) else {
+            wrong.push(format!("{input}: ours unreadable"));
+            continue;
+        };
+        let mut parts = Vec::new();
+        if is_list(&table) {
+            parts.push(format!("size({input})"));
+            for k in 0..table.args().len() {
+                parts.push(format!("tail(({input})[{k}])"));
+            }
+            parts.push(format!("({input})[0][0]"));
+            parts.push(format!(
+                "({input})[{}][0]",
+                if input.starts_with("tabsign") { 1 } else { 2 }
+            ));
+        } else {
+            parts.push((*input).to_owned());
+        }
+        for part in parts {
+            match (giac.value(&part), ours(&part)) {
+                (Ok(theirs), Ok(ours)) if same_cell(&ctx, &theirs, &ours) => {}
+                (theirs, ours) => wrong.push(format!("{part}: ours {ours:?}, giac's {theirs:?}")),
+            }
+        }
+    }
+    wrong
+}
+
+/// Variation and sign tables (CAS-582): giac's examples and more.
+#[test]
+fn tables() {
+    let wrong = check_tables(&TABLES);
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+const TABLES: [&str; 31] = [
+    "tabsign(x^2-x,x)",
+    "tabsign((x-1)/(x+2),x)",
+    "tabsign(x^2,x,-3,5)",
+    "tabsign(x^3-x,x)",
+    "tabsign(x^2-2,x)",
+    "tabsign(ln(x),x)",
+    "tabsign(abs(x)-1,x)",
+    "tabvar(x^2-2*x,x)",
+    "tabvar(x^2,x,-3,5)",
+    "tabvar(sin(x),x)",
+    "tabvar(1/x,x)",
+    "tabvar(x^3-3*x,x)",
+    "tabvar(x^2+x+1,x)",
+    "tabvar(x/(x^2+1),x)",
+    "tabvar(sqrt(x),x)",
+    "tabvar(sqrt(4-x^2),x)",
+    "tabvar(x*ln(x),x)",
+    "tabvar(exp(-x^2),x)",
+    "tabvar(abs(x-1),x)",
+    "tabvar(sin(x),x,0,4*pi)",
+    "tabvar(cos(x),x=0..pi)",
+    "tabvar((x^2-1)/(x-2),x)",
+    "tabvar(x^2/(x^2-1),x)",
+    "tabvar(x*exp(x),x)",
+    "tabvar(ln(x)/x,x)",
+    "tabvar(x^4-2*x^2,x)",
+    "tabvar(x+sin(x),x)",
+    "tabvar(x^3,x,diff=1)",
+    "tabvar(x^3-3*x,x=-2..3)",
+    "tabvar(exp(x),x)",
+    "tabvar(1/ln(x^2-1),x,diff=1)",
+];

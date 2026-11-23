@@ -651,6 +651,9 @@ builtins! {
     // Function study: domains and convexity (CAS-581, CAS-583).
     FUNCTION_DOMAIN = "FunctionDomain" [PROTECTED];
     CONVEX = "Convex" [PROTECTED];
+    // Variation and sign tables (CAS-582).
+    TAB_VAR = "TabVar" [PROTECTED];
+    TAB_SIGN = "TabSign" [PROTECTED];
     // Vector calculus (CAS-DOC-37): the differential operators (§2).
     GRAD = "Grad" [PROTECTED];
     DIVERGENCE = "Divergence" [PROTECTED];

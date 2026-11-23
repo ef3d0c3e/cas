@@ -248,7 +248,7 @@ fn periodic_parts(
 
 /// The period of `f` in `x`, over `π`: `2/g` for `g` the gcd of the slopes
 /// of its trigonometric functions; `None` when `f` is not so periodic.
-fn period(ev: &mut Eval<'_>, f: &Expr, x: &Expr) -> Result<Option<Rational>, EvalError> {
+pub(super) fn period(ev: &mut Eval<'_>, f: &Expr, x: &Expr) -> Result<Option<Rational>, EvalError> {
     let mut slopes = Vec::new();
     if !periodic_parts(ev, f, x, &mut slopes)? || slopes.is_empty() {
         return Ok(None);
