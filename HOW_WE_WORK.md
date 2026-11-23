@@ -49,7 +49,7 @@ PY = /usr/bin/python3
 - (none yet)
 
 ## Paths <!-- roles: claude expert coder planner review auditor curator -->
-- Oracles (the ground truth X3 names): libgiac through `crates/cas-giac` (tests compare with Xcas's answers; CI job `oracle`)
+- Oracles (the ground truth X3 names): libgiac through `crates/cas-giac` (tests compare with Xcas's answers; CI job `oracle`); giac lookups outside tests: `PY scripts/caseval.py <inputs.cas> [timeout_s]` (libgiac caseval, one child per line, C0018), `PY scripts/aide.py <name>... [--cas]` (aide_cas entries and examples), `bash scripts/giac_gap.sh <outdir>` (missing names)
 - Generated (never hand-edited, H1): `Cargo.lock`, `target/`, `crates/*/proptest-regressions/` (proptest seeds)
 - Hand-edited: `crates/*/src`, `crates/*/doc/algorithms/`, `crates/cas-lang/names/en.txt`, `fuzz/`, `.github/workflows/`
 - Scratch: all of a phase's work in `.run/` goes under `.run/<phase>/` (gitignored; never the system temp), nowhere
