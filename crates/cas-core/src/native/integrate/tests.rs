@@ -919,7 +919,7 @@ fn integrals_that_stay() {
         // Not a symbol, or the wrong arguments.
         "Integrate[x, 2]",
         "Integrate[x, x, 1]",
-        "Integrate[x]",
+        // `Integrate[x]` integrates in x since CAS-578 (giac's int(e)).
         "Integrate[x, List[x, 1]]",
     ] {
         // The arguments evaluate, the call stays.
