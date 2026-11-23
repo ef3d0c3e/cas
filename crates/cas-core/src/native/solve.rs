@@ -54,7 +54,9 @@
 //!
 //! Xcas's `zeros` and `cZeros` are names of `Solve` and `CSolve` (CAS-536),
 //! in their orders; `CFSolve`, `cfsolve`, finds complex roots by number
-//! ([`fsolve::complex`]).
+//! ([`fsolve::complex`]). `Newton` and `NSolve`, Xcas's `newton` and
+//! `nSolve`, find one root by giac's damped Newton iteration
+//! ([`newton`], CAS-591).
 
 #![allow(
     clippy::many_single_char_names,
@@ -870,6 +872,7 @@ pub(in crate::native) mod fsolve;
 mod groebner;
 mod inequality;
 mod linear;
+pub(in crate::native) mod newton;
 mod nonlinear;
 mod radicals;
 #[cfg(test)]

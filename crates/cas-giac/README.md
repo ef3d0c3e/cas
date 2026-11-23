@@ -148,6 +148,19 @@ digit, overlap our balls in the same places (`sqrt(2)`, with 20 digits,
 with 20), and the rest, intervals and balls as symbols, is the same
 expression. A departure in form only: giac prints an interval, ours a ball.
 
+`tests/solve.rs` and `tests/nsolve.rs`, `newton` and `nSolve` (CAS-591):
+- giac's `newton` (start points, step counts that stop it, a tolerance,
+  `undef`) and `nSolve` (start points, a range) read back and compared by
+  value, our converged roots certified balls, a stopped iterate a ball;
+- the departures, each with giac's answer: giac restarts from random
+  points, ours from fixed ones, so `newton(x^2-2,x)` and `nSolve(x^2=2,x)`
+  are `√2` here and giac's (either of `±√2`) is checked as a root only;
+  `nSolve` of a system is `fsolve`'s first real solution here
+  (`[-1.93185165258,-0.517638090205]`), giac's
+  `[-0.517638090205,-1.93185165258]` unseeded, `[1.93185165258,0.517638090205]`
+  after `srand(42)` and `[0.517638090205,1.93185165258]` after `srand(7)`
+  in the same call: each solves the equations.
+
 `tests/real_roots.rs`, real roots (CAS-538, CAS-539): giac's `VAS`,
 `VAS_positive`, `posubLMQ`, `poslbdLMQ`, `sturmseq`, `sturm` with bounds,
 `rationalroot` and `crationalroot` read back and compared by value;

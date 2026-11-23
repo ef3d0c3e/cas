@@ -373,6 +373,8 @@ Solve: solve zeros
 CSolve: csolve cZeros
 FSolve: fsolve
 CFSolve: cfsolve
+Newton: newton
+NSolve: nSolve
 # FSolve's methods, Xcas's (CAS-590): options, no function.
 BisectionSolver: bisection_solver
 FalsePositionSolver: falsepos_solver

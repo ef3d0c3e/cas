@@ -371,6 +371,9 @@ builtins! {
     CSOLVE = "CSolve" [PROTECTED];
     FSOLVE = "FSolve" [PROTECTED];
     CFSOLVE = "CFSolve" [PROTECTED];
+    // giac's damped Newton iteration (CAS-591).
+    NEWTON = "Newton" [PROTECTED];
+    NSOLVE = "NSolve" [PROTECTED];
     // FSolve's methods, options (CAS-590).
     BISECTION_SOLVER = "BisectionSolver" [PROTECTED];
     FALSE_POSITION_SOLVER = "FalsePositionSolver" [PROTECTED];

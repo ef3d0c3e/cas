@@ -306,7 +306,7 @@ fn head(e: &Expr) -> Option<Symbol> {
 }
 
 /// Whether `f` is a number at `x = 1/3` or `x = 2/7`: no parameters.
-fn numeric(ctx: &Context, f: &Expr, x: &Expr) -> bool {
+pub(super) fn numeric(ctx: &Context, f: &Expr, x: &Expr) -> bool {
     [(1, 3), (2, 7)].iter().any(|&(p, q)| {
         let at = Expr::from(Rational::new(Integer::from(p), Integer::from(q)));
         matches!(
@@ -319,7 +319,7 @@ fn numeric(ctx: &Context, f: &Expr, x: &Expr) -> bool {
 }
 
 /// The ends of `Range[a, b]`, the language's `a .. b`.
-fn range(r: &Expr) -> Option<(&Expr, &Expr)> {
+pub(super) fn range(r: &Expr) -> Option<(&Expr, &Expr)> {
     match (r.head().and_then(Expr::as_symbol), r.args()) {
         (Some(Symbol::RANGE), [a, b]) => Some((a, b)),
         _ => None,
@@ -331,7 +331,7 @@ fn list(items: Vec<Expr>) -> Expr {
 }
 
 /// A real number's value as a rational: exact, or its ball's midpoint.
-fn point(ctx: &Context, e: &Expr) -> Option<Rational> {
+pub(super) fn point(ctx: &Context, e: &Expr) -> Option<Rational> {
     if let Some(q) = e.to_rational() {
         return Some(q);
     }
@@ -658,14 +658,14 @@ fn refined(
 }
 
 /// `q` rounded to `prec` bits, so that iterates stay short.
-fn rounded(q: &Rational, prec: u64) -> Rational {
+pub(super) fn rounded(q: &Rational, prec: u64) -> Rational {
     Float::from_rational(q, prec, Round::Nearest)
         .0
         .to_rational()
 }
 
 /// The midpoint of `f`'s ball at `q`, at `prec` bits.
-fn at(ctx: &Context, f: &Expr, x: &Expr, q: &Rational, prec: u64) -> Option<Rational> {
+pub(super) fn at(ctx: &Context, f: &Expr, x: &Expr, q: &Rational, prec: u64) -> Option<Rational> {
     value(ctx, f, x, &Expr::from(q.clone()), prec).map(|b| b.mid().to_rational())
 }
 

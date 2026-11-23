@@ -371,6 +371,57 @@ fn numeric_systems() {
     ]);
 }
 
+/// giac's `newton` and `nSolve` (CAS-591) by value: converged roots,
+/// iterates stopped by a step count, `undef`, and `nSolve`'s start points
+/// and range.
+#[test]
+fn newton() {
+    check(&[
+        "newton(x^2-2,x,1,1)",
+        "newton(x^3-2,x,1,3)",
+        "newton(x^2+1,x)",
+        "newton(x^2-2,x,2)",
+        "newton(x^2-2,x,-2)",
+        "newton(x^2-2,x,2,5,1e-7)",
+        "newton(cos(x)-x,x)",
+        "newton(x^3-2,x,1)",
+        "newton(x^2-2,x,1,2)",
+        "newton(x^2-2,x=1)",
+        "newton(x^2-2,x,1..2)",
+        "nSolve(cos(x)=x,x)",
+        "nSolve(cos(x)=x,x=1.3)",
+        "nSolve(x^3-x=0,x=0.6)",
+        "nSolve(x^2=2,x=1..2)",
+    ]);
+}
+
+/// A departure (CAS-591): where giac's `newton` restarts from random
+/// points its root is either of `±√2`; ours, from fixed restarts, is
+/// `√2`, and giac's is checked as a root only.
+#[test]
+fn newton_random_restarts() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let root2 = Expr::call(Symbol::SQRT, [Expr::from(2)]);
+    let mut wrong = Vec::new();
+    for input in ["newton(x^2-2,x)", "nSolve(x^2=2,x)"] {
+        let theirs = giac.value(input).map_err(|e| e.to_string());
+        let ours = ours(input).map_err(|e| e.to_string());
+        let good = match (&theirs, &ours) {
+            (Ok(t), Ok(o)) => {
+                same(&ctx, o, &root2) && close(&ctx, &(t.clone() * t.clone()), &Expr::from(2))
+            }
+            _ => false,
+        };
+        if !good {
+            wrong.push(format!("{input}: ours {ours:?}, giac's {theirs:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 /// Identities and contradictions.
 #[test]
 fn identities() {

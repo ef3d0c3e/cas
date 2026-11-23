@@ -1181,3 +1181,107 @@ fn all_trig_solutions() {
     // Off, the principal solutions.
     check(&[("Solve[Equation[Sin[x], 0], x]", "List[0, Pi]")]);
 }
+
+/// `Newton` and `NSolve` (CAS-591): giac's rows, its converged roots
+/// certified, the stopped iterates, `undef`, `NSolve`'s range and system.
+#[test]
+fn newton_and_nsolve() {
+    let root2 = std::f64::consts::SQRT_2;
+    let cube2 = 1.259_921_049_894_873_2;
+    let dottie = 0.739_085_133_215_160_6;
+    let (big, small) = (1.931_851_652_578_136_6, 0.517_638_090_205_041_5);
+    let square = "Plus[-2, Power[x, 2]]";
+    let cube = "Plus[-2, Power[x, 3]]";
+    for (input, expected) in [
+        (format!("Newton[{square}, x]"), vec![root2]),
+        (format!("Newton[{square}, x, 1, 1]"), vec![1.5]),
+        (
+            format!("Newton[{cube}, x, 1, 3]"),
+            vec![1.259_933_493_449_977],
+        ),
+        (format!("Newton[{square}, x, 2]"), vec![root2]),
+        (format!("Newton[{square}, x, -2]"), vec![-root2]),
+        (
+            format!("Newton[{square}, x, 2, 5, Power[10, -7]]"),
+            vec![root2],
+        ),
+        (
+            "Newton[Plus[Cos[x], Times[-1, x]], x]".to_owned(),
+            vec![dottie],
+        ),
+        (format!("Newton[{cube}, x, 1]"), vec![cube2]),
+        (format!("Newton[{square}, x, 1, 2]"), vec![17.0 / 12.0]),
+        (format!("Newton[{square}, Equation[x, 1]]"), vec![root2]),
+        (format!("Newton[{square}, x, Range[1, 2]]"), vec![root2]),
+        (
+            "Newton[Equation[Power[x, 2], 2], x, 1]".to_owned(),
+            vec![root2],
+        ),
+        ("NSolve[Equation[Cos[x], x], x]".to_owned(), vec![dottie]),
+        (
+            "NSolve[Equation[Cos[x], x], Equation[x, 13/10]]".to_owned(),
+            vec![dottie],
+        ),
+        (
+            "NSolve[Equation[Power[x, 2], 2], x]".to_owned(),
+            vec![root2],
+        ),
+        (
+            "NSolve[Equation[Plus[Power[x, 3], Times[-1, x]], 0], Equation[x, 3/5]]".to_owned(),
+            vec![1.0],
+        ),
+        (
+            "NSolve[Equation[Power[x, 2], 2], Equation[x, Range[1, 2]]]".to_owned(),
+            vec![root2],
+        ),
+        (
+            "NSolve[List[Equation[Plus[Power[x, 2], Power[y, 2]], 4], Equation[Times[x, y], 1]], \
+             List[x, y]]"
+                .to_owned(),
+            vec![-big, -small],
+        ),
+    ] {
+        let found = Context::new().eval(&read(&input)).unwrap();
+        let values = flat_values(&found).unwrap_or_else(|| panic!("{input}: {found:?}"));
+        assert_eq!(values.len(), expected.len(), "{input}: {found:?}");
+        for (a, b) in values.iter().zip(&expected) {
+            assert!((a - b).abs() < 1e-12, "{input}: {found:?}");
+        }
+    }
+    // Never converged, giac's undef.
+    check(&[
+        ("Newton[Plus[1, Power[x, 2]], x]", "Indeterminate"),
+        ("Newton[Power[x, -1], x]", "Indeterminate"),
+        (
+            "NSolve[Equation[Plus[1, Power[x, 2]], 0], x]",
+            "Indeterminate",
+        ),
+    ]);
+    // Shapes, parameters, complex numbers and limits leave the call.
+    for input in [
+        "Newton[Plus[-2, Power[x, 2]], x, 1, 1001]",
+        "Newton[Plus[-2, Power[x, 2]], x, 1, 0]",
+        "Newton[Plus[-2, Power[x, 2]], x, 1, 2, 3, 4]",
+        "Newton[Plus[-2, Power[x, 2]]]",
+        "Newton[Plus[-2, Power[x, 2]], 2]",
+        "Newton[Plus[Times[-1, a], Power[x, 2]], x]",
+        "Newton[Plus[I, Power[x, 2]], x]",
+        "Newton[Plus[-2, Power[x, 2]], x, I]",
+        "NSolve[Plus[-2, Power[x, 2]], x, 1]",
+        "NSolve[List[Plus[-2, Power[x, 2]]], List[x, y]]",
+        "NSolve[List[Plus[-2, Power[x, 2]]], x]",
+    ] {
+        check(&[(input, input)]);
+    }
+    let mut ctx = Context::new();
+    let mut limits = ctx.limits();
+    limits.terms = 64;
+    ctx.set_limits(limits);
+    // 20 steps of a call of size 5 pass 64 terms; 1 step does not.
+    let past = "Newton[Plus[-2, Power[x, 2]], x]";
+    check_in(&ctx, &[(past, past)]);
+    let within = ctx
+        .eval(&read("Newton[Plus[-2, Power[x, 2]], x, 1, 1]"))
+        .unwrap();
+    assert_eq!(flat_values(&within), Some(vec![1.5]), "{within:?}");
+}

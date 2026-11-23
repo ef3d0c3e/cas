@@ -56,7 +56,7 @@ const METHODS: [Symbol; 7] = [
 ];
 
 /// The most unknowns.
-pub(super) const MAX_UNKNOWNS: usize = 16;
+pub(in crate::native) const MAX_UNKNOWNS: usize = 16;
 
 /// A square system: its functions `F_i`, unknowns and Jacobian; when
 /// `complex`, of complex unknowns, each two real ones, `Re` then `Im`.

@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 572] = [
+const BUILTINS: [&str; 574] = [
     "Plus",
     "Times",
     "Power",
@@ -177,6 +177,8 @@ const BUILTINS: [&str; 572] = [
     "CSolve",
     "FSolve",
     "CFSolve",
+    "Newton",
+    "NSolve",
     // Differential equations (CAS-259).
     "DSolve",
     "KovacicSols",

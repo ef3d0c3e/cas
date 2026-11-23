@@ -940,6 +940,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),
         (Symbol::CFSOLVE, solve::fsolve::complex::cfsolve),
+        (Symbol::NEWTON, solve::newton::newton),
+        (Symbol::NSOLVE, solve::newton::nsolve),
         (Symbol::TRANSPOSE, matrix::transpose),
         (Symbol::IDENTITY_MATRIX, matrix::identity_matrix),
         (Symbol::TR, matrix::tr),
