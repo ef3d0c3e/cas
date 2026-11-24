@@ -67,7 +67,7 @@ fn optimum() {
             "First[LPSolve[Plus[Times[1, x11], Times[2, x12], Times[3, x21], Times[1, x22]], \
              List[Equation[Plus[x11, x12], 10], Equation[Plus[x21, x22], 20], \
              Equation[Plus[x11, x21], 15], Equation[Plus[x12, x22], 15]], \
-             Equation[Assume, lp_nonnegative]]]",
+             Equation[Assume, LPNonNegative]]]",
         ),
         (
             "First[List[TPSolve[List[12, 17, 11], List[10, 10, 10, 10], \
@@ -80,7 +80,7 @@ fn optimum() {
              Equation[Plus[x21, x22, x23, x24], 17], Equation[Plus[x31, x32, x33, x34], 11], \
              Equation[Plus[x11, x21, x31], 10], Equation[Plus[x12, x22, x32], 10], \
              Equation[Plus[x13, x23, x33], 10], Equation[Plus[x14, x24, x34], 10]], \
-             Equation[Assume, lp_nonnegative]]]",
+             Equation[Assume, LPNonNegative]]]",
         ),
     ]);
 }

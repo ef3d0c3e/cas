@@ -7,9 +7,29 @@
 //!   taken as their closures, in a list; the variables are the symbols of
 //!   `c` and the constraints in the order they first appear. Anything else
 //!   leaves the call.
-//! - The bounds are `x = a..b`, ends rational or infinite. The options are
-//!   `maximize` (or `lp_maximize`) and giac's `assume = lp_nonnegative`,
-//!   every variable at least 0. A variable is free otherwise.
+//! - The bounds are `x = a..b` and `[x, y, …] = a..b`, ends rational or
+//!   infinite, of the program's variables; each intersects the variable's
+//!   bounds, and a variable is free otherwise. The options, giac's
+//!   (CAS-600, lpsolve.cc:2364-2504), in any order, a later one deciding:
+//!   - `maximize` or `lp_maximize` alone, or `maximize = b`,
+//!     `lp_maximize = b` with `b` `true` or `false`, maximize; `minimize`
+//!     alone minimizes.
+//!   - `assume = k` or `lp_assume = k`, the last one, applies to every
+//!     variable after the other options: `integer` and `lp_integer`
+//!     integers, `lp_nonnegint` (`nonnegint`) nonnegative integers,
+//!     `lp_binary` integers in `0..1`, `lp_nonnegative` at least 0
+//!     ([`super::integer::kind`]). Ours also takes `lp_nonnegative = true`
+//!     (`false` changes nothing), which giac ignores.
+//!   - `lp_integervariables = [x, …]` makes those variables integers,
+//!     `lp_binaryvariables = [x, …]` integers in `0..1`; giac's indices
+//!     and index ranges there leave the call.
+//!   - Another of giac's words alone (`lp_integer`, `lp_simplex`, …) is
+//!     ignored, as giac's, with a warning that names it.
+//!   - The keys of branch and bound (`lp_nodeselect`, `lp_varselect`,
+//!     `lp_maxcuts`, `lp_heuristic`, `lp_depthlimit`, `lp_nodelimit`,
+//!     `lp_iterationlimit`, `lp_timelimit`, `lp_gaptolerance`) leave the
+//!     call for now (T3), and so does any other option, a value of another
+//!     kind, or a range of a symbol that is not a variable.
 //! - Each variable becomes nonnegative: `x = a + x′` for a lower end `a`,
 //!   with `x′ ≤ b − a` for an upper one, `x = b − x′` for an upper end
 //!   alone, `x = x⁺ − x⁻` for none. The program goes to [`simplex`], which
@@ -100,6 +120,73 @@ fn end(e: &Expr) -> Result<Option<Rational>, ()> {
     if infinite { Ok(None) } else { Err(()) }
 }
 
+/// Narrows the ends `b` of a variable to their intersection with
+/// `low..high`, an absent end infinite.
+pub(super) fn tighten(
+    b: &mut (Option<Rational>, Option<Rational>),
+    low: Option<&Rational>,
+    high: Option<&Rational>,
+) {
+    if let Some(low) = low
+        && b.0.as_ref().is_none_or(|l| l < low)
+    {
+        b.0 = Some(low.clone());
+    }
+    if let Some(high) = high
+        && b.1.as_ref().is_none_or(|h| h > high)
+    {
+        b.1 = Some(high.clone());
+    }
+}
+
+/// `True` or `False`.
+fn boolean(e: &Expr) -> Option<bool> {
+    match e.as_symbol() {
+        Some(Symbol::TRUE) => Some(true),
+        Some(Symbol::FALSE) => Some(false),
+        _ => None,
+    }
+}
+
+/// giac's spelling of one of `lpsolve`'s option words; `None` for another
+/// symbol.
+fn lp_word(s: Symbol) -> Option<&'static str> {
+    Some(match s {
+        Symbol::LP_ASSUME => "lp_assume",
+        Symbol::LP_MAXIMIZE => "lp_maximize",
+        Symbol::LP_NON_NEGATIVE => "lp_nonnegative",
+        Symbol::LP_NON_NEG_INT => "lp_nonnegint",
+        Symbol::LP_INTEGER => "lp_integer",
+        Symbol::LP_BINARY => "lp_binary",
+        Symbol::LP_INTEGER_VARIABLES => "lp_integervariables",
+        Symbol::LP_BINARY_VARIABLES => "lp_binaryvariables",
+        Symbol::LP_METHOD => "lp_method",
+        Symbol::LP_SIMPLEX => "lp_simplex",
+        Symbol::LP_INTERIOR_POINT => "lp_interiorpoint",
+        Symbol::LP_VERBOSE => "lp_verbose",
+        Symbol::LP_PRESOLVE => "lp_presolve",
+        Symbol::LP_NODE_SELECT => "lp_nodeselect",
+        Symbol::LP_DEPTH_FIRST => "lp_depthfirst",
+        Symbol::LP_BREADTH_FIRST => "lp_breadthfirst",
+        Symbol::LP_BEST_LOCAL_BOUND => "lp_bestlocalbound",
+        Symbol::LP_BEST_PROJECTION => "lp_bestprojection",
+        Symbol::LP_HYBRID => "lp_hybrid",
+        Symbol::LP_VAR_SELECT => "lp_varselect",
+        Symbol::LP_FIRST_FRACTIONAL => "lp_firstfractional",
+        Symbol::LP_LAST_FRACTIONAL => "lp_lastfractional",
+        Symbol::LP_MOST_FRACTIONAL => "lp_mostfractional",
+        Symbol::LP_PSEUDO_COST => "lp_pseudocost",
+        Symbol::LP_MAX_CUTS => "lp_maxcuts",
+        Symbol::LP_HEURISTIC => "lp_heuristic",
+        Symbol::LP_DEPTH_LIMIT => "lp_depthlimit",
+        Symbol::LP_NODE_LIMIT => "lp_nodelimit",
+        Symbol::LP_ITERATION_LIMIT => "lp_iterationlimit",
+        Symbol::LP_TIME_LIMIT => "lp_timelimit",
+        Symbol::LP_GAP_TOLERANCE => "lp_gaptolerance",
+        _ => return None,
+    })
+}
+
 /// A program: the objective's coefficients and constant, the rows, the
 /// variables' bounds, and whether it maximizes.
 pub(super) struct Program {
@@ -112,6 +199,64 @@ pub(super) struct Program {
     pub(super) integer: Vec<bool>,
 }
 
+/// The options of a call, as giac reads them; ranges and lists of
+/// variables are checked against the program's later.
+#[derive(Default)]
+struct Options<'a> {
+    maximum: bool,
+    nonnegative: bool,
+    assumption: Option<&'a Expr>,
+    /// The lists of `lp_integervariables` (false) and `lp_binaryvariables`
+    /// (true).
+    typed: Vec<(&'a Expr, bool)>,
+    ranges: Vec<(&'a Expr, &'a Expr, &'a Expr)>,
+    /// The words alone that do nothing, giac's spelling.
+    ignored: Vec<&'static str>,
+}
+
+/// The options `rest`; `None` when one is not an option.
+fn options(rest: &[Expr]) -> Option<Options<'_>> {
+    let mut o = Options::default();
+    for option in rest {
+        if let Some(s) = option.as_symbol() {
+            match s {
+                Symbol::MAXIMIZE | Symbol::LP_MAXIMIZE => o.maximum = true,
+                Symbol::MINIMIZE => o.maximum = false,
+                _ => o.ignored.push(lp_word(s)?),
+            }
+            continue;
+        }
+        let (Some(Symbol::EQUATION | Symbol::EQUAL), [l, r]) = (head(option), option.args()) else {
+            return None;
+        };
+        match (l.as_symbol(), head(r), r.args()) {
+            (Some(Symbol::MAXIMIZE | Symbol::LP_MAXIMIZE), _, _) => o.maximum = boolean(r)?,
+            (Some(Symbol::ASSUME | Symbol::LP_ASSUME), _, _) => o.assumption = Some(r),
+            (Some(Symbol::LP_NON_NEGATIVE), _, _) => o.nonnegative |= boolean(r)?,
+            (Some(Symbol::LP_INTEGER_VARIABLES), _, _) => o.typed.push((r, false)),
+            (Some(Symbol::LP_BINARY_VARIABLES), _, _) => o.typed.push((r, true)),
+            (_, Some(Symbol::RANGE), [a, b]) => o.ranges.push((l, a, b)),
+            _ => return None,
+        }
+    }
+    Some(o)
+}
+
+/// Warns of each word in `ignored`.
+fn warn_ignored(ev: &mut Eval<'_>, e: &Expr, ignored: &[&str]) {
+    for word in ignored {
+        let message = if matches!(
+            *word,
+            "lp_integer" | "lp_binary" | "lp_nonnegative" | "lp_nonnegint"
+        ) {
+            format!("the option {word} alone is ignored; assume={word} applies it")
+        } else {
+            format!("the option {word} alone is ignored")
+        };
+        warn(ev, e, &message);
+    }
+}
+
 /// The program of a call; `None` when it is not one.
 pub(super) fn program(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Program>, EvalError> {
     let [objective, rest @ ..] = e.args() else {
@@ -121,41 +266,43 @@ pub(super) fn program(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Program>, Ev
         [c, more @ ..] if head(c) == Some(Symbol::LIST) => (c.args(), more),
         _ => (&[][..], rest),
     };
-    let mut maximum = false;
-    let mut nonnegative = false;
-    let mut kind: Option<Expr> = None;
-    let mut ranges: Vec<(&Expr, &Expr, &Expr)> = Vec::new();
-    for option in rest {
-        if option.as_symbol() == Some(Symbol::MAXIMIZE) || *option == Expr::symbol("lp_maximize") {
-            maximum = true;
-            continue;
-        }
-        let (Some(Symbol::EQUATION | Symbol::EQUAL), [l, r]) = (head(option), option.args()) else {
-            return Ok(None);
-        };
-        if l.as_symbol() == Some(Symbol::ASSUME) {
-            if *r == Expr::symbol("lp_nonnegative") {
-                nonnegative = true;
-            } else {
-                kind = Some(r.clone());
-            }
-            continue;
-        }
-        let (Some(Symbol::RANGE), [a, b]) = (head(r), r.args()) else {
-            return Ok(None);
-        };
-        ranges.push((l, a, b));
-    }
+    let Some(o) = options(rest) else {
+        return Ok(None);
+    };
     let mut xs = Vec::new();
     symbols_in_order(objective, &mut xs);
     for c in constraints {
         symbols_in_order(c, &mut xs);
     }
-    for (x, _, _) in &ranges {
-        if x.as_symbol().is_none_or(Symbol::is_builtin) {
+    // The position of a program variable, `None` for anything else.
+    let index = |x: &Expr| xs.iter().position(|v| v == x);
+    let mut spans: Vec<(usize, &Expr, &Expr)> = Vec::new();
+    for (l, a, b) in o.ranges {
+        let vars = if head(l) == Some(Symbol::LIST) {
+            l.args()
+        } else {
+            std::slice::from_ref(l)
+        };
+        for x in vars {
+            let Some(j) = index(x) else {
+                return Ok(None);
+            };
+            spans.push((j, a, b));
+        }
+    }
+    let mut integer = vec![false; xs.len()];
+    let mut binary = vec![false; xs.len()];
+    for (list, is_binary) in o.typed {
+        if head(list) != Some(Symbol::LIST) {
             return Ok(None);
         }
-        symbols_in_order(x, &mut xs);
+        for x in list.args() {
+            let Some(j) = index(x) else {
+                return Ok(None);
+            };
+            integer[j] = true;
+            binary[j] |= is_binary;
+        }
     }
     let Some((objective, constant)) = linear(ev, objective, &xs)? else {
         return Ok(None);
@@ -176,33 +323,36 @@ pub(super) fn program(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Program>, Ev
         };
         rows.push((a, relation, -k));
     }
-    let start = if nonnegative {
-        Some(Rational::ZERO)
-    } else {
-        None
-    };
-    let mut bounds = vec![(start, None); xs.len()];
-    for (x, a, b) in ranges {
-        let j = xs.iter().position(|v| v == x).expect("collected");
+    // Every option narrows the bounds; the assumption comes last, as
+    // giac's (lpsolve.cc:2672-2689).
+    let mut bounds = vec![(None, None); xs.len()];
+    for (j, a, b) in spans {
         let (Ok(low), Ok(high)) = (end(a), end(b)) else {
             return Ok(None);
         };
-        bounds[j] = (low, high);
+        tighten(&mut bounds[j], low.as_ref(), high.as_ref());
     }
-    let integer = match kind {
-        None => vec![false; xs.len()],
-        Some(k) => match super::integer::kind(&k, &mut bounds) {
-            Some(flags) => flags,
-            None => return Ok(None),
-        },
-    };
+    for (b, _) in bounds.iter_mut().zip(&binary).filter(|(_, is)| **is) {
+        tighten(b, Some(&Rational::ZERO), Some(&Rational::ONE));
+    }
+    if o.nonnegative {
+        for b in &mut bounds {
+            tighten(b, Some(&Rational::ZERO), None);
+        }
+    }
+    if let Some(k) = o.assumption
+        && !super::integer::kind(k, &mut bounds, &mut integer)
+    {
+        return Ok(None);
+    }
+    warn_ignored(ev, e, &o.ignored);
     Ok(Some(Program {
         xs,
         objective,
         constant,
         rows,
         bounds,
-        maximum,
+        maximum: o.maximum,
         integer,
     }))
 }

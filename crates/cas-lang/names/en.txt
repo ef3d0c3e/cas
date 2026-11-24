@@ -559,6 +559,38 @@ FMax: fMax
 LPSolve: lpsolve
 NLPSolve: nlpsolve
 TPSolve: tpsolve
+# lpsolve's options, Xcas's (CAS-600, CAS-601): options, no function.
+LPAssume: lp_assume
+LPMaximize: lp_maximize
+LPNonNegative: lp_nonnegative
+LPNonNegInt: lp_nonnegint nonnegint
+LPInteger: lp_integer
+LPBinary: lp_binary
+LPIntegerVariables: lp_integervariables
+LPBinaryVariables: lp_binaryvariables
+LPMethod: lp_method
+LPSimplex: lp_simplex
+LPInteriorPoint: lp_interiorpoint
+LPVerbose: lp_verbose
+LPPresolve: lp_presolve
+LPNodeSelect: lp_nodeselect
+LPDepthFirst: lp_depthfirst
+LPBreadthFirst: lp_breadthfirst
+LPBestLocalBound: lp_bestlocalbound
+LPBestProjection: lp_bestprojection
+LPHybrid: lp_hybrid
+LPVarSelect: lp_varselect
+LPFirstFractional: lp_firstfractional
+LPLastFractional: lp_lastfractional
+LPMostFractional: lp_mostfractional
+LPPseudoCost: lp_pseudocost
+LPMaxCuts: lp_maxcuts
+LPHeuristic: lp_heuristic
+LPDepthLimit: lp_depthlimit
+LPNodeLimit: lp_nodelimit
+LPIterationLimit: lp_iterationlimit
+LPTimeLimit: lp_timelimit
+LPGapTolerance: lp_gaptolerance
 # Number theory II (CAS-DOC-39, CAS-422).
 QuotientRemainder: iquorem
 SymmetricMod: smod

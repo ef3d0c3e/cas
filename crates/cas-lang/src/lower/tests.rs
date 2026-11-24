@@ -439,7 +439,7 @@ fn assume_options() {
             "lpsolve(x, [x >= 1], assume = integer)",
             "LPSolve[x, List[GreaterEqual[x, 1]], Equation[Assume, integer]]",
         ),
-        ("f(assume = lp_binary)", "f[Equation[Assume, lp_binary]]"),
+        ("f(assume = lp_binary)", "f[Equation[Assume, LPBinary]]"),
     ]);
     assert_eq!(
         errors("y := assume"),

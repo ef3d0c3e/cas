@@ -1,7 +1,8 @@
-//! Integer programs (CAS-DOC-38 §4, CAS-418): giac's `assume = integer` or
-//! `lp_integer` (integers), `nonnegint` (nonnegative integers) and
-//! `lp_binary` (0 or 1), by branch and bound on the continuous
-//! relaxations.
+//! Integer programs (CAS-DOC-38 §4, CAS-418, CAS-600): giac's
+//! `assume = integer` or `lp_integer` (integers), `lp_nonnegint` or
+//! `nonnegint` (nonnegative integers) and `lp_binary` (0 or 1), each
+//! variable's own by `lp_integervariables` and `lp_binaryvariables` (the
+//! others continuous), by branch and bound on the continuous relaxations.
 //!
 //! - A relaxation's best point with an integer variable at a fraction `v`
 //!   branches into `x ≤ ⌊v⌋` and `x ≥ ⌈v⌉`, depth first, the first such
@@ -14,9 +15,10 @@
 
 use cas_num::Rational;
 
-use super::lpsolve::{Program, relaxation};
+use super::lpsolve::{Program, relaxation, tighten};
 use super::simplex::Outcome;
 use crate::expr::Expr;
+use crate::symbol::Symbol;
 
 /// The most relaxations of one program.
 const MAX_NODES: usize = 10_000;
@@ -24,32 +26,30 @@ const MAX_NODES: usize = 10_000;
 /// A variable's ends, `None` for an infinite one.
 type Bounds = Vec<(Option<Rational>, Option<Rational>)>;
 
-/// The variables that must be integers under giac's option `k`, their
-/// bounds narrowed for `nonnegint` and `lp_binary`; `None` for another
-/// option.
-pub(super) fn kind(k: &Expr, bounds: &mut Bounds) -> Option<Vec<bool>> {
-    let is = |name: &str| *k == Expr::symbol(name);
-    if is("integer") || is("lp_integer") {
-        return Some(vec![true; bounds.len()]);
-    }
-    let (low, high) = if is("nonnegint") {
-        (Rational::ZERO, None)
-    } else if is("lp_binary") {
-        (Rational::ZERO, Some(Rational::ONE))
+/// Applies giac's assumption `assume = k` to every variable: `integer` and
+/// `lp_integer` make it an integer, `lp_nonnegint` (`nonnegint`) a
+/// nonnegative integer, `lp_binary` an integer in `0..1`, and
+/// `lp_nonnegative` nonnegative, its bounds intersected with those
+/// (lpsolve.cc:2672-2689); `false` for another value.
+pub(super) fn kind(k: &Expr, bounds: &mut Bounds, integer: &mut [bool]) -> bool {
+    let zero = Some(&Rational::ZERO);
+    // `integer` is a name of [types], not a builtin.
+    let (whole, low, high) = if *k == Expr::symbol("integer") {
+        (true, None, None)
     } else {
-        return None;
+        match k.as_symbol() {
+            Some(Symbol::LP_INTEGER) => (true, None, None),
+            Some(Symbol::LP_NON_NEG_INT) => (true, zero, None),
+            Some(Symbol::LP_BINARY) => (true, zero, Some(&Rational::ONE)),
+            Some(Symbol::LP_NON_NEGATIVE) => (false, zero, None),
+            _ => return false,
+        }
     };
-    for (l, h) in bounds.iter_mut() {
-        if l.as_ref().is_none_or(|l| *l < low) {
-            *l = Some(low.clone());
-        }
-        if let Some(high) = &high
-            && h.as_ref().is_none_or(|h| h > high)
-        {
-            *h = Some(high.clone());
-        }
+    for (b, is) in bounds.iter_mut().zip(integer) {
+        tighten(b, low, high);
+        *is |= whole;
     }
-    Some(vec![true; bounds.len()])
+    true
 }
 
 /// Whether `value` is better than `best`.
