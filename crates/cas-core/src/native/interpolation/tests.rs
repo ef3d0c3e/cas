@@ -311,8 +311,10 @@ fn trigonometric_interpolation() {
             "TrigonometricInterpolation[List[0x1p+0, 2, 3], Equation[x, Range[0, 2]]]",
         ))
         .unwrap();
+    // `may_contain` is a bloom filter: its negation is no proof (a
+    // symbol renumbering made `Pi`'s bit collide in 49787b3), so `free_of`.
     assert!(
-        found.may_contain(Symbol::COS) && !found.may_contain(Symbol::PI),
+        found.may_contain(Symbol::COS) && found.free_of(&Expr::from(Symbol::PI)),
         "{found:?}"
     );
 }
