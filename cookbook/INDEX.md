@@ -61,3 +61,4 @@ C0058 | Expr::may_contain is a bloom filter: never assert its negation | tests,e
 C0059 | Certified KKT points under bounds: one-point ranges; simple inequalities as bounds | nlpsolve,kkt,certified,bounds,branch-and-bound | 2026-11-24 | 1.5/T4 | T4.c2 CAS-605; CI 45337180530 nlpsolve_seeded
 C0060 | giac gen arithmetic on mixed exact/float data: an Exact|Float entry enum | giac,port,decimal,exact,prototype | 2026-11-24 | 1.5/T5 | CAS-606
 C0061 | Certified global minimiser on an interval: float candidate, ball cover, interval Newton | minimum,certified,krawczyk,cover,brent,find_minimum | 2026-11-24 | 1.5/T6 | T6.c1 CAS-608
+C0062 | Iterative float optimisers with a certified stop: test in balls, one shared work budget | frank-wolfe,certified,optimisation,limits,budget,gap | 2026-11-24 | 1.5/T6 | T6.c2 CAS-609
