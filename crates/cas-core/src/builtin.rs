@@ -731,6 +731,8 @@ builtins! {
     NLP_SOLVE = "NLPSolve" [PROTECTED];
     // giac's simplex_reduce (CAS-606).
     SIMPLEX_REDUCE = "SimplexReduce" [PROTECTED];
+    // giac's find_minimum (CAS-608).
+    FIND_MINIMUM = "FindMinimum" [PROTECTED];
     // LPSolve's options (CAS-600, CAS-601): no native.
     LP_ASSUME = "LPAssume" [PROTECTED];
     LP_MAXIMIZE = "LPMaximize" [PROTECTED];

@@ -543,7 +543,7 @@ fn to_f64(q: &Rational) -> f64 {
 }
 
 /// The finite ball of a real number.
-fn ball(ev: &Eval<'_>, e: &Expr, prec: u64) -> Option<Ball> {
+pub(super) fn ball(ev: &Eval<'_>, e: &Expr, prec: u64) -> Option<Ball> {
     if let Some(q) = e.to_rational() {
         return Some(Ball::from_rational(&q, prec));
     }
@@ -558,7 +558,7 @@ fn ball(ev: &Eval<'_>, e: &Expr, prec: u64) -> Option<Ball> {
 }
 
 /// A real value of `tree` at the ball `z`.
-fn value(tree: &Node, z: &Ball, prec: u64) -> Option<Ball> {
+pub(super) fn value(tree: &Node, z: &Ball, prec: u64) -> Option<Ball> {
     tree.eval(&ComplexBall::from_real(z.clone()), Mode::Real, prec)
         .filter(|v| v.is_real() && v.re().is_finite())
         .map(|v| v.re().clone())

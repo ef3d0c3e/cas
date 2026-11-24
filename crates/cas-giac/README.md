@@ -506,6 +506,13 @@ points.
   pivots an infeasible basis (`-9/2,[0,0,-3/2,0,11/2],…`); ours warns and stays
   `SimplexReduce[…]`.
 
+`tests/find_minimum.rs`, Xcas's `find_minimum` (CAS-608): giac's 7 probe rows that compile
+(`cosh`, with `eps=1e-5, maxiter=20` too, `x^2-2*x`, `(x-1/3)^2`, `x->x^4-3*x^2+x`, `sin`,
+`abs(x-1/2)`), closed form first: our ball holds it (at 60 digits) with radius at most `eps`,
+giac's double within `10⁻⁶` of it (`10⁻⁴` for `eps=1e-5`). Departures: the `Airy_Ai` and
+`besselJ`/`Gamma` rows (giac `-3.96344565209`, `4.82843934915`), which do not compile to ball
+operations; ours stays `FindMinimum[…]`.
+
 `tests/nlpsolve.rs` and `tests/nlpsolve_seeded.rs` (CAS-604, CAS-605), `nlpsolve`'s options matched by
 their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_precision`,
 `nlp_tolerance`, `nlp_method`, `nlp_maximize`, `nlp_presolve`, `nlp_verbose`, `assume`,

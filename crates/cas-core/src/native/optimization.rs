@@ -2,7 +2,8 @@
 //! `extrema`; [`global`] optima (§3); linear programs ([`lpsolve`], by
 //! [`simplex`] and, with integers, [`integer`], §4); nonlinear programs
 //! ([`nlpsolve`], CAS-519; with integers [`nlpinteger`], CAS-605); giac's
-//! tableau method [`simplex_reduce`] (CAS-606).
+//! tableau method [`simplex_reduce`] (CAS-606); giac's [`find_minimum`]
+//! (CAS-608).
 //!
 //! `Extrema[f, vars]` and `Extrema[f, constraints, vars]`:
 //!
@@ -32,6 +33,7 @@
 //!   balls'; one not decided leaves the point out, as giac reports a
 //!   saddle or an indeterminate point and leaves it out.
 
+pub(super) mod find_minimum;
 pub(super) mod global;
 mod integer;
 pub(super) mod lpsolve;
