@@ -201,3 +201,170 @@ fn distances() {
         report.warnings
     );
 }
+
+#[test]
+fn splitting() {
+    check(&[
+        (
+            "Split[\"This is a phrase\", \" \"]",
+            "List[\"This\", \"is\", \"a\", \"phrase\"]",
+        ),
+        ("Split[\"a,,b\", \",\"]", "List[\"a\", \"\", \"b\"]"),
+        ("Split[\"\", \",\"]", "List[]"),
+        ("Split[\"a,\", \",\"]", "List[\"a\"]"),
+        ("Split[\",a\", \",\"]", "List[\"\", \"a\"]"),
+        ("Split[\"aXYbXY\", \"XY\"]", "List[\"a\", \"b\"]"),
+        ("Split[\"a,,\", \",\"]", "List[\"a\", \"\"]"),
+        // giac's split(e, [x, y]).
+        (
+            "Split[Plus[Times[Power[x, 3], Power[y, 2]], Times[-1, Power[y, 2]], Power[x, 3], -1], \
+             List[x, y]]",
+            "List[Times[Plus[x, -1], Plus[Power[x, 2], x, 1]], Plus[Power[y, 2], 1]]",
+        ),
+        (
+            "Split[Plus[Times[Power[x, 3], Power[y, 2]], Times[-1, Power[y, 2]], Power[x, 3], 1], \
+             List[x, y]]",
+            "List[0]",
+        ),
+        ("Split[Times[2, x, y], List[x, y]]", "List[x, Times[2, y]]"),
+        ("Split[Plus[x, y], List[x, y]]", "List[0]"),
+        ("Split[3, List[x, y]]", "List[1, 3]"),
+        (
+            "Split[Times[Power[x, 2], Sin[y]], List[x, y]]",
+            "List[Power[x, 2], Sin[y]]",
+        ),
+    ]);
+    stays(&[
+        "Split[\"abc\", \"\"]",
+        "Split[\"abc\", x]",
+        "Split[x, \",\"]",
+        "Split[\"abc\", List[x, y]]",
+        "Split[\"a\"]",
+    ]);
+}
+
+#[test]
+fn joining() {
+    check(&[
+        (
+            "StringJoin[\" \", List[\"This\", \"is\", \"a\", \"phrase\"]]",
+            "\"This is a phrase\"",
+        ),
+        ("StringJoin[\",\", List[]]", "\"\""),
+        ("StringJoin[\"\", List[\"a\", \"b\"]]", "\"ab\""),
+        ("StringJoin[\", \", List[\"a\"]]", "\"a\""),
+    ]);
+    stays(&[
+        "StringJoin[\",\", List[1, 2]]",
+        "StringJoin[\",\", \"ab\"]",
+        "StringJoin[x, List[\"a\"]]",
+        "StringJoin[List[\"a\"]]",
+    ]);
+}
+
+#[test]
+fn trimming() {
+    check(&[
+        ("Trim[\"   an apple     \"]", "\"an apple\""),
+        ("Trim[\" a b \"]", "\"a b\""),
+        ("Trim[\"\"]", "\"\""),
+        ("Trim[\"\\tab\\n\"]", "\"ab\""),
+        ("Trim[\"\\u{b}\\u{c}\\rab\\u{e}\"]", "\"ab\\u{e}\""),
+        ("Trim[\"ab\", Left]", "\"ab\""),
+        ("Trim[\" ab \", Left]", "\"ab \""),
+        ("Trim[\" ab \", Right]", "\" ab\""),
+        (
+            "Trim[List[0, 0, 1, 2, 3, 0, 0x1p-53, 0], Right]",
+            "List[0, 0, 1, 2, 3]",
+        ),
+        (
+            "Trim[List[0x1p-7, 0x1p-3, 0x1p+0, 0x1p-5], 0x1.999999999999ap-4]",
+            "List[0x1p-3, 0x1p+0]",
+        ),
+        ("Trim[List[0, 0], Right]", "List[]"),
+        ("Trim[List[0x1p-44, 1, 0]]", "List[1]"),
+        ("Trim[List[0x1p-36, 1, 0]]", "List[0x1p-36, 1]"),
+        ("Trim[List[0, 1, 0], Left]", "List[1, 0]"),
+        ("Trim[List[0, 1, 0]]", "List[1]"),
+        ("Trim[List[0, x, 0]]", "List[x]"),
+        ("Trim[List[0, 0x0p+0, 1]]", "List[1]"),
+        ("Trim[List[1, 0x1p-1, 2], 1]", "List[1, 0x1p-1, 2]"),
+        ("Trim[List[1/2, 2, -1/3], 1]", "List[2]"),
+        ("Trim[List[1, x], 1, Left]", "List[1, x]"),
+    ]);
+    stays(&[
+        "Trim[List[1, 0x1p-1, 2], -1]",
+        "Trim[List[1, 0x1p-1, 2], 0]",
+        "Trim[List[1, 0x1p-1, 2], \"x\"]",
+        "Trim[List[1, 0x1p-1, 2], x]",
+        "Trim[List[0, x, 0], 1]",
+        "Trim[\"ab\", 1]",
+        "Trim[x]",
+        "Trim[List[0], 1, 2]",
+    ]);
+}
+
+#[test]
+fn stripping() {
+    check(&[
+        ("Strip[\"  an apple     \"]", "\"an apple\""),
+        ("Strip[\"\\ta\\t\"]", "\"\\ta\\t\""),
+        ("Strip[\"xxaxx\", \"x\"]", "\"a\""),
+        ("Strip[\"xxx\", \"x\"]", "\"\""),
+        ("Strip[\"  \"]", "\"\""),
+        ("Strip[\"xyaxy\", \"yx\"]", "\"a\""),
+    ]);
+    stays(&["Strip[x]", "Strip[\"a\", 1]", "Strip[]"]);
+}
+
+/// Strings in `Length`, `Join`, `At`, the comparisons and `Sort` (CAS-612).
+#[test]
+fn elsewhere() {
+    check(&[
+        ("Length[\"abc\"]", "3"),
+        ("Length[\"\"]", "0"),
+        ("Length[\"h\u{e9}llo\"]", "5"),
+        ("Join[\"ab\", \"cd\"]", "\"abcd\""),
+        ("Join[\"a\", \"b\", \"c\"]", "\"abc\""),
+        ("Join[List[\"a\"], \"b\"]", "List[\"a\", \"b\"]"),
+        ("At[\"abc\", 1]", "\"b\""),
+        ("At[\"abc\", 0]", "\"a\""),
+        ("At[\"abc\", -1]", "\"c\""),
+        ("At[\"abc\", Range[1, 2]]", "\"bc\""),
+        ("At[\"abc\", Range[1, 0]]", "\"\""),
+        ("At[\"abc\", 1, 0]", "\"b\""),
+        ("At[\"h\u{e9}llo\", 1]", "\"\u{e9}\""),
+        ("Less[\"a\", \"b\"]", "True"),
+        ("Less[\"B\", \"a\"]", "True"),
+        ("Less[\"b\", \"a\"]", "False"),
+        ("Less[\"a\", \"b\", \"c\"]", "True"),
+        ("LessEqual[\"a\", \"a\"]", "True"),
+        ("Greater[\"b\", \"a\"]", "True"),
+        ("GreaterEqual[\"b\", \"a\"]", "True"),
+        ("Equal[\"abc\", \"abc\"]", "True"),
+        ("Equal[\"a\", \"b\"]", "False"),
+        ("Unequal[\"a\", \"b\"]", "True"),
+        (
+            "Sort[List[\"b\", \"A\", \"a\", \"aa\", \"\"]]",
+            "List[\"\", \"A\", \"a\", \"aa\", \"b\"]",
+        ),
+        ("Sort[List[\"b\", 2, \"a\"]]", "List[2, \"a\", \"b\"]"),
+    ]);
+    stays(&[
+        "Join[\"a\", 1]",
+        "At[\"abc\", Range[0, 1], 0]",
+        "At[\"abc\", x]",
+    ]);
+    let ctx = Context::new();
+    for input in [
+        "At[\"abc\", 3]",
+        "At[\"abc\", -4]",
+        "At[\"abc\", Range[0, 5]]",
+    ] {
+        assert_eq!(
+            ctx.eval(&read(input)),
+            Err(crate::EvalError::IndexOutOfRange),
+            "{input}"
+        );
+    }
+}

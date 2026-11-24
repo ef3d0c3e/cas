@@ -12,7 +12,11 @@
 //! a row and `m[0..1, j]` part of a column. An integer takes its level away
 //! and a slice keeps it, as a list. `m[i, j]` is `m[i][j]`.
 //!
-//! Only lists are indexed. Anything else, as `x[0]` for an unassigned `x`
+//! A string is indexed as the list of its characters (Unicode scalar
+//! values), each a string (CAS-612): `"abc"[1]` is `"b"`, `"abc"[0..1]`
+//! `"ab"`; a slice of a string followed by more indices stays.
+//!
+//! Only lists and strings are indexed. Anything else, as `x[0]` for an unassigned `x`
 //! (an indexed name), and an index that is neither an integer nor a slice,
 //! as `v[k]`, stay unevaluated. An index out of range is
 //! [`EvalError::IndexOutOfRange`]: unlike Xcas, a slice past the end is not
@@ -108,6 +112,9 @@ fn select(ev: &mut Eval<'_>, v: &Expr, indices: &[Expr]) -> Native {
     let Some((index, rest)) = indices.split_first() else {
         return Ok(Some(v.clone()));
     };
+    if let Some(s) = v.as_str() {
+        return select_chars(ev, s, index, rest);
+    }
     if !is_list(v) {
         return Ok(None);
     }
@@ -122,6 +129,21 @@ fn select(ev: &mut Eval<'_>, v: &Expr, indices: &[Expr]) -> Native {
         items.push(below(ev, x, rest)?);
     }
     Ok(Some(list(&items)))
+}
+
+/// What `index`, then `rest`, select in the characters of `s`.
+fn select_chars(ev: &mut Eval<'_>, s: &str, index: &Expr, rest: &[Expr]) -> Native {
+    let chars: Vec<char> = s.chars().collect();
+    match Index::of(index, chars.len())? {
+        Some(Index::One(k)) => below(ev, &Expr::string(&chars[k].to_string()), rest).map(Some),
+        Some(Index::Slice(range))
+            if rest.is_empty() && range.len() <= ev.context().limits().terms =>
+        {
+            Ok(Some(Expr::string(&chars[range].iter().collect::<String>())))
+        }
+        // Not an index, or a slice followed by more indices.
+        None | Some(Index::Slice(_)) => Ok(None),
+    }
 }
 
 /// What `rest` selects in `x`, a level down, which takes a level of

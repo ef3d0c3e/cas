@@ -1,9 +1,21 @@
-//! Xcas's string commands (CAS-611, CAS-613): `Char`, `Asc`, `Ord`,
-//! `InString`, `Contains`, `Mid`, `Left`, `Right`, `Levenshtein` and
-//! `Hamming`, ported from giac 2.0.0.21: ti89.cc `_inString`, `_left`,
-//! `_right`, `_mid`, `_ord`; prog.cc `_contains`, `_char`, `_asc`;
-//! optimization.cc `_levenshtein`. giac has no `hamming` command (an aide
-//! entry only): ours counts the positions that differ.
+//! Xcas's string commands (CAS-611, CAS-612, CAS-613): `Char`, `Asc`,
+//! `Ord`, `InString`, `Contains`, `Mid`, `Left`, `Right`, `Levenshtein`,
+//! `Hamming`, `Split`, `StringJoin`, `Trim` and `Strip`, ported from giac
+//! 2.0.0.21: ti89.cc `_inString`, `_left`, `_right`, `_mid`, `_ord`;
+//! prog.cc `_contains`, `_char`, `_asc`; optimization.cc `_levenshtein`;
+//! permu.cc `_split`, `_join`; signalprocessing.cc `_trim`; misc.cc
+//! `_strip`. giac has no `hamming` command (an aide entry only): ours counts
+//! the positions that differ. Strings in other natives (CAS-612): `Length`,
+//! `Join` (concat), `At`, the comparisons and `Sort` take them in their own
+//! modules.
+//!
+//! `split(e, [x, y])` is giac's: the factors of `FactorList[e]` free of `x`
+//! multiply to the `y` part, the others free of `y` to the `x` part, and
+//! `[0]` when a factor has both. `trim` takes giac's whitespace (space and
+//! codes 9 to 13) off a string, and the zeros off the ends of a list: exact
+//! 0 or a decimal within giac's `epsilon` 1e-12, or with a threshold `t > 0`
+//! the real entries below `t` in absolute value (another entry met makes it
+//! stay). `strip` takes spaces, or the given characters.
 //!
 //! Positions are 0-based and count Unicode scalar values. A call giac
 //! refuses, or whose shape is not one of these, stays unevaluated.
@@ -23,12 +35,17 @@
 //! - `levenshtein` of a string and a list stays with giac's message as a
 //!   warning; past the `terms` limit (`n·m` cells) it stays.
 //! - `hamming` answers equal-length strings or lists, where giac stays.
+//! - `split(s, "")` stays (giac's "Invalid dimension"); `join` of anything
+//!   but strings stays (giac prints them); a `trim` threshold that is not a
+//!   positive real stays (giac's "Invalid threshold specification").
+//! - Results past the `terms` limit (pieces, characters) stay.
 
 use std::cmp::Ordering;
 
 use cas_num::Rational;
 use cas_num::ball::Ball;
 
+use super::expressions::EPSILON;
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
@@ -385,6 +402,193 @@ pub(super) fn hamming(_: &mut Eval<'_>, e: &Expr) -> Native {
         _ => return Ok(None),
     };
     Ok(Some(int(differ)))
+}
+
+/// Whether `n` elements are within the `terms` limit.
+fn within(ev: &Eval<'_>, n: usize) -> bool {
+    n <= ev.context().limits().terms
+}
+
+/// `Split[s, sep]`: the pieces of `s` between the occurrences of `sep`,
+/// a last empty piece dropped; `Split[e, List[x, y]]`: `e` as a product
+/// `List[f(x), g(y)]` of its factors, or `List[0]` when it is not one.
+pub(super) fn split(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [s, sep] = e.args() else {
+        return Ok(None);
+    };
+    if let [x, y] = sep.args()
+        && is_list(sep)
+    {
+        return split_variables(ev, s, x, y);
+    }
+    let (Some(s), Some(sep)) = (s.as_str(), sep.as_str()) else {
+        return Ok(None);
+    };
+    if sep.is_empty() || !within(ev, s.matches(sep).count().saturating_add(1)) {
+        return Ok(None);
+    }
+    let mut pieces: Vec<&str> = s.split(sep).collect();
+    if pieces.last() == Some(&"") {
+        pieces.pop();
+    }
+    Ok(Some(list(pieces.into_iter().map(Expr::string).collect())))
+}
+
+/// giac's `split(e, [x, y])`: the factors of `FactorList[e]` free of `x`
+/// make the `y` part, the others free of `y` the `x` part.
+fn split_variables(ev: &mut Eval<'_>, e: &Expr, x: &Expr, y: &Expr) -> Native {
+    if e.as_str().is_some() || is_list(e) {
+        return Ok(None);
+    }
+    let factors = ev.eval(&Expr::call(Symbol::FACTOR_LIST, [e.clone()]))?;
+    if !is_list(&factors) || factors.args().len() % 2 != 0 {
+        return Ok(None);
+    }
+    let (mut xs, mut ys) = (Vec::new(), Vec::new());
+    for pair in factors.args().chunks_exact(2) {
+        let power = Expr::call(Symbol::POWER, [pair[0].clone(), pair[1].clone()]);
+        if pair[0].free_of(x) {
+            ys.push(power);
+        } else if pair[0].free_of(y) {
+            xs.push(power);
+        } else {
+            return Ok(Some(list(vec![Expr::from(0)])));
+        }
+    }
+    let xs = ev.eval(&Expr::call(Symbol::TIMES, xs))?;
+    let ys = ev.eval(&Expr::call(Symbol::TIMES, ys))?;
+    Ok(Some(list(vec![xs, ys])))
+}
+
+/// `StringJoin[sep, List[s…]]`: the strings `s…` with `sep` between them.
+pub(super) fn string_join(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [sep, items] = e.args() else {
+        return Ok(None);
+    };
+    let (Some(sep), true) = (sep.as_str(), is_list(items)) else {
+        return Ok(None);
+    };
+    let Some(items) = items
+        .args()
+        .iter()
+        .map(Expr::as_str)
+        .collect::<Option<Vec<_>>>()
+    else {
+        return Ok(None);
+    };
+    let gaps = items.len().saturating_sub(1);
+    let length = items
+        .iter()
+        .try_fold(0usize, |n, s| n.checked_add(s.chars().count()))
+        .and_then(|n| gaps.checked_mul(sep.chars().count())?.checked_add(n));
+    if length.is_none_or(|n| !within(ev, n)) {
+        return Ok(None);
+    }
+    Ok(Some(Expr::string(&items.join(sep))))
+}
+
+/// giac's whitespace: space, tab, line feed, vertical tab, form feed and
+/// carriage return.
+fn is_whitespace(c: char) -> bool {
+    c == ' ' || ('\t'..='\r').contains(&c)
+}
+
+/// Whether `x` is zero for `trim`: below the threshold `t` in absolute
+/// value, `None` when `x` is not a real number; without one exactly 0, or a
+/// decimal within [`EPSILON`].
+fn trimmed(x: &Expr, t: Option<&Real>) -> Option<bool> {
+    let Some(t) = t else {
+        return Some(match x.view() {
+            View::Ball(b) => b.mid().to_f64().abs() <= EPSILON,
+            _ => x.to_rational().is_some_and(|q| q.is_zero()),
+        });
+    };
+    let size = match real(x)? {
+        Real::Exact(q) => Real::Exact(q.abs()),
+        Real::Float(f) => Real::Float(f.abs()),
+    };
+    Some(size.compare(t).is_lt())
+}
+
+/// `Trim[s]`: `s` without whitespace at its ends; `Trim[v]`, `Trim[v, t]`:
+/// the list `v` without its zeros at its ends, below `t` when given. A last
+/// option `Left` or `Right` trims that end only.
+pub(super) fn trim(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let [a, options @ ..] = e.args() else {
+        return Ok(None);
+    };
+    let (options, left, right) = match options.split_last() {
+        Some((side, rest)) if side.as_symbol() == Some(Symbol::LEFT) => (rest, true, false),
+        Some((side, rest)) if side.as_symbol() == Some(Symbol::RIGHT) => (rest, false, true),
+        _ => (options, true, true),
+    };
+    if let Some(s) = a.as_str() {
+        if !options.is_empty() {
+            return Ok(None);
+        }
+        let s = if left {
+            s.trim_start_matches(is_whitespace)
+        } else {
+            s
+        };
+        let s = if right {
+            s.trim_end_matches(is_whitespace)
+        } else {
+            s
+        };
+        return Ok(Some(Expr::string(s)));
+    }
+    if !is_list(a) {
+        return Ok(None);
+    }
+    let threshold = match options {
+        [] => None,
+        [t] => match real(t) {
+            Some(Real::Exact(q)) if !q.is_negative() && !q.is_zero() => Some(Real::Exact(q)),
+            Some(Real::Float(f)) if f > 0.0 => Some(Real::Float(f)),
+            _ => return Ok(None),
+        },
+        _ => return Ok(None),
+    };
+    let items = a.args();
+    let (mut i, mut j) = (0, items.len());
+    if left {
+        while i < j {
+            let Some(zero) = trimmed(&items[i], threshold.as_ref()) else {
+                return Ok(None);
+            };
+            if !zero {
+                break;
+            }
+            i += 1;
+        }
+    }
+    if right {
+        while j > i {
+            let Some(zero) = trimmed(&items[j - 1], threshold.as_ref()) else {
+                return Ok(None);
+            };
+            if !zero {
+                break;
+            }
+            j -= 1;
+        }
+    }
+    Ok(Some(list(items[i..j].to_vec())))
+}
+
+/// `Strip[s]`, `Strip[s, chars]`: `s` without the characters of `chars`, a
+/// space by default, at its ends.
+pub(super) fn strip(_: &mut Eval<'_>, e: &Expr) -> Native {
+    let (s, set) = match e.args() {
+        [s] => (s.as_str(), Some(" ")),
+        [s, set] => (s.as_str(), set.as_str()),
+        _ => return Ok(None),
+    };
+    let (Some(s), Some(set)) = (s, set) else {
+        return Ok(None);
+    };
+    Ok(Some(Expr::string(s.trim_matches(|c| set.contains(c)))))
 }
 
 #[cfg(test)]

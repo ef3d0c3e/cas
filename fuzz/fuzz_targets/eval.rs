@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 601] = [
+const BUILTINS: [&str; 605] = [
     "Plus",
     "Times",
     "Power",
@@ -690,6 +690,11 @@ const BUILTINS: [&str; 601] = [
     "Right",
     "Levenshtein",
     "Hamming",
+    // Strings (CAS-612).
+    "Split",
+    "StringJoin",
+    "Trim",
+    "Strip",
 ];
 
 /// Builtins that apply something to parts, only in the expression

@@ -13,14 +13,14 @@ use crate::symbol::Symbol;
 
 type Native = Result<Option<Expr>, EvalError>;
 
-/// `Length[e]`: the number of arguments; 0 for an atom.
+/// `Length[e]`: the number of arguments; 0 for an atom; the characters
+/// (Unicode scalar values) of a string (CAS-612).
 pub(super) fn length(_: &mut Eval<'_>, e: &Expr) -> Native {
     let [x] = e.args() else {
         return Ok(None);
     };
-    Ok(Some(Expr::from(
-        i64::try_from(x.args().len()).expect("fits"),
-    )))
+    let n = x.as_str().map_or(x.args().len(), |s| s.chars().count());
+    Ok(Some(Expr::from(i64::try_from(n).expect("fits"))))
 }
 
 /// `Part[e, i, j, …]`, in the `Part` convention (CAS-25): 0 is the head, 1

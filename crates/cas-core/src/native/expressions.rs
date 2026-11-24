@@ -84,8 +84,8 @@ type Native = Result<Option<Expr>, EvalError>;
 /// for an algebraic extension.
 const MAX_ROOT_ORDER: i64 = 4;
 
-/// giac's `epsilon`, the default bound of `epsilon2zero`.
-const EPSILON: f64 = 1e-12;
+/// giac's `epsilon`, the default bound of `epsilon2zero` and of `trim`.
+pub(super) const EPSILON: f64 = 1e-12;
 
 fn list(items: Vec<Expr>) -> Expr {
     Expr::call(Symbol::LIST, items)

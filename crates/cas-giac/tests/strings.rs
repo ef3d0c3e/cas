@@ -1,4 +1,5 @@
-//! Xcas's string commands against giac (CAS-611, CAS-613): giac's answers
+//! Xcas's string commands against giac (CAS-611, CAS-612, CAS-613), and
+//! strings in `size`, `concat`, `[]`, the comparisons and `sort`: giac's answers
 //! read back are this CAS's value of the same input; departures, giac's
 //! answer as caseval prints it, whitespace collapsed (C0007, C0047), and
 //! this CAS's own.
@@ -139,6 +140,96 @@ fn distances() {
     ]);
 }
 
+/// `split`, `join`, `trim` and `strip` (probe1, probe5, probe8, probe9),
+/// with giac's `split(e, [x, y])` of an expression.
+#[test]
+fn words() {
+    check(&[
+        "split(\"This is a phrase\",\" \")",
+        "split(\"a,,b\",\",\")",
+        "split(\"\",\",\")",
+        "split(\"a,\",\",\")",
+        "split(\",a\",\",\")",
+        "split(\"aXYbXY\",\"XY\")",
+        "split(x^3*y^2-y^2+x^3-1,[x,y])",
+        "split(x^3*y^2-y^2+x^3+1,[x,y])",
+        "split(2*x*y,[x,y])",
+        "split(x+y,[x,y])",
+        "split(3,[x,y])",
+        "split(x^2*sin(y),[x,y])",
+        "join(\" \",[\"This\",\"is\",\"a\",\"phrase\"])",
+        "join(\",\",[])",
+        "join(\"\",[\"a\",\"b\"])",
+        "trim(\"   an apple     \")",
+        "trim(\" a b \")",
+        "trim(\"\")",
+        "trim(\"ab\",left)",
+        "trim(\" ab \",left)",
+        "trim(\" ab \",right)",
+        "trim([0,0,1,2,3,0,1e-16,0],right)",
+        "trim([0.01,0.023,0.005,0.12,0.27,0.82,0.53,0.21,0.05,0.001],0.1)",
+        "trim([0,0],right)",
+        "trim([1e-13,1,0])",
+        "trim([1e-11,1,0])",
+        "trim([0,1,0],left)",
+        "trim([0,1,0])",
+        "trim([0,x,0])",
+        "trim([0,0.0,1])",
+        "trim([1,0.5,2],1)",
+        "strip(\"\ta\t\")",
+        "strip(\"xxaxx\",\"x\")",
+        "strip(\"xxx\",\"x\")",
+        "strip(\"  \")",
+    ]);
+}
+
+/// Strings in `size`/`length`, `concat`, `[]`, the comparisons and `sort`
+/// (probe5, probe8, probe9).
+#[test]
+fn elsewhere() {
+    check(&[
+        "size(\"abc\")",
+        "size(\"\")",
+        "length(\"abc\")",
+        "concat(\"ab\",\"cd\")",
+        "concat(\"a\",\"b\",\"c\")",
+        "concat([\"a\"],\"b\")",
+        "\"abc\"[1]",
+        "\"abc\"[0]",
+        "\"abc\"[-1]",
+        "\"abc\"[1..2]",
+        "\"abc\"==\"abc\"",
+        "\"a\"==\"b\"",
+        "\"b\">\"a\"",
+        "\"a\"<\"b\"",
+        "\"B\"<\"a\"",
+        "\"b\">=\"a\"",
+        "sort([\"b\",\"a\",\"c\"])",
+        "sort([\"b\",\"A\",\"a\",\"aa\",\"\"])",
+    ]);
+}
+
+/// An index out of a string's range: giac's error (probe8, probe9), and
+/// ours; a slice past the end, which giac cuts short, is ours too, as for
+/// lists.
+#[test]
+fn index_errors() {
+    let error = "GIAC_ERROR: Gen [int] Error: Bad Argument Type";
+    let cases = [
+        ("\"abc\"[5]", error),
+        ("\"abc\"[-4]", error),
+        ("\"abc\"[0..5]", "\"abc\""),
+    ];
+    for (input, answer) in cases {
+        if let Some(giac) = giac() {
+            let printed = giac.eval(input).unwrap_or_default();
+            let collapsed = printed.split_whitespace().collect::<Vec<_>>().join(" ");
+            assert_eq!(collapsed, answer, "{input}");
+        }
+        assert!(ours(input).is_err(), "{input}");
+    }
+}
+
 /// Departures, giac's answer as caseval prints it (probe5, probe9,
 /// probe10) and ours: giac counts bytes of UTF-8 where ours counts Unicode
 /// scalar values; giac's errors stay here; giac has no `hamming`.
@@ -173,6 +264,27 @@ fn departures() {
             "hamming([1,0,1,1],[1,1,1,0])",
             Some("2"),
         ),
+        // CAS-612: ours counts characters, giac bytes.
+        ("length(\"h\u{e9}llo\")", "6", Some("5")),
+        (
+            "split(\"abc\",\"\")",
+            "GIAC_ERROR: split(\"abc\",\"\") \n Error: Invalid dimension",
+            None,
+        ),
+        (
+            "trim([1,0.5,2],-1)",
+            "GIAC_ERROR: Invalid threshold specification. Error: Bad Argument Value",
+            None,
+        ),
+        (
+            "trim([1,0.5,2],x)",
+            "GIAC_ERROR: Invalid threshold specification. Error: Bad Argument Value",
+            None,
+        ),
+        // Non-strings wait for a printer; `+` does not join strings.
+        ("join(\",\",[1,2])", "\"1,2\"", None),
+        ("concat(\"a\",1)", "\"a1\"", None),
+        ("\"ab\"+\"cd\"", "\"abcd\"", None),
     ];
     let collapsed = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut wrong = Vec::new();
@@ -191,7 +303,17 @@ fn departures() {
                 .ok()
                 .and_then(|e| e.head().and_then(Expr::as_symbol))
                 .is_some_and(|head| {
-                    [Symbol::CHAR, Symbol::ORD, Symbol::LEVENSHTEIN].contains(&head)
+                    [
+                        Symbol::CHAR,
+                        Symbol::ORD,
+                        Symbol::LEVENSHTEIN,
+                        Symbol::SPLIT,
+                        Symbol::TRIM,
+                        Symbol::STRING_JOIN,
+                        Symbol::JOIN,
+                        Symbol::PLUS,
+                    ]
+                    .contains(&head)
                 }),
         };
         if !ok {

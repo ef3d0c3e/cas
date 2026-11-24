@@ -178,6 +178,11 @@ builtins! {
     RIGHT = "Right" [PROTECTED];
     LEVENSHTEIN = "Levenshtein" [PROTECTED];
     HAMMING = "Hamming" [PROTECTED];
+    // Strings, Xcas's (CAS-612).
+    SPLIT = "Split" [PROTECTED];
+    STRING_JOIN = "StringJoin" [PROTECTED];
+    TRIM = "Trim" [PROTECTED];
+    STRIP = "Strip" [PROTECTED];
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];

@@ -2,7 +2,8 @@
 //! §7).
 //!
 //! Comparisons decide on numbers, on the infinities `Infinity` and
-//! `-Infinity`, and on expressions that are structurally equal; on balls as
+//! `-Infinity`, on two strings (ordered by bytes, CAS-612), and on
+//! expressions that are structurally equal; on balls as
 //! [`ball_relation`] says; otherwise
 //! the assumptions and the number domain decide them when they can (`assume`,
 //! CAS-58), then, for exact numeric quantities, approximations
@@ -318,6 +319,10 @@ pub(super) fn unequal(ev: &mut Eval<'_>, e: &Expr) -> Native {
 fn order(ev: &mut Eval<'_>, e: &Expr, accept: fn(Ordering) -> bool) -> Native {
     let ctx = ev.context();
     chain(ev, e, |a, b| {
+        // Two strings by byte order (CAS-612).
+        if let (Some(a), Some(b)) = (a.as_str(), b.as_str()) {
+            return Some(accept(a.cmp(b)));
+        }
         if let Some(relation) = ball_relation(a, b, ctx) {
             return match relation {
                 Relation::Equal => Some(accept(Ordering::Equal)),

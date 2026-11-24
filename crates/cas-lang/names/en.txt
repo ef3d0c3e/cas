@@ -839,6 +839,11 @@ Left: left lhs
 Right: right rhs
 Levenshtein: levenshtein
 Hamming: hamming
+# Strings (CAS-612), Xcas's.
+Split: split
+StringJoin: join
+Trim: trim
+Strip: strip
 
 [planned]
 

@@ -275,6 +275,20 @@ pub(super) fn sort(ev: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(None);
     };
     rest.sort();
+    // Strings among themselves in byte order, as giac's (CAS-612), in the
+    // places the canonical order gives them.
+    let mut strings: Vec<Expr> = rest
+        .iter()
+        .filter(|x| x.as_str().is_some())
+        .cloned()
+        .collect();
+    strings.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
+    let mut strings = strings.into_iter();
+    for x in &mut rest {
+        if x.as_str().is_some() {
+            *x = strings.next().expect("as many strings");
+        }
+    }
     let mut all: Vec<Expr> = numbers.into_iter().map(|(_, x)| x).collect();
     all.extend(rest);
     Ok(Some(list(all)))
@@ -313,7 +327,25 @@ pub(super) fn rotate(_: &mut Eval<'_>, e: &Expr) -> Native {
     Ok(Some(list(out)))
 }
 
-pub(super) fn join(_: &mut Eval<'_>, e: &Expr) -> Native {
+/// `Join[a, b, …]`: the elements of the lists and the other arguments, in
+/// a list; of strings only, their concatenation (CAS-612), within the
+/// `terms` limit.
+pub(super) fn join(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    if let Some(strings) = e
+        .args()
+        .iter()
+        .map(Expr::as_str)
+        .collect::<Option<Vec<_>>>()
+        && !strings.is_empty()
+    {
+        let length = strings
+            .iter()
+            .try_fold(0usize, |n, s| n.checked_add(s.chars().count()));
+        if length.is_none_or(|n| n > ev.context().limits().terms) {
+            return Ok(None);
+        }
+        return Ok(Some(Expr::string(&strings.concat())));
+    }
     if e.args().is_empty() || !e.args().iter().any(is_list) {
         return Ok(None);
     }

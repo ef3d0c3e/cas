@@ -566,6 +566,15 @@ their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_p
   stays), ours counts the differing positions of equal-length strings or lists (`3`, `2`).
   Not compared: non-integer counts (giac's `left("abc",2.0)` is `"ab"`, ours stays) and giac's
   other one-argument `left`/`right` forms (integer bits, lists, first operands), which stay.
+- CAS-612: giac's answers to `split` (strings, and `split(e,[x,y])` of an expression through
+  `factors`), `join`, `trim` (strings, lists with giac's epsilon or a threshold, `left`/`right`)
+  and `strip`, and strings in `size`/`length`, `concat`, `"abc"[k]` and slices, `==`, `<`, `>`,
+  `>=` and `sort` (byte order). Departures, giac's text copied: `length("héllo")` giac 6 bytes,
+  ours 5 characters; `split("abc","")` ("Invalid dimension") and a `trim` threshold not a
+  positive real ("Invalid threshold specification") stay; `join(",",[1,2])` (giac `"1,2"`) and
+  `concat("a",1)` (`"a1"`) stay until there is a printer; `"ab"+"cd"` (giac `"abcd"`) stays;
+  `"abc"[5]` and `"abc"[-4]` are errors in both, and `"abc"[0..5]`, giac's `"abc"`, is out of
+  range here, as for a list.
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
