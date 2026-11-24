@@ -7,3 +7,4 @@ T4 | done | nlpsolve's options: the nlp_* names, initial points, limits, precisi
 T5 | done | the simplex tableau: simplex_reduce, and CoefficientList's order on ball coefficients | - | tasks/T5.md | logs/T5.md | R1.5-001
 T6 | done | univariate and polytope minimisation: find_minimum and frank_wolfe | - | tasks/T6.md | logs/T6.md | R1.5-001,R1.5-003,R1.4-005
 T7 | done | simulated annealing: simulated_annealing | - | tasks/T7.md | logs/T7.md | R1.5-001,R1.5-003,R1.4-005
+T8 | done | push master for the phase's final CI and Fuzz runs | - | tasks/T8.md | logs/T8.md | -
