@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-24T04:01:38.406Z
+# filed through: 2026-11-24T04:40:40.578Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
@@ -72,7 +72,9 @@ R68 | 2026-11-23 | decision | in force | Phase 1.4 Numerical analysis II | Rule 
 R69 | 2026-11-24 | decision | in force | Phase 1.4 Numerical analysis II | Phase 1.4 is closed. | .claude-state/journal/2026-11-24/051701-117r-claude-record.md
 R70 | 2026-11-24 | finding | in force | Phase 1.4 Numerical analysis II | Phase 1.4 built 41 giac names under CAS-DOC-56, which also records CAS-517..520. | .claude-state/journal/2026-11-24/051701-117r-claude-record.md
 R71 | 2026-11-24 | finding | in force | Phase 1.4 Numerical analysis II | The final fuzz rounds found four problems in older code, each fixed. | .claude-state/journal/2026-11-24/051701-117r-claude-record.md
-R72 | 2026-11-24 | open | in force | Phase 1.4 Numerical analysis II | CoefficientList swaps terms on polynomials with ball coefficients; no ticket yet -> offered to the… | .claude-state/journal/2026-11-24/051701-117r-claude-record.md
+R72 | 2026-11-24 | open | superseded by R77 | Phase 1.4 Numerical analysis II | CoefficientList swaps terms on polynomials with ball coefficients; no ticket yet -> offered to the… | .claude-state/journal/2026-11-24/051701-117r-claude-record.md
 R73 | 2026-11-24 | open | in force | Phase 1.4 Numerical analysis II | commit_task.sh stages every changed file under logs/, so a coder's commit can pick up another agent… | .claude-state/journal/2026-11-24/051701-117r-claude-record.md
 R74 | 2026-11-24 | decision | in force | Local example programs (R33) | Our answers are seen only on CI: no local scratch or example programs or binaries that print them,… | .claude-state/journal/2026-11-24/051701-117r-claude-record.md
-R75 | 2026-11-24 | open | in force | Phase 1.5 Optimization II | phase 1.5 draft in progress by pa-planner -> present with plan(kind: phase) when its report arrives | .claude-state/journal/2026-11-24/051701-117r-claude-record.md
+R75 | 2026-11-24 | open | superseded by R76 | Phase 1.5 Optimization II | phase 1.5 draft in progress by pa-planner -> present with plan(kind: phase) when its report arrives | .claude-state/journal/2026-11-24/051701-117r-claude-record.md
+R76 | 2026-11-24 | decision | in force | Phase 1.5 Optimization II | The phase 1.5 plan is installed and runs on its own; the developer's touchpoints are the approval a… | .claude-state/journal/2026-11-24/055548-123r-claude-record.md
+R77 | 2026-11-24 | finding | in force | Phase 1.5 Optimization II | CoefficientList's leading-first order is deliberate: it is giac's symb2poly order and its own doc's… | .claude-state/journal/2026-11-24/055548-123r-claude-record.md
