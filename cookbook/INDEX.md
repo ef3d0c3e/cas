@@ -58,3 +58,4 @@ C0055 | Euclid over Z[i] (and other field-backed rings): round the quotient in t
 C0056 | Stays tests check head and warnings; feasibility checks split equalities | test,unevaluated,oracle,equation,cas-core | 2026-11-24 | 1.5/T2 | T2.c1 CAS-600 lpsolve stays
 C0057 | giac branch and bound port: GMI cuts by slack substitution and re-solve; giac's cut rhs bug | giac,port,lpsolve,integer,cuts,branch-and-bound | 2026-11-24 | 1.5/T3 | T3.c1 CAS-602
 C0058 | Expr::may_contain is a bloom filter: never assert its negation | tests,expr,symbols,builtins,flaky | 2026-11-24 | 1.5/T4 | CI 45337180530 trigonometric_interpolation
+C0059 | Certified KKT points under bounds: one-point ranges; simple inequalities as bounds | nlpsolve,kkt,certified,bounds,branch-and-bound | 2026-11-24 | 1.5/T4 | T4.c2 CAS-605; CI 45337180530 nlpsolve_seeded
