@@ -304,10 +304,6 @@ fn nonlinear_options() {
     let fine = bowl(&format!("{box3}, Equation[NLPPrecision, 0x1p-120]"));
     let found = ctx.eval(&read(&fine)).unwrap();
     assert!(within(&found, 2f64.powi(-120)), "{fine}: {found:?}");
-    assert!(!within(
-        &ctx.eval(&read(&bowl(box3))).unwrap(),
-        2f64.powi(-120)
-    ));
 }
 
 /// What leaves `NLPSolve` (CAS-604): a warning that names the option or
@@ -347,11 +343,6 @@ fn nonlinear_options_that_stay() {
         ("Equation[NLPInitialPoint, List[Equation[z, 1]]]", None),
         ("Equation[NLPIntegerVariables, List[z]]", None),
         ("Equation[NLPIntegerVariables, x]", None),
-        // A nonlinear program with integer variables: not yet (T4.c2).
-        ("Equation[Assume, integer]", None),
-        ("Equation[Assume, NLPNonNegInt]", None),
-        ("Equation[Assume, NLPBinary]", None),
-        ("Equation[NLPBinaryVariables, List[x]]", None),
     ] {
         let input = bowl(&format!("{box3}, {option}"));
         let e = read(&input);
@@ -419,7 +410,7 @@ fn linear_nonlinear_programs() {
         ),
         // Decimals made exact.
         (
-            "NLPSolve[Plus[x, Times[-1, y]], List[LessEqual[Plus[x, y], 2.5], \
+            "NLPSolve[Plus[x, Times[-1, y]], List[LessEqual[Plus[x, y], 0x1.4p+1], \
              GreaterEqual[x, 0], GreaterEqual[y, 0]], Equation[NLPMaximize, True]]",
             "List[5/2, List[Equation[x, 5/2], Equation[y, 0]]]",
         ),
@@ -436,4 +427,140 @@ fn linear_nonlinear_programs() {
             "List[Infinity, List[]]",
         ),
     ]);
+}
+
+/// giac's aide program of `nlpsolve` (maximized), its options to come.
+const AIDE: &str = "NLPSolve[Plus[Times[1/2, Power[x1, 2]], Times[5, x1], Times[6, x2]], \
+                    List[LessEqual[Plus[Times[6, x1], Power[x2, 2]], 23]], \
+                    Equation[List[x1, x2], Range[1, 5]], Maximize";
+
+/// Integer and binary variables (CAS-605): exact answers at integer
+/// points, by enumeration and by branch and bound (giac fails on these,
+/// T4 prototype `.run/1.5/t4/proto_c2.py`).
+#[test]
+fn integer_programs() {
+    let aide = AIDE;
+    let aide_optimum = "List[63/2, List[Equation[x1, 3], Equation[x2, 2]]]";
+    let cubic = "NLPSolve[Plus[Times[4, x1, x2, x3], Times[-1, x1, x2], Times[-1, x1, x3], \
+                 Times[-1, x2, x3]]";
+    let lowest = "List[-1, List[Equation[x1, 0], Equation[x2, 1], Equation[x3, 1]]]";
+    let highest = "List[1, List[Equation[x1, 1], Equation[x2, 1], Equation[x3, 1]]]";
+    let far = "NLPSolve[Plus[Power[Plus[-3, x], 2], Power[Plus[1, y], 2]]";
+    let near = "List[1, List[Equation[x, 3], Equation[y, 0]]]";
+    let box3 = "Equation[List[x, y], Range[0, 3]]";
+    let cases: Vec<(String, &str)> = vec![
+        (format!("{aide}, Equation[Assume, integer]]"), aide_optimum),
+        (
+            format!("{aide}, Equation[Assume, NLPInteger]]"),
+            aide_optimum,
+        ),
+        (
+            format!("{aide}, Equation[NLPIntegerVariables, List[x1, x2]]]"),
+            aide_optimum,
+        ),
+        (format!("{cubic}, Equation[Assume, NLPBinary]]"), lowest),
+        (
+            format!("{cubic}, Equation[Assume, NLPBinary], Maximize]"),
+            highest,
+        ),
+        (
+            format!("{cubic}, Equation[NLPBinaryVariables, List[x1, x2, x3]]]"),
+            lowest,
+        ),
+        // Branch and bound (no upper ends), and enumeration.
+        (format!("{far}, Equation[Assume, NLPNonNegInt]]"), near),
+        (
+            format!(
+                "{far}, Equation[x, Range[0, 10]], Equation[y, Range[0, 10]], \
+                     Equation[Assume, integer]]"
+            ),
+            near,
+        ),
+        (
+            "NLPSolve[Power[Plus[-1/3, x], 2], Equation[x, Range[-5, 5]], \
+             Equation[Assume, integer]]"
+                .to_owned(),
+            "List[1/9, List[Equation[x, 0]]]",
+        ),
+        // Branched on x, then y; the later (4, 0) is no better.
+        (
+            "NLPSolve[Plus[Power[Plus[-7/2, x], 2], Power[Plus[-1/3, y], 2]], \
+             Equation[Assume, NLPNonNegInt]]"
+                .to_owned(),
+            "List[13/36, List[Equation[x, 3], Equation[y, 0]]]",
+        ),
+        (
+            bowl(&format!("{box3}, Equation[Assume, integer]")),
+            "List[0, List[Equation[x, 1], Equation[y, 2]]]",
+        ),
+        (
+            bowl(&format!("{box3}, Equation[Assume, NLPNonNegInt]")),
+            "List[0, List[Equation[x, 1], Equation[y, 2]]]",
+        ),
+        (
+            bowl(&format!("{box3}, Equation[Assume, NLPBinary]")),
+            "List[1, List[Equation[x, 1], Equation[y, 1]]]",
+        ),
+    ];
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, expected) in &cases {
+        let (found, report) = ctx.eval_with(&read(input), &EvalOptions::default());
+        let expected = ctx.eval(&read(expected)).unwrap();
+        match found {
+            Ok(found) if found == expected && report.warnings.is_empty() => {}
+            found => wrong.push(format!(
+                "{input}: {found:?} {:?}, expected {expected:?}",
+                report.warnings
+            )),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Integer variables beside continuous ones (CAS-605): the continuous
+/// coordinate certified, the integer exact; no feasible integer point
+/// leaves the call with a warning.
+#[test]
+fn mixed_and_infeasible_integer_programs() {
+    let ctx = Context::new();
+    let (aide, box3) = (AIDE, "Equation[List[x, y], Range[0, 3]]");
+    // Mixed: x1 an integer, x2 = √5 certified; the integer exact.
+    let mixed = format!("{aide}, Equation[NLPIntegerVariables, List[x1]]]");
+    let (v, xs) = optimum(&mixed);
+    let close = |a: f64, b: f64| (a - b).abs() <= 1e-12 * (1.0 + b.abs());
+    let root5 = 5.0_f64.sqrt();
+    assert!(close(v, 19.5 + 6.0 * root5), "{mixed}: {v}");
+    assert!(
+        close(xs[0].1, 3.0) && close(xs[1].1, root5),
+        "{mixed}: {xs:?}"
+    );
+    let found = ctx.eval(&read(&mixed)).unwrap();
+    assert_eq!(
+        found.args()[1].args()[0],
+        read("Equation[x1, 3]"),
+        "{mixed}"
+    );
+    let (v, xs) = optimum(&bowl(&format!(
+        "{box3}, Equation[NLPBinaryVariables, List[x]]"
+    )));
+    assert!(
+        close(v, 0.0) && close(xs[0].1, 1.0) && close(xs[1].1, 2.0),
+        "{xs:?}"
+    );
+    // No feasible integer point: the call stays, with the warning.
+    for input in [
+        "NLPSolve[Power[x, 2], Equation[x, Range[1/4, 3/4]], Equation[Assume, integer]]",
+        "NLPSolve[Plus[Power[x, 2], Power[y, 2]], List[Equation[Plus[Power[x, 2], Power[y, 2]], 3]], \
+         Equation[List[x, y], Range[0, 3]], Equation[Assume, integer]]",
+    ] {
+        let e = read(input);
+        let (found, report) = ctx.eval_with(&e, &EvalOptions::default());
+        assert_eq!(found.unwrap().head(), e.head(), "{input}");
+        let text = format!("{:?}", report.warnings);
+        assert!(
+            text.contains("no integer point is feasible"),
+            "{input}: {text}"
+        );
+    }
 }

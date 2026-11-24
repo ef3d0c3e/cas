@@ -9,7 +9,13 @@
 //!   box;
 //! - `Minimize` and `Maximize` of a random polynomial of degree at most 4
 //!   on `[a, b]`: no value on a grid lies below the minimum or above the
-//!   maximum.
+//!   maximum;
+//! - `NLPSolve` with 2 or 3 integer variables (CAS-605), each in a box
+//!   inside `[−3, 3]`, a random quadratic objective with a product term,
+//!   up to 2 linear or quadratic constraints, minimized or maximized, by
+//!   `assume = integer` or `nlp_integervariables`: the answer is the best
+//!   value over every integer point, exactly, at a feasible point of that
+//!   value; the call stays only when no point is feasible.
 #![no_main]
 
 use arbitrary::{Result, Unstructured};
@@ -325,11 +331,163 @@ fn polynomial_optimum(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
     Ok(())
 }
 
+/// A quadratic `Σ q_j x_j² + Σ a_j x_j + p x_0 x_1` as coefficients.
+struct Quadratic {
+    square: Vec<i64>,
+    linear: Vec<i64>,
+    product: i64,
+}
+
+impl Quadratic {
+    fn at(&self, x: &[Rational]) -> Rational {
+        let mut v = &q(self.product, 1) * &(&x[0] * &x[1]);
+        for (j, xj) in x.iter().enumerate() {
+            v = &v + &(&q(self.square[j], 1) * &(xj * xj));
+            v = &v + &(&q(self.linear[j], 1) * xj);
+        }
+        v
+    }
+
+    fn expr(&self, xs: &[Expr]) -> Expr {
+        let mut terms = vec![Expr::from(self.product) * xs[0].clone() * xs[1].clone()];
+        for (j, x) in xs.iter().enumerate() {
+            terms.push(Expr::from(self.square[j]) * x.clone().pow(2));
+            terms.push(Expr::from(self.linear[j]) * x.clone());
+        }
+        Expr::call(Symbol::PLUS, terms)
+    }
+}
+
+fn integer_nonlinear_program(ctx: &Context, u: &mut Unstructured<'_>) -> Result<()> {
+    let n = u.int_in_range(2..=3usize)?;
+    let names = ["x", "y", "z"];
+    let xs: Vec<Expr> = names[..n].iter().map(|s| sym(s)).collect();
+    let mut ranges = Vec::with_capacity(n);
+    for _ in 0..n {
+        let lo = u.int_in_range(-3..=3i64)?;
+        ranges.push((lo, u.int_in_range(lo..=3i64)?));
+    }
+    let small = |u: &mut Unstructured<'_>| -> Result<i64> { u.int_in_range(-3..=3) };
+    let quadratic = |u: &mut Unstructured<'_>, squares: bool| -> Result<Quadratic> {
+        let mut square = vec![0; n];
+        if squares {
+            for c in &mut square {
+                *c = small(u)?;
+            }
+        }
+        let mut linear = vec![0; n];
+        for c in &mut linear {
+            *c = small(u)?;
+        }
+        Ok(Quadratic {
+            square,
+            linear,
+            product: 0,
+        })
+    };
+    // The objective is not linear: a product term (else it is LPSolve's).
+    let mut objective = quadratic(u, true)?;
+    objective.product = *u.choose(&[-3, -2, -1, 1, 2, 3])?;
+    let mut rows: Vec<(Quadratic, i64)> = Vec::new();
+    for _ in 0..u.int_in_range(0..=2)? {
+        let squares: bool = u.arbitrary()?;
+        let mut row = quadratic(u, squares)?;
+        // Not a constant: one variable's coefficient is not 0.
+        let k = u.int_in_range(0..=n - 1)?;
+        row.linear[k] = *u.choose(&[-3, -2, -1, 1, 2, 3])?;
+        rows.push((row, u.int_in_range(-6..=10)?));
+    }
+    let maximum: bool = u.arbitrary()?;
+    let by_name: bool = u.arbitrary()?;
+    // Every integer point, the first in lexicographic order kept.
+    let mut best: Option<Rational> = None;
+    let mut point: Vec<i64> = ranges.iter().map(|r| r.0).collect();
+    loop {
+        let x: Vec<Rational> = point.iter().map(|&v| q(v, 1)).collect();
+        if rows.iter().all(|(row, c)| row.at(&x) <= q(*c, 1)) {
+            let value = objective.at(&x);
+            if better(&value, best.as_ref(), maximum) {
+                best = Some(value);
+            }
+        }
+        let Some(k) = (0..n).find(|&k| point[k] < ranges[k].1) else {
+            break;
+        };
+        point[k] += 1;
+        for (j, v) in point[..k].iter_mut().enumerate() {
+            *v = ranges[j].0;
+        }
+    }
+    let feasible = |x: &[Rational]| rows.iter().all(|(row, c)| row.at(x) <= q(*c, 1));
+    let mut args = vec![
+        objective.expr(&xs),
+        list(
+            rows.iter()
+                .map(|(row, c)| Expr::call(Symbol::LESS_EQUAL, [row.expr(&xs), Expr::from(*c)]))
+                .collect(),
+        ),
+    ];
+    for (x, (lo, hi)) in xs.iter().zip(&ranges) {
+        let range = Expr::call(Symbol::RANGE, [Expr::from(*lo), Expr::from(*hi)]);
+        args.push(Expr::call(Symbol::EQUATION, [x.clone(), range]));
+    }
+    args.push(if by_name {
+        Expr::call(
+            Symbol::EQUATION,
+            [Expr::from(Symbol::NLP_INTEGER_VARIABLES), list(xs.clone())],
+        )
+    } else {
+        Expr::call(
+            Symbol::EQUATION,
+            [Expr::from(Symbol::ASSUME), sym("integer")],
+        )
+    });
+    if maximum {
+        args.push(Expr::from(Symbol::MAXIMIZE));
+    }
+    let call = Expr::call(Symbol::NLP_SOLVE, args);
+    let found = ctx.eval(&call).unwrap_or_else(|e| panic!("{call:?}: {e}"));
+    let Some(value) = best else {
+        assert_eq!(found.head(), call.head(), "{call:?}: no point is feasible");
+        return Ok(());
+    };
+    let [optimum, at] = found.args() else {
+        panic!("{call:?}: {found:?}, expected {value:?}");
+    };
+    assert_eq!(
+        optimum.to_rational(),
+        Some(value.clone()),
+        "{call:?}: {found:?}"
+    );
+    let x: Vec<Rational> = xs
+        .iter()
+        .map(|v| {
+            let eq = at
+                .args()
+                .iter()
+                .find(|eq| eq.args()[0] == *v)
+                .unwrap_or_else(|| panic!("{call:?}: {found:?} has no {v:?}"));
+            eq.args()[1].to_rational().expect("rational")
+        })
+        .collect();
+    assert!(x.iter().all(Rational::is_integer), "{call:?}: {found:?}");
+    assert!(
+        x.iter()
+            .zip(&ranges)
+            .all(|(v, (lo, hi))| *v >= q(*lo, 1) && *v <= q(*hi, 1)),
+        "{call:?}: {found:?} is outside the box"
+    );
+    assert!(feasible(&x), "{call:?}: {found:?} is not feasible");
+    assert_eq!(objective.at(&x), value, "{call:?}: {found:?}");
+    Ok(())
+}
+
 fn run(u: &mut Unstructured<'_>) -> Result<()> {
     let ctx = Context::new();
-    match u.int_in_range(0u8..=2)? {
+    match u.int_in_range(0u8..=3)? {
         0 => linear_program(&ctx, u, false),
         1 => linear_program(&ctx, u, true),
+        2 => integer_nonlinear_program(&ctx, u),
         _ => polynomial_optimum(&ctx, u),
     }
 }

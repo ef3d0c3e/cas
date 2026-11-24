@@ -1,4 +1,4 @@
-//! `nlpsolve` against giac (CAS-604), the rows whose giac answer draws
+//! `nlpsolve` against giac (CAS-604, CAS-605), the rows whose giac answer draws
 //! random numbers (C0014): giac seeded with `srand(42)` in the same call,
 //! in a test binary of their own. Ours is checked against each program's
 //! closed form first, giac's within its own error (C0006).
@@ -203,6 +203,64 @@ fn departures() {
             if t.starts_with("[\"Failed to optimize at given precision\",")
                 && o.head().and_then(Expr::as_symbol) == Some(Symbol::NLP_SOLVE) => {}
         (t, o) => wrong.push(format!("{short}: ours {o:?}, giac's {t:?}")),
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Integer and binary variables (CAS-605), where giac's `nlpsolve` fails
+/// ("Failed to find a solution", seeded, as under seeds 7 and 1 and
+/// unseeded, T4 probes), its answer copied (C0007): ours the known optimum
+/// (`.run/1.5/check/known.py`, the T4.c2 prototype), exact at integer
+/// points, the mixed program's continuous coordinate certified.
+#[test]
+fn integer_departures() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let failed = "GIAC_ERROR: Failed to find a solution. Error: Bad Argument Value";
+    let aide = "nlpsolve(x1^2/2+5x1+6x2,[6x1+x2^2<=23],[x1,x2]=1..5,";
+    let cubic = "nlpsolve(4x1*x2*x3-x1*x2-x1*x3-x2*x3,";
+    let lowest = "[-1,[x1=0,x2=1,x3=1]]";
+    let rows = [
+        (
+            format!("{aide}assume=integer,maximize)"),
+            "[63/2,[x1=3,x2=2]]",
+        ),
+        (
+            format!("{aide}assume=nlp_integer,maximize)"),
+            "[63/2,[x1=3,x2=2]]",
+        ),
+        (
+            format!("{aide}nlp_integervariables=[x1,x2],maximize)"),
+            "[63/2,[x1=3,x2=2]]",
+        ),
+        (
+            format!("{aide}nlp_integervariables=[x1],maximize)"),
+            "[39/2+6*sqrt(5),[x1=3,x2=sqrt(5)]]",
+        ),
+        (format!("{cubic}assume=nlp_binary)"), lowest),
+        (
+            format!("{cubic}assume=nlp_binary,maximize)"),
+            "[1,[x1=1,x2=1,x3=1]]",
+        ),
+        (format!("{cubic}nlp_binaryvariables=[x1,x2,x3])"), lowest),
+        (
+            "nlpsolve((x-3)^2+(y+1)^2,assume=nlp_nonnegint)".to_owned(),
+            "[1,[x=3,y=0]]",
+        ),
+        (
+            "nlpsolve((x-3)^2+(y+1)^2,x=0..10,y=0..10,assume=integer)".to_owned(),
+            "[1,[x=3,y=0]]",
+        ),
+    ];
+    let mut wrong = Vec::new();
+    for (input, known) in rows {
+        let known = ours(known).expect("the known optimum");
+        match (seeded_text(giac, &input), ours(&input)) {
+            (Some(t), Ok(o)) if t == failed && same(&ctx, &o, &known, 10_000_000_000) => {}
+            (t, o) => wrong.push(format!("{input}: ours {o:?}, giac's {t:?}")),
+        }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }

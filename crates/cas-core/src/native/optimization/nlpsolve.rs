@@ -8,7 +8,9 @@
 //!   their closures, in a list that may hold bounds too; a bound is `x =
 //!   a..b` or `[x, y, …] = a..b`, ends real or infinite, several of one
 //!   variable intersected. The variables are the symbols of `f`, the
-//!   constraints and the bounds, sorted, giac's order.
+//!   constraints and the bounds, sorted, giac's order. An inequality
+//!   linear in one variable alone, rational coefficients, is that
+//!   variable's bound (giac's, optimization.cc:6833-6855).
 //! - The options, giac's (optimization.cc:6650-6832), matched by their
 //!   builtins, a later one deciding:
 //!   - `maximize` or `nlp_maximize` alone, or `maximize = b`,
@@ -19,7 +21,10 @@
 //!     integer, `assume = nlp_nonnegint` (`nonnegint`) a nonnegative one,
 //!     `assume = nlp_binary` one in `0..1`; `nlp_integervariables = [x, …]`
 //!     and `nlp_binaryvariables = [x, …]` those variables. A nonlinear
-//!     program with an integer variable leaves the call.
+//!     program with an integer variable is [`super::nlpinteger`]'s: a
+//!     binary variable's ends within `0..1`, an integer one's the lower
+//!     end's ceiling and the upper end's floor (giac's,
+//!     optimization.cc:6861-6876), its points enumerated or branched on.
 //!   - `nlp_initialpoint = [x = v, …]` starts the search there, `[x = a..b,
 //!     …]` at the region's midpoint; giac's several points (`x = [v, …]`)
 //!     leave the call.
@@ -83,13 +88,14 @@ use super::super::approximation;
 use super::super::ndsolve::rhs::Node;
 use super::super::solve::fsolve::systems::certified_root_at;
 use super::lpsolve::{exact, linear, lp_solve, symbols_in_order};
+use super::nlpinteger::nlp_integer;
 use crate::context::{Context, EvalError};
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
 
-type Native = Result<Option<Expr>, EvalError>;
+pub(super) type Native = Result<Option<Expr>, EvalError>;
 
 /// The most variables.
 const MAX_VARIABLES: usize = 16;
@@ -138,11 +144,11 @@ fn head(e: &Expr) -> Option<Symbol> {
     e.head().and_then(Expr::as_symbol)
 }
 
-fn list(items: Vec<Expr>) -> Expr {
+pub(super) fn list(items: Vec<Expr>) -> Expr {
     Expr::call(Symbol::LIST, items)
 }
 
-fn warn(ev: &mut Eval<'_>, e: &Expr, message: &str) {
+pub(super) fn warn(ev: &mut Eval<'_>, e: &Expr, message: &str) {
     ev.warn(Warning::Native {
         message: message.to_owned().into(),
         expr: e.clone(),
@@ -154,25 +160,29 @@ type Ends = Vec<Option<End>>;
 
 /// A bound's end: exact, with its double.
 #[derive(Clone)]
-struct End {
-    exact: Expr,
-    value: f64,
+pub(super) struct End {
+    pub(super) exact: Expr,
+    pub(super) value: f64,
 }
 
 /// A program as read: the objective (negated for a maximum), the
 /// equations `h = 0` and inequalities `g ≤ 0`, the bounds, the start, the
-/// outer iterations' cap and the precision asked.
-struct Program {
-    xs: Vec<Expr>,
-    objective: Expr,
-    minimized: Expr,
-    equalities: Vec<Expr>,
-    inequalities: Vec<Expr>,
-    lower: Vec<Option<End>>,
-    upper: Vec<Option<End>>,
-    start: Vec<Option<Expr>>,
-    limit: usize,
-    precision: Option<f64>,
+/// outer iterations' cap, the precision asked, whether it is a maximum,
+/// and which variables are integers.
+#[derive(Clone)]
+pub(super) struct Program {
+    pub(super) xs: Vec<Expr>,
+    pub(super) objective: Expr,
+    pub(super) minimized: Expr,
+    pub(super) equalities: Vec<Expr>,
+    pub(super) inequalities: Vec<Expr>,
+    pub(super) lower: Vec<Option<End>>,
+    pub(super) upper: Vec<Option<End>>,
+    pub(super) start: Vec<Option<Expr>>,
+    pub(super) limit: usize,
+    pub(super) precision: Option<f64>,
+    pub(super) maximum: bool,
+    pub(super) integer: Vec<bool>,
 }
 
 /// A call as read.
@@ -197,11 +207,42 @@ pub(in crate::native) fn nlp_solve(ev: &mut Eval<'_>, e: &Expr) -> Native {
             return Ok(None);
         }
     };
-    let Some(compiled) = compile(ev, &program)? else {
-        return Ok(None);
+    if program.integer.contains(&true) {
+        return nlp_integer(ev, e, &program);
+    }
+    match continuous(ev, &program)? {
+        Solved::Optimum(answer) => {
+            ev.step("NLPSolve", e, &answer);
+            Ok(Some(answer))
+        }
+        Solved::Infeasible(why) | Solved::Runaway(why) | Solved::Failed(Some(why)) => {
+            warn(ev, e, why);
+            Ok(None)
+        }
+        Solved::Failed(None) => Ok(None),
+    }
+}
+
+/// What the certified search makes of a program, its integer marks
+/// ignored.
+pub(super) enum Solved {
+    /// `{value, {x = …, …}}`.
+    Optimum(Expr),
+    /// An empty range, or the search found no feasible point.
+    Infeasible(&'static str),
+    /// The search ran off to infinity.
+    Runaway(&'static str),
+    /// Anything else, with a warning or none.
+    Failed(Option<&'static str>),
+}
+
+/// The program's local optimum by the search, certified.
+pub(super) fn continuous(ev: &mut Eval<'_>, program: &Program) -> Result<Solved, EvalError> {
+    let Some(compiled) = compile(ev, program)? else {
+        return Ok(Solved::Failed(None));
     };
-    let Some(x0) = start(ev.context(), &program) else {
-        return Ok(None);
+    let Some(x0) = start(ev.context(), program) else {
+        return Ok(Solved::Failed(None));
     };
     let lo: Vec<f64> = program
         .lower
@@ -214,59 +255,46 @@ pub(in crate::native) fn nlp_solve(ev: &mut Eval<'_>, e: &Expr) -> Native {
         .map(|b| b.as_ref().map_or(f64::INFINITY, |b| b.value))
         .collect();
     if lo.iter().zip(&hi).any(|(a, b)| a > b) {
-        warn(ev, e, "a variable's range is empty");
-        return Ok(None);
+        return Ok(Solved::Infeasible("a variable's range is empty"));
     }
     let search = match lagrangian(&compiled, x0, &lo, &hi, program.limit) {
         Ok(found) => found,
         Err(Failure::Runaway) => {
-            warn(
-                ev,
-                e,
+            return Ok(Solved::Runaway(
                 "the search ran off to infinity: the program may be unbounded",
-            );
-            return Ok(None);
+            ));
         }
         Err(Failure::Infeasible) => {
-            warn(ev, e, "the search found no feasible point");
-            return Ok(None);
+            return Ok(Solved::Infeasible("the search found no feasible point"));
         }
         Err(Failure::Domain) => {
-            warn(ev, e, "the search left the functions' domain");
-            return Ok(None);
+            return Ok(Solved::Failed(Some(
+                "the search left the functions' domain",
+            )));
         }
         Err(Failure::Unconverged) => {
-            warn(
-                ev,
-                e,
+            return Ok(Solved::Failed(Some(
                 "nlp_iterationlimit reached before the search converged",
-            );
-            return Ok(None);
+            )));
         }
     };
     let cap = MAX_BITS.min(ev.context().limits().number_bits);
     let mut bits = ev.context().working_precision();
-    let answer = loop {
-        let Some(answer) = certify(ev, &program, &compiled, &search, &lo, &hi, bits)? else {
-            warn(
-                ev,
-                e,
+    loop {
+        let Some(answer) = certify(ev, program, &compiled, &search, &lo, &hi, bits)? else {
+            return Ok(Solved::Failed(Some(
                 "the search's point could not be certified as an optimum",
-            );
-            return Ok(None);
+            )));
         };
         match program.precision {
             Some(r) if !within(&answer, r) => {}
-            _ => break answer,
+            _ => return Ok(Solved::Optimum(answer)),
         }
         bits = bits.saturating_mul(2);
         if bits > cap {
-            warn(ev, e, "nlp_precision could not be met");
-            return Ok(None);
+            return Ok(Solved::Failed(Some("nlp_precision could not be met")));
         }
-    };
-    ev.step("NLPSolve", e, &answer);
-    Ok(Some(answer))
+    }
 }
 
 /// Whether every ball of `answer` has a radius at most `r` times its
@@ -624,10 +652,9 @@ fn program(ev: &mut Eval<'_>, e: &Expr) -> Result<Read, EvalError> {
         );
         return Ok(Read::Linear(call, xs));
     }
-    // A nonlinear program with integer variables: not yet.
-    if whole.contains(&true) {
+    let Some((mut lower, mut upper)) = bounds(ev.context(), &xs, ranges, nonnegative) else {
         return Ok(Read::Not(None));
-    }
+    };
     let mut equalities = Vec::new();
     let mut inequalities = Vec::new();
     for (h, l, r) in relations {
@@ -638,13 +665,13 @@ fn program(ev: &mut Eval<'_>, e: &Expr) -> Result<Read, EvalError> {
         let g = ev.eval(&(a.clone() - b.clone()))?;
         if h == Symbol::EQUATION {
             equalities.push(g);
-        } else {
+        } else if !as_bound(ev, &g, &xs, &mut lower, &mut upper)? {
             inequalities.push(g);
         }
     }
-    let Some((lower, upper)) = bounds(ev.context(), &xs, ranges, nonnegative) else {
+    if !integral(ev, &mut lower, &mut upper, &whole, &zero_one)? {
         return Ok(Read::Not(None));
-    };
+    }
     let Some(start) = initial_point(ev, &xs, initial)? else {
         return Ok(Read::Not(None));
     };
@@ -665,7 +692,90 @@ fn program(ev: &mut Eval<'_>, e: &Expr) -> Result<Read, EvalError> {
         start,
         limit: iterations.unwrap_or(MAX_OUTER),
         precision,
+        maximum,
+        integer: whole,
     }))
+}
+
+/// An inequality `g ≤ 0` linear in one variable alone, rational
+/// coefficients, taken as that variable's bound, intersected (giac's,
+/// optimization.cc:6833-6855); `false` for any other.
+fn as_bound(
+    ev: &mut Eval<'_>,
+    g: &Expr,
+    xs: &[Expr],
+    lower: &mut Ends,
+    upper: &mut Ends,
+) -> Result<bool, EvalError> {
+    let Some((coefficients, k)) = linear(ev, g, xs)? else {
+        return Ok(false);
+    };
+    let mut nonzero = coefficients
+        .iter()
+        .enumerate()
+        .filter(|(_, a)| !a.is_zero());
+    let (Some((j, a)), None) = (nonzero.next(), nonzero.next()) else {
+        return Ok(false);
+    };
+    let exact = Expr::from(-(&k / a));
+    let Some(value) = double(ev.context(), &exact) else {
+        return Ok(false);
+    };
+    let end = Some(End { exact, value });
+    if a.is_positive() {
+        if upper[j].as_ref().is_none_or(|b| b.value > value) {
+            upper[j] = end;
+        }
+    } else if lower[j].as_ref().is_none_or(|b| b.value < value) {
+        lower[j] = end;
+    }
+    Ok(true)
+}
+
+/// The integer variables' ends made integral, giac's (optimization.cc:
+/// 6861-6876): a binary variable's within `0..1`, then the lower end's
+/// ceiling and the upper end's floor; `false` when one is no integer.
+fn integral(
+    ev: &mut Eval<'_>,
+    lower: &mut Ends,
+    upper: &mut Ends,
+    whole: &[bool],
+    zero_one: &[bool],
+) -> Result<bool, EvalError> {
+    let end = |n: i64, value: f64| End {
+        exact: Expr::from(n),
+        value,
+    };
+    for j in 0..whole.len() {
+        if !whole[j] {
+            continue;
+        }
+        if zero_one[j] {
+            if lower[j].as_ref().is_none_or(|a| a.value < 0.0) {
+                lower[j] = Some(end(0, 0.0));
+            }
+            if upper[j].as_ref().is_none_or(|b| b.value > 1.0) {
+                upper[j] = Some(end(1, 1.0));
+            }
+        }
+        for (side, round) in [
+            (&mut lower[j], Symbol::CEILING),
+            (&mut upper[j], Symbol::FLOOR),
+        ] {
+            let Some(a) = side else {
+                continue;
+            };
+            let r = ev.eval(&Expr::call(round, [a.exact.clone()]))?;
+            if !r.to_rational().is_some_and(|q| q.is_integer()) {
+                return Ok(false);
+            }
+            let Some(value) = double(ev.context(), &r) else {
+                return Ok(false);
+            };
+            *a = End { exact: r, value };
+        }
+    }
+    Ok(true)
 }
 
 /// Each variable's ends: at least 0 when `nonnegative`, each range
@@ -747,7 +857,7 @@ fn end(ctx: &Context, a: &Expr) -> Result<Option<End>, ()> {
 }
 
 /// A real number's double, by its ball.
-fn double(ctx: &Context, a: &Expr) -> Option<f64> {
+pub(super) fn double(ctx: &Context, a: &Expr) -> Option<f64> {
     match approximation(ctx, a, SEARCH_BITS).ok()?.view() {
         View::Ball(b) if b.is_finite() => Some(b.mid().to_f64()).filter(|v| v.is_finite()),
         _ => None,
@@ -1055,7 +1165,7 @@ fn lagrangian(
     })
 }
 
-fn rational(v: f64) -> Option<Rational> {
+pub(super) fn rational(v: f64) -> Option<Rational> {
     Float::from_f64(v).map(|f| f.to_rational())
 }
 
@@ -1066,7 +1176,7 @@ fn near(v: f64, end: f64) -> bool {
 
 /// The sign of `e`'s ball: `Some(true)` for certainly positive,
 /// `Some(false)` for certainly negative, `None` for undecided.
-fn certain_sign(ctx: &Context, e: &Expr) -> Option<bool> {
+pub(super) fn certain_sign(ctx: &Context, e: &Expr) -> Option<bool> {
     let bits = ctx.working_precision();
     let v = approximation(ctx, e, bits).ok()?;
     match v.view() {
@@ -1080,25 +1190,25 @@ fn certain_sign(ctx: &Context, e: &Expr) -> Option<bool> {
 }
 
 /// The bounds and inequalities the search's point meets: each fixed
-/// variable's end and side (`true` for the lower), and the active
-/// inequalities.
+/// variable's end and side (`true` for the lower, `None` for a range of
+/// one point), and the active inequalities.
 struct Active {
-    fixed: Vec<Option<(Expr, bool)>>,
+    fixed: Vec<Option<(Expr, Option<bool>)>>,
     inequalities: Vec<usize>,
 }
 
 fn active(p: &Program, c: &Compiled, s: &Search, lo: &[f64], hi: &[f64]) -> Option<Active> {
     let n = p.xs.len();
-    let mut fixed: Vec<Option<(Expr, bool)>> = vec![None; n];
+    let mut fixed: Vec<Option<(Expr, Option<bool>)>> = vec![None; n];
     for j in 0..n {
         if let Some(a) = &p.lower[j]
             && near(s.x[j], lo[j])
         {
-            fixed[j] = Some((a.exact.clone(), true));
+            fixed[j] = Some((a.exact.clone(), (lo[j] < hi[j]).then_some(true)));
         } else if let Some(b) = &p.upper[j]
             && near(s.x[j], hi[j])
         {
-            fixed[j] = Some((b.exact.clone(), false));
+            fixed[j] = Some((b.exact.clone(), Some(false)));
         }
     }
     let point = balls(&s.x)?;
@@ -1226,7 +1336,8 @@ fn certify(
 /// Whether the certified Karush–Kuhn–Tucker point is no evident
 /// non-optimum: the inequalities' multipliers not certainly negative, no
 /// fixed variable's derivative of the Lagrangian `full` certainly of the
-/// side that would move it inside, and no inactive inequality certainly
+/// side that would move it inside (a range of one point has none), and
+/// no inactive inequality certainly
 /// violated, at `everything`'s values.
 fn optimal(
     ev: &mut Eval<'_>,
@@ -1243,7 +1354,7 @@ fn optimal(
         return Ok(false);
     }
     for (j, f) in on.fixed.iter().enumerate() {
-        let Some((_, lower)) = f else {
+        let Some((_, Some(lower))) = f else {
             continue;
         };
         let d = ev.eval(&Expr::call(Symbol::D, [full.clone(), p.xs[j].clone()]))?;

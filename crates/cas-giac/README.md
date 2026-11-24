@@ -501,7 +501,7 @@ points.
   ours has no clock and answers the optimum) and `lp_nodeselect=foo` (giac's "Bad Argument
   Type", ours stays `LPSolve[…]`).
 
-`tests/nlpsolve.rs` and `tests/nlpsolve_seeded.rs` (CAS-604), `nlpsolve`'s options matched by
+`tests/nlpsolve.rs` and `tests/nlpsolve_seeded.rs` (CAS-604, CAS-605), `nlpsolve`'s options matched by
 their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_precision`,
 `nlp_tolerance`, `nlp_method`, `nlp_maximize`, `nlp_presolve`, `nlp_verbose`, `assume`,
 `nlp_integervariables`, `nlp_binaryvariables`):
@@ -518,6 +518,13 @@ their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_p
   under `x+y<=2` (1/2 at (1/2, 3/2)), `x^2+y^2` under `x+y>=1`, `(x+1)^2+(y-2)^2` with
   `assume=nlp_nonnegative` (1 at (0, 2)), `nlp_method="ipt"`; and `nlp_iterationlimit=2`, giac's
   "Failed to optimize at given precision", ours stays with a warning.
+- Integer and binary variables in nonlinear programs (CAS-605): `integer_programs`, giac's one
+  answered row (`(x-1/3)^2`, `x=-5..5`, `assume=integer`: ours exactly `[1/9, [x=0]]`, giac's
+  within 10⁻⁸); the seeded `integer_departures` (9 rows: the aide's program under `assume=integer`,
+  `assume=nlp_integer`, `nlp_integervariables=[x1,x2]` and `[x1]`, the binary cubic under
+  `assume=nlp_binary`, with `maximize`, and `nlp_binaryvariables`, `(x-3)^2+(y+1)^2` under
+  `assume=nlp_nonnegint` and on a box with `assume=integer`), giac's "Failed to find a solution"
+  copied, ours the known optimum (exact at integer points, `x2 = sqrt(5)` certified).
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.

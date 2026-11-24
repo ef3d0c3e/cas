@@ -1,4 +1,4 @@
-//! `nlpsolve` against giac (CAS-604): its options matched by their names,
+//! `nlpsolve` against giac (CAS-604, CAS-605): its options matched by their names,
 //! linear programs answered exactly as giac's `lpsolve` answers them
 //! (optimization.cc:6080-6085), and the inputs where ours departs. The
 //! rows whose giac answer draws random numbers are in `nlpsolve_seeded.rs`.
@@ -98,6 +98,24 @@ fn from_an_initial_point() {
         (Ok(theirs), Ok(o))
             if same(&ctx, &o, &closed, 10_000_000_000) && same(&ctx, &theirs, &closed, 100_000) => {
         }
+        (theirs, o) => panic!("{input}: ours {o:?}, giac's {theirs:?}"),
+    }
+}
+
+/// An integer program giac answers (CAS-605): one variable, its points
+/// enumerated (optimization.cc:5972-6102), the same under seeds 42 and 1
+/// and unseeded (T4 probes); ours exact, `1/9` at `0`, giac's within its
+/// error (C0006). The rows where giac fails are `nlpsolve_seeded.rs`'s.
+#[test]
+fn integer_programs() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let input = "nlpsolve((x-1/3)^2,x=-5..5,assume=integer)";
+    let exact = ours("[1/9,[x=0]]").expect("the optimum");
+    match (giac.value(input), ours(input)) {
+        (Ok(theirs), Ok(o)) if o == exact && same(&ctx, &theirs, &exact, 100_000_000) => {}
         (theirs, o) => panic!("{input}: ours {o:?}, giac's {theirs:?}"),
     }
 }
