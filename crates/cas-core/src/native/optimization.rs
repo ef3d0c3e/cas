@@ -3,7 +3,7 @@
 //! [`simplex`] and, with integers, [`integer`], §4); nonlinear programs
 //! ([`nlpsolve`], CAS-519; with integers [`nlpinteger`], CAS-605); giac's
 //! tableau method [`simplex_reduce`] (CAS-606); giac's [`find_minimum`]
-//! (CAS-608).
+//! (CAS-608) and [`frank_wolfe`] (CAS-609).
 //!
 //! `Extrema[f, vars]` and `Extrema[f, constraints, vars]`:
 //!
@@ -34,6 +34,7 @@
 //!   saddle or an indeterminate point and leaves it out.
 
 pub(super) mod find_minimum;
+pub(super) mod frank_wolfe;
 pub(super) mod global;
 mod integer;
 pub(super) mod lpsolve;

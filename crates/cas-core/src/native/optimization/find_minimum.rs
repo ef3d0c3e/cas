@@ -88,7 +88,7 @@ pub(super) enum Stop {
     NotReal,
 }
 
-fn warn(ev: &mut Eval<'_>, e: &Expr, message: &'static str) {
+pub(super) fn warn(ev: &mut Eval<'_>, e: &Expr, message: &'static str) {
     ev.warn(Warning::Native {
         message: message.into(),
         expr: e.clone(),
@@ -96,7 +96,7 @@ fn warn(ev: &mut Eval<'_>, e: &Expr, message: &'static str) {
 }
 
 /// [`EvalError::Interrupted`] once the evaluation was interrupted.
-fn interrupted(ev: &Eval<'_>) -> Result<(), EvalError> {
+pub(super) fn interrupted(ev: &Eval<'_>) -> Result<(), EvalError> {
     if ev
         .context()
         .interrupt_flag()
@@ -254,7 +254,7 @@ fn lower_end(b: &Ball, prec: u64) -> Option<Float> {
 }
 
 /// `m + r` rounded up, `None` for a ball not finite.
-fn upper_end(b: &Ball, prec: u64) -> Option<Float> {
+pub(super) fn upper_end(b: &Ball, prec: u64) -> Option<Float> {
     if !b.is_finite() {
         return None;
     }

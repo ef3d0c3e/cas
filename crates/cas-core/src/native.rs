@@ -1128,6 +1128,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::FIND_MINIMUM,
             optimization::find_minimum::find_minimum,
         ),
+        (Symbol::FRANK_WOLFE, optimization::frank_wolfe::frank_wolfe),
         (
             Symbol::QUOTIENT_REMAINDER,
             number_theory::residues::quotient_remainder,

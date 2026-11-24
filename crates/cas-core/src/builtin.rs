@@ -733,6 +733,8 @@ builtins! {
     SIMPLEX_REDUCE = "SimplexReduce" [PROTECTED];
     // giac's find_minimum (CAS-608).
     FIND_MINIMUM = "FindMinimum" [PROTECTED];
+    // giac's frank_wolfe (CAS-609).
+    FRANK_WOLFE = "FrankWolfe" [PROTECTED];
     // LPSolve's options (CAS-600, CAS-601): no native.
     LP_ASSUME = "LPAssume" [PROTECTED];
     LP_MAXIMIZE = "LPMaximize" [PROTECTED];

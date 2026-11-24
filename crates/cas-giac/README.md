@@ -513,6 +513,13 @@ giac's double within `10⁻⁶` of it (`10⁻⁴` for `eps=1e-5`). Departures: t
 `besselJ`/`Gamma` rows (giac `-3.96344565209`, `4.82843934915`), which do not compile to ball
 operations; ours stays `FindMinimum[…]`.
 
+`tests/frank_wolfe.rs`, Xcas's `frank_wolfe` (CAS-609): giac's 3 probe rows (`(x1-2/3)^2/3+(x2-2/3)^2/5`
+on the ± unit points, `(x1-1)^2+(x2-1)^2` on `[[0,0],[1,0],[0,1]]`, `x1^2+x2^2` on `[[1,1],[2,1],[1,2]]`),
+by default and with `exact`, closed forms first: our point in the hull with `f − f* ≤ 10⁻³` (`f*` 1/72, 1/2,
+2), giac's point within `10⁻³` by value too; `rand=5` on ours only (random starts on both sides). Departure:
+`maxiter=3` on the first two rows, where giac answers `["Unable to minimize at given precision, last value",
+[…]]`; ours warns and stays `FrankWolfe[…]`.
+
 `tests/nlpsolve.rs` and `tests/nlpsolve_seeded.rs` (CAS-604, CAS-605), `nlpsolve`'s options matched by
 their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_precision`,
 `nlp_tolerance`, `nlp_method`, `nlp_maximize`, `nlp_presolve`, `nlp_verbose`, `assume`,
