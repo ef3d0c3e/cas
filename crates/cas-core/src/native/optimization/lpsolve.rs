@@ -3,7 +3,10 @@
 //! `LPSolve[c, constraints, bounds…, options…]`:
 //!
 //! - `c` and the constraints' sides are linear in the variables with
-//!   rational coefficients; the constraints are `≤`, `≥`, `=`, and `<`, `>`
+//!   rational coefficients; decimals in `c`, the constraints and the ends
+//!   of the ranges are made exact first by `Exact`, as giac's
+//!   `make_problem_exact` (lpsolve.cc:1306; CAS-601), and a ball that
+//!   stays leaves the call. The constraints are `≤`, `≥`, `=`, and `<`, `>`
 //!   taken as their closures, in a list; the variables are the symbols of
 //!   `c` and the constraints in the order they first appear. Anything else
 //!   leaves the call.
@@ -23,6 +26,11 @@
 //!   - `lp_integervariables = [x, …]` makes those variables integers,
 //!     `lp_binaryvariables = [x, …]` integers in `0..1`; giac's indices
 //!     and index ranges there leave the call.
+//!   - `lp_method = m` with `m` `exact`, `float`, `lp_simplex` or
+//!     `lp_interiorpoint` (CAS-601): every one is our exact simplex, and
+//!     the answer is exact, as giac's answers are with each of them.
+//!   - `lp_verbose` and `lp_presolve`, alone or `= true` or `= false`, do
+//!     nothing: ours prints nothing more and has no presolve step.
 //!   - Another of giac's words alone (`lp_integer`, `lp_simplex`, …) is
 //!     ignored, as giac's, with a warning that names it.
 //!   - The keys of branch and bound (`lp_nodeselect`, `lp_varselect`,
@@ -48,7 +56,7 @@ use cas_num::Rational;
 use super::simplex::{Outcome, Relation, Row, minimize};
 use crate::context::EvalError;
 use crate::eval::Eval;
-use crate::expr::Expr;
+use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
 
@@ -118,6 +126,42 @@ fn end(e: &Expr) -> Result<Option<Rational>, ()> {
     }
     let infinite = e.may_contain(Symbol::INFINITY) || e.may_contain(Symbol::DIRECTED_INFINITY);
     if infinite { Ok(None) } else { Err(()) }
+}
+
+/// Whether `e` holds a ball, real or complex.
+fn holds_ball(e: &Expr) -> bool {
+    matches!(e.view(), View::Ball(_) | View::ComplexBall(_)) || e.args().iter().any(holds_ball)
+}
+
+/// `e` with its decimals exact, `Exact[e]` as giac's `make_problem_exact`
+/// (lpsolve.cc:1306); `None` when a ball stays.
+fn exact(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Expr>, EvalError> {
+    if !holds_ball(e) {
+        return Ok(Some(e.clone()));
+    }
+    let e = ev.eval(&Expr::call(Symbol::EXACT, [e.clone()]))?;
+    Ok((!holds_ball(&e)).then_some(e))
+}
+
+/// The row of the constraint `c`, its decimals exact first; `None` when it
+/// is not a linear one.
+fn row(ev: &mut Eval<'_>, c: &Expr, xs: &[Expr]) -> Result<Option<Row>, EvalError> {
+    let Some(c) = exact(ev, c)? else {
+        return Ok(None);
+    };
+    let (Some(h), [l, r]) = (head(&c), c.args()) else {
+        return Ok(None);
+    };
+    let relation = match h {
+        Symbol::LESS_EQUAL | Symbol::LESS => Relation::AtMost,
+        Symbol::GREATER_EQUAL | Symbol::GREATER => Relation::AtLeast,
+        Symbol::EQUATION | Symbol::EQUAL => Relation::Equal,
+        _ => return Ok(None),
+    };
+    let Some((a, k)) = linear(ev, &(l.clone() - r.clone()), xs)? else {
+        return Ok(None);
+    };
+    Ok(Some((a, relation, -k)))
 }
 
 /// Narrows the ends `b` of a variable to their intersection with
@@ -222,6 +266,8 @@ fn options(rest: &[Expr]) -> Option<Options<'_>> {
             match s {
                 Symbol::MAXIMIZE | Symbol::LP_MAXIMIZE => o.maximum = true,
                 Symbol::MINIMIZE => o.maximum = false,
+                // Ours prints nothing more and has no presolve step.
+                Symbol::LP_VERBOSE | Symbol::LP_PRESOLVE => {}
                 _ => o.ignored.push(lp_word(s)?),
             }
             continue;
@@ -235,6 +281,19 @@ fn options(rest: &[Expr]) -> Option<Options<'_>> {
             (Some(Symbol::LP_NON_NEGATIVE), _, _) => o.nonnegative |= boolean(r)?,
             (Some(Symbol::LP_INTEGER_VARIABLES), _, _) => o.typed.push((r, false)),
             (Some(Symbol::LP_BINARY_VARIABLES), _, _) => o.typed.push((r, true)),
+            // Every method is our exact simplex.
+            (Some(Symbol::LP_METHOD), _, _) => {
+                let method = matches!(
+                    r.as_symbol(),
+                    Some(Symbol::EXACT | Symbol::LP_SIMPLEX | Symbol::LP_INTERIOR_POINT)
+                ) || *r == Expr::symbol("float");
+                if !method {
+                    return None;
+                }
+            }
+            (Some(Symbol::LP_VERBOSE | Symbol::LP_PRESOLVE), _, _) => {
+                boolean(r)?;
+            }
             (_, Some(Symbol::RANGE), [a, b]) => o.ranges.push((l, a, b)),
             _ => return None,
         }
@@ -304,30 +363,27 @@ pub(super) fn program(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Program>, Ev
             binary[j] |= is_binary;
         }
     }
-    let Some((objective, constant)) = linear(ev, objective, &xs)? else {
+    let Some(objective) = exact(ev, objective)? else {
+        return Ok(None);
+    };
+    let Some((objective, constant)) = linear(ev, &objective, &xs)? else {
         return Ok(None);
     };
     let mut rows = Vec::new();
     for c in constraints {
-        let (Some(h), [l, r]) = (head(c), c.args()) else {
+        let Some(row) = row(ev, c, &xs)? else {
             return Ok(None);
         };
-        let relation = match h {
-            Symbol::LESS_EQUAL | Symbol::LESS => Relation::AtMost,
-            Symbol::GREATER_EQUAL | Symbol::GREATER => Relation::AtLeast,
-            Symbol::EQUATION | Symbol::EQUAL => Relation::Equal,
-            _ => return Ok(None),
-        };
-        let Some((a, k)) = linear(ev, &(l.clone() - r.clone()), &xs)? else {
-            return Ok(None);
-        };
-        rows.push((a, relation, -k));
+        rows.push(row);
     }
     // Every option narrows the bounds; the assumption comes last, as
     // giac's (lpsolve.cc:2672-2689).
     let mut bounds = vec![(None, None); xs.len()];
     for (j, a, b) in spans {
-        let (Ok(low), Ok(high)) = (end(a), end(b)) else {
+        let (Some(a), Some(b)) = (exact(ev, a)?, exact(ev, b)?) else {
+            return Ok(None);
+        };
+        let (Ok(low), Ok(high)) = (end(&a), end(&b)) else {
             return Ok(None);
         };
         tighten(&mut bounds[j], low.as_ref(), high.as_ref());

@@ -1,5 +1,6 @@
-//! Tests of the linear programs (CAS-417, CAS-418): giac's examples,
-//! unbounded and infeasible programs, integers and binaries.
+//! Tests of the linear programs (CAS-417, CAS-418, CAS-600, CAS-601):
+//! giac's examples and options, unbounded and infeasible programs,
+//! integers, binaries and decimals.
 
 use crate::trace::EvalOptions;
 use crate::{Context, Expr};
@@ -241,4 +242,59 @@ fn words_alone() {
         let text = format!("{:?}", report.warnings[0]);
         assert!(text.contains(name), "{word}: {text}");
     }
+}
+
+/// giac's `lp_method`, `lp_verbose` and `lp_presolve` change nothing, and
+/// decimals are made exact (CAS-601), giac's answers (probe1, probe5).
+#[test]
+fn methods() {
+    let program = |o: &str| {
+        format!(
+            "LPSolve[Plus[Times[2, x], y, Times[-1, z], 4], List[LessEqual[x, 1], \
+             GreaterEqual[y, 2], Equation[Plus[x, Times[3, y], Times[-1, z]], 2], \
+             LessEqual[Plus[Times[2, x], Times[-1, y], z], 8], \
+             LessEqual[Plus[Times[-1, x], y], 5]], {o}]"
+        )
+    };
+    let answer = "List[-4, List[Equation[x, 0], Equation[y, 5], Equation[z, 13]]]";
+    // 2.5x + y under [x + y ≥ 1.5, x - y ≤ 0.5].
+    let decimals = |o: &str| {
+        format!(
+            "LPSolve[Plus[Times[0x1.4p+1, x], y], List[GreaterEqual[Plus[x, y], 0x1.8p+0], \
+             LessEqual[Plus[x, Times[-1, y]], 0x1p-1]], {o}]"
+        )
+    };
+    let decimal_answer = "List[3/2, List[Equation[x, 0], Equation[y, 3/2]]]";
+    check_owned(&[
+        (program("Equation[LPMethod, LPSimplex]"), answer),
+        (program("Equation[LPMethod, LPInteriorPoint]"), answer),
+        (program("Equation[LPMethod, Exact]"), answer),
+        (program("Equation[LPMethod, float]"), answer),
+        (program("Equation[LPPresolve, False]"), answer),
+        (program("Equation[LPVerbose, True]"), answer),
+        (program("LPVerbose, LPPresolve"), answer),
+        (decimals("Equation[Assume, LPNonNegative]"), decimal_answer),
+        (
+            decimals("Equation[Assume, LPNonNegative], Equation[LPMethod, float]"),
+            decimal_answer,
+        ),
+        (
+            decimals("Equation[x, Range[0, 0x1.8p-1]], Equation[y, Range[0, Infinity]]"),
+            decimal_answer,
+        ),
+    ]);
+    stays(&[
+        program("Equation[LPMethod, foo]"),
+        program("Equation[LPMethod, True]"),
+        program("Equation[LPVerbose, 1]"),
+        program("Equation[LPPresolve, x]"),
+        // A ball Exact leaves, past the bits of a number.
+        "LPSolve[Times[0x1p+100000000, x], List[GreaterEqual[x, 1]]]".to_owned(),
+        "LPSolve[x, List[GreaterEqual[x, 1]], Equation[x, Range[0, 0x1p+100000000]]]".to_owned(),
+    ]);
+    // No warning for the words that do nothing.
+    let ctx = Context::new();
+    let e = read(&program("LPVerbose, LPPresolve"));
+    let (_, report) = ctx.eval_with(&e, &EvalOptions::default());
+    assert!(report.warnings.is_empty(), "{:?}", report.warnings);
 }

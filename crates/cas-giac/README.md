@@ -489,6 +489,11 @@ points.
   bracketed, cost and plan equal; departures, where ours stays
   `TPSolve[…]`: the two rows giac finds no feasible solution for, a
   decimal cost, a negative supply and `2*M`.
+- `lp_options` (CAS-600, CAS-601): giac's 26 probe rows of `lpsolve`'s options (`lp_method`,
+  `lp_presolve`, `lp_verbose`, the forms of maximize, `assume`, `lp_assume`,
+  `lp_integervariables`, `lp_binaryvariables`, a bare `lp_integer`, decimals); the optimum
+  equal, our point checked by its constraints, integers and objective, not giac's point
+  (`x+y` on `x+y>=1` has several).
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.

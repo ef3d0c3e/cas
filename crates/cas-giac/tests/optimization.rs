@@ -117,6 +117,236 @@ fn linear_programs() {
     ]);
 }
 
+/// A row of [`lp_options`]: giac's input; its objective and its constraints
+/// in a list, the ranges and assumptions among them, an equality as two
+/// inequalities and decimals exact; the variables that must be integers.
+type LpRow<'a> = (&'a str, &'a str, &'a str, &'a [&'a str]);
+
+/// Whether our answer `o` is one to giac's `t` (CAS-DOC-38 §5): the same
+/// optimum by [`same`], and a point that keeps the constraints and the
+/// integers and reaches it, though not giac's point when several reach it;
+/// `[]` and `[±inf, []]` the same by [`same`].
+fn solves(ctx: &Context, o: &Expr, t: &Expr, row: &LpRow<'_>) -> bool {
+    const SCALE: i64 = 10_000_000_000;
+    let (_, objective, constraints, integers) = *row;
+    let (Some(Symbol::LIST), [value, point], [their_value, _]) =
+        (o.head().and_then(Expr::as_symbol), o.args(), t.args())
+    else {
+        return same(ctx, o, t, SCALE);
+    };
+    if point.args().is_empty() {
+        return same(ctx, o, t, SCALE);
+    }
+    if !same(ctx, value, their_value, SCALE) {
+        return false;
+    }
+    let pairs: Vec<(Expr, Expr)> = point
+        .args()
+        .iter()
+        .filter_map(|e| match e.args() {
+            [x, v] => Some((x.clone(), v.clone())),
+            _ => None,
+        })
+        .collect();
+    let (Ok(f), Ok(cs)) = (ours(objective), ours(constraints)) else {
+        return false;
+    };
+    let reached = ctx.eval(&f.substitute(&pairs)).ok();
+    let kept = cs.args().iter().all(|c| holds(ctx, &c.substitute(&pairs)));
+    let integral = integers.iter().all(|x| {
+        pairs
+            .iter()
+            .any(|(v, q)| ours(x).is_ok_and(|x| x == *v) && q.to_integer().is_some())
+    });
+    pairs.len() == point.args().len()
+        && reached.is_some_and(|r| same(ctx, &r, value, SCALE))
+        && kept
+        && integral
+}
+
+/// The constraints of [`LP_ROWS`].
+const THREE: &str = "[x<=1,y>=2,x+3y-z<=2,x+3y-z>=2,2x-y+z<=8,-x+y<=5]";
+const BOXED: &str = "[4x-12y<=20,-x+3y<=3,x>=-5,x<=5,y>=0]";
+const WEDGE: &str = "[y<=3x+1/2,y<=-5x+2,x>=0,y>=0]";
+const LATTICE: &str = "[7x+y<=35,-x+3y<=6]";
+const LATTICE_NONNEGATIVE: &str = "[7x+y<=35,-x+3y<=6,x>=0,y>=0]";
+const SACK: &str = "[5x1+7x2+4x3+3x4<=14,x1>=0,x1<=1,x2>=0,x2<=1,x3>=0,x3<=1,x4>=0,x4<=1]";
+const COINS: &str = "[1867x1+1913x2<=3618894,1867x1+1913x2>=3618894,x1>=0,x2>=0]";
+const DECIMALS: &str = "[x+y>=3/2,x-y<=1/2,x>=0,y>=0]";
+
+/// The rows of [`lp_options`].
+const LP_ROWS: &[LpRow<'static>] = &[
+    (
+        "lpsolve(2x+y-z+4,[x<=1,y>=2,x+3y-z=2,2x-y+z<=8,-x+y<=5],lp_method=lp_simplex)",
+        "2x+y-z+4",
+        THREE,
+        &[],
+    ),
+    (
+        "lpsolve(2x+y-z+4,[x<=1,y>=2,x+3y-z=2,2x-y+z<=8,-x+y<=5],lp_method=lp_interiorpoint)",
+        "2x+y-z+4",
+        THREE,
+        &[],
+    ),
+    (
+        "lpsolve(2x+y-z+4,[x<=1,y>=2,x+3y-z=2,2x-y+z<=8,-x+y<=5],lp_method=exact)",
+        "2x+y-z+4",
+        THREE,
+        &[],
+    ),
+    (
+        "lpsolve(2x+y-z+4,[x<=1,y>=2,x+3y-z=2,2x-y+z<=8,-x+y<=5],lp_method=float)",
+        "2x+y-z+4",
+        THREE,
+        &[],
+    ),
+    (
+        "lpsolve(2x+y-z+4,[x<=1,y>=2,x+3y-z=2,2x-y+z<=8,-x+y<=5],lp_presolve=false)",
+        "2x+y-z+4",
+        THREE,
+        &[],
+    ),
+    (
+        "lpsolve(-7x+2y,[4x-12y<=20,-x+3y<=3],x=-5..5,y=0..inf,lp_maximize)",
+        "-7x+2y",
+        BOXED,
+        &[],
+    ),
+    (
+        "lpsolve(-7x+2y,[4x-12y<=20,-x+3y<=3],x=-5..5,y=0..inf,lp_maximize=true)",
+        "-7x+2y",
+        BOXED,
+        &[],
+    ),
+    (
+        "lpsolve(-7x+2y,[4x-12y<=20,-x+3y<=3],x=-5..5,y=0..inf,maximize=true)",
+        "-7x+2y",
+        BOXED,
+        &[],
+    ),
+    (
+        "lpsolve(-7x+2y,[4x-12y<=20,-x+3y<=3],x=-5..5,y=0..inf,lp_maximize=false)",
+        "-7x+2y",
+        BOXED,
+        &[],
+    ),
+    (
+        "lpsolve(-x-y,[y<=3x+1/2,y<=-5x+2],lp_nonnegative=true)",
+        "-x-y",
+        WEDGE,
+        &[],
+    ),
+    (
+        "lpsolve(-x-y,[y<=3x+1/2,y<=-5x+2],lp_assume=lp_nonnegative)",
+        "-x-y",
+        WEDGE,
+        &[],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=lp_integer)",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=lp_nonnegint)",
+        "-5x-7y",
+        LATTICE_NONNEGATIVE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],lp_integervariables=[x,y])",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],lp_integervariables=[x])",
+        "-5x-7y",
+        LATTICE,
+        &["x"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],lp_integer)",
+        "-5x-7y",
+        LATTICE,
+        &[],
+    ),
+    (
+        "lpsolve(8x1+11x2+6x3+4x4,[5x1+7x2+4x3+3x4<=14],\
+         lp_binaryvariables=[x1,x2,x3,x4],lp_maximize=true)",
+        "8x1+11x2+6x3+4x4",
+        SACK,
+        &["x1", "x2", "x3", "x4"],
+    ),
+    (
+        "lpsolve(8x1+11x2+6x3+4x4,[5x1+7x2+4x3+3x4<=14],\
+         lp_binaryvariables=[x1,x2],x3=0..1,x4=0..1,lp_maximize=true)",
+        "8x1+11x2+6x3+4x4",
+        SACK,
+        &["x1", "x2"],
+    ),
+    (
+        "lpsolve(x1+x2,[1867x1+1913x2=3618894],assume=nonnegint)",
+        "x1+x2",
+        COINS,
+        &["x1", "x2"],
+    ),
+    (
+        "lpsolve(x1+x2,[1867x1+1913x2=3618894],assume=nonnegint,lp_verbose=true)",
+        "x1+x2",
+        COINS,
+        &["x1", "x2"],
+    ),
+    (
+        "lpsolve(2.5x+y,[x+y>=1.5,x-y<=0.5],assume=lp_nonnegative)",
+        "5/2*x+y",
+        DECIMALS,
+        &[],
+    ),
+    (
+        "lpsolve(2.5x+y,[x+y>=1.5,x-y<=0.5],assume=lp_nonnegative,lp_method=float)",
+        "5/2*x+y",
+        DECIMALS,
+        &[],
+    ),
+    // Several optima: giac's is (1, 0).
+    (
+        "lpsolve(x+y,[x+y>=1],assume=lp_nonnegative)",
+        "x+y",
+        "[x+y>=1,x>=0,y>=0]",
+        &[],
+    ),
+    (
+        "lpsolve(3x+2y,[x+y<=4,x+3y<=6],assume=lp_nonnegative,lp_maximize=true)",
+        "3x+2y",
+        "[x+y<=4,x+3y<=6,x>=0,y>=0]",
+        &[],
+    ),
+    ("lpsolve(x,[x>=1,x<=0])", "x", "[x>=1,x<=0]", &[]),
+    ("lpsolve(x,[x<=1])", "x", "[x<=1]", &[]),
+];
+
+/// giac's options of `lpsolve` (CAS-600, CAS-601): its methods, verbose
+/// and presolve, maximize, assumptions, integer and binary variables and
+/// decimals (probe1, probe5); our points by [`solves`].
+#[test]
+fn lp_options() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for row in LP_ROWS {
+        let input = row.0;
+        match (giac.value(input), ours(input)) {
+            (Ok(theirs), Ok(o)) if solves(&ctx, &o, &theirs, row) => {}
+            (theirs, o) => wrong.push(format!("{input}: ours {o:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 /// giac's answer to `input` with its random generator seeded (42: every
 /// input below then succeeds; seed 0 fails the first) first, in the
 /// same call: `nlpsolve` starts from random points, so its answer (and
