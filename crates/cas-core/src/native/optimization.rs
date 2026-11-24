@@ -3,7 +3,8 @@
 //! [`simplex`] and, with integers, [`integer`], §4); nonlinear programs
 //! ([`nlpsolve`], CAS-519; with integers [`nlpinteger`], CAS-605); giac's
 //! tableau method [`simplex_reduce`] (CAS-606); giac's [`find_minimum`]
-//! (CAS-608) and [`frank_wolfe`] (CAS-609).
+//! (CAS-608), [`frank_wolfe`] (CAS-609) and [`simulated_annealing`]
+//! (CAS-610).
 //!
 //! `Extrema[f, vars]` and `Extrema[f, constraints, vars]`:
 //!
@@ -42,6 +43,7 @@ mod nlpinteger;
 pub(super) mod nlpsolve;
 mod simplex;
 pub(super) mod simplex_reduce;
+pub(super) mod simulated_annealing;
 pub(super) mod tpsolve;
 
 use std::cmp::Ordering;

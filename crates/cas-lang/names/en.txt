@@ -565,6 +565,8 @@ SimplexReduce: simplex_reduce
 FindMinimum: find_minimum
 # giac's frank_wolfe (CAS-609), Xcas's.
 FrankWolfe: frank_wolfe
+# giac's simulated_annealing (CAS-610), Xcas's.
+SimulatedAnnealing: simulated_annealing
 # lpsolve's options, Xcas's (CAS-600, CAS-601): options, no function.
 LPAssume: lp_assume
 LPMaximize: lp_maximize

@@ -735,6 +735,8 @@ builtins! {
     FIND_MINIMUM = "FindMinimum" [PROTECTED];
     // giac's frank_wolfe (CAS-609).
     FRANK_WOLFE = "FrankWolfe" [PROTECTED];
+    // giac's simulated_annealing (CAS-610).
+    SIMULATED_ANNEALING = "SimulatedAnnealing" [PROTECTED];
     // LPSolve's options (CAS-600, CAS-601): no native.
     LP_ASSUME = "LPAssume" [PROTECTED];
     LP_MAXIMIZE = "LPMaximize" [PROTECTED];

@@ -1130,6 +1130,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         ),
         (Symbol::FRANK_WOLFE, optimization::frank_wolfe::frank_wolfe),
         (
+            Symbol::SIMULATED_ANNEALING,
+            optimization::simulated_annealing::simulated_annealing,
+        ),
+        (
             Symbol::QUOTIENT_REMAINDER,
             number_theory::residues::quotient_remainder,
         ),

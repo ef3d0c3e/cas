@@ -520,6 +520,16 @@ by default and with `exact`, closed forms first: our point in the hull with `f �
 `maxiter=3` on the first two rows, where giac answers `["Unable to minimize at given precision, last value",
 […]]`; ours warns and stays `FrankWolfe[…]`.
 
+`tests/simulated_annealing.rs`, Xcas's `simulated_annealing` (CAS-610): the row
+`simulated_annealing(2,x->x^2+sin(20x)/5,(x,y)->abs(x-y),(x,m)->rand(x-m,x+m),[1,0.1,1.002,1e-6],[5,20],1)`
+against its closed form first, `x* = −0.0766237535726` (`f* = −0.193981966498`): giac unseeded and seeded with
+`srand(42);…` and `srand(7);…` in the same input (`-0.0766196874902`, `-0.0766106601804`, `-0.0766229843721`),
+ours seeded with 1, 42 and 7, each within `10⁻³` of `x*`; ours never compared with giac's. Departures: our draws
+(ours and the user's `rand`) come from the session's generator, not GSL's default generator nor giac's `rand`, so
+`SeedRandom` makes a run repeat; giac's errors in `cost` or `step` leave the call; our schedule checks
+(`k > 0`, `mu_t > 1`, `0 < t_min < t_initial`, the steps within `terms`) warn and leave the call, where GSL
+loops forever when `mu_t ≤ 1`.
+
 `tests/nlpsolve.rs` and `tests/nlpsolve_seeded.rs` (CAS-604, CAS-605), `nlpsolve`'s options matched by
 their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_precision`,
 `nlp_tolerance`, `nlp_method`, `nlp_maximize`, `nlp_presolve`, `nlp_verbose`, `assume`,
