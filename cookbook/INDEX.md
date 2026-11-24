@@ -56,3 +56,4 @@ C0053 | Per-cache-hit side data (warnings, trace steps) needs its own count boun
 C0054 | Subresultant gcd: gamma/lc-scale the last remainder before its primitive part | gcd,subresultant,cas-poly,fuzz,timeout,content,performance | 2026-11-24 | 1.4/T9 | Fuzz 45304609232, T9.c5 8a82c52
 C0055 | Euclid over Z[i] (and other field-backed rings): round the quotient in the ring from leading bits | gcd,gaussian,euclid,cas-num,fuzz,timeout,performance,rounding | 2026-11-24 | 1.4/T9 | Fuzz 45311134759, T9.c6 8c9ca3e
 C0056 | Stays tests check head and warnings; feasibility checks split equalities | test,unevaluated,oracle,equation,cas-core | 2026-11-24 | 1.5/T2 | T2.c1 CAS-600 lpsolve stays
+C0057 | giac branch and bound port: GMI cuts by slack substitution and re-solve; giac's cut rhs bug | giac,port,lpsolve,integer,cuts,branch-and-bound | 2026-11-24 | 1.5/T3 | T3.c1 CAS-602
