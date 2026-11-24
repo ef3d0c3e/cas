@@ -199,6 +199,37 @@ fn linear_program(ctx: &Context, u: &mut Unstructured<'_>, integer: bool) -> Res
             Symbol::EQUATION,
             [Expr::from(Symbol::ASSUME), sym("integer")],
         ));
+        // Random branch and bound strategies: each still finds the optimum.
+        let option =
+            |key: Symbol, value: Expr| Expr::call(Symbol::EQUATION, [Expr::from(key), value]);
+        if u.arbitrary()? {
+            let node = *u.choose(&[
+                Symbol::LP_DEPTH_FIRST,
+                Symbol::LP_BREADTH_FIRST,
+                Symbol::LP_BEST_LOCAL_BOUND,
+                Symbol::LP_BEST_PROJECTION,
+                Symbol::LP_HYBRID,
+            ])?;
+            args.push(option(Symbol::LP_NODE_SELECT, Expr::from(node)));
+        }
+        if u.arbitrary()? {
+            let var = *u.choose(&[
+                Symbol::LP_FIRST_FRACTIONAL,
+                Symbol::LP_LAST_FRACTIONAL,
+                Symbol::LP_MOST_FRACTIONAL,
+                Symbol::LP_PSEUDO_COST,
+            ])?;
+            args.push(option(Symbol::LP_VAR_SELECT, Expr::from(var)));
+        }
+        if u.arbitrary()? {
+            let cuts = u.int_in_range(0..=5i64)?;
+            args.push(option(Symbol::LP_MAX_CUTS, Expr::from(cuts)));
+        }
+        if u.arbitrary()? {
+            let on: bool = u.arbitrary()?;
+            let value = if on { Symbol::TRUE } else { Symbol::FALSE };
+            args.push(option(Symbol::LP_HEURISTIC, Expr::from(value)));
+        }
     }
     if maximum {
         args.push(Expr::from(Symbol::MAXIMIZE));

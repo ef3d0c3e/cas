@@ -347,6 +347,199 @@ fn lp_options() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// The rows of [`lp_branch_and_bound`].
+const LP_BRANCH_ROWS: &[LpRow<'static>] = &[
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=integer,lp_nodeselect=lp_breadthfirst)",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=integer,lp_nodeselect=lp_bestprojection)",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=integer,lp_nodeselect=lp_hybrid)",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=integer,lp_nodeselect=lp_bestlocalbound)",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=integer,lp_varselect=lp_lastfractional)",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=integer,lp_varselect=lp_pseudocost)",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=integer,lp_varselect=lp_mostfractional)",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=integer,lp_depthlimit=1)",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=integer,lp_nodelimit=1)",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=integer,lp_maxcuts=0)",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=integer,lp_gaptolerance=0.5)",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=integer,lp_heuristic=false)",
+        "-5x-7y",
+        LATTICE,
+        &["x", "y"],
+    ),
+    (
+        "lpsolve(x1+x2,[1867x1+1913x2=3618894],assume=nonnegint,lp_gaptolerance=0.5)",
+        "x1+x2",
+        COINS,
+        &["x1", "x2"],
+    ),
+    (
+        "lpsolve(x1+x2,[1867x1+1913x2=3618894],assume=nonnegint,lp_maxcuts=0)",
+        "x1+x2",
+        COINS,
+        &["x1", "x2"],
+    ),
+    (
+        "lpsolve(x1+x2,[1867x1+1913x2=3618894],assume=nonnegint,lp_heuristic=false)",
+        "x1+x2",
+        COINS,
+        &["x1", "x2"],
+    ),
+    (
+        "lpsolve(x1+x2,[1867x1+1913x2=3618894],assume=nonnegint,lp_nodeselect=lp_depthfirst)",
+        "x1+x2",
+        COINS,
+        &["x1", "x2"],
+    ),
+    (
+        "lpsolve(x1+x2,[1867x1+1913x2=3618894],assume=nonnegint,lp_nodeselect=lp_breadthfirst)",
+        "x1+x2",
+        COINS,
+        &["x1", "x2"],
+    ),
+    (
+        "lpsolve(x1+x2,[1867x1+1913x2=3618894],assume=nonnegint,lp_varselect=lp_firstfractional)",
+        "x1+x2",
+        COINS,
+        &["x1", "x2"],
+    ),
+    (
+        "lpsolve(x1+x2,[1867x1+1913x2=3618894],assume=nonnegint,lp_nodelimit=5)",
+        "x1+x2",
+        COINS,
+        &["x1", "x2"],
+    ),
+    (
+        "lpsolve(x1+x2,[1867x1+1913x2=3618894],assume=nonnegint,lp_depthlimit=2)",
+        "x1+x2",
+        COINS,
+        &["x1", "x2"],
+    ),
+    (
+        "lpsolve(x1+x2,[1867x1+1913x2=3618894],assume=nonnegint,lp_iterationlimit=10)",
+        "x1+x2",
+        COINS,
+        &["x1", "x2"],
+    ),
+    (
+        "lpsolve(x1+x2,[1867x1+1913x2=3618894],assume=nonnegint,lp_iterationlimit=1000)",
+        "x1+x2",
+        COINS,
+        &["x1", "x2"],
+    ),
+    (
+        "lpsolve(2x+y-z+4,[x<=1,y>=2,x+3y-z=2,2x-y+z<=8,-x+y<=5],lp_iterationlimit=1)",
+        "2x+y-z+4",
+        THREE,
+        &[],
+    ),
+];
+
+/// giac's branch and bound options of `lpsolve` (CAS-602, CAS-603): node
+/// and variable selection, cuts, the rounding heuristic, the gap and the
+/// depth, node and iteration limits, `[]` where a limit is reached before
+/// any integer point (probe1, probe5); our points by [`solves`].
+#[test]
+fn lp_branch_and_bound() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for row in LP_BRANCH_ROWS {
+        let input = row.0;
+        match (giac.value(input), ours(input)) {
+            (Ok(theirs), Ok(o)) if solves(&ctx, &o, &theirs, row) => {}
+            (theirs, o) => wrong.push(format!("{input}: ours {o:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Branch and bound inputs where ours departs from giac (CAS-603):
+/// `lp_timelimit=1` is giac's 1 ms of CPU, which the coins program
+/// outlasts (`[]`); ours has no clock and answers the optimum 1916 at a
+/// feasible integer point. giac rejects `lp_nodeselect=foo` with "Bad
+/// Argument Type"; ours stays `LPSolve[…]`.
+#[test]
+fn lp_branch_and_bound_departures() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    let timed = "lpsolve(x1+x2,[1867x1+1913x2=3618894],assume=nonnegint,lp_timelimit=1)";
+    let row: LpRow<'_> = (timed, "x1+x2", COINS, &["x1", "x2"]);
+    let optimum = ours("[1916,[x1=1009,x2=907]]").expect("the optimum");
+    match ours(timed) {
+        Ok(o) if solves(&ctx, &o, &optimum, &row) => {}
+        o => wrong.push(format!(
+            "{timed}: ours {o:?}, giac's {:?}",
+            giac.value(timed)
+        )),
+    }
+    let bad = "lpsolve(-5x-7y,[7x+y<=35,-x+3y<=6],assume=integer,lp_nodeselect=foo)";
+    match ours(bad) {
+        Ok(e) if e.head().and_then(Expr::as_symbol) == Some(Symbol::LP_SOLVE) => {}
+        o => wrong.push(format!("{bad}: ours {o:?}, giac's {:?}", giac.value(bad))),
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 /// giac's answer to `input` with its random generator seeded (42: every
 /// input below then succeeds; seed 0 fails the first) first, in the
 /// same call: `nlpsolve` starts from random points, so its answer (and

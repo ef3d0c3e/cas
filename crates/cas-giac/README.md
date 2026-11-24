@@ -494,6 +494,12 @@ points.
   `lp_integervariables`, `lp_binaryvariables`, a bare `lp_integer`, decimals); the optimum
   equal, our point checked by its constraints, integers and objective, not giac's point
   (`x+y` on `x+y>=1` has several).
+- `lp_branch_and_bound` (CAS-602, CAS-603): giac's 23 probe rows of the branch and bound
+  options (`lp_nodeselect`, `lp_varselect`, `lp_maxcuts`, `lp_heuristic`, `lp_gaptolerance`,
+  `lp_depthlimit`, `lp_nodelimit`, `lp_iterationlimit`), `[]` where a limit is reached first;
+  checked as `lp_options`. Departures: `lp_timelimit=1` (giac's 1 ms CPU clock gives `[]`,
+  ours has no clock and answers the optimum) and `lp_nodeselect=foo` (giac's "Bad Argument
+  Type", ours stays `LPSolve[…]`).
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
