@@ -1,6 +1,9 @@
-//! Tests of the linear programs (CAS-417, CAS-418, CAS-600, CAS-601):
+//! Tests of the linear programs (CAS-417, CAS-418, CAS-600 to CAS-603):
 //! giac's examples and options, unbounded and infeasible programs,
-//! integers, binaries and decimals.
+//! integers, binaries and decimals, branch and bound's strategies against
+//! enumeration, its limits and gap.
+
+use cas_num::{Integer, Rational};
 
 use crate::trace::EvalOptions;
 use crate::{Context, Expr};
@@ -216,9 +219,6 @@ fn options() {
         lattice("Equation[LPIntegerVariables, List[1]]"),
         lattice("Equation[LPBinaryVariables, List[x, z]]"),
         lattice("Equation[LPNonNegative, 1]"),
-        // Branch and bound's keys, until T3.
-        lattice("Equation[Assume, LPInteger], Equation[LPNodeSelect, LPDepthFirst]"),
-        lattice("Equation[Assume, LPInteger], Equation[LPDepthLimit, 1]"),
     ]);
 }
 
@@ -297,4 +297,423 @@ fn methods() {
     let e = read(&program("LPVerbose, LPPresolve"));
     let (_, report) = ctx.eval_with(&e, &EvalOptions::default());
     assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+}
+
+/// A test program over `x1, x2, …`: the objective's coefficients and
+/// constant, the rows `(a, relation, (numerator, denominator))`, each
+/// variable's box, which are integers, and whether it maximizes.
+struct Case {
+    c: &'static [i64],
+    constant: i64,
+    rows: &'static [(&'static [i64], &'static str, (i64, i64))],
+    boxes: &'static [(i64, i64)],
+    integer: &'static [bool],
+    maximum: bool,
+}
+
+fn q(n: i64, d: i64) -> Rational {
+    Rational::new(Integer::from(n), Integer::from(d))
+}
+
+/// `Σ a_j x_j`, plus `k` when not 0, in full form.
+fn sum(a: &[i64], k: i64) -> String {
+    let mut terms: Vec<String> = a
+        .iter()
+        .enumerate()
+        .map(|(j, a)| format!("Times[{a}, x{}]", j + 1))
+        .collect();
+    if k != 0 {
+        terms.push(k.to_string());
+    }
+    format!("Plus[{}]", terms.join(", "))
+}
+
+impl Case {
+    /// The call with the boxes and the integers, then `options`.
+    fn call(&self, boxes: &[(i64, i64)], integer: bool, options: &str) -> String {
+        let rows: Vec<String> = self
+            .rows
+            .iter()
+            .map(|(a, rel, (n, d))| format!("{rel}[{}, {n}/{d}]", sum(a, 0)))
+            .collect();
+        let mut o: Vec<String> = boxes
+            .iter()
+            .enumerate()
+            .map(|(j, (l, h))| format!("Equation[x{}, Range[{l}, {h}]]", j + 1))
+            .collect();
+        let integers: Vec<String> = (0..self.c.len())
+            .filter(|&j| integer && self.integer[j])
+            .map(|j| format!("x{}", j + 1))
+            .collect();
+        if !integers.is_empty() {
+            o.push(format!(
+                "Equation[LPIntegerVariables, List[{}]]",
+                integers.join(", ")
+            ));
+        }
+        if self.maximum {
+            o.push("Maximize".to_owned());
+        }
+        if !options.is_empty() {
+            o.push(options.to_owned());
+        }
+        format!(
+            "LPSolve[{}, List[{}], {}]",
+            sum(self.c, self.constant),
+            rows.join(", "),
+            o.join(", ")
+        )
+    }
+
+    /// Whether `x` keeps the rows, the boxes and the integers.
+    fn feasible(&self, x: &[Rational]) -> bool {
+        let rows = self.rows.iter().all(|(a, rel, (n, d))| {
+            let ax = a
+                .iter()
+                .zip(x)
+                .fold(Rational::ZERO, |s, (a, v)| &s + &(&q(*a, 1) * v));
+            let b = q(*n, *d);
+            match *rel {
+                "LessEqual" => ax <= b,
+                "GreaterEqual" => ax >= b,
+                _ => ax == b,
+            }
+        });
+        let boxes = x
+            .iter()
+            .zip(self.boxes)
+            .zip(self.integer)
+            .all(|((v, (l, h)), is)| *v >= q(*l, 1) && *v <= q(*h, 1) && (!is || v.is_integer()));
+        rows && boxes
+    }
+
+    fn value(&self, x: &[Rational]) -> Rational {
+        self.c
+            .iter()
+            .zip(x)
+            .fold(q(self.constant, 1), |s, (c, v)| &s + &(&q(*c, 1) * v))
+    }
+
+    /// The best value by enumeration of the integer variables' boxes, the
+    /// continuous ones by `LPSolve` with the integers fixed.
+    fn best(&self, ctx: &Context) -> Rational {
+        let ints: Vec<usize> = (0..self.c.len()).filter(|&j| self.integer[j]).collect();
+        let mut point: Vec<i64> = ints.iter().map(|&j| self.boxes[j].0).collect();
+        let mut best: Option<Rational> = None;
+        loop {
+            let mut boxes = self.boxes.to_vec();
+            for (&j, &v) in ints.iter().zip(&point) {
+                boxes[j] = (v, v);
+            }
+            let value = if ints.len() == self.c.len() {
+                let x: Vec<Rational> = point.iter().map(|&v| q(v, 1)).collect();
+                self.feasible(&x).then(|| self.value(&x))
+            } else {
+                let found = ctx.eval(&read(&self.call(&boxes, false, ""))).unwrap();
+                found.args().first().and_then(Expr::to_rational)
+            };
+            if let Some(v) = value
+                && best
+                    .as_ref()
+                    .is_none_or(|b| if self.maximum { v > *b } else { v < *b })
+            {
+                best = Some(v);
+            }
+            // The next point, the first variable fastest.
+            let mut i = 0;
+            while i < ints.len() && point[i] == self.boxes[ints[i]].1 {
+                point[i] = self.boxes[ints[i]].0;
+                i += 1;
+            }
+            if i == ints.len() {
+                break;
+            }
+            point[i] += 1;
+        }
+        best.expect("a feasible integer point")
+    }
+}
+
+/// The integer programs of [`strategies`], each in a finite box: giac's
+/// lattice, the binary knapsack, `x + y` past fractions, three bounded
+/// programs, and two mixed ones.
+const CASES: &[Case] = &[
+    Case {
+        c: &[-5, -7],
+        constant: 0,
+        rows: &[
+            (&[7, 1], "LessEqual", (35, 1)),
+            (&[-1, 3], "LessEqual", (6, 1)),
+        ],
+        boxes: &[(-10, 10), (-10, 10)],
+        integer: &[true, true],
+        maximum: false,
+    },
+    Case {
+        c: &[8, 11, 6, 4],
+        constant: 0,
+        rows: &[(&[5, 7, 4, 3], "LessEqual", (14, 1))],
+        boxes: &[(0, 1), (0, 1), (0, 1), (0, 1)],
+        integer: &[true, true, true, true],
+        maximum: true,
+    },
+    Case {
+        c: &[1, 1],
+        constant: 0,
+        rows: &[
+            (&[1, 0], "GreaterEqual", (1, 3)),
+            (&[0, 1], "GreaterEqual", (1, 2)),
+        ],
+        boxes: &[(-5, 5), (-5, 5)],
+        integer: &[true, true],
+        maximum: false,
+    },
+    Case {
+        c: &[5, 4, 3],
+        constant: 0,
+        rows: &[
+            (&[2, 3, 1], "LessEqual", (5, 1)),
+            (&[4, 1, 2], "LessEqual", (11, 1)),
+            (&[3, 4, 2], "LessEqual", (8, 1)),
+        ],
+        boxes: &[(0, 3), (0, 3), (0, 3)],
+        integer: &[true, true, true],
+        maximum: true,
+    },
+    Case {
+        c: &[3, 2, 4],
+        constant: 0,
+        rows: &[
+            (&[3, 2, 5], "LessEqual", (37, 2)),
+            (&[2, 5, 1], "LessEqual", (11, 1)),
+            (&[1, -1, 3], "GreaterEqual", (-2, 1)),
+        ],
+        boxes: &[(0, 6), (0, 6), (0, 6)],
+        integer: &[true, true, true],
+        maximum: true,
+    },
+    Case {
+        c: &[-1, -1],
+        constant: 0,
+        rows: &[
+            (&[2, 2], "LessEqual", (7, 1)),
+            (&[-2, 2], "LessEqual", (3, 1)),
+        ],
+        boxes: &[(-4, 4), (-4, 4)],
+        integer: &[true, true],
+        maximum: false,
+    },
+    Case {
+        c: &[7, -3],
+        constant: 1,
+        rows: &[
+            (&[3, 5], "GreaterEqual", (7, 2)),
+            (&[4, -1], "LessEqual", (9, 1)),
+        ],
+        boxes: &[(-3, 5), (-3, 5)],
+        integer: &[true, true],
+        maximum: false,
+    },
+    Case {
+        c: &[8, 11, 6, 4],
+        constant: 0,
+        rows: &[(&[5, 7, 4, 3], "LessEqual", (14, 1))],
+        boxes: &[(0, 1), (0, 1), (0, 1), (0, 1)],
+        integer: &[true, true, false, false],
+        maximum: true,
+    },
+    Case {
+        c: &[-5, -7],
+        constant: 0,
+        rows: &[
+            (&[7, 1], "LessEqual", (35, 1)),
+            (&[-1, 3], "LessEqual", (6, 1)),
+        ],
+        boxes: &[(-10, 10), (-10, 10)],
+        integer: &[true, false],
+        maximum: false,
+    },
+];
+
+/// Every node selection, variable selection, `lp_maxcuts` 0 and 5, and
+/// `lp_heuristic` on and off (CAS-602) reach the best value found by
+/// enumeration, at a point that keeps the rows, the boxes and the integers
+/// (C0040: every failure, one assert).
+#[test]
+fn strategies() {
+    let ctx = Context::new();
+    let nodes = [
+        "LPDepthFirst",
+        "LPBreadthFirst",
+        "LPBestLocalBound",
+        "LPBestProjection",
+        "LPHybrid",
+    ];
+    let vars = [
+        "LPFirstFractional",
+        "LPLastFractional",
+        "LPMostFractional",
+        "LPPseudoCost",
+    ];
+    let mut wrong = Vec::new();
+    for case in CASES {
+        let best = case.best(&ctx);
+        for node in nodes {
+            for var in vars {
+                for cuts in [0, 5] {
+                    for heuristic in ["True", "False"] {
+                        let options = format!(
+                            "Equation[LPNodeSelect, {node}], Equation[LPVarSelect, {var}], \
+                             Equation[LPMaxCuts, {cuts}], Equation[LPHeuristic, {heuristic}]"
+                        );
+                        let input = case.call(case.boxes, true, &options);
+                        let found = ctx.eval(&read(&input)).unwrap();
+                        let point: Option<Vec<Rational>> = found.args().get(1).and_then(|p| {
+                            p.args()
+                                .iter()
+                                .map(|e| e.args().get(1).and_then(Expr::to_rational))
+                                .collect()
+                        });
+                        let value = found.args().first().and_then(Expr::to_rational);
+                        let right = matches!((&value, &point), (Some(v), Some(x))
+                            if *v == best && x.len() == case.c.len() && case.feasible(x)
+                                && case.value(x) == best);
+                        if !right {
+                            wrong.push(format!("{input}: {found:?}, best {best:?}"));
+                        }
+                    }
+                }
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The binary knapsack of [`knapsack`], maximized, with the options `o`.
+fn binary(o: &str) -> String {
+    knapsack(&format!("Equation[Assume, LPBinary], Maximize, {o}"))
+}
+
+/// giac's `x1 + x2` over `1867x1 + 1913x2 = 3618894` in nonnegative
+/// integers with the options `o`.
+fn coins(o: &str) -> String {
+    format!(
+        "LPSolve[Plus[x1, x2], List[Equation[Plus[Times[1867, x1], Times[1913, x2]], 3618894]], \
+         Equation[Assume, LPNonNegInt], {o}]"
+    )
+}
+
+/// The answer of `input` and its one warning, which names `option`; `None`
+/// for no warning expected.
+fn warns(cases: &[(String, &str, Option<&str>)]) {
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for (input, expected, option) in cases {
+        let (found, report) = ctx.eval_with(&read(input), &EvalOptions::default());
+        let found = found.unwrap();
+        let expected = ctx.eval(&read(expected)).unwrap();
+        let named = match option {
+            Some(name) => {
+                report.warnings.len() == 1 && format!("{:?}", report.warnings[0]).contains(name)
+            }
+            None => report.warnings.is_empty(),
+        };
+        if found != expected || !named {
+            wrong.push(format!("{input}: {found:?} {:?}", report.warnings));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// A limit or the gap stops the search (CAS-603): the incumbent, or `{}`
+/// when there is none, with a warning that names the option, as giac's
+/// `[]` (probe1, probe5); the prototype's points (.run/1.5/t3/proto.py).
+#[test]
+fn limits() {
+    let point = |x: [i64; 4]| {
+        format!(
+            "List[Equation[x1, {}], Equation[x2, {}], Equation[x3, {}], Equation[x4, {}]]",
+            x[0], x[1], x[2], x[3]
+        )
+    };
+    let fourteen = format!("List[14, {}]", point([1, 0, 1, 0]));
+    let twelve = format!("List[12, {}]", point([1, 0, 0, 1]));
+    let eighteen = format!("List[18, {}]", point([1, 0, 1, 1]));
+    let best = format!("List[21, {}]", point([0, 1, 1, 1]));
+    let program = |o: &str| {
+        format!(
+            "LPSolve[Plus[Times[2, x], y, Times[-1, z], 4], List[LessEqual[x, 1], \
+             GreaterEqual[y, 2], Equation[Plus[x, Times[3, y], Times[-1, z]], 2], \
+             LessEqual[Plus[Times[2, x], Times[-1, y], z], 8], \
+             LessEqual[Plus[Times[-1, x], y], 5]], {o}]"
+        )
+    };
+    let (node, depth, iteration, gap) = (
+        Some("lp_nodelimit"),
+        Some("lp_depthlimit"),
+        Some("lp_iterationlimit"),
+        Some("lp_gaptolerance"),
+    );
+    warns(&[
+        (binary("Equation[LPNodeLimit, 1]"), &fourteen, node),
+        (binary("Equation[LPDepthLimit, 1]"), &fourteen, depth),
+        (binary("Equation[LPIterationLimit, 17]"), &twelve, iteration),
+        (binary("Equation[LPIterationLimit, 1]"), "List[]", iteration),
+        (binary("Equation[LPGapTolerance, 1/2]"), &eighteen, gap),
+        (binary("Equation[LPGapTolerance, 0x1p-1]"), &eighteen, gap),
+        // No limit: Infinity, 0, and a gap of 0.
+        (binary("Equation[LPNodeLimit, Infinity]"), &best, None),
+        (binary("Equation[LPDepthLimit, 0]"), &best, None),
+        (binary("Equation[LPGapTolerance, 0]"), &best, None),
+        // No integer point yet.
+        (coins("Equation[LPNodeLimit, 5]"), "List[]", node),
+        (coins("Equation[LPDepthLimit, 2]"), "List[]", depth),
+        (coins("Equation[LPIterationLimit, 10]"), "List[]", iteration),
+        // A program with no integer: giac's [] too.
+        (
+            program("Equation[LPIterationLimit, 1]"),
+            "List[]",
+            iteration,
+        ),
+        (
+            program("Equation[LPIterationLimit, 1000]"),
+            "List[-4, List[Equation[x, 0], Equation[y, 5], Equation[z, 13]]]",
+            None,
+        ),
+    ]);
+}
+
+/// `lp_timelimit` is read and changes nothing (ours has no clock); the
+/// keys' values of another kind leave the call (CAS-602, CAS-603).
+#[test]
+fn keys() {
+    let int = "List[-41, List[Equation[x, 4], Equation[y, 3]]]";
+    let integer = |o: &str| lattice(&format!("Equation[Assume, integer], {o}"));
+    warns(&[
+        (integer("Equation[LPTimeLimit, 1]"), int, None),
+        (integer("Equation[LPTimeLimit, Infinity]"), int, None),
+        (integer("Equation[LPMaxCuts, Infinity]"), int, None),
+        (integer("Equation[LPNodeSelect, LPHybrid]"), int, None),
+        (
+            integer("Equation[LPVarSelect, LPMostFractional]"),
+            int,
+            None,
+        ),
+        (integer("Equation[LPHeuristic, False]"), int, None),
+    ]);
+    stays(&[
+        integer("Equation[LPNodeSelect, foo]"),
+        integer("Equation[LPNodeSelect, LPPseudoCost]"),
+        integer("Equation[LPVarSelect, LPDepthFirst]"),
+        integer("Equation[LPVarSelect, 1]"),
+        integer("Equation[LPMaxCuts, -1]"),
+        integer("Equation[LPMaxCuts, 1/2]"),
+        integer("Equation[LPNodeLimit, x]"),
+        integer("Equation[LPDepthLimit, 0x1.8p+0]"),
+        integer("Equation[LPIterationLimit, Times[-1, Infinity]]"),
+        integer("Equation[LPTimeLimit, foo]"),
+        integer("Equation[LPHeuristic, 1]"),
+        integer("Equation[LPGapTolerance, -1/2]"),
+        integer("Equation[LPGapTolerance, x]"),
+    ]);
 }

@@ -1,10 +1,19 @@
-//! Tests of the simplex method (CAS-417): a classic program, equations,
-//! infeasible and unbounded ones, and Beale's, which cycles without Bland's
-//! rule.
+//! Tests of the simplex method (CAS-417, CAS-603): a classic program,
+//! equations, infeasible and unbounded ones, Beale's, which cycles without
+//! Bland's rule, and the work of a call: its iterations, the user's limit,
+//! the interrupt and the cells.
+
+use std::sync::atomic::AtomicBool;
 
 use cas_num::{Integer, Rational};
 
-use super::{Outcome, Relation, Row, minimize};
+use super::{Outcome, Relation, Row, Work};
+
+/// The outcome of `minimize` with no limit.
+fn minimize(c: &[Rational], rows: &[Row]) -> Outcome {
+    let stop = AtomicBool::new(false);
+    super::minimize(c, rows, &mut Work::new(0, usize::MAX, &stop)).0
+}
 
 fn q(n: i64, d: i64) -> Rational {
     Rational::new(Integer::from(n), Integer::from(d))
@@ -73,4 +82,38 @@ fn beale() {
         minimize(&c, &rows),
         Outcome::Optimal(ints(&[1, 0, 1, 0]), q(-5, 4))
     );
+}
+
+/// giac's `icount`: each search for an entering column counts, the last
+/// one too; past the user's limit the method stops, on an interrupt too,
+/// and a tableau past the cells gives up before any work.
+#[test]
+fn work() {
+    let rows = [
+        row(&[1, 1], Relation::Equal, 2),
+        row(&[1, -1], Relation::Equal, 0),
+        row(&[-1, 0], Relation::AtMost, -1),
+    ];
+    let c = ints(&[1, 1]);
+    let stop = AtomicBool::new(false);
+    let mut w = Work::new(0, usize::MAX, &stop);
+    assert!(matches!(
+        super::minimize(&c, &rows, &mut w).0,
+        Outcome::Optimal(..)
+    ));
+    assert_eq!(w.iterations, 4);
+    let mut w = Work::new(4, usize::MAX, &stop);
+    assert!(matches!(
+        super::minimize(&c, &rows, &mut w).0,
+        Outcome::Optimal(..)
+    ));
+    let mut w = Work::new(3, usize::MAX, &stop);
+    assert_eq!(super::minimize(&c, &rows, &mut w).0, Outcome::Limit);
+    assert_eq!(w.iterations, 4);
+    let mut w = Work::new(0, 8, &stop);
+    assert_eq!(super::minimize(&c, &rows, &mut w).0, Outcome::GaveUp);
+    assert_eq!(w.iterations, 0);
+    let stop = AtomicBool::new(true);
+    let mut w = Work::new(0, usize::MAX, &stop);
+    assert_eq!(super::minimize(&c, &rows, &mut w).0, Outcome::Interrupted);
 }
