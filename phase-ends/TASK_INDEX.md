@@ -32,3 +32,13 @@
 1.3 | T10 | done | push master for the phase's final CI and Fuzz runs | - | phase-1.3/tasks/T10.md | phase-1.3/logs/T10.md | -
 1.3 | T11 | done | CI and Fuzz check on the pushed head; tickets done and CAS-DOC-55 in step | - | phase-1.3/tasks/T11.md | phase-1.3/logs/T11.md | -
 1.3 | T12 | done | phase cleanup | - | phase-1.3/tasks/T12.md | phase-1.3/logs/T12.md | -
+1.4 | T1 | done | design page CAS-DOC-56 and one ticket per family, recording CAS-517..520 | - | phase-1.4/tasks/T1.md | phase-1.4/logs/T1.md | R1.4-001,R1.4-002
+1.4 | T2 | done | quadrature: area's numeric form with the rectangle, trapezoid, Simpson, Romberg and gauss15 rules | - | phase-1.4/tasks/T2.md | phase-1.4/logs/T2.md | R1.4-001,R1.4-004,R1.4-005
+1.4 | T3 | done | solvers: fsolve's twelve named solvers, newton, nSolve and convert's interval option | - | phase-1.4/tasks/T3.md | phase-1.4/logs/T3.md | R1.4-001,R1.4-004,R1.2-005
+1.4 | T4 | done | sampling, interpolation and numerical derivatives | - | phase-1.4/tasks/T4.md | phase-1.4/logs/T4.md | R1.4-003,R1.4-004,R1.4-002,R1.4-005
+1.4 | T5 | done | B-splines and least-squares fits: bspline, fitspline, fitpoly | - | phase-1.4/tasks/T5.md | phase-1.4/logs/T5.md | R1.4-003,R1.4-002
+1.4 | T6 | done | transportation problems: tpsolve | - | phase-1.4/tasks/T6.md | phase-1.4/logs/T6.md | R1.4-003
+1.4 | T7 | done | minimax approximation by Remez's algorithm: minimax | - | phase-1.4/tasks/T7.md | phase-1.4/logs/T7.md | R1.4-003,R1.4-001,R1.4-002,R1.4-005
+1.4 | T8 | done | push master for the phase's final CI and Fuzz runs | - | phase-1.4/tasks/T8.md | phase-1.4/logs/T8.md | -
+1.4 | T9 | done | CI and Fuzz check on the pushed head; tickets done and CAS-DOC-56 in step | - | phase-1.4/tasks/T9.md | phase-1.4/logs/T9.md | -
+1.4 | T10 | done | phase cleanup | - | phase-1.4/tasks/T10.md | phase-1.4/logs/T10.md | -

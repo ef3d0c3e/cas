@@ -7,8 +7,13 @@ Built by `tools/phaseend_index.py history` from the PhaseEnds and rebuilt at eac
 - 1.1 | 2026-11-22 | Green master | Phase 1.1 Green master: master's CI and Fuzz are green again on fa9ae22 (CI run 45047911216, all five jobs; Fuzz run 45047911210, all 55 targets).
 - 1.2 | 2026-11-23 | Algebra and polynomials parity | Phase 1.2 Algebra and polynomials parity: CAS-DOC-54 sorts 89 giac entries (66 built, 1 alias, 5 options, 2 settings, 15 recorded departures); tickets CAS-526..547 done.
 - 1.3 | 2026-11-23 | Calculus, expressions and integers parity | Phase 1.3 Calculus, expressions and integers parity: CAS-DOC-55 sorts 81 giac entries; tickets CAS-548..585 are done.
+- 1.4 | 2026-11-24 | Numerical analysis II | Phase 1.4 Numerical analysis II: CAS-DOC-56 sorts 41 giac names and records CAS-517..520; tickets CAS-588..599 are done.
 
 ## This generation's recaps (1, newest first)
+
+### 1.4: Numerical analysis II (2026-11-24)
+
+Phase 1.4 Numerical analysis II: CAS-DOC-56 sorts 41 giac names and records CAS-517..520; tickets CAS-588..599 are done. Built: area with the rectangle, trapezoid, Simpson, Romberg and gauss15 rules (balls holding each rule's exact sum); the twelve *_solver names as option builtins, newton (Krawczyk-certified roots, fixed restart sequence instead of giac's random one), nSolve and convert's interval; linspace, linear_interpolate, interval2center, center2interval, ratinterp (faithful port), triginterp, numdiff (Lagrange-derivative weights), nDeriv; bspline, fitspline and fitpoly, exact on exact data; tpsolve (northwest corner plus MODI with giac's tie rules, matching giac on 165 problems); minimax by Remez with a full exchange step instead of giac's (which fails on abs at degree 2) and a certified error ball. Exact answers where giac prints floats, compared within giac's error. Final gate green on 1a429d0 (CI 45317637464, Fuzz 45317637578) after four fuzz findings in older code, each fixed: a harness false alarm on recursion-limit disagreement, OOM from unbounded cache-hit warnings and the trace (capped; the trace is marked truncated), a slow subresultant gcd (Brown normalisation) and slow Gaussian-integer division. Cookbook C0044-C0055. Open: R33 (coders in T3 and T7 again used local scratch binaries); a CoefficientList bug that swaps terms with ball coefficients (no ticket yet); commit_task.sh stages every changed file under logs/; docs-only commits unpushed until the next phase's first push.
 
 ### 1.3: Calculus, expressions and integers parity (2026-11-23)
 
