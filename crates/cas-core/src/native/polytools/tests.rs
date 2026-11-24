@@ -150,6 +150,11 @@ fn coefficients() {
             "List[y, 0, y]",
         ),
         ("CoefficientList[5]", "List[5]"),
+        // Decimal coefficients, the leading one first (CAS-607).
+        (
+            "CoefficientList[Plus[0x1.ca21f0309a48bp-1, Times[0x1.b7e151628bf9fp+0, x]]]",
+            "List[0x1.b7e151628bf9fp+0, 0x1.ca21f0309a48bp-1]",
+        ),
         (
             "FromCoefficients[List[2, 0, 1], t]",
             "Plus[1, Times[2, Power[t, 2]]]",
