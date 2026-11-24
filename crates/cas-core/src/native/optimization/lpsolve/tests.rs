@@ -627,7 +627,7 @@ fn warns(cases: &[(String, &str, Option<&str>)]) {
 
 /// A limit or the gap stops the search (CAS-603): the incumbent, or `{}`
 /// when there is none, with a warning that names the option, as giac's
-/// `[]` (probe1, probe5); the prototype's points (.run/1.5/t3/proto.py).
+/// `[]` (probe1, probe5); the points from 1.5/T3's Python prototype.
 #[test]
 fn limits() {
     let point = |x: [i64; 4]| {

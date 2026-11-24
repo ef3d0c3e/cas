@@ -210,7 +210,7 @@ fn departures() {
 /// Integer and binary variables (CAS-605), where giac's `nlpsolve` fails
 /// ("Failed to find a solution", seeded, as under seeds 7 and 1 and
 /// unseeded, T4 probes), its answer copied (C0007): ours the known optimum
-/// (`.run/1.5/check/known.py`, the T4.c2 prototype), exact at integer
+/// (by enumeration in 1.5/T4.c2's Python prototype), exact at integer
 /// points, the mixed program's continuous coordinate certified.
 #[test]
 fn integer_departures() {

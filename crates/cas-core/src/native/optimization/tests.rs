@@ -436,7 +436,7 @@ const AIDE: &str = "NLPSolve[Plus[Times[1/2, Power[x1, 2]], Times[5, x1], Times[
 
 /// Integer and binary variables (CAS-605): exact answers at integer
 /// points, by enumeration and by branch and bound (giac fails on these,
-/// T4 prototype `.run/1.5/t4/proto_c2.py`).
+/// optima by enumeration in 1.5/T4's Python prototype).
 #[test]
 fn integer_programs() {
     let aide = AIDE;
