@@ -60,3 +60,4 @@ C0057 | giac branch and bound port: GMI cuts by slack substitution and re-solve;
 C0058 | Expr::may_contain is a bloom filter: never assert its negation | tests,expr,symbols,builtins,flaky | 2026-11-24 | 1.5/T4 | CI 45337180530 trigonometric_interpolation
 C0059 | Certified KKT points under bounds: one-point ranges; simple inequalities as bounds | nlpsolve,kkt,certified,bounds,branch-and-bound | 2026-11-24 | 1.5/T4 | T4.c2 CAS-605; CI 45337180530 nlpsolve_seeded
 C0060 | giac gen arithmetic on mixed exact/float data: an Exact|Float entry enum | giac,port,decimal,exact,prototype | 2026-11-24 | 1.5/T5 | CAS-606
+C0061 | Certified global minimiser on an interval: float candidate, ball cover, interval Newton | minimum,certified,krawczyk,cover,brent,find_minimum | 2026-11-24 | 1.5/T6 | T6.c1 CAS-608
