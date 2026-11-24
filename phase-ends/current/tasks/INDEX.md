@@ -6,3 +6,4 @@ T3 | done | lpsolve's branch and bound: giac's node and variable selection, cuts
 T4 | done | nlpsolve's options: the nlp_* names, initial points, limits, precision, methods, integer and binary variables | - | tasks/T4.md | logs/T4.md | R1.5-001,R1.5-004
 T5 | done | the simplex tableau: simplex_reduce, and CoefficientList's order on ball coefficients | - | tasks/T5.md | logs/T5.md | R1.5-001
 T6 | done | univariate and polytope minimisation: find_minimum and frank_wolfe | - | tasks/T6.md | logs/T6.md | R1.5-001,R1.5-003,R1.4-005
+T7 | done | simulated annealing: simulated_annealing | - | tasks/T7.md | logs/T7.md | R1.5-001,R1.5-003,R1.4-005
