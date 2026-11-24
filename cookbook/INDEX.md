@@ -53,3 +53,4 @@ C0050 | giac symbolic linsolve: free parameters make comparisons skip, port the 
 C0051 | Remez exchange: giac's one-peak-per-zero-interval step fails; use a full exchange | remez,minimax,approximation,giac,port | 2026-11-23 | 1.4/T7 | CAS-599
 C0052 | Eval fuzz plain vs traced disagree at a limit: cache order, not a bug | fuzz,eval,harness,recursion-limit,cache,stamps,triage | 2026-11-24 | 1.4/T9 | Fuzz 45285948112, T9.c1 2a70d96
 C0053 | Per-cache-hit side data (warnings, trace steps) needs its own count bound; OOM triage via addr2line | fuzz,oom,cache,memo,warnings,trace,limits,addr2line | 2026-11-24 | 1.4/T9 | Fuzz 45293145351, T9.c2
+C0054 | Subresultant gcd: gamma/lc-scale the last remainder before its primitive part | gcd,subresultant,cas-poly,fuzz,timeout,content,performance | 2026-11-24 | 1.4/T9 | Fuzz 45304609232, T9.c5 8a82c52
