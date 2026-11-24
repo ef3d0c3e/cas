@@ -1121,6 +1121,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::NLP_SOLVE, optimization::nlpsolve::nlp_solve),
         (Symbol::TP_SOLVE, optimization::tpsolve::tp_solve),
         (
+            Symbol::SIMPLEX_REDUCE,
+            optimization::simplex_reduce::simplex_reduce,
+        ),
+        (
             Symbol::QUOTIENT_REMAINDER,
             number_theory::residues::quotient_remainder,
         ),

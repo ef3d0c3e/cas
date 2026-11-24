@@ -1,7 +1,8 @@
 //! Optimization (CAS-DOC-38): local extrema (§2, CAS-415), Xcas's
 //! `extrema`; [`global`] optima (§3); linear programs ([`lpsolve`], by
 //! [`simplex`] and, with integers, [`integer`], §4); nonlinear programs
-//! ([`nlpsolve`], CAS-519; with integers [`nlpinteger`], CAS-605).
+//! ([`nlpsolve`], CAS-519; with integers [`nlpinteger`], CAS-605); giac's
+//! tableau method [`simplex_reduce`] (CAS-606).
 //!
 //! `Extrema[f, vars]` and `Extrema[f, constraints, vars]`:
 //!
@@ -37,6 +38,7 @@ pub(super) mod lpsolve;
 mod nlpinteger;
 pub(super) mod nlpsolve;
 mod simplex;
+pub(super) mod simplex_reduce;
 pub(super) mod tpsolve;
 
 use std::cmp::Ordering;

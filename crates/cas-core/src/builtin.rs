@@ -729,6 +729,8 @@ builtins! {
     LP_SOLVE = "LPSolve" [PROTECTED];
     TP_SOLVE = "TPSolve" [PROTECTED];
     NLP_SOLVE = "NLPSolve" [PROTECTED];
+    // giac's simplex_reduce (CAS-606).
+    SIMPLEX_REDUCE = "SimplexReduce" [PROTECTED];
     // LPSolve's options (CAS-600, CAS-601): no native.
     LP_ASSUME = "LPAssume" [PROTECTED];
     LP_MAXIMIZE = "LPMaximize" [PROTECTED];

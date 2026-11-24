@@ -500,6 +500,11 @@ points.
   checked as `lp_options`. Departures: `lp_timelimit=1` (giac's 1 ms CPU clock gives `[]`,
   ours has no clock and answers the optimum) and `lp_nodeselect=foo` (giac's "Bad Argument
   Type", ours stays `LPSolve[…]`).
+- `simplex_reduce` (CAS-606): giac's 8 probe rows, both forms (`A, b, c` and a tableau), an
+  unbounded program (`+infinity,[]`), each bracketed, exact rows by `Together` of the
+  difference, the decimal row numerically. Departure: a negative right side, from which giac
+  pivots an infeasible basis (`-9/2,[0,0,-3/2,0,11/2],…`); ours warns and stays
+  `SimplexReduce[…]`.
 
 `tests/nlpsolve.rs` and `tests/nlpsolve_seeded.rs` (CAS-604, CAS-605), `nlpsolve`'s options matched by
 their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_precision`,

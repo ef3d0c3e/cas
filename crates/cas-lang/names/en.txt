@@ -559,6 +559,8 @@ FMax: fMax
 LPSolve: lpsolve
 NLPSolve: nlpsolve
 TPSolve: tpsolve
+# giac's simplex_reduce on its tableau (CAS-606), Xcas's.
+SimplexReduce: simplex_reduce
 # lpsolve's options, Xcas's (CAS-600, CAS-601): options, no function.
 LPAssume: lp_assume
 LPMaximize: lp_maximize

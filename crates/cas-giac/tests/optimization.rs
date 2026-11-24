@@ -641,3 +641,72 @@ fn transportation_departures() {
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+/// Whether two values are one exactly: lists part by part, other values
+/// the same or with a difference `Together` makes 0 (C0032).
+fn exactly(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    if a == b {
+        return true;
+    }
+    if a.head().and_then(Expr::as_symbol) == Some(Symbol::LIST)
+        && b.head().and_then(Expr::as_symbol) == Some(Symbol::LIST)
+    {
+        return a.args().len() == b.args().len()
+            && a.args()
+                .iter()
+                .zip(b.args())
+                .all(|(a, b)| exactly(ctx, a, b));
+    }
+    ctx.eval(&Expr::call(Symbol::TOGETHER, [a.clone() - b.clone()]))
+        .is_ok_and(|d| d == Expr::from(0))
+}
+
+/// giac's `simplex_reduce` (CAS-606), probe3 rows 1-7, bracketed (C0023):
+/// both forms, an unbounded program; the optimum, the basic feasible
+/// solution and the reduced tableau exactly equal.
+#[test]
+fn simplex_reduce() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in [
+        "[simplex_reduce([[3,2,2],[1,1,1]],[3,4],[1,2,3])]",
+        "[simplex_reduce([[3,2,2,1,0,3],[1,1,1,0,1,4],[-1,-2,-3,0,0,0]])]",
+        "[simplex_reduce([[-3,2],[1,1]],[3,4],[1,2])]",
+        "[simplex_reduce([[-3,2,1,0,3],[1,1,0,1,4],[-1,-2,0,0,0]])]",
+        "[simplex_reduce([[2,1,1,1,0,0,2],[1,2,3,0,1,0,5],[2,2,1,0,0,1,6],[-3,-1,-3,1,-1,2,0]])]",
+        "[simplex_reduce([[1,1],[1,-1]],[2,1],[1,1])]",
+        "[simplex_reduce([[1,-1]],[1],[1,1])]",
+    ] {
+        match (giac.value(input), ours(input)) {
+            (Ok(theirs), Ok(o)) if exactly(&ctx, &o, &theirs) => {}
+            (theirs, o) => wrong.push(format!("{input}: ours {o:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    // A decimal entry (probe3 row 8): its column decimal, numerically.
+    check(&["[simplex_reduce([[1.5,2],[1,1]],[3,4],[1,2])]"]);
+}
+
+/// A negative right side (probe3 row 9), where ours departs: giac pivots
+/// from the infeasible basis and answers `-9/2,[0,0,-3/2,0,11/2],…`, no
+/// optimum; ours warns and stays `SimplexReduce[…]`.
+#[test]
+fn simplex_reduce_departures() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let input = "[simplex_reduce([[3,2,2],[1,1,1]],[-3,4],[1,2,3])]";
+    let theirs = giac.value(input);
+    match ours(input) {
+        Ok(e)
+            if e.args()
+                .first()
+                .and_then(Expr::head)
+                .and_then(Expr::as_symbol)
+                == Some(Symbol::SIMPLEX_REDUCE) => {}
+        o => panic!("{input}: ours {o:?}, giac's {theirs:?}"),
+    }
+}
