@@ -555,6 +555,18 @@ their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_p
   `assume=nlp_nonnegint` and on a box with `assume=integer`), giac's "Failed to find a solution"
   copied, ours the known optimum (exact at integer points, `x2 = sqrt(5)` certified).
 
+`tests/strings.rs`, Xcas's string commands (CAS-611, CAS-613):
+- giac's answers to `char`/`chr`, `asc`, `ord`, `inString`, `contains` (with giac's interval
+  `[lo..hi]`), `mid`, `left`/`lhs`, `right`/`rhs` and `levenshtein` on the probe rows, read back
+  and compared with ours.
+- Departures, giac's text copied: giac counts bytes of UTF-8 where ours counts Unicode scalar
+  values (`asc("é")` giac `[195,169]`, ours `[233]`; `ord("é")` `-61` and `233`; `char(233)` an
+  invalid byte and `"é"`); giac's errors `char(65.5)`, `ord("")` and `levenshtein("abc",[1,2])`
+  stay here (the last with giac's message as a warning); giac has no `hamming` command (it
+  stays), ours counts the differing positions of equal-length strings or lists (`3`, `2`).
+  Not compared: non-integer counts (giac's `left("abc",2.0)` is `"ab"`, ours stays) and giac's
+  other one-argument `left`/`right` forms (integer bits, lists, first operands), which stay.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

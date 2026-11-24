@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 591] = [
+const BUILTINS: [&str; 601] = [
     "Plus",
     "Times",
     "Power",
@@ -679,6 +679,17 @@ const BUILTINS: [&str; 591] = [
     // Settings (CAS-545).
     "AllTrigSolutions",
     "WithSqrt",
+    // Strings (CAS-611, CAS-613).
+    "Char",
+    "Asc",
+    "Ord",
+    "InString",
+    "Contains",
+    "Mid",
+    "Left",
+    "Right",
+    "Levenshtein",
+    "Hamming",
 ];
 
 /// Builtins that apply something to parts, only in the expression

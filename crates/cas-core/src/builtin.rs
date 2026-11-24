@@ -167,6 +167,17 @@ builtins! {
     AUTO_CORRELATION = "AutoCorrelation" [PROTECTED];
     // Thresholds of lists (CAS-524).
     THRESHOLD = "Threshold" [PROTECTED];
+    // Strings, Xcas's (CAS-611, CAS-613).
+    CHAR = "Char" [PROTECTED];
+    ASC = "Asc" [PROTECTED];
+    ORD = "Ord" [PROTECTED];
+    IN_STRING = "InString" [PROTECTED];
+    CONTAINS = "Contains" [PROTECTED];
+    MID = "Mid" [PROTECTED];
+    LEFT = "Left" [PROTECTED];
+    RIGHT = "Right" [PROTECTED];
+    LEVENSHTEIN = "Levenshtein" [PROTECTED];
+    HAMMING = "Hamming" [PROTECTED];
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];

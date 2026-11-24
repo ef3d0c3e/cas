@@ -72,6 +72,7 @@ mod solve;
 mod special;
 mod statistics;
 mod step;
+mod strings;
 mod structure;
 mod sum;
 mod tables;
@@ -162,6 +163,16 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::CROSS_CORRELATION, signal::correlation),
         (Symbol::AUTO_CORRELATION, signal::correlation),
         (Symbol::THRESHOLD, signal::threshold),
+        (Symbol::CHAR, strings::char),
+        (Symbol::ASC, strings::asc),
+        (Symbol::ORD, strings::ord),
+        (Symbol::IN_STRING, strings::in_string),
+        (Symbol::CONTAINS, strings::contains),
+        (Symbol::MID, strings::mid),
+        (Symbol::LEFT, strings::left),
+        (Symbol::RIGHT, strings::right),
+        (Symbol::LEVENSHTEIN, strings::levenshtein),
+        (Symbol::HAMMING, strings::hamming),
         (Symbol::BESSEL_J, bessel::bessel),
         (Symbol::BESSEL_Y, bessel::bessel),
         (Symbol::BESSEL_I, bessel::bessel),

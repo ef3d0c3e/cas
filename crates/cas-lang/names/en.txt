@@ -828,6 +828,17 @@ CrossCorrelation: cross_correlation
 AutoCorrelation: auto_correlation
 # Thresholds of lists (CAS-524), Xcas's.
 Threshold: threshold
+# Strings (CAS-611, CAS-613), Xcas's.
+Char: char chr
+Asc: asc
+Ord: ord
+InString: inString
+Contains: contains
+Mid: mid
+Left: left lhs
+Right: right rhs
+Levenshtein: levenshtein
+Hamming: hamming
 
 [planned]
 
