@@ -211,3 +211,39 @@ fn associates_share_a_normal_form() {
         Complex::new(Rational::ONE, Rational::from(Integer::from(2)))
     );
 }
+
+/// Halves of the quotient round away from zero, as `Rational::round`.
+#[test]
+fn gaussian_division_rounds_halves_away_from_zero() {
+    let z = |re: i64, im: i64| Complex::new(Rational::from(re), Rational::from(im));
+    for (a, q) in [
+        (z(1, 1), z(1, 1)),
+        (z(-1, -1), z(-1, -1)),
+        (z(-1, 1), z(-1, 1)),
+    ] {
+        assert_eq!(
+            GaussianIntegers.div_rem(&a, &z(2, 0)),
+            (q.clone(), &a - &(&q * &z(2, 0)))
+        );
+    }
+    assert_eq!(
+        GaussianIntegers.div_rem(&z(7, -3), &z(2, 1)),
+        (z(2, -3), z(0, 1))
+    );
+}
+
+/// The gcd of 2000-bit Gaussian integers (fuzz `rewrite` timeout, T9.c6):
+/// each step of Euclid's algorithm rounded the quotient through rationals,
+/// a gcd of the operands' size per part: 4.7 s per gcd at 16000 bits, now 64 ms.
+#[test]
+fn large_gaussian_gcd() {
+    let z = |re: i64, im: i64| Complex::new(Rational::from(re), Rational::from(im));
+    // 2 + 3i, 1 + 4i and 5 + 2i are primes of norms 13, 17 and 29.
+    let g = z(2, 3).pow(400);
+    let (a, b) = (&g * &z(1, 4).pow(800), &g * &z(5, 2).pow(800));
+    assert!(a.re().numer().bit_length() > 2000);
+    assert_eq!(
+        GaussianIntegers.gcd(&a, &b),
+        GaussianIntegers.normal_form(&g).0
+    );
+}

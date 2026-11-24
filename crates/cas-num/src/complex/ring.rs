@@ -101,10 +101,23 @@ impl EuclideanDomain for GaussianIntegers {
     /// If `b` is zero.
     fn div_rem(&self, a: &Complex, b: &Complex) -> (Complex, Complex) {
         debug_assert!(a.is_gaussian_integer() && b.is_gaussian_integer());
-        let exact = a / b;
+        // a / b = a conj(b) / norm(b), rounded in integers: the exact
+        // quotient as rationals reduced each part by a gcd as large as the
+        // operands, at every step of Euclid's algorithm.
+        let (ar, ai) = (a.re().numer(), a.im().numer());
+        let (br, bi) = (b.re().numer(), b.im().numer());
+        if let Some((re, im)) = leading_quotient([ar, ai, br, bi]) {
+            let q = Complex::new(Rational::from(re), Rational::from(im));
+            let r = a - &(&q * b);
+            return (q, r);
+        }
+        let norm = &(br * br) + &(bi * bi);
+        assert!(!norm.is_zero(), "division by zero");
+        let re = &(ar * br) + &(ai * bi);
+        let im = &(ai * br) - &(ar * bi);
         let q = Complex::new(
-            Rational::from(exact.re().round()),
-            Rational::from(exact.im().round()),
+            Rational::from(round(&re, &norm)),
+            Rational::from(round(&im, &norm)),
         );
         let r = a - &(&q * b);
         (q, r)
@@ -119,4 +132,56 @@ impl EuclideanDomain for GaussianIntegers {
         let u = unit(4 - quadrant(a));
         (a * &u, u)
     }
+}
+
+/// Bits of `b` that [`leading_quotient`] keeps.
+const KEPT: u64 = 64;
+
+/// The largest excess of the bits of `a` over those of `b` for
+/// [`leading_quotient`].
+const GAP: u64 = 32;
+
+/// Bits of the fixed-point quotient in [`leading_quotient`].
+const FRACTION: u64 = 40;
+
+/// The parts of `a / b` rounded to the nearest integers, for the parts
+/// `[re a, im a, re b, im b]`, from the leading [`KEPT`] bits of `b`: or
+/// `None` when `b` is small, `a` far larger, or a part near a half.
+///
+/// The parts truncated by `2^k` are off by less than 1 each and `|b'| >=
+/// 2^(KEPT - 1)`, so `a' / b'` is within `(1 + |a' / b'|) 2 / |b'| <
+/// 2^-28` of `a / b`, `|a' / b'| < 2^(GAP + 1)`; a fractional part farther
+/// than `2^-20` from `1/2` rounds the same. Each step of Euclid's algorithm
+/// then costs a product by the small quotient, not products of the operands.
+fn leading_quotient([ar, ai, br, bi]: [&Integer; 4]) -> Option<(Integer, Integer)> {
+    let lb = br.bit_length().max(bi.bit_length());
+    if lb <= 2 * KEPT || ar.bit_length().max(ai.bit_length()) > lb + GAP {
+        return None;
+    }
+    let k = lb - KEPT;
+    let top = |x: &Integer| Integer::from_parts(x.is_negative(), &x.unsigned_abs() >> k);
+    let (ar, ai, br, bi) = (top(ar), top(ai), top(br), top(bi));
+    let norm = &(&br * &br) + &(&bi * &bi);
+    let one = Integer::from(1u64 << FRACTION);
+    let half = Integer::from(1u64 << (FRACTION - 1));
+    let margin = Integer::from(1u64 << (FRACTION - 20));
+    let part = |x: Integer| -> Option<Integer> {
+        let (q, f) = (&x * &one).div_rem_floor(&norm).0.div_rem_floor(&one);
+        if (&f - &half).abs() <= margin {
+            return None;
+        }
+        Some(if f > half { q + Integer::ONE } else { q })
+    };
+    let re = part(&(&ar * &br) + &(&ai * &bi))?;
+    let im = part(&(&ai * &br) - &(&ar * &bi))?;
+    Some((re, im))
+}
+
+/// The nearest integer to `n / d`, `d > 0`, halves rounded away from zero
+/// (as [`Rational::round`]).
+fn round(n: &Integer, d: &Integer) -> Integer {
+    // |n| / d + 1/2 = (2 |n| + d) / (2 d), floored.
+    let m = n.abs();
+    let m = (&(&m + &m) + d).div_rem_floor(&(d + d)).0;
+    if n.is_negative() { -m } else { m }
 }
