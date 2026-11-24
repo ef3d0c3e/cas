@@ -1000,11 +1000,13 @@ fn a_wrong_antiderivative_is_caught() {
     };
     let wrong = Trace {
         steps: vec![step("Times[1/2, Power[x, 3]]")],
+        truncated: false,
     };
     assert!(wrong.verify(&ctx).wrong.is_some());
     // A constant more is right.
     let right = Trace {
         steps: vec![step("Plus[7, Times[1/3, Power[x, 3]]]")],
+        truncated: false,
     };
     let verification = right.verify(&ctx);
     assert!(verification.wrong.is_none() && verification.passed == 1);

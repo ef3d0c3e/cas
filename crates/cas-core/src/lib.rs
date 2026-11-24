@@ -71,8 +71,8 @@ pub use read::{FullFormError, FullFormErrorKind};
 pub use rules::{DefineError, UserNative};
 pub use symbol::Symbol;
 pub use trace::{
-    Counterexample, EvalOptions, Origin, Report, RuleId, RuleKind, Step, StepKind, Trace,
-    TraceLevel, Verification, Warning,
+    Counterexample, EvalOptions, MAX_STEPS, Origin, Report, RuleId, RuleKind, Step, StepKind,
+    Trace, TraceLevel, Verification, Warning,
 };
 pub use traverse::{Distinct, PostOrder, PreOrder};
 

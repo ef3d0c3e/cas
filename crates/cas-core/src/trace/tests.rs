@@ -301,6 +301,36 @@ fn natives_report_steps_and_warnings_of_their_own() {
     assert_eq!(report.warnings.len(), 1);
 }
 
+/// Past `MAX_STEPS` a trace records nothing more and is truncated; the
+/// result is the untraced one, and no id names a step left out.
+#[test]
+fn a_trace_past_its_bound_is_truncated() {
+    let mut ctx = Context::new();
+    // `busy[a]` is `a`, reporting one step more than a trace holds.
+    ctx.define_native(
+        sym("busy"),
+        Arc::new(|ev, e| {
+            let [a] = e.args() else { return Ok(None) };
+            if ev.tracing() {
+                for _ in 0..=super::MAX_STEPS {
+                    ev.step("busy", e, a);
+                }
+            }
+            Ok(Some(a.clone()))
+        }),
+    )
+    .unwrap();
+    let plain = ctx.eval(&read("busy[a]"));
+    let (result, report) = traced(&ctx, "busy[a]", TraceLevel::Verbose);
+    assert_eq!(result, plain);
+    assert_eq!(result, Ok(read("a")));
+    assert!(report.trace.truncated);
+    assert_eq!(report.trace.steps.len(), super::MAX_STEPS);
+    assert!(report.trace.steps.iter().all(|s| s.parent.is_none()));
+    let (_, report) = traced(&ctx, "Plus[1, 2]", TraceLevel::Verbose);
+    assert!(!report.trace.truncated);
+}
+
 /// A part that warned in its own rewrite is attempted again where it is
 /// met; one whose parts warned is a stamp hit in later calls, which takes no
 /// step but gives the warning again (CAS-149).

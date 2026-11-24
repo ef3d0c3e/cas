@@ -18,6 +18,10 @@
 //! printed without recursion. At [`TraceLevel::Verbose`] a trace is
 //! complete: its top steps, replayed from the input, give the result.
 //!
+//! A trace holds at most [`MAX_STEPS`] steps: past them it records nothing
+//! more and is [`Trace::truncated`], a prefix of the steps that is not
+//! replayable; the result of the evaluation is the same.
+//!
 //! [`Trace::verify`] checks the steps, each of which claims `before =
 //! after`, at exact sample points that satisfy the assumptions.
 
@@ -206,18 +210,30 @@ impl fmt::Display for Warning {
     }
 }
 
+/// The most steps a [`Trace`] records. A call that hits the memo over and
+/// over takes a step per hit at O(1) work each, which no limit on the work
+/// stops (Fuzz 45293145351: a flat head nesting itself in `TaylorShift`
+/// grew the steps past a gigabyte); past this many the trace is
+/// [`Trace::truncated`].
+pub const MAX_STEPS: usize = 1 << 20;
+
 /// The steps of an evaluation, located from its input.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Trace {
     /// Every step, children included, in the order taken: `steps[i].id` is
     /// `i`, and a step comes after its children.
     pub steps: Vec<Step>,
+    /// Whether the evaluation took more than [`MAX_STEPS`] steps, and the
+    /// trace stopped recording. The result is the same; `steps` is a prefix
+    /// of the steps taken, which names no step it lacks (a step whose parent
+    /// was not recorded has none), and is not replayable.
+    pub truncated: bool,
 }
 
 impl Trace {
     /// The steps of the evaluation itself, children of no other, in the
     /// order taken. At [`TraceLevel::Verbose`], replayed from the input,
-    /// they give the result.
+    /// they give the result, unless the trace is [`truncated`](Self::truncated).
     pub fn top(&self) -> impl Iterator<Item = &Step> {
         self.steps.iter().filter(|s| s.parent.is_none())
     }
@@ -348,6 +364,8 @@ pub(crate) struct Tracer {
     /// What rewrote the subject of the innermost attempt: set where it did,
     /// taken when the attempt closes.
     source: Option<StepKind>,
+    /// Whether a step went unrecorded, past [`MAX_STEPS`].
+    truncated: bool,
 }
 
 /// The steps collected for one expression, by id.
@@ -388,6 +406,7 @@ impl Tracer {
             frames: vec![Frame::new(input, false)],
             first: HashMap::with_hasher(FixedState::default()),
             source: None,
+            truncated: false,
         }
     }
 
@@ -418,7 +437,8 @@ impl Tracer {
         self.steps.len()
     }
 
-    /// Records a step at the current position, the parent of `children`.
+    /// Records a step at the current position, the parent of `children`;
+    /// past [`MAX_STEPS`], nothing, and `children` stay without a parent.
     pub(crate) fn record(
         &mut self,
         kind: StepKind,
@@ -427,6 +447,10 @@ impl Tracer {
         children: Vec<usize>,
     ) {
         let id = self.steps.len();
+        if id == MAX_STEPS {
+            self.truncated = true;
+            return;
+        }
         for &c in &children {
             self.steps[c].parent = Some(id);
         }
@@ -546,6 +570,7 @@ impl Tracer {
     /// [`StepKind::Attempts`], an evaluation with `after` its subject. The
     /// steps dropped are left out and the others numbered again in order; a
     /// memo step whose earlier evaluation was dropped points nowhere.
+    /// Past [`MAX_STEPS`] the trace is truncated.
     pub(crate) fn finish(mut self) -> Trace {
         while self.frames.len() > 1 {
             if self.frames.last().is_some_and(|f| f.attempt) {
@@ -579,7 +604,10 @@ impl Tracer {
                 s
             })
             .collect();
-        Trace { steps }
+        Trace {
+            steps,
+            truncated: self.truncated,
+        }
     }
 }
 

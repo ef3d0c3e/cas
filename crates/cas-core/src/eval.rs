@@ -124,6 +124,14 @@ pub struct Eval<'c> {
 /// their number.
 const MAX_KEPT: usize = 64;
 
+/// The most warnings [`Warned::given`] lists. A hit on a part that warned
+/// gives its warnings again, so a call that meets such parts over and over
+/// (a flat head nesting itself in a native's argument, Fuzz 45293145351) would
+/// list the same few warnings without bound. At this length the list keeps
+/// each warning once and grows only by new ones, and no part that warns is
+/// memoised for the rest of the call, as for [`MAX_KEPT`].
+const MAX_GIVEN: usize = 1 << 16;
+
 /// [`Warned`] once a call warns. It drops what it holds out of line, so a
 /// call that does not warn pays only a test for it.
 #[derive(Default)]
@@ -150,6 +158,13 @@ struct Warned {
     /// evaluation that gave them: those given while a part is evaluated go
     /// with its stamp or its memo entries.
     given: Vec<(u32, Warning)>,
+    /// The warnings of `given`, once it reached [`MAX_GIVEN`]: from then on
+    /// it lists each warning once, and depths no longer tell anything.
+    full: Option<HashSet<Warning, FixedState>>,
+    /// Past [`MAX_GIVEN`], the lists of warnings given again in full, by
+    /// address (each kept, so that the address stays its own): a hit on
+    /// one of them only counts its warnings.
+    again: HashMap<usize, Arc<[Warning]>, FixedState>,
     /// The memo of the parts whose evaluation warned, with their warnings.
     memo: HashMap<Expr, (Expr, Arc<[Warning]>), FixedState>,
 }
@@ -338,11 +353,19 @@ impl<'c> Eval<'c> {
             }
         }
         let depth = self.depth;
-        self.warnings
-            .0
-            .get_or_insert_default()
-            .given
-            .push((depth, warning));
+        let cold = self.warnings.0.get_or_insert_default();
+        if let Some(seen) = &mut cold.full {
+            if seen.insert(warning.clone()) {
+                cold.given.push((depth, warning));
+            }
+        } else {
+            cold.given.push((depth, warning));
+            if cold.given.len() == MAX_GIVEN {
+                let mut seen = HashSet::with_hasher(FixedState::default());
+                cold.given.retain(|(_, w)| seen.insert(w.clone()));
+                cold.full = Some(seen);
+            }
+        }
         self.warned = self.warned.wrapping_add(1);
     }
 
@@ -572,20 +595,37 @@ impl<'c> Eval<'c> {
     fn warned_hit<const TRACED: bool>(&mut self, e: &Expr, stamp: u64) -> Option<Expr> {
         if stamp == self.context.stamp_id() | WARNED {
             if let Some(warnings) = self.context.fixpoint_warnings(e) {
-                for w in warnings.iter() {
-                    self.warn(w.clone());
-                }
+                self.warn_again(&warnings);
                 return Some(e.clone());
             }
         }
         let (result, warnings) = self.warnings.0.as_ref()?.memo.get(e)?.clone();
-        for w in warnings.iter() {
-            self.warn(w.clone());
-        }
+        self.warn_again(&warnings);
         if TRACED {
             self.trace_memo(e, &result);
         }
         Some(result)
+    }
+
+    /// Gives `warnings`, those of a part met again, again. Past
+    /// [`MAX_GIVEN`] a list given in full once is only counted: its
+    /// warnings are listed already, and a call can meet such parts millions
+    /// of times.
+    fn warn_again(&mut self, warnings: &Arc<[Warning]>) {
+        if let Some(cold) = self.warnings.0.as_deref_mut()
+            && cold.full.is_some()
+        {
+            let address = Arc::as_ptr(warnings).cast::<Warning>().addr();
+            if cold.again.contains_key(&address) {
+                let count = u32::try_from(warnings.len()).unwrap_or(u32::MAX);
+                self.warned = self.warned.wrapping_add(count);
+                return;
+            }
+            cold.again.insert(address, Arc::clone(warnings));
+        }
+        for w in warnings.iter() {
+            self.warn(w.clone());
+        }
     }
 
     /// Stamps and memoises what an evaluation that warned passed on the way
@@ -611,6 +651,10 @@ impl<'c> Eval<'c> {
         let Some(cold) = self.warnings.0.as_deref() else {
             return;
         };
+        // Past `MAX_GIVEN` the list no longer follows the count.
+        if cold.full.is_some() {
+            return;
+        }
         // The count wraps; the list does not.
         let since = cold.given.len() - self.warned.wrapping_sub(warned) as usize;
         let window = &cold.given[since..];

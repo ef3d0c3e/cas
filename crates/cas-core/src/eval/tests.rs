@@ -8,7 +8,7 @@ use std::sync::{LazyLock, Mutex, PoisonError};
 
 use proptest::prelude::*;
 
-use super::{Eval, NativeFn, STACK_PER_LEVEL};
+use super::{Eval, MAX_GIVEN, NativeFn, STACK_PER_LEVEL};
 use crate::{
     Attributes, Context, EvalError, EvalOptions, Expr, Limits, Symbol, TraceLevel, Warning,
 };
@@ -492,6 +492,36 @@ fn nested_comparisons_of_a_warned_part_take_linear_time() {
             "{calls} evaluations of the bottom at {recursion} levels"
         );
     }
+}
+
+/// What the `eval` fuzz target found (Fuzz 45293145351): a flat head
+/// nesting itself in `TaylorShift`'s argument met parts that warned
+/// millions of times in one call, and each hit gave their warnings again
+/// into a list that grew past 2 GB. The list stops at [`MAX_GIVEN`] and
+/// keeps each warning once; a hit still counts as warning.
+#[test]
+fn warned_hits_past_the_bound_list_each_warning_once() {
+    define_native("again_bottom", |ev, e| {
+        ev.warn(Warning::NoDefinitionMatches(e.clone()));
+        Ok(None)
+    });
+    define_native("again_loop", |ev, _| {
+        let part = read("again_top[again_bottom[1]]");
+        for _ in 0..3 * MAX_GIVEN {
+            let before = ev.warnings_given();
+            assert_eq!(ev.eval(&part)?, part);
+            assert_ne!(ev.warnings_given(), before);
+        }
+        let given = ev.warnings.0.as_deref().map_or(0, |w| w.given.len());
+        assert!(given <= MAX_GIVEN, "{given} warnings listed");
+        Ok(Some(Expr::from(0)))
+    });
+    let (result, report) = Context::new().eval_with(&read("again_loop[]"), &EvalOptions::default());
+    assert_eq!(result, Ok(Expr::from(0)));
+    assert_eq!(
+        report.warnings,
+        [Warning::NoDefinitionMatches(read("again_bottom[1]"))]
+    );
 }
 
 #[test]

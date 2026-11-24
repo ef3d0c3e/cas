@@ -1096,7 +1096,10 @@ fn check(mut u: Unstructured<'_>, recursion: u32) {
     check_tree(&report.trace);
     if let (Ok(r), Ok(t)) = (&plain, &traced) {
         assert_eq!(t, r, "{e:?}");
-        assert_eq!(&replay(&report.trace, &e, report.trace.top()), r, "{e:?}");
+        // A truncated trace is a prefix of the steps, not replayable.
+        if !report.trace.truncated {
+            assert_eq!(&replay(&report.trace, &e, report.trace.top()), r, "{e:?}");
+        }
     }
     for w in &report.warnings {
         let _ = w.to_string();
