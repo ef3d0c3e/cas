@@ -22,7 +22,8 @@
 //!   best, below `E` makes it `x`, else it becomes `x` when a uniform draw
 //!   is below `exp(−(cost(new) − E)/(k·T))`; then `T` is divided by `mu_t`,
 //!   and the loop ends once `T < t_min`. The answer: the best point, as
-//!   `step` gave it. `dist` is never applied (GSL's neither); `n_tries` is
+//!   `step` gave it, but its decimals made exact at their midpoints (GSL's
+//!   doubles; radii would compound from step to step). `dist` is never applied (GSL's neither); `n_tries` is
 //!   unused (GSL's too).
 //! - `cost`'s value, numericised (`N`, giac's `evalf_double`), must be a
 //!   finite real number (a decimal by its midpoint), and `step`'s value not
@@ -38,7 +39,7 @@
 //! - The schedule's checks are ours: GSL loops forever when `mu_t ≤ 1`.
 
 use cas_num::Rational;
-use cas_num::ball::{Float, Round};
+use cas_num::ball::{Ball, ComplexBall, Float, Round};
 use cas_num::random::Generator;
 
 use super::find_minimum::{interrupted, warn};
@@ -126,6 +127,25 @@ fn energy(ev: &mut Eval<'_>, e: &Expr, cost: &Expr, x: &Expr) -> Result<Option<f
     Ok(v)
 }
 
+/// `e` with each ball made its exact midpoint: GSL's point, a double. A
+/// ball's radius would compound through `step` (in `Random[x − m, x + m]`
+/// both ends carry `x`'s radius, so the draw's is about `r(1 + 2u)`), and
+/// `N[cost[x]]` would warn of it at every step (`InputLimited`); once it
+/// passes the cost's scale, the cost's midpoint is no longer its value.
+fn points(e: &Expr) -> Expr {
+    match e.view() {
+        View::Ball(b) => Expr::from(Ball::exact(b.mid().clone())),
+        View::ComplexBall(z) => Expr::from(ComplexBall::new(
+            Ball::exact(z.re().mid().clone()),
+            Ball::exact(z.im().mid().clone()),
+        )),
+        View::Apply { head, args } => {
+            Expr::apply(head, &args.iter().map(points).collect::<Vec<_>>())
+        }
+        _ => e.clone(),
+    }
+}
+
 /// GSL's `gsl_rng_uniform`: a double in `[0, 1)` from 53 drawn bits.
 fn uniform(ev: &mut Eval<'_>) -> f64 {
     let bits = ev.draw(Generator::next_u64) >> 11;
@@ -210,7 +230,7 @@ pub(in crate::native) fn simulated_annealing(ev: &mut Eval<'_>, e: &Expr) -> Nat
                 Some(size) => Expr::apply(step, &[x.clone(), size.clone()]),
                 None => Expr::apply(step, std::slice::from_ref(&x)),
             };
-            let new = ev.eval(&call)?;
+            let new = points(&ev.eval(&call)?);
             if matches!(
                 new.as_symbol(),
                 Some(Symbol::INDETERMINATE | Symbol::COMPLEX_INFINITY)
