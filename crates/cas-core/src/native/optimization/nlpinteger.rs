@@ -342,8 +342,8 @@ fn point(
     let mut fixed = rules.into_iter();
     let mut solved = found.args().iter();
     let mut coordinates = Vec::with_capacity(p.xs.len());
-    for j in 0..p.xs.len() {
-        let c = if p.integer[j] {
+    for &integer in &p.integer {
+        let c = if integer {
             fixed
                 .next()
                 .map(|(x, v)| Expr::call(Symbol::EQUATION, [x, v]))
