@@ -43,7 +43,9 @@
 //! arguments again, as a comparison evaluating `a - b` does, would take time
 //! exponential in the depth. A part that warned only in its own rewrites
 //! stays uncached, as before: evaluated again where it is met, it takes one
-//! level.
+//! level. Once a call has given [`MAX_GIVEN`] warnings, every part that
+//! warns is memoised for the rest of it with one warning it gave, already
+//! listed, and stamped with none: a hit still counts as warning.
 
 use std::borrow::Cow;
 use std::fmt;
@@ -128,8 +130,11 @@ const MAX_KEPT: usize = 64;
 /// gives its warnings again, so a call that meets such parts over and over
 /// (a flat head nesting itself in a native's argument, Fuzz 45293145351) would
 /// list the same few warnings without bound. At this length the list keeps
-/// each warning once and grows only by new ones, and no part that warns is
-/// memoised for the rest of the call, as for [`MAX_KEPT`].
+/// each warning once and grows only by new ones, so it no longer tells
+/// which warnings a part gave: a part that warns is memoised from then on
+/// with [`Warned::last`] alone, every warning being listed already, and not
+/// stamped, since a stamp outlives the call. Leaving such parts uncached
+/// made the nesting above exponential (T9.c4: 4M `Exponent` calls).
 const MAX_GIVEN: usize = 1 << 16;
 
 /// [`Warned`] once a call warns. It drops what it holds out of line, so a
@@ -165,6 +170,10 @@ struct Warned {
     /// address (each kept, so that the address stays its own): a hit on
     /// one of them only counts its warnings.
     again: HashMap<usize, Arc<[Warning]>, FixedState>,
+    /// Past [`MAX_GIVEN`], the last warning given in full (not a hit only
+    /// counted): listed already, it stands for the warnings of a part
+    /// memoised from then on, and a hit on that part still counts as one.
+    last: Option<Arc<[Warning]>>,
     /// The memo of the parts whose evaluation warned, with their warnings.
     memo: HashMap<Expr, (Expr, Arc<[Warning]>), FixedState>,
 }
@@ -355,12 +364,16 @@ impl<'c> Eval<'c> {
         let depth = self.depth;
         let cold = self.warnings.0.get_or_insert_default();
         if let Some(seen) = &mut cold.full {
+            if cold.last.as_deref().and_then(<[Warning]>::first) != Some(&warning) {
+                cold.last = Some(Arc::from([warning.clone()]));
+            }
             if seen.insert(warning.clone()) {
                 cold.given.push((depth, warning));
             }
         } else {
             cold.given.push((depth, warning));
             if cold.given.len() == MAX_GIVEN {
+                cold.last = cold.given.last().map(|(_, w)| Arc::from([w.clone()]));
                 let mut seen = HashSet::with_hasher(FixedState::default());
                 cold.given.retain(|(_, w)| seen.insert(w.clone()));
                 cold.full = Some(seen);
@@ -637,7 +650,8 @@ impl<'c> Eval<'c> {
     /// nothing, is left as before CAS-149: evaluated again where it is met,
     /// it takes one level. That keeps the cost of a warning that many leaves
     /// give, as `f(1) + f(2) + …` with no definition matching, at what it
-    /// was.
+    /// was. Past [`MAX_GIVEN`] every part that warned is memoised, with
+    /// [`Warned::last`], and none is stamped.
     #[cold]
     #[inline(never)]
     fn memoise_warned<const TRACED: bool>(
@@ -651,8 +665,20 @@ impl<'c> Eval<'c> {
         let Some(cold) = self.warnings.0.as_deref() else {
             return;
         };
-        // Past `MAX_GIVEN` the list no longer follows the count.
+        // Past `MAX_GIVEN` the list no longer follows the count: the part is
+        // memoised with a warning listed already, and not stamped.
         if cold.full.is_some() {
+            let Some(last) = cold.last.clone() else {
+                return;
+            };
+            if TRACED {
+                self.trace_memoised(&passed, result, first);
+            }
+            let memo = &mut self.warnings.0.get_or_insert_default().memo;
+            for p in passed {
+                memo.insert(p, (result.clone(), Arc::clone(&last)));
+            }
+            self.warned_bound = 0;
             return;
         }
         // The count wraps; the list does not.

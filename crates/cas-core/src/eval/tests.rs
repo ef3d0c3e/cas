@@ -524,6 +524,50 @@ fn warned_hits_past_the_bound_list_each_warning_once() {
     );
 }
 
+/// The same input past [`MAX_GIVEN`] (T9.c4): parts that warned were no
+/// longer memoised, so `TaylorShift` evaluating its nested argument again
+/// made 4M `Exponent` calls. Here each level evaluates the one below three
+/// times, `3^12` evaluations of the bottom unless parts that warn stay
+/// memoised once the list is full.
+#[test]
+fn warned_parts_past_the_bound_stay_memoised() {
+    static CALLS: AtomicUsize = AtomicUsize::new(0);
+    define_native("full_fill", |ev, e| {
+        for _ in 0..MAX_GIVEN {
+            ev.warn(Warning::NoDefinitionMatches(e.clone()));
+        }
+        Ok(None)
+    });
+    define_native("full_bottom", |ev, e| {
+        CALLS.fetch_add(1, Ordering::Relaxed);
+        ev.warn(Warning::NoDefinitionMatches(e.clone()));
+        Ok(None)
+    });
+    define_native("full_twice", |ev, e| {
+        ev.eval(&e.args()[0])?;
+        ev.eval(&e.args()[0])?;
+        Ok(None)
+    });
+    let input = Expr::call(
+        Symbol::LIST,
+        [
+            read("full_fill[]"),
+            nested(sym("full_twice"), read("full_bottom[]"), 12),
+        ],
+    );
+    let (result, report) = Context::new().eval_with(&input, &EvalOptions::default());
+    assert_eq!(result, Ok(input));
+    let calls = CALLS.load(Ordering::Relaxed);
+    assert!(calls <= 3, "{calls} evaluations of the bottom");
+    assert_eq!(
+        report.warnings,
+        [
+            Warning::NoDefinitionMatches(read("full_fill[]")),
+            Warning::NoDefinitionMatches(read("full_bottom[]")),
+        ]
+    );
+}
+
 #[test]
 fn iteration_limit() {
     let mut ctx = Context::new();
