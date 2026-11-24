@@ -59,3 +59,4 @@ C0056 | Stays tests check head and warnings; feasibility checks split equalities
 C0057 | giac branch and bound port: GMI cuts by slack substitution and re-solve; giac's cut rhs bug | giac,port,lpsolve,integer,cuts,branch-and-bound | 2026-11-24 | 1.5/T3 | T3.c1 CAS-602
 C0058 | Expr::may_contain is a bloom filter: never assert its negation | tests,expr,symbols,builtins,flaky | 2026-11-24 | 1.5/T4 | CI 45337180530 trigonometric_interpolation
 C0059 | Certified KKT points under bounds: one-point ranges; simple inequalities as bounds | nlpsolve,kkt,certified,bounds,branch-and-bound | 2026-11-24 | 1.5/T4 | T4.c2 CAS-605; CI 45337180530 nlpsolve_seeded
+C0060 | giac gen arithmetic on mixed exact/float data: an Exact|Float entry enum | giac,port,decimal,exact,prototype | 2026-11-24 | 1.5/T5 | CAS-606
