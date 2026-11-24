@@ -591,6 +591,21 @@ LPNodeLimit: lp_nodelimit
 LPIterationLimit: lp_iterationlimit
 LPTimeLimit: lp_timelimit
 LPGapTolerance: lp_gaptolerance
+# nlpsolve's options, Xcas's (CAS-604): options, no function.
+NLPInitialPoint: nlp_initialpoint
+NLPIterationLimit: nlp_iterationlimit
+NLPNonNegative: nlp_nonnegative
+NLPPrecision: nlp_precision
+NLPMaximize: nlp_maximize
+NLPPresolve: nlp_presolve
+NLPMethod: nlp_method
+NLPIntegerVariables: nlp_integervariables
+NLPInteger: nlp_integer
+NLPBinaryVariables: nlp_binaryvariables
+NLPBinary: nlp_binary
+NLPTolerance: nlp_tolerance
+NLPVerbose: nlp_verbose
+NLPNonNegInt: nlp_nonnegint
 # Number theory II (CAS-DOC-39, CAS-422).
 QuotientRemainder: iquorem
 SymmetricMod: smod

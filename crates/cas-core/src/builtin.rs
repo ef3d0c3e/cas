@@ -761,6 +761,21 @@ builtins! {
     LP_ITERATION_LIMIT = "LPIterationLimit" [PROTECTED];
     LP_TIME_LIMIT = "LPTimeLimit" [PROTECTED];
     LP_GAP_TOLERANCE = "LPGapTolerance" [PROTECTED];
+    // NLPSolve's options (CAS-604): no native.
+    NLP_INITIAL_POINT = "NLPInitialPoint" [PROTECTED];
+    NLP_ITERATION_LIMIT = "NLPIterationLimit" [PROTECTED];
+    NLP_NON_NEGATIVE = "NLPNonNegative" [PROTECTED];
+    NLP_PRECISION = "NLPPrecision" [PROTECTED];
+    NLP_MAXIMIZE = "NLPMaximize" [PROTECTED];
+    NLP_PRESOLVE = "NLPPresolve" [PROTECTED];
+    NLP_METHOD = "NLPMethod" [PROTECTED];
+    NLP_INTEGER_VARIABLES = "NLPIntegerVariables" [PROTECTED];
+    NLP_INTEGER = "NLPInteger" [PROTECTED];
+    NLP_BINARY_VARIABLES = "NLPBinaryVariables" [PROTECTED];
+    NLP_BINARY = "NLPBinary" [PROTECTED];
+    NLP_TOLERANCE = "NLPTolerance" [PROTECTED];
+    NLP_VERBOSE = "NLPVerbose" [PROTECTED];
+    NLP_NON_NEG_INT = "NLPNonNegInt" [PROTECTED];
     // Number theory II (CAS-DOC-39).
     QUOTIENT_REMAINDER = "QuotientRemainder" [PROTECTED];
     SYMMETRIC_MOD = "SymmetricMod" [PROTECTED];

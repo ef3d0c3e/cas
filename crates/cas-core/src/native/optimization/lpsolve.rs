@@ -132,7 +132,7 @@ pub(super) fn symbols_in_order(e: &Expr, found: &mut Vec<Expr>) {
 
 /// `e` as `Σ a_j x_j + k`, rational coefficients, evaluated; `None` when
 /// it is not linear so.
-fn linear(
+pub(super) fn linear(
     ev: &mut Eval<'_>,
     e: &Expr,
     xs: &[Expr],
@@ -174,7 +174,7 @@ fn holds_ball(e: &Expr) -> bool {
 
 /// `e` with its decimals exact, `Exact[e]` as giac's `make_problem_exact`
 /// (lpsolve.cc:1306); `None` when a ball stays.
-fn exact(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Expr>, EvalError> {
+pub(super) fn exact(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Expr>, EvalError> {
     if !holds_ball(e) {
         return Ok(Some(e.clone()));
     }

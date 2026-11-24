@@ -206,7 +206,21 @@ pub(in crate::native) fn certified_root(
     vars: &[Expr],
     start: Vec<Rational>,
 ) -> Result<Option<Vec<Expr>>, EvalError> {
-    Ok(certified(ev, fs, vars, start, false)?.map(|r| r.into_iter().map(Expr::from).collect()))
+    let bits = ev.context().working_precision();
+    certified_root_at(ev, fs, vars, start, bits)
+}
+
+/// [`certified_root`] at `bits` bits, `NLPSolve`'s for `nlp_precision`
+/// (CAS-604).
+pub(in crate::native) fn certified_root_at(
+    ev: &mut Eval<'_>,
+    fs: Vec<Expr>,
+    vars: &[Expr],
+    start: Vec<Rational>,
+    bits: u64,
+) -> Result<Option<Vec<Expr>>, EvalError> {
+    Ok(certified_at(ev, fs, vars, start, false, bits)?
+        .map(|r| r.into_iter().map(Expr::from).collect()))
 }
 
 /// [`certified_root`] as balls; of the complex system when `complex`, from
@@ -217,6 +231,19 @@ pub(super) fn certified(
     vars: &[Expr],
     start: Vec<Rational>,
     complex: bool,
+) -> Result<Option<Vec<Ball>>, EvalError> {
+    let bits = ev.context().working_precision();
+    certified_at(ev, fs, vars, start, complex, bits)
+}
+
+/// [`certified`] at `bits` bits.
+fn certified_at(
+    ev: &mut Eval<'_>,
+    fs: Vec<Expr>,
+    vars: &[Expr],
+    start: Vec<Rational>,
+    complex: bool,
+    bits: u64,
 ) -> Result<Option<Vec<Ball>>, EvalError> {
     let mut jacobian = Vec::with_capacity(fs.len());
     for f in &fs {
@@ -232,7 +259,6 @@ pub(super) fn certified(
         jacobian,
         complex,
     };
-    let bits = ev.context().working_precision();
     let ctx = ev.context();
     Ok(newton(ctx, &system, start, bits).and_then(|q| krawczyk(ctx, &system, &q, bits)))
 }

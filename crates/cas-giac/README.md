@@ -501,6 +501,24 @@ points.
   ours has no clock and answers the optimum) and `lp_nodeselect=foo` (giac's "Bad Argument
   Type", ours stays `LPSolve[…]`).
 
+`tests/nlpsolve.rs` and `tests/nlpsolve_seeded.rs` (CAS-604), `nlpsolve`'s options matched by
+their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_precision`,
+`nlp_tolerance`, `nlp_method`, `nlp_maximize`, `nlp_presolve`, `nlp_verbose`, `assume`,
+`nlp_integervariables`, `nlp_binaryvariables`):
+- `linear_programs`: 11 linear programs, which giac and ours hand to `lpsolve` and `LPSolve`,
+  exact and equal (unique optima; integers, binaries, decimals, the point in sorted order).
+- `from_an_initial_point` and the seeded `options` (14 rows, `srand(42)` in the same call, C0014):
+  ours checked against the closed form to 10⁻¹⁰ first, giac's within its observed error (10⁻⁵,
+  10⁻³ with `nlp_tolerance=1e-3`, 10⁻⁴ for the five-variable product).
+- Departures, giac's text copied: an infeasible linear program (giac "The problem is
+  infeasible", ours `[]`), an unbounded one (giac `+infinity`, ours `[+infinity, []]`),
+  `nlp_nonnegative=true` and `nlp_verbose`, `nlp_presolve` alone (giac "Invalid argument", ours
+  answers), `nlp_method=cobyla` and `nlp_method="foo"` (both refuse; ours stays `NLPSolve[…]`);
+  seeded, where giac's "Failed to find a solution" and ours answers the closed form: `(x-1)^2+(y-2)^2`
+  under `x+y<=2` (1/2 at (1/2, 3/2)), `x^2+y^2` under `x+y>=1`, `(x+1)^2+(y-2)^2` with
+  `assume=nlp_nonnegative` (1 at (0, 2)), `nlp_method="ipt"`; and `nlp_iterationlimit=2`, giac's
+  "Failed to optimize at given precision", ours stays with a warning.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 

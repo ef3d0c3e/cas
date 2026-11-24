@@ -1,15 +1,56 @@
-//! Nonlinear programs (CAS-519): `NLPSolve`, Xcas's `nlpsolve`, a local
-//! optimum of a smooth function under equations, inequalities and bounds.
+//! Nonlinear programs (CAS-519, CAS-604): `NLPSolve`, Xcas's `nlpsolve`, a
+//! local optimum of a smooth function under equations, inequalities and
+//! bounds.
 //!
 //! `NLPSolve[f, constraints, bounds…, options…]`:
 //!
 //! - The constraints are `g = c`, `g ≤ c`, `g ≥ c`, and `<`, `>` taken as
 //!   their closures, in a list that may hold bounds too; a bound is `x =
-//!   a..b`, ends real or infinite. The options are `maximize`, `maximize =
-//!   true` or `false`, `nlp_nonnegative = true` (every variable at least 0
-//!   unless bounded) and `nlp_initialpoint = {x = v, …}`. The variables are
-//!   the symbols of `f`, the constraints and the bounds, sorted, giac's
-//!   order.
+//!   a..b` or `[x, y, …] = a..b`, ends real or infinite, several of one
+//!   variable intersected. The variables are the symbols of `f`, the
+//!   constraints and the bounds, sorted, giac's order.
+//! - The options, giac's (optimization.cc:6650-6832), matched by their
+//!   builtins, a later one deciding:
+//!   - `maximize` or `nlp_maximize` alone, or `maximize = b`,
+//!     `nlp_maximize = b` with `b` `true` or `false`, maximize.
+//!   - `assume = nlp_nonnegative` makes every variable at least 0 unless
+//!     bounded higher; ours also takes `nlp_nonnegative = true`, which giac
+//!     rejects. `assume = integer` or `nlp_integer` makes every variable an
+//!     integer, `assume = nlp_nonnegint` (`nonnegint`) a nonnegative one,
+//!     `assume = nlp_binary` one in `0..1`; `nlp_integervariables = [x, …]`
+//!     and `nlp_binaryvariables = [x, …]` those variables. A nonlinear
+//!     program with an integer variable leaves the call.
+//!   - `nlp_initialpoint = [x = v, …]` starts the search there, `[x = a..b,
+//!     …]` at the region's midpoint; giac's several points (`x = [v, …]`)
+//!     leave the call.
+//!   - `nlp_iterationlimit = n`, a positive integer, caps the outer
+//!     iterations at `n` (at most [`MAX_OUTER`]); a search it stops before
+//!     it converges leaves the call with a warning.
+//!   - `nlp_precision = r`, a positive real: the certified balls' radii
+//!     are at most `r` times their midpoints' magnitudes, or `r` below
+//!     magnitude 1 (a zero optimum is then reachable), the certification
+//!     raising its precision for it up to [`MAX_BITS`] bits, else the call
+//!     stays with a warning.
+//!   - `nlp_tolerance = r`, a positive real, is accepted and changes
+//!     nothing: ours checks the constraints at the certified point.
+//!   - `nlp_method = m`, `m` one of giac's strings `"automatic"`
+//!     (`"auto"`), `"ipt"` (`"interior-point"`), `"nm"`
+//!     (`"nelder-mead"`), `"de"` (`"differential-evolution"`), `"cobyla"`
+//!     (`"cbl"`), or a list `["name", "parameter" = v, …]`, the
+//!     parameters unchecked beyond their form: every method is our one
+//!     certified method below. Another string, or a symbol, leaves the
+//!     call with a warning that names it.
+//!   - `nlp_presolve` and `nlp_verbose`, alone (giac rejects these) or `=
+//!     b`, `nlp_verbose = n` with `n` in `0..4`, change nothing.
+//!   - Anything else, or an option with a value of another kind, leaves
+//!     the call; an equation whose left side is another builtin is never a
+//!     constraint.
+//! - A linear objective under linear constraints, rational coefficients
+//!   once decimals are exact, is giac's linear program
+//!   (optimization.cc:6080-6085): the call becomes `LPSolve[…]` with the
+//!   same constraints, bounds, `maximize`, `assume = lp_nonnegative`,
+//!   `lp_integervariables` and `lp_binaryvariables`, and its exact answer
+//!   is `NLPSolve`'s, the point in this order.
 //! - The functions must compile to ball operations, as `NDSolve`'s right
 //!   sides (CAS-DOC-35 §3): no parameters, no `Abs` or steps.
 //! - The search, on doubles: an augmented Lagrangian (Powell, Hestenes,
@@ -40,8 +81,8 @@ use cas_num::ball::{Ball, Float};
 
 use super::super::approximation;
 use super::super::ndsolve::rhs::Node;
-use super::super::solve::fsolve::systems::certified_root;
-use super::lpsolve::symbols_in_order;
+use super::super::solve::fsolve::systems::certified_root_at;
+use super::lpsolve::{exact, linear, lp_solve, symbols_in_order};
 use crate::context::{Context, EvalError};
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
@@ -74,6 +115,25 @@ const RUNAWAY: f64 = 1e12;
 /// Within this (relative) distance a bound or inequality is active.
 const ACTIVE: f64 = 1e-6;
 
+/// The most bits the certification raises its precision to for
+/// `nlp_precision`.
+const MAX_BITS: u64 = 4096;
+
+/// giac's names of its methods (optimization.cc:6785-6797, optimization.h:
+/// 109-113).
+const METHODS: [&str; 10] = [
+    "automatic",
+    "auto",
+    "ipt",
+    "interior-point",
+    "nm",
+    "nelder-mead",
+    "de",
+    "differential-evolution",
+    "cobyla",
+    "cbl",
+];
+
 fn head(e: &Expr) -> Option<Symbol> {
     e.head().and_then(Expr::as_symbol)
 }
@@ -89,6 +149,9 @@ fn warn(ev: &mut Eval<'_>, e: &Expr, message: &str) {
     });
 }
 
+/// Each variable's lower or upper end, `None` for an infinite one.
+type Ends = Vec<Option<End>>;
+
 /// A bound's end: exact, with its double.
 #[derive(Clone)]
 struct End {
@@ -97,7 +160,8 @@ struct End {
 }
 
 /// A program as read: the objective (negated for a maximum), the
-/// equations `h = 0` and inequalities `g ≤ 0`, the bounds and the start.
+/// equations `h = 0` and inequalities `g ≤ 0`, the bounds, the start, the
+/// outer iterations' cap and the precision asked.
 struct Program {
     xs: Vec<Expr>,
     objective: Expr,
@@ -107,12 +171,31 @@ struct Program {
     lower: Vec<Option<End>>,
     upper: Vec<Option<End>>,
     start: Vec<Option<Expr>>,
+    limit: usize,
+    precision: Option<f64>,
+}
+
+/// A call as read.
+enum Read {
+    /// A nonlinear program.
+    Nonlinear(Program),
+    /// A linear one, as `LPSolve[…]`, and the variables in order.
+    Linear(Expr, Vec<Expr>),
+    /// None: the call stays, with this warning or none.
+    Not(Option<String>),
 }
 
 /// `NLPSolve[f, constraints, bounds…, options…]`.
 pub(in crate::native) fn nlp_solve(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    let Some(program) = program(ev, e)? else {
-        return Ok(None);
+    let program = match program(ev, e)? {
+        Read::Nonlinear(p) => p,
+        Read::Linear(call, xs) => return linear_program(ev, &call, &xs),
+        Read::Not(why) => {
+            if let Some(message) = why {
+                warn(ev, e, &message);
+            }
+            return Ok(None);
+        }
     };
     let Some(compiled) = compile(ev, &program)? else {
         return Ok(None);
@@ -134,7 +217,7 @@ pub(in crate::native) fn nlp_solve(ev: &mut Eval<'_>, e: &Expr) -> Native {
         warn(ev, e, "a variable's range is empty");
         return Ok(None);
     }
-    let search = match lagrangian(&compiled, x0, &lo, &hi) {
+    let search = match lagrangian(&compiled, x0, &lo, &hi, program.limit) {
         Ok(found) => found,
         Err(Failure::Runaway) => {
             warn(
@@ -152,17 +235,67 @@ pub(in crate::native) fn nlp_solve(ev: &mut Eval<'_>, e: &Expr) -> Native {
             warn(ev, e, "the search left the functions' domain");
             return Ok(None);
         }
+        Err(Failure::Unconverged) => {
+            warn(
+                ev,
+                e,
+                "nlp_iterationlimit reached before the search converged",
+            );
+            return Ok(None);
+        }
     };
-    let Some(answer) = certify(ev, &program, &compiled, &search, &lo, &hi)? else {
-        warn(
-            ev,
-            e,
-            "the search's point could not be certified as an optimum",
-        );
-        return Ok(None);
+    let cap = MAX_BITS.min(ev.context().limits().number_bits);
+    let mut bits = ev.context().working_precision();
+    let answer = loop {
+        let Some(answer) = certify(ev, &program, &compiled, &search, &lo, &hi, bits)? else {
+            warn(
+                ev,
+                e,
+                "the search's point could not be certified as an optimum",
+            );
+            return Ok(None);
+        };
+        match program.precision {
+            Some(r) if !within(&answer, r) => {}
+            _ => break answer,
+        }
+        bits = bits.saturating_mul(2);
+        if bits > cap {
+            warn(ev, e, "nlp_precision could not be met");
+            return Ok(None);
+        }
     };
     ev.step("NLPSolve", e, &answer);
     Ok(Some(answer))
+}
+
+/// Whether every ball of `answer` has a radius at most `r` times its
+/// midpoint's magnitude, or `r` below magnitude 1.
+fn within(answer: &Expr, r: f64) -> bool {
+    match answer.view() {
+        View::Ball(b) => {
+            let radius = b.rad().to_float().map_or(f64::INFINITY, |f| f.to_f64());
+            radius <= r * b.mid().to_f64().abs().max(1.0)
+        }
+        _ => answer.args().iter().all(|a| within(a, r)),
+    }
+}
+
+/// A linear program's answer, `LPSolve`'s, its point in the order `xs`.
+fn linear_program(ev: &mut Eval<'_>, call: &Expr, xs: &[Expr]) -> Native {
+    let Some(answer) = lp_solve(ev, call)? else {
+        return Ok(None);
+    };
+    let (Some(Symbol::LIST), [value, point]) = (head(&answer), answer.args()) else {
+        return Ok(Some(answer));
+    };
+    let mut point = point.args().to_vec();
+    point.sort_by_key(|p| {
+        p.args()
+            .first()
+            .and_then(|x| xs.iter().position(|y| y == x))
+    });
+    Ok(Some(list(vec![value.clone(), list(point)])))
 }
 
 /// The arguments after the objective, sorted out.
@@ -170,9 +303,27 @@ pub(in crate::native) fn nlp_solve(ev: &mut Eval<'_>, e: &Expr) -> Native {
 struct Items<'a> {
     maximum: bool,
     nonnegative: bool,
+    /// Every variable an integer (`assume = integer`, `nlp_integer` or
+    /// `nlp_nonnegint`): `Some(false)`; in `0..1` (`nlp_binary`):
+    /// `Some(true)`.
+    every: Option<bool>,
+    /// The lists of `nlp_integervariables` (false) and
+    /// `nlp_binaryvariables` (true).
+    typed: Vec<(&'a Expr, bool)>,
     initial: &'a [Expr],
+    iterations: Option<usize>,
+    precision: Option<f64>,
     relations: Vec<(Symbol, &'a Expr, &'a Expr)>,
+    /// One range per variable.
     ranges: Vec<(&'a Expr, &'a Expr, &'a Expr)>,
+}
+
+/// Why a call is no program: `None` silently, else a warning.
+type Reject = Option<String>;
+
+/// `o`'s value, or a silent rejection.
+fn silent<T>(o: Option<T>) -> Result<T, Reject> {
+    o.ok_or(None)
 }
 
 /// A `true` or `false` option's value.
@@ -184,8 +335,13 @@ fn flag(r: &Expr) -> Option<bool> {
     }
 }
 
-/// The constraints, bounds and options; `None` for anything else.
-fn items(rest: &[Expr]) -> Option<Items<'_>> {
+/// A positive real option's value, as a double.
+fn positive(ctx: &Context, r: &Expr) -> Option<f64> {
+    double(ctx, r).filter(|v| *v > 0.0)
+}
+
+/// The constraints, bounds and options.
+fn items<'a>(ctx: &Context, rest: &'a [Expr]) -> Result<Items<'a>, Reject> {
     let mut all: Vec<&Expr> = Vec::new();
     for a in rest {
         if head(a) == Some(Symbol::LIST) {
@@ -196,56 +352,242 @@ fn items(rest: &[Expr]) -> Option<Items<'_>> {
     }
     let mut found = Items::default();
     for item in all {
-        if item.as_symbol() == Some(Symbol::MAXIMIZE) {
-            found.maximum = true;
+        if let Some(s) = item.as_symbol() {
+            match s {
+                Symbol::MAXIMIZE | Symbol::NLP_MAXIMIZE => found.maximum = true,
+                // Ours prints nothing more and has no presolve step.
+                Symbol::NLP_PRESOLVE | Symbol::NLP_VERBOSE => {}
+                _ => return Err(None),
+            }
             continue;
         }
         let (Some(h), [l, r]) = (head(item), item.args()) else {
-            return None;
+            return Err(None);
         };
         match h {
-            Symbol::EQUATION | Symbol::EQUAL => {
-                if l.as_symbol() == Some(Symbol::MAXIMIZE) {
-                    found.maximum = flag(r)?;
-                } else if *l == Expr::symbol("nlp_nonnegative") {
-                    found.nonnegative = flag(r)?;
-                } else if *l == Expr::symbol("nlp_initialpoint") {
-                    if head(r) != Some(Symbol::LIST) {
-                        return None;
-                    }
-                    found.initial = r.args();
-                } else if let (Some(Symbol::RANGE), [a, b]) = (head(r), r.args()) {
-                    if l.as_symbol().is_none_or(Symbol::is_builtin) {
-                        return None;
-                    }
-                    found.ranges.push((l, a, b));
-                } else {
-                    found.relations.push((Symbol::EQUATION, l, r));
-                }
-            }
+            Symbol::EQUATION | Symbol::EQUAL => equation(ctx, &mut found, l, r)?,
             Symbol::LESS | Symbol::LESS_EQUAL | Symbol::GREATER | Symbol::GREATER_EQUAL => {
                 found.relations.push((h, l, r));
             }
-            _ => return None,
+            _ => return Err(None),
         }
     }
-    Some(found)
+    Ok(found)
 }
 
-/// The program of a call; `None` when it is not one.
-fn program(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Program>, EvalError> {
-    let [objective, rest @ ..] = e.args() else {
-        return Ok(None);
+/// One `l = r`: an option when `l` is a builtin, else a range of variables
+/// or an equation.
+fn equation<'a>(
+    ctx: &Context,
+    found: &mut Items<'a>,
+    l: &'a Expr,
+    r: &'a Expr,
+) -> Result<(), Reject> {
+    let Some(key) = l.as_symbol().filter(|s| s.is_builtin()) else {
+        if let (Some(Symbol::RANGE), [a, b]) = (head(r), r.args()) {
+            let xs = if head(l) == Some(Symbol::LIST) {
+                l.args()
+            } else {
+                std::slice::from_ref(l)
+            };
+            for x in xs {
+                if x.as_symbol().is_none_or(Symbol::is_builtin) {
+                    return Err(None);
+                }
+                found.ranges.push((x, a, b));
+            }
+        } else if head(l) == Some(Symbol::LIST) {
+            return Err(None);
+        } else {
+            found.relations.push((Symbol::EQUATION, l, r));
+        }
+        return Ok(());
     };
-    let Some(Items {
+    match key {
+        Symbol::MAXIMIZE | Symbol::NLP_MAXIMIZE => found.maximum = silent(flag(r))?,
+        Symbol::ASSUME => match r.as_symbol() {
+            Some(Symbol::NLP_NON_NEGATIVE) => found.nonnegative = true,
+            Some(Symbol::NLP_INTEGER) => _ = found.every.get_or_insert(false),
+            Some(Symbol::NLP_NON_NEG_INT | Symbol::LP_NON_NEG_INT) => {
+                found.every.get_or_insert(false);
+                found.nonnegative = true;
+            }
+            Some(Symbol::NLP_BINARY) => found.every = Some(true),
+            // `integer` is a name of [types], not a builtin.
+            _ if *r == Expr::symbol("integer") => _ = found.every.get_or_insert(false),
+            _ => return Err(None),
+        },
+        Symbol::NLP_NON_NEGATIVE => found.nonnegative |= silent(flag(r))?,
+        Symbol::NLP_INITIAL_POINT => {
+            if head(r) != Some(Symbol::LIST) {
+                return Err(None);
+            }
+            found.initial = r.args();
+        }
+        Symbol::NLP_ITERATION_LIMIT => {
+            let q = silent(r.to_rational())?;
+            if !q.is_integer() || !q.is_positive() {
+                return Err(None);
+            }
+            found.iterations = Some(usize::try_from(q.numer()).unwrap_or(usize::MAX));
+        }
+        Symbol::NLP_PRECISION => found.precision = Some(silent(positive(ctx, r))?),
+        // Ours checks the constraints at the certified point.
+        Symbol::NLP_TOLERANCE => {
+            silent(positive(ctx, r))?;
+        }
+        Symbol::NLP_METHOD => method(r)?,
+        // Ours prints nothing more and has no presolve step.
+        Symbol::NLP_PRESOLVE => {
+            silent(flag(r))?;
+        }
+        Symbol::NLP_VERBOSE => {
+            if flag(r).is_none() && !(0..=4).any(|n| *r == Expr::from(n)) {
+                return Err(None);
+            }
+        }
+        Symbol::NLP_INTEGER_VARIABLES => found.typed.push((r, false)),
+        Symbol::NLP_BINARY_VARIABLES => found.typed.push((r, true)),
+        _ => return Err(None),
+    }
+    Ok(())
+}
+
+/// `nlp_method`'s value: one of giac's names, alone or first in a list of
+/// `"parameter" = v`; every one runs ours.
+fn method(r: &Expr) -> Result<(), Reject> {
+    let name = match (head(r), r.args()) {
+        (Some(Symbol::LIST), [name, parameters @ ..]) => {
+            let shaped = parameters.iter().all(|p| {
+                matches!(
+                    (head(p), p.args()),
+                    (Some(Symbol::EQUATION | Symbol::EQUAL), [k, _]) if k.as_str().is_some()
+                )
+            });
+            if !shaped {
+                return Err(None);
+            }
+            name
+        }
+        _ => r,
+    };
+    match name.as_str() {
+        Some(s) if METHODS.contains(&s) => Ok(()),
+        Some(s) => Err(Some(format!(
+            "nlp_method = \"{s}\" is not one of giac's methods"
+        ))),
+        None if name.as_symbol().is_some() => Err(Some(format!(
+            "nlp_method = {name} is no method: giac's are strings, as \"{name}\""
+        ))),
+        None => Err(None),
+    }
+}
+
+/// Whether the objective and every relation are linear in `xs`, rational
+/// coefficients once decimals are exact, as `LPSolve` reads them.
+fn is_linear(
+    ev: &mut Eval<'_>,
+    objective: &Expr,
+    relations: &[(Symbol, &Expr, &Expr)],
+    xs: &[Expr],
+) -> Result<bool, EvalError> {
+    let sides = relations
+        .iter()
+        .map(|(_, l, r)| (*l).clone() - (*r).clone());
+    for f in std::iter::once(objective.clone()).chain(sides) {
+        let Some(f) = exact(ev, &f)? else {
+            return Ok(false);
+        };
+        if linear(ev, &f, xs)?.is_none() {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+/// A linear program as `LPSolve[…]` (giac's, optimization.cc:6080-6085):
+/// the constraints, bounds, maximum, nonnegativity, integer and binary
+/// variables.
+fn lp_call(
+    objective: &Expr,
+    relations: &[(Symbol, &Expr, &Expr)],
+    ranges: &[(&Expr, &Expr, &Expr)],
+    maximum: bool,
+    nonnegative: bool,
+    integers: Vec<Expr>,
+    binaries: Vec<Expr>,
+) -> Expr {
+    let constraints = relations
+        .iter()
+        .map(|&(h, l, r)| Expr::call(h, [l.clone(), r.clone()]))
+        .collect();
+    let mut args = vec![objective.clone(), list(constraints)];
+    for &(x, a, b) in ranges {
+        let range = Expr::call(Symbol::RANGE, [a.clone(), b.clone()]);
+        args.push(Expr::call(Symbol::EQUATION, [x.clone(), range]));
+    }
+    if maximum {
+        args.push(Expr::from(Symbol::MAXIMIZE));
+    }
+    if nonnegative {
+        let kind = Expr::from(Symbol::LP_NON_NEGATIVE);
+        args.push(Expr::call(
+            Symbol::EQUATION,
+            [Expr::from(Symbol::ASSUME), kind],
+        ));
+    }
+    for (xs, key) in [
+        (integers, Symbol::LP_INTEGER_VARIABLES),
+        (binaries, Symbol::LP_BINARY_VARIABLES),
+    ] {
+        if !xs.is_empty() {
+            args.push(Expr::call(Symbol::EQUATION, [Expr::from(key), list(xs)]));
+        }
+    }
+    Expr::call(Symbol::LP_SOLVE, args)
+}
+
+/// Which variables are integers, and which of them in `0..1`: all by
+/// `every`, and those `typed` lists name; `None` for a list naming no
+/// variable.
+fn integers(
+    xs: &[Expr],
+    every: Option<bool>,
+    typed: Vec<(&Expr, bool)>,
+) -> Option<(Vec<bool>, Vec<bool>)> {
+    let mut whole = vec![every.is_some(); xs.len()];
+    let mut zero_one = vec![every == Some(true); xs.len()];
+    for (named, is_binary) in typed {
+        if head(named) != Some(Symbol::LIST) {
+            return None;
+        }
+        for x in named.args() {
+            let j = xs.iter().position(|v| v == x)?;
+            whole[j] = true;
+            zero_one[j] |= is_binary;
+        }
+    }
+    Some((whole, zero_one))
+}
+
+/// The program of a call.
+fn program(ev: &mut Eval<'_>, e: &Expr) -> Result<Read, EvalError> {
+    let [objective, rest @ ..] = e.args() else {
+        return Ok(Read::Not(None));
+    };
+    let Items {
         maximum,
         nonnegative,
+        every,
+        typed,
         initial,
+        iterations,
+        precision,
         relations,
         ranges,
-    }) = items(rest)
-    else {
-        return Ok(None);
+    } = match items(ev.context(), rest) {
+        Ok(found) => found,
+        Err(why) => return Ok(Read::Not(why)),
     };
     let mut xs = Vec::new();
     symbols_in_order(objective, &mut xs);
@@ -258,7 +600,33 @@ fn program(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Program>, EvalError> {
     }
     xs.sort();
     if xs.is_empty() || xs.len() > MAX_VARIABLES || relations.len() > MAX_CONSTRAINTS {
-        return Ok(None);
+        return Ok(Read::Not(None));
+    }
+    let Some((whole, zero_one)) = integers(&xs, every, typed) else {
+        return Ok(Read::Not(None));
+    };
+    if is_linear(ev, objective, &relations, &xs)? {
+        let pick = |integers: bool| -> Vec<Expr> {
+            xs.iter()
+                .zip(whole.iter().zip(&zero_one))
+                .filter(|(_, (w, b))| **w && **b != integers)
+                .map(|(x, _)| x.clone())
+                .collect()
+        };
+        let call = lp_call(
+            objective,
+            &relations,
+            &ranges,
+            maximum,
+            nonnegative,
+            pick(true),
+            pick(false),
+        );
+        return Ok(Read::Linear(call, xs));
+    }
+    // A nonlinear program with integer variables: not yet.
+    if whole.contains(&true) {
+        return Ok(Read::Not(None));
     }
     let mut equalities = Vec::new();
     let mut inequalities = Vec::new();
@@ -274,6 +642,40 @@ fn program(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Program>, EvalError> {
             inequalities.push(g);
         }
     }
+    let Some((lower, upper)) = bounds(ev.context(), &xs, ranges, nonnegative) else {
+        return Ok(Read::Not(None));
+    };
+    let Some(start) = initial_point(ev, &xs, initial)? else {
+        return Ok(Read::Not(None));
+    };
+    let objective = ev.eval(objective)?;
+    let minimized = if maximum {
+        ev.eval(&(Expr::from(0) - objective.clone()))?
+    } else {
+        objective.clone()
+    };
+    Ok(Read::Nonlinear(Program {
+        xs,
+        objective,
+        minimized,
+        equalities,
+        inequalities,
+        lower,
+        upper,
+        start,
+        limit: iterations.unwrap_or(MAX_OUTER),
+        precision,
+    }))
+}
+
+/// Each variable's ends: at least 0 when `nonnegative`, each range
+/// intersected; `None` for an end that is no real number.
+fn bounds(
+    ctx: &Context,
+    xs: &[Expr],
+    ranges: Vec<(&Expr, &Expr, &Expr)>,
+    nonnegative: bool,
+) -> Option<(Ends, Ends)> {
     let n = xs.len();
     let zero = End {
         exact: Expr::from(0),
@@ -283,13 +685,38 @@ fn program(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Program>, EvalError> {
     let mut upper: Vec<Option<End>> = vec![None; n];
     for (x, a, b) in ranges {
         let j = xs.iter().position(|v| v == x).expect("collected");
-        let (Ok(low), Ok(high)) = (end(ev.context(), a), end(ev.context(), b)) else {
-            return Ok(None);
+        let (Ok(low), Ok(high)) = (end(ctx, a), end(ctx, b)) else {
+            return None;
         };
-        lower[j] = low;
-        upper[j] = high;
+        if let Some(low) = low
+            && lower[j].as_ref().is_none_or(|l| l.value < low.value)
+        {
+            lower[j] = Some(low);
+        }
+        if let Some(high) = high
+            && upper[j].as_ref().is_none_or(|h| h.value > high.value)
+        {
+            upper[j] = Some(high);
+        }
     }
-    let mut start = vec![None; n];
+    Some((lower, upper))
+}
+
+/// `nlp_initialpoint`'s values, a region's (all ranges) midpoints; `None`
+/// for anything else, giac's several points too.
+fn initial_point(
+    ev: &mut Eval<'_>,
+    xs: &[Expr],
+    initial: &[Expr],
+) -> Result<Option<Vec<Option<Expr>>>, EvalError> {
+    let regions = initial
+        .iter()
+        .filter(|p| p.args().get(1).and_then(head) == Some(Symbol::RANGE))
+        .count();
+    if regions != 0 && regions != initial.len() {
+        return Ok(None);
+    }
+    let mut start = vec![None; xs.len()];
     for p in initial {
         let (Some(Symbol::EQUATION | Symbol::EQUAL), [x, v]) = (head(p), p.args()) else {
             return Ok(None);
@@ -297,24 +724,13 @@ fn program(ev: &mut Eval<'_>, e: &Expr) -> Result<Option<Program>, EvalError> {
         let Some(j) = xs.iter().position(|y| y == x) else {
             return Ok(None);
         };
-        start[j] = Some(v.clone());
+        start[j] = Some(match (head(v), v.args()) {
+            (Some(Symbol::RANGE), [a, b]) => ev.eval(&((a.clone() + b.clone()) / Expr::from(2)))?,
+            (Some(Symbol::LIST), _) => return Ok(None),
+            _ => v.clone(),
+        });
     }
-    let objective = ev.eval(objective)?;
-    let minimized = if maximum {
-        ev.eval(&(Expr::from(0) - objective.clone()))?
-    } else {
-        objective.clone()
-    };
-    Ok(Some(Program {
-        xs,
-        objective,
-        minimized,
-        equalities,
-        inequalities,
-        lower,
-        upper,
-        start,
-    }))
+    Ok(Some(start))
 }
 
 /// A bound's end: `Ok(None)` for an infinite one, `Err` for one that is no
@@ -501,6 +917,8 @@ enum Failure {
     Runaway,
     Infeasible,
     Domain,
+    /// Stopped by `nlp_iterationlimit` before it converged.
+    Unconverged,
 }
 
 /// What the search found: the point and the multipliers.
@@ -571,8 +989,15 @@ fn subproblem(
     Ok(x)
 }
 
-/// The augmented Lagrangian's outer loop from `x0`.
-fn lagrangian(c: &Compiled, x0: Vec<f64>, lo: &[f64], hi: &[f64]) -> Result<Search, Failure> {
+/// The augmented Lagrangian's outer loop from `x0`, at most `limit`
+/// iterations (and [`MAX_OUTER`]).
+fn lagrangian(
+    c: &Compiled,
+    x0: Vec<f64>,
+    lo: &[f64],
+    hi: &[f64],
+    limit: usize,
+) -> Result<Search, Failure> {
     let mut m = Multipliers {
         lambda: vec![0.0; c.equalities.len()],
         mu: vec![0.0; c.inequalities.len()],
@@ -581,7 +1006,8 @@ fn lagrangian(c: &Compiled, x0: Vec<f64>, lo: &[f64], hi: &[f64]) -> Result<Sear
     let mut x = x0;
     let mut previous = f64::INFINITY;
     let mut tol = 1e-6;
-    for _ in 0..MAX_OUTER {
+    let mut converged = false;
+    for _ in 0..limit.min(MAX_OUTER) {
         x = subproblem(c, &m, x, lo, hi, tol)?;
         let Merit {
             equalities: hs,
@@ -599,6 +1025,7 @@ fn lagrangian(c: &Compiled, x0: Vec<f64>, lo: &[f64], hi: &[f64]) -> Result<Sear
             *mu = (*mu + m.rho * g).max(0.0);
         }
         if violation < 1e-10 && tol <= 1e-11 {
+            converged = true;
             break;
         }
         if violation > previous / 4.0 && m.rho < MAX_PENALTY {
@@ -606,6 +1033,9 @@ fn lagrangian(c: &Compiled, x0: Vec<f64>, lo: &[f64], hi: &[f64]) -> Result<Sear
         }
         previous = violation;
         tol = (tol / 10.0).max(1e-11);
+    }
+    if !converged && limit < MAX_OUTER {
+        return Err(Failure::Unconverged);
     }
     let point = balls(&x).ok_or(Failure::Domain)?;
     for s in &c.equalities {
@@ -685,8 +1115,8 @@ fn active(p: &Program, c: &Compiled, s: &Search, lo: &[f64], hi: &[f64]) -> Opti
     })
 }
 
-/// The search's point certified as a Karush–Kuhn–Tucker point: the
-/// answer, or `None`.
+/// The search's point certified as a Karush–Kuhn–Tucker point at `bits`
+/// bits: the answer, or `None`.
 fn certify(
     ev: &mut Eval<'_>,
     p: &Program,
@@ -694,6 +1124,7 @@ fn certify(
     s: &Search,
     lo: &[f64],
     hi: &[f64],
+    bits: u64,
 ) -> Result<Option<Expr>, EvalError> {
     let Some(on) = active(p, c, s, lo, hi) else {
         return Ok(None);
@@ -755,7 +1186,7 @@ fn certify(
     let values: Vec<Expr> = if equations.is_empty() {
         Vec::new()
     } else {
-        match certified_root(ev, equations, &unknowns, guess)? {
+        match certified_root_at(ev, equations, &unknowns, guess, bits)? {
             Some(v) => v,
             None => return Ok(None),
         }
@@ -770,7 +1201,6 @@ fn certify(
         .into_iter()
         .filter(|(x, _)| p.xs.contains(x))
         .collect();
-    let bits = ev.context().working_precision();
     let Ok(value) = approximation(ev.context(), &p.objective.substitute(&point), bits) else {
         return Ok(None);
     };
