@@ -549,6 +549,51 @@ fn subresultant_gcds_with_constants() {
     assert_eq!(parts, Some((zi.one(), a, b)));
 }
 
+/// `f g` and `f h` in three variables, reduced from a `poly_gcd` fuzz timeout:
+/// the last remainder in `x` has a content far larger than `f`, which the
+/// gcd of all its coefficients took 1 s to find (7 s in the fuzz unit);
+/// scaled by `γ / lc(last)` first, its content divides `γ` (milliseconds).
+#[test]
+fn subresultants_with_a_large_last_content() {
+    let ring = SparseRing::new(Integers, 3);
+    let poly = |terms: &[([u64; 3], i64)]| {
+        ring.from_terms(
+            terms
+                .iter()
+                .map(|(e, c)| (e.to_vec(), Integer::from(*c)))
+                .collect::<Vec<_>>(),
+        )
+    };
+    let f = poly(&[
+        ([3, 3, 3], 3_386_426_548_545_388_543),
+        ([3, 3, 0], -1),
+        ([3, 1, 0], -5),
+        ([3, 0, 3], -12),
+        ([3, 0, 0], 3),
+        ([0, 3, 3], -71_775_036_729_458_689),
+    ]);
+    let g = poly(&[
+        ([3, 3, 3], -19),
+        ([3, 3, 0], 14),
+        ([3, 0, 3], -11),
+        ([0, 0, 0], -12),
+    ]);
+    let h = poly(&[
+        ([1, 1, 3], -12),
+        ([0, 0, 3], 2_305_843_009_213_661_991),
+        ([0, 0, 1], -20),
+        ([0, 0, 0], -60),
+    ]);
+    let (a, b) = (ring.mul(&f, &g), ring.mul(&f, &h));
+    let parts = ring
+        .gcd_by(&a, &b, GcdMethod::Subresultant, &Never)
+        .unwrap();
+    let (d, x, y) = parts.expect("subresultants always apply");
+    assert_eq!(ring.mul(&d, &x), a);
+    assert_eq!(ring.mul(&d, &y), b);
+    assert_eq!((d, x, y), ring.gcd_cofactors(&a, &b));
+}
+
 /// `b² - 4ac` and `-4p³ - 27q²`, and the edge cases of degree 0 and 1.
 #[test]
 fn discriminants() {

@@ -88,6 +88,17 @@ stay small without a gcd of them at every step.
 **The gcd** [Coh93, §3.3.1] is the gcd of the contents times the primitive
 part of the last non-zero remainder of the primitive parts.
 
+**The primitive part of the last remainder.** The last remainder is `c G`
+for the primitive gcd `G` and a content `c` that can be far larger than the
+inputs: in three variables, a `c` of degree 174 in the innermost variable
+with big integers took 7 s as the gcd of all the coefficients, each a
+subresultant gcd of its own (fuzz poly_gcd, 2026-11-24). `G` divides both
+primitive parts, so `lc G` divides `γ = gcd(lc a, lc b)` (Gauss's lemma), and
+`γ · last / lc(last) = (γ / lc G) G` is exact; its content divides `γ`, so
+the gcd of its coefficients stays small, as in Brown's modular algorithm
+[Bro71]. That took the case to a quarter second, and a reduced one
+(`subresultants_with_a_large_last_content`) from 1 s to 13 ms.
+
 **Several variables.**
 - The sequence runs in the first variable that occurs, as a
   `DenseRing<SparseRing<R>>` whose coefficients are the polynomials in the

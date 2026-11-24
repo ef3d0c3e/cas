@@ -136,11 +136,25 @@ fn gcd_over<C: Exact>(
     if small.degree() == Some(0) {
         return Ok(ring.constant(d));
     }
+    // The gcd of the leading coefficients, taken before the sequence moves
+    // the primitive parts.
+    let gamma = gcd(
+        big.lead().expect("non-zero"),
+        small.lead().expect("non-zero"),
+    )?;
     Ok(match last_remainder(ring, big, small, cancel)? {
         None => ring.constant(d),
         Some(last) => {
-            let c = content(base, &last, gcd)?;
-            ring.scale(&div_coeffs(ring, &last, &c), &d)
+            // The last remainder is `c G` for the primitive gcd `G` and a
+            // content `c` that can dwarf both, taken as the gcd of all its
+            // coefficients in a gcd of their own each (fuzz poly_gcd: `c` of
+            // degree 174 in z with big integers, 7 s). `lc G` divides
+            // `γ = gcd(lc a, lc b)`, so `γ last / lc(last) = (γ / lc G) G`
+            // exactly, a content that divides `γ` and is small to find [Bro71].
+            let lead = last.lead().expect("non-zero").clone();
+            let scaled = div_coeffs(ring, &ring.scale(&last, &gamma), &lead);
+            let c = content(base, &scaled, gcd)?;
+            ring.scale(&div_coeffs(ring, &scaled, &c), &d)
         }
     })
 }
