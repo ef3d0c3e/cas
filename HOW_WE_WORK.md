@@ -60,6 +60,8 @@ PY = /usr/bin/python3
 ## Build / run / test <!-- roles: claude expert coder planner review auditor curator -->
 - Build: `cargo build`, `cargo check` (local is fine)
 - Run: library crates; `cargo run -p cas-tune` writes cas-num's tuning configuration
+- Our answers are seen only on CI: no local scratch/example programs or binaries that print them (developer, 1.4
+  close); Python prototypes and giac probes (`scripts/caseval.py`) are fine.
 - Test / the gate: CI only, never `cargo test`/`cargo fuzz`/benchmarks locally (`AGENTS.md`). Green means every job of
   `.github/workflows/ci.yml` (fmt, clippy on stable, test, fuzz-check, oracle) and `fuzz.yml` passes on the pushed commit
 - Modes: `gh workflow run fuzz.yml -f time_per_target=<s> [-f targets="<names>"]`; perf A/B `workload.yml` (C0001)
