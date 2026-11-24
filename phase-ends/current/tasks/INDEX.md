@@ -8,3 +8,4 @@ T5 | done | the simplex tableau: simplex_reduce, and CoefficientList's order on 
 T6 | done | univariate and polytope minimisation: find_minimum and frank_wolfe | - | tasks/T6.md | logs/T6.md | R1.5-001,R1.5-003,R1.4-005
 T7 | done | simulated annealing: simulated_annealing | - | tasks/T7.md | logs/T7.md | R1.5-001,R1.5-003,R1.4-005
 T8 | done | push master for the phase's final CI and Fuzz runs | - | tasks/T8.md | logs/T8.md | -
+T9 | done | CI and Fuzz check on the pushed head; tickets done and CAS-DOC-57 in step | - | tasks/T9.md | logs/T9.md | -
