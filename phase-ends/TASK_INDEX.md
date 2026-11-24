@@ -42,3 +42,13 @@
 1.4 | T8 | done | push master for the phase's final CI and Fuzz runs | - | phase-1.4/tasks/T8.md | phase-1.4/logs/T8.md | -
 1.4 | T9 | done | CI and Fuzz check on the pushed head; tickets done and CAS-DOC-56 in step | - | phase-1.4/tasks/T9.md | phase-1.4/logs/T9.md | -
 1.4 | T10 | done | phase cleanup | - | phase-1.4/tasks/T10.md | phase-1.4/logs/T10.md | -
+1.5 | T1 | done | design page CAS-DOC-57 and one ticket per family | - | phase-1.5/tasks/T1.md | phase-1.5/logs/T1.md | R0-004,R1.5-001,R1.5-002,R1.5-004
+1.5 | T2 | done | lpsolve's options: the lp_* names, maximize and assume forms, mixed integer variables, lp_method and decimal data | - | phase-1.5/tasks/T2.md | phase-1.5/logs/T2.md | R1.5-002,R1.5-004,R1.5-003
+1.5 | T3 | done | lpsolve's branch and bound: giac's node and variable selection, cuts, heuristic, limits and gap | - | phase-1.5/tasks/T3.md | phase-1.5/logs/T3.md | R1.5-002,R1.5-004,R1.5-003
+1.5 | T4 | done | nlpsolve's options: the nlp_* names, initial points, limits, precision, methods, integer and binary variables | - | phase-1.5/tasks/T4.md | phase-1.5/logs/T4.md | R1.5-001,R1.5-004
+1.5 | T5 | done | the simplex tableau: simplex_reduce, and CoefficientList's order on ball coefficients | - | phase-1.5/tasks/T5.md | phase-1.5/logs/T5.md | R1.5-001
+1.5 | T6 | done | univariate and polytope minimisation: find_minimum and frank_wolfe | - | phase-1.5/tasks/T6.md | phase-1.5/logs/T6.md | R1.5-001,R1.5-003,R1.4-005
+1.5 | T7 | done | simulated annealing: simulated_annealing | - | phase-1.5/tasks/T7.md | phase-1.5/logs/T7.md | R1.5-001,R1.5-003,R1.4-005
+1.5 | T8 | done | push master for the phase's final CI and Fuzz runs | - | phase-1.5/tasks/T8.md | phase-1.5/logs/T8.md | -
+1.5 | T9 | done | CI and Fuzz check on the pushed head; tickets done and CAS-DOC-57 in step | - | phase-1.5/tasks/T9.md | phase-1.5/logs/T9.md | -
+1.5 | T10 | done | phase cleanup | - | phase-1.5/tasks/T10.md | phase-1.5/logs/T10.md | -

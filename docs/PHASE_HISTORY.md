@@ -8,8 +8,13 @@ Built by `tools/phaseend_index.py history` from the PhaseEnds and rebuilt at eac
 - 1.2 | 2026-11-23 | Algebra and polynomials parity | Phase 1.2 Algebra and polynomials parity: CAS-DOC-54 sorts 89 giac entries (66 built, 1 alias, 5 options, 2 settings, 15 recorded departures); tickets CAS-526..547 done.
 - 1.3 | 2026-11-23 | Calculus, expressions and integers parity | Phase 1.3 Calculus, expressions and integers parity: CAS-DOC-55 sorts 81 giac entries; tickets CAS-548..585 are done.
 - 1.4 | 2026-11-24 | Numerical analysis II | Phase 1.4 Numerical analysis II: CAS-DOC-56 sorts 41 giac names and records CAS-517..520; tickets CAS-588..599 are done.
+- 1.5 | 2026-11-24 | Optimization II | Phase 1.5 Optimization II: CAS-DOC-57 (still a draft in Lific) sorts 50 giac names; tickets CAS-600..610 are done.
 
 ## This generation's recaps (1, newest first)
+
+### 1.5: Optimization II (2026-11-24)
+
+Phase 1.5 Optimization II: CAS-DOC-57 (still a draft in Lific) sorts 50 giac names; tickets CAS-600..610 are done. Built: lpsolve's 31 lp_* option builtins (nonnegint alias), maximize/assume forms, mixed integer and binary variables, every lp_method on our exact simplex with decimals made exact; giac's branch and bound ported (5 node and 4 variable strategies, Gomory cuts with the true right side where giac's rescaled cut can drop integer points, a bound-checked rounding heuristic, node/depth/iteration limits and the gap; deterministic ties; lp_timelimit accepted but no clock); nlpsolve's 14 nlp_* options, linear problems routed to LPSolve, integer NLP by enumeration or capped branch and bound (nlpinteger.rs); simplex_reduce as a line-by-line port of misc.cc with giac's mixed exact/decimal entries; find_minimum (Brent candidate, then a certified ball by interval Newton or cover); frank_wolfe with a ball-certified gap; simulated_annealing (GSL siman loop, seeded, user functions under limits, exact midpoints per step). CoefficientList is not buggy: a ball-coefficient unit test confirms leading-first order (CAS-607). Final gate green on a2ba5de with no fixes needed (CI 45350578782, Fuzz 45350578815, 56 targets). Cookbook C0056-C0064. Notes: the local stable clippy (1.99.1) is older than CI's and missed a lint; many giac integer/inequality nlpsolve probes fail, recorded as departures against known optima. Open: publish CAS-DOC-57; docs-only commits unpushed until the next phase's first push.
 
 ### 1.4: Numerical analysis II (2026-11-24)
 
