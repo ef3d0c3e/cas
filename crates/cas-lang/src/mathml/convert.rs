@@ -185,6 +185,7 @@ impl Writer {
             Sub::Seq => ("", ""),
             Sub::Set => ("set[", "]"),
             Sub::List => ("[", "]"),
+            Sub::Poly1 => ("poly1[", "]"),
         };
         let mut s = String::from(open);
         for (k, x) in items.iter().enumerate() {

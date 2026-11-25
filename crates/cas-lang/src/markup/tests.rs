@@ -402,9 +402,9 @@ impl Parser {
                 Gen::Str(s)
             }
             Tok::Id => match val.as_str() {
-                // poly1[…] prints as a list.
+                // poly1[…]: a list to gen2markup, poly1[ to mathml.cc.
                 "set" | "poly1" if self.at(&["["]) => {
-                    let sub = if val == "set" { Sub::Set } else { Sub::List };
+                    let sub = if val == "set" { Sub::Set } else { Sub::Poly1 };
                     Gen::Vect(self.arglist("[", "]"), sub)
                 }
                 "i" => Gen::i(),

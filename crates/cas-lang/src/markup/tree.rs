@@ -41,6 +41,11 @@ pub(crate) enum Sub {
     Seq,
     /// A set, `{…}` (`_SET__VECT`).
     Set,
+    /// A dense polynomial's coefficients, `poly1[…]` (`_POLY1__VECT`): a
+    /// list to gen2markup, `poly1[` to mathml.cc (`begin_VECT_string`).
+    /// Only giac's shapes in the tests make one; our lowering never does.
+    #[cfg_attr(not(test), allow(dead_code))]
+    Poly1,
 }
 
 impl Gen {

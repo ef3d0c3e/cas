@@ -808,7 +808,7 @@ impl Engine {
             Sub::Seq if toplevel => ("", ""),
             Sub::Seq => ("\\left(", "\\right)"),
             Sub::Set => ("\\left\\{", "\\right\\}"),
-            Sub::List => ("\\left[", "\\right]"),
+            Sub::List | Sub::Poly1 => ("\\left[", "\\right]"),
         };
         ml.latex.push_str(ld);
         for (k, x) in items.iter().enumerate() {
@@ -828,7 +828,7 @@ impl Engine {
             Sub::Seq if toplevel => ("list", "", ""),
             Sub::Seq => ("list", "(", ")"),
             Sub::Set => ("set", "{", "}"),
-            Sub::List => ("vector", "[", "]"),
+            Sub::List | Sub::Poly1 => ("vector", "[", "]"),
         };
         if flags.cont() {
             ml.content = mml::tag(element, &ml.content, self.next_id(), &[]);

@@ -472,6 +472,7 @@ pub(super) fn print_atom(g: &Gen) -> String {
                 (Sub::Seq, false) => inner,
                 (Sub::Set, false) => format!("set[{inner}]"),
                 (Sub::List, _) => format!("[{inner}]"),
+                (Sub::Poly1, _) => format!("poly1[{inner}]"),
             }
         }
         Gen::Symb(..) => gprint(g),
@@ -580,6 +581,7 @@ fn add_print_symbolic(s: &mut String, op: &str, f: &Gen) {
         s.push_str(pname(op));
         s.push_str(match sub {
             Sub::List => "([])",
+            Sub::Poly1 => "(poly1[])",
             Sub::Set => "(set[ ])",
             Sub::Seq => "(NULL)",
         });
@@ -601,6 +603,7 @@ fn add_print_symbolic(s: &mut String, op: &str, f: &Gen) {
                 Sub::Seq => ("", ""),
                 Sub::Set => ("set[", "]"),
                 Sub::List => ("[", "]"),
+                Sub::Poly1 => ("poly1[", "]"),
             };
             s.push_str(open);
             for (k, x) in items.iter().enumerate() {
