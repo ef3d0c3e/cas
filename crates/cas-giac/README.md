@@ -292,6 +292,30 @@ after giac's `restart`, ours in a new session, compared value by value:
   `LU(A,L,U,P)` store into variables in giac (ours stay),
   `SVL([[1,4],[4,1]])` giac `[5.0,3.0]`, ours `[3,5]`.
 
+`tests/random_variables.rs`, Xcas's `randvar` objects, `sample` and
+`randvector` over them, and `randmultinomial` (CAS-624):
+- objects (no draws), 17 rows: the law's head and each parameter against
+  giac's, `normal(ours − giac)` 0 or within giac's 12 digits (C0006, C0032):
+  parameters given, from `mean=`, `stddev=`, `variance=` (`gammad(36,3)`,
+  `uniformd(10-2*sqrt(3),10+2*sqrt(3))`, `geometric(1/4)`), giac's decimals
+  for decimal input and its numeric Weibull fit; invalid calls (14 rows) stay
+  with giac's message as the warning (libgiac's text checked), and ours only
+  `sample(randvar(poisson,3),10^7)` with "too many draws";
+- draws, seeded with 42 on both sides in the same input (C0014), never giac's
+  digits: supports and sizes of 21 `sample`, `randvector` and
+  `randmultinomial` rows; the mean of 10,000 normal draws within 4 standard
+  errors; giac's `randvector(n,multinomial,P)`, the counts of each index,
+  within `4·√(n·p(1−p))` of `n·p`; ours only, `srand(7)` repeating draws;
+- departures: `binomial(n,p)` from moments (giac's law; our `binomial` is the
+  coefficient, ours `randvar(binomial,n,p)`), giac's `discreted(…)` alias
+  tables in decimals for weights with values (ours `randvar([w…],[v…])`,
+  exact), `string(randvar(normal))` (giac `"normald(0.0,1.0)"`, ours exact),
+  `uniform` over a range (giac's `'uniformd',a,b` sequence in decimals, ours
+  `uniformd(a,b)`), `randvar(multinomial,P)` (giac's sequence does not
+  sample; ours the weights form, drawing indices), and `sample` of
+  `randvar(student,3)` and `randvar(chisquare,3)` (giac's Bad Argument Value;
+  ours real and positive decimals).
+
 `tests/angle_radian.rs`, `tests/complex_mode.rs`,
 `tests/complex_variables.rs` and `tests/epsilon.rs`, the settings that change
 answers (CAS-617), one group a file, giac's flag set and reset within one
