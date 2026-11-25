@@ -398,7 +398,7 @@ fn binned(
     if !(d.ball.is_finite() && d.value() > 0.0) {
         return Ok(None);
     }
-    let counts = counts(xs, a, &d, bins);
+    let counts = counts(xs, giac_grid(o, xs, sorted, bandwidth.as_ref(), wp), bins);
     let h = if let Some(h) = bandwidth {
         h
     } else {
@@ -630,14 +630,55 @@ fn plug_in_bins(counts: &[u64], n: usize, d: &Ball, sd: &Ball, wp: u64) -> Optio
     finish(&g6, &s1, n as u64, |g4| sum(g4, &fourth), wp)
 }
 
+/// giac's grid start `a` and step `d` as its doubles compute them
+/// (:7384-7389, `_kernel_density`'s grid, :7233): `sd` from running sums in
+/// the data's order, the rule of thumb `1.06 min(sd, IQR/1.34) n^(−0.2)`,
+/// `a = min − 3h`, `b = max + 3h` (or the range's ends), `d = (b − a)/(bins
+/// − 1)`. Only the counts use them: on a symmetric grid a datum sits on a
+/// tie and the last bit of `a` and `d` picks its bin, which correctly
+/// rounded values need not match (`[1,2,3,2]`, `bandwidth=gauss`, CI
+/// 45599518271).
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "giac converts the sizes to double"
+)]
+fn giac_grid(o: &Options, xs: &[Real], sorted: &[Real], h: Option<&Real>, wp: u64) -> (f64, f64) {
+    let steps = (o.bins - 1) as f64;
+    if let Some((a, b)) = &o.ends {
+        let a = a.value();
+        return (a, (b.value() - a) / steps);
+    }
+    let n = xs.len() as f64;
+    let h = match h {
+        None => 0.0,
+        Some(h) if !o.thumb => h.value(),
+        Some(_) => {
+            let (mut sx, mut sxsq) = (0.0, 0.0);
+            for x in xs {
+                let f = x.value();
+                sx += f;
+                sxsq += f * f;
+            }
+            let sd = (1.0 / (n - 1.0) * (sxsq - 1.0 / n * sx * sx)).sqrt();
+            let m = sorted.len();
+            let iqr = sorted[(3 * m).div_ceil(4) - 1]
+                .plus(&ratio(-1, 1), &sorted[m.div_ceil(4) - 1], wp)
+                .value();
+            1.06 * sd.min(iqr / 1.34) * n.powf(-0.2)
+        }
+    };
+    let a = sorted[0].value() - 3.0 * h;
+    let b = sorted[sorted.len() - 1].value() + 3.0 * h;
+    (a, (b - a) / steps)
+}
+
 /// giac's nearest-bin counts (:7236-7240): `trunc((x − a)/d + 1/2)` when in
-/// `0 … bins − 1`, computed in `f64` as giac does even on exact data: at a
-/// tie (`[1,2,3,2]` over `[1, 3]` in 100 bins puts 2 at 49.5) giac's
-/// doubles round below and pick the lower bin, which exact arithmetic would
-/// not (CI 45597160314).
-fn counts(xs: &[Real], a: &Real, d: &Real, bins: usize) -> Vec<u64> {
+/// `0 … bins − 1`, computed in `f64` from giac's own `a` and `d`
+/// ([`giac_grid`]) even on exact data: at a tie (`[1,2,3,2]` over `[1, 3]`
+/// in 100 bins puts 2 at 49.5) giac's doubles may round below and pick the
+/// lower bin, which exact arithmetic would not (CI 45597160314).
+fn counts(xs: &[Real], (a, d): (f64, f64), bins: usize) -> Vec<u64> {
     let mut c = vec![0u64; bins];
-    let (a, d) = (a.value(), d.value());
     for x in xs {
         let u = (x.value() - a) / d + 0.5;
         if let Some(i) = index(u.trunc(), bins) {

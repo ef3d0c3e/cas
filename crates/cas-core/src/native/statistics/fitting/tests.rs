@@ -144,11 +144,16 @@ fn iterative_fits() {
     }
 }
 
+/// `input` with its arguments evaluated: the call as it stays.
+fn stayed(ctx: &Context, input: &str) -> Expr {
+    read(input).map_args(|a| ctx.eval(a).unwrap_or_else(|e| panic!("{input}: {e}")))
+}
+
 /// The one warning of `input`, which stays.
 fn warning(ctx: &Context, input: &str) -> String {
     let e = read(input);
     let (found, report) = ctx.eval_with(&e, &EvalOptions::default());
-    assert_eq!(found.unwrap(), e, "{input}");
+    assert_eq!(found.unwrap(), stayed(ctx, input), "{input}");
     match &report.warnings[..] {
         [Warning::Native { message, .. }] => message.to_string(),
         other => panic!("{input}: {other:?}"),
@@ -265,7 +270,7 @@ fn stays_silently() {
     let quiet = |ctx: &Context, input: &str| {
         let e = read(input);
         let (found, report) = ctx.eval_with(&e, &EvalOptions::default());
-        assert_eq!(found.unwrap(), e, "{input}");
+        assert_eq!(found.unwrap(), stayed(ctx, input), "{input}");
         assert!(report.warnings.is_empty(), "{input}: {:?}", report.warnings);
     };
     let ctx = Context::new();
