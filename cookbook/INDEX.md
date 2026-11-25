@@ -85,3 +85,4 @@ C0082 | giac ports and clippy: full binding names; Warning::Native needs &'stati
 C0083 | Together leaves balls untouched: test for a ball before wrapping a numeric result | together,ball,native,decimal,regression | 2026-11-25 | 1.7/T3 | T3.c3 CAS-627
 C0084 | giac convolution/FFT lists carry packed-FFT noise: compare within it | giac,fft,convolution,oracle,tolerance,kde | 2026-11-25 | 1.7/T5 | T5.c1 CAS-629 prototype
 C0085 | giac's discrete choices made in doubles (bin index, trunc at ties): make them in f64 | giac,rounding,ties,exact,oracle,port,kde | 2026-11-25 | 1.7/T5 | CI 45597160314 kernel_density lists
+C0086 | Certified MLE fits from giac's starts: ball Newton, Krawczyk, start fallback | mle,fit,newton,krawczyk,certified,ball,weibull,fitdistr | 2026-11-25 | 1.7/T5 | T5.c3 CAS-629 fitdistr
