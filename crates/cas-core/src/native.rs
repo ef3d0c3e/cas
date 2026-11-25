@@ -77,6 +77,7 @@ mod step;
 mod strings;
 mod structure;
 mod sum;
+mod symbols;
 mod tables;
 mod text;
 mod trig;
@@ -1229,6 +1230,20 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::SORT_ASCENDING, lists::ordering::sort_ascending),
         (Symbol::SORT_DESCENDING, lists::ordering::sort_descending),
         (Symbol::SORT_PERMUTATION, lists::ordering::sort_permutation),
+        (Symbol::MAKE_SYMBOL, symbols::make_symbol),
+        (Symbol::SYMBOL_ARRAY, symbols::symbol_array),
+        (
+            Symbol::LEAST_SQUARES,
+            matrix::decompose::least_squares::least_squares,
+        ),
+        (
+            Symbol::LQ_DECOMPOSITION,
+            matrix::decompose::least_squares::lq_decomposition,
+        ),
+        (
+            Symbol::ASCENDING_SINGULAR_VALUE_DECOMPOSITION,
+            matrix::decompose::least_squares::ascending_svd,
+        ),
     ];
     let mut table: [Option<NativeFn>; builtin::COUNT] = [None; builtin::COUNT];
     let mut i = 0;

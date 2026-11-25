@@ -259,7 +259,8 @@ after giac's `restart`, ours in a new session, compared value by value:
   `monotonic()` a nonnegative decimal, `version()` starting `cas `.
 
 `tests/ti_names.rs`, Xcas's `type` (CAS-621), `iPart`, `fPart`, `frac`,
-`trunc`, the sorting commands and `RandSeed` (CAS-622):
+`trunc`, the sorting commands and `RandSeed` (CAS-622), `make_symbol`,
+`symbol_array`, `LSQ`, `LQ`, `SVD` and `SVL` (CAS-623):
 - `type(e)==DOM_X` on both sides (giac prints its answer as the type's name):
   integers of any size, rationals, decimals, complex numbers exact and
   decimal, symbols (`x`, `pi`, `infinity`, `undef`), strings, lists,
@@ -278,6 +279,16 @@ after giac's `restart`, ours in a new session, compared value by value:
   row, ties (`SortD` reverses the ascending order, ties too), symbols and
   strings; `sortperm(l)` and `sortperm(l, p)`; `RandSeed(321)` and
   `RandSeed(5)==srand(5)`.
+- `make_symbol("abc")`, `symbol_array` with one and two dimensions and a
+  `%` template, `LSQ` and `lsq` exact (vector and matrix right-hand
+  sides, square and tall); `SVL` (`svl`'s alias) near giac's decimals;
+  `SVD` (ours `svd`'s with `s` ascending, giac's layout) and `LQ` compared
+  by their products `U diag(s) Vᴴ` and `L Q` within 10⁻⁹ (C0006), `SVD`'s
+  `s` too, `LQ`'s `P` giac's identity; departures: `make_symbol("x y")`
+  (giac `undef`) and `make_symbol("1a")` (giac `a`) stay,
+  `symbol_array("%a",2)` (giac `[0a,1a]`) stays, `QR(A,Q,R)` and
+  `LU(A,L,U,P)` store into variables in giac (ours stay),
+  `SVL([[1,4],[4,1]])` giac `[5.0,3.0]`, ours `[3,5]`.
 
 `tests/angle_radian.rs`, `tests/complex_mode.rs`,
 `tests/complex_variables.rs` and `tests/epsilon.rs`, the settings that change

@@ -914,6 +914,13 @@ builtins! {
     SORT_ASCENDING = "SortAscending" [PROTECTED];
     SORT_DESCENDING = "SortDescending" [PROTECTED];
     SORT_PERMUTATION = "SortPermutation" [PROTECTED];
+    // Xcas's `make_symbol` and `symbol_array` (CAS-623).
+    MAKE_SYMBOL = "MakeSymbol" [PROTECTED];
+    SYMBOL_ARRAY = "SymbolArray" [PROTECTED];
+    // HP Prime's `LSQ`, `LQ` and `SVD` in giac (CAS-623).
+    LEAST_SQUARES = "LeastSquares" [PROTECTED];
+    LQ_DECOMPOSITION = "LQDecomposition" [PROTECTED];
+    ASCENDING_SINGULAR_VALUE_DECOMPOSITION = "AscendingSingularValueDecomposition" [PROTECTED];
     // Logical values, infinities and nothing (CAS-DOC-4 §6.1, R14).
     TRUE = "True" [PROTECTED];
     FALSE = "False" [PROTECTED];

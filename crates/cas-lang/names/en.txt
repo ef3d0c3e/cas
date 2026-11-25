@@ -325,7 +325,7 @@ LInfinityNorm: linfnorm rowNorm rownorm
 MaxNorm: maxnorm
 ConditionNumber: cond
 GramSchmidt: gramschmidt
-SingularValues: svl
+SingularValues: svl SVL
 ConjugateGradient: conjugate_gradient
 # Matrix decompositions III (CAS-DOC-51).
 SchurDecomposition: schur
@@ -897,6 +897,13 @@ Truncate: trunc
 SortAscending: SortA sorta
 SortDescending: SortD sortd
 SortPermutation: sortperm
+# Symbols from strings (CAS-623), Xcas's.
+MakeSymbol: make_symbol
+SymbolArray: symbol_array
+# HP Prime's least squares and decompositions in giac (CAS-623).
+LeastSquares: LSQ lsq
+LQDecomposition: LQ
+AscendingSingularValueDecomposition: SVD
 
 [planned]
 
