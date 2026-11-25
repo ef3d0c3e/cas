@@ -36,10 +36,12 @@
 //! - Random variables, Xcas's `randvar` objects (CAS-624):
 //!   [`random_variables`].
 //! - Markov chains, Xcas's `markov` and `randmarkov` (CAS-628): [`markov`].
+//! - Distribution fitting, Xcas's `fitdistr` (CAS-629): [`fitting`].
 
 pub(super) mod density;
 pub(super) mod descriptive;
 pub(super) mod distributions;
+pub(super) mod fitting;
 pub(super) mod hypothesis;
 pub(super) mod markov;
 mod order;

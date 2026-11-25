@@ -371,6 +371,37 @@ and `kde` (CAS-629):
   giac's FFT noise there reaches 1.3·10⁻⁹ of the largest entry (the
   prototype's port of giac's FFT 7.5·10⁻¹⁰), past the bound above.
 
+`tests/fitdistr.rs`, Xcas's distribution fitting `fitdistr` (CAS-629):
+- the Weibull, Cauchy and beta fits (6 rows: probe3's three and three of
+  extra.out) within 10⁻⁸ of giac's parameters, ours certified balls (giac
+  stops its iteration at a step of 10⁻⁵; probe3's Weibull `λ` differs by
+  3.4·10⁻¹⁰);
+- departures, giac's mean `Σx/(N − 1)` (optimization.cc:7481) and ours
+  `Σx/N`, giac's answer and ours: `fitdistr([1,2,3,4,5],normal)` giac
+  `normald(3.75,1.78972763291)`, ours `normald(3,sqrt(10)/2)`;
+  `fitdistr([1,2,3,4,5,2,3,3],normal)` giac
+  `normald(3.28571428571,1.32149751613)`, ours
+  `normald(23/8,sqrt(1218)/28)`; the decimal data's normal giac
+  `normald(2.28,0.947248647399)`, ours `normald(1.9,0.850881895447)`;
+  `poisson` giac `3.28571428571`, ours `23/8`; `exponential` and
+  `geometric` giac `0.304347826087`, ours `8/23`; `gammad` giac
+  `gammad(1.8889697753,0.828495515483)`, ours
+  `gammad(4.91602524944,2.58738171023)`; `fitdistr([1,2,3,4,5],weibulld)`
+  giac `weibulld(2.29380667075,3.39430387666)`, ours
+  `weibulld(2.29380667071,3.39429071811)` (giac's start from its mean, and
+  its `λ` from the step before the last); `fitdistr([2,2,2],weibull)` giac
+  `undef`, ours stays with "Expected a nonzero variance"; and
+  `fitdistr([0,0.5],betad)` giac `betad(-0.0,-0.0)` (its start, ln 0 being
+  −∞), ours stays with "Unable to compute parameters for Beta
+  distribution";
+- invalid calls (18 rows: the binomial, uniform, lognormal and negative
+  binomial laws, an unknown name, giac's argument and data checks) stay
+  with giac's message as the warning;
+- seeded rows (C0014): `fitdistr(randvector(1000,weibulld,1/2,1),weibull)`
+  within four standard errors of `(1/2, 1)` (0.05 and 0.27; giac `(0.4968,
+  0.9409)`), and the normal fit of a log-normal sample's logarithms within
+  four of `(5, √2)` (0.18 and 0.127; giac `(5.0334, 1.4515)`), both sides.
+
 `tests/tail_probabilities.rs`, Xcas's upper tails `UTPN`, `UTPT`, `UTPC` and
 `UTPF` (CAS-625), and `cdf`, `icdf` and `mgf` of a law by its name, of a
 `randvar` object or of a list (CAS-626):

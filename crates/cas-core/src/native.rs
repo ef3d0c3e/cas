@@ -1041,6 +1041,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             statistics::markov::random_markov,
         ),
         (Symbol::KERNEL_DENSITY, statistics::density::kernel_density),
+        (
+            Symbol::FIT_DISTRIBUTION,
+            statistics::fitting::fit_distribution,
+        ),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),

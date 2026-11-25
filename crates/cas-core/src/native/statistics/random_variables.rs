@@ -286,14 +286,14 @@ pub(in crate::native) fn random_multinomial(ev: &mut Eval<'_>, e: &Expr) -> Nati
 
 /// What a law's name in `randvar` stands for.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Name {
+pub(in crate::native) enum Name {
     Law(Law),
     Multinomial,
 }
 
 /// giac's names of the laws (`is_density`), as they arrive: the builtins
 /// that are their aliases (C0008).
-fn name(e: &Expr) -> Option<Name> {
+pub(in crate::native) fn name(e: &Expr) -> Option<Name> {
     if is_multinomial(e) {
         return Some(Name::Multinomial);
     }
@@ -308,7 +308,7 @@ fn name(e: &Expr) -> Option<Name> {
 }
 
 /// The object of `law` with `parameters`.
-fn object(law: Law, parameters: Vec<Expr>) -> Expr {
+pub(in crate::native) fn object(law: Law, parameters: Vec<Expr>) -> Expr {
     let head = match law {
         Law::Binomial => {
             let mut args = vec![Expr::from(Symbol::BINOMIAL)];
