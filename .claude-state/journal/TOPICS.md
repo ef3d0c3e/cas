@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-24T08:45:06.798Z
+# filed through: 2026-11-24T23:25:01.265Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
@@ -43,10 +43,10 @@ R39 | 2026-11-23 | open | superseded by R43 | Phase 1.3 Calculus, expressions an
 R40 | 2026-11-23 | decision | in force | Phase 1.3 Calculus, expressions and integers parity | The Abs-of-complex-ball fix rides 1.3's T2 (Balls module, one unit test). | .claude-state/journal/2026-11-23.md#040718-069r-claude-record
 R41 | 2026-11-23 | open | superseded by R44 | Phase 1.3 Calculus, expressions and integers parity | changebase, semi_augment (Algebra) and divis (Polynomials) were missed by 1.2's list; the draft lea… | .claude-state/journal/2026-11-23.md#040718-069r-claude-record
 R42 | 2026-11-23 | open | superseded by R45 | Phase 1.3 Calculus, expressions and integers parity | .run/logs/gen1-gap/ is kept until 1.8 because GENERATION_PLAN.md:57 cites it as R0-004's raw inputs… | .claude-state/journal/2026-11-23.md#040718-069r-claude-record
-R43 | 2026-11-23 | decision | in force | Phase 1.3 Calculus, expressions and integers parity | The phase 1.3 plan is installed and runs on its own; the developer's touchpoints are the approval a… | .claude-state/journal/2026-11-23.md#042306-074r-claude-record
+R43 | 2026-11-23 | decision | retired by .claude-state/journal/2026-11-25/004018-017r-claude-record.md (phase 1.3 is closed (R59); its plan no longer runs) | Phase 1.3 Calculus, expressions and integers parity | The phase 1.3 plan is installed and runs on its own; the developer's touchpoints are the approval a… | .claude-state/journal/2026-11-23.md#042306-074r-claude-record
 R44 | 2026-11-23 | decision | in force | Phase 1.3 Calculus, expressions and integers parity | changebase, semi_augment and divis stay out of 1.3 and are accounted for in 1.8's gap check. | .claude-state/journal/2026-11-23.md#042306-074r-claude-record
 R45 | 2026-11-23 | decision | in force | Phase 1.3 Calculus, expressions and integers parity | .run/logs/gen1-gap/ is kept until 1.8's cleanup, as R0-004's raw inputs. | .claude-state/journal/2026-11-23.md#042306-074r-claude-record
-R46 | 2026-11-23 | decision | in force | Phase 1.3 T9 risch | T9 resumes where it left off (not fresh). | .claude-state/journal/2026-11-23.md#113816-081r-claude-record
+R46 | 2026-11-23 | decision | retired by .claude-state/journal/2026-11-25/004018-017r-claude-record.md (T9 resumed and finished; phase 1.3 is closed (R59)) | Phase 1.3 T9 risch | T9 resumes where it left off (not fresh). | .claude-state/journal/2026-11-23.md#113816-081r-claude-record
 R47 | 2026-11-23 | finding | in force | Phase 1.3 T9 risch | The T9.c1 sympy prototype (.run/1.3/T9/risch.py, ported from giac's risch.cc) matches giac on all 8… | .claude-state/journal/2026-11-23.md#113816-081r-claude-record
 R48 | 2026-11-23 | open | retired by .claude-state/journal/2026-11-23.md#153454-084r-claude-record (T9 committed C0039 (its summary lists C0039..C0041 as banked)) | Phase 1.3 T9 risch | cookbook/C0039.md and its cookbook/INDEX.md line are uncommitted -> T9's expert commits them when i… | .claude-state/journal/2026-11-23.md#113816-081r-claude-record
 R49 | 2026-11-23 | finding | in force | Phase 1.3 Calculus, expressions and integers parity | Phase 1.3 built 81 giac entries under CAS-DOC-55, and tickets CAS-548..585 are done. | .claude-state/journal/2026-11-23.md#153454-084r-claude-record
@@ -83,4 +83,5 @@ R79 | 2026-11-24 | finding | in force | Phase 1.5 Optimization II | Phase 1.5 bu
 R80 | 2026-11-24 | finding | in force | Phase 1.5 Optimization II | The local stable toolchain (1.99.1) is older than CI's stable, so CI clippy flagged a needless_rang… | .claude-state/journal/2026-11-24/100029-131r-claude-record.md
 R81 | 2026-11-24 | open | in force | Phase 1.5 Optimization II | CAS-DOC-57 is still a draft in Lific -> Claude or the developer publishes it | .claude-state/journal/2026-11-24/100029-131r-claude-record.md
 R82 | 2026-11-24 | open | in force | Phase 1.5 Optimization II | update the local stable Rust toolchain to match CI's -> the developer's call | .claude-state/journal/2026-11-24/100029-131r-claude-record.md
-R83 | 2026-11-24 | open | in force | Phase 1.6 Strings, printers and session commands | phase 1.6 draft in progress by pa-planner -> present with plan(kind: phase) when its report arrives | .claude-state/journal/2026-11-24/100029-131r-claude-record.md
+R83 | 2026-11-24 | open | superseded by R84 | Phase 1.6 Strings, printers and session commands | phase 1.6 draft in progress by pa-planner -> present with plan(kind: phase) when its report arrives | .claude-state/journal/2026-11-24/100029-131r-claude-record.md
+R84 | 2026-11-25 | decision | in force | Phase 1.6 Strings, printers and session commands | The phase 1.6 plan is installed and runs on its own. | .claude-state/journal/2026-11-25/004018-017r-claude-record.md
