@@ -10,3 +10,4 @@ T7 | done | sound clips: createwav, soundsec, samplerate, bit_depth, channels, d
 T8 | done | clip edits and resampling: set_channel_data, stereo2mono, mixdown, splice, resample | - | tasks/T8.md | logs/T8.md | R1.7-002,R1.7-008
 T9 | done | signal transforms: dwt, idwt, hilbert's list form, instfreq, instphase, emd | - | tasks/T9.md | logs/T9.md | R1.7-013,R1.7-002,R1.7-006
 T10 | done | push master for the phase's final CI and Fuzz runs | - | tasks/T10.md | logs/T10.md | -
+T11 | done | CI and Fuzz check on the pushed head; tickets done, CAS-DOC-59 in step, the eval target's memory read | - | tasks/T11.md | logs/T11.md | -
