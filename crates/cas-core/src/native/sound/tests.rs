@@ -558,3 +558,401 @@ fn limits() {
     assert_eq!(warning(&small, "SoundSeconds[1, 21]"), "Too many records");
     check(&small, &[("Length[SoundSeconds[1, 20]]".to_owned(), "20")]);
 }
+
+const B: &str = "List[0.1, 0.2, 0.3, 0.4]";
+const CLIPPING: &str = "clipping audio, the result will be distorted";
+
+/// `SoundClip[44100, 16, codes…]`.
+fn clip16(channels: &[&str]) -> String {
+    format!("SoundClip[44100, 16, {}]", channels.join(", "))
+}
+
+/// The clip edits (CAS-632): the prototype's rows checked against giac
+/// (.run/1.7/T8/proto.py, logs/T8.c1.md), as codes.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one row per probe")]
+fn edits() {
+    let ctx = Context::new();
+    let (a, b, m) = (w(A), w(B), w(M));
+    let a0 = "List[29204, -29204, 14602, 0]";
+    let spliced = clip16(&["List[29204, -29204, 10180, 14602, 21903, 29204]"]);
+    let first = clip16(&["List[29490, 26214, 14602, 0]"]);
+    let eight = w("List[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]");
+    let cases: &[(String, String)] = &[
+        (
+            format!("SetChannelData[{a}, List[0.9, 0.8]]"),
+            first.clone(),
+        ),
+        (
+            format!("SetChannelData[{a}, List[List[0.9, 0.8]]]"),
+            first.clone(),
+        ),
+        (
+            format!("SetChannelData[{a}, List[0.9, 0.8], 1]"),
+            clip16(&["List[29204, 29490, 26214, 0]"]),
+        ),
+        (
+            format!("SetChannelData[{a}, List[0.9, 0.8, 0.7, 0.6, 0.5], 2]"),
+            clip16(&["List[29204, -29204, 29490, 26214]"]),
+        ),
+        (
+            format!("SetChannelData[{m}, List[0.9], 2, Right]"),
+            clip16(&[a0, "List[5841, 11681, 29490, 23363]"]),
+        ),
+        (
+            format!("SetChannelData[{m}, List[List[0.9, 0.8], List[0.1, 0.2]], 1]"),
+            clip16(&[
+                "List[29204, 29490, 26214, 0]",
+                "List[5841, 3277, 6553, 23363]",
+            ]),
+        ),
+        (
+            format!("SetChannelData[{m}, List[0.9, 0.8]]"),
+            clip16(&[
+                "List[29490, 26214, 14602, 0]",
+                "List[29490, 26214, 17522, 23363]",
+            ]),
+        ),
+        (
+            format!("SetChannelData[{a}, List[0.9, x], 3]"),
+            clip16(&["List[29204, -29204, 14602, 29490]"]),
+        ),
+        (
+            format!("SetChannelData[{a}, List[Power[2, -1/2], 1/3, -2, Pi]]"),
+            clip16(&["List[23170, 10922, -32767, 32767]"]),
+        ),
+        (
+            format!("SetChannelData[{a}, List[0.9], 0, 0, 7]"),
+            clip16(&["List[29490, -29204, 14602, 0]"]),
+        ),
+        (
+            format!(
+                "SetChannelData[{}, List[0.9, -1]]",
+                w("List[0.5, -0.5], Equation[BitDepth, 8]")
+            ),
+            "SoundClip[44100, 8, List[114, -127]]".to_owned(),
+        ),
+        (format!("SetChannelData[{a}, List[]]"), clip16(&[a0])),
+        (
+            format!("Stereo2Mono[{m}]"),
+            clip16(&["List[17522, -8761, 16062, 11681]"]),
+        ),
+        (
+            format!("Stereo2Mono[{}]", w("List[0.5, 0.25]")),
+            clip16(&["List[29203, 14602]"]),
+        ),
+        (
+            format!(
+                "Stereo2Mono[{}]",
+                w("List[List[0.5, 0.25], List[0.1, 0.2], List[0.3, -0.4]]")
+            ),
+            clip16(&["List[17522, 973]"]),
+        ),
+        (
+            format!("Mixdown[{a}, List[0, -6], {b}, List[0, -6]]"),
+            clip16(&["List[18295, -7317, 18295, 14636]"]),
+        ),
+        (
+            format!("Mixdown[{m}, List[0, 0, -0.5], {b}, List[1, -3, 0.5]]"),
+            clip16(&[
+                "List[26980, -25001, 17445, 5934, 7912]",
+                "List[2235, 9245, 16255, 23265, 19100]",
+            ]),
+        ),
+        (
+            format!("Mixdown[{a}, List[0, 0, 0, 2, 2], {b}, 1]"),
+            clip16(&["List[0, -7301, 21902, 21902, 29203]"]),
+        ),
+        (
+            format!(
+                "Mixdown[{}, 0, {b}, 1]",
+                w("List[0.5, -0.5], Equation[BitDepth, 8]")
+            ),
+            clip16(&["List[28927, -21625, 14602, 21902, 29203]"]),
+        ),
+        (
+            format!("Mixdown[{a}, List[0, -6, 0, 1, 1], {b}, List[1/44100, -3]]"),
+            clip16(&["List[0, -9467, 17655, 15506, 20674]"]),
+        ),
+        (
+            format!("Length[ChannelData[Mixdown[{a}, 0.5, {b}, 0.5]]]"),
+            "22054".to_owned(),
+        ),
+        (
+            format!("Length[ChannelData[Mixdown[{a}, 0.0001, {b}, 0]]]"),
+            "8".to_owned(),
+        ),
+        (
+            format!("Length[ChannelData[Mixdown[{a}, Sqrt[2], {b}, 0]]]"),
+            "62371".to_owned(),
+        ),
+        (format!("Splice[{a}, {b}]"), spliced.clone()),
+        (format!("Splice[{a}, {b}, 5]"), spliced.clone()),
+        (format!("Splice[{a}, {b}, 2, -1]"), spliced.clone()),
+        (format!("Splice[{a}, {b}, 1.5]"), spliced.clone()),
+        (
+            format!("Splice[{a}, {b}, 2, 1]"),
+            clip16(&["List[29204, -29204, 10951, 14602, 21903, 29204]"]),
+        ),
+        (
+            format!("Splice[{a}, {b}, 1]"),
+            clip16(&["List[29204, -29204, 14602, 7301, 14602, 21903, 29204]"]),
+        ),
+        (
+            format!("Splice[{a}, {b}, 3]"),
+            clip16(&["List[29204, -8128, 14602, 21902, 29204]"]),
+        ),
+        (
+            format!("Splice[{a}, {b}, 4]"),
+            clip16(&["List[18704, 1125, 20869, 29203]"]),
+        ),
+        (
+            format!("Splice[{}, {b}]", w("List[0, 0, 0, 0]")),
+            clip16(&["List[0, 0, 0, 14602, 21903, 29204]"]),
+        ),
+        (
+            format!(
+                "Splice[{m}, {}]",
+                w(&format!("List[{B}, List[-0.5, -0.5, 0.5, 0.5]]"))
+            ),
+            clip16(&[
+                "List[29204, -29204, 0, 11681, 17522, 23363]",
+                "List[5841, 11681, 0, -29203, 29204, 29204]",
+            ]),
+        ),
+        (
+            format!("Splice[{a}, {}, 3, 1]", w("List[0.9]")),
+            clip16(&["List[29204, -29204]"]),
+        ),
+        (
+            format!("Splice[{eight}, {}, 6, 1]", w("List[0.9, -0.9]")),
+            clip16(&["List[3650, 7301, 10951, 14602]"]),
+        ),
+    ];
+    let cases: Vec<(String, &str)> = cases.iter().map(|(i, x)| (i.clone(), x.as_str())).collect();
+    check(&ctx, &cases);
+}
+
+/// A mix or a splice that clips answers with one warning per call (giac
+/// reports the last sample's status only); one that does not, with none.
+#[test]
+fn edits_clipping() {
+    let ctx = Context::new();
+    let (a, b, m) = (w(A), w(B), w(M));
+    let nine = w("List[0.9, 0.9, 0.9, 0.9]");
+    let cases = [
+        (
+            format!("Mixdown[{a}, 1, {b}, 1]"),
+            clip16(&["List[0, 32767, -14601, 32767, 29203]"]),
+            true,
+        ),
+        (
+            format!("Mixdown[{a}, 2, {b}, 0]"),
+            clip16(&["List[7301, 14602, 32767, 1, 14602, 0]"]),
+            true,
+        ),
+        (
+            format!("Mixdown[{a}, List[0, 0, -1], {b}, List[0, 0, 1]]"),
+            clip16(&["List[32767, -14601, 32767, 29203]"]),
+            true,
+        ),
+        (
+            format!("Mixdown[{a}, 0, {m}, 0]"),
+            clip16(&[
+                "List[32767, -32767, 20650, 0]",
+                "List[24779, -12390, 22714, 16520]",
+            ]),
+            true,
+        ),
+        (
+            format!("Splice[{nine}, {nine}, 2, 0]"),
+            clip16(&["List[29204, 29204, 32767, 32767, 29204, 29204]"]),
+            true,
+        ),
+        (
+            format!("Mixdown[{a}, List[0, -6], {b}, List[0, -6]]"),
+            clip16(&["List[18295, -7317, 18295, 14636]"]),
+            false,
+        ),
+        (
+            format!("Splice[{a}, {b}]"),
+            clip16(&["List[29204, -29204, 10180, 14602, 21903, 29204]"]),
+            false,
+        ),
+    ];
+    for (input, expected, clips) in &cases {
+        let (found, report) = ctx.eval_with(&read(input), &EvalOptions::default());
+        assert_eq!(found.unwrap(), eval(&ctx, expected), "{input}");
+        let messages: Vec<String> = report
+            .warnings
+            .iter()
+            .map(|w| match w {
+                Warning::Native { message, .. } => message.to_string(),
+                other => format!("{other:?}"),
+            })
+            .collect();
+        let wanted: &[&str] = if *clips { &[CLIPPING] } else { &[] };
+        assert_eq!(messages, wanted, "{input}");
+    }
+}
+
+/// giac's errors of the clip edits: the call stays with its message.
+#[test]
+#[allow(clippy::too_many_lines, reason = "one row per error")]
+fn edits_stay() {
+    let ctx = Context::new();
+    let (a, b, m) = (w(A), w(B), w(M));
+    let slow = w(&format!("{B}, Equation[SampleRate, 22050]"));
+    let same = "Clips should have the same bit depths, sample rates and channel counts";
+    let cases: &[(String, &str)] = &[
+        (
+            format!("SetChannelData[{a}, List[0.9, 0.8], 4]"),
+            "Invalid offset",
+        ),
+        (
+            format!("SetChannelData[{a}, List[0.9, 0.8], -1]"),
+            "Invalid offset",
+        ),
+        (
+            format!("SetChannelData[{a}, List[0.9, 0.8], 1.0]"),
+            "Expected an integer",
+        ),
+        (
+            format!("SetChannelData[{a}, List[0.9, 0.8], 0, 1]"),
+            "Invalid channel number",
+        ),
+        (
+            format!("SetChannelData[{a}, List[0.9, 0.8], 0, Right]"),
+            "Invalid channel number",
+        ),
+        (
+            format!("SetChannelData[{a}, List[0.9, 0.8], 0, x]"),
+            "Invalid channel specification",
+        ),
+        (
+            format!("SetChannelData[{a}, 0.9]"),
+            "Invalid data specification",
+        ),
+        (
+            format!("SetChannelData[{m}, List[List[0.9, 0.8], List[0.1, 0.2]], 0, 0]"),
+            "Invalid data specification",
+        ),
+        (
+            format!("SetChannelData[{m}, List[List[0.9, 0.8, 0.7]]]"),
+            "Invalid data specification",
+        ),
+        (
+            format!("SetChannelData[{a}, List[0.9, x]]"),
+            "Failed to set channel data, x is not a valid sample value",
+        ),
+        (
+            "SetChannelData[List[1, 2], List[0.9]]".to_owned(),
+            "Expected audio clip or image",
+        ),
+        (
+            "Stereo2Mono[List[0.5, 0.25]]".to_owned(),
+            "Invalid sound data",
+        ),
+        (format!("Stereo2Mono[{a}, {b}]"), "Invalid sound data"),
+        (format!("Mixdown[{a}, {b}]"), "Invalid offset specification"),
+        (
+            format!("Mixdown[{a}, -6, {b}, 0]"),
+            "Invalid offset specification",
+        ),
+        (
+            format!("Mixdown[{a}, List[0.5, -1], {b}, List[0.5, 1]]"),
+            "Invalid gain specification",
+        ),
+        (
+            format!("Mixdown[{a}, List[0, x], {b}, 0]"),
+            "Invalid gain specification",
+        ),
+        (
+            format!("Mixdown[{a}, List[0, 0, 2], {b}, 1]"),
+            "Invalid pan specification",
+        ),
+        (
+            format!("Mixdown[{a}, List[0, 0, 0, -1], {b}, 1]"),
+            "Invalid fade-in specification",
+        ),
+        (
+            format!("Mixdown[{a}, List[0, 0, 0, 0, x], {b}, 1]"),
+            "Invalid fade-out specification",
+        ),
+        (
+            format!("Mixdown[{a}, List[0, 0, 0, 3, 2], {b}, 1]"),
+            "Fade-in/out is too long",
+        ),
+        (
+            format!("Mixdown[{a}, 0, List[1, 2], 0]"),
+            "Invalid argument 3",
+        ),
+        (
+            format!("Mixdown[{a}, 0, {slow}, 0]"),
+            "All clips must have the same sample rate",
+        ),
+        (
+            format!(
+                "Mixdown[{}, 0, {b}, 0]",
+                w("List[0.1, 0.2], Equation[Channels, 3]")
+            ),
+            "Only mono and stereo clips are allowed",
+        ),
+        (format!("Splice[{a}, {b}, 0]"), "Invalid splice position"),
+        (format!("Splice[{a}, {b}, -3]"), "Invalid splice position"),
+        (format!("Splice[{a}, {slow}]"), same),
+        (format!("Splice[{a}, {slow}, 2, 1]"), same),
+        (format!("Splice[{m}, {b}, 2]"), same),
+        (
+            format!("Splice[{a}, {b}, x]"),
+            "Crossfade length should be a real number",
+        ),
+        (
+            format!("Splice[{a}, {b}, 2, x]"),
+            "Crossfade exponent should be a real number",
+        ),
+        (
+            format!("Splice[{a}, List[1, 2]]"),
+            "First two arguments should be audio clips",
+        ),
+    ];
+    for (input, message) in cases {
+        assert_eq!(&warning(&ctx, input), message, "{input}");
+    }
+}
+
+/// giac's type and dimension errors of the clip edits stay silently, and
+/// sizes past `Limits::terms` stay before anything is built.
+#[test]
+fn edits_silent_and_limits() {
+    let ctx = Context::new();
+    let (a, b) = (w(A), w(B));
+    for input in [
+        "Mixdown[]".to_owned(),
+        format!("Mixdown[{a}]"),
+        format!("Mixdown[{a}, 0, {b}]"),
+        format!("Mixdown[{a}, List[0, 0, 0, 0, 0, 0], {b}, 1]"),
+        format!("Splice[{a}]"),
+        format!("Splice[{a}, {b}, 2, 0, 1]"),
+        format!("Splice[{a}, {b}, 3/2]"),
+        format!("SetChannelData[{a}]"),
+    ] {
+        let (found, report) = ctx.eval_with(&read(&input), &EvalOptions::default());
+        assert_eq!(found.unwrap(), stayed(&ctx, &input), "{input}");
+        assert!(report.warnings.is_empty(), "{input}: {:?}", report.warnings);
+    }
+    let mut small = Context::new();
+    let limits = small.limits();
+    small.set_limits(Limits {
+        terms: 20,
+        ..limits
+    });
+    let fifteen = w("Equation[Length, 15], Equation[Channels, 1]");
+    for input in [
+        format!("Mixdown[{a}, 1000000.0, {b}, 0]"),
+        format!("Mixdown[{a}, 1000000000000000000000000000000, {b}, 0]"),
+        format!("Splice[{fifteen}, {fifteen}]"),
+    ] {
+        assert_eq!(warning(&small, &input), "Too many samples", "{input}");
+    }
+}

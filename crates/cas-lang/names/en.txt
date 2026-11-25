@@ -887,6 +887,11 @@ Channels: channels
 Duration: duration
 ChannelData: channel_data
 About: about
+# Clip edits (CAS-632), Xcas's.
+SetChannelData: set_channel_data
+Stereo2Mono: stereo2mono
+Mixdown: mixdown
+Splice: splice
 # Strings (CAS-611, CAS-613), Xcas's.
 Char: char chr
 Asc: asc

@@ -177,6 +177,11 @@ builtins! {
     DURATION = "Duration" [PROTECTED];
     CHANNEL_DATA = "ChannelData" [PROTECTED];
     ABOUT = "About" [PROTECTED];
+    // Clip edits (CAS-632).
+    SET_CHANNEL_DATA = "SetChannelData" [PROTECTED];
+    STEREO2MONO = "Stereo2Mono" [PROTECTED];
+    MIXDOWN = "Mixdown" [PROTECTED];
+    SPLICE = "Splice" [PROTECTED];
     // Strings, Xcas's (CAS-611, CAS-613).
     CHAR = "Char" [PROTECTED];
     ASC = "Asc" [PROTECTED];

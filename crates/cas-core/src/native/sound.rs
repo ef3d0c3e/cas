@@ -47,6 +47,11 @@
 //!
 //! giac's errors stay with its message; sizes are checked against
 //! `Limits::terms` before anything is built (C0019).
+//!
+//! The clip edits (CAS-632), `SetChannelData` (`set_channel_data`,
+//! :2554-2602), `Stereo2Mono` (`stereo2mono`, :2339), `Mixdown`
+//! (`mixdown`, :1791-1843) and `Splice` (`splice`, :1738-1773), live in
+//! [`edits`].
 
 use std::cmp::Ordering;
 
@@ -61,6 +66,10 @@ use crate::expr::{Expr, View};
 use crate::language::Form;
 use crate::symbol::Symbol;
 use crate::trace::Warning;
+
+mod edits;
+
+pub(super) use edits::{mixdown, set_channel_data, splice, stereo2mono};
 
 type Native = Result<Option<Expr>, EvalError>;
 

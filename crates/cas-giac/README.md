@@ -438,7 +438,15 @@ a clip (ours `soundclip(44100, 16, [29204, -29204, 14602, 0])`), `type`,
 `concat`, `size=3` and the `duration=0.001` / `1/1000` rows (ours 9 samples,
 giac 8: its 47-bit doubles, C0088); session rows: a clip prints as that
 call, reads back and is its `string`, and `about(x)` after `assume(x>0)` is
-`hold([x > 0])`.
+`hold([x > 0])`. The clip edits (CAS-632; probe5, probe9 and
+.run/1.7/T8/probe1.out, the prototype .run/1.7/T8/proto.py, plain `f64` and
+giac's 47-bit doubles alike on every row): 74 value rows of `set_channel_data`,
+`stereo2mono`, `mixdown` and `splice` (offsets and fades in samples and
+seconds, gain, pan, depths, silent and negative similarities, a second clip
+shorter than the overlap), 34 more errors that stay, two departures (giac's
+`splice` of clips of other sample rates with an exponent `p ≥ 0`, which
+giac mixes and ours refuses) and `clipping`: ours warns once per call when
+any sample clips, giac only when the last one does.
 
 `tests/tail_probabilities.rs`, Xcas's upper tails `UTPN`, `UTPT`, `UTPC` and
 `UTPF` (CAS-625), and `cdf`, `icdf` and `mgf` of a law by its name, of a

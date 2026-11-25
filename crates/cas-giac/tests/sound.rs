@@ -10,7 +10,9 @@
 //! ordinary call to `+`, `*`, `abs`, `[ ]`, `size`, `evalf` and `concat`;
 //! giac keeps 47 fraction bits in its doubles (C0088). Session rows: the
 //! session prints a clip as that call, which reads back, and `about(x)`
-//! holds its facts (C0026).
+//! holds its facts (C0026). The clip edits (CAS-632): `set_channel_data`,
+//! `stereo2mono`, `mixdown` and `splice` (.run/1.7/T8/probe1.out and the
+//! prototype .run/1.7/T8/proto.py, logs/T8.c1.md).
 
 use cas_core::{Context, Expr, Symbol, Warning};
 use cas_core::{EvalOptions, View};
@@ -91,9 +93,13 @@ fn check_near(inputs: &[&str]) {
 /// probe10, dur.out): giac's answers read back. Several channels are a
 /// sequence in both: bracketed (C0023).
 #[test]
+#[allow(clippy::too_many_lines, reason = "one row per probe")]
 fn values() {
     let s = "createwav([[0.5,-0.5,0.25,0],[0.1,0.2,0.3,0.4]])";
     let a = "createwav([0.5,-0.5,0.25,0])";
+    let b = "createwav([0.1,0.2,0.3,0.4])";
+    let z = "createwav([0,0,0,0])";
+    let eight = "createwav([0.1,0.2,0.3,0.4,0.5,0.6,0.7,0.8])";
     let six = "createwav([0.5,-0.5,0.25,0,1,0.75]";
     let rows = [
         format!("channels({a})"),
@@ -145,6 +151,81 @@ fn values() {
         "size(channel_data(createwav(duration=0.25,channels=1,samplerate=10)))".to_owned(),
         "size(channel_data(createwav(length=3,duration=1,channels=1,samplerate=10)))".to_owned(),
         "size(channel_data(createwav([1,2],duration=1,samplerate=10)))".to_owned(),
+        // The clip edits (CAS-632; probe5, probe9, .run/1.7/T8/probe1.out).
+        format!("channel_data(set_channel_data({a},[0.9,0.8]))"),
+        format!("channel_data(set_channel_data({a},[0.9,0.8],1))"),
+        format!("channel_data(set_channel_data({a},[0.9,0.8,0.7,0.6,0.5],2))"),
+        format!("channel_data(set_channel_data({a},[0.9,0.8],3))"),
+        format!("channel_data(set_channel_data({a},[0.9,0.8],0,left))"),
+        format!("channel_data(set_channel_data({a},[[0.9,0.8]],1))"),
+        format!("channel_data(set_channel_data({s},[0.9],2,right),matrix)"),
+        format!("channel_data(set_channel_data({s},[[0.9,0.8],[0.1,0.2]],1),matrix)"),
+        format!("channel_data(set_channel_data({s},[0.9,0.8]),matrix)"),
+        format!("channel_data(set_channel_data({a},[0.9,x],3))"),
+        format!("channel_data(set_channel_data({a},[sqrt(2)/2,1/3,-2,pi]))"),
+        format!("channel_data(set_channel_data({a},[]))"),
+        format!("channel_data(set_channel_data({a},[0.9],0,0,7))"),
+        format!("channel_data(set_channel_data({a},[1,1]))"),
+        "channel_data(set_channel_data(createwav([0.5,-0.5],bit_depth=8),[0.9,-1]))".to_owned(),
+        "channel_data(set_channel_data(createwav([0.5,-0.5],bit_depth=24),[0.9,-1]))".to_owned(),
+        format!("channel_data(stereo2mono({s}))"),
+        format!("channels(stereo2mono({s}))"),
+        "channel_data(stereo2mono(createwav([0.5,0.25])))".to_owned(),
+        "channel_data(stereo2mono(createwav([0.5,-0.25],bit_depth=8)))".to_owned(),
+        "channel_data(stereo2mono(createwav([[0.5,0.25],[0.1,0.2],[0.3,-0.4]])))".to_owned(),
+        "channel_data(stereo2mono(createwav([[0.7,0.25],[0.3,-0.2]],bit_depth=24)))".to_owned(),
+        format!("channel_data(mixdown({a},1,{b},1))"),
+        format!("channel_data(mixdown({a},[1,0],{b},[1,0]))"),
+        format!("channel_data(mixdown({a},[1,0,0],{b},[1,0,0]))"),
+        format!("channel_data(mixdown({a},0,{b},0))"),
+        format!("channel_data(mixdown({a},2,{b},0))"),
+        format!("channel_data(mixdown({a},[0,-6],{b},[0,-6]))"),
+        format!("channel_data(mixdown({a},[0,0,-1],{b},[0,0,1]),matrix)"),
+        format!("channels(mixdown({a},[0,0,-1],{b},[0,0,1]))"),
+        format!("size(channel_data(mixdown({a},0.5,{b},0.5)))"),
+        format!("size(channel_data(mixdown({a},0.0001,{b},0)))"),
+        format!("size(channel_data(mixdown({a},0.0,{b},0)))"),
+        format!("size(channel_data(mixdown({a},1/2,{b},0)))"),
+        format!("size(channel_data(mixdown({a},sqrt(2),{b},0)))"),
+        format!("size(channel_data(mixdown({a},0,{b},1e-5)))"),
+        format!("channel_data(mixdown({a},0,{s},0),matrix)"),
+        format!("channel_data(mixdown({a},[0,0,0.5],{s},0),matrix)"),
+        format!("channel_data(mixdown({a},[0,0,-0.5],{b},[1,-3,0.5]),matrix)"),
+        format!("channel_data(mixdown({s},[0,0,-0.5],{b},[1,-3,0.5]),matrix)"),
+        format!("channel_data(mixdown({a},[0,0,0,2,2],{b},1))"),
+        format!("channel_data(mixdown({a},[0,0,0,1,0],{b},[0,0,0,0,3]))"),
+        format!("channel_data(mixdown(createwav([0.5,-0.5],bit_depth=8),0,{b},1))"),
+        format!("bit_depth(mixdown(createwav([0.5,-0.5],bit_depth=8),0,{b},1))"),
+        format!("channel_data(mixdown({a},0,{a},0,{a},0))"),
+        "channel_data(mixdown(createwav([0.9,-0.9,0.9]),0,createwav([0.9,-0.9,0.1]),0))".to_owned(),
+        format!("channel_data(mixdown({a},[],{b},0))"),
+        format!("channel_data(mixdown({a},0,{b},0,{a},1))"),
+        "channel_data(mixdown(createwav([0.5,0.25],bit_depth=24),0,createwav([0.1,0.3],bit_depth=24),0))".to_owned(),
+        format!("channel_data(splice({a},{b}))"),
+        format!("channel_data(splice({a},{b},2,1))"),
+        format!("channel_data(splice({a},{b},2,0.5))"),
+        format!("channel_data(splice({a},{b},2,2))"),
+        format!("channel_data(splice({a},{b},2,1/2))"),
+        format!("channel_data(splice({a},{b},2,0))"),
+        format!("channel_data(splice({a},{b},2,-1))"),
+        format!("channel_data(splice({a},{b},1))"),
+        format!("channel_data(splice({a},{b},3))"),
+        format!("channel_data(splice({a},{b},4))"),
+        format!("channel_data(splice({a},{b},5))"),
+        format!("channel_data(splice({a},{b},1.5))"),
+        format!("channel_data(splice({a},{b},0.00004))"),
+        format!("channel_data(splice({z},{b}))"),
+        format!("channel_data(splice({z},{b},2,1))"),
+        format!("channel_data(splice({a},{z}))"),
+        format!("channel_data(splice({s},createwav([[0.1,0.2,0.3,0.4],[-0.5,-0.5,0.5,0.5]])),matrix)"),
+        format!("channel_data(splice({s},createwav([[0.1,0.2,0.3,0.4],[0.5,0.5,0.5,0.5]])),matrix)"),
+        format!("channel_data(splice({a},createwav([0.9])))"),
+        format!("channel_data(splice({a},createwav([0.9]),3,1))"),
+        format!("channel_data(splice({eight},createwav([0.9,-0.9]),6,1))"),
+        format!("channel_data(splice({eight},createwav([0.9,-0.9]),7,0))"),
+        "channel_data(splice(createwav([0.9,0.9,0.9,0.9]),createwav([0.9,0.9,0.9,0.9]),2,0))".to_owned(),
+        "channel_data(splice(createwav([0.5,-0.5,0.25,0],bit_depth=24),createwav([0.1,0.2,0.3,0.4],bit_depth=24),2,1))".to_owned(),
+        "channel_data(splice(createwav([0.5,-0.5,0.25,0],bit_depth=8),createwav([0.1,0.2,0.3,0.4],bit_depth=8)))".to_owned(),
     ];
     check_near(&rows.iter().map(String::as_str).collect::<Vec<_>>());
 }
@@ -187,8 +268,15 @@ fn stays_with(input: &str, expected: &str) -> bool {
 /// giac's errors that ours shares (probe5, probe9, probe10): the call
 /// stays with giac's message as the warning (C0022, C0056).
 #[test]
+#[allow(clippy::too_many_lines, reason = "one row per error")]
 fn errors_stay() {
     let value = |m: &str| format!("GIAC_ERROR: {m}. Error: Bad Argument Value");
+    let kind = |m: &str| format!("GIAC_ERROR: {m}. Error: Bad Argument Type");
+    let dim = |m: &str| format!("GIAC_ERROR: {m}. Error: Invalid dimension");
+    let a = "createwav([0.5,-0.5,0.25,0])";
+    let b = "createwav([0.1,0.2,0.3,0.4])";
+    let slow = "createwav([0.1,0.2,0.3,0.4],samplerate=22050)";
+    let same = "Clips should have the same bit depths, sample rates and channel counts";
     let s = "createwav([[0.5,-0.5,0.25,0],[0.1,0.2,0.3,0.4]])";
     let six = "createwav([0.5,-0.5,0.25,0,1,0.75])";
     let failed = "Failed to set channel data, [0.5,0.25] is not a valid sample value";
@@ -254,6 +342,131 @@ fn errors_stay() {
             "channel_data(createwav(createwav([0.5,-0.5]),bit_depth=8))".to_owned(),
             value("Invalid argument 1"),
         ),
+        // The clip edits (CAS-632; probe5, probe9, .run/1.7/T8/probe1.out).
+        (
+            format!("set_channel_data({a},[0.9,0.8],4)"),
+            value("Invalid offset"),
+        ),
+        (
+            format!("set_channel_data({a},[0.9,0.8],-1)"),
+            value("Invalid offset"),
+        ),
+        (
+            format!("set_channel_data({a},[0.9,0.8],1.0)"),
+            kind("Expected an integer"),
+        ),
+        (
+            format!("set_channel_data({a},[0.9,0.8],0,1)"),
+            dim("Invalid channel number"),
+        ),
+        (
+            format!("set_channel_data({a},[0.9,0.8],0,right)"),
+            value("Invalid channel number"),
+        ),
+        (
+            format!("set_channel_data({a},[0.9,0.8],0,x)"),
+            kind("Invalid channel specification"),
+        ),
+        (
+            format!("set_channel_data({a},0.9)"),
+            kind("Invalid data specification"),
+        ),
+        (
+            format!("set_channel_data({s},[[0.9,0.8],[0.1,0.2]],0,0)"),
+            kind("Invalid data specification"),
+        ),
+        (
+            format!("set_channel_data({a},[0.9,x])"),
+            value("Failed to set channel data, x is not a valid sample value"),
+        ),
+        (
+            format!("set_channel_data({a},[[0.9],[0.8,0.7]])"),
+            value("Failed to set channel data, [0.9] is not a valid sample value"),
+        ),
+        (
+            "set_channel_data([1,2],[0.9])".to_owned(),
+            value("Expected audio clip or image"),
+        ),
+        (
+            "stereo2mono([0.5,0.25])".to_owned(),
+            kind("Invalid sound data"),
+        ),
+        (format!("stereo2mono({a},{b})"), kind("Invalid sound data")),
+        ("stereo2mono(x)".to_owned(), kind("Invalid sound data")),
+        (
+            format!("mixdown({a},{b})"),
+            value("Invalid offset specification"),
+        ),
+        (
+            format!("mixdown({a},-6,{b},0)"),
+            value("Invalid offset specification"),
+        ),
+        (
+            format!("mixdown({a},x,{b},0)"),
+            value("Invalid offset specification"),
+        ),
+        (
+            format!("mixdown({a},[0.5,-1],{b},[0.5,1])"),
+            value("Invalid gain specification"),
+        ),
+        (
+            format!("mixdown({a},[0,0],{b},[0,2])"),
+            value("Invalid gain specification"),
+        ),
+        (
+            format!("mixdown({a},[0,x],{b},0)"),
+            value("Invalid gain specification"),
+        ),
+        (
+            format!("mixdown({a},[0,0,2],{b},1)"),
+            value("Invalid pan specification"),
+        ),
+        (
+            format!("mixdown({a},[0,0,0,-1],{b},1)"),
+            value("Invalid fade-in specification"),
+        ),
+        (
+            format!("mixdown({a},[0,0,0,0,x],{b},1)"),
+            value("Invalid fade-out specification"),
+        ),
+        (
+            format!("mixdown({a},[0,0,0,3,2],{b},1)"),
+            dim("Fade-in/out is too long"),
+        ),
+        (
+            format!("mixdown({a},0,[1,2],0)"),
+            value("Invalid argument 3"),
+        ),
+        (
+            format!("mixdown({a},0,{slow},0)"),
+            value("All clips must have the same sample rate"),
+        ),
+        (
+            format!("mixdown(createwav([0.1,0.2],channels=3),0,{b},0)"),
+            value("Only mono and stereo clips are allowed"),
+        ),
+        (
+            format!("splice({a},{b},0)"),
+            value("Invalid splice position"),
+        ),
+        (
+            format!("splice({a},{b},-3)"),
+            value("Invalid splice position"),
+        ),
+        (format!("splice({a},{slow})"), value(same)),
+        (format!("splice({s},{b},2)"), value(same)),
+        (
+            format!("splice({a},{b},x)"),
+            kind("Crossfade length should be a real number"),
+        ),
+        (
+            format!("splice({a},{b},2,x)"),
+            value("Crossfade exponent should be a real number"),
+        ),
+        (
+            format!("splice({a},[1,2])"),
+            kind("First two arguments should be audio clips"),
+        ),
     ];
     let giac = giac();
     let mut wrong = Vec::new();
@@ -303,6 +516,8 @@ fn departures() {
     let stereo = "a sound clip with 2 samples at 44100 Hz (16 bit, stereo)";
     let refused = |m: &str| format!("GIAC_ERROR: {m} not redefined Error: Bad Argument Value");
     let argument = "GIAC_ERROR: Invalid argument 1. Error: Bad Argument Value";
+    let spliced =
+        "channel_data(splice(createwav([0.5,-0.5,0.25,0]),createwav([0.1,0.2,0.3,0.4],samplerate=";
     let cases = [
         (
             "createwav([0.5,-0.5,0.25,0])".to_owned(),
@@ -420,6 +635,20 @@ fn departures() {
             "8".to_owned(),
             "9".to_owned(),
         ),
+        // splice: giac checks the clips' parameters only for the similarity
+        // (a negative or absent exponent); ours always (CAS-632).
+        (
+            format!("{spliced}22050),2,1))"),
+            "[0.891235351562,-0.891235351562,0.334197998047,0.445617675781,0.668426513672,0.891235351562]"
+                .to_owned(),
+            format!("{spliced}22050),2,1))"),
+        ),
+        (
+            format!("{spliced}22050),2,0))"),
+            "[0.891235351562,-0.891235351562,0.668395996094,0.445617675781,0.668426513672,0.891235351562]"
+                .to_owned(),
+            format!("{spliced}22050),2,0))"),
+        ),
     ];
     let mut wrong = Vec::new();
     for (input, answer, mine) in &cases {
@@ -432,6 +661,38 @@ fn departures() {
         let found = ours(input);
         if found.as_ref().ok() != ours(mine).ok().as_ref() {
             wrong.push(format!("{input}: ours {found:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Clipping (CAS-632): ours warns once per call when any sample clips;
+/// giac's `mix` and `splice` keep only the last sample's status
+/// (signalprocessing.cc :1185, :1213), so `mixdown(A,0,B,0)`, which clips
+/// its first and third samples (its value in [`values`]), warns in ours
+/// and not in giac: a departure.
+#[test]
+fn clipping() {
+    let a = "createwav([0.5,-0.5,0.25,0])";
+    let b = "createwav([0.1,0.2,0.3,0.4])";
+    let nine = "createwav([0.9,0.9,0.9,0.9])";
+    let rows = [
+        (format!("mixdown({a},0,{b},0)"), 1),
+        (format!("mixdown({a},1,{b},1)"), 1),
+        (format!("mixdown({a},[0,-6],{b},[0,-6])"), 0),
+        (format!("splice({nine},{nine},2,0)"), 1),
+        (format!("splice({a},{b})"), 0),
+    ];
+    let mut wrong = Vec::new();
+    for (input, n) in &rows {
+        let found = evaluated(input).map(|(_, _, warnings)| {
+            warnings
+                .iter()
+                .filter(|w| matches!(w, Warning::Native { message, .. } if &**message == "clipping audio, the result will be distorted"))
+                .count()
+        });
+        if found != Some(*n) {
+            wrong.push(format!("{input}: {found:?} clipping warnings, wanted {n}"));
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
