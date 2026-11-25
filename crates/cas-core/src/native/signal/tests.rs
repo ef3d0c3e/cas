@@ -316,6 +316,19 @@ fn rc_filters() {
     }
 }
 
+/// A filter in its own cutoff stays, without approximating the cutoff
+/// (CAS-628, Fuzz 45608125834): each level approximated afresh evaluated
+/// the filters below it again: 5.5 s at 24 levels, about 1.7 times that a
+/// level more.
+#[test]
+fn nested_filters_stay() {
+    let mut input = "c".to_string();
+    for _ in 0..32 {
+        input = format!("LowPass[List[], {input}, u]");
+    }
+    check(&[(&input, &input)]);
+}
+
 /// Correlations (CAS-523): giac's examples exactly, symbolic and complex
 /// samples, empty lists.
 #[test]

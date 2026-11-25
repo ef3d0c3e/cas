@@ -35,6 +35,8 @@
 //! α)(y_{k−1} + x_k − x_{k−1})` for the high pass. As α holds π, exact
 //! recurrences would grow without end: the samples are real numbers and
 //! the answer balls at the working precision, as giac's are doubles.
+//! Samples and parameters known numeric (`Expr::is_numeric`) only: others
+//! are not approximated and the call stays (CAS-628).
 //!
 //! Correlations (CAS-523), giac's `cross_correlation(u, v)` and
 //! `auto_correlation(u)`: `CrossCorrelation[u, v]` is `r_k = Σ_n conj(u_n)
@@ -301,6 +303,9 @@ fn real(ev: &Eval<'_>, a: &Expr) -> Option<Rational> {
     if let Some(r) = a.to_rational() {
         return Some(r);
     }
+    if !a.is_numeric() {
+        return None;
+    }
     match approximation(ev.context(), a, 64).ok()?.view() {
         View::Ball(b) if b.is_finite() => Some(b.mid().to_rational()),
         _ => None,
@@ -387,8 +392,14 @@ pub(super) fn window(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// The default sample rate of giac's filters.
 const SAMPLE_RATE: i64 = 44_100;
 
-/// A real number's ball at `bits`.
+/// A real number's ball at `bits`. Only a numeric `x` is approximated:
+/// the approximation evaluates it afresh, so a symbolic one holding
+/// filters (`LowPass` in its own cutoff) evaluated each again, twice a
+/// level (CAS-628, Fuzz 45608125834: 77 s).
 fn ball(ev: &Eval<'_>, x: &Expr, bits: u64) -> Option<Ball> {
+    if !x.is_numeric() {
+        return None;
+    }
     match approximation(ev.context(), x, bits).ok()?.view() {
         View::Ball(b) if b.is_finite() => Some(b.clone()),
         _ => None,
