@@ -72,3 +72,7 @@ C0069 | giac quoted products nest binary; mathml's aplatir_fois_plus multiplies 
 C0070 | Settings with a bare value: name() goes through the session, not a native | settings,session,eval,head,native | 2026-11-25 | 1.6/T6 | T6.c1 settings
 C0071 | Mode rerouting between natives: split the body; degree-mode trig traps | settings,native,recursion,factor,trig | 2026-11-25 | 1.6/T6 | T6.c2 complex_mode, angle_radian
 C0072 | Natives reading data outside State: Eval::volatile, no stamp or memo; Context Debug fields | eval,memo,cache,native,context,clippy,session | 2026-11-25 | 1.6/T7 | T7.c1 CAS-620
+C0073 | Writing a cas-core native: Ball path, View matches, Eval::context lifetime | native,cas-core,ball,view,borrow,rust | 2026-11-25 | 1.6/T8 | T8.c1 CAS-622
+C0074 | giac's descending sorts are reversed stable ascending (ties reversed) | giac,sort,descending,ties,port | 2026-11-25 | 1.6/T8 | T8.c2 CAS-622
+C0075 | giac uppercase HP/TI names are not always aliases (SVL=svl, SVD!=svd): probe both | giac,alias,svd,svl,hp,ti,port | 2026-11-25 | 1.6/T8 | T8.c3 CAS-623
+C0076 | New builtins: ASCII-alnum internal names; LISTABLE never broadcasts a scalar; decimal rows within error | builtin,listable,registry,naming,oracle,decimal | 2026-11-25 | 1.6/T8 | T8.c4 CAS-621 CAS-622
