@@ -11,7 +11,7 @@
 //!   (h n √(2π))` in the variable (`x`, or a bare symbol given as an
 //!   option), exact on exact data with an exact `h`. `output=list`, the
 //!   default: the estimate on `bins` points (100) of the grid `a … b`, giac's
-//!   nearest-bin counts (`trunc((xᵢ − a)/d + 1/2)`, exact on exact data)
+//!   nearest-bin counts (`trunc((xᵢ − a)/d + 1/2)`, in `f64` as giac's)
 //!   convolved with the kernel's `2L + 1` weights, `L = min(bins − 1, ⌊1 +
 //!   4h/d⌋)`. `piecewise` (or `output=piecewise`): giac's linear
 //!   interpolation of that list, `Piecewise[x < g₀, 0, x < g₁, s₀(x − g₀) +
@@ -398,7 +398,7 @@ fn binned(
     if !(d.ball.is_finite() && d.value() > 0.0) {
         return Ok(None);
     }
-    let counts = counts(xs, a, &d, bins, wp);
+    let counts = counts(xs, a, &d, bins);
     let h = if let Some(h) = bandwidth {
         h
     } else {
@@ -631,19 +631,16 @@ fn plug_in_bins(counts: &[u64], n: usize, d: &Ball, sd: &Ball, wp: u64) -> Optio
 }
 
 /// giac's nearest-bin counts (:7236-7240): `trunc((x − a)/d + 1/2)` when in
-/// `0 … bins − 1`, exactly on exact data and grid.
-fn counts(xs: &[Real], a: &Real, d: &Real, bins: usize, wp: u64) -> Vec<u64> {
+/// `0 … bins − 1`, computed in `f64` as giac does even on exact data: at a
+/// tie (`[1,2,3,2]` over `[1, 3]` in 100 bins puts 2 at 49.5) giac's
+/// doubles round below and pick the lower bin, which exact arithmetic would
+/// not (CI 45597160314).
+fn counts(xs: &[Real], a: &Real, d: &Real, bins: usize) -> Vec<u64> {
     let mut c = vec![0u64; bins];
-    let half = ratio(1, 2);
+    let (a, d) = (a.value(), d.value());
     for x in xs {
-        let index = if let (Some(x), Some(a), Some(d)) = (&x.exact, &a.exact, &d.exact) {
-            let t = (&(&(x - a) / d) + &half).trunc();
-            t.to_i64().and_then(|t| usize::try_from(t).ok())
-        } else {
-            let u = x.ball.sub(&a.ball, wp).div(&d.ball, wp).mid().to_f64() + 0.5;
-            index(u.trunc(), bins)
-        };
-        if let Some(i) = index.filter(|&i| i < bins) {
+        let u = (x.value() - a) / d + 0.5;
+        if let Some(i) = index(u.trunc(), bins) {
             c[i] += 1;
         }
     }

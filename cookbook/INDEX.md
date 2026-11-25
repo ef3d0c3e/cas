@@ -83,3 +83,5 @@ C0080 | Sorting mixed exact and decimal values: one comparator kind per slice | 
 C0081 | giac's undef/infinity answers are agreeing rows (infinity reads as ComplexInfinity) | giac,oracle,undef,infinity,departures | 2026-11-25 | 1.7/T3 | T3.c2 CAS-627
 C0082 | giac ports and clippy: full binding names; Warning::Native needs &'static str | clippy,port,native,warning,lifetime | 2026-11-25 | 1.7/T3 | T3.c1 T3.c2
 C0083 | Together leaves balls untouched: test for a ball before wrapping a numeric result | together,ball,native,decimal,regression | 2026-11-25 | 1.7/T3 | T3.c3 CAS-627
+C0084 | giac convolution/FFT lists carry packed-FFT noise: compare within it | giac,fft,convolution,oracle,tolerance,kde | 2026-11-25 | 1.7/T5 | T5.c1 CAS-629 prototype
+C0085 | giac's discrete choices made in doubles (bin index, trunc at ties): make them in f64 | giac,rounding,ties,exact,oracle,port,kde | 2026-11-25 | 1.7/T5 | CI 45597160314 kernel_density lists
