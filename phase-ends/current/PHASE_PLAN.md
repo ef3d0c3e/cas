@@ -130,7 +130,7 @@ Approved: 2026-11-25   Planner: claude-opus-5-5/medium   Plan-hash: b3da2ab9be03
   No research needed. Nothing is pushed after this until T10 has read both runs: a later push cancels Fuzz (fuzz.yml:41-43). Never force-push.
 - T10 | done | title: CI and Fuzz check on the pushed head; tickets done and CAS-DOC-58 in step | deps: T9 | reads: T1 | verify: gh run list --branch master --limit 2 | done-when: `gh run list --branch master --limit 2` shows CI and Fuzz green on the pushed head, each conclusion read with `gh run view <id> --json conclusion,jobs` (a red job or a fuzz finding is fixed in this task, a finding under a regression test in its owning crate, then pushed and checked again); every ticket the T1 summary lists is `done` (`lific issue get CAS-<n> --backend http --json` each); CAS-DOC-58's ## §8 Oracle and tests lists the departures this phase recorded in crates/cas-giac/README.md ## Tests
   Cookbook: C0004 (one watcher per run at `--interval 60`; logs via `gh api repos/ef3d0c3e/cas/actions/jobs/<id>/logs`, grep'd), C0043 (a fuzz mismatch: the harness side first), C0042 (arity guards), C0052-C0055 (1.4's findings were all in older code reached through new names), C0002 and C0005 (fuzz findings and replays), C0019 and C0028 (timeouts and float panics in the new natives; the printers and the reader on deep or long inputs). Fuzz takes about 40 minutes. Also read any Fuzz run of the phase that finished red before T9 (`gh run list --workflow fuzz.yml --branch master --limit 12`): its finding is fixed here or shown gone. This task's own log and summary commit stays local (a docs-only push would cancel or restart Fuzz); the next phase's first push carries it. No research needed.
-- T11 | next | title: phase cleanup | deps: T10 | coder: none | done-when: what the project still needs from .run/1.6/ is in its proper place in the repo
+- T11 | done | title: phase cleanup | deps: T10 | coder: none | done-when: what the project still needs from .run/1.6/ is in its proper place in the repo
   .run/1.6/ holds the planner's gap/ (regenerable with `bash scripts/giac_gap.sh .run/1.6/gap`; describe.py, describe_all.py and area_lines.py list aide entries), giac/ (probe inputs and answers), lific/ (search.py), src/ (giac source, refetchable by C0009) and the tasks' scratch (prototypes, CI logs). `.run/logs/gen1-gap/` is not this phase's (R0-004's inputs): leave it until 1.8 (R45). No research needed.
 
 ## Risks
@@ -159,3 +159,4 @@ Approved: 2026-11-25   Planner: claude-opus-5-5/medium   Plan-hash: b3da2ab9be03
 - 2026-11-25 router: T8 next -> done
 - 2026-11-25 router: T9 next -> done
 - 2026-11-25 router: T10 next -> done
+- 2026-11-25 router: T11 next -> done
