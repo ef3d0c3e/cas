@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 666] = [
+const BUILTINS: [&str; 668] = [
     "Plus",
     "Times",
     "Power",
@@ -763,6 +763,9 @@ const BUILTINS: [&str; 666] = [
     // The logistic and its regression (CAS-627).
     "Logistic",
     "LogisticRegression",
+    // Markov chains (CAS-628).
+    "MarkovChain",
+    "RandomMarkovChain",
 ];
 
 /// Builtins that apply something to parts, only in the expression

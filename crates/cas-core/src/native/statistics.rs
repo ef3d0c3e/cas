@@ -35,10 +35,12 @@
 //! - Hypothesis tests (CAS-DOC-52): [`hypothesis`].
 //! - Random variables, Xcas's `randvar` objects (CAS-624):
 //!   [`random_variables`].
+//! - Markov chains, Xcas's `markov` and `randmarkov` (CAS-628): [`markov`].
 
 pub(super) mod descriptive;
 pub(super) mod distributions;
 pub(super) mod hypothesis;
+pub(super) mod markov;
 mod order;
 pub(super) mod random_variables;
 pub(super) mod regression;

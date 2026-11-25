@@ -673,6 +673,9 @@ builtins! {
     // Random variables (CAS-624).
     RANDOM_VARIABLE = "RandomVariable" [PROTECTED];
     RANDOM_MULTINOMIAL = "RandomMultinomial" [PROTECTED];
+    // Markov chains (CAS-628): `markov`, `randmarkov`.
+    MARKOV_CHAIN = "MarkovChain" [PROTECTED];
+    RANDOM_MARKOV_CHAIN = "RandomMarkovChain" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];
