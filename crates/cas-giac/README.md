@@ -245,6 +245,21 @@ compared value by value with giac's sequence:
   `xcas_mode(0)`, `maple_mode(0)`, `python_compat(0)`, not builtins here
   (CAS-DOC-7's one grammar): the calls stay.
 
+`tests/angle_radian.rs`, `tests/complex_mode.rs`,
+`tests/complex_variables.rs` and `tests/epsilon.rs`, the settings that change
+answers (CAS-617), one group a file, giac's flag set and reset within one
+call, ours in a session:
+- `angle_radian:=0` (degrees) and `:=2` (grads): numbers converted in the
+  trigonometric functions and their inverses (`sin(30)`, `asin(1/2)`,
+  `sec(60)`, `acot(0)`, `sin(15)`, decimals), `sin(pi)`, `sin(x+30)`,
+  `asin(x)`, `atan(x)` staying, the hyperbolic functions and `exp` unchanged;
+- `complex_mode:=1`: `solve` as `csolve` and `factor` as `cfactor`, `[]`
+  again after the reset;
+- `complex_variables:=1`: `conj`, `re`, `im`, `abs` of a symbol staying; the
+  departures `abs(x)^2` (giac `x^2`, ours stays) and `solve(x^2+1=0,x)`
+  (giac `[]`, ours `[i,-i]`: the setting is ours' complex domain);
+- `epsilon:=1e-3`: `epsilon2zero` and `trim`'s default threshold.
+
 `tests/complex_solving.rs`, complex roots by number and real roots
 (CAS-536, CAS-537):
 - giac's `cfsolve` (polynomials, `exp(x)=-1`, `sin(x)=2`, a system, start
