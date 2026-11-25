@@ -67,3 +67,5 @@ C0064 | Iterated user steps on balls: exact midpoints, or radii compound | ball,
 C0065 | giac string order is byte order: compare with str::cmp, not Expr's Ord | giac,strings,sort,order,compare | 2026-11-25 | 1.6/T2 | T2.c2 CAS-612 sort on strings
 C0066 | A Context input a cached result depends on: a State field set via state_mut | context,cache,stamps,state-id,hook,settings | 2026-11-25 | 1.6/T3 | T3.c1 725956e
 C0067 | giac printed answers hide internal shape (inv vs division): probe latex(quote(typed)) | giac,port,prototype,quote,latex,markup,shape | 2026-11-25 | 1.6/T4 | T4.c1 CAS-615
+C0068 | Printer departure rows under R74: prototype printer on our lowered shape | giac,port,prototype,departures,printer,markup,mathml | 2026-11-25 | 1.6/T5 | T5.c2 CAS-616
+C0069 | giac quoted products nest binary; mathml's aplatir_fois_plus multiplies them out | giac,port,prototype,quote,mathml,shape | 2026-11-25 | 1.6/T5 | T5.c3 CAS-616
