@@ -46,9 +46,9 @@
 //! The text keeps giac's quirks: trailing spaces (`\pi `, `\sin `,
 //! `\cdot `), `\frac1{…}` from `inv` only, `abs` dropping its argument's
 //! minus. The prototype that fixed each step against giac's `latex()` on 301
-//! inputs is 1.6/T4.c1's (`.run/1.6/T4/proto/`); its table is the engine's
+//! inputs is 1.6/T4.c1's (`proto/latex/proto/`); its table is the engine's
 //! test data (`markup/giac_latex.tsv`). The `MathML` prototype (1.6/T5.c1,
-//! `.run/1.6/T5/proto/`) matched giac's `export_mathml` on the same inputs
+//! `proto/mathml/proto/`) matched giac's `export_mathml` on the same inputs
 //! in its three forms, 893 texts (`markup/giac_mathml.tsv`); it keeps giac's
 //! quirks too (`<true>` unclosed in content, `f(x)` inside a derivative
 //! with two `&af;`).

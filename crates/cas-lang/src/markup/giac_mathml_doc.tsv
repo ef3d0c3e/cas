@@ -1,5 +1,5 @@
-# giac 2.0.0.21 mathml() of T4's 301 inputs (1.6/T5.c3, CAS-616; probe .run/1.6/T5/c3/probe.cas via
-# scripts/caseval.py, table .run/1.6/T5/c3/table.tsv, prototype 301/301). Columns: input, mode, shape (as
+# giac 2.0.0.21 mathml() of T4's 301 inputs (1.6/T5.c3, CAS-616; probe proto/mathml/doc/probe.cas via
+# scripts/caseval.py, table proto/mathml/doc/table.tsv, prototype 301/301). Columns: input, mode, shape (as
 # giac_latex.tsv; quoted products nest two factors at a time, as giac's parser), giac's text (a newline shown
 # as ' | ', doubled quotes undone).
 1/2	eval	1/2	<?xml version="1.0" encoding="iso-8859-1"?> | <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.1 plus MathML 2.0//EN" | "http://www.w3.org/TR/MathML2/dtd/xhtml-math11-f.dtd" [ | <!ENTITY mathml "http://www.w3.org/1998/Math/MathML"> | ]> | <html xmlns="http://www.w3.org/1999/xhtml"> | <body> |  | <math mode="display" xmlns="http://www.w3.org/1998/Math/MathML"> |  | <mfrac><mrow><mn>1</mn></mrow><mrow><mn>2</mn></mrow></mfrac> |  | </math><br/> |  | </body> | </html> | 

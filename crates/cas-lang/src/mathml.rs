@@ -37,7 +37,7 @@
 //! `<mtext>`. Our `x^(1/2)` (lowered as `sqrt(x)`) is giac's evaluated
 //! `pow(x, 1/2)` here, since this printer writes the two apart. The
 //! prototype that fixed each step against giac's `mathml()` on the 301
-//! inputs of `markup`'s tables is 1.6/T5.c3's (`.run/1.6/T5/c3/`); its
+//! inputs of `markup`'s tables is 1.6/T5.c3's (`proto/mathml/doc/`); its
 //! table is the test data (`markup/giac_mathml_doc.tsv`).
 //!
 //! Term order is the expression's: the language hook first puts sums of

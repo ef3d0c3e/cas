@@ -404,7 +404,7 @@ fn document(body: &str) -> String {
 }
 
 /// The departures of [`departures`] in giac's `mathml` document: ours,
-/// the formula of the prototype (`.run/1.6/T5/c3/`) on our shapes (C0068).
+/// the formula of the prototype (`crates/cas-lang/proto/mathml/doc/`) on our shapes (C0068).
 #[test]
 #[allow(clippy::too_many_lines)]
 fn mathml_departures() {

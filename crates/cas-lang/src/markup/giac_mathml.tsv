@@ -1,5 +1,5 @@
-# giac 2.0.0.21 export_mathml of T4's 301 inputs in its three forms (1.6/T5.c1, CAS-616; probe .run/1.6/T5/probe.cas
-# via scripts/caseval.py, table .run/1.6/T5/table.tsv; 893 rows, 10 giac crashes left out). Columns: input, mode, shape
+# giac 2.0.0.21 export_mathml of T4's 301 inputs in its three forms (1.6/T5.c1, CAS-616; probe proto/mathml/probe.cas
+# via scripts/caseval.py, table proto/mathml/table.tsv; 893 rows, 10 giac crashes left out). Columns: input, mode, shape
 # (as giac_latex.tsv), kind (display, content, default), giac's text (a newline shown as ' | ', doubled quotes undone).
 1/2	eval	1/2	display	<math mode='display' xmlns='http://www.w3.org/1998/Math/MathML'><mfrac><mn>1</mn><mn>2</mn></mfrac></math>
 1/2	eval	1/2	content	<math mode='display' xmlns='http://www.w3.org/1998/Math/MathML'><cn id='id1' type='rational'>1<sep/>2</cn></math>

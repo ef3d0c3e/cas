@@ -1,4 +1,4 @@
-# giac 2.0.0.21 latex() of 301 inputs (1.6/T4.c1, CAS-615; probe via libgiac, table .run/1.6/T4/table.tsv).
+# giac 2.0.0.21 latex() of 301 inputs (1.6/T4.c1, CAS-615; probe via libgiac, table proto/latex/table.tsv).
 # Columns: input, mode (eval: giac's evaluated answer; quote: a quote(...) answer), the shape latex() sees
 # (giac's printed answer, or the typed form where that print hides the shape, NOTES.md), giac's latex.
 # Tab-separated; trailing spaces in the latex column are giac's.

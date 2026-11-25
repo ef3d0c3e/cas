@@ -831,7 +831,7 @@ fn answers_in_a_mathml_document_as_giac_writes_its_own() {
 /// Departures: our answers' shapes or orders (as in
 /// [`answers_print_as_giac_prints_its_own`] and cas-giac's `latex.rs`) in
 /// presentation and content, the texts of the prototype
-/// (`.run/1.6/T5/proto/markup.py`) on our shapes; giac's are in
+/// (`proto/mathml/proto/markup.py`) on our shapes; giac's are in
 /// `giac_mathml.tsv`.
 #[test]
 #[allow(clippy::too_many_lines)]

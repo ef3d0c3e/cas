@@ -10,3 +10,4 @@ T7 | done | session commands: restart, the variable lists, history, clocks, vers
 T8 | done | area 18's names: type and the DOM_* constants, iPart, fPart, trunc, the TI sorts, sortperm, RandSeed, symbols and TI matrix names | - | tasks/T8.md | logs/T8.md | R1.6-003,R1.6-006
 T9 | done | push master for the phase's final CI and Fuzz runs | - | tasks/T9.md | logs/T9.md | -
 T10 | done | CI and Fuzz check on the pushed head; tickets done and CAS-DOC-58 in step | - | tasks/T10.md | logs/T10.md | -
+T11 | done | phase cleanup | - | tasks/T11.md | logs/T11.md | -

@@ -28,7 +28,7 @@ pub(super) mod ty {
 
 /// The heads giac registers with a `printsommet` (their own print), by
 /// giac name, sorted: the `define_unary_function_eval*` of giac's sources
-/// with one (`.run/1.6/T5/c3/printsommet.py`). `need_parenthesis` reads it.
+/// with one (`proto/mathml/doc/printsommet.py`). `need_parenthesis` reads it.
 const PRINTSOMMET: &[&str] = &[
     "Ans",
     "Archive",

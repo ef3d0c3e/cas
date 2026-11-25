@@ -1,8 +1,8 @@
 //! giac's `gen2markup` (markup.cc :1233-3627), its LaTeX and `MathML`
 //! (presentation and content) arms: a [`Gen`] to a [`MarkupBlock`]. Each
 //! function cites the lines it ports; the prototypes
-//! `.run/1.6/T4/proto/markup.py` (1.6/T4.c1, LaTeX) and
-//! `.run/1.6/T5/proto/markup.py` (1.6/T5.c1, `MathML`) were checked against
+//! `proto/latex/proto/markup.py` (1.6/T4.c1, LaTeX) and
+//! `proto/mathml/proto/markup.py` (1.6/T5.c1, `MathML`) were checked against
 //! giac 2.0.0.21's `latex()` on 301 inputs and `export_mathml` on 893
 //! (301 inputs in its three forms), and these are their steps.
 //!

@@ -19,6 +19,8 @@ in Lific page `CAS-DOC-7`; the implementation plan is `CAS-PLAN-11`.
 | `names` | The name table (CAS-DOC-7 §5). `Names` maps the names the language reserves to a `Target`: a cas-core builtin, a builtin that is `Planned` but not defined yet (its names are reserved already), the imaginary unit, or a `SyntaxForm` (`call`, `assume`, `purge`); types after `::` (`TypeName`) are a namespace of their own. Each target has the spelling printers use. The English table is data, `names/en.txt`, whose header describes the format; `Names::with_locale` adds a locale's overlay in the same format, which adds names and may change spellings while English names stay valid. `escape_name` gives the symbol name of a user's name, `$` in front when it starts with an ASCII capital, so `E` becomes `$E` and never meets the builtin `E`; `unescape_name` undoes it. |
 | `literal` | The values of literal tokens. `number_value` is exact (`0.1` is `1/10`, `1.5e-3` is `3/2000`), with exponents bounded by `MAX_DECIMAL_EXPONENT` (10⁶) so a short literal can't become gigabytes; `string_value` replaces the escapes `\"`, `\\`, `\n`, `\t` and `\u{…}`; `superscript_value` gives the exponent as an `Integer`; `name` puts a name in Unicode normal form C (borrowed when it already is) and spells `π`, `ℯ`, `∞` as `pi`, `e`, `inf`. Each accepts exactly the texts the lexer gives as one error-free token of its kind. |
 
+`proto/` holds the Python ports of giac's printers that `markup` and `mathml` were checked against (not compiled; `proto/README.md`).
+
 ## Testing
 
 Lexer tests are in `src/lexer/tests.rs`: golden token tables for trivia and nested comments, names
