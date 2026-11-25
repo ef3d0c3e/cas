@@ -99,7 +99,6 @@ fn strings_of_expressions() {
 #[test]
 fn expressions_of_strings() {
     check(&[
-        "expr(\"ifactor(54)\")",
         "expr(\"123\")",
         "expr(\"1+1\")",
         "expr(sin,x)",
@@ -113,6 +112,24 @@ fn expressions_of_strings() {
         "execute(\"2+3\")",
         "expr(\"1.5\")",
     ]);
+    // giac's product reads back multiplied out; ours is `ifactor`'s held
+    // product, compared by its value (as tests/number_theory.rs does).
+    let Some(giac) = giac() else {
+        return;
+    };
+    let input = "expr(\"ifactor(54)\")";
+    let held = ours(input).ok();
+    let value = held.as_ref().and_then(|h| match h.args() {
+        [inner] if h.head() == Some(&Expr::from(Symbol::HOLD)) => {
+            cas_core::Context::new().eval(inner).ok()
+        }
+        _ => None,
+    });
+    let theirs = giac.value(input).ok();
+    assert!(
+        value.is_some() && value == theirs,
+        "{input}: ours {held:?}, giac's {theirs:?}"
+    );
 }
 
 /// `cat`, and non-strings in `join` and `concat` (probe1, probe5,
