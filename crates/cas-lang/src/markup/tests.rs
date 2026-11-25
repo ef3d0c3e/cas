@@ -1025,3 +1025,41 @@ fn text_past_the_cap_is_refused() {
     }
     assert!(hook.print(&e, Form::Mathml, &context, 100).is_err());
 }
+
+/// `increasing_power` off (CAS-618): giac's `latex` and `export_mathml` of
+/// the same answers with the flag off (1.6/T6.c3 probes); with it on, ours
+/// as before.
+#[test]
+fn sums_of_one_symbol_by_decreasing_degree() {
+    let mut context = context();
+    let cubic = "x^3+3*x^2+3*x+1";
+    assert_eq!(latex_of(&context, cubic), "1+3 x+3 x^{2}+x^{3}");
+    context.set_increasing_power(false);
+    for (text, want) in [
+        (cubic, "x^{3}+3 x^{2}+3 x+1"),
+        ("1-x^2", "-x^{2}+1"),
+        ("2*x^2-x+5", "2 x^{2}-x+5"),
+        ("(x+1)^2", "\\left(x+1\\right)^{2}"),
+        ("sin(x^2+2*x+1)", "\\sin \\left(x^{2}+2 x+1\\right)"),
+    ] {
+        assert_eq!(latex_of(&context, text), want, "{text}");
+    }
+    // Two symbols: the order stays.
+    let two = latex_of(&context, "x^2+y+1");
+    context.set_increasing_power(true);
+    assert_eq!(latex_of(&context, "x^2+y+1"), two);
+    context.set_increasing_power(false);
+    let (display, _) = printed(&context, cubic, Form::MathmlDisplay);
+    assert_eq!(
+        display,
+        "<math mode='display' xmlns='http://www.w3.org/1998/Math/MathML'><mrow><msup><mi>x</mi><mn>3</mn></msup><mo>+</mo><mrow><mn>3</mn><mo>&it;</mo><msup><mi>x</mi><mn>2</mn></msup></mrow><mo>+</mo><mrow><mn>3</mn><mo>&it;</mo><mi>x</mi></mrow><mo>+</mo><mn>1</mn></mrow></math>"
+    );
+    let (semantic, _) = printed(&context, cubic, Form::MathmlContent);
+    assert_eq!(
+        semantic,
+        "<math mode='display' xmlns='http://www.w3.org/1998/Math/MathML'><apply id='id13'><plus/><apply id='id3'><power/><ci id='id1'>x</ci><cn id='id2' type='integer'>3</cn></apply><apply id='id8'><times/><cn id='id4' type='integer'>3</cn><apply id='id7'><power/><ci id='id5'>x</ci><cn id='id6' type='integer'>2</cn></apply></apply><apply id='id11'><times/><cn id='id9' type='integer'>3</cn><ci id='id10'>x</ci></apply><cn id='id12' type='integer'>1</cn></apply></math>"
+    );
+    let (default, input) = printed(&context, cubic, Form::Mathml);
+    assert_eq!(input, "x^3 + 3*x^2 + 3*x + 1");
+    assert!(default.contains("<annotation-xml encoding='MathML-Content'><apply id='id13'><plus/><apply id='id3'><power/>"), "{default}");
+}

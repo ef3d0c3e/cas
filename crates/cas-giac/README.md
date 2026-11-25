@@ -209,9 +209,20 @@ a file and giac's input sets and resets it within one call:
 - `with_sqrt(0)` (giac refuses `with_sqrt:=0`, a reserved word): giac's
   `factor` over ℚ read back and compared by value; `factor` splits over
   square roots again with it back on;
-- the departures: giac's `increasing_power` changes printing and is left for
-  phase 1.6 (CAS-546); a setting's bare name reads its value here, 0 or 1,
+- the departure: a setting's bare name reads its value here, 0 or 1,
   where giac gives the symbol.
+
+`tests/increasing_power.rs`, Xcas's `increasing_power` (CAS-546, CAS-618),
+giac's input setting the flag and back to its default, 0, within one call,
+ours run in a session with `increasing_power := 0`:
+- sums of powers of one symbol by decreasing degree in `string` (giac's text
+  is ours without spaces, the term order compared, and one value read
+  back), `latex`, `export_mathml` in its three forms and `mathml` (giac's
+  text is ours, whitespace collapsed; the default form's annotation without
+  spaces); with the flag on, increasing degree in both;
+- the departures, same values: a rational coefficient (giac
+  `1/2*x^2-x+1/2`, ours `x^2/2 - x + 1/2`), and sums of two symbols, which
+  ours leaves in its canonical order (giac `x^2+y^2+2*x*y`, `x^2+y+1`).
 
 `tests/settings.rs`, Xcas's settings of phase 1.6 (CAS-617, CAS-618), each
 input setting and resetting within one call, ours run in a session and

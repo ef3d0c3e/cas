@@ -2,7 +2,9 @@
 //! turn expressions into text and back, `string`, `expr`, `cat` and `join`,
 //! `latex` (CAS-615, [`Form::Latex`]), `export_mathml` and `mathml`
 //! (CAS-616), call it through
-//! the context, since cas-core cannot depend on this crate. The session and
+//! the context, since cas-core cannot depend on this crate. Each printer
+//! writes sums of powers of one symbol in the order of the context's
+//! `increasing_power` ([`power_order`], CAS-618). The session and
 //! the oracle install it ([`Context::set_language`]); it is part of the
 //! context's state, so a context with another hook has another id and
 //! shares no cached values.
@@ -17,7 +19,7 @@ use crate::markup::{MathmlKind, export_mathml, latex};
 use crate::mathml::mathml;
 use crate::names::Names;
 use crate::parser::parse;
-use crate::print::{Balls, print_capped};
+use crate::print::{Balls, power_order, print_capped};
 
 /// The language with the names of one locale: the input form and LaTeX
 /// printed with balls as they show at the context's working precision, and
@@ -54,6 +56,11 @@ impl Language for Hook {
         let balls = Balls::Shown {
             working_precision: context.working_precision(),
         };
+        // Sums of powers of one symbol in the context's `increasing_power`
+        // order (CAS-618); one the printers refuse for its size stays as it is.
+        let fits = usize::try_from(e.size()).is_ok_and(|n| n <= max_len);
+        let ordered = power_order(e, context.increasing_power() || !fits);
+        let e = ordered.as_ref();
         match form {
             Form::Input => {
                 print_capped(e, &self.names, balls, max_len).map_err(|error| error.to_string())

@@ -1,7 +1,7 @@
 use cas_core::{Complex, Expr, Integer, Rational, Symbol};
 use proptest::prelude::*;
 
-use super::{MAX_PRINT_DEPTH, PrintErrorKind as K, fold_arithmetic, print};
+use super::{MAX_PRINT_DEPTH, PrintErrorKind as K, fold_arithmetic, power_order, print};
 use crate::lower::lower;
 use crate::names::Names;
 use crate::parser::parse;
@@ -1473,4 +1473,58 @@ fn set_operators() {
             "x in a union b",
         ),
     ]);
+}
+
+/// `increasing_power` (CAS-618): sums of powers of one symbol by
+/// decreasing degree with the flag off, giac's rows (1.6/T6.c3 probes):
+/// `x^3+3*x^2+3*x+1`, `-x^2+1`, `x^2+2*i*x-1`; other sums keep their
+/// order, and with the flag on nothing changes.
+#[test]
+fn power_order_sorts_sums_of_one_symbol() {
+    let (x, y) = (sym("x"), sym("y"));
+    let cubic = plus([
+        int(1),
+        times([int(3), x.clone()]),
+        times([int(3), pow(&x, &int(2))]),
+        pow(&x, &int(3)),
+    ]);
+    let ordered = |e: &Expr, increasing: bool| printed(&power_order(e, increasing));
+    assert_eq!(ordered(&cubic, true), "1 + 3*x + 3*x^2 + x^3");
+    assert_eq!(ordered(&cubic, false), "x^3 + 3*x^2 + 3*x + 1");
+    let square = plus([int(1), times([int(-1), pow(&x, &int(2))])]);
+    assert_eq!(ordered(&square, false), "-x^2 + 1");
+    let complex = plus([
+        int(-1),
+        times([cx((0, 1), (2, 1)), x.clone()]),
+        pow(&x, &int(2)),
+    ]);
+    assert_eq!(ordered(&complex, false), "x^2 + 2*i*x - 1");
+    let half = plus([rat(1, 2), times([rat(1, 2), pow(&x, &int(2))])]);
+    assert_eq!(ordered(&half, false), "x^2/2 + 1/2");
+    // At every level: in a list, an argument, a power's base.
+    let nested = app(
+        Symbol::LIST,
+        [
+            call("f", [plus([int(1), x.clone()])]),
+            pow(&plus([int(2), y.clone()]), &int(2)),
+        ],
+    );
+    assert_eq!(ordered(&nested, false), "[f(x + 1), (y + 2)^2]");
+    // Two symbols, a term that is not a monomial, a negative power, a
+    // builtin constant: the order stays.
+    for e in [
+        plus([int(1), y.clone(), pow(&x, &int(2))]),
+        plus([int(1), call("f", [x.clone()]), pow(&x, &int(2))]),
+        plus([pow(&x, &int(-1)), x.clone()]),
+        plus([int(1), Expr::from(Symbol::PI)]),
+        plus([times([x.clone(), y.clone()]), pow(&x, &int(2))]),
+    ] {
+        assert_eq!(ordered(&e, false), printed(&e));
+    }
+    // Already decreasing: the same expression, not a copy.
+    let dec = plus([pow(&x, &int(2)), int(1)]);
+    assert!(matches!(
+        power_order(&dec, false),
+        std::borrow::Cow::Borrowed(_)
+    ));
 }

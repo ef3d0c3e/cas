@@ -21,7 +21,9 @@
 //!   [`Diagnostic`]s, some with a [`Fix`].
 //! - [`print()`]: an expression as text that reads back as it (the input
 //!   form), for output that can be pasted as input; a [`PrintError`] for
-//!   what the language cannot write.
+//!   what the language cannot write. [`power_order`]: sums of powers of
+//!   one symbol in the order of Xcas's `increasing_power` (CAS-618), for
+//!   every printer.
 //! - [`latex`]: an expression in LaTeX as giac's `latex()` writes it, a
 //!   port of giac's `gen2markup` (CAS-615).
 //! - [`Hook`]: the language as cas-core's [`Language`](cas_core::Language)
@@ -58,7 +60,8 @@ pub use parser::{MAX_DEPTH, Parse, ParseErrorKind, SyntaxError, SyntaxErrorKind,
 #[doc(hidden)]
 pub use print::fold_arithmetic;
 pub use print::{
-    Balls, MAX_PRINT_DEPTH, PrintError, PrintErrorKind, print, print_capped, print_with,
+    Balls, MAX_PRINT_DEPTH, PrintError, PrintErrorKind, power_order, print, print_capped,
+    print_with,
 };
 pub use session::{Level, Message, Output, Session, Shown};
 pub use syntax::{CasLanguage, SyntaxElement, SyntaxKind, SyntaxNode, SyntaxToken};

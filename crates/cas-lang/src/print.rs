@@ -1,6 +1,14 @@
 //! The input form: expressions as text of the language (CAS-43), see
 //! [`print()`].
+//!
+//! [`power_order`] puts sums of powers of one symbol in the order of Xcas's
+//! `increasing_power` (CAS-618) before any printer runs: decreasing degree
+//! with the flag off, as giac's `islesscomplexthanf2` sorts its sums then
+//! (giac 2.0.0.21, gen.cc :10081-10109, the flag read at :10094); with it
+//! on, our canonical order, which is already by increasing degree.
 
+use std::borrow::Cow;
+use std::cmp::Reverse;
 use std::fmt::{self, Write as _};
 
 use cas_core::{
@@ -237,6 +245,135 @@ pub fn print_capped(
         Ok(()) if printer.out.len() > max_len => Err(too_long()),
         Ok(()) => Ok(printer.out),
     }
+}
+
+/// `e` with its sums of powers of one symbol in the order Xcas's
+/// `increasing_power` says (CAS-618), for [`print()`], [`latex`](crate::latex),
+/// [`export_mathml`](crate::export_mathml) and [`mathml`](crate::mathml)
+/// to write: the language hook and the session print through it with
+/// their context's flag.
+///
+/// A sum whose terms are all `c*v^k`, one user symbol `v` in all of them,
+/// `c` a number and `k` a nonnegative integer (a number alone has degree 0),
+/// is sorted by decreasing degree when `increasing` is false, a stable
+/// sort; every other sum keeps its order, at every level of `e`. When
+/// `increasing` is true `e` is returned as it is, since evaluation already
+/// orders those sums by increasing degree. An expression nested deeper than
+/// [`MAX_PRINT_DEPTH`], which the printers refuse, is returned as it is.
+///
+/// ```
+/// use cas_core::{Expr, Symbol};
+/// use cas_lang::{Names, power_order, print};
+///
+/// let x = Expr::from(Symbol::new("x"));
+/// let e = Expr::apply(&Symbol::PLUS.into(), &[Expr::from(1), x.pow(2)]);
+/// let names = Names::english();
+/// assert_eq!(print(&power_order(&e, true), names).unwrap(), "1 + x^2");
+/// assert_eq!(print(&power_order(&e, false), names).unwrap(), "x^2 + 1");
+/// ```
+#[must_use]
+pub fn power_order(e: &Expr, increasing: bool) -> Cow<'_, Expr> {
+    if increasing || usize::from(e.depth()) > MAX_PRINT_DEPTH {
+        return Cow::Borrowed(e);
+    }
+    decreasing(e).map_or(Cow::Borrowed(e), Cow::Owned)
+}
+
+/// `e` with its sums of powers of one symbol by decreasing degree; `None`
+/// when that is `e` itself.
+fn decreasing(e: &Expr) -> Option<Expr> {
+    let View::Apply { head, args } = e.view() else {
+        return None;
+    };
+    let new_head = decreasing(head);
+    let mut changed = new_head.is_some();
+    let mut terms: Vec<Expr> = args
+        .iter()
+        .map(|a| match decreasing(a) {
+            Some(a) => {
+                changed = true;
+                a
+            }
+            None => a.clone(),
+        })
+        .collect();
+    if head.as_symbol() == Some(Symbol::PLUS)
+        && let Some(degrees) = one_symbol_degrees(&terms)
+        && degrees.windows(2).any(|w| w[0] < w[1])
+    {
+        let mut keyed: Vec<(i64, Expr)> = degrees.into_iter().zip(terms).collect();
+        keyed.sort_by_key(|(k, _)| Reverse(*k));
+        terms = keyed.into_iter().map(|(_, t)| t).collect();
+        changed = true;
+    }
+    changed.then(|| Expr::apply(new_head.as_ref().unwrap_or(head), &terms))
+}
+
+/// The degrees of `terms` when they are all monomials in one and the same
+/// user symbol, at least one of them with it.
+fn one_symbol_degrees(terms: &[Expr]) -> Option<Vec<i64>> {
+    let mut symbol = None;
+    let mut degrees = Vec::with_capacity(terms.len());
+    for t in terms {
+        let (s, k) = monomial(t)?;
+        if let Some(s) = s
+            && *symbol.get_or_insert(s) != s
+        {
+            return None;
+        }
+        degrees.push(k);
+    }
+    symbol.map(|_| degrees)
+}
+
+/// `c*v^k` as `(Some(v), k)`, a number as `(None, 0)`.
+fn monomial(t: &Expr) -> Option<(Option<Symbol>, i64)> {
+    if is_number(t) {
+        return Some((None, 0));
+    }
+    if let Some((s, k)) = symbol_power(t) {
+        return Some((Some(s), k));
+    }
+    let View::Apply { head, args } = t.view() else {
+        return None;
+    };
+    if head.as_symbol() != Some(Symbol::TIMES) {
+        return None;
+    }
+    let mut power = None;
+    for f in args.iter().filter(|f| !is_number(f)) {
+        if power.is_some() {
+            return None;
+        }
+        power = Some(symbol_power(f)?);
+    }
+    power.map(|(s, k)| (Some(s), k))
+}
+
+/// `v` or `v^k`, `v` a user symbol and `k` a nonnegative integer.
+fn symbol_power(e: &Expr) -> Option<(Symbol, i64)> {
+    match e.view() {
+        View::Symbol(s) if !s.is_builtin() => Some((s, 1)),
+        View::Apply { head, args: [b, k] } if head.as_symbol() == Some(Symbol::POWER) => {
+            match (b.view(), k.view()) {
+                (View::Symbol(s), View::Int(k)) if !s.is_builtin() && k >= 0 => Some((s, k)),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+fn is_number(e: &Expr) -> bool {
+    matches!(
+        e.view(),
+        View::Int(_)
+            | View::Integer(_)
+            | View::Rational(_)
+            | View::Complex(_)
+            | View::Ball(_)
+            | View::ComplexBall(_)
+    )
 }
 
 /// How tightly a printed form binds, weakest first: the levels of

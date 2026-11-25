@@ -40,6 +40,11 @@
 //! inputs of `markup`'s tables is 1.6/T5.c3's (`.run/1.6/T5/c3/`); its
 //! table is the test data (`markup/giac_mathml_doc.tsv`).
 //!
+//! Term order is the expression's: the language hook first puts sums of
+//! powers of one symbol in the order of the context's `increasing_power`
+//! ([`power_order`](crate::power_order), CAS-618; giac gen.cc :10094
+//! `islesscomplexthanf2`).
+//!
 //! Not ported: giac's evaluation inside the printer (`eval` of a limit's,
 //! sum's or integral's body, :468, :499, :604, and `needs_times` :256 are
 //! the identity here), `rootof` values (:1625), modular vectors, spreadsheets

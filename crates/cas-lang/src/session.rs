@@ -60,7 +60,7 @@ use crate::literal::decimal_balls;
 use crate::lower::{Fix, Severity, Statement, lower};
 use crate::names::{Names, Target, unescape_name};
 use crate::parser::parse;
-use crate::print::{Balls, print_with};
+use crate::print::{Balls, PrintError, power_order, print_with};
 
 /// Messages write out an expression of at most this many parts, as
 /// cas-core's do: a larger one could take long, sharing parts that its text
@@ -613,7 +613,14 @@ impl Session {
                 _ => "…".to_owned(),
             };
         }
-        print_with(e, &self.names, self.shown()).unwrap_or_else(|_| e.to_string())
+        self.text(e).unwrap_or_else(|_| e.to_string())
+    }
+
+    /// `e` in input form, its sums of powers of one symbol in the order of
+    /// the context's `increasing_power` ([`power_order`], CAS-618).
+    fn text(&self, e: &Expr) -> Result<String, PrintError> {
+        let ordered = power_order(e, self.context.increasing_power());
+        print_with(&ordered, &self.names, self.shown())
     }
 
     /// The result of a statement in input form; nothing for `Null`, and the
@@ -623,7 +630,7 @@ impl Session {
         if value.as_symbol() == Some(Symbol::NULL) {
             return;
         }
-        match print_with(value, &self.names, self.shown()) {
+        match self.text(value) {
             Ok(text) => out.result = Some(Shown::Input(text)),
             Err(e) => {
                 out.result = Some(Shown::Evaluator(value.to_string()));

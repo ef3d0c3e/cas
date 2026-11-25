@@ -332,3 +332,26 @@ fn expressions_as_text_and_back() {
     assert!(results(&outputs)[0].is_some_and(|t| t.starts_with("expr(")));
     assert_eq!(results(&outputs)[1], Some("a"));
 }
+
+/// `increasing_power := 0` (CAS-618): results, `string` and `latex` write
+/// sums of powers of one symbol by decreasing degree, as giac does with the
+/// flag off; set back to 1, by increasing degree again.
+#[test]
+fn increasing_power_orders_printed_sums() {
+    let mut session = Session::new();
+    let outputs = session.run(
+        "increasing_power := 0\nx^3 + 3*x^2 + 3*x + 1\nstring(1 - x^2)\nlatex(2*x^2 - 3*x + 1)\n\
+         [1 + t^2, sin(1 + x)]\nincreasing_power := 1\n1 + x^2",
+    );
+    let results = results(&outputs);
+    assert_eq!(
+        results[1..5],
+        [
+            Some("x^3 + 3*x^2 + 3*x + 1"),
+            Some("\"-x^2 + 1\""),
+            Some("\"2 x^{2}-3 x+1\""),
+            Some("[t^2 + 1, sin(x + 1)]"),
+        ]
+    );
+    assert_eq!(results[6], Some("1 + x^2"));
+}

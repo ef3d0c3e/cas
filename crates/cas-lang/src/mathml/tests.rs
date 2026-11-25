@@ -9,7 +9,7 @@ use super::{document, mathml};
 use crate::markup::tests::parse;
 use crate::markup::tree::Gen;
 use crate::names::Names;
-use crate::print::{Balls, MAX_PRINT_DEPTH, PrintErrorKind};
+use crate::print::{Balls, MAX_PRINT_DEPTH, PrintErrorKind, power_order};
 
 /// giac's parser builds a quoted `a*b*c` as `prod(prod(a, b), c)`, which
 /// `aplatir_fois_plus` then multiplies out (C0069; the prototype's `nest`).
@@ -110,4 +110,35 @@ fn text_past_the_cap_is_refused() {
     let e = Expr::apply(&Symbol::PLUS.into(), &[long, Expr::from(Symbol::new("x"))]);
     let error = mathml(&e, names, balls, 100).unwrap_err();
     assert_eq!(error.kind, PrintErrorKind::TooLong);
+}
+
+/// `increasing_power` off (CAS-618): the sum by decreasing degree, as
+/// giac's `mathml(expand((x+1)^3))` with the flag off (1.6/T6.c3 probe).
+#[test]
+fn a_sum_of_one_symbol_by_decreasing_degree() {
+    let names = Names::english();
+    let balls = Balls::Shown {
+        working_precision: 53,
+    };
+    let x = Expr::from(Symbol::new("x"));
+    let apply = |head: Symbol, args: &[Expr]| Expr::apply(&head.into(), args);
+    let cubic = apply(
+        Symbol::PLUS,
+        &[
+            Expr::from(1),
+            apply(Symbol::TIMES, &[Expr::from(3), x.clone()]),
+            apply(Symbol::TIMES, &[Expr::from(3), x.pow(2)]),
+            x.pow(3),
+        ],
+    );
+    let text = mathml(&power_order(&cubic, false), names, balls, usize::MAX).unwrap();
+    let giac = "<msup><mrow> <mi>x</mi></mrow><mrow><mn>3</mn></mrow></msup><mo>+</mo>\
+                <mn>3</mn><msup><mrow> <mi>x</mi></mrow><mrow><mn>2</mn></mrow></msup>\
+                <mo>+</mo><mn>3</mn><mi>x</mi><mo>+</mo><mn>1</mn>";
+    assert!(text.contains(giac), "{text}");
+    let text = mathml(&power_order(&cubic, true), names, balls, usize::MAX).unwrap();
+    assert!(
+        text.contains("<mn>1</mn><mo>+</mo><mn>3</mn><mi>x</mi>"),
+        "{text}"
+    );
 }

@@ -52,6 +52,11 @@
 //! in its three forms, 893 texts (`markup/giac_mathml.tsv`); it keeps giac's
 //! quirks too (`<true>` unclosed in content, `f(x)` inside a derivative
 //! with two `&af;`).
+//!
+//! Term order is the expression's: the language hook first puts sums of
+//! powers of one symbol in the order of the context's `increasing_power`
+//! ([`power_order`](crate::power_order), CAS-618; giac gen.cc :10094
+//! `islesscomplexthanf2`), so `x^{3}+3 x^{2}+3 x+1` with the flag off.
 
 mod engine;
 pub(crate) mod ident;
