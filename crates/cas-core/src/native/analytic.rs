@@ -148,12 +148,13 @@ pub(in crate::native) fn hilbert(ev: &mut Eval<'_>, e: &Expr, l: &Expr) -> Nativ
         .iter()
         .enumerate()
         .map(|(k, z)| {
-            if k == 0 || k == n.div_ceil(2) {
-                z.clone()
-            } else if k <= n / 2 {
-                z.add(z, prec)
-            } else {
+            // giac's loop stops at n/2: for odd n, (n+1)/2 lies past it.
+            if k > n / 2 {
                 ComplexBall::ZERO
+            } else if k == 0 || k == n.div_ceil(2) {
+                z.clone()
+            } else {
+                z.add(z, prec)
             }
         })
         .collect();
@@ -200,12 +201,24 @@ fn of_list(ev: &mut Eval<'_>, e: &Expr, z: &[Expr], phase: bool) -> Native {
     if size.is_none_or(|s| s > limit) {
         return Ok(None);
     }
+    // Arg of a complex ball builds `atan(b/a) + Pi`: decimals answer balls.
+    let inexact = z
+        .iter()
+        .any(|v| matches!(v.view(), View::Ball(_) | View::ComplexBall(_)));
+    let angle = |ev: &mut Eval<'_>, a: Expr| {
+        let a = ev.eval(&a)?;
+        if inexact {
+            ev.eval(&Expr::call(Symbol::N, [a]))
+        } else {
+            Ok(a)
+        }
+    };
     let mut out = Vec::with_capacity(n);
     if phase && n > 0 {
-        out.push(ev.eval(&Expr::call(Symbol::ARG, [z[0].clone()]))?);
+        out.push(angle(ev, Expr::call(Symbol::ARG, [z[0].clone()]))?);
     }
     for w in z.windows(2) {
-        let omega = ev.eval(&step_angle(&w[0], &w[1]))?;
+        let omega = angle(ev, step_angle(&w[0], &w[1]))?;
         let value = match (phase, out.last()) {
             (true, Some(previous)) => {
                 ev.eval(&Expr::call(Symbol::PLUS, [previous.clone(), omega]))?
