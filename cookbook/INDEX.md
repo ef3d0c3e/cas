@@ -76,3 +76,6 @@ C0073 | Writing a cas-core native: Ball path, View matches, Eval::context lifeti
 C0074 | giac's descending sorts are reversed stable ascending (ties reversed) | giac,sort,descending,ties,port | 2026-11-25 | 1.6/T8 | T8.c2 CAS-622
 C0075 | giac uppercase HP/TI names are not always aliases (SVL=svl, SVD!=svd): probe both | giac,alias,svd,svl,hp,ti,port | 2026-11-25 | 1.6/T8 | T8.c3 CAS-623
 C0076 | New builtins: ASCII-alnum internal names; LISTABLE never broadcasts a scalar; decimal rows within error | builtin,listable,registry,naming,oracle,decimal | 2026-11-25 | 1.6/T8 | T8.c4 CAS-621 CAS-622
+C0077 | giac error texts from caseval.py: ' | ' is libgiac's newline on CI | giac,oracle,caseval,errors,ci,departures | 2026-11-25 | 1.7/T2 | CI 45565458930 invalid_calls_stay
+C0078 | A CI test job that hangs: cancel the run, diff finished tests against the last green run | ci,tests,hang,gh,debugging,libtest | 2026-11-25 | 1.7/T2 | CI 45565458930 shared_subexpressions
+C0079 | Walks over an Expr keep a seen set; a may_contain fast path only hides a tree walk | expr,dag,traversal,bloom,builtins,hang,simplify | 2026-11-25 | 1.7/T2 | T2.c4 2488b71 shared_subexpressions
