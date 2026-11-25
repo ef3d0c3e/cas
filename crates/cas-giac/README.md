@@ -258,6 +258,22 @@ after giac's `restart`, ours in a new session, compared value by value:
   only: `time(1+1)` one nonnegative decimal (giac `[real, cpu]`),
   `monotonic()` a nonnegative decimal, `version()` starting `cas `.
 
+`tests/ti_names.rs`, Xcas's `type` (CAS-621), `iPart`, `fPart`, `frac` and
+`trunc` (CAS-622):
+- `type(e)==DOM_X` on both sides (giac prints its answer as the type's name):
+  integers of any size, rationals, decimals, complex numbers exact and
+  decimal, symbols (`x`, `pi`, `infinity`, `undef`), strings, lists,
+  functions (`sin`, `x->x^2`) and expressions; `iPart`, `fPart` and `frac`
+  of decimals, rationals, `sqrt(2)` and lists, `[iPart(4.3,sqrt(2))]`
+  bracketed (C0023); `trunc` to an integer and to `n` decimals, `n < 0` by
+  giac's significant digits, lists and `sqrt(2)+i*sqrt(5)`; ours exact on
+  exact input (`trunc(sqrt(2),3)` 707/500 against giac's 1.414, C0006);
+- the departures, with giac's text: `DOM_INT+0` (giac 2, ours `DOM_INT`),
+  `type(2)` printed (giac `integer`), `type(true)` (giac `integer`, ours
+  `DOM_IDENT`), `fPart(x)` (giac `x-sign(x)*floor(x*sign(x))`, ours stays),
+  `trunc(x)` (giac `floor(x)`), `trunc(-sqrt(2),3)` (giac floors, -1.415;
+  ours toward zero, -707/500).
+
 `tests/angle_radian.rs`, `tests/complex_mode.rs`,
 `tests/complex_variables.rs` and `tests/epsilon.rs`, the settings that change
 answers (CAS-617), one group a file, giac's flag set and reset within one

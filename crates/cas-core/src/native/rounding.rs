@@ -69,7 +69,7 @@ fn ends(x: &Expr) -> Option<(Rational, Rational)> {
 
 /// `x`'s value as a real ball or a rational, at increasing precision until
 /// `decided` tells from it; `None` past [`MAX_BITS`].
-fn decide<T>(
+pub(super) fn decide<T>(
     ctx: &Context,
     x: &Expr,
     decided: impl FnMut(&Rational, &Rational) -> Option<T>,

@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 634] = [
+const BUILTINS: [&str; 647] = [
     "Plus",
     "Times",
     "Power",
@@ -725,6 +725,20 @@ const BUILTINS: [&str; 634] = [
     "LaTeX",
     "ExportMathML",
     "MathML",
+    // Types, integer parts and truncation (CAS-621, CAS-622).
+    "Type",
+    "DOM_FLOAT",
+    "DOM_INT",
+    "DOM_RAT",
+    "DOM_COMPLEX",
+    "DOM_IDENT",
+    "DOM_LIST",
+    "DOM_SYMBOLIC",
+    "DOM_STRING",
+    "DOM_FUNC",
+    "IntegerPart",
+    "FractionalPart",
+    "Truncate",
 ];
 
 /// Builtins that apply something to parts, only in the expression

@@ -878,6 +878,21 @@ LaTeX: latex TeX
 # MathML (CAS-616), Xcas's.
 ExportMathML: export_mathml
 MathML: mathml
+# Types (CAS-621), Xcas's.
+Type: type
+DOM_FLOAT: DOM_FLOAT
+DOM_INT: DOM_INT DOM_int
+DOM_RAT: DOM_RAT
+DOM_COMPLEX: DOM_COMPLEX
+DOM_IDENT: DOM_IDENT
+DOM_LIST: DOM_LIST
+DOM_SYMBOLIC: DOM_SYMBOLIC
+DOM_STRING: DOM_STRING
+DOM_FUNC: DOM_FUNC
+# Integer and fractional parts, truncation (CAS-622), Xcas's.
+IntegerPart: iPart
+FractionalPart: fPart frac
+Truncate: trunc
 
 [planned]
 

@@ -1146,3 +1146,36 @@ fn user_symbols_and_restart() {
     assert_eq!(restarted.limits(), limits);
     assert_eq!(restarted.eval(&read("Ans[]")), Ok(Expr::from(5)));
 }
+
+/// `Type` and its nine answers (CAS-621, giac prog.cc `_type`).
+#[test]
+fn types() {
+    let ctx = Context::new();
+    let cases = [
+        ("Type[2]", "DOM_INT"),
+        ("Type[Power[2, 100]]", "DOM_INT"),
+        ("Type[1/2]", "DOM_RAT"),
+        ("Type[0x1p+1]", "DOM_FLOAT"),
+        ("Type[Complex[1, 1]]", "DOM_COMPLEX"),
+        ("Type[Complex[0x1p+0, 1]]", "DOM_COMPLEX"),
+        ("Type[x]", "DOM_IDENT"),
+        ("Type[Pi]", "DOM_IDENT"),
+        ("Type[True]", "DOM_IDENT"),
+        ("Type[\"a\"]", "DOM_STRING"),
+        ("Type[List[1, 2]]", "DOM_LIST"),
+        ("Type[Sin]", "DOM_FUNC"),
+        ("Type[Function[x, Power[x, 2]]]", "DOM_FUNC"),
+        ("Type[Power[2, 1/2]]", "DOM_SYMBOLIC"),
+        ("Type[Equal[x, 1]]", "DOM_SYMBOLIC"),
+        ("Type[x, y]", "Type[x, y]"),
+        ("Type[]", "Type[]"),
+    ];
+    let mut wrong = Vec::new();
+    for (input, expected) in cases {
+        let found = ctx.eval(&read(input)).unwrap();
+        if found != read(expected) {
+            wrong.push(format!("{input}: {found:?}, expected {expected}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}

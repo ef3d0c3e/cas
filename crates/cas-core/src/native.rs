@@ -80,6 +80,8 @@ mod sum;
 mod tables;
 mod text;
 mod trig;
+mod truncation;
+mod types;
 mod vector;
 mod zeta;
 mod ztransform;
@@ -1220,6 +1222,10 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::MONOTONIC, session::monotonic),
         (Symbol::VERSION, session::version),
         (Symbol::NO_DISPLAY, session::no_display),
+        (Symbol::TYPE, types::type_of),
+        (Symbol::INTEGER_PART, truncation::integer_part),
+        (Symbol::FRACTIONAL_PART, truncation::integer_part),
+        (Symbol::TRUNCATE, truncation::truncate),
     ];
     let mut table: [Option<NativeFn>; builtin::COUNT] = [None; builtin::COUNT];
     let mut i = 0;
