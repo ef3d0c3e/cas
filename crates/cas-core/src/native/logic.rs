@@ -155,8 +155,9 @@ fn complex_relation(left: &Num, right: &Num, prec: u64, strict: bool) -> Relatio
 }
 
 /// Whether `a` and `b` are equal in `ctx`, when it can be told:
-/// structurally equal expressions are; numbers, strings, booleans and
-/// infinities that differ are not; balls as [`ball_relation`] says. With
+/// structurally equal expressions are; numbers, strings, booleans,
+/// infinities and sound clips (giac's `==`, CAS-631) that differ are not;
+/// balls as [`ball_relation`] says. With
 /// strict comparisons, equal expressions with an inexact ball are not equal
 /// for sure: different values may have made the same ball.
 fn equal(a: &Expr, b: &Expr, ctx: &Context) -> Option<bool> {
@@ -175,6 +176,7 @@ fn equal(a: &Expr, b: &Expr, ctx: &Context) -> Option<bool> {
             || e.as_str().is_some()
             || truth(e).is_some()
             || matches!(Infinity::of(e), Some(Infinity::Directed(_)))
+            || super::sound::clip(e).is_some()
     };
     (known(a) && known(b)).then_some(false)
 }

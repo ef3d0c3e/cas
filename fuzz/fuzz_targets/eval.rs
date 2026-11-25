@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 674] = [
+const BUILTINS: [&str; 683] = [
     "Plus",
     "Times",
     "Power",
@@ -774,6 +774,16 @@ const BUILTINS: [&str; 674] = [
     // Clustering (CAS-630).
     "KMeans",
     "Cluster",
+    // Sound clips (CAS-631).
+    "SoundClip",
+    "CreateWav",
+    "SoundSeconds",
+    "SampleRate",
+    "BitDepth",
+    "Channels",
+    "Duration",
+    "ChannelData",
+    "About",
 ];
 
 /// Builtins that apply something to parts, only in the expression

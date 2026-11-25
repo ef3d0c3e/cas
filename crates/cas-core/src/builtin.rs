@@ -167,6 +167,16 @@ builtins! {
     AUTO_CORRELATION = "AutoCorrelation" [PROTECTED];
     // Thresholds of lists (CAS-524).
     THRESHOLD = "Threshold" [PROTECTED];
+    // Sound clips (CAS-631): giac's audio clips, `SoundClip` inert.
+    SOUND_CLIP = "SoundClip" [PROTECTED];
+    CREATE_WAV = "CreateWav" [PROTECTED];
+    SOUND_SECONDS = "SoundSeconds" [PROTECTED];
+    SAMPLE_RATE = "SampleRate" [PROTECTED];
+    BIT_DEPTH = "BitDepth" [PROTECTED];
+    CHANNELS = "Channels" [PROTECTED];
+    DURATION = "Duration" [PROTECTED];
+    CHANNEL_DATA = "ChannelData" [PROTECTED];
+    ABOUT = "About" [PROTECTED];
     // Strings, Xcas's (CAS-611, CAS-613).
     CHAR = "Char" [PROTECTED];
     ASC = "Asc" [PROTECTED];

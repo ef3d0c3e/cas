@@ -71,6 +71,7 @@ mod settings;
 mod signal;
 mod simplify;
 mod solve;
+mod sound;
 mod special;
 mod statistics;
 mod step;
@@ -169,6 +170,14 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::CROSS_CORRELATION, signal::correlation),
         (Symbol::AUTO_CORRELATION, signal::correlation),
         (Symbol::THRESHOLD, signal::threshold),
+        (Symbol::CREATE_WAV, sound::create_wav),
+        (Symbol::SOUND_SECONDS, sound::sound_seconds),
+        (Symbol::SAMPLE_RATE, sound::property),
+        (Symbol::BIT_DEPTH, sound::property),
+        (Symbol::CHANNELS, sound::property),
+        (Symbol::DURATION, sound::property),
+        (Symbol::CHANNEL_DATA, sound::channel_data),
+        (Symbol::ABOUT, sound::about),
         (Symbol::CHAR, strings::char),
         (Symbol::ASC, strings::asc),
         (Symbol::ORD, strings::ord),

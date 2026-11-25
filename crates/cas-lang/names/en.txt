@@ -877,6 +877,16 @@ CrossCorrelation: cross_correlation
 AutoCorrelation: auto_correlation
 # Thresholds of lists (CAS-524), Xcas's.
 Threshold: threshold
+# Sound clips (CAS-631), Xcas's; a clip is `SoundClip[rate, depth, {codes}…]`.
+SoundClip: soundclip
+CreateWav: createwav
+SoundSeconds: soundsec
+SampleRate: samplerate
+BitDepth: bit_depth
+Channels: channels
+Duration: duration
+ChannelData: channel_data
+About: about
 # Strings (CAS-611, CAS-613), Xcas's.
 Char: char chr
 Asc: asc
