@@ -50,6 +50,8 @@
 mod convert;
 mod flat;
 mod print;
+#[cfg(test)]
+mod tests;
 
 use cas_core::Expr;
 
