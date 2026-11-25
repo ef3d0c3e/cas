@@ -1,4 +1,5 @@
-//! Tests of `ToString`, `ToExpression` and `Cat` (CAS-614), and of the
+//! Tests of `ToString`, `ToExpression`, `Cat` (CAS-614) and `LaTeX`
+//! (CAS-615), and of the
 //! non-strings in `StringJoin` and `Join`: what each does with no language
 //! hook, and the logic (caps, warnings) through a stub language that prints
 //! and reads full form. cas-lang's session tests run them with the
@@ -86,6 +87,7 @@ fn without_a_hook() {
         &[
             "ToString[x]",
             "ToString[\"a\"]",
+            "LaTeX[x]",
             "ToExpression[\"1\"]",
             "Cat[\"a\", x]",
             "Cat[1]",
@@ -120,6 +122,8 @@ fn shapes_that_stay() {
         &[
             "ToString[]",
             "ToString[x, y]",
+            "LaTeX[]",
+            "LaTeX[x, \"file\"]",
             "ToExpression[]",
             "ToExpression[x]",
             "ToExpression[\"1\", 2]",
@@ -140,6 +144,7 @@ fn through_the_hook() {
         &ctx,
         &[
             ("ToString[f[x]]", "\"f[x]\""),
+            ("LaTeX[f[x]]", "\"f[x]\""),
             ("ToString[\"a\"]", "\"\\\"a\\\"\""),
             ("ToExpression[\"Plus[1, 1]\"]", "2"),
             ("ToExpression[ToString[f[x, 2]]]", "f[x, 2]"),

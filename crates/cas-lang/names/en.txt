@@ -848,6 +848,8 @@ Strip: strip
 ToString: string str
 ToExpression: expr execute
 Cat: cat
+# LaTeX (CAS-615), Xcas's.
+LaTeX: latex TeX
 
 [planned]
 

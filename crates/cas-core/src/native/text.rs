@@ -1,6 +1,6 @@
 //! Expressions as text and text as expressions (CAS-614): `ToString`
 //! (giac's `string`, `str`), `ToExpression` (`expr`, `execute`) and `Cat`
-//! (`cat`), and the printing of non-strings that `StringJoin` (`join`) and
+//! (`cat`); `LaTeX` (`latex`, `TeX`; CAS-615); and the printing of non-strings that `StringJoin` (`join`) and
 //! `Join` (`concat`) share with `Cat`. Ported from giac 2.0.0.21: prog.cc
 //! `_string` (:10930) and `_expr` (:10892-10924), maple.cc `_cat`
 //! (:946-958), permu.cc `_join` (:1803-1824). They print and read through
@@ -38,6 +38,17 @@ type Native = Result<Option<Expr>, EvalError>;
 
 /// `ToString[e]`: `e` in the input form.
 pub(super) fn to_string(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    printed(ev, e, Form::Input)
+}
+
+/// `LaTeX[e]` (CAS-615): `e` as LaTeX, giac's `latex` (tex.cc `_latex`).
+/// `latex(e, "file")` stays.
+pub(super) fn latex(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    printed(ev, e, Form::Latex)
+}
+
+/// `head[x]`: `x` printed in `form` through the hook, as a string.
+fn printed(ev: &mut Eval<'_>, e: &Expr, form: Form) -> Native {
     let [x] = e.args() else {
         return Ok(None);
     };
@@ -45,7 +56,7 @@ pub(super) fn to_string(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some(language) = context.language() else {
         return Ok(None);
     };
-    match language.print(x, Form::Input, context, context.limits().terms) {
+    match language.print(x, form, context, context.limits().terms) {
         Ok(text) => Ok(Some(Expr::string(&text))),
         Err(message) => {
             warn(ev, message, e);

@@ -187,6 +187,8 @@ builtins! {
     TO_STRING = "ToString" [PROTECTED];
     TO_EXPRESSION = "ToExpression" [PROTECTED];
     CAT = "Cat" [PROTECTED];
+    // LaTeX, Xcas's (CAS-615).
+    LA_TE_X = "LaTeX" [PROTECTED];
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];
