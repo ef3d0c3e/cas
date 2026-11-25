@@ -8,3 +8,4 @@ T5 | done | the MathML printers: export_mathml and mathml | - | tasks/T5.md | lo
 T6 | done | settings: angle, complex and approximate modes, increasing_power, epsilon, cas_setup and giac's tuning words | - | tasks/T6.md | logs/T6.md | R1.6-002,R1.6-006
 T7 | done | session commands: restart, the variable lists, history, clocks, version and nodisp | - | tasks/T7.md | logs/T7.md | R1.6-002,R1.6-006,R1.5-003
 T8 | done | area 18's names: type and the DOM_* constants, iPart, fPart, trunc, the TI sorts, sortperm, RandSeed, symbols and TI matrix names | - | tasks/T8.md | logs/T8.md | R1.6-003,R1.6-006
+T9 | done | push master for the phase's final CI and Fuzz runs | - | tasks/T9.md | logs/T9.md | -
