@@ -402,6 +402,30 @@ and `kde` (CAS-629):
   0.9409)`), and the normal fit of a log-normal sample's logarithms within
   four of `(5, √2)` (0.18 and 0.127; giac `(5.0334, 1.4515)`), both sides.
 
+`tests/clustering.rs`, Xcas's `cluster` and `kmeans` (CAS-630; giac's
+answers in probe4.out and probe8.out, the prototype .run/1.7/T6/proto.py,
+R1.7-012):
+- `cluster` (21 rows: D6, E6, 1-D and one- and two-point data, every
+  linkage, `count=`, `output=list` and `output=count`) giac's labels and
+  ours as they are;
+- `kmeans`' seed-independent rows (9: D6 with no `k`, 2 and `output=list`
+  under no seed, `srand(42)` and `srand(1)`; four 2-D points plain and in
+  `matrix(…)`, with a rational fifth; `[[1],[2],[10],[11]]`) giac's partition
+  and ours up to relabelling, and `kmeans(E6,3,output=count)` = 3 exactly;
+- departures, the seed-dependent rows (9: `srand(42);kmeans(D6,3)`, E6 with
+  no `k`, `count=2..4`, 3, `count=3`, `output=list`, `srand(7)` and
+  `srand(1)`, and `kmeans([1,2,10,11,20,21],3)`, where giac crashes on
+  scalar data and is not asked): giac's and ours among the partitions the
+  prototype found over 200 seeds;
+- invalid calls (28 rows: giac's errors in the probes, among them the
+  agreeing stays rows `kmeans(D6,2..4)` "Invalid option",
+  `kmeans([[1,2],[3,4]],2)` "Invalid k-range" and `cluster(D6,type=complete)`
+  "Expected a string") stay with giac's message as the warning;
+- graphics (`kmeans(E6,3,output=plot)`, `cluster(D6,output=plot)` and
+  `output=tree`): giac draws, ours stays without a warning;
+- seeded rows (C0014): `srand(s)` then `kmeans(E6,3)` twice gives the same
+  labels, s = 1, 7, 42, 2024.
+
 `tests/tail_probabilities.rs`, Xcas's upper tails `UTPN`, `UTPT`, `UTPC` and
 `UTPF` (CAS-625), and `cdf`, `icdf` and `mgf` of a law by its name, of a
 `randvar` object or of a list (CAS-626):

@@ -681,6 +681,9 @@ builtins! {
     BANDWIDTH = "Bandwidth" [PROTECTED];
     BINS = "Bins" [PROTECTED];
     FIT_DISTRIBUTION = "FitDistribution" [PROTECTED];
+    // Clustering (CAS-630).
+    KMEANS = "KMeans" [PROTECTED];
+    CLUSTER = "Cluster" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

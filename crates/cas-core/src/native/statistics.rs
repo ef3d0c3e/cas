@@ -37,7 +37,9 @@
 //!   [`random_variables`].
 //! - Markov chains, Xcas's `markov` and `randmarkov` (CAS-628): [`markov`].
 //! - Distribution fitting, Xcas's `fitdistr` (CAS-629): [`fitting`].
+//! - Clustering, Xcas's `kmeans` and `cluster` (CAS-630): [`clustering`].
 
+pub(super) mod clustering;
 pub(super) mod density;
 pub(super) mod descriptive;
 pub(super) mod distributions;

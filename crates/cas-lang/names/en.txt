@@ -833,6 +833,9 @@ KernelDensity: kernel_density kde
 Bandwidth: bandwidth
 Bins: bins
 FitDistribution: fitdistr
+# Clustering (CAS-630).
+KMeans: kmeans
+Cluster: cluster
 
 # Bessel and Airy functions (CAS-DOC-34), the order first; giac's
 # lowercase `besselJ(x, n)` takes the argument first and is not these.

@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 672] = [
+const BUILTINS: [&str; 674] = [
     "Plus",
     "Times",
     "Power",
@@ -771,6 +771,9 @@ const BUILTINS: [&str; 672] = [
     "Bandwidth",
     "Bins",
     "FitDistribution",
+    // Clustering (CAS-630).
+    "KMeans",
+    "Cluster",
 ];
 
 /// Builtins that apply something to parts, only in the expression

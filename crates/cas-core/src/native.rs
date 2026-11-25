@@ -1045,6 +1045,8 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::FIT_DISTRIBUTION,
             statistics::fitting::fit_distribution,
         ),
+        (Symbol::KMEANS, statistics::clustering::kmeans),
+        (Symbol::CLUSTER, statistics::clustering::cluster),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),
