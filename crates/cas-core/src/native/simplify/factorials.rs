@@ -7,7 +7,13 @@
 //! (u + j)` above it and `(u + s)!/((u + j + 1) ⋯ (u + s))` below; each as
 //! it evaluates and made `Together`. So `n!/(n-1)!` is `n`,
 //! `binomial(n,k)/binomial(n,k-1)` is `(n-k+1)/k`, and `(n+2)/(n+2)!` is
-//! `1/(n+1)!` (the shift −1).
+//! `1/(n+1)!` (the shift −1). The factorials are found once per distinct
+//! subexpression, so a shared one (`f[e, e]` nested) costs its size, not
+//! its occurrences (CAS-624).
+
+use std::collections::HashSet;
+
+use foldhash::fast::FixedState;
 
 use super::evaluated;
 use crate::context::EvalError;
@@ -61,10 +67,18 @@ pub(super) fn candidates(ev: &mut Eval<'_>, e: &Expr) -> Result<Vec<Expr>, EvalE
 }
 
 /// The arguments of the factorials of `f` but numbers, in classes.
+///
+/// Each distinct subexpression is walked once: the stack is LIFO, so a
+/// later occurrence comes after the first one's whole subtree, whose
+/// arguments are already listed, and the order is the tree walk's.
 fn classes(ev: &mut Eval<'_>, f: &Expr) -> Result<Vec<Class>, EvalError> {
     let mut arguments: Vec<Expr> = Vec::new();
+    let mut seen: HashSet<&Expr, FixedState> = HashSet::with_hasher(FixedState::default());
     let mut stack = vec![f];
     while let Some(x) = stack.pop() {
+        if !seen.insert(x) {
+            continue;
+        }
         if let View::Apply { head, args } = x.view() {
             if head.as_symbol() == Some(Symbol::FACTORIAL)
                 && let [u] = args

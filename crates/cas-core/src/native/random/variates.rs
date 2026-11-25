@@ -135,9 +135,14 @@ pub(in crate::native) fn variate(ev: &mut Eval<'_>, law: Law, parameters: &[Expr
         let warned = ev.warnings_given();
         let value = ev.eval(&Expr::apply(&inverse, &args))?;
         if !value.contains(&inverse) {
+            // A symbol among the parameters: the inverse answers in it
+            // (`μ + σ √2 erfinv(2u − 1)`), no draw; the call stays.
+            if !value.is_numeric() {
+                return Ok(None);
+            }
             // The normal's inverse keeps √2 exact beside its ball: one
             // number by `N`.
-            if !value.is_number() && value.is_numeric() {
+            if !value.is_number() {
                 return ev.eval(&Expr::call(Symbol::N, [value])).map(Some);
             }
             return Ok(Some(value));
