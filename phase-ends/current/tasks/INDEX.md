@@ -8,3 +8,4 @@ T5 | done | density estimation and fitting: kernel_density kde, bandwidth, bins,
 T6 | done | clustering: kmeans and cluster | - | tasks/T6.md | logs/T6.md | R1.7-012,R1.7-005
 T7 | done | sound clips: createwav, soundsec, samplerate, bit_depth, channels, duration, channel_data and about | - | tasks/T7.md | logs/T7.md | R1.7-001,R1.7-002,R1.7-006,R1.6-006,R1.4-005
 T8 | done | clip edits and resampling: set_channel_data, stereo2mono, mixdown, splice, resample | - | tasks/T8.md | logs/T8.md | R1.7-002,R1.7-008
+T9 | done | signal transforms: dwt, idwt, hilbert's list form, instfreq, instphase, emd | - | tasks/T9.md | logs/T9.md | R1.7-013,R1.7-002,R1.7-006
