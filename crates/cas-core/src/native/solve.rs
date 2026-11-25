@@ -53,7 +53,9 @@
 //! trace leaves unchecked: the roots' order follows the parameters' values.
 //!
 //! Xcas's `zeros` and `cZeros` are names of `Solve` and `CSolve` (CAS-536),
-//! in their orders; `CFSolve`, `cfsolve`, finds complex roots by number
+//! in their orders. With Xcas's `complex_mode` on (CAS-617), `Solve` is
+//! `CSolve`: `solve(x^2+1=0,x)` is `[i,-i]`. `CFSolve`, `cfsolve`, finds
+//! complex roots by number
 //! ([`fsolve::complex`]). `Newton` and `NSolve`, Xcas's `newton` and
 //! `nSolve`, find one root by giac's damped Newton iteration
 //! ([`newton`], CAS-591).
@@ -95,8 +97,12 @@ const MAX_NUMERIC_DEGREE: u64 = 64;
 /// precision: 16 times the working precision for a higher one.
 const MAX_ROOT_BITS: u64 = 2048;
 
-/// `Solve[eqn, x]`, Xcas's `solve`: the real solutions in the Real domain.
+/// `Solve[eqn, x]`, Xcas's `solve`: the real solutions in the Real domain;
+/// with Xcas's `complex_mode` on (CAS-617), [`complex_solve`].
 pub(super) fn solve(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    if ev.context().complex_mode() {
+        return complex_solve(ev, e);
+    }
     solving(ev, e, false)
 }
 

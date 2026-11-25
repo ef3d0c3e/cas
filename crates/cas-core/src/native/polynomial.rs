@@ -1681,8 +1681,19 @@ pub(super) fn factored<R: Factoring>(
 /// `(x+1)*(x+2*i)`. As giac's default, a quadratic factor in one generator
 /// then splits over square roots ([`split_quadratic`]): `factor(x^2-2)` is
 /// `(x-sqrt(2))*(x+sqrt(2))`; not with Xcas's `with_sqrt` off (CAS-545),
-/// as [`factor_rational`]. An infinity is given back.
+/// as [`factor_rational`]. An infinity is given back. With Xcas's
+/// `complex_mode` on (CAS-617), `ComplexFactor`'s native: `factor(x^2+1)`
+/// is `(x+i)*(x-i)`.
 pub(super) fn factor(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    if ev.context().complex_mode() {
+        return super::polytools::two::complex_factor(ev, e);
+    }
+    factor_as_set(ev, e)
+}
+
+/// [`factor`] whatever `complex_mode`: `ComplexFactor`'s own step, which
+/// would come back to it through `Factor` with the mode on.
+pub(in crate::native) fn factor_as_set(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let roots = ev.context().with_sqrt();
     factoring(ev, e, roots)
 }

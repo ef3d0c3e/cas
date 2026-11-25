@@ -13,9 +13,10 @@
 //! multiply to the `y` part, the others free of `y` to the `x` part, and
 //! `[0]` when a factor has both. `trim` takes giac's whitespace (space and
 //! codes 9 to 13) off a string, and the zeros off the ends of a list: exact
-//! 0 or a decimal within giac's `epsilon` 1e-12, or with a threshold `t > 0`
-//! the real entries below `t` in absolute value (another entry met makes it
-//! stay). `strip` takes spaces, or the given characters.
+//! 0 or a decimal within giac's `epsilon` (the context's, 1e-12 by
+//! default), or with a threshold `t > 0` the real entries below `t` in
+//! absolute value (another entry met makes it stay). `strip` takes spaces,
+//! or the given characters.
 //!
 //! Positions are 0-based and count Unicode scalar values. A call giac
 //! refuses, or whose shape is not one of these, stays unevaluated.
@@ -46,7 +47,6 @@ use std::cmp::Ordering;
 use cas_num::Rational;
 use cas_num::ball::Ball;
 
-use super::expressions::EPSILON;
 use super::text::concatenated;
 use crate::context::EvalError;
 use crate::eval::Eval;
@@ -483,11 +483,11 @@ fn is_whitespace(c: char) -> bool {
 
 /// Whether `x` is zero for `trim`: below the threshold `t` in absolute
 /// value, `None` when `x` is not a real number; without one exactly 0, or a
-/// decimal within [`EPSILON`].
-fn trimmed(x: &Expr, t: Option<&Real>) -> Option<bool> {
+/// decimal within `epsilon`, the context's (Xcas's `epsilon`, CAS-617).
+fn trimmed(x: &Expr, t: Option<&Real>, epsilon: f64) -> Option<bool> {
     let Some(t) = t else {
         return Some(match x.view() {
-            View::Ball(b) => b.mid().to_f64().abs() <= EPSILON,
+            View::Ball(b) => b.mid().to_f64().abs() <= epsilon,
             _ => x.to_rational().is_some_and(|q| q.is_zero()),
         });
     };
@@ -501,7 +501,7 @@ fn trimmed(x: &Expr, t: Option<&Real>) -> Option<bool> {
 /// `Trim[s]`: `s` without whitespace at its ends; `Trim[v]`, `Trim[v, t]`:
 /// the list `v` without its zeros at its ends, below `t` when given. A last
 /// option `Left` or `Right` trims that end only.
-pub(super) fn trim(_: &mut Eval<'_>, e: &Expr) -> Native {
+pub(super) fn trim(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [a, options @ ..] = e.args() else {
         return Ok(None);
     };
@@ -539,10 +539,11 @@ pub(super) fn trim(_: &mut Eval<'_>, e: &Expr) -> Native {
         _ => return Ok(None),
     };
     let items = a.args();
+    let epsilon = ev.context().epsilon();
     let (mut i, mut j) = (0, items.len());
     if left {
         while i < j {
-            let Some(zero) = trimmed(&items[i], threshold.as_ref()) else {
+            let Some(zero) = trimmed(&items[i], threshold.as_ref(), epsilon) else {
                 return Ok(None);
             };
             if !zero {
@@ -553,7 +554,7 @@ pub(super) fn trim(_: &mut Eval<'_>, e: &Expr) -> Native {
     }
     if right {
         while j > i {
-            let Some(zero) = trimmed(&items[j - 1], threshold.as_ref()) else {
+            let Some(zero) = trimmed(&items[j - 1], threshold.as_ref(), epsilon) else {
                 return Ok(None);
             };
             if !zero {

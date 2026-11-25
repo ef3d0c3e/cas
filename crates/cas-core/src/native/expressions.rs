@@ -33,8 +33,9 @@
 //!   map; an undecided test stays.
 //! - [`epsilon_to_zero`]: `EpsilonToZero[e]` and `EpsilonToZero[e, eps]`,
 //!   giac's `epsilon2zero` (misc.cc): each decimal of absolute value at most
-//!   `eps` (giac's `epsilon`, `10⁻¹²`) becomes 0, the real and imaginary
-//!   parts of a complex decimal apart. It holds its arguments, as evaluation
+//!   `eps` (by default the context's `epsilon`, Xcas's, `10⁻¹²` unless set,
+//!   CAS-617) becomes 0, the real and imaginary parts of a complex decimal
+//!   apart. It holds its arguments, as evaluation
 //!   would merge `1e-13 + 5` into one decimal giac keeps apart: the held
 //!   expression is cleared, evaluated, and cleared again.
 //! - [`infinite_q`]: `InfiniteQ[e]`, giac's `isinf`: whether `e` is an
@@ -83,9 +84,6 @@ type Native = Result<Option<Expr>, EvalError>;
 /// giac's `MAX_ALG_EXT_ORDER_SIZE`: the largest root order `algvar` takes
 /// for an algebraic extension.
 const MAX_ROOT_ORDER: i64 = 4;
-
-/// giac's `epsilon`, the default bound of `epsilon2zero` and of `trim`.
-pub(super) const EPSILON: f64 = 1e-12;
 
 fn list(items: Vec<Expr>) -> Expr {
     Expr::call(Symbol::LIST, items)
@@ -378,7 +376,7 @@ fn clear(ev: &mut Eval<'_>, e: &Expr, eps: f64) -> Result<Expr, EvalError> {
 /// `EpsilonToZero[e]`, `EpsilonToZero[e, eps]`, holding its arguments.
 pub(super) fn epsilon_to_zero(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let (x, eps) = match e.args() {
-        [x] => (x, Some(EPSILON)),
+        [x] => (x, Some(ev.context().epsilon())),
         [x, eps] => {
             let eps = ev.eval(&Expr::call(Symbol::N, [eps.clone()]))?;
             let eps = match eps.view() {

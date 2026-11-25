@@ -43,7 +43,8 @@
 //!
 //! - **`ComplexFactor[p]`**, `cfactor`: `Factor` over ℚ(i), as it factors
 //!   when a coefficient is complex: `Factor[i p]/i`, giac's
-//!   `(x+i)*(x-i)` for `x² + 1`.
+//!   `(x+i)*(x-i)` for `x² + 1`; `Factor` itself with Xcas's
+//!   `complex_mode` on (CAS-617).
 //! - **`CompleteSquare[p, x]`**, `canonical_form`: `a (x + b/(2a))² + c −
 //!   b²/(4a)` for `a x² + b x + c`, giac's `(x-3)^2-7`.
 //! - **`DigitPolynomial[n, b, x]`**, `genpoly`: `Σ dᵢ xⁱ` with `n = Σ dᵢ bⁱ`,
@@ -592,13 +593,24 @@ pub(in crate::native) fn pade_approximant(ev: &mut Eval<'_>, e: &Expr) -> Native
     answer(ev, "pade", e, &result)
 }
 
-/// `ComplexFactor[p]`.
+/// `ComplexFactor[p]`, and `Factor[p]` with Xcas's `complex_mode` on
+/// (CAS-617): `Factor[i p]` then, called as set, as `Factor`'s native would
+/// come back here.
 pub(in crate::native) fn complex_factor(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [p] = e.args() else {
         return Ok(None);
     };
     let i = Expr::from(Complex::new(Rational::ZERO, Rational::ONE));
-    let factored = ev.eval(&call(Symbol::FACTOR, vec![i.clone() * p.clone()]))?;
+    let factored = if ev.context().complex_mode() {
+        let product = ev.eval(&(i.clone() * p.clone()))?;
+        let factor = call(Symbol::FACTOR, vec![product]);
+        match super::super::polynomial::factor_as_set(ev, &factor)? {
+            Some(factored) => ev.eval(&factored)?,
+            None => return Ok(None),
+        }
+    } else {
+        ev.eval(&call(Symbol::FACTOR, vec![i.clone() * p.clone()]))?
+    };
     if factored.head() == Some(&Expr::from(Symbol::FACTOR)) {
         return Ok(None);
     }

@@ -8,6 +8,17 @@
 //! `0.0`. Exact arguments have their special values first (CAS-200,
 //! `special`), `Sin[Pi/6]` is `1/2`; others stay as they are.
 //!
+//! Xcas's `angle_radian` (CAS-617, giac's usual.cc:167-186, :614-698): with
+//! the context's [`Angle`] in degrees or grads, `Sin`, `Cos` and `Tan` of a
+//! number `x` are those of `x π/180` (`x π/200`), through the special values
+//! and the balls, and `ArcSin`, `ArcCos` and `ArcTan` of a number their
+//! values times `180/π` (`200/π`): `sin(30)` is `1/2`, `asin(1/2)` is `30`
+//! and `cos(1)` stays, as an answer still held keeps the call. Other
+//! arguments, symbols and `π` among them, stay, without the compositions
+//! and periodicity of radians; the reciprocals follow through their
+//! rewriting, `ArcCot[0]` is `90` (`100`). The hyperbolic functions and
+//! `Exp` are the same in every mode.
+//!
 //! Xcas's logarithms to a base and angle conversions, rewritten exactly,
 //! listable:
 //!
@@ -24,8 +35,9 @@ use cas_num::ball::{Ball, ComplexBall};
 use cas_num::{Integer, Rational};
 
 use super::number::{Infinity, Num, Precision};
+use super::numeric::approximation;
 use super::special;
-use crate::context::EvalError;
+use crate::context::{Angle, EvalError};
 use crate::eval::Eval;
 use crate::expr::Expr;
 use crate::symbol::Symbol;
@@ -91,28 +103,100 @@ pub(super) fn log(ev: &mut Eval<'_>, e: &Expr) -> Native {
     elementary(ev, e, Ball::log, ComplexBall::log)
 }
 
+/// One unit of the context's [`Angle`] in radians, `π/180` or `π/200`;
+/// `None` in radians.
+fn unit(ev: &Eval<'_>) -> Option<Expr> {
+    let per = match ev.context().angle() {
+        Angle::Radian => return None,
+        Angle::Degree => 180,
+        Angle::Grad => 200,
+    };
+    Some(Expr::from(Rational::new(Integer::ONE, Integer::from(per))) * Symbol::PI)
+}
+
+/// `e` evaluated, or for the number `n` a ball approximated at the working
+/// precision, as a ball times `π` stays a product.
+fn scaled(ev: &mut Eval<'_>, n: &Num, e: &Expr) -> Result<Expr, EvalError> {
+    if n.is_ball() {
+        let ctx = ev.context();
+        approximation(ctx, e, ctx.working_precision())
+    } else {
+        ev.eval(e)
+    }
+}
+
+/// `Sin`, `Cos` and `Tan` in the context's [`Angle`]: [`elementary`] in
+/// radians; otherwise of a number only, at it in radians, the call kept
+/// when the answer is still held.
+fn trigonometric(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    real: fn(&Ball, u64) -> Ball,
+    complex: fn(&ComplexBall, u64) -> ComplexBall,
+) -> Native {
+    let Some(unit) = unit(ev) else {
+        return elementary(ev, e, real, complex);
+    };
+    let (Some(f), [x]) = (e.head().and_then(Expr::as_symbol), e.args()) else {
+        return Ok(None);
+    };
+    let Some(n) = Num::of(x) else {
+        return Ok(None);
+    };
+    let radians = scaled(ev, &n, &(x.clone() * unit))?;
+    let value = elementary(ev, &Expr::call(f, [radians]), real, complex)?;
+    Ok(value.filter(|v| !v.contains(&Expr::from(f))))
+}
+
+/// `ArcSin`, `ArcCos` and `ArcTan` in the context's [`Angle`]:
+/// [`elementary`] in radians; otherwise of a number only, its value in
+/// radians over one unit, the call kept when the answer is still held.
+fn inverse(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    real: fn(&Ball, u64) -> Ball,
+    complex: fn(&ComplexBall, u64) -> ComplexBall,
+) -> Native {
+    let Some(unit) = unit(ev) else {
+        return elementary(ev, e, real, complex);
+    };
+    let (Some(f), [x]) = (e.head().and_then(Expr::as_symbol), e.args()) else {
+        return Ok(None);
+    };
+    let Some(n) = Num::of(x) else {
+        return Ok(None);
+    };
+    let Some(radians) = elementary(ev, e, real, complex)? else {
+        return Ok(None);
+    };
+    if radians.contains(&Expr::from(f)) {
+        return Ok(None);
+    }
+    scaled(ev, &n, &(radians / unit)).map(Some)
+}
+
 pub(super) fn sin(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    elementary(ev, e, Ball::sin, ComplexBall::sin)
+    trigonometric(ev, e, Ball::sin, ComplexBall::sin)
 }
 
 pub(super) fn cos(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    elementary(ev, e, Ball::cos, ComplexBall::cos)
+    trigonometric(ev, e, Ball::cos, ComplexBall::cos)
 }
 
 pub(super) fn tan(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    elementary(ev, e, Ball::tan, ComplexBall::tan)
+    trigonometric(ev, e, Ball::tan, ComplexBall::tan)
 }
 
 pub(super) fn arc_sin(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    elementary(ev, e, Ball::asin, ComplexBall::asin)
+    inverse(ev, e, Ball::asin, ComplexBall::asin)
 }
 
 pub(super) fn arc_cos(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    elementary(ev, e, Ball::acos, ComplexBall::acos)
+    inverse(ev, e, Ball::acos, ComplexBall::acos)
 }
 
 pub(super) fn arc_tan(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    elementary(ev, e, Ball::atan, ComplexBall::atan)
+    inverse(ev, e, Ball::atan, ComplexBall::atan)
 }
 
 pub(super) fn sinh(ev: &mut Eval<'_>, e: &Expr) -> Native {
@@ -142,8 +226,9 @@ pub(super) fn arc_tanh(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// The reciprocal trigonometric functions, rewritten as giac does
 /// (CAS-DOC-15 §3, CAS-239): `Sec[x] = 1/Cos[x]`, `Csc[x] = 1/Sin[x]`,
 /// `Cot[x] = Cos[x]/Sin[x]`, `ArcSec[x] = ArcCos[1/x]`, `ArcCsc[x] =
-/// ArcSin[1/x]` and `ArcCot[x] = ArcTan[1/x]`, `ArcCot[0] = Pi/2`.
-pub(super) fn reciprocal(_: &mut Eval<'_>, e: &Expr) -> Native {
+/// ArcSin[1/x]` and `ArcCot[x] = ArcTan[1/x]`, `ArcCot[0] = Pi/2`, over
+/// one unit of the context's [`Angle`] in degrees or grads.
+pub(super) fn reciprocal(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let (Some(f), [x]) = (e.head().and_then(Expr::as_symbol), e.args()) else {
         return Ok(None);
     };
@@ -156,7 +241,12 @@ pub(super) fn reciprocal(_: &mut Eval<'_>, e: &Expr) -> Native {
         Symbol::ARC_SEC => call(Symbol::ARC_COS, inverse()),
         Symbol::ARC_CSC => call(Symbol::ARC_SIN, inverse()),
         Symbol::ARC_COT if *x == Expr::from(0) => {
-            Expr::from(Rational::new(Integer::ONE, Integer::from(2))) * Expr::from(Symbol::PI)
+            let right =
+                Expr::from(Rational::new(Integer::ONE, Integer::from(2))) * Expr::from(Symbol::PI);
+            match unit(ev) {
+                Some(unit) => right / unit,
+                None => right,
+            }
         }
         Symbol::ARC_COT => call(Symbol::ARC_TAN, inverse()),
         _ => return Ok(None),

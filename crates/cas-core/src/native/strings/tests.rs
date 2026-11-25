@@ -368,3 +368,14 @@ fn elsewhere() {
         );
     }
 }
+
+/// `trim`'s default bound: the context's `epsilon` (CAS-617).
+#[test]
+fn trim_reads_the_epsilon() {
+    let mut ctx = Context::new();
+    ctx.set_epsilon(1e-3);
+    let found = ctx
+        .eval(&read("Trim[List[0x1p-14, 1, 0x1p-14, 0x1p-7]]"))
+        .unwrap();
+    assert_eq!(found, ctx.eval(&read("List[1, 0x1p-14, 0x1p-7]")).unwrap());
+}

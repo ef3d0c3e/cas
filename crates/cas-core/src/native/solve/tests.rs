@@ -162,6 +162,24 @@ fn the_complex_domain() {
     );
 }
 
+/// Xcas's `complex_mode` (CAS-617): `Solve` is `CSolve`, giac's `[i,-i]`.
+#[test]
+fn complex_mode() {
+    let mut ctx = Context::new();
+    ctx.set_complex_mode(true);
+    check_in(
+        &ctx,
+        &[
+            ("Solve[Plus[1, Power[x, 2]], x]", "List[I, Times[-1, I]]"),
+            (
+                "Solve[Plus[-2, Power[x, 2]], x]",
+                "CSolve[Plus[-2, Power[x, 2]], x]",
+            ),
+        ],
+    );
+    check(&[("Solve[Plus[1, Power[x, 2]], x]", "List[]")]);
+}
+
 /// Parameters: giac's formulas, `+√Δ` first, the sign of `Δ` from the
 /// assumptions where they tell it.
 #[test]

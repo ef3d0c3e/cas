@@ -262,3 +262,17 @@ fn equations_and_lists() {
         ("EquationsToList[x]", "List[x]"),
     ]);
 }
+
+/// `epsilon2zero`'s default bound: the context's `epsilon` (CAS-617).
+#[test]
+fn epsilon_to_zero_reads_the_context() {
+    let mut ctx = Context::new();
+    ctx.set_epsilon(1e-3);
+    for (input, expected) in [
+        ("EpsilonToZero[Plus[0x1p-14, x]]", "x"),
+        ("EpsilonToZero[Plus[0x1p-7, x]]", "Plus[0x1p-7, x]"),
+    ] {
+        let found = ctx.eval(&read(input)).unwrap();
+        assert_eq!(found, ctx.eval(&read(expected)).unwrap(), "{input}");
+    }
+}

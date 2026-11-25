@@ -1,7 +1,7 @@
 //! Tests of the special values (CAS-200): giac's table, the shifts and
 //! signs, what stays.
 
-use crate::{Context, Expr};
+use crate::{Context, Expr, Symbol};
 
 fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
@@ -351,4 +351,85 @@ fn integer_multiples_of_pi() {
         let e = ctx.eval(&read(input)).unwrap();
         assert_eq!(e.head(), read(input).head(), "{input}: {e:?}");
     }
+}
+
+/// Xcas's `angle_radian` (CAS-617), giac's answers: in `angle`, the
+/// `values` evaluate to their radian `expected`, the `held` stay, and the
+/// `decimals` are within `10⁻¹⁰` of theirs.
+fn check_angle(
+    angle: crate::Angle,
+    values: &[(&str, &str)],
+    held: &[&str],
+    decimals: &[(&str, &str)],
+) {
+    let mut ctx = Context::new();
+    ctx.set_angle(angle);
+    let radians = Context::new();
+    let mut wrong = Vec::new();
+    for (input, expected) in values {
+        let found = ctx.eval(&read(input)).unwrap();
+        let expected = radians.eval(&read(expected)).unwrap();
+        if found != expected {
+            wrong.push(format!("{input}: {found:?}, expected {expected:?}"));
+        }
+    }
+    for input in held {
+        let found = ctx.eval(&read(input)).unwrap();
+        if found != read(input) {
+            wrong.push(format!("{input}: {found:?}, expected to stay"));
+        }
+    }
+    for (input, expected) in decimals {
+        let found = ctx.eval(&read(input)).unwrap();
+        let difference = Expr::call(Symbol::ABS, [found.clone() - read(expected)]);
+        let close = Expr::call(Symbol::LESS, [difference, read("0x1p-34")]);
+        if radians.eval(&close).unwrap().as_symbol() != Some(Symbol::TRUE) {
+            wrong.push(format!("{input}: {found:?}, expected {expected}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Degrees: giac's `sin(30)`, `asin(1/2)`, `sec(60)` …; `sin(pi)`,
+/// `cos(1)` and symbols stay.
+#[test]
+fn degrees() {
+    check_angle(
+        crate::Angle::Degree,
+        &[
+            ("Sin[30]", "1/2"),
+            ("Cos[60]", "1/2"),
+            ("Tan[45]", "1"),
+            ("Sin[15]", "Sin[Times[1/12, Pi]]"),
+            ("Sec[60]", "2"),
+            ("ArcSin[1/2]", "30"),
+            ("ArcTan[1]", "45"),
+            ("ArcCos[0]", "90"),
+            ("ArcCot[0]", "90"),
+            ("Sinh[0]", "0"),
+        ],
+        &["Sin[Pi]", "Cos[1]", "Sin[x]", "ArcTan[x]"],
+        &[("Sin[0x1.ep+4]", "0x1p-1"), ("ArcSin[0x1p-1]", "0x1.ep+4")],
+    );
+}
+
+/// Grads: giac's `sin(100)` and `asin(1)`; radians as before.
+#[test]
+fn grads_and_radians() {
+    check_angle(
+        crate::Angle::Grad,
+        &[
+            ("Sin[100]", "1"),
+            ("ArcSin[1]", "100"),
+            ("ArcCot[0]", "100"),
+        ],
+        &["Cos[1]"],
+        &[],
+    );
+    check_angle(
+        crate::Angle::Radian,
+        &[("ArcSin[1/2]", "Times[1/6, Pi]"), ("Sin[Pi]", "0")],
+        &["Sin[30]"],
+        &[],
+    );
 }

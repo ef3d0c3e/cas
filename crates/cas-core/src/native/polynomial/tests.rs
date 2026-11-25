@@ -924,6 +924,35 @@ fn factor_without_square_roots() {
     }
 }
 
+/// Xcas's `complex_mode` (CAS-617): `Factor` is `ComplexFactor`, giac's
+/// `(x+i)*(x-i)` and `(x+2*i)*(x-2*i)`; `ComplexFactor` itself the same.
+#[test]
+fn factor_in_complex_mode() {
+    let mut ctx = Context::new();
+    ctx.set_complex_mode(true);
+    let real = Context::new();
+    for (input, expected) in [
+        (
+            "Factor[Plus[Power[x, 2], 1]]",
+            "ComplexFactor[Plus[Power[x, 2], 1]]",
+        ),
+        (
+            "Factor[Plus[Power[x, 2], 4]]",
+            "ComplexFactor[Plus[Power[x, 2], 4]]",
+        ),
+        (
+            "ComplexFactor[Plus[Power[x, 2], 1]]",
+            "ComplexFactor[Plus[Power[x, 2], 1]]",
+        ),
+    ] {
+        let (found, warnings) = eval(&ctx, input);
+        let (expected, _) = eval(&real, expected);
+        assert_eq!((found, warnings), (expected, Vec::new()), "{input}");
+    }
+    let (found, _) = eval(&real, "Factor[Plus[Power[x, 2], 1]]");
+    assert_eq!(found, eval(&real, "Plus[1, Power[x, 2]]").0);
+}
+
 /// Over ℚ(i) when a coefficient is complex (CAS-186), as giac's `factor`.
 #[test]
 fn factor_over_gaussian_rationals() {
