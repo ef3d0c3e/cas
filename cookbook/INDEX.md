@@ -88,3 +88,5 @@ C0085 | giac's discrete choices made in doubles (bin index, trunc at ties): make
 C0086 | Certified MLE fits from giac's starts: ball Newton, Krawczyk, start fallback | mle,fit,newton,krawczyk,certified,ball,weibull,fitdistr | 2026-11-25 | 1.7/T5 | T5.c3 CAS-629 fitdistr
 C0087 | giac answers from random starts: measure seed dependence over many prototype seeds | giac,prototype,random,seed,oracle,kmeans,local-optimum | 2026-11-25 | 1.7/T6 | T6.c1 CAS-630 R1.7-012
 C0088 | giac's stored doubles keep 47 fraction bits: floors of decimal products drop by one | giac,double,float,prototype,floor,departures,oracle | 2026-11-25 | 1.7/T7 | T7.c1 f3689ae CAS-631
+C0089 | Bit-exact giac ports: pow(x,2) folds, pow(1,NaN), bounded memcpy, last-sample flags | giac,port,prototype,f64,nan,sound | 2026-11-25 | 1.7/T8 | CAS-632
+C0090 | Kaiser-windowed sinc tables for resampling: sizing H and L, measuring the response | resample,sinc,kaiser,signal,fft,table | 2026-11-25 | 1.7/T8 | CAS-633
