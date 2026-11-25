@@ -897,19 +897,19 @@ builtins! {
     NO_DISPLAY = "NoDisplay" [PROTECTED];
     // Xcas's `type` and its answers (CAS-621), symbols without a value.
     TYPE = "Type" [PROTECTED];
-    DOM_FLOAT = "DOM_FLOAT" [PROTECTED];
-    DOM_INT = "DOM_INT" [PROTECTED];
-    DOM_RAT = "DOM_RAT" [PROTECTED];
-    DOM_COMPLEX = "DOM_COMPLEX" [PROTECTED];
-    DOM_IDENT = "DOM_IDENT" [PROTECTED];
-    DOM_LIST = "DOM_LIST" [PROTECTED];
-    DOM_SYMBOLIC = "DOM_SYMBOLIC" [PROTECTED];
-    DOM_STRING = "DOM_STRING" [PROTECTED];
-    DOM_FUNC = "DOM_FUNC" [PROTECTED];
+    DOM_FLOAT = "DomFloat" [PROTECTED];
+    DOM_INT = "DomInt" [PROTECTED];
+    DOM_RAT = "DomRat" [PROTECTED];
+    DOM_COMPLEX = "DomComplex" [PROTECTED];
+    DOM_IDENT = "DomIdent" [PROTECTED];
+    DOM_LIST = "DomList" [PROTECTED];
+    DOM_SYMBOLIC = "DomSymbolic" [PROTECTED];
+    DOM_STRING = "DomString" [PROTECTED];
+    DOM_FUNC = "DomFunc" [PROTECTED];
     // Xcas's `iPart`, `fPart` and `trunc` (CAS-622), toward zero.
     INTEGER_PART = "IntegerPart" [LISTABLE, PROTECTED];
     FRACTIONAL_PART = "FractionalPart" [LISTABLE, PROTECTED];
-    TRUNCATE = "Truncate" [LISTABLE, PROTECTED];
+    TRUNCATE = "Truncate" [PROTECTED];
     // Xcas's `SortA`, `SortD` and `sortperm` (CAS-622), in `Sort`'s order.
     SORT_ASCENDING = "SortAscending" [PROTECTED];
     SORT_DESCENDING = "SortDescending" [PROTECTED];

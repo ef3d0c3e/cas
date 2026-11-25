@@ -1,7 +1,10 @@
 //! `Type` (`type`, CAS-621), Xcas's, and its answers `DOM_INT`, `DOM_RAT`,
 //! `DOM_FLOAT`, `DOM_COMPLEX`, `DOM_IDENT`, `DOM_LIST`, `DOM_SYMBOLIC`,
 //! `DOM_STRING` and `DOM_FUNC`, symbols without a value (giac prog.cc
-//! `_type`, which answers an integer printed as its type's name).
+//! `_type`, which answers an integer printed as its type's name). Their
+//! names here are `DomInt` … `DomFunc` (a builtin's name is an ASCII
+//! capital, then letters and digits); the language spells them `DOM_INT`
+//! … `DOM_FUNC` (`names/en.txt`).
 //!
 //! The kind of the evaluated argument: an integer of any size `DOM_INT`
 //! (giac's small and big integers both `_ZINT`), a rational `DOM_RAT`, a

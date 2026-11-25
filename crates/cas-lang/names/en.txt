@@ -880,15 +880,15 @@ ExportMathML: export_mathml
 MathML: mathml
 # Types (CAS-621), Xcas's.
 Type: type
-DOM_FLOAT: DOM_FLOAT
-DOM_INT: DOM_INT DOM_int
-DOM_RAT: DOM_RAT
-DOM_COMPLEX: DOM_COMPLEX
-DOM_IDENT: DOM_IDENT
-DOM_LIST: DOM_LIST
-DOM_SYMBOLIC: DOM_SYMBOLIC
-DOM_STRING: DOM_STRING
-DOM_FUNC: DOM_FUNC
+DomFloat: DOM_FLOAT
+DomInt: DOM_INT DOM_int
+DomRat: DOM_RAT
+DomComplex: DOM_COMPLEX
+DomIdent: DOM_IDENT
+DomList: DOM_LIST
+DomSymbolic: DOM_SYMBOLIC
+DomString: DOM_STRING
+DomFunc: DOM_FUNC
 # Integer and fractional parts, truncation (CAS-622), Xcas's.
 IntegerPart: iPart
 FractionalPart: fPart frac

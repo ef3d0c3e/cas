@@ -30,6 +30,24 @@ fn check(inputs: &[&str]) {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// Each input whose giac answer is a decimal: giac's answer, read back, is
+/// this CAS's value within giac's error ([`near`]; C0006, C0032), ours
+/// exact where the input is (R67).
+fn check_near(inputs: &[&str]) {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in inputs {
+        match (giac.value(input), ours(input)) {
+            (Ok(theirs), Ok(mine)) if near(&ctx, &theirs, &mine) => {}
+            (theirs, mine) => wrong.push(format!("{input}: ours {mine:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 /// `type`, compared through `==` since giac prints its answer as the
 /// type's name (probe1, probe2, probe6).
 #[test]
@@ -55,10 +73,18 @@ fn types() {
 }
 
 /// `iPart`, `fPart` and `frac`; a sequence bracketed (C0023; probe2,
-/// probe6).
+/// probe6); giac's decimal answers (every `iPart`, T8.c4 probe) within its
+/// error.
 #[test]
 fn parts() {
     check(&[
+        "fPart(1/2)",
+        "fPart(-1/2)",
+        "fPart(7/2)",
+        "fPart(sqrt(2))",
+        "frac(7/3)",
+    ]);
+    check_near(&[
         "iPart(4.3)",
         "iPart(sqrt(2))",
         "iPart(-4.3)",
@@ -66,19 +92,15 @@ fn parts() {
         "iPart(-7/2)",
         "[iPart(4.3,sqrt(2))]",
         "iPart([1.5,-2.5])",
-        "fPart(1/2)",
-        "fPart(-1/2)",
         "fPart(1.2)",
         "fPart(-1.2)",
-        "fPart(7/2)",
         "fPart(-2.5)",
-        "fPart(sqrt(2))",
         "fPart([3.4,sqrt(2)])",
-        "frac(7/3)",
     ]);
 }
 
-/// `trunc`, to an integer or to `n` decimals (probe2, probe6).
+/// `trunc`, to an integer or to `n` decimals (probe2, probe6); giac's
+/// decimal answers (every `trunc(x, n)`, T8.c4 probe) within its error.
 #[test]
 fn truncation() {
     check(&[
@@ -86,12 +108,14 @@ fn truncation() {
         "trunc(-4.7)",
         "trunc(7/2)",
         "trunc(-7/2)",
+        "trunc([4.3333,sqrt(2)])",
+    ]);
+    check_near(&[
         "trunc(sqrt(2),3)",
         "trunc(pi,4)",
         "trunc(1/3,2)",
         "trunc(2/3,1)",
         "trunc(12345.678,-2)",
-        "trunc([4.3333,sqrt(2)])",
         "trunc([4.3333,sqrt(2)],2)",
         "trunc(sqrt(2)+i*sqrt(5),4)",
     ]);

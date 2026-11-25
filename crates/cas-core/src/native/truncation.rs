@@ -16,8 +16,10 @@
 //!   floors (`trunc(-sqrt(2), 3)`: giac −1.415, ours −1.414); a `10^b`
 //!   past `Limits::number_bits` stays.
 //! - A non-real number part by part; `iPart(x, y)` and `fPart(x, y)` the
-//!   sequence of each, as giac; lists thread (`Listable`); what does not
-//!   decide stays, free symbols too (giac's `fPart(x)` is
+//!   sequence of each, as giac; lists thread (`IntegerPart` and
+//!   `FractionalPart` `Listable`; `Truncate` threads its first argument
+//!   itself, with the same `n`, since `Listable` does not broadcast a scalar
+//!   `n`, CAS-DOC-4 O8); what does not decide stays, free symbols too (giac's `fPart(x)` is
 //!   `x-sign(x)*floor(x*sign(x))`, its `trunc(x)` `floor(x)`).
 
 use cas_num::ball::Ball;
@@ -155,8 +157,23 @@ pub(super) fn integer_part(ev: &mut Eval<'_>, e: &Expr) -> Native {
     }
 }
 
-/// `Truncate[x]` and `Truncate[x, n]`.
+/// `Truncate[x]` and `Truncate[x, n]`; a list `x` threads, each entry
+/// with the same `n` (`trunc([4.3333, sqrt(2)], 2)`, as giac).
 pub(super) fn truncate(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    if let [x, n @ ..] = e.args()
+        && n.len() <= 1
+        && x.head().and_then(Expr::as_symbol) == Some(Symbol::LIST)
+    {
+        return Ok(Some(Expr::call(
+            Symbol::LIST,
+            x.args().iter().map(|a| {
+                Expr::call(
+                    Symbol::TRUNCATE,
+                    std::iter::once(a.clone()).chain(n.iter().cloned()),
+                )
+            }),
+        )));
+    }
     match e.args() {
         [x] => part_of(ev, Part::Truncate, x),
         [x, n] => {
