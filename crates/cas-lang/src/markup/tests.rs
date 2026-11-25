@@ -1,15 +1,17 @@
-//! Tests of the LaTeX printer. The engine on giac's own answers: the 301
-//! rows of `giac_latex.tsv` (1.6/T4.c1), each giac's printed answer read
-//! back into giac's shape by a port of the prototype's `parse.py`, and
-//! printed as giac's `latex()` did. Lowering: inputs read and evaluated
-//! here, printed through the hook as giac prints its own answer, except
-//! where our answer has another shape or order ("departure:"). The limits.
+//! Tests of the LaTeX and `MathML` printers. The engine on giac's own
+//! answers: the 301 rows of `giac_latex.tsv` (1.6/T4.c1) and the 893 of
+//! `giac_mathml.tsv` (1.6/T5.c1), each giac's printed answer read back into
+//! giac's shape by a port of the prototype's `parse.py`, and printed as
+//! giac's `latex()` and `export_mathml` did. Lowering: inputs read and
+//! evaluated here, printed through the hook as giac prints its own answer,
+//! except where our answer has another shape or order ("departure:"). The
+//! limits.
 
 use cas_core::{Context, Expr, Form, Integer, Symbol};
 
 use super::engine::Engine;
-use super::latex;
 use super::tree::{Gen, Sub};
+use super::{MathmlKind, export_mathml, latex, mml};
 use crate::hook::Hook;
 use crate::names::Names;
 use crate::print::{Balls, MAX_PRINT_DEPTH, PrintErrorKind};
@@ -474,6 +476,57 @@ fn the_engine_writes_giacs_latex_of_giacs_answers() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// giac's text of the annotation in a default-form row: its input form.
+fn annotation(text: &str) -> &str {
+    let open = "<annotation encoding='giac'>";
+    let from = text.find(open).expect("an annotation") + open.len();
+    &text[from..text.rfind("</annotation>").expect("closed")]
+}
+
+#[test]
+fn the_engine_writes_giacs_mathml_of_giacs_answers() {
+    let engine = Engine::new(usize::MAX);
+    let mut failures = Vec::new();
+    let mut rows = 0;
+    for line in include_str!("giac_mathml.tsv").lines() {
+        if line.starts_with('#') {
+            continue;
+        }
+        let [input, mode, shape, kind, want] = line.split('\t').collect::<Vec<_>>()[..] else {
+            panic!("a row of five columns: {line}");
+        };
+        rows += 1;
+        // giac's doubles printed without a point (the prototype's check.py).
+        let g = match input {
+            "1e10" => Gen::Dbl {
+                text: "10000000000".to_owned(),
+                neg: false,
+            },
+            "12345678901.0" => Gen::Dbl {
+                text: "12345678901".to_owned(),
+                neg: false,
+            },
+            _ => parse(shape, mode == "quote"),
+        };
+        let got = match kind {
+            "display" => engine.export_mathml_presentation(&g),
+            "content" => engine.export_mathml_content(&g),
+            // The annotation is the printed input, here giac's own.
+            _ => engine
+                .export_mathml(&g, "\0")
+                .map(|t| t.replace('\0', annotation(want))),
+        }
+        .expect("no cap")
+        // giac's table shows a newline as ' | ' (C0047).
+        .replace('\n', " | ");
+        if got != want {
+            failures.push(format!("{kind} {input} ({shape}): {got:?}, giac {want:?}"));
+        }
+    }
+    assert_eq!(rows, 893);
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 #[test]
 fn the_test_parser_keeps_giacs_shapes() {
     let x = || Gen::idnt("x");
@@ -499,6 +552,7 @@ fn the_test_parser_keeps_giacs_shapes() {
         parse("-x*y", false),
         Gen::symb_n("prod", vec![Gen::symb("neg", x()), Gen::idnt("y")])
     );
+    assert_eq!(parse("'Gamma'", true), Gen::Func("Gamma".to_owned()));
 }
 
 // ---- lowering: our answers in giac's shapes -----------------------------
@@ -621,6 +675,248 @@ fn answers_print_as_giac_prints_its_own() {
     assert!(failures.is_empty(), "{}", failures.join("\n"));
 }
 
+/// The inputs of [`answers_print_as_giac_prints_its_own`] whose answers
+/// have giac's shape: their `MathML` is giac's (`giac_mathml.tsv`).
+const SAME_SHAPE: [&str; 58] = [
+    "1/2",
+    "-1/2",
+    "x^2",
+    "sqrt(x)",
+    "sqrt(2)/2",
+    "x/2",
+    "2/x",
+    "x*y",
+    "2*x",
+    "-x",
+    "x-y",
+    "-x-y",
+    "1/x",
+    "x^(-2)",
+    "sin(x)",
+    "cos(x)^2",
+    "sin(x^2)",
+    "exp(x)",
+    "exp(2*x)",
+    "ln(x)",
+    "abs(x)",
+    "floor(x)",
+    "asin(x)",
+    "pi",
+    "infinity",
+    "i",
+    "1+2*i",
+    "3.14",
+    "1.5e-7",
+    "-2.5",
+    "3.0",
+    "0.001",
+    "1e-5",
+    "1.23e20",
+    "1e100",
+    "12345678901.0",
+    "1.0/3",
+    "[1,2,3]",
+    "[[1,2],[3,4]]",
+    "x=1",
+    "x^2+y^2=1",
+    "f(x)",
+    "f(x,y)",
+    "diff(f(x),x)",
+    "int(f(x),x)",
+    "\"abc\"",
+    "alpha",
+    "abc",
+    "x_1",
+    "a_n",
+    "n!",
+    "x^y^z",
+    "a/(b*c)",
+    "2/3*x",
+    "x*(-y)",
+    "1..2",
+    "true",
+    "undef",
+];
+
+/// `text` read, evaluated, and printed in `form` through the hook, with
+/// its input form.
+fn printed(context: &Context, text: &str, form: Form) -> (String, String) {
+    let hook = context.language().expect("installed");
+    let e = context
+        .eval(&hook.read(text, context).expect("one expression"))
+        .expect("evaluates");
+    let print = |form| {
+        hook.print(&e, form, context, usize::MAX)
+            .unwrap_or_else(|error| panic!("{text}: {error}"))
+    };
+    (print(form), print(Form::Input))
+}
+
+/// giac's `MathML` row of `input` in `kind`.
+fn giac_mathml(input: &str, kind: &str) -> &'static str {
+    include_str!("giac_mathml.tsv")
+        .lines()
+        .find_map(|line| match line.split('\t').collect::<Vec<_>>()[..] {
+            [i, _, _, k, want] if i == input && k == kind => Some(want),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no {kind} row of {input}"))
+}
+
+/// giac's `MathML` of the same inputs; in the default form the annotation is
+/// our input form, escaped, and giac's is put in its place to compare.
+#[test]
+fn answers_in_mathml_as_giac_writes_its_own() {
+    let context = context();
+    let mut failures = Vec::new();
+    for text in SAME_SHAPE {
+        for (form, kind) in [
+            (Form::MathmlDisplay, "display"),
+            (Form::MathmlContent, "content"),
+            (Form::Mathml, "default"),
+        ] {
+            let want = giac_mathml(text, kind);
+            let (got, input) = printed(&context, text, form);
+            let got = got.replace('\n', " | ");
+            let mut ok = true;
+            let got = if kind == "default" {
+                let ours = annotation(&got).to_owned();
+                ok = ours == mml::str_to_mml(&input).replace('\n', " | ");
+                got.replace(
+                    &format!("<annotation encoding='giac'>{ours}</annotation>"),
+                    &format!(
+                        "<annotation encoding='giac'>{}</annotation>",
+                        annotation(want)
+                    ),
+                )
+            } else {
+                got
+            };
+            if !ok || got != want {
+                failures.push(format!("{kind} {text} ({input}): {got:?}, giac {want:?}"));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// Departures: our answers' shapes or orders (as in
+/// [`answers_print_as_giac_prints_its_own`] and cas-giac's `latex.rs`) in
+/// presentation and content, the texts of the prototype
+/// (`.run/1.6/T5/proto/markup.py`) on our shapes; giac's are in
+/// `giac_mathml.tsv`.
+#[test]
+#[allow(clippy::too_many_lines)]
+fn mathml_departures() {
+    let context = context();
+    let rows: &[(&str, &str, &str)] = &[
+        (
+            "sqrt(x+1)",
+            r"<msqrt><mrow><mn>1</mn><mo>+</mo><mi>x</mi></mrow></msqrt>",
+            r"<apply id='id4'><root/><apply id='id3'><plus/><cn id='id1' type='integer'>1</cn><ci id='id2'>x</ci></apply></apply>",
+        ),
+        (
+            "(x^4-1)/(x^2+3)",
+            r"<mfrac><mrow><mo>&minus;</mo><mn>1</mn><mo>+</mo><msup><mi>x</mi><mn>4</mn></msup></mrow><mrow><mn>3</mn><mo>+</mo><msup><mi>x</mi><mn>2</mn></msup></mrow></mfrac>",
+            r"<apply id='id11'><divide/><apply id='id5'><plus/><apply><minus/><cn id='id1' type='integer'>1</cn></apply><apply id='id4'><power/><ci id='id2'>x</ci><cn id='id3' type='integer'>4</cn></apply></apply><apply id='id10'><plus/><cn id='id6' type='integer'>3</cn><apply id='id9'><power/><ci id='id7'>x</ci><cn id='id8' type='integer'>2</cn></apply></apply></apply>",
+        ),
+        (
+            "2*x^2-3*x+1",
+            r"<mrow><mn>1</mn><mo>&minus;</mo><mrow><mn>3</mn><mo>&it;</mo><mi>x</mi></mrow><mo>+</mo><mrow><mn>2</mn><mo>&it;</mo><msup><mi>x</mi><mn>2</mn></msup></mrow></mrow>",
+            r"<apply id='id10'><plus/><cn id='id1' type='integer'>1</cn><apply><minus/><apply id='id4'><times/><cn id='id2' type='integer'>3</cn><ci id='id3'>x</ci></apply></apply><apply id='id9'><times/><cn id='id5' type='integer'>2</cn><apply id='id8'><power/><ci id='id6'>x</ci><cn id='id7' type='integer'>2</cn></apply></apply></apply>",
+        ),
+        (
+            "1/(x+1)",
+            r"<mfrac><mn>1</mn><mrow><mn>1</mn><mo>+</mo><mi>x</mi></mrow></mfrac>",
+            r"<apply id='id4'><divide/><cn type='integer'>1</cn><apply id='id3'><plus/><cn id='id1' type='integer'>1</cn><ci id='id2'>x</ci></apply></apply>",
+        ),
+        (
+            "(x+1)^2",
+            r"<msup><mfenced><mrow><mn>1</mn><mo>+</mo><mi>x</mi></mrow></mfenced><mn>2</mn></msup>",
+            r"<apply id='id5'><power/><apply id='id3'><plus/><cn id='id1' type='integer'>1</cn><ci id='id2'>x</ci></apply><cn id='id4' type='integer'>2</cn></apply>",
+        ),
+        (
+            "(x+1)*(x-1)",
+            r"<mrow><mfenced><mrow><mo>&minus;</mo><mn>1</mn><mo>+</mo><mi>x</mi></mrow></mfenced><mo>&it;</mo><mfenced><mrow><mn>1</mn><mo>+</mo><mi>x</mi></mrow></mfenced></mrow>",
+            r"<apply id='id7'><times/><apply id='id3'><plus/><apply><minus/><cn id='id1' type='integer'>1</cn></apply><ci id='id2'>x</ci></apply><apply id='id6'><plus/><cn id='id4' type='integer'>1</cn><ci id='id5'>x</ci></apply></apply>",
+        ),
+        (
+            "sin(x)*cos(x)",
+            r"<mrow><mrow><mi>cos</mi><mo>&af;</mo><mi>x</mi></mrow><mo>&middot;</mo><mrow><mi>sin</mi><mo>&af;</mo><mi>x</mi></mrow></mrow>",
+            r"<apply id='id7'><times/><apply id='id3'><cos id='id1'/><ci id='id2'>x</ci></apply><apply id='id6'><sin id='id4'/><ci id='id5'>x</ci></apply></apply>",
+        ),
+        (
+            "-(x+1)",
+            r"<mrow><mo>&minus;</mo><mfenced><mrow><mn>1</mn><mo>+</mo><mi>x</mi></mrow></mfenced></mrow>",
+            r"<apply id='id3'><minus/><apply><plus/><cn id='id1' type='integer'>1</cn><ci id='id2'>x</ci></apply></apply>",
+        ),
+        (
+            "x<y",
+            r"<mrow><mi>x</mi><mo>&lt;</mo><mi>y</mi></mrow>",
+            r"<apply id='id3'><lt/><ci id='id1'>x</ci><ci id='id2'>y</ci></apply>",
+        ),
+        (
+            "x<=y",
+            r"<mrow><mi>x</mi><mo>&leq;</mo><mi>y</mi></mrow>",
+            r"<apply id='id3'><leq/><ci id='id1'>x</ci><ci id='id2'>y</ci></apply>",
+        ),
+        (
+            "x!=y",
+            r"<mrow><mi>x</mi><mo>&#x2260;</mo><mi>y</mi></mrow>",
+            r"<apply id='id3'><neq/><ci id='id1'>x</ci><ci id='id2'>y</ci></apply>",
+        ),
+        (
+            "ceil(x)",
+            r"<mfenced open='&lceil;' close='&rceil;'><mi>x</mi></mfenced>",
+            r"<apply id='id2'><ceiling/><ci id='id1'>x</ci></apply>",
+        ),
+        (
+            "binomial(n,k)",
+            r"<mfenced><mfrac linethickness='0'><mi>n</mi><mi>k</mi></mfrac></mfenced>",
+            r"<apply id='id3'><csymbol cd='combinat1'>binomial</csymbol><ci id='id1'>n</ci><ci id='id2'>k</ci></apply>",
+        ),
+        (
+            "x^(2/3)",
+            r"<msup><mi>x</mi><mfrac><mn>2</mn><mn>3</mn></mfrac></msup>",
+            r"<apply id='id3'><power/><ci id='id1'>x</ci><cn id='id2' type='rational'>2<sep/>3</cn></apply>",
+        ),
+        (
+            "x*sqrt(2)",
+            r"<mrow><msqrt><mn>2</mn></msqrt><mo>&it;</mo><mi>x</mi></mrow>",
+            r"<apply id='id4'><times/><apply id='id2'><root/><cn id='id1' type='integer'>2</cn></apply><ci id='id3'>x</ci></apply>",
+        ),
+        (
+            "sum(k,k,1,n)",
+            r"<mrow><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>&it;</mo><mi>n</mi><mo>&it;</mo><mfenced><mrow><mn>1</mn><mo>+</mo><mi>n</mi></mrow></mfenced></mrow>",
+            r"<apply id='id6'><times/><cn id='id1' type='rational'>1<sep/>2</cn><ci id='id2'>n</ci><apply id='id5'><plus/><cn id='id3' type='integer'>1</cn><ci id='id4'>n</ci></apply></apply>",
+        ),
+        (
+            "diff(f(x),x,2)",
+            r"<mrow><mi>derive</mi><mfenced><mrow><mfrac><mi mathvariant='normal'>d</mi><mrow><mi>x</mi></mrow></mfrac><mo>&af;</mo><mrow><mi>f</mi><mo>&af;</mo><mo>&af;</mo><mfenced><mi>x</mi></mfenced></mrow></mrow><mn>2</mn></mfenced></mrow>",
+            r"<apply id='id13'><ci id='id6' type='function'>derive</ci><apply id='id11'><diff/><bvar><ci id='id10'>x</ci></bvar><apply id='id9'><ci id='id7'>f</ci><ci id='id8'>x</ci></apply></apply><cn id='id12' type='integer'>2</cn></apply>",
+        ),
+    ];
+    let math = |body: &str| {
+        format!("<math mode='display' xmlns='http://www.w3.org/1998/Math/MathML'>{body}</math>")
+    };
+    let mut failures = Vec::new();
+    for (text, display, content) in rows {
+        for (form, want) in [
+            (Form::MathmlDisplay, display),
+            (Form::MathmlContent, content),
+        ] {
+            let (got, _) = printed(&context, text, form);
+            if got != math(want) {
+                failures.push(format!(
+                    "{form:?} {text}: {got:?}, expected {:?}",
+                    math(want)
+                ));
+            }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
 // ---- limits ---------------------------------------------------------------
 
 #[test]
@@ -636,8 +932,17 @@ fn too_deep_is_refused_before_any_work() {
         e = list(e);
     }
     assert!(latex(&e, names, balls, usize::MAX).is_ok());
-    let error = latex(&list(e), names, balls, usize::MAX).unwrap_err();
+    let error = latex(&list(e.clone()), names, balls, usize::MAX).unwrap_err();
     assert_eq!(error.kind, PrintErrorKind::TooDeep);
+    for kind in [
+        MathmlKind::Default,
+        MathmlKind::Display,
+        MathmlKind::Content,
+    ] {
+        assert!(export_mathml(&e, names, balls, usize::MAX, kind).is_ok());
+        let error = export_mathml(&list(e.clone()), names, balls, usize::MAX, kind).unwrap_err();
+        assert_eq!(error.kind, PrintErrorKind::TooDeep);
+    }
 }
 
 #[test]
@@ -657,6 +962,22 @@ fn text_past_the_cap_is_refused() {
         (error.kind, error.part),
         (PrintErrorKind::TooLong, e.clone())
     );
+    for kind in [
+        MathmlKind::Default,
+        MathmlKind::Display,
+        MathmlKind::Content,
+    ] {
+        let text = export_mathml(&e, names, balls, usize::MAX, kind).unwrap();
+        assert_eq!(
+            export_mathml(&e, names, balls, text.len(), kind).unwrap(),
+            text
+        );
+        let error = export_mathml(&e, names, balls, text.len() - 1, kind).unwrap_err();
+        assert_eq!(
+            (error.kind, error.part),
+            (PrintErrorKind::TooLong, e.clone())
+        );
+    }
     // A long atom deep inside is refused as its block is made.
     let long = Expr::string(&"a".repeat(1000));
     let e = Expr::apply(&Symbol::PLUS.into(), &[long, Expr::from(Symbol::new("x"))]);
@@ -666,4 +987,13 @@ fn text_past_the_cap_is_refused() {
     let context = context();
     let hook = context.language().unwrap();
     assert!(hook.print(&e, Form::Latex, &context, 100).is_err());
+    for kind in [
+        MathmlKind::Default,
+        MathmlKind::Display,
+        MathmlKind::Content,
+    ] {
+        let error = export_mathml(&e, names, balls, 100, kind).unwrap_err();
+        assert_eq!(error.kind, PrintErrorKind::TooLong);
+    }
+    assert!(hook.print(&e, Form::Mathml, &context, 100).is_err());
 }

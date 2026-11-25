@@ -1,6 +1,6 @@
-//! MathML tags as giac writes them (markup.cc :35-47, :206-302, :382-407):
+//! `MathML` tags as giac writes them (markup.cc :35-47, :206-302, :382-407):
 //! an element with its id, ids put into and taken out of a tag, and text
-//! escaped for MathML.
+//! escaped for `MathML`.
 
 /// `<mo>&it;</mo>`, invisible times (:35).
 pub(super) const ITIMES: &str = "<mo>&it;</mo>";
@@ -68,11 +68,19 @@ pub(super) fn tag(tag: &str, s: &str, idc: u32, attrs: &[(&str, &str)]) -> Strin
         } else {
             "xref"
         };
-        r.push_str(&format!(" {key}='id{idc}'"));
+        r.push(' ');
+        r.push_str(key);
+        r.push_str("='id");
+        r.push_str(&idc.to_string());
+        r.push('\'');
     }
     for (k, v) in attrs {
         if !k.is_empty() && !v.is_empty() {
-            r.push_str(&format!(" {k}='{v}'"));
+            r.push(' ');
+            r.push_str(k);
+            r.push_str("='");
+            r.push_str(v);
+            r.push('\'');
         }
     }
     format!("{r}>{s}</{tag}>")

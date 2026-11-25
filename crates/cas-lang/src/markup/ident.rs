@@ -1,4 +1,4 @@
-//! Names and strings in LaTeX and MathML, giac's way: identifiers
+//! Names and strings in LaTeX and `MathML`, giac's way: identifiers
 //! (markup.cc `idnt2markup` :621-934, the non-unit arms), function names
 //! (`func2markup` :1106-1226) and strings (`string2markup` :304-468).
 
@@ -116,7 +116,7 @@ fn greek(s: &str) -> String {
     }
 }
 
-/// A greek letter as a MathML entity: `&alpha;` (no `var` forms, :875).
+/// A greek letter as a `MathML` entity: `&alpha;` (no `var` forms, :875).
 fn greek_mml(s: &str) -> String {
     format!("&{s};")
 }
@@ -129,7 +129,7 @@ pub(super) fn idnt2markup(s_orig: &str) -> (String, bool) {
     idnt(s_orig, None)
 }
 
-/// The same identifier in MathML presentation (`typ` 2), its outer tag
+/// The same identifier in `MathML` presentation (`typ` 2), its outer tag
 /// with id `idc`: `<mi>x</mi>`, `<msub><mi>x</mi><mrow>1</mrow></msub>`,
 /// `<mi>&alpha;</mi>`, `<mi mathvariant='bold'>x</mi>` for `xx` (a name
 /// here, unlike in LaTeX). giac's slips kept: `alpha_` is `&alpha;_`
@@ -138,7 +138,7 @@ pub(super) fn idnt2mml(s_orig: &str, idc: u32) -> (String, bool) {
     idnt(s_orig, Some(idc))
 }
 
-/// :621-934: LaTeX when `mml` is `None`, else MathML with that id.
+/// :621-934: LaTeX when `mml` is `None`, else `MathML` with that id.
 fn idnt(s_orig: &str, mml: Option<u32>) -> (String, bool) {
     // :845: `greek_`; `phi_` is `varphi` in both.
     if let Some(stem) = s_orig.strip_suffix('_')
@@ -233,7 +233,7 @@ fn idnt(s_orig: &str, mml: Option<u32>) -> (String, bool) {
     (ret, len > 1)
 }
 
-/// :897-921, MathML: `<mi>` (bold for a double letter), the id on it, or
+/// :897-921, `MathML`: `<mi>` (bold for a double letter), the id on it, or
 /// on the `<msub>` when there is an index: `<mrow>1<mo>,<mo>2</mrow>` for
 /// numbers, else `<mn>` or `<mi>`.
 fn idnt_mml(s: &str, len: usize, bold: bool, ssub: &str, idc: u32) -> String {
@@ -333,7 +333,7 @@ pub(super) fn func2markup(name: &str) -> String {
     }
 }
 
-/// The MathML names of the functions with one (:1133-1175): content
+/// The `MathML` names of the functions with one (:1133-1175): content
 /// element, presentation name.
 fn func_mml(name: &str) -> Option<(&'static str, &'static str)> {
     Some(match name {
@@ -360,7 +360,7 @@ fn func_mml(name: &str) -> Option<(&'static str, &'static str)> {
     })
 }
 
-/// A function's name in MathML (:1128, `typ` 3 presentation, 2 content),
+/// A function's name in `MathML` (:1128, `typ` 3 presentation, 2 content),
 /// its tag with id `idc`: `<mi>sin</mi>` / `<sin/>`, `&Gamma;` /
 /// `<csymbol cd='hypergeo0'>gamma</csymbol>`, else the identifier's
 /// (`<mi>erf</mi>`) / `<ci type='function'>erf</ci>`.
@@ -454,16 +454,18 @@ fn string_lines(s: &str) -> Vec<&str> {
     lines
 }
 
-/// A string in MathML presentation (:453-464): `<ms>s</ms>` with id
+/// A string in `MathML` presentation (:453-464): `<ms>s</ms>` with id
 /// `idc`; several lines a left-aligned `<mtable>` of them.
 pub(super) fn string2mml(s: &str, idc: u32) -> String {
     match &string_lines(s)[..] {
         [line] => mml::tag("ms", &mml::str_to_mml(line), idc, &[]),
         lines => {
-            let rows: String = lines
-                .iter()
-                .map(|l| format!("<mtr><mtd>{}</mtd></mtr>", mml::str_to_mml_tag(l, "ms", 0)))
-                .collect();
+            let mut rows = String::new();
+            for l in lines {
+                rows.push_str("<mtr><mtd>");
+                rows.push_str(&mml::str_to_mml_tag(l, "ms", 0));
+                rows.push_str("</mtd></mtr>");
+            }
             mml::tag("mtable", &rows, idc, &[("columnalign", "left")])
         }
     }

@@ -47,7 +47,7 @@ pub(super) fn latex(ev: &mut Eval<'_>, e: &Expr) -> Native {
     printed(ev, e, Form::Latex)
 }
 
-/// `ExportMathML[e]` (CAS-616): `e` as MathML, giac's `export_mathml`
+/// `ExportMathML[e]` (CAS-616): `e` as `MathML`, giac's `export_mathml`
 /// (markup.cc :3765); `ExportMathML[e, display]` presentation only,
 /// `ExportMathML[e, content]` content only. Another second argument stays.
 pub(super) fn export_mathml(ev: &mut Eval<'_>, e: &Expr) -> Native {

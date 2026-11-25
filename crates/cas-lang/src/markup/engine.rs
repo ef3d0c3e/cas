@@ -1,12 +1,12 @@
-//! giac's `gen2markup` (markup.cc :1233-3627), its LaTeX and MathML
+//! giac's `gen2markup` (markup.cc :1233-3627), its LaTeX and `MathML`
 //! (presentation and content) arms: a [`Gen`] to a [`MarkupBlock`]. Each
 //! function cites the lines it ports; the prototypes
 //! `.run/1.6/T4/proto/markup.py` (1.6/T4.c1, LaTeX) and
-//! `.run/1.6/T5/proto/markup.py` (1.6/T5.c1, MathML) were checked against
+//! `.run/1.6/T5/proto/markup.py` (1.6/T5.c1, `MathML`) were checked against
 //! giac 2.0.0.21's `latex()` on 301 inputs and `export_mathml` on 893
 //! (301 inputs in its three forms), and these are their steps.
 //!
-//! One run writes the texts its [`Flags`] select. MathML content elements
+//! One run writes the texts its [`Flags`] select. `MathML` content elements
 //! take ids from one counter, post-order (children first), and the
 //! presentation tag of the same node refers to it (`xref`): giac counts
 //! only in content (`++idc`), so a presentation-only run has no ids.
@@ -98,7 +98,7 @@ impl std::ops::BitOr for Flags {
     }
 }
 
-/// giac's `MarkupBlock` (:179-192), its LaTeX and MathML fields.
+/// giac's `MarkupBlock` (:179-192), its LaTeX and `MathML` fields.
 #[derive(Clone, Debug)]
 pub(super) struct MarkupBlock {
     /// How weakly the text binds: 0 for an atom, see [`priority`].
@@ -108,9 +108,9 @@ pub(super) struct MarkupBlock {
     /// A minus sign that belongs in front, not in the texts yet.
     pub(super) neg: bool,
     pub(super) latex: String,
-    /// MathML presentation.
+    /// `MathML` presentation.
     pub(super) markup: String,
-    /// MathML content.
+    /// `MathML` content.
     pub(super) content: String,
     /// Where an elementary function's application splits (`\sin |x`), in
     /// the markup text after its first tag (a byte length): 0 in a run
@@ -172,7 +172,7 @@ fn parenthesize(ml: &mut MarkupBlock, flags: Flags) {
 }
 
 /// :972: the pending minus written in front; a product now, of kind `NEG`.
-/// MathML: `<apply><minus/>…</apply>` and `<mrow><mo>&minus;</mo>…</mrow>`,
+/// `MathML`: `<apply><minus/>…</apply>` and `<mrow><mo>&minus;</mo>…</mrow>`,
 /// the operand's id moved onto them.
 pub(super) fn prepend_minus(ml: &mut MarkupBlock, flags: Flags) {
     minus(ml, flags, true);
@@ -198,7 +198,12 @@ fn minus(ml: &mut MarkupBlock, flags: Flags, mrow: bool) {
         ml.content = if mrow {
             let id = mml::extract_id(&mut ml.content, true);
             let key = if id.is_empty() { "" } else { "id" };
-            mml::tag("apply", &format!("<minus/>{}", ml.content), 0, &[(key, &id)])
+            mml::tag(
+                "apply",
+                &format!("<minus/>{}", ml.content),
+                0,
+                &[(key, &id)],
+            )
         } else {
             format!("<apply><minus/>{}</apply>", ml.content)
         };
@@ -207,7 +212,12 @@ fn minus(ml: &mut MarkupBlock, flags: Flags, mrow: bool) {
         ml.markup = if mrow {
             let id = mml::extract_id(&mut ml.markup, false);
             let key = if id.is_empty() { "" } else { "xref" };
-            mml::tag("mrow", &format!("{}{}", mml::MINUS, ml.markup), 0, &[(key, &id)])
+            mml::tag(
+                "mrow",
+                &format!("{}{}", mml::MINUS, ml.markup),
+                0,
+                &[(key, &id)],
+            )
         } else {
             format!("{}{}", mml::MINUS, ml.markup)
         };
@@ -439,7 +449,7 @@ impl Engine {
         Ok(ml)
     }
 
-    /// A number's MathML (:1327-1330, :1378-1399): `<cn type='…'>s</cn>`
+    /// A number's `MathML` (:1327-1330, :1378-1399): `<cn type='…'>s</cn>`
     /// with the next id, `<mn>s</mn>`.
     fn number(&self, ml: &mut MarkupBlock, flags: Flags, s: &str, ty: &str) {
         if flags.cont() {
@@ -477,6 +487,7 @@ impl Engine {
         Ok(ml)
     }
 
+    #[allow(clippy::too_many_lines)]
     fn markup(&self, g: &Gen, flags_orig: Flags) -> Block {
         let toplevel = flags_orig.has(Flags::TOPLEVEL);
         let isfactor = flags_orig.has(Flags::FACTOR);
@@ -551,12 +562,8 @@ impl Engine {
                     let (n, d) = (n.abs(), d.abs());
                     if flags.cont() {
                         let id = self.next_id();
-                        ml.content = mml::tag(
-                            "cn",
-                            &format!("{n}<sep/>{d}"),
-                            id,
-                            &[("type", "rational")],
-                        );
+                        ml.content =
+                            mml::tag("cn", &format!("{n}<sep/>{d}"), id, &[("type", "rational")]);
                     }
                     if flags.pres() {
                         let frac = format!("<mn>{n}</mn><mn>{d}</mn>");
@@ -745,7 +752,9 @@ impl Engine {
                     let tmp = self.minus_prepended(x, flags)?;
                     ml.content.push_str(&tmp.content);
                     if flags.pres() {
-                        ml.markup.push_str(&format!("<mtd>{}</mtd>", tmp.markup));
+                        ml.markup.push_str("<mtd>");
+                        ml.markup.push_str(&tmp.markup);
+                        ml.markup.push_str("</mtd>");
                     }
                     cells.push(tmp.latex);
                 }
@@ -1048,13 +1057,7 @@ impl Engine {
                 }
                 let (element, ld_mml, rd_mml, ld, rd) = match op {
                     "abs" => ("<abs/>", "|", "|", "|", "|"),
-                    "floor" => (
-                        "<floor/>",
-                        "&lfloor;",
-                        "&rfloor;",
-                        "\\lfloor ",
-                        "\\rfloor ",
-                    ),
+                    "floor" => ("<floor/>", "&lfloor;", "&rfloor;", "\\lfloor ", "\\rfloor "),
                     _ => ("<ceiling/>", "&lceil;", "&rceil;", "\\lceil ", "\\rceil "),
                 };
                 self.wrap(&mut ml, flags, element, &tmp.content, "");
@@ -1489,7 +1492,11 @@ impl Engine {
         let (mut big, mut big_tex, head) = if isint {
             ("<mo>&int;</mo>".to_owned(), "\\int ".to_owned(), "<int/>")
         } else if isprod {
-            ("<mo>&prod;</mo>".to_owned(), "\\prod ".to_owned(), "<product/>")
+            (
+                "<mo>&prod;</mo>".to_owned(),
+                "\\prod ".to_owned(),
+                "<product/>",
+            )
         } else {
             ("<mo>&sum;</mo>".to_owned(), "\\sum ".to_owned(), "<sum/>")
         };
@@ -1620,6 +1627,7 @@ impl Engine {
     /// :2488-2548: `\lim_{x\to a}`, `^{+}`/`^{-}` for a direction ±1;
     /// content `<apply><limit/><bvar>…</bvar><condition><tendsto…>`,
     /// presentation `<munder><mi>lim</mi>…`.
+    #[allow(clippy::many_single_char_names)]
     fn limit(&self, a: &[Gen], flags: Flags, mut ml: MarkupBlock) -> Block {
         ml.priority = priority::MUL;
         ml.kind = kind::SUMPROD;
@@ -1701,7 +1709,7 @@ impl Engine {
     /// of differentials (content `<diff/>`, `<partialdiff/>`, `nthdiff`).
     /// `false` when giac falls through to the general arm, with `ml`'s
     /// fields set so far.
-    #[allow(clippy::too_many_lines)]
+    #[allow(clippy::too_many_lines, clippy::many_single_char_names)]
     fn derive(&self, g: &Gen, flags: Flags, ml: &mut MarkupBlock) -> Result<bool, TooLong> {
         if let Some((f, deg)) = is_partialdiff(g) {
             ml.priority = priority::EXP;
@@ -1878,10 +1886,7 @@ impl Engine {
             if flags.pres() {
                 let sup = format!("<msup>{ds}<mn>{ns}</mn></msup>");
                 ml.markup = if simp {
-                    let m = format!(
-                        "<mrow>{sup}{}</mrow><mrow>{}</mrow>",
-                        tmp.markup, ml.markup
-                    );
+                    let m = format!("<mrow>{sup}{}</mrow><mrow>{}</mrow>", tmp.markup, ml.markup);
                     mml::tag("mfrac", &m, self.id(), &[])
                 } else {
                     let f = mml::tag("mfrac", &format!("{sup}<mrow>{}</mrow>", ml.markup), 0, &[]);
@@ -1959,7 +1964,7 @@ impl Engine {
     /// function by `func2markup`; one argument of an elementary function
     /// without parentheses when it is an atom (`\sin x`). Several
     /// arguments are not minus-prepended (giac bug: `f(-x,y)` prints
-    /// `f\left(x,y\right)`). MathML: content `<apply>head args</apply>`,
+    /// `f\left(x,y\right)`). `MathML`: content `<apply>head args</apply>`,
     /// presentation `<mrow>head<mfenced>args</mfenced></mrow>` or
     /// `<mrow>head<mo>&af;</mo>arg</mrow>`.
     fn general(&self, g: &Gen, flags: Flags, mut ml: MarkupBlock) -> Block {
@@ -2058,9 +2063,5 @@ fn double_parts(s: &str) -> Option<(String, bool, &str)> {
     }
     let ex = after.trim_start_matches('0');
     let point = if mant.contains('.') { "" } else { ".0" };
-    Some((
-        format!("{mant}{point}"),
-        s[cpos + 1..].starts_with('-'),
-        ex,
-    ))
+    Some((format!("{mant}{point}"), s[cpos + 1..].starts_with('-'), ex))
 }

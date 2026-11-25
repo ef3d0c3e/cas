@@ -1,4 +1,4 @@
-//! The tree the LaTeX and MathML printers work on: giac's `gen`, in the shapes giac's
+//! The tree the LaTeX and `MathML` printers work on: giac's `gen`, in the shapes giac's
 //! evaluator leaves (markup.cc reads `g.type`, `g._SYMBptr->sommet` and
 //! `feuille`). Built by [`lower`](super::lower) from our expressions, and by
 //! the tests from giac's printed answers.

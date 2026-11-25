@@ -1,5 +1,5 @@
-//! Tests of `ToString`, `ToExpression`, `Cat` (CAS-614) and `LaTeX`
-//! (CAS-615), and of the
+//! Tests of `ToString`, `ToExpression`, `Cat` (CAS-614), `LaTeX`
+//! (CAS-615) and `ExportMathML` (CAS-616), and of the
 //! non-strings in `StringJoin` and `Join`: what each does with no language
 //! hook, and the logic (caps, warnings) through a stub language that prints
 //! and reads full form. cas-lang's session tests run them with the
@@ -26,6 +26,19 @@ impl Language for Stub {
             return Err("too long".to_owned());
         }
         Ok(text)
+    }
+
+    fn read(&self, text: &str, _: &Context) -> Result<Expr, String> {
+        Expr::parse_full_form(text).map_err(|e| e.to_string())
+    }
+}
+
+/// Full form after the name of the form asked for: `Mathml:f[x]`.
+struct Forms;
+
+impl Language for Forms {
+    fn print(&self, e: &Expr, form: Form, _: &Context, _: usize) -> Result<String, String> {
+        Ok(format!("{form:?}:{}", e.full_form()))
     }
 
     fn read(&self, text: &str, _: &Context) -> Result<Expr, String> {
@@ -88,6 +101,8 @@ fn without_a_hook() {
             "ToString[x]",
             "ToString[\"a\"]",
             "LaTeX[x]",
+            "ExportMathML[x]",
+            "ExportMathML[x, display]",
             "ToExpression[\"1\"]",
             "Cat[\"a\", x]",
             "Cat[1]",
@@ -124,6 +139,10 @@ fn shapes_that_stay() {
             "ToString[x, y]",
             "LaTeX[]",
             "LaTeX[x, \"file\"]",
+            "ExportMathML[]",
+            "ExportMathML[x, y]",
+            "ExportMathML[x, \"display\"]",
+            "ExportMathML[x, display, y]",
             "ToExpression[]",
             "ToExpression[x]",
             "ToExpression[\"1\", 2]",
@@ -157,6 +176,24 @@ fn through_the_hook() {
     );
     // The reader's message as the warning.
     assert!(!warning(&ctx, "ToExpression[\"Plus[\"]").is_empty());
+}
+
+/// `ExportMathML`'s second argument picks the form: none the default,
+/// `display` presentation, `content` (or `Content`, its builtin) content.
+#[test]
+fn export_mathml_forms() {
+    let mut ctx = Context::new();
+    ctx.set_language(Some(Arc::new(Forms)));
+    check(
+        &ctx,
+        &[
+            ("ExportMathML[f[x]]", "\"Mathml:f[x]\""),
+            ("ExportMathML[f[x], display]", "\"MathmlDisplay:f[x]\""),
+            ("ExportMathML[f[x], content]", "\"MathmlContent:f[x]\""),
+            ("ExportMathML[f[x], Content]", "\"MathmlContent:f[x]\""),
+            ("LaTeX[f[x]]", "\"Latex:f[x]\""),
+        ],
+    );
 }
 
 /// A symbol with a value or rules of its own is applied; one without stays.

@@ -72,7 +72,7 @@ pub enum MathmlKind {
     Content,
 }
 
-/// `e` in MathML as giac's `export_mathml` writes the same answer, in the
+/// `e` in `MathML` as giac's `export_mathml` writes the same answer, in the
 /// form `kind`; names and balls as [`latex`] has them. The annotation of
 /// [`MathmlKind::Default`] is our input form of `e` (giac's is its own),
 /// escaped (`str_to_mml`).
