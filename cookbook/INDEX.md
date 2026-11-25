@@ -79,3 +79,7 @@ C0076 | New builtins: ASCII-alnum internal names; LISTABLE never broadcasts a sc
 C0077 | giac error texts from caseval.py: ' | ' is libgiac's newline on CI | giac,oracle,caseval,errors,ci,departures | 2026-11-25 | 1.7/T2 | CI 45565458930 invalid_calls_stay
 C0078 | A CI test job that hangs: cancel the run, diff finished tests against the last green run | ci,tests,hang,gh,debugging,libtest | 2026-11-25 | 1.7/T2 | CI 45565458930 shared_subexpressions
 C0079 | Walks over an Expr keep a seen set; a may_contain fast path only hides a tree walk | expr,dag,traversal,bloom,builtins,hang,simplify | 2026-11-25 | 1.7/T2 | T2.c4 2488b71 shared_subexpressions
+C0080 | Sorting mixed exact and decimal values: one comparator kind per slice | sort,fuzz,float,total_cmp,panic,native | 2026-11-25 | 1.7/T3 | T3.c1 CAS-626 empirical cdf
+C0081 | giac's undef/infinity answers are agreeing rows (infinity reads as ComplexInfinity) | giac,oracle,undef,infinity,departures | 2026-11-25 | 1.7/T3 | T3.c2 CAS-627
+C0082 | giac ports and clippy: full binding names; Warning::Native needs &'static str | clippy,port,native,warning,lifetime | 2026-11-25 | 1.7/T3 | T3.c1 T3.c2
+C0083 | Together leaves balls untouched: test for a ball before wrapping a numeric result | together,ball,native,decimal,regression | 2026-11-25 | 1.7/T3 | T3.c3 CAS-627
