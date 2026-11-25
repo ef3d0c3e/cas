@@ -605,8 +605,8 @@ fn answers_print_as_giac_prints_its_own() {
         ("x^y^z", "x^{y^{z}}"),
         ("a/(b*c)", "\\frac{a}{b c}"),
         ("2/3*x", "\\frac{2}{3} x"),
-        // departure: constants first (giac: -x-1).
-        ("-(x+1)", "-1-x"),
+        // departure: ours keeps Times[-1, Plus[1, x]] (giac: -x-1).
+        ("-(x+1)", "-\\left(1+x\\right)"),
         ("x*(-y)", "-x y"),
         ("1..2", "1\\ldots 2"),
         ("true", "\\mathrm{true}"),
