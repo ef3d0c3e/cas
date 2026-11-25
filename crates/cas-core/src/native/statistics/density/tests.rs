@@ -1,5 +1,5 @@
 //! Tests of kernel density estimation (CAS-629): `kernel_density`'s three
-//! forms against the prototype's direct sums (.run/1.7/T5/proto.py, which
+//! forms against the prototype's direct sums (crates/cas-core/proto/density/proto.py, which
 //! reproduces giac's numbers within its FFT noise, C0084), exactness on
 //! exact data, each warning, the options not ported and the limits.
 

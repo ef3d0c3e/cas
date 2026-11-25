@@ -1,5 +1,5 @@
 //! Tests of the sound clips (CAS-631): the rows of the prototype checked
-//! against giac (.run/1.7/T7/proto.py, logs/T7.c1.md ## Rows) that these
+//! against giac (crates/cas-core/proto/sound/clip/proto.py, logs/T7.c1.md ## Rows) that these
 //! natives answer, their departures, giac's errors with their warnings,
 //! `==`, `About`, and the limits.
 
@@ -568,7 +568,7 @@ fn clip16(channels: &[&str]) -> String {
 }
 
 /// The clip edits (CAS-632): the prototype's rows checked against giac
-/// (.run/1.7/T8/proto.py, logs/T8.c1.md), as codes.
+/// (crates/cas-core/proto/sound/edit/proto.py, logs/T8.c1.md), as codes.
 #[test]
 #[allow(clippy::too_many_lines, reason = "one row per probe")]
 fn edits() {
@@ -963,7 +963,7 @@ fn sc(rate: u32, depth: u32, channels: &[&str]) -> String {
 }
 
 /// Resampling (CAS-633): the qualities 0 and 1 exactly, the others on
-/// `A`, from the prototype (.run/1.7/T8/resample.py, resample.log).
+/// `A`, from the prototype (crates/cas-core/proto/sound/edit/resample.py, resample.log).
 #[test]
 #[allow(clippy::too_many_lines, reason = "one row per case")]
 fn resample() {

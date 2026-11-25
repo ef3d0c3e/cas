@@ -28,7 +28,7 @@
 //! does. The designs, cutoff `c`, attenuation `A`, zero crossings `H`,
 //! points per unit `L`: quality 2 `0.90`, 100 dB, 37, 512; quality 3 `0.95`,
 //! 120 dB, 86, 2048; quality 4 `0.98`, 144 dB, 312, 8192. Measured on the
-//! transform of the interpolated table (.run/1.7/T8/resample.py, its
+//! transform of the interpolated table (crates/cas-core/proto/sound/edit/resample.py, its
 //! images included), with `δ = 10^(−A/20)`: the passband deviation
 //! `max |G − 1|` up to 80, 90 and 96 % of the lower Nyquist frequency is
 //! `8.5e−6`, `9.2e−7` and `5.4e−8` (0.85, 0.92 and 0.86 `δ`); the stopband

@@ -403,7 +403,7 @@ and `kde` (CAS-629):
   four of `(5, √2)` (0.18 and 0.127; giac `(5.0334, 1.4515)`), both sides.
 
 `tests/clustering.rs`, Xcas's `cluster` and `kmeans` (CAS-630; giac's
-answers in probe4.out and probe8.out, the prototype .run/1.7/T6/proto.py,
+answers in probe4.out and probe8.out, the prototype crates/cas-core/proto/clustering/proto.py,
 R1.7-012):
 - `cluster` (21 rows: D6, E6, 1-D and one- and two-point data, every
   linkage, `count=`, `output=list` and `output=count`) giac's labels and
@@ -427,8 +427,8 @@ R1.7-012):
   labels, s = 1, 7, 42, 2024.
 
 `tests/sound.rs`, Xcas's sound clips (CAS-631; giac's answers in probe5,
-probe9, probe10, probe11 and .run/1.7/T7/dur.out, the prototype
-.run/1.7/T7/proto.py): 49 value rows (properties, `channel_data` with
+probe9, probe10, probe11 and crates/cas-core/proto/sound/clip/dur.cas, the prototype
+crates/cas-core/proto/sound/clip/proto.py): 49 value rows (properties, `channel_data` with
 channels, `matrix`, `range=`, bit depths, `normalize=`, `duration=`, and
 `soundsec`; several channels bracketed, C0023) giac's decimals read back
 within its error; 16 of giac's errors stay with its message (C0056); 24
@@ -439,7 +439,7 @@ a clip (ours `soundclip(44100, 16, [29204, -29204, 14602, 0])`), `type`,
 giac 8: its 47-bit doubles, C0088); session rows: a clip prints as that
 call, reads back and is its `string`, and `about(x)` after `assume(x>0)` is
 `hold([x > 0])`. The clip edits (CAS-632; probe5, probe9 and
-.run/1.7/T8/probe1.out, the prototype .run/1.7/T8/proto.py, plain `f64` and
+crates/cas-core/proto/sound/edit/probe1.cas, the prototype crates/cas-core/proto/sound/edit/proto.py, plain `f64` and
 giac's 47-bit doubles alike on every row): 74 value rows of `set_channel_data`,
 `stereo2mono`, `mixdown` and `splice` (offsets and fades in samples and
 seconds, gain, pan, depths, silent and negative similarities, a second clip
@@ -447,7 +447,7 @@ shorter than the overlap), 34 more errors that stay, two departures (giac's
 `splice` of clips of other sample rates with an exponent `p ≥ 0`, which
 giac mixes and ours refuses) and `clipping`: ours warns once per call when
 any sample clips, giac only when the last one does. `resample` (CAS-633;
-.run/1.7/T8/probe_rs.out, the prototype .run/1.7/T8/resample.py): 12 shared
+crates/cas-core/proto/sound/edit/probe_rs.cas, the prototype crates/cas-core/proto/sound/edit/resample.py): 12 shared
 errors that stay, six departures (giac's Debian build has no libsamplerate
 and answers "libsamplerate is required for resampling audio"; ours answers
 the clip, libsamplerate's linear and zero-order hold converters exactly at
@@ -456,8 +456,8 @@ the qualities 0 and 1, a Kaiser-windowed sinc of ours at 2 to 4) and
 kept and a 23500 Hz tone attenuated at 48000 → 44100 Hz.
 
 `tests/transforms.rs`, Xcas's wavelet transforms `dwt` and `idwt` (CAS-634;
-giac's answers in .run/1.7/T9/giac/p1.out and p2.out, the prototype
-.run/1.7/T9/proto_dwt.py, a port of GSL's wavelet/dwt.c): 37 rows of giac's
+giac's answers in crates/cas-core/proto/wavelet/giac/p1.cas and p2.cas, the prototype
+crates/cas-core/proto/wavelet/proto_dwt.py, a port of GSL's wavelet/dwt.c): 37 rows of giac's
 decimals read back within its 12 digits (C0006): Daubechies, Haar and
 B-spline members, `center`, inverse, padding of a list and of a matrix, the
 2-D standard and `image` forms, `[]`, and `idwt(dwt(x))`; giac's rounding
@@ -469,7 +469,7 @@ implemented", "Invalid argument 2" for a bare `haar` and for `centre=true`,
 
 `tests/transforms.rs` also holds Xcas's analytic signals `hilbert` on a
 list, `instfreq`, `instphase` and `emd` (CAS-635; giac's answers in
-.run/1.7/T9/giac/p3.out, the prototypes .run/1.7/T9/proto_emd.py and
+crates/cas-core/proto/wavelet/giac/p3.cas, the prototypes crates/cas-core/proto/wavelet/proto_emd.py and
 proto_analytic.py, emd bit-exact with libgsl through ctypes): 25 rows within
 giac's 12 digits by real and imaginary parts (C0006, C0010): `emd` bracketed
 (C0023), its options, the decimal 41-sample row within giac's noise

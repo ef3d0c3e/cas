@@ -1,8 +1,8 @@
 //! Xcas's sound clips against giac (CAS-631): `createwav`, `soundsec`,
 //! `samplerate`, `bit_depth`, `channels`, `duration`, `channel_data` and
-//! `about` (giac's answers in .run/1.7/giac/probe5.out, probe9.out,
-//! probe10.out, probe11.out and .run/1.7/T7/dur.out; the prototype
-//! .run/1.7/T7/proto.py, logs/T7.c1.md ## Rows). Exact answers against
+//! `about` (giac's answers in crates/cas-core/proto/giac/probe5.cas, probe9.cas,
+//! probe10.cas, probe11.cas and crates/cas-core/proto/sound/clip/dur.cas; the prototype
+//! crates/cas-core/proto/sound/clip/proto.py, logs/T7.c1.md ## Rows). Exact answers against
 //! giac's decimals within their error (C0006, C0032); several channels as a
 //! list (C0023). giac's errors stay with its message as the warning (C0022,
 //! C0056). Departures, giac's answer as caseval prints it (C0047) and ours:
@@ -11,8 +11,8 @@
 //! giac keeps 47 fraction bits in its doubles (C0088). Session rows: the
 //! session prints a clip as that call, which reads back, and `about(x)`
 //! holds its facts (C0026). The clip edits (CAS-632): `set_channel_data`,
-//! `stereo2mono`, `mixdown` and `splice` (.run/1.7/T8/probe1.out and the
-//! prototype .run/1.7/T8/proto.py, logs/T8.c1.md).
+//! `stereo2mono`, `mixdown` and `splice` (crates/cas-core/proto/sound/edit/probe1.cas and the
+//! prototype crates/cas-core/proto/sound/edit/proto.py, logs/T8.c1.md).
 
 use cas_core::{Context, Expr, Symbol, Warning};
 use cas_core::{EvalOptions, View};
@@ -151,7 +151,7 @@ fn values() {
         "size(channel_data(createwav(duration=0.25,channels=1,samplerate=10)))".to_owned(),
         "size(channel_data(createwav(length=3,duration=1,channels=1,samplerate=10)))".to_owned(),
         "size(channel_data(createwav([1,2],duration=1,samplerate=10)))".to_owned(),
-        // The clip edits (CAS-632; probe5, probe9, .run/1.7/T8/probe1.out).
+        // The clip edits (CAS-632; probe5, probe9, crates/cas-core/proto/sound/edit/probe1.cas).
         format!("channel_data(set_channel_data({a},[0.9,0.8]))"),
         format!("channel_data(set_channel_data({a},[0.9,0.8],1))"),
         format!("channel_data(set_channel_data({a},[0.9,0.8,0.7,0.6,0.5],2))"),
@@ -344,7 +344,7 @@ fn errors_stay() {
             "channel_data(createwav(createwav([0.5,-0.5]),bit_depth=8))".to_owned(),
             value("Invalid argument 1"),
         ),
-        // The clip edits (CAS-632; probe5, probe9, .run/1.7/T8/probe1.out).
+        // The clip edits (CAS-632; probe5, probe9, crates/cas-core/proto/sound/edit/probe1.cas).
         (
             format!("set_channel_data({a},[0.9,0.8],4)"),
             value("Invalid offset"),
@@ -469,7 +469,7 @@ fn errors_stay() {
             format!("splice({a},[1,2])"),
             kind("First two arguments should be audio clips"),
         ),
-        // resample (CAS-633, .run/1.7/T8/probe_rs.out).
+        // resample (CAS-633, crates/cas-core/proto/sound/edit/probe_rs.cas).
         (format!("resample({a},0)"), value(rate)),
         (format!("resample({a},-3)"), value(rate)),
         (format!("resample({a},22050.0)"), value(rate)),
@@ -668,8 +668,8 @@ fn departures() {
             format!("{spliced}22050),2,0))"),
         ),
         // resample: giac's Debian build has no libsamplerate (CAS-633,
-        // .run/1.7/T8/probe_rs.out); ours resamples (the prototype
-        // .run/1.7/T8/resample.py), a clip of no samples stays.
+        // crates/cas-core/proto/sound/edit/probe_rs.cas); ours resamples (the prototype
+        // crates/cas-core/proto/sound/edit/resample.py), a clip of no samples stays.
         (
             "resample(createwav([0.5,-0.5,0.25,0]))".to_owned(),
             no_lsr.to_owned(),
@@ -820,7 +820,7 @@ fn tone(f: f64, rate: f64, k: usize) -> i64 {
 }
 
 /// Resampling's properties, ours only (CAS-633; the expected shapes and
-/// tolerances from the prototype .run/1.7/T8/resample.py, resample.log,
+/// tolerances from the prototype crates/cas-core/proto/sound/edit/resample.py, resample.log,
 /// with margin): `floor(len·r/sr)` samples; a constant clip stays constant
 /// where the kernel lies inside it; at 48000 → 44100 Hz a 440 Hz tone of
 /// amplitude 1/2 at 24 bits keeps its frequency and amplitude there

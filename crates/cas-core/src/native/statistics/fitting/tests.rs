@@ -1,6 +1,6 @@
 //! Tests of distribution fitting (CAS-629): `fitdistr`'s closed forms,
 //! exact on exact data, its iterative fits against the roots of the score
-//! equations (mpmath at 40 digits, from .run/1.7/T5/proto.py's equations
+//! equations (mpmath at 40 digits, from crates/cas-core/proto/density/proto.py's equations
 //! with the mean `Σx/N`), each warning, and the budget.
 
 use crate::context::Limits;

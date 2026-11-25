@@ -1,0 +1,10 @@
+floor(0.001*8000)
+0.001-1/1000
+evalf(0.001*8000,20)
+size(channel_data(createwav(duration=0.002,channels=1,samplerate=8000)))
+size(channel_data(createwav(duration=1/1000,channels=1,samplerate=8000)))
+size(channel_data(createwav(duration=0.5,channels=1,samplerate=4)))
+size(channel_data(createwav(duration=1,channels=1,samplerate=10)))
+size(channel_data(createwav(duration=0.25,channels=1,samplerate=10)))
+size(channel_data(createwav(length=3,duration=1,channels=1,samplerate=10)))
+size(channel_data(createwav([1,2],duration=1,samplerate=10)))

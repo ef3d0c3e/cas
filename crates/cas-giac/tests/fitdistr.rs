@@ -1,9 +1,11 @@
 //! Xcas's distribution fitting against giac (CAS-629): `fitdistr` (giac's
-//! answers in .run/1.7/giac/probe3.out and .run/1.7/T5/extra.out). giac's
+//! answers to crates/cas-core/proto/giac/probe3.cas and
+//! crates/cas-core/proto/density/extra.cas). giac's
 //! mean divides by `N − 1` (optimization.cc:7481), ours by `N`, so the laws
 //! whose answer uses the mean are departures: giac's text, whitespace
 //! collapsed, and ours, exact on exact data (the same as ours of its form)
-//! or within 10⁻¹² of the prototype's root (.run/1.7/T5/proto.py). The
+//! or within 10⁻¹² of the prototype's root
+//! (crates/cas-core/proto/density/proto.py). The
 //! Weibull, Cauchy and beta fits do not depend on the mean but through
 //! their starting points: each parameter within 10⁻⁸ of giac's, which stops
 //! its iteration at a step of 10⁻⁵. Invalid calls stay with giac's message

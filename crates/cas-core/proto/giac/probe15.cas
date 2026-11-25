@@ -1,0 +1,4 @@
+(x^2)(3)
+type(kernel_density([1,2,3,2],bandwidth=1/4,exact))
+type(cdf(normald,0,1))
+subst(kernel_density([1,2,3,2],bandwidth=1/4,exact),x=2)

@@ -1,0 +1,1 @@
+sample(randvar(multinomial,[1/2,1/2]),4)

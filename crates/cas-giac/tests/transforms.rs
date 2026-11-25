@@ -1,6 +1,6 @@
 //! Xcas's wavelet transforms against giac (CAS-634): `dwt` and `idwt`
-//! (giac's answers in `.run/1.7/T9/giac/p1.out` and `p2.out`, the prototype
-//! `.run/1.7/T9/proto_dwt.py`, logs/T9.c1.md). giac's decimals read back are
+//! (giac's answers in `crates/cas-core/proto/wavelet/giac/p1.cas` and `p2.cas`, the prototype
+//! `crates/cas-core/proto/wavelet/proto_dwt.py`, logs/T9.c1.md). giac's decimals read back are
 //! ours within its printed digits (C0006, C0076): its rounding noise
 //! (`2.2·10⁻¹⁶`) against ours of about `10⁻³⁰`; Haar on exact data is exact
 //! here (`a + b√2`). giac's errors stay with its message as the warning
@@ -239,7 +239,7 @@ fn check_parts(inputs: &[&str]) {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
-/// giac's analytic signals (CAS-635, `.run/1.7/T9/giac/p3.out`, the
+/// giac's analytic signals (CAS-635, `crates/cas-core/proto/wavelet/giac/p3.cas`, the
 /// prototypes `proto_emd.py` and `proto_analytic.py`, logs/T9.c3.md): `emd`
 /// bracketed, its answer a sequence (C0023); the decimal 41-sample row
 /// within giac's noise (`5.6·10⁻¹⁷` where its decimals differ from strtod's).

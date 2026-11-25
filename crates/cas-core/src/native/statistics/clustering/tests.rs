@@ -1,6 +1,6 @@
 //! Tests of clustering (CAS-630): `cluster`'s labels and `kmeans`'
 //! partitions (up to relabelling) against the prototype's answers
-//! (.run/1.7/T6/proto.py, R1.7-012), the seed-dependent ones among the
+//! (crates/cas-core/proto/clustering/proto.py, R1.7-012), the seed-dependent ones among the
 //! partitions it found over 200 seeds, a run repeated under `SeedRandom`,
 //! each warning, and the limits.
 

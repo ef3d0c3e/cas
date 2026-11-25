@@ -1,6 +1,6 @@
 //! Xcas's clustering against giac (CAS-630): `cluster` and `kmeans`
-//! (giac's answers in .run/1.7/giac/probe4.out and probe8.out; the
-//! prototype .run/1.7/T6/proto.py, R1.7-012). `cluster` is deterministic:
+//! (giac's answers in crates/cas-core/proto/giac/probe4.cas and probe8.cas; the
+//! prototype crates/cas-core/proto/clustering/proto.py, R1.7-012). `cluster` is deterministic:
 //! labels compared as they are. `kmeans` starts from random centres and
 //! giac's `_rand` stream is not ours: partitions compared up to relabelling
 //! (labels renumbered by first appearance, C0087), the seed-independent rows

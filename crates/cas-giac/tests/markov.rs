@@ -7,7 +7,8 @@
 //! text, C0007, C0077). giac's generator is not ours: draws are properties
 //! both answers have, each side seeded in the same input (C0014).
 //! Departures: giac's answer as caseval prints it, whitespace collapsed,
-//! and ours (.run/1.7/giac/probe1.out, probe10.out, .run/1.7/T4/).
+//! and ours (crates/cas-core/proto/giac/probe1.cas, probe10.cas,
+//! crates/cas-core/proto/markov/).
 
 use cas_core::{Context, EvalOptions, Expr, Rational, Symbol, View, Warning};
 use cas_giac::{Giac, ours};
@@ -189,8 +190,9 @@ fn stays_with(input: &str, expected: Option<&str>) -> bool {
 }
 
 /// Invalid calls stay with giac's message as the warning (giac's text in
-/// `.run/1.7/giac/probe1.out`, `probe10.out`, `.run/1.7/T4/probe_a.out`,
-/// `probe_b.out`).
+/// `crates/cas-core/proto/giac/probe1.cas`, `probe10.cas`,
+/// `crates/cas-core/proto/markov/probe_a.cas`,
+/// `probe_b.cas`).
 #[test]
 fn invalid_calls_stay() {
     const STOCHASTIC: &str = "GIAC_ERROR: Not a stochastic matrix! Error: Bad Argument Value";
@@ -313,7 +315,7 @@ fn departures() {
             wrong.push(format!("{input}: ours {found:?}"));
         }
     }
-    // giac's loop never ends here (.run/1.7/T4/probe_b.out, a 15 s
+    // giac's loop never ends here (crates/cas-core/proto/markov/probe_b.cas, a 15 s
     // timeout): ours only.
     let periodic = ours("[markov([[1,0,0,0],[0,0,1,0],[0,1,0,0],[1/2,1/6,1/3,0]])]");
     let expected =
@@ -433,8 +435,8 @@ fn classes(v: &'static [usize], nt: usize) -> impl Fn(&Expr) -> bool {
     }
 }
 
-/// Seeded draws (giac's in `.run/1.7/giac/probe1.out`, `probe10.out`,
-/// `.run/1.7/T4/probe_f.out`): paths by length, start and steps of positive
+/// Seeded draws (giac's in `crates/cas-core/proto/giac/probe1.cas`, `probe10.cas`,
+/// `crates/cas-core/proto/markov/probe_f.cas`): paths by length, start and steps of positive
 /// probability; random chains by layout and by `markov`'s classes.
 #[test]
 fn draws() {

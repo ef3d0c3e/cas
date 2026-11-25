@@ -2,7 +2,7 @@
 //! optimization.cc: AS 136 `optra` :9862, `qtran` :10096, `kmns` :10292;
 //! `init_cluster_centers` :10622, `kmeans` :10654; `comp_dist` :10765;
 //! `hclust` :11102-11443; `clustering_result` :11571, `_kmeans` :11610,
-//! `_cluster` :11737), ported from .run/1.7/T6/proto.py (R1.7-012).
+//! `_cluster` :11737), ported from crates/cas-core/proto/clustering/proto.py (R1.7-012).
 //!
 //! - **Data.** A list of real numbers (1-D points) or of equal-length
 //!   lists of real numbers, `Matrix[l]` of such a list too; reals are

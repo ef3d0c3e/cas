@@ -1,0 +1,5 @@
+srand(42);X:=randvar(normal,mean=5,stddev=1.5):;randvector(3,X)
+srand(42);X:=randvar(poisson,3):;randvector(4,X)
+srand(42);X:=randvar([1,2,3]):;randvector(4,X)
+srand(42);randvector(3,normald(5,1.5))
+srand(42);sample(normald(0,1),3)

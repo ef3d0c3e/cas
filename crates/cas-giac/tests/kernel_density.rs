@@ -1,6 +1,7 @@
 //! Xcas's kernel density estimation against giac (CAS-629):
 //! `kernel_density` and `kde`, in its exact, list and piecewise forms
-//! (giac's answers in .run/1.7/giac/probe3.out and .run/1.7/T5/extra.out).
+//! (giac's answers to crates/cas-core/proto/giac/probe3.cas and
+//! crates/cas-core/proto/density/extra.cas).
 //! The exact form compares by its values at sample points within giac's 12
 //! digits, ours exact (no ball) on exact data with an exact bandwidth.
 //! giac convolves by FFT, whose lists carry ~10⁻⁹ relative noise (C0084):
@@ -329,7 +330,7 @@ fn check_stays(rows: &[(&str, &str)], warned: bool) {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
-/// giac's errors (.run/1.7/T5/extra.out) stay with its message; `bins=1`
+/// giac's errors (crates/cas-core/proto/density/extra.cas) stay with its message; `bins=1`
 /// with giac's FFT's "Invalid dimension".
 #[test]
 fn invalid_calls_stay() {

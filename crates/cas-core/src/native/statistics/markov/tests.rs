@@ -1,5 +1,5 @@
 //! Tests of Markov chains (CAS-628): `markov`'s four lists on the rows of
-//! the prototype (.run/1.7/T4/markov.py, giac's answers made exact), its
+//! the prototype (crates/cas-core/proto/markov/markov.py, giac's answers made exact), its
 //! balls on decimals, each warning, and seeded `randmarkov` paths and
 //! matrices by their properties.
 

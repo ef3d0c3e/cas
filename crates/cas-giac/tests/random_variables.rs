@@ -140,8 +140,8 @@ fn check_stays(rows: &[(&str, &str)]) {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
-/// Objects (CAS-624; giac's answers in .run/1.7/T2/probe.out,
-/// .run/1.7/giac/probe2.out): parameters given, from `mean=`, `stddev=`
+/// Objects (CAS-624; giac's answers in crates/cas-core/proto/randvar/probe.cas,
+/// crates/cas-core/proto/giac/probe2.cas): parameters given, from `mean=`, `stddev=`
 /// and `variance=` (exact where giac's are: `gammad(36,3)`,
 /// `uniformd(10-2*sqrt(3),10+2*sqrt(3))`, `geometric(1/4)` from giac's
 /// unsimplified radical), giac's decimals for decimal input
@@ -424,8 +424,8 @@ fn check(cases: &[(&str, Property<'_>)]) {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
-/// Draws from the objects (giac's in .run/1.7/giac/probe2.out, probe14.out,
-/// .run/1.7/T2/c2): supports and sizes; giac's weights form draws indices
+/// Draws from the objects (giac's in crates/cas-core/proto/giac/probe2.cas, probe14.cas,
+/// crates/cas-core/proto/randvar/c2): supports and sizes; giac's weights form draws indices
 /// from 0, and its parameter-only density call is itself an object.
 #[test]
 fn draws() {

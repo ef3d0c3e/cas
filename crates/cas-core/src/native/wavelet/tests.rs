@@ -1,5 +1,5 @@
 //! Tests of the wavelet transforms (CAS-634): giac's rows, which the
-//! prototype (`.run/1.7/T9/proto_dwt.py`, `logs/T9.c1.md`) reproduces from GSL
+//! prototype (`crates/cas-core/proto/wavelet/proto_dwt.py`, `logs/T9.c1.md`) reproduces from GSL
 //! to giac's printed digits, Haar exactly, round trips, padding, giac's
 //! errors with their warnings, and the limits.
 
