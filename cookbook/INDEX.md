@@ -64,3 +64,4 @@ C0061 | Certified global minimiser on an interval: float candidate, ball cover, 
 C0062 | Iterative float optimisers with a certified stop: test in balls, one shared work budget | frank-wolfe,certified,optimisation,limits,budget,gap | 2026-11-24 | 1.5/T6 | T6.c2 CAS-609
 C0063 | A native applying user functions: Expr::apply + ev.eval, N[] for numbers | native,function,apply,eval,random,seed | 2026-11-24 | 1.5/T7 | T7.c1 CAS-610
 C0064 | Iterated user steps on balls: exact midpoints, or radii compound | ball,radius,random,iteration,native,annealing | 2026-11-24 | 1.5/T7 | T7.c2 CAS-610; CI 45347780940
+C0065 | giac string order is byte order: compare with str::cmp, not Expr's Ord | giac,strings,sort,order,compare | 2026-11-25 | 1.6/T2 | T2.c2 CAS-612 sort on strings
