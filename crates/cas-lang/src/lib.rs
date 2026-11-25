@@ -22,6 +22,8 @@
 //! - [`print()`]: an expression as text that reads back as it (the input
 //!   form), for output that can be pasted as input; a [`PrintError`] for
 //!   what the language cannot write.
+//! - [`latex`]: an expression in LaTeX as giac's `latex()` writes it, a
+//!   port of giac's `gen2markup` (CAS-615).
 //! - [`Hook`]: the language as cas-core's [`Language`](cas_core::Language)
 //!   hook, which natives print and read text through (CAS-614).
 //! - [`Session`]: a program run one statement at a time against a
@@ -32,6 +34,7 @@ mod hook;
 mod lexer;
 mod literal;
 mod lower;
+mod markup;
 mod names;
 mod parser;
 mod print;
@@ -45,6 +48,7 @@ pub use literal::{
     superscript_value,
 };
 pub use lower::{Diagnostic, Fix, LowerErrorKind, Lowered, Severity, Spans, Statement, lower};
+pub use markup::latex;
 pub use names::{
     Names, NamesError, NamesErrorKind, SyntaxForm, Target, TypeName, escape_name, unescape_name,
 };

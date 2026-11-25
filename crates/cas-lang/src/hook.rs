@@ -1,9 +1,10 @@
 //! The language as cas-core's [`Language`] hook (CAS-614): natives that
 //! turn expressions into text and back, `string`, `expr`, `cat` and `join`,
-//! and later `latex` and `mathml`, call it through the context, since
-//! cas-core cannot depend on this crate. The session and the oracle install
-//! it ([`Context::set_language`]); it is part of the context's state, so a
-//! context with another hook has another id and shares no cached values.
+//! `latex` (CAS-615, [`Form::Latex`]) and later `mathml`, call it through
+//! the context, since cas-core cannot depend on this crate. The session and
+//! the oracle install it ([`Context::set_language`]); it is part of the
+//! context's state, so a context with another hook has another id and
+//! shares no cached values.
 
 use std::sync::{Arc, LazyLock};
 
@@ -11,13 +12,14 @@ use cas_core::{Context, Expr, Form, Language, Symbol};
 
 use crate::literal::decimal_balls;
 use crate::lower::{Severity, lower};
+use crate::markup::latex;
 use crate::names::Names;
 use crate::parser::parse;
 use crate::print::{Balls, print_capped};
 
-/// The language with the names of one locale: the input form printed with
-/// balls as they show at the context's working precision, and text read as
-/// one expression.
+/// The language with the names of one locale: the input form and LaTeX
+/// printed with balls as they show at the context's working precision, and
+/// text read as one expression.
 #[derive(Clone, Debug)]
 pub struct Hook {
     names: Names,
@@ -47,13 +49,14 @@ impl Language for Hook {
         context: &Context,
         max_len: usize,
     ) -> Result<String, String> {
+        let balls = Balls::Shown {
+            working_precision: context.working_precision(),
+        };
         match form {
             Form::Input => {
-                let balls = Balls::Shown {
-                    working_precision: context.working_precision(),
-                };
                 print_capped(e, &self.names, balls, max_len).map_err(|error| error.to_string())
             }
+            Form::Latex => latex(e, &self.names, balls, max_len).map_err(|error| error.to_string()),
             _ => Err(format!("no printer for the form {form:?}")),
         }
     }

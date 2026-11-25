@@ -17,6 +17,8 @@ use crate::expr::Expr;
 pub enum Form {
     /// The input form: text that [`Language::read`] reads back.
     Input,
+    /// LaTeX, as giac's `latex()` writes it (CAS-615).
+    Latex,
 }
 
 /// A language that prints expressions as text and reads text back.
