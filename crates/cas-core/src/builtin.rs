@@ -882,6 +882,19 @@ builtins! {
     RUR_CERTIFY = "RurCertify" [PROTECTED];
     GBASIS_MAX_PAIRS = "GbasisMaxPairs" [PROTECTED];
     GBASIS_SIMULT_PRIMES = "GbasisSimultPrimes" [PROTECTED];
+    // Xcas's session commands (CAS-619, CAS-620): the session runs
+    // `Restart`, `RemoveAllVariables`, `RemoveAToZ`, `Variables`, `Time`
+    // and `Monotonic` as statements; nested, they stay with a warning.
+    RESTART = "Restart" [PROTECTED];
+    REMOVE_ALL_VARIABLES = "RemoveAllVariables" [PROTECTED];
+    REMOVE_A_TO_Z = "RemoveAToZ" [PROTECTED];
+    VARIABLES = "Variables" [PROTECTED];
+    ANS = "Ans" [PROTECTED];
+    QUEST = "Quest" [PROTECTED];
+    TIME = "Time" [PROTECTED];
+    MONOTONIC = "Monotonic" [PROTECTED];
+    VERSION = "Version" [PROTECTED];
+    NO_DISPLAY = "NoDisplay" [PROTECTED];
     // Logical values, infinities and nothing (CAS-DOC-4 §6.1, R14).
     TRUE = "True" [PROTECTED];
     FALSE = "False" [PROTECTED];

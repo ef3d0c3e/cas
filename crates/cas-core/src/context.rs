@@ -6,11 +6,17 @@
 //! phase 1.6 (CAS-617, CAS-618), which the session sets, and the
 //! [`Language`] natives print and read text with (CAS-614).
 //!
+//! Outside the state, a context shares with its clones the generator of
+//! random numbers and the session's history (CAS-620): the inputs and
+//! answers `ans` and `quest` read, the 256 last ones and at most 1 MiB of
+//! input text, the oldest dropped first.
+//!
 //! Of those settings, `keep_algext`, `eval_level`, `rur_certify`,
 //! `gbasis_max_pairs` and `gbasis_simult_primes` are stored only: this CAS
 //! evaluates to a fixpoint, and its Gröbner bases and rational univariate
 //! representations are exact, so nothing reads them.
 
+use std::collections::VecDeque;
 use std::fmt;
 use std::num::NonZeroU64;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -65,6 +71,45 @@ pub struct Context {
     /// state either: shared by the clones of this context and the contexts
     /// made from it, so that drawing changes no id.
     random: Arc<Mutex<Random>>,
+    /// The session's history (CAS-620), not part of the state: shared by
+    /// the clones of this context and the contexts made from it.
+    history: Arc<Mutex<History>>,
+}
+
+/// The most entries a [`History`] keeps.
+const MAX_HISTORY: usize = 256;
+
+/// The most bytes of input text a [`History`] keeps, all entries together
+/// but the newest.
+const MAX_HISTORY_BYTES: usize = 1 << 20;
+
+/// The statements a session ran, oldest first: each one's input text and
+/// answer, for `ans` and `quest` (CAS-620). Bounded: past
+/// [`MAX_HISTORY`] entries or [`MAX_HISTORY_BYTES`] of input, the oldest
+/// go.
+#[derive(Clone, Debug, Default)]
+pub(crate) struct History {
+    entries: VecDeque<(String, Expr)>,
+    /// The bytes of input the entries hold.
+    bytes: usize,
+}
+
+impl History {
+    pub(crate) fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// The entry at `n`: for `n ≥ 0` the `(n+1)`th kept, for `n < 0` the
+    /// `(−n)`th from the end.
+    pub(crate) fn get(&self, n: i64) -> Option<&(String, Expr)> {
+        let i = if n >= 0 {
+            usize::try_from(n).ok()?
+        } else {
+            let back = usize::try_from(n.unsigned_abs()).ok()?;
+            self.entries.len().checked_sub(back)?
+        };
+        self.entries.get(i)
+    }
 }
 
 /// A context's generator of random numbers, and the draws it gave, which
@@ -258,6 +303,7 @@ impl Default for Context {
             interrupt: None,
             warned: Arc::default(),
             random: Arc::default(),
+            history: Arc::default(),
         }
     }
 }
@@ -651,6 +697,67 @@ impl Context {
         self.random = Arc::new(Mutex::new(copy));
     }
 
+    /// Records a statement the session ran in the history (CAS-620),
+    /// which this context shares with its clones: its input text and its
+    /// answer. The oldest entries go past 256, or past 1 MiB of input.
+    pub fn record(&self, input: &str, answer: Expr) {
+        let mut history = self.history();
+        history.bytes += input.len();
+        history.entries.push_back((input.to_owned(), answer));
+        while history.entries.len() > MAX_HISTORY
+            || (history.bytes > MAX_HISTORY_BYTES && history.entries.len() > 1)
+        {
+            if let Some((old, _)) = history.entries.pop_front() {
+                history.bytes -= old.len();
+            }
+        }
+    }
+
+    /// The history, locked.
+    pub(crate) fn history(&self) -> MutexGuard<'_, History> {
+        self.history.lock().unwrap_or_else(PoisonError::into_inner)
+    }
+
+    /// The user symbols this context knows (CAS-619): those with a value,
+    /// attributes or rules, and those in the assumptions; each once, in no
+    /// set order.
+    #[must_use]
+    pub fn user_symbols(&self) -> Vec<Symbol> {
+        let state = &self.state;
+        let mut symbols: Vec<Symbol> = state
+            .values
+            .iter()
+            .map(|(s, _)| s)
+            .chain(state.attributes.iter().map(|(s, _)| s))
+            .chain(state.rules.owners())
+            .chain(state.assumptions.iter().flat_map(Expr::symbols))
+            .filter(|s| !s.is_builtin())
+            .collect();
+        symbols.sort_unstable_by_key(|s| s.id());
+        symbols.dedup();
+        symbols
+    }
+
+    /// A new context but for its limits and language, as after Xcas's
+    /// `restart` (CAS-619): no values, rules, attributes or assumptions,
+    /// every setting its default, the generator of random numbers from the
+    /// seed 0. It keeps the interrupt and shares the history.
+    #[must_use]
+    pub fn restarted(&self) -> Context {
+        Context {
+            state: Arc::new(State {
+                limits: self.state.limits,
+                language: self.state.language.clone(),
+                ..State::default()
+            }),
+            id: StateId::fresh(),
+            interrupt: self.interrupt.clone(),
+            warned: Arc::default(),
+            random: Arc::default(),
+            history: Arc::clone(&self.history),
+        }
+    }
+
     /// Sets what symbols without facts range over (CAS-DOC-4 §7.1).
     pub fn set_domain(&mut self, domain: Domain) {
         self.state_mut().domain = domain;
@@ -951,6 +1058,7 @@ impl fmt::Debug for Context {
                 &self.interrupt.as_ref().map(Interrupt::is_interrupted),
             )
             .field("random", &self.random)
+            .field("history", &self.history().entries.len())
             .finish()
     }
 }

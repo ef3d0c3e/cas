@@ -34,7 +34,26 @@
 //!   eval_level]`, `increasing_power`, `with_sqrt`, `all_trig_solutions`)
 //!   and answers `l`; `cas_setup()` lists them;
 //! - an expression's result goes through the `autosimplify` command when
-//!   one is set, then `N` when `approx_mode` is 1.
+//!   one is set, then `N` when `approx_mode` is 1;
+//! - Xcas's session commands (CAS-619, CAS-620) run as statements:
+//!   `restart` or `restart()` gives the context a new start, every setting
+//!   its default (its limits and language stay), and answers the user names
+//!   it had; `rm_all_vars()` clears and forgets each user name, as `purge`
+//!   does, and answers them; `rm_a_z()` the same for those of one lowercase
+//!   letter but `e` and `i`, answering nothing; `VARS()` answers the user
+//!   names (those with a value, attributes or rules, or in an assumption),
+//!   by spelling as giac orders them; `time(e)` evaluates `e` and answers
+//!   the seconds it took, one decimal where giac lists real and CPU time;
+//!   `monotonic()` the seconds since the session began. Nested in an
+//!   expression, they stay with a warning.
+//!
+//! The session keeps a history (CAS-620) that `ans(n)` and `quest(n)`
+//! (`entry(n)`) read: each statement that ran, its text without the
+//! trailing `;` and the answer it shows, or would show without `;` (`Null`
+//! for definitions, `assume`, `purge` and failed statements). It holds the
+//! 256 last statements and at most 1 MiB of their text, the oldest dropped
+//! first; `ans(0)` is the oldest kept, `ans(-1)`, `ans()`, the last. It
+//! survives `restart`.
 //!
 //! Each statement gives an [`Output`]: the result unless `;` follows it or
 //! it is a definition, and [`Message`]s: the parser's and lowering's
@@ -48,12 +67,13 @@
 
 use std::ops::Range;
 use std::sync::Arc;
+use std::time::Instant;
 
 use cas_core::{
     Angle, Attributes, Context, DefineError, EvalError, EvalOptions, Expr, Interrupt, Limits,
     Symbol, View,
 };
-use cas_num::ball::Ball;
+use cas_num::ball::{Ball, Float};
 
 use crate::hook::Hook;
 use crate::literal::decimal_balls;
@@ -90,6 +110,11 @@ pub struct Session {
     context: Context,
     names: Names,
     interrupt: Interrupt,
+    /// When the session began, for `monotonic()` (CAS-620).
+    started: Instant,
+    /// The answer of the statement in progress, recorded in the history
+    /// once it ran: `Null` unless it gives one.
+    answer: Expr,
 }
 
 /// What one statement of a program gave.
@@ -176,6 +201,8 @@ impl Session {
             context,
             names,
             interrupt,
+            started: Instant::now(),
+            answer: Expr::from(Symbol::NULL),
         }
     }
 
@@ -291,7 +318,13 @@ impl Session {
                     quiet: statement.quiet,
                     spans: statement.spans.clone(),
                 };
+                self.answer = Expr::from(Symbol::NULL);
                 self.execute(&statement, &mut output);
+                // The history keeps its text, without the trailing `;`.
+                let input = text[range.clone()].trim();
+                let input = input.strip_suffix(';').unwrap_or(input).trim_end();
+                let answer = std::mem::replace(&mut self.answer, Expr::from(Symbol::NULL));
+                self.context.record(input, answer);
             }
             outputs.push(output);
         }
@@ -309,6 +342,9 @@ impl Session {
     fn execute(&mut self, statement: &Statement, out: &mut Output) {
         self.interrupt.reset();
         let e = &statement.expr;
+        if e.as_symbol() == Some(Symbol::RESTART) {
+            return self.restart(statement, out);
+        }
         match (e.head().and_then(Expr::as_symbol), e.args()) {
             (Some(Symbol::SET), [target, _]) => self.assign(statement, target, out),
             (Some(Symbol::SET_DELAYED), [lhs, rhs]) => {
@@ -333,10 +369,8 @@ impl Session {
             // `name()` reads a setting: the head alone would evaluate to
             // its value before a native could see the call.
             (Some(s), []) if is_setting(s) => {
-                if !statement.quiet {
-                    if let Ok(value) = self.context.eval(&Expr::from(s)) {
-                        self.show(&value, statement.spans.range(), out);
-                    }
+                if let Ok(value) = self.context.eval(&Expr::from(s)) {
+                    self.give(statement, value, out);
                 }
             }
             (Some(Symbol::CAS_SETUP), [_, ..]) => self.cas_setup(statement, out),
@@ -347,16 +381,84 @@ impl Session {
             }
             (Some(Symbol::CLEAR), names) => {
                 for s in names.iter().filter_map(Expr::as_symbol) {
-                    match self.context.clear(s) {
-                        Ok(()) => self.context = self.context.forgetting(s),
-                        Err(e) => out
-                            .messages
-                            .push(error(statement.spans.range(), e.to_string())),
+                    self.purge(statement, s, out);
+                }
+            }
+            // Xcas's session commands (CAS-619, CAS-620).
+            (Some(Symbol::RESTART), []) => self.restart(statement, out),
+            (Some(Symbol::REMOVE_ALL_VARIABLES), []) => {
+                let names = self.user_names();
+                for &s in &names {
+                    self.purge(statement, s, out);
+                }
+                self.give(statement, list(&names), out);
+            }
+            (Some(Symbol::REMOVE_A_TO_Z), []) => {
+                for s in self.user_names() {
+                    if matches!(spelling(s).as_bytes(), [c] if c.is_ascii_lowercase() && !matches!(c, b'e' | b'i'))
+                    {
+                        self.purge(statement, s, out);
                     }
                 }
             }
+            (Some(Symbol::VARIABLES), []) => {
+                let names = self.user_names();
+                self.give(statement, list(&names), out);
+            }
+            (Some(Symbol::TIME), [_]) => {
+                let start = Instant::now();
+                if self.evaluate(statement, &[1], out).is_some() {
+                    let seconds = Self::seconds(start.elapsed().as_secs_f64());
+                    self.give(statement, seconds, out);
+                }
+            }
+            (Some(Symbol::MONOTONIC), []) => {
+                let seconds = Self::seconds(self.started.elapsed().as_secs_f64());
+                self.give(statement, seconds, out);
+            }
             _ => self.expression(statement, out),
         }
+    }
+
+    /// `restart`: the context made anew ([`Context::restarted`]), and the
+    /// user names it had as the answer.
+    fn restart(&mut self, statement: &Statement, out: &mut Output) {
+        let names = self.user_names();
+        self.context = self.context.restarted();
+        self.give(statement, list(&names), out);
+    }
+
+    /// `purge(s)`: `s` cleared, and the assumptions on it forgotten.
+    fn purge(&mut self, statement: &Statement, s: Symbol, out: &mut Output) {
+        match self.context.clear(s) {
+            Ok(()) => self.context = self.context.forgetting(s),
+            Err(e) => out
+                .messages
+                .push(error(statement.spans.range(), e.to_string())),
+        }
+    }
+
+    /// The user names of the context, by spelling, as giac's `VARS()`
+    /// orders them.
+    fn user_names(&self) -> Vec<Symbol> {
+        let mut names = self.context.user_symbols();
+        names.sort_by(|&a, &b| spelling(a).cmp(spelling(b)));
+        names
+    }
+
+    /// `seconds` as a decimal, the exact ball of the double, shown at the
+    /// working precision.
+    fn seconds(seconds: f64) -> Expr {
+        Float::from_f64(seconds).map_or_else(|| Expr::from(0), |f| Expr::from(Ball::exact(f)))
+    }
+
+    /// The answer of a statement: recorded in the history, and shown
+    /// unless `;` follows it.
+    fn give(&mut self, statement: &Statement, value: Expr, out: &mut Output) {
+        if !statement.quiet {
+            self.show(&value, statement.spans.range(), out);
+        }
+        self.answer = value;
     }
 
     /// An expression statement: its value, through the `autosimplify`
@@ -366,9 +468,6 @@ impl Session {
         let Some(mut value) = self.evaluate(statement, &[], out) else {
             return;
         };
-        if statement.quiet {
-            return;
-        }
         let mut commands = Vec::new();
         commands.extend(self.context.autosimplify().cloned());
         if self.context.approx_mode() {
@@ -384,7 +483,7 @@ impl Session {
                 }
             }
         }
-        self.show(&value, statement.spans.range(), out);
+        self.give(statement, value, out);
     }
 
     /// `cas_setup(l)`, giac's (prog.cc): `l` a list of at least 7 elements,
@@ -435,9 +534,7 @@ impl Session {
             }
         }
         self.context = context;
-        if !statement.quiet {
-            self.show(&elements, statement.spans.range(), out);
-        }
+        self.give(statement, elements, out);
     }
 
     /// `name := v` or `name(v)` for a setting `s` (`Digits`, CAS-151; the
@@ -455,9 +552,7 @@ impl Session {
         match changed(&self.context, &self.names, s, value) {
             Ok((context, answer)) => {
                 self.context = context;
-                if !statement.quiet {
-                    self.show(&answer, statement.spans.range(), out);
-                }
+                self.give(statement, answer, out);
             }
             Err(message) => out
                 .messages
@@ -510,9 +605,7 @@ impl Session {
                 }
             }
         }
-        if !statement.quiet {
-            self.show(&value, spans.range(), out);
-        }
+        self.give(statement, value, out);
     }
 
     /// `s := value`, unless `value` refers to `s` while `s` has no value:
@@ -806,6 +899,11 @@ fn changed(
         _ => return Err(format!("{name} is not a setting")),
     }
     Ok((context, answer))
+}
+
+/// The list of `names`.
+fn list(names: &[Symbol]) -> Expr {
+    Expr::call(Symbol::LIST, names.iter().map(|&s| Expr::from(s)))
 }
 
 fn has_head(e: &Expr, s: Symbol) -> bool {

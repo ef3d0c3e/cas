@@ -245,6 +245,19 @@ compared value by value with giac's sequence:
   `xcas_mode(0)`, `maple_mode(0)`, `python_compat(0)`, not builtins here
   (CAS-DOC-7's one grammar): the calls stay.
 
+`tests/session.rs`, Xcas's session commands (CAS-619, CAS-620), each input
+after giac's `restart`, ours in a new session, compared value by value:
+- `VARS()` by name (`[a,b]` either way, `[a,f,zz]`, the last value only
+  where our definition shows nothing), `rm_all_vars()` (`[a]`, then `a`
+  bare), `rm_a_z()` (`[a,ab]` gives `[a,6]`), `restart` and `restart()` (the
+  names, `[]`; `angle_radian` back to 1), and `nodisp(1+1)` (`"Done"`,
+  compared raw);
+- the departures, with giac's text, ours checked alone: `ans()` and
+  `quest()` after `1+1` (giac's `caseval` keeps no history, `undef`; ours 2
+  and `"1+1"`), `1+restart()` (giac 1, ours stays with a warning); and ours
+  only: `time(1+1)` one nonnegative decimal (giac `[real, cpu]`),
+  `monotonic()` a nonnegative decimal, `version()` starting `cas `.
+
 `tests/angle_radian.rs`, `tests/complex_mode.rs`,
 `tests/complex_variables.rs` and `tests/epsilon.rs`, the settings that change
 answers (CAS-617), one group a file, giac's flag set and reset within one

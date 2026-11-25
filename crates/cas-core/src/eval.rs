@@ -24,7 +24,8 @@
 //!    stamped, so evaluating it again in this state is O(1), and memoised
 //!    for the rest of the call. An evaluation that drew a random number
 //!    ([`Eval::draw`], CAS-DOC-33 §2) is neither: evaluated again, it draws
-//!    again, so that `{Random[], Random[]}` holds two numbers.
+//!    again, so that `{Random[], Random[]}` holds two numbers. Nor is one
+//!    that read the session's history ([`Eval::volatile`], CAS-620).
 //!
 //! The evaluator is recursive. Each nested evaluation counts against
 //! [`Limits::recursion`], which stops it before the stack runs out as long
@@ -397,6 +398,14 @@ impl<'c> Eval<'c> {
         let mut random = self.context.random();
         random.draws = random.draws.wrapping_add(1);
         f(&mut random.generator)
+    }
+
+    /// Marks what is being evaluated volatile, as a draw does
+    /// ([`Eval::draw`]) but without one: neither stamped nor memoised, so
+    /// that it is evaluated again when it is met again. For what reads the
+    /// session's history (CAS-620), which changes no state.
+    pub(crate) fn volatile(&mut self) {
+        self.draws = self.draws.wrapping_add(1);
     }
 
     /// What rewrote the subject of the attempt in progress, for the trace.

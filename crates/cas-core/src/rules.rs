@@ -142,6 +142,11 @@ impl Rules {
             .is_some_and(|r| !r.exact.is_empty() || !r.down.rules.is_empty() || r.native.is_some())
     }
 
+    /// The symbols with rules of their own, or a default.
+    pub(crate) fn owners(&self) -> impl Iterator<Item = Symbol> + '_ {
+        self.symbols.iter().map(|(s, _)| s)
+    }
+
     /// Records that rules of `owner` depend on each symbol of `on`.
     fn depend(&mut self, on: &[Symbol], owner: Symbol) {
         for &s in on {

@@ -650,6 +650,17 @@ CasSetup: cas_setup
 RurCertify: rur_certify
 GbasisMaxPairs: gbasis_max_pairs
 GbasisSimultPrimes: gbasis_simult_primes
+# Xcas's session commands (CAS-619, CAS-620).
+Restart: restart
+RemoveAllVariables: rm_all_vars
+RemoveAToZ: rm_a_z
+Variables: VARS
+Ans: ans
+Quest: quest entry
+Time: time
+Monotonic: monotonic
+Version: version
+NoDisplay: nodisp
 # Numeric evaluation with balls, Xcas's evalf (CAS-DOC-5 §9.2, CAS-84).
 N: evalf approx
 # Polynomials, phase 1 (CAS-DOC-8 §10, §15 detail 1; CAS-140).

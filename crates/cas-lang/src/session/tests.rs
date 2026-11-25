@@ -355,3 +355,164 @@ fn increasing_power_orders_printed_sums() {
     );
     assert_eq!(results[6], Some("1 + x^2"));
 }
+
+/// The history (CAS-620): `ans(n)` answers, `quest(n)` and `entry(n)`
+/// inputs, by index from either end; quiet statements and the reads
+/// themselves are recorded; an index out of range warns.
+#[test]
+fn the_history_answers_and_inputs() {
+    let mut session = Session::new();
+    assert_eq!(results(&session.run("ans()")), [Some("undef")]);
+    let mut session = Session::new();
+    assert_eq!(results(&session.run("quest()")), [Some("undef")]);
+    let mut session = Session::new();
+    let outputs = session.run(
+        "x + 1;\n2*3\nans() + 1\nans()\nans(-4)\nans(0)\nquest()\nentry(-1)\nquest(0)\n\
+         ans(100)\nans(1/2)",
+    );
+    assert_eq!(
+        results(&outputs),
+        [
+            None,
+            Some("6"),
+            Some("7"),
+            Some("7"),
+            Some("1 + x"),
+            Some("1 + x"),
+            Some("\"ans(0)\""),
+            Some("\"quest()\""),
+            Some("\"x + 1\""),
+            Some("ans(100)"),
+            Some("ans(1/2)"),
+        ]
+    );
+    for output in &outputs[9..] {
+        assert_eq!(output.messages.len(), 1, "{:?}", output.messages);
+        assert_eq!(output.messages[0].level, Level::Warning);
+    }
+}
+
+/// The history keeps the last 256 statements: `ans(0)` is the oldest kept.
+#[test]
+fn the_history_is_bounded() {
+    let mut session = Session::new();
+    let text = (1..=300)
+        .map(|k| k.to_string())
+        .collect::<Vec<_>>()
+        .join(";\n");
+    session.run(&text);
+    assert_eq!(
+        results(&session.run("ans(0)\nans(0)")),
+        [Some("45"), Some("46")]
+    );
+}
+
+/// A read of the history in a state that did not change is read again,
+/// never taken from a cache.
+#[test]
+fn the_history_is_read_fresh() {
+    let mut session = Session::new();
+    assert_eq!(
+        results(&session.run("x := 1\nans()\n2\nans()")),
+        [Some("1"), Some("1"), Some("2"), Some("2")]
+    );
+}
+
+/// `restart` (CAS-619): every setting back to its default, no
+/// assumptions, definitions or values; the answer is the user names it
+/// had; the limits stay.
+#[test]
+fn restart_resets_every_setting() {
+    let mut session = Session::new();
+    let limits = session.context().limits();
+    session.run(
+        "Digits := 30;\nangle_radian := 0;\napprox_mode := 1;\ncomplex_mode := 1;\n\
+         complex_variables := 1;\nincreasing_power := 0;\nepsilon := 1e-6;\n\
+         autosimplify(expand);\nwith_sqrt := 0;\nall_trig_solutions := 1;\nassume(y > 0)\n\
+         f(x) := x^2\na := 5;",
+    );
+    assert_eq!(results(&session.run("VARS()")), [Some("[a, f, y]")]);
+    assert_eq!(results(&session.run("restart")), [Some("[a, f, y]")]);
+    let ctx = session.context();
+    assert_eq!(ctx.working_precision(), cas_core::DEFAULT_WORKING_PRECISION);
+    assert_eq!(ctx.angle(), Angle::Radian);
+    assert!(!ctx.approx_mode() && !ctx.complex_mode() && !ctx.complex_variables());
+    assert!(ctx.increasing_power() && ctx.with_sqrt() && !ctx.all_trig_solutions());
+    assert_eq!(ctx.epsilon().to_bits(), 1e-12_f64.to_bits());
+    assert!(ctx.autosimplify().is_none());
+    assert!(ctx.assumptions().is_empty());
+    assert!(ctx.user_symbols().is_empty());
+    assert_eq!(ctx.limits(), limits);
+    assert_eq!(
+        results(&session.run("VARS()\na\nf(2)\nrestart()")),
+        [Some("[]"), Some("a"), Some("f(2)"), Some("[]")]
+    );
+}
+
+/// `rm_all_vars()`, `rm_a_z()` and `VARS()` (CAS-619): the user names by
+/// spelling, cleared and forgotten.
+#[test]
+fn user_names_listed_and_removed() {
+    let mut session = Session::new();
+    assert_eq!(
+        results(&session.run("b := 1;\na := 2;\nzz := 3;\nVARS()")),
+        [None, None, None, Some("[a, b, zz]")]
+    );
+    assert_eq!(
+        results(&session.run("ab := 6;\nrm_a_z()\n[a, ab, b, zz]")),
+        [None, None, Some("[a, 6, b, 3]")]
+    );
+    assert_eq!(
+        results(&session.run("f(x) := x^2\nrm_all_vars()\n[ab, zz, f(2)]\nVARS()")),
+        [
+            None,
+            Some("[ab, f, zz]"),
+            Some("[ab, zz, f(2)]"),
+            Some("[]")
+        ]
+    );
+}
+
+/// `time(e)` and `monotonic()` (CAS-620): nonnegative decimals.
+#[test]
+fn time_and_monotonic() {
+    let mut session = Session::new();
+    let outputs = session.run("time(1 + 1)\nmonotonic()");
+    for (output, result) in outputs.iter().zip(results(&outputs)) {
+        let text = result.unwrap_or_default();
+        assert!(
+            text.starts_with(|c: char| c.is_ascii_digit()),
+            "{text}: {:?}",
+            output.messages
+        );
+    }
+}
+
+/// The session's commands nested in an expression stay, with a warning,
+/// and change nothing.
+#[test]
+fn session_commands_nested_stay() {
+    let mut session = Session::new();
+    session.run("a := 5;");
+    for (input, name) in [
+        ("1 + VARS()", "VARS"),
+        ("1 + restart()", "restart"),
+        ("1 + time(1)", "time"),
+        ("1 + monotonic()", "monotonic"),
+        ("1 + rm_all_vars()", "rm_all_vars"),
+        ("1 + rm_a_z()", "rm_a_z"),
+    ] {
+        let outputs = session.run(input);
+        let [output] = &outputs[..] else {
+            panic!("{input}: {outputs:?}");
+        };
+        let text = output.result.as_ref().map_or("", Shown::text);
+        assert!(text.contains(name), "{input}: {text}");
+        assert!(
+            output.messages.iter().any(|m| m.level == Level::Warning),
+            "{input}: {:?}",
+            output.messages
+        );
+    }
+    assert_eq!(results(&session.run("a")), [Some("5")]);
+}

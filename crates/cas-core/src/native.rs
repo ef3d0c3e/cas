@@ -65,6 +65,7 @@ mod rewrite;
 mod rounding;
 mod rsolve;
 mod series;
+mod session;
 mod sets;
 mod settings;
 mod signal;
@@ -1209,6 +1210,16 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::REPLACE_REPEATED, replace::replace_repeated),
         (Symbol::MATCH_Q, replace::match_q),
         (Symbol::CAS_SETUP, settings::cas_setup),
+        (Symbol::RESTART, session::restart),
+        (Symbol::REMOVE_ALL_VARIABLES, session::remove_all_variables),
+        (Symbol::REMOVE_A_TO_Z, session::remove_a_to_z),
+        (Symbol::VARIABLES, session::variables),
+        (Symbol::ANS, session::ans),
+        (Symbol::QUEST, session::quest),
+        (Symbol::TIME, session::time),
+        (Symbol::MONOTONIC, session::monotonic),
+        (Symbol::VERSION, session::version),
+        (Symbol::NO_DISPLAY, session::no_display),
     ];
     let mut table: [Option<NativeFn>; builtin::COUNT] = [None; builtin::COUNT];
     let mut i = 0;

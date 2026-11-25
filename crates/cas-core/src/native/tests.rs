@@ -1055,3 +1055,94 @@ fn settings_read_the_context() {
     found[6] = Expr::from(1);
     assert_eq!(Expr::call(Symbol::LIST, found), read(&expected));
 }
+
+/// Xcas's session commands (CAS-619, CAS-620): the history the session
+/// records, read by `Ans` and `Quest`, never cached; `Version`,
+/// `NoDisplay`; the commands the session runs as statements stay, nested,
+/// with a warning.
+#[test]
+fn session_commands() {
+    let ctx = Context::new();
+    let indeterminate = Expr::from(Symbol::INDETERMINATE);
+    assert_eq!(ctx.eval(&read("Ans[]")), Ok(indeterminate.clone()));
+    assert_eq!(ctx.eval(&read("Quest[]")), Ok(indeterminate));
+    ctx.record("1+1", Expr::from(2));
+    assert_eq!(ctx.eval(&read("Ans[]")), Ok(Expr::from(2)));
+    // Same state, a new entry: the answer is read again.
+    ctx.record("x", read("x"));
+    ctx.record("3", Expr::from(3));
+    assert_eq!(ctx.eval(&read("Ans[]")), Ok(Expr::from(3)));
+    assert_eq!(ctx.eval(&read("Ans[0]")), Ok(Expr::from(2)));
+    assert_eq!(ctx.eval(&read("Ans[-2]")), Ok(read("x")));
+    assert_eq!(ctx.eval(&read("Plus[Ans[], 1]")), Ok(Expr::from(4)));
+    assert_eq!(ctx.eval(&read("Quest[0]")), Ok(Expr::string("1+1")));
+    assert_eq!(ctx.eval(&read("Quest[-1]")), Ok(Expr::string("3")));
+    // The clones share the history.
+    let clone = ctx.clone();
+    clone.record("4", Expr::from(4));
+    assert_eq!(ctx.eval(&read("Ans[]")), Ok(Expr::from(4)));
+    for input in [
+        "Ans[4]",
+        "Ans[-5]",
+        "Ans[x]",
+        "Ans[1, 2]",
+        "Restart[]",
+        "RemoveAllVariables[]",
+        "RemoveAToZ[]",
+        "Variables[]",
+        "Time[1]",
+        "Monotonic[]",
+    ] {
+        let e = read(input);
+        let (result, report) = ctx.eval_with(&e, &crate::EvalOptions::default());
+        assert_eq!(result, Ok(e), "{input}");
+        assert_eq!(report.warnings.len(), 1, "{input}: {:?}", report.warnings);
+    }
+    assert_eq!(
+        ctx.eval(&read("NoDisplay[Plus[1, 1]]")),
+        Ok(Expr::string("Done"))
+    );
+    check(&[
+        ("NoDisplay[]", "NoDisplay[]"),
+        ("Version[1]", "Version[1]"),
+        ("Restart[1]", "Restart[1]"),
+        ("Time[]", "Time[]"),
+    ]);
+    let version = ctx.eval(&read("Version[]")).unwrap();
+    assert!(
+        version.as_str().is_some_and(|v| v.starts_with("cas ")),
+        "{version:?}"
+    );
+}
+
+/// The user symbols of a context, and a context restarted: its settings
+/// their defaults, its limits and history kept (CAS-619).
+#[test]
+fn user_symbols_and_restart() {
+    let mut ctx = Context::new();
+    let (a, f, y) = (Symbol::new("a"), Symbol::new("f"), Symbol::new("y"));
+    ctx.set(a, Expr::from(5)).unwrap();
+    ctx.define_delayed(&read("f[Pattern[x, Blank[]]]"), &read("Power[x, 2]"))
+        .unwrap();
+    let mut ctx = ctx.assuming(read("Greater[y, 0]"));
+    ctx.set_angle(crate::Angle::Degree);
+    ctx.set_working_precision(100);
+    let mut limits = ctx.limits();
+    limits.iterations = 7;
+    ctx.set_limits(limits);
+    let mut symbols = ctx.user_symbols();
+    symbols.sort_by_key(|s| s.name().to_owned());
+    assert_eq!(symbols, [a, f, y]);
+    ctx.record("a", Expr::from(5));
+    let restarted = ctx.restarted();
+    assert_ne!(restarted.id(), ctx.id());
+    assert!(restarted.user_symbols().is_empty());
+    assert!(restarted.assumptions().is_empty());
+    assert_eq!(restarted.angle(), crate::Angle::Radian);
+    assert_eq!(
+        restarted.working_precision(),
+        crate::DEFAULT_WORKING_PRECISION
+    );
+    assert_eq!(restarted.limits(), limits);
+    assert_eq!(restarted.eval(&read("Ans[]")), Ok(Expr::from(5)));
+}

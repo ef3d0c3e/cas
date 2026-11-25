@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 624] = [
+const BUILTINS: [&str; 634] = [
     "Plus",
     "Times",
     "Power",
@@ -692,6 +692,16 @@ const BUILTINS: [&str; 624] = [
     "RurCertify",
     "GbasisMaxPairs",
     "GbasisSimultPrimes",
+    "Restart",
+    "RemoveAllVariables",
+    "RemoveAToZ",
+    "Variables",
+    "Ans",
+    "Quest",
+    "Time",
+    "Monotonic",
+    "Version",
+    "NoDisplay",
     // Strings (CAS-611, CAS-613).
     "Char",
     "Asc",
