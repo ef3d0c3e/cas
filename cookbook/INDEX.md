@@ -90,3 +90,4 @@ C0087 | giac answers from random starts: measure seed dependence over many proto
 C0088 | giac's stored doubles keep 47 fraction bits: floors of decimal products drop by one | giac,double,float,prototype,floor,departures,oracle | 2026-11-25 | 1.7/T7 | T7.c1 f3689ae CAS-631
 C0089 | Bit-exact giac ports: pow(x,2) folds, pow(1,NaN), bounded memcpy, last-sample flags | giac,port,prototype,f64,nan,sound | 2026-11-25 | 1.7/T8 | CAS-632
 C0090 | Kaiser-windowed sinc tables for resampling: sizing H and L, measuring the response | resample,sinc,kaiser,signal,fft,table | 2026-11-25 | 1.7/T8 | CAS-633
+C0091 | Porting GSL routines giac calls: tarball fetch, exact literals, ctypes reference | gsl,giac,port,wavelet,spline,prototype | 2026-11-25 | 1.7/T9 | T9.c1 CAS-634, T9.c2 CAS-635
