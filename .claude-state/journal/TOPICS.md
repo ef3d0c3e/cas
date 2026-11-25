@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-24T23:25:01.265Z
+# filed through: 2026-11-25T05:35:13.985Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
@@ -85,3 +85,9 @@ R81 | 2026-11-24 | open | in force | Phase 1.5 Optimization II | CAS-DOC-57 is s
 R82 | 2026-11-24 | open | in force | Phase 1.5 Optimization II | update the local stable Rust toolchain to match CI's -> the developer's call | .claude-state/journal/2026-11-24/100029-131r-claude-record.md
 R83 | 2026-11-24 | open | superseded by R84 | Phase 1.6 Strings, printers and session commands | phase 1.6 draft in progress by pa-planner -> present with plan(kind: phase) when its report arrives | .claude-state/journal/2026-11-24/100029-131r-claude-record.md
 R84 | 2026-11-25 | decision | in force | Phase 1.6 Strings, printers and session commands | The phase 1.6 plan is installed and runs on its own. | .claude-state/journal/2026-11-25/004018-017r-claude-record.md
+R85 | 2026-11-25 | finding | in force | Phase 1.6 Strings, printers and session commands | Phase 1.6 built 72 giac entries under CAS-DOC-58 (still a draft), and CAS-611..623 are done. | .claude-state/journal/2026-11-25/065052-020r-claude-record.md
+R86 | 2026-11-25 | finding | in force | Phase 1.6 Strings, printers and session commands | The printer prototypes now live in crates/cas-lang/proto/ (latex, mathml, mathml/doc; rerun as in p… | .claude-state/journal/2026-11-25/065052-020r-claude-record.md
+R87 | 2026-11-25 | open | in force | Phase 1.6 Strings, printers and session commands | phase 1.6 close question asked -> on yes, release close with the phase report; on "not yet", plan_e… | .claude-state/journal/2026-11-25/065052-020r-claude-record.md
+R88 | 2026-11-25 | open | in force | Phase 1.6 Strings, printers and session commands | diff(e,x,n) treats n as a variable instead of taking the nth derivative -> a later-phase ticket | .claude-state/journal/2026-11-25/065052-020r-claude-record.md
+R89 | 2026-11-25 | open | in force | Phase 1.6 Strings, printers and session commands | symbol_array can create up to 1e6 symbols that are never freed -> check memory use on the next Fuzz… | .claude-state/journal/2026-11-25/065052-020r-claude-record.md
+R90 | 2026-11-25 | open | in force | Phase 1.6 Strings, printers and session commands | CAS-DOC-58 is still a draft in Lific (like CAS-DOC-57, R81) -> Claude or the developer publishes it | .claude-state/journal/2026-11-25/065052-020r-claude-record.md
