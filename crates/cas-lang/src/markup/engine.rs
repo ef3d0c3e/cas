@@ -141,9 +141,14 @@ impl MarkupBlock {
         self.kind & t != 0
     }
 
-    /// The bytes of its texts, LaTeX, presentation and content together.
-    fn len(&self) -> usize {
-        self.latex.len() + self.markup.len() + self.content.len()
+    /// The bytes of the texts `flags` makes (LaTeX, presentation, content):
+    /// a text the run does not write (a list's LaTeX in a `MathML` run, made
+    /// then cleared) does not count against the cap.
+    fn len(&self, flags: Flags) -> usize {
+        let part = |on: bool, s: &String| if on { s.len() } else { 0 };
+        part(flags.tex(), &self.latex)
+            + part(flags.pres(), &self.markup)
+            + part(flags.cont(), &self.content)
     }
 
     /// Another block's texts appended to its own.
@@ -356,8 +361,8 @@ fn ckmatrix(items: &[Gen]) -> bool {
 const MATH: &str = "<math mode='display' xmlns='http://www.w3.org/1998/Math/MathML'>";
 
 /// The converter, with the longest text allowed: every block is checked as
-/// it is built (its LaTeX, presentation and content together), so a long
-/// text is refused before it is all made.
+/// it is built (the texts the run writes, together), so a long text is
+/// refused before it is all made, and a cap of the answer's length passes.
 pub(super) struct Engine {
     max_len: usize,
     /// giac's `idc`: the last content id given.
@@ -397,7 +402,7 @@ impl Engine {
         let flags = flags | Flags::TOPLEVEL;
         let mut ml = self.gen2markup(g, flags)?;
         prepend_minus(&mut ml, flags);
-        self.check(ml.len())?;
+        self.check(ml.len(flags))?;
         Ok(ml)
     }
 
@@ -409,11 +414,9 @@ impl Engine {
     /// :3765 `export_mathml`: presentation with `xref`s, content with ids,
     /// and `printed`, the input form, as the annotation (escaped).
     pub(super) fn export_mathml(&self, g: &Gen, printed: &str) -> Result<String, TooLong> {
-        let ml = self.top(
-            g,
-            Flags::MATHML_PRESENTATION | Flags::MATHML_CONTENT | Flags::ELEMPOW,
-        )?;
-        self.check(ml.len() + printed.len())?;
+        let flags = Flags::MATHML_PRESENTATION | Flags::MATHML_CONTENT | Flags::ELEMPOW;
+        let ml = self.top(g, flags)?;
+        self.check(ml.len(flags) + printed.len())?;
         self.whole(format!(
             "{MATH}<semantics>{}<annotation-xml encoding='MathML-Content'>{}</annotation-xml>\
              <annotation encoding='giac'>{}</annotation></semantics></math>",
@@ -445,7 +448,7 @@ impl Engine {
     /// :1233 `gen2markup`, its texts checked against the cap.
     pub(super) fn gen2markup(&self, g: &Gen, flags: Flags) -> Block {
         let ml = self.markup(g, flags)?;
-        self.check(ml.len())?;
+        self.check(ml.len(flags))?;
         Ok(ml)
     }
 
@@ -761,7 +764,12 @@ impl Engine {
                 ml.content.push_str("</matrixrow>");
                 ml.markup.push_str("</mtr>");
                 rows.push(cells.join("&"));
-                self.check(ml.len() + rows.last().expect("pushed").len())?;
+                let tex = if flags.tex() {
+                    rows.last().map_or(0, String::len)
+                } else {
+                    0
+                };
+                self.check(ml.len(flags) + tex)?;
             }
             if flags.cont() {
                 ml.content = mml::tag("matrix", &ml.content, self.next_id(), &[]);
@@ -808,7 +816,7 @@ impl Engine {
                 ml.latex.push(',');
             }
             ml.push(&self.minus_prepended(x, flags)?);
-            self.check(ml.len())?;
+            self.check(ml.len(flags))?;
         }
         ml.latex.push_str(rd);
         if !flags.tex() {
@@ -870,7 +878,7 @@ impl Engine {
                             parenthesize(&mut tmp, flags);
                         }
                         ml.push(&tmp);
-                        self.check(ml.len())?;
+                        self.check(ml.len(flags))?;
                     }
                     if flags.cont() {
                         let c = format!("<plus/>{}", ml.content);
@@ -946,7 +954,7 @@ impl Engine {
                         }
                     }
                     ml.push(&tmp);
-                    self.check(ml.len())?;
+                    self.check(ml.len(flags))?;
                 }
                 if flags.cont() {
                     let c = format!("<ci>.*</ci>{}", ml.content);
@@ -1418,7 +1426,7 @@ impl Engine {
                 side.latex.push_str(if is_cdot { "\\cdot " } else { " " });
             }
             side.push(&tmp);
-            self.check(num.len() + den.len())?;
+            self.check(num.len(flags) + den.len(flags))?;
             if isinv {
                 pden = tmp;
             } else {
@@ -1871,7 +1879,7 @@ impl Engine {
                     format!("^{{{k}}}")
                 };
                 parts.push(format!("{ds_tex}{}{power}", var.latex));
-                self.check(ml.len())?;
+                self.check(ml.len(flags))?;
             }
             let body = parts.join(" ");
             let ns: u64 = vars.iter().map(|(_, k)| k).sum();
@@ -1941,7 +1949,7 @@ impl Engine {
                     }
                     sub.markup.push_str(&s.markup);
                     subs.push(s.latex);
-                    self.check(sub.len())?;
+                    self.check(sub.len(flags))?;
                 }
                 sub.markup = mml::tag("mrow", &sub.markup, 0, &[]);
                 sub.latex = subs.join(sept);
@@ -2005,7 +2013,7 @@ impl Engine {
                 args.content.push_str(&tmp.content);
                 args.markup.push_str(&tmp.markup);
                 texs.push(tmp.latex);
-                self.check(ml.len() + args.len())?;
+                self.check(ml.len(flags) + args.len(flags))?;
             }
             if flags.cont() {
                 let c = format!("{}{}", ml.content, args.content);
