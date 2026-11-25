@@ -343,6 +343,34 @@ after giac's `restart`, ours in a new session, compared value by value:
   of its doubles: `0.5+1e-12` accepted, `0.5-1e-12` not), ours exactly
   10⁻¹² in `f64`; `randmarkov` with a plot argument (giac a graphic) stays.
 
+`tests/kernel_density.rs`, Xcas's kernel density estimation `kernel_density`
+and `kde` (CAS-629):
+- the exact form (9 rows) by its values at three points within giac's 12
+  digits; ours exact (no ball) on exact data with an exact bandwidth
+  (`bandwidth=1/4`, `1/2`), balls for a selected one (plug-in rule, rule of
+  thumb) or decimal data; a bare symbol as the variable;
+- the list form (17 rows: given, plug-in and rule-of-thumb bandwidths,
+  `bins`, `range=a..b`, `range=[a,b]`, a bare `a..b`, `output=list`, past
+  1000 data the binned plug-in rule) entry by entry within giac's FFT noise,
+  `|ours − giac| ≤ 10⁻⁹ max|entry| + 1.5·10⁻¹² |giac|` (C0084); ours certified
+  balls, summed directly;
+- the piecewise form (4 rows, `t=0..4` naming the variable, `interp=1`) by
+  its values at seven points inside and outside the grid, within the same
+  noise (C0049);
+- a seeded row (C0014): a 500-draw sample's density on 50 bins has 50
+  entries on both sides;
+- invalid calls (18 rows) stay with giac's message as the warning, `bins=1`
+  with giac's FFT's "Invalid dimension";
+- departures: giac's `eval=v` (a value of the piecewise form, or its errors)
+  is not ported, the call stays without a warning, as do `interp=k` for
+  `k > 1` and `spline=k` (giac's spline interpolation); `bins=1` keeps giac's
+  error, which comes from its FFT of one point rather than from the options
+  (the grid has no spacing, `d = (b − a)/0`); `kernel_density(...)(2)`
+  (applying the exact form) is not a row, its value is the exact form's at
+  `x = 2`; `kernel_density(seq(irem(k*k,37),k,1,1000),bins=12)` is not a row:
+  giac's FFT noise there reaches 1.3·10⁻⁹ of the largest entry (the
+  prototype's port of giac's FFT 7.5·10⁻¹⁰), past the bound above.
+
 `tests/tail_probabilities.rs`, Xcas's upper tails `UTPN`, `UTPT`, `UTPC` and
 `UTPF` (CAS-625), and `cdf`, `icdf` and `mgf` of a law by its name, of a
 `randvar` object or of a list (CAS-626):

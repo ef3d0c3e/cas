@@ -828,6 +828,11 @@ RandomMultinomial: randmultinomial
 # Markov chains (CAS-628).
 MarkovChain: markov
 RandomMarkovChain: randmarkov
+# Density estimation and fitting (CAS-629).
+KernelDensity: kernel_density kde
+Bandwidth: bandwidth
+Bins: bins
+FitDistribution: fitdistr
 
 # Bessel and Airy functions (CAS-DOC-34), the order first; giac's
 # lowercase `besselJ(x, n)` takes the argument first and is not these.

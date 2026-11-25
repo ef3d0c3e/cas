@@ -334,7 +334,7 @@ fn object(law: Law, parameters: Vec<Expr>) -> Expr {
 
 /// The sign of an evaluated numeric expression, when its approximation
 /// decides it; `None` for another.
-fn sign(ev: &Eval<'_>, x: &Expr) -> Option<Ordering> {
+pub(in crate::native) fn sign(ev: &Eval<'_>, x: &Expr) -> Option<Ordering> {
     if let Some(q) = x.to_rational() {
         return Some(q.sign());
     }
@@ -349,7 +349,7 @@ fn sign(ev: &Eval<'_>, x: &Expr) -> Option<Ordering> {
 }
 
 /// The sides of an equation (C0016).
-fn equation(e: &Expr) -> Option<(&Expr, &Expr)> {
+pub(in crate::native) fn equation(e: &Expr) -> Option<(&Expr, &Expr)> {
     match (e.head().and_then(Expr::as_symbol), e.args()) {
         (Some(Symbol::EQUATION | Symbol::EQUAL), [l, r]) => Some((l, r)),
         _ => None,
@@ -357,7 +357,7 @@ fn equation(e: &Expr) -> Option<(&Expr, &Expr)> {
 }
 
 /// The ends of `a .. b` (C0029).
-fn range(e: &Expr) -> Option<(&Expr, &Expr)> {
+pub(in crate::native) fn range(e: &Expr) -> Option<(&Expr, &Expr)> {
     match (e.head().and_then(Expr::as_symbol), e.args()) {
         (Some(Symbol::RANGE), [a, b]) => Some((a, b)),
         _ => None,

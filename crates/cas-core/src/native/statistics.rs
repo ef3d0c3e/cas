@@ -37,6 +37,7 @@
 //!   [`random_variables`].
 //! - Markov chains, Xcas's `markov` and `randmarkov` (CAS-628): [`markov`].
 
+pub(super) mod density;
 pub(super) mod descriptive;
 pub(super) mod distributions;
 pub(super) mod hypothesis;

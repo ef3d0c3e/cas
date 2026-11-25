@@ -1040,6 +1040,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::RANDOM_MARKOV_CHAIN,
             statistics::markov::random_markov,
         ),
+        (Symbol::KERNEL_DENSITY, statistics::density::kernel_density),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),

@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 668] = [
+const BUILTINS: [&str; 672] = [
     "Plus",
     "Times",
     "Power",
@@ -766,6 +766,11 @@ const BUILTINS: [&str; 668] = [
     // Markov chains (CAS-628).
     "MarkovChain",
     "RandomMarkovChain",
+    // Density estimation and fitting (CAS-629).
+    "KernelDensity",
+    "Bandwidth",
+    "Bins",
+    "FitDistribution",
 ];
 
 /// Builtins that apply something to parts, only in the expression

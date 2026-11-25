@@ -676,6 +676,11 @@ builtins! {
     // Markov chains (CAS-628): `markov`, `randmarkov`.
     MARKOV_CHAIN = "MarkovChain" [PROTECTED];
     RANDOM_MARKOV_CHAIN = "RandomMarkovChain" [PROTECTED];
+    // Density estimation and fitting (CAS-629): `kernel_density`, `fitdistr`.
+    KERNEL_DENSITY = "KernelDensity" [PROTECTED];
+    BANDWIDTH = "Bandwidth" [PROTECTED];
+    BINS = "Bins" [PROTECTED];
+    FIT_DISTRIBUTION = "FitDistribution" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];
