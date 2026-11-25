@@ -1,7 +1,9 @@
 //! Xcas's upper tails `UTPN`, `UTPT`, `UTPC` and `UTPF` (CAS-625), and
 //! `cdf`, `icdf` and `mgf` of a law by its name, of a random variable's
-//! object or of a list (CAS-626), against giac: giac's answers read back
-//! are this CAS's value of the same input, the difference expanded 0 or,
+//! object or of a list (CAS-626), and `logistic` and `logistic_regression`
+//! (CAS-627, the regression's six entries one by one), against giac:
+//! giac's answers read back are this CAS's value of the same input, the
+//! difference expanded 0 or,
 //! with symbols, the two equal at a rational point within 10⁻²⁰; giac's
 //! decimals within its 12 digits, ours exact where the input is (C0006,
 //! C0032, R67); invalid calls stay with giac's message as the warning
@@ -407,4 +409,95 @@ fn departures() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The logistic (CAS-627): giac's exact and symbolic answers, its decimals
+/// within its 12 digits, and its Invalid dimension (T3 rows).
+#[test]
+fn logistic() {
+    check(&[
+        "logistic(0)",
+        "logistic(1,0,2,3)",
+        "logistic(x)",
+        "logistic(x,1,2,3)",
+    ]);
+    check_near(&["logistic(0.5)", "logistic(0.0,0.5,10,2)", "logistic(1.8)"]);
+    check_stays(&[
+        (
+            "logistic()",
+            "GIAC_ERROR: logistic(seq[]) | Error: Invalid dimension",
+        ),
+        (
+            "logistic(1,2,3,4,5)",
+            "GIAC_ERROR: logistic(1,2,3,4,5) | Error: Invalid dimension",
+        ),
+    ]);
+}
+
+/// Each input: giac's six entries and ours, entry by entry: a rational
+/// entry the same value (C0032), any other within giac's 12 digits at
+/// several values of `x` (C0006).
+fn check_entries(inputs: &[&str]) {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let q = |n: i64, d: i64| Expr::from(n) / Expr::from(d);
+    let points: Vec<Vec<(Expr, Expr)>> = [q(0, 1), q(7, 10), q(5, 1), q(25, 2)]
+        .into_iter()
+        .map(|v| vec![(Expr::symbol("x"), v)])
+        .collect();
+    let list = Expr::from(Symbol::LIST);
+    let mut wrong = Vec::new();
+    for input in inputs {
+        let agree = match (giac.value(input), ours(input)) {
+            (Ok(theirs), Ok(mine)) => {
+                theirs.head() == Some(&list)
+                    && mine.head() == Some(&list)
+                    && theirs.args().len() == 6
+                    && mine.args().len() == 6
+                    && theirs.args().iter().zip(mine.args()).all(|(t, m)| {
+                        if t.to_rational().is_some() {
+                            same_value(&ctx, m, t)
+                        } else {
+                            points
+                                .iter()
+                                .all(|at| close(&ctx, &m.substitute(at), &t.substitute(at), 9))
+                        }
+                    })
+            }
+            _ => false,
+        };
+        if !agree {
+            wrong.push(format!(
+                "{input}: ours {:?}, giac's {:?}",
+                ours(input),
+                giac.value(input)
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// giac's logistic regression (CAS-627; probe7.out, probe10.out, T3 rows):
+/// exact total and peak where giac's are, the fitted curves within its
+/// digits; constant quotients, giac's `[undef,undef,infinity,infinity,
+/// undef,undef]`; a time that is no number stays with its message.
+#[test]
+fn logistic_regressions() {
+    check_entries(&[
+        "logistic_regression([1,2,4,7,11],0,1)",
+        "logistic_regression([11,7,4,2,1],0,1)",
+        "logistic_regression([0.5,1,2,3.5,4.5,4],1,1)",
+        "logistic_regression([1,2,4,7,11],0,1.0)",
+        "logistic_regression([1.0,2,4,7,11],0,1)",
+    ]);
+    check(&[
+        "logistic_regression([1,2,4],0,1)",
+        "logistic_regression([1,2],0,1)",
+    ]);
+    check_stays(&[(
+        "logistic_regression([1,2,4,7,11],x,1)",
+        "GIAC_ERROR: logistic_regression([1,2,4,7,11],x,1) | Error: Bad Argument Value",
+    )]);
 }

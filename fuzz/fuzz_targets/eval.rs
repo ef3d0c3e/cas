@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 664] = [
+const BUILTINS: [&str; 666] = [
     "Plus",
     "Times",
     "Power",
@@ -760,6 +760,9 @@ const BUILTINS: [&str; 664] = [
     "CDF",
     "InverseCDF",
     "MomentGeneratingFunction",
+    // The logistic and its regression (CAS-627).
+    "Logistic",
+    "LogisticRegression",
 ];
 
 /// Builtins that apply something to parts, only in the expression

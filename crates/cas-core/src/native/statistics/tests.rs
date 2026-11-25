@@ -366,3 +366,119 @@ fn logarithmic_regressions() {
         "ExponentialRegression[List[1, 2], List[a, 2]]",
     ]);
 }
+
+/// Whether `claim` evaluates to `True`.
+fn holds(ctx: &Context, claim: &str) -> bool {
+    ctx.eval(&read(claim)).ok() == Some(read("True"))
+}
+
+/// The one warning of `input`, which stays.
+fn warning(ctx: &Context, input: &str) -> String {
+    use crate::EvalOptions;
+    use crate::trace::Warning;
+    let e = read(input);
+    let (found, report) = ctx.eval_with(&e, &EvalOptions::default());
+    assert_eq!(found.unwrap(), e, "{input}");
+    match &report.warnings[..] {
+        [Warning::Native { message, .. }] => message.to_string(),
+        other => panic!("{input}: {other:?}"),
+    }
+}
+
+/// The logistic, giac's defaults and its values (CAS-627).
+#[test]
+fn logistic() {
+    check(&[
+        ("Logistic[0]", "1/2"),
+        ("Logistic[x]", "Power[Plus[1, Exp[Times[-1, x]]], -1]"),
+        (
+            "Logistic[1, 0, 2, 3]",
+            "Times[2, Power[Plus[1, Exp[-3]], -1]]",
+        ),
+        (
+            "Logistic[x, 1, 2, 3]",
+            "Times[2, Power[Plus[1, Exp[Times[-3, Plus[x, -1]]]], -1]]",
+        ),
+    ]);
+    let ctx = Context::new();
+    for claim in [
+        "Less[Abs[Plus[Logistic[0.5], -0.622459331202]], Power[10, -11]]",
+        "Less[Abs[Plus[Logistic[0.0, 0.5, 10, 2], -2.6894142137]], Power[10, -9]]",
+    ] {
+        assert!(holds(&ctx, claim), "{claim}");
+    }
+    for input in ["Logistic[]", "Logistic[1, 2, 3, 4, 5]"] {
+        assert_eq!(warning(&ctx, input), "Invalid dimension", "{input}");
+    }
+}
+
+/// giac's logistic regression: exact total and peak, certified balls
+/// through the logarithms, the exact correlation; constant quotients;
+/// what stays (CAS-627; giac's answers, probe7.out, probe10.out).
+#[test]
+fn logistic_regressions() {
+    const EXACT: &str = "LogisticRegression[List[1, 2, 4, 7, 11], 0, 1]";
+    check(&[
+        (&format!("Part[{EXACT}, 3]"), "38177/251"),
+        (&format!("Part[{EXACT}, 4]"), "1457483329/74396400"),
+        (
+            "Part[LogisticRegression[List[11, 7, 4, 2, 1], 0, 1], 4]",
+            "130145990401095529/12274677896364000",
+        ),
+        (
+            "LogisticRegression[List[1, 2, 4], 0, 1]",
+            "List[Indeterminate, Indeterminate, ComplexInfinity, ComplexInfinity, \
+             Indeterminate, Indeterminate]",
+        ),
+        (
+            "LogisticRegression[List[1, 2], 0, 1]",
+            "List[Indeterminate, Indeterminate, ComplexInfinity, ComplexInfinity, \
+             Indeterminate, Indeterminate]",
+        ),
+    ]);
+    let ctx = Context::new();
+    let near = |e: String, v: &str, digits: i64| {
+        format!(
+            "Less[Abs[Plus[{e}, Times[-1, {v}]]], Power[10, {}]]",
+            -digits
+        )
+    };
+    let at_peak = |n: usize| format!("ReplaceAll[Part[{EXACT}, {n}], Rule[x, Part[{EXACT}, 5]]]");
+    let decimal = "LogisticRegression[List[0.5, 1, 2, 3.5, 4.5, 4], 1, 1]";
+    for claim in [
+        near(format!("Part[{EXACT}, 5]"), "6.24947835314", 9),
+        // At the peak, half the total and the greatest production.
+        near(at_peak(1), "38177/502", 9),
+        near(at_peak(2), "1457483329/74396400", 9),
+        near(
+            format!("N[Part[{EXACT}, 6], 30]"),
+            "N[Times[-251/39, Power[Times[1482/1521, Power[46, 1/2]], -1]], 30]",
+            20,
+        ),
+        near(format!("Part[{decimal}, 3]"), "57.0147984942", 9),
+        near(format!("Part[{decimal}, 5]"), "7.39922355351", 9),
+        near(format!("Part[{decimal}, 6]"), "-0.585719114374", 9),
+        near(
+            "Part[LogisticRegression[List[1, 2, 4, 7, 11], 0, 1.0], 3]".into(),
+            "152.099601594",
+            9,
+        ),
+    ] {
+        assert!(holds(&ctx, &claim), "{claim}");
+    }
+    stays(&[
+        // giac guesses the initial value from 20 values or more.
+        "LogisticRegression[List[1, 2, 4, 7, 11], 0]",
+        "LogisticRegression[List[1, a, 4], 0, 1]",
+        "LogisticRegression[List[1], 0, 1]",
+        "LogisticRegression[x, 0, 1]",
+    ]);
+    assert_eq!(
+        warning(&ctx, "LogisticRegression[List[1, 2, 4, 7, 11], x, 1]"),
+        "Bad Argument Value"
+    );
+    assert!(
+        warning(&ctx, "LogisticRegression[List[1, 3, 9, 27], 0, 1]")
+            .starts_with("Data not suited for logistic regression")
+    );
+}

@@ -19,6 +19,25 @@
 //!   data give exact answers: `exponential_regression([0,1,2],[3,6,12])` is
 //!   `{2, 3}`, where giac answers an expression of logarithms. A value that
 //!   is not positive under a logarithm leaves the call.
+//! - `Logistic[x, x0, L, k]` (`logistic`, CAS-627), `L/(1 + e^(−k(x − x0)))`
+//!   with giac's defaults `x0 = 0`, `L = k = 1`, evaluated as it stands:
+//!   `logistic(0)` is `1/2`. No argument or more than four stay, with
+//!   giac's Invalid dimension.
+//! - `LogisticRegression[w, t0, P0]` (`logistic_regression`, CAS-627),
+//!   giac's closed form (misc.cc `logistic_regression`): the productions
+//!   `wᵢ` at times `t0, t0 + 1, …`, cumulated from `P0`, `Cᵢ`; the line
+//!   `wᵢ/Cᵢ = a Cᵢ + b`, exact, gives the total `U = −b/a`; the line of
+//!   `ln(U/Cᵢ − 1)`, certified balls, on the times gives `b₂ x + c₂`. The
+//!   answer is giac's `{U/(1 + e^(b₂x + c₂)), U b/2/(1 + cosh(b₂x + c₂)), U,
+//!   U b/4, −c₂/b₂, r}` in the symbol `x`, `r` the correlation of `Cᵢ` and
+//!   `wᵢ/Cᵢ`, exact as giac's. A slope `a` of 0 (constant quotients) gives
+//!   giac's `{undef, undef, ∞, ∞, undef, undef}`, `ComplexInfinity` for ∞.
+//!   Stay: a `t0` that is no real number (giac's Bad Argument Value), a
+//!   negative `U` (giac's message), data that are not real numbers, a
+//!   cumulated value that is not of known sign, and an `U/Cᵢ − 1` that is
+//!   not positive, which giac answers with complex logarithms. Departure:
+//!   the two-argument form, where giac guesses `P0` from 20 or more values,
+//!   stays; so does giac's interval of times `t0..t1`.
 
 use std::cmp::Ordering;
 
@@ -30,8 +49,9 @@ use super::super::rounding::real_sign;
 use super::pairs;
 use crate::context::EvalError;
 use crate::eval::Eval;
-use crate::expr::Expr;
+use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
+use crate::trace::Warning;
 
 type Native = Result<Option<Expr>, EvalError>;
 
@@ -245,4 +265,132 @@ pub(in super::super) fn polynomial_regression(ev: &mut Eval<'_>, e: &Expr) -> Na
         .map(|c| Expr::call(Symbol::EXPAND, [c.clone()]))
         .collect();
     Ok(Some(ev.eval(&Expr::call(Symbol::LIST, coefficients))?))
+}
+
+/// The call stays, with giac's message as the warning.
+fn refuse(ev: &mut Eval<'_>, e: &Expr, why: &'static str) -> Native {
+    ev.warn(Warning::Native {
+        message: why.into(),
+        expr: e.clone(),
+    });
+    Ok(None)
+}
+
+/// Whether `v` is a real number atom, exact or a ball.
+fn real(v: &Expr) -> bool {
+    matches!(
+        v.view(),
+        View::Int(_) | View::Integer(_) | View::Rational(_) | View::Ball(_)
+    )
+}
+
+/// `Logistic[x, x0, L, k]`, the last three optional.
+pub(in super::super) fn logistic(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let args = e.args();
+    let [x, rest @ ..] = args else {
+        return refuse(ev, e, "Invalid dimension");
+    };
+    if rest.len() > 3 {
+        return refuse(ev, e, "Invalid dimension");
+    }
+    let x0 = rest.first().cloned().unwrap_or_else(|| Expr::from(0));
+    let l = rest.get(1).cloned().unwrap_or_else(|| Expr::from(1));
+    let k = rest.get(2).cloned().unwrap_or_else(|| Expr::from(1));
+    let decay = Expr::call(Symbol::EXP, [-(k * (x - x0))]);
+    Ok(Some(ev.eval(&(l / (1 + decay)))?))
+}
+
+/// `LogisticRegression[w, t0, P0]`.
+pub(in super::super) fn logistic_regression(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [data, t0, p0] = e.args() else {
+        return Ok(None);
+    };
+    if data.head() != Some(&Expr::from(Symbol::LIST)) {
+        return Ok(None);
+    }
+    let values = data.args();
+    if values.len() > ev.context().limits().terms {
+        return refuse(ev, e, "too many values");
+    }
+    if !real(t0) {
+        return refuse(ev, e, "Bad Argument Value");
+    }
+    if values.len() < 2 || !real(p0) || !values.iter().all(real) {
+        return Ok(None);
+    }
+    // The cumulated productions and the quotients.
+    let mut cumulated = Vec::with_capacity(values.len());
+    let mut quotients = Vec::with_capacity(values.len());
+    let mut total = p0.clone();
+    for value in values {
+        total = ev.eval(&(total + value))?;
+        if !matches!(
+            real_sign(ev.context(), &total),
+            Some(Ordering::Less | Ordering::Greater)
+        ) {
+            return Ok(None);
+        }
+        quotients.push(ev.eval(&(value / &total))?);
+        cumulated.push(total.clone());
+    }
+    let list = |v: &[Expr]| Expr::call(Symbol::LIST, v.to_vec());
+    let correlation = ev.eval(&Expr::call(
+        Symbol::CORRELATION,
+        [list(&cumulated), list(&quotients)],
+    ))?;
+    let (slope, intercept) = line(ev, &cumulated, &quotients)?;
+    let undef = Expr::from(Symbol::INDETERMINATE);
+    let ctx = ev.context();
+    if !matches!(
+        real_sign(ctx, &slope),
+        Some(Ordering::Less | Ordering::Greater)
+    ) {
+        // giac's −b/0: `infinity` (unsigned), or `undef` for 0/0.
+        let total = match real_sign(ctx, &intercept) {
+            Some(Ordering::Less | Ordering::Greater) => Expr::from(Symbol::COMPLEX_INFINITY),
+            _ => undef.clone(),
+        };
+        let answer = [
+            undef.clone(),
+            undef.clone(),
+            total.clone(),
+            total,
+            undef,
+            correlation,
+        ];
+        return Ok(Some(ev.eval(&list(&answer))?));
+    }
+    let urr = ev.eval(&(-(&intercept / &slope)))?;
+    if real_sign(ev.context(), &urr) == Some(Ordering::Less) {
+        return refuse(
+            ev,
+            e,
+            "Data not suited for logistic regression (instant production should be a \
+             decreasing function of cumulated production)",
+        );
+    }
+    // The line of ln(U/Cᵢ − 1) on the times.
+    let mut times = Vec::with_capacity(values.len());
+    let mut logs = Vec::with_capacity(values.len());
+    for (i, cumul) in cumulated.iter().enumerate() {
+        let ratio = ev.eval(&(&urr / cumul - 1))?;
+        if real_sign(ev.context(), &ratio) != Some(Ordering::Greater) {
+            return Ok(None);
+        }
+        let ln = Expr::call(Symbol::LOG, [ratio]);
+        logs.push(ev.eval(&Expr::call(Symbol::N, [ln]))?);
+        let i = i64::try_from(i).unwrap_or(i64::MAX);
+        times.push(ev.eval(&(t0 + i))?);
+    }
+    let (b2, bt0) = line(ev, &times, &logs)?;
+    let exponent = &b2 * Expr::symbol("x") + &bt0;
+    let answer = [
+        &urr / (1 + Expr::call(Symbol::EXP, [exponent.clone()])),
+        &urr * &intercept / 2 / (1 + Expr::call(Symbol::COSH, [exponent])),
+        urr.clone(),
+        &urr * &intercept / 4,
+        -(bt0 / b2),
+        correlation,
+    ];
+    Ok(Some(ev.eval(&list(&answer))?))
 }

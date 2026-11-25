@@ -29,7 +29,8 @@
 //!   `PopulationCovariance` (`covariance`), `S_xy / Σ f` expanded, and
 //!   `Correlation` (`correlation`), `S_xy / √(S_xx S_yy)`, which is
 //!   `Indeterminate` for constant data (giac's `undef`).
-//! - The regressions (§5, CAS-297), least squares: [`regression`].
+//! - The regressions (§5, CAS-297), least squares, and the logistic with
+//!   giac's logistic regression (CAS-627): [`regression`].
 //! - Probability distributions (CAS-DOC-23): [`distributions`].
 //! - Hypothesis tests (CAS-DOC-52): [`hypothesis`].
 //! - Random variables, Xcas's `randvar` objects (CAS-624):

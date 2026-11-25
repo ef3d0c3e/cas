@@ -338,7 +338,15 @@ after giac's `restart`, ours in a new session, compared value by value:
   `-1.88884303598e-19`, ours 0), `cdf` of `gammad` and `betad` (giac keeps
   `igamma` and `Beta`, ours evaluates), of `negbinomial` (giac `undef(…)`,
   ours `negbinomial_cdf`, `negbinomial_icdf`), and `UTPT(3,x)`,
-  `UTPC(2,x)` (giac stays, ours `1 − F` expanded).
+  `UTPC(2,x)` (giac stays, ours `1 − F` expanded);
+- `logistic` (CAS-627), exact and symbolic as giac's, its decimals within
+  12 digits, Invalid dimension for no argument or more than four;
+  `logistic_regression` (CAS-627), the six entries one by one: the
+  rational ones (the total, the peak production) the same value, the
+  others (the two curves in `x`, sampled at four rationals; the time of
+  the peak; the correlation) within giac's 12 digits; constant quotients
+  `[undef,undef,infinity,infinity,undef,undef]` as giac's; a time that is
+  no number stays with Bad Argument Value.
 
 `tests/angle_radian.rs`, `tests/complex_mode.rs`,
 `tests/complex_variables.rs` and `tests/epsilon.rs`, the settings that change

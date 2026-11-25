@@ -745,6 +745,9 @@ PolynomialRegression: polynomial_regression
 ExponentialRegression: exponential_regression
 LogarithmicRegression: logarithmic_regression
 PowerRegression: power_regression
+# The logistic and its regression (CAS-627).
+Logistic: logistic
+LogisticRegression: logistic_regression
 # Discrete distributions (CAS-DOC-23, CAS-301); the binomial's mass is
 # `binomial`'s three-argument form.
 BinomialCDF: binomial_cdf

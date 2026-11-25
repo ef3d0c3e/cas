@@ -585,6 +585,10 @@ builtins! {
     EXPONENTIAL_REGRESSION = "ExponentialRegression" [PROTECTED];
     LOGARITHMIC_REGRESSION = "LogarithmicRegression" [PROTECTED];
     POWER_REGRESSION = "PowerRegression" [PROTECTED];
+    // The logistic and its regression (CAS-627): `logistic`,
+    // `logistic_regression`.
+    LOGISTIC = "Logistic" [PROTECTED];
+    LOGISTIC_REGRESSION = "LogisticRegression" [PROTECTED];
     // Discrete distributions (CAS-DOC-23 §2): the binomial's mass is
     // `Binomial`'s three-argument form, Xcas's `binomial(n, p, k)`.
     BINOMIAL_CDF = "BinomialCDF" [PROTECTED];

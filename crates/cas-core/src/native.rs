@@ -798,6 +798,11 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::POWER_REGRESSION,
             statistics::regression::power_regression,
         ),
+        (Symbol::LOGISTIC, statistics::regression::logistic),
+        (
+            Symbol::LOGISTIC_REGRESSION,
+            statistics::regression::logistic_regression,
+        ),
         (
             Symbol::BINOMIAL_CDF,
             statistics::distributions::discrete::binomial_cdf,
