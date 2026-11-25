@@ -615,7 +615,11 @@ ours is checked to be our `string(x)`, escaped (giac `x+1`, ours `1 + x`).
   (giac's evaluation order and rewrites; the printers agree on the same shape); giac's MathML of
   each is in `crates/cas-lang/src/markup/giac_mathml.tsv`. `x<y`: giac
   `<mi>y</mi><mo>&gt;</mo><mi>x</mi>`, ours `<mi>x</mi><mo>&lt;</mo><mi>y</mi>`.
-- giac's `mathml()` (mathml.cc), a separate printer, is not ported yet.
+- giac's `mathml()` (mathml.cc, a separate printer, `cas_lang::mathml`): the same 115 inputs,
+  `mathml(x)`: giac's text (quotes removed, doubled quotes undone, a newline written ' | ' on both
+  sides, C0047) is ours exactly. The 17 departures, ours asserted (the formula of the prototype on
+  our shapes, C0068, in giac's XHTML); giac's texts are in
+  `crates/cas-lang/src/markup/giac_mathml_doc.tsv`.
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
