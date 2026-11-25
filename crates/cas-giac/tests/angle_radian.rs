@@ -126,11 +126,24 @@ fn degrees_and_grads_as_giac() {
             "angle_radian:=0;sin(x+30);angle_radian:=1",
             "angle_radian:=0;tan(45);sec(60);angle_radian:=1",
             "angle_radian:=0;acos(0);atan(x);asin(0.5);angle_radian:=1",
-            "angle_radian:=0;sin(15);cos(1);angle_radian:=1",
+            "angle_radian:=0;cos(1);angle_radian:=1",
             "angle_radian:=0;acot(0);sin(390);cos(1.0);angle_radian:=1",
             // The hyperbolic functions and exp are the same in every mode.
             "angle_radian:=0;sinh(1);exp(i*30);angle_radian:=1",
             "angle_radian:=2;sin(100);asin(1);angle_radian:=1",
         ],
     );
+}
+
+/// Departure: giac writes `sin(15)` in degrees as `(sqrt(6)-sqrt(2))/4`;
+/// ours has no closed form of `sin(pi/12)`, so the call stays.
+#[test]
+fn sin_15_degrees_stays() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let input = "angle_radian:=0;sin(15);angle_radian:=1";
+    assert_eq!(giac.eval(input).unwrap(), "0,(sqrt(6)-sqrt(2))/4,1");
+    let mine = session_values(input);
+    assert_eq!(mine.get(1), Some(&ours("sin(15)").unwrap()), "{mine:?}");
 }

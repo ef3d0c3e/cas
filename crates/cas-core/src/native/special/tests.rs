@@ -400,7 +400,6 @@ fn degrees() {
             ("Sin[30]", "1/2"),
             ("Cos[60]", "1/2"),
             ("Tan[45]", "1"),
-            ("Sin[15]", "Sin[Times[1/12, Pi]]"),
             ("Sec[60]", "2"),
             ("ArcSin[1/2]", "30"),
             ("ArcTan[1]", "45"),
@@ -408,7 +407,7 @@ fn degrees() {
             ("ArcCot[0]", "90"),
             ("Sinh[0]", "0"),
         ],
-        &["Sin[Pi]", "Cos[1]", "Sin[x]", "ArcTan[x]"],
+        &["Sin[Pi]", "Cos[1]", "Sin[15]", "Sin[x]", "ArcTan[x]"],
         &[("Sin[0x1.ep+4]", "0x1p-1"), ("ArcSin[0x1p-1]", "0x1.ep+4")],
     );
 }
