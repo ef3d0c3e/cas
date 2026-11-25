@@ -591,15 +591,17 @@ their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_p
 whitespace collapsed) is ours: the plan's probes, `cas_lang::markup`'s lowering rows that print as
 giac prints its own answer, `rootof([1,0],[1,0,1,1])` (held in both), and 57 more rows of
 `crates/cas-lang/src/markup/giac_latex.tsv`.
-- Departures (16), ours asserted, giac's text copied: all come from giac's evaluation order, not
+- Departures (17), ours asserted, giac's text copied: all come from giac's evaluation order, not
   the printer (the same shape prints the same). Constants first in sums: `sqrt(x+1)` giac
   `\sqrt{x+1}`, `(x^4-1)/(x^2+3)`, `2*x^2-3*x+1` (ascending degree), `1/(x+1)`, `(x+1)^2`,
-  `(x+1)*(x-1)`, `-(x+1)` (giac `-x-1`); our product order: `sin(x)*cos(x)` (giac
+  `(x+1)*(x-1)`, `-(x+1)` (ours keeps `-(1+x)`, giac `-x-1`); our product order: `sin(x)*cos(x)` (giac
   `\sin x\cdot \cos x`), `x*sqrt(2)` (giac `x \sqrt{2}`); giac rewrites what ours keeps: `x<y`
   (giac `y>x`), `x<=y` (giac `y\geq x`), `x!=y` (giac `\mathrm{true}`), `ceil(x)` (giac
   `-\left\lfloor -x\right\rfloor`), `binomial(n,k)` (giac's factorial quotient), `x^(2/3)` (giac
   `\left(x^{\frac{1}{3}}\right)^{2}`), `sum(k,k,1,n)` (giac
-  `\frac{-n-1+\left(n+1\right)^{2}}{2}`, ours `\frac{n \left(1+n\right)}{2}`).
+  `\frac{-n-1+\left(n+1\right)^{2}}{2}`, ours `\frac{1}{2} n \left(1+n\right)`, as giac prints `n*(n+1)/2`),
+  `diff(f(x),x,2)` (ours differentiates by `x`, then holds `derive(…, 2)`; giac's second
+  derivative; `diff(f(x),x,x)` is a row).
 - Algebraic extensions and points (tex.cc's `gen2tex`, giac's `latex` on geometry) have no
   counterpart in ours.
 

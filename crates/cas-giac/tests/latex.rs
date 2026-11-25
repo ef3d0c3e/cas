@@ -170,7 +170,7 @@ fn more_of_giacs_table() {
         "latex(3*sin(x))",
         "latex(f(x)/2)",
         "latex((2*n)!)",
-        "latex(diff(f(x),x,2))",
+        "latex(diff(f(x),x,x))",
         "latex(int(f(x),x,0,1))",
         "latex(sum(f(k),k,1,n))",
         "latex(x>=1)",
@@ -205,8 +205,8 @@ fn departures() {
         ("latex((x+1)*(x-1))", r"\left(-1+x\right) \left(1+x\right)"),
         // Our products put cos before sin: giac \sin x\cdot \cos x.
         ("latex(sin(x)*cos(x))", r"\cos x\cdot \sin x"),
-        // giac -x-1.
-        ("latex(-(x+1))", r"-1-x"),
+        // Ours keeps Times[-1, Plus[1, x]] (C0029): giac -x-1.
+        ("latex(-(x+1))", r"-\left(1+x\right)"),
         // giac's evaluator turns x<y into y>x: giac y>x.
         ("latex(x<y)", r"x<y"),
         // giac y\geq x.
@@ -223,7 +223,13 @@ fn departures() {
         // Our product order: giac x \sqrt{2}.
         ("latex(x*sqrt(2))", r"\sqrt{2} x"),
         // Our closed form, factored: giac \frac{-n-1+\left(n+1\right)^{2}}{2}.
-        ("latex(sum(k,k,1,n))", r"\frac{n \left(1+n\right)}{2}"),
+        ("latex(sum(k,k,1,n))", r"\frac{1}{2} n \left(1+n\right)"),
+        // Our diff(e, x, 2) differentiates by x, then by 2 (held):
+        // giac \frac{\mathrm{d}^{2}}{\mathrm{d}x^{2}}f\left(x\right).
+        (
+            "latex(diff(f(x),x,2))",
+            r"\mathrm{derive}\left(\frac{\mathrm{d}}{\mathrm{d}x}f\left(x\right),2\right)",
+        ),
     ];
     let mut wrong = Vec::new();
     for (input, mine) in cases {
