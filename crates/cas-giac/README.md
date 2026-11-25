@@ -446,7 +446,14 @@ seconds, gain, pan, depths, silent and negative similarities, a second clip
 shorter than the overlap), 34 more errors that stay, two departures (giac's
 `splice` of clips of other sample rates with an exponent `p ≥ 0`, which
 giac mixes and ours refuses) and `clipping`: ours warns once per call when
-any sample clips, giac only when the last one does.
+any sample clips, giac only when the last one does. `resample` (CAS-633;
+.run/1.7/T8/probe_rs.out, the prototype .run/1.7/T8/resample.py): 12 shared
+errors that stay, six departures (giac's Debian build has no libsamplerate
+and answers "libsamplerate is required for resampling audio"; ours answers
+the clip, libsamplerate's linear and zero-order hold converters exactly at
+the qualities 0 and 1, a Kaiser-windowed sinc of ours at 2 to 4) and
+`resample_properties`, ours only: the lengths, a constant kept, a 440 Hz tone
+kept and a 23500 Hz tone attenuated at 48000 → 44100 Hz.
 
 `tests/tail_probabilities.rs`, Xcas's upper tails `UTPN`, `UTPT`, `UTPC` and
 `UTPF` (CAS-625), and `cdf`, `icdf` and `mgf` of a law by its name, of a

@@ -182,6 +182,8 @@ builtins! {
     STEREO2MONO = "Stereo2Mono" [PROTECTED];
     MIXDOWN = "Mixdown" [PROTECTED];
     SPLICE = "Splice" [PROTECTED];
+    // Resampling (CAS-633).
+    RESAMPLE = "Resample" [PROTECTED];
     // Strings, Xcas's (CAS-611, CAS-613).
     CHAR = "Char" [PROTECTED];
     ASC = "Asc" [PROTECTED];

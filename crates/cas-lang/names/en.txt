@@ -892,6 +892,8 @@ SetChannelData: set_channel_data
 Stereo2Mono: stereo2mono
 Mixdown: mixdown
 Splice: splice
+# Resampling (CAS-633), Xcas's.
+Resample: resample
 # Strings (CAS-611, CAS-613), Xcas's.
 Char: char chr
 Asc: asc

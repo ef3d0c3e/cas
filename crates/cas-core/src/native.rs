@@ -182,6 +182,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::STEREO2MONO, sound::stereo2mono),
         (Symbol::MIXDOWN, sound::mixdown),
         (Symbol::SPLICE, sound::splice),
+        (Symbol::RESAMPLE, sound::resample),
         (Symbol::CHAR, strings::char),
         (Symbol::ASC, strings::asc),
         (Symbol::ORD, strings::ord),

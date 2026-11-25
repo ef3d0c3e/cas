@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 687] = [
+const BUILTINS: [&str; 688] = [
     "Plus",
     "Times",
     "Power",
@@ -789,6 +789,8 @@ const BUILTINS: [&str; 687] = [
     "Stereo2Mono",
     "Mixdown",
     "Splice",
+    // Resampling (CAS-633).
+    "Resample",
 ];
 
 /// Builtins that apply something to parts, only in the expression

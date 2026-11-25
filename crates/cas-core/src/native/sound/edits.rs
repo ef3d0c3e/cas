@@ -92,7 +92,7 @@ fn count(n: usize) -> i128 {
 }
 
 /// The clip as the call `SoundClip[rate, depth, {codes}…]`.
-fn answer(c: Clip) -> Expr {
+pub(super) fn answer(c: Clip) -> Expr {
     let mut parts = Vec::with_capacity(c.channels.len() + 2);
     parts.push(Expr::from(Integer::from(c.rate)));
     parts.push(Expr::from(Integer::from(c.depth)));

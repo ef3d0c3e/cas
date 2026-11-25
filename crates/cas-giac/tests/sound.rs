@@ -280,6 +280,8 @@ fn errors_stay() {
     let s = "createwav([[0.5,-0.5,0.25,0],[0.1,0.2,0.3,0.4]])";
     let six = "createwav([0.5,-0.5,0.25,0,1,0.75])";
     let failed = "Failed to set channel data, [0.5,0.25] is not a valid sample value";
+    let rate = "Invalid sample rate specification";
+    let quality = "Invalid quality specification";
     let rows = [
         (
             format!("channel_data({s},2)"),
@@ -467,6 +469,19 @@ fn errors_stay() {
             format!("splice({a},[1,2])"),
             kind("First two arguments should be audio clips"),
         ),
+        // resample (CAS-633, .run/1.7/T8/probe_rs.out).
+        (format!("resample({a},0)"), value(rate)),
+        (format!("resample({a},-3)"), value(rate)),
+        (format!("resample({a},22050.0)"), value(rate)),
+        (format!("resample({a},1/2)"), value(rate)),
+        (format!("resample({a},22050,5)"), value(quality)),
+        (format!("resample({a},22050,-1)"), value(quality)),
+        (format!("resample({a},22050,2.0)"), value(quality)),
+        ("resample(x)".to_owned(), kind("Invalid sound data")),
+        ("resample([1,2,3])".to_owned(), kind("Invalid sound data")),
+        ("resample(x,22050)".to_owned(), kind("Invalid sound data")),
+        ("resample(x,0)".to_owned(), value(rate)),
+        ("resample(x,22050,7)".to_owned(), value(quality)),
     ];
     let giac = giac();
     let mut wrong = Vec::new();
@@ -506,7 +521,8 @@ fn collapsed(s: &str) -> String {
 /// stays and `size(A)` is the call's 2 + channels; giac refuses `size = n`,
 /// ours takes it as the length; giac's 47-bit doubles make 8 samples of
 /// `duration = 0.001` (or `1/1000`) at 8000 Hz and 16 of 0.002, ours exactly 9
-/// and 17 (C0088).
+/// and 17 (C0088); giac's `resample` needs libsamplerate, which its Debian
+/// build lacks, ours resamples (CAS-633).
 #[test]
 #[allow(clippy::too_many_lines, reason = "one row per departure")]
 fn departures() {
@@ -518,6 +534,8 @@ fn departures() {
     let argument = "GIAC_ERROR: Invalid argument 1. Error: Bad Argument Value";
     let spliced =
         "channel_data(splice(createwav([0.5,-0.5,0.25,0]),createwav([0.1,0.2,0.3,0.4],samplerate=";
+    let no_lsr =
+        "GIAC_ERROR: libsamplerate is required for resampling audio. Error: Bad Argument Value";
     let cases = [
         (
             "createwav([0.5,-0.5,0.25,0])".to_owned(),
@@ -649,6 +667,39 @@ fn departures() {
                 .to_owned(),
             format!("{spliced}22050),2,0))"),
         ),
+        // resample: giac's Debian build has no libsamplerate (CAS-633,
+        // .run/1.7/T8/probe_rs.out); ours resamples (the prototype
+        // .run/1.7/T8/resample.py), a clip of no samples stays.
+        (
+            "resample(createwav([0.5,-0.5,0.25,0]))".to_owned(),
+            no_lsr.to_owned(),
+            "soundclip(44100,16,[22068,-21986,7576,6577])".to_owned(),
+        ),
+        (
+            "resample(createwav([0.5,-0.5,0.25,0]),22050)".to_owned(),
+            no_lsr.to_owned(),
+            "soundclip(22050,16,[4683,-1172])".to_owned(),
+        ),
+        (
+            "resample(createwav([0.5,-0.5,0.25,0]),88200,0)".to_owned(),
+            no_lsr.to_owned(),
+            "soundclip(88200,16,[29203,29203,29203,0,-29203,-7301,14602,7301])".to_owned(),
+        ),
+        (
+            "resample(createwav([0.5,-0.5,0.25,0]),88200,1)".to_owned(),
+            no_lsr.to_owned(),
+            "soundclip(88200,16,[29203,29203,29203,29203,-29203,-29203,14602,14602])".to_owned(),
+        ),
+        (
+            "resample(createwav([0.5,-0.5,0.25,0]),48000,4)".to_owned(),
+            no_lsr.to_owned(),
+            "soundclip(48000,16,[27744,-26007,4832,11250])".to_owned(),
+        ),
+        (
+            "resample(createwav([0.5,-0.5,0.25,0]),1)".to_owned(),
+            no_lsr.to_owned(),
+            "resample(soundclip(44100,16,[29204,-29204,14602,0]),1)".to_owned(),
+        ),
     ];
     let mut wrong = Vec::new();
     for (input, answer, mine) in &cases {
@@ -736,6 +787,114 @@ fn session() {
         let printed = giac.eval(input).unwrap_or_default();
         if collapsed(&printed) != "assume[[],[line[0,+infinity]],[0]]" {
             wrong.push(format!("{input}: giac prints {printed}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The codes of channel 0 of the clip `text` evaluates to.
+fn codes(text: &str) -> Vec<i64> {
+    let (_, found, _) = evaluated(text).unwrap_or_else(|| panic!("{text}: unreadable"));
+    found
+        .args()
+        .get(2)
+        .map(|c| c.args().iter().filter_map(Expr::as_i64).collect())
+        .unwrap_or_default()
+}
+
+/// `soundclip(rate, depth, [codes])`.
+fn mono_clip(rate: u32, depth: u32, codes: &[i64]) -> String {
+    let codes: Vec<String> = codes.iter().map(i64::to_string).collect();
+    format!("soundclip({rate},{depth},[{}])", codes.join(","))
+}
+
+/// `floor(range·x/2 + 1/2)` at 24 bits, `x = sin(2π·f·k/rate)`.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "|range·x/2 + 1/2| < 2^23: the floor fits; k below 2^53"
+)]
+fn tone(f: f64, rate: f64, k: usize) -> i64 {
+    let range = f64::from((1_u32 << 23) - 1);
+    (range * 0.5 * (std::f64::consts::TAU * f * k as f64 / rate).sin() + 0.5).floor() as i64
+}
+
+/// Resampling's properties, ours only (CAS-633; the expected shapes and
+/// tolerances from the prototype .run/1.7/T8/resample.py, resample.log,
+/// with margin): `floor(len·r/sr)` samples; a constant clip stays constant
+/// where the kernel lies inside it; at 48000 → 44100 Hz a 440 Hz tone of
+/// amplitude 1/2 at 24 bits keeps its frequency and amplitude there
+/// (measured 14, 1.8 and 1.4 codes off at the qualities 2, 3 and 4) and a
+/// 23500 Hz tone, above the new Nyquist frequency, is attenuated to the
+/// quality's stopband (measured at most 41, 3 and 1 codes).
+#[test]
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "sample counts below 2^53: exact doubles"
+)]
+fn resample_properties() {
+    let mut wrong = Vec::new();
+    let zeros = |n: usize| vec![0_i64; n];
+    for (len, sr, rate, n) in [
+        (4, 44100, 88200, 8),
+        (4, 44100, 22050, 2),
+        (4, 44100, 30000, 2),
+        (10, 48000, 44100, 9),
+        (1000, 48000, 44100, 918),
+        (3, 8000, 44100, 16),
+        (1, 44100, 48000, 1),
+    ] {
+        for q in 0..=4 {
+            let input = format!("resample({},{rate},{q})", mono_clip(sr, 16, &zeros(len)));
+            let found = codes(&input).len();
+            if found != n {
+                wrong.push(format!(
+                    "{len} samples {sr} -> {rate} q{q}: {found}, wanted {n}"
+                ));
+            }
+        }
+    }
+    // (quality, zero crossings / cutoff, 440 Hz error, 23500 Hz peak) in codes.
+    let qualities = [
+        (2, 37.0 / 0.90, 20.0, 60),
+        (3, 86.0 / 0.95, 4.0, 6),
+        (4, 312.0 / 0.98, 3.0, 3),
+    ];
+    let rho = 44100.0 / 48000.0;
+    let interior = |len: usize, reach: f64, k: usize| {
+        let t = k as f64 / rho;
+        t - reach / rho >= 0.0 && t + reach / rho <= (len - 1) as f64
+    };
+    let flat = mono_clip(48000, 16, &[10000; 900]);
+    let low: Vec<i64> = (0..2048).map(|k| tone(440.0, 48000.0, k)).collect();
+    let high: Vec<i64> = (0..2048).map(|k| tone(23500.0, 48000.0, k)).collect();
+    let (low, high) = (mono_clip(48000, 24, &low), mono_clip(48000, 24, &high));
+    for (q, reach, error, peak) in qualities {
+        let out = codes(&format!("resample({flat},44100,{q})"));
+        if out.len() != 826 || (0..826).any(|k| interior(900, reach, k) && out[k] != 10000) {
+            wrong.push(format!("constant q{q}: {out:?}"));
+        }
+        let out = codes(&format!("resample({low},44100,{q})"));
+        let off = (0..out.len())
+            .filter(|&k| interior(2048, reach, k))
+            .map(|k| (out[k] - tone(440.0, 44100.0, k)).abs())
+            .max();
+        if out.len() != 1881 || off.is_none_or(|d| d as f64 > error) {
+            wrong.push(format!(
+                "440 Hz q{q}: {} samples, {off:?} codes off",
+                out.len()
+            ));
+        }
+        let out = codes(&format!("resample({high},44100,{q})"));
+        let top = (0..out.len())
+            .filter(|&k| interior(2048, reach, k))
+            .map(|k| out[k].abs())
+            .max();
+        if out.len() != 1881 || top.is_none_or(|t| t > peak) {
+            wrong.push(format!(
+                "23500 Hz q{q}: {} samples, peak {top:?}",
+                out.len()
+            ));
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));

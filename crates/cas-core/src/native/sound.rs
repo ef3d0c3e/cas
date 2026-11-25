@@ -51,7 +51,7 @@
 //! The clip edits (CAS-632), `SetChannelData` (`set_channel_data`,
 //! :2554-2602), `Stereo2Mono` (`stereo2mono`, :2339), `Mixdown`
 //! (`mixdown`, :1791-1843) and `Splice` (`splice`, :1738-1773), live in
-//! [`edits`].
+//! [`edits`]; `Resample` (`resample`, CAS-633, :2859-2881) in [`resample`].
 
 use std::cmp::Ordering;
 
@@ -68,8 +68,10 @@ use crate::symbol::Symbol;
 use crate::trace::Warning;
 
 mod edits;
+mod resample;
 
 pub(super) use edits::{mixdown, set_channel_data, splice, stereo2mono};
+pub(super) use resample::resample;
 
 type Native = Result<Option<Expr>, EvalError>;
 

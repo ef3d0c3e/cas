@@ -956,3 +956,218 @@ fn edits_silent_and_limits() {
         assert_eq!(warning(&small, &input), "Too many samples", "{input}");
     }
 }
+
+/// `SoundClip[rate, depth, codes…]`.
+fn sc(rate: u32, depth: u32, channels: &[&str]) -> String {
+    format!("SoundClip[{rate}, {depth}, {}]", channels.join(", "))
+}
+
+/// Resampling (CAS-633): the qualities 0 and 1 exactly, the others on
+/// `A`, from the prototype (.run/1.7/T8/resample.py, resample.log).
+#[test]
+#[allow(clippy::too_many_lines, reason = "one row per case")]
+fn resample() {
+    let ctx = Context::new();
+    let a = sc(44100, 16, &["List[29204, -29204, 14602, 0]"]);
+    let b = "List[5841, 11681, 17522, 23363]";
+    let ab = sc(44100, 16, &["List[29204, -29204, 14602, 0]", b]);
+    let one = sc(44100, 16, &["List[29204]"]);
+    let eight = sc(8000, 8, &["List[64, -64, 32, 0]"]);
+    let deep = sc(44100, 24, &["List[4194304, -4194304, 2097152, 0]"]);
+    let cases: &[(String, String)] = &[
+        (
+            format!("Resample[{a}, 88200, 0]"),
+            sc(
+                88200,
+                16,
+                &["List[29203, 29203, 29203, 0, -29203, -7301, 14602, 7301]"],
+            ),
+        ),
+        (
+            format!("Resample[{a}, 88200, 1]"),
+            sc(
+                88200,
+                16,
+                &["List[29203, 29203, 29203, 29203, -29203, -29203, 14602, 14602]"],
+            ),
+        ),
+        (
+            format!("Resample[{a}, 22050, 0]"),
+            sc(22050, 16, &["List[29203, -29203]"]),
+        ),
+        (
+            format!("Resample[{a}, 22050, 1]"),
+            sc(22050, 16, &["List[29203, -29203]"]),
+        ),
+        (
+            format!("Resample[{a}, 30000, 0]"),
+            sc(30000, 16, &["List[29203, 1752]"]),
+        ),
+        (
+            format!("Resample[{a}, 30000, 1]"),
+            sc(30000, 16, &["List[29203, 29203]"]),
+        ),
+        (
+            format!("Resample[{a}, 132300, 0]"),
+            sc(
+                132_300,
+                16,
+                &[
+                    "List[29203, 29203, 29203, 29203, 9734, -9734, -29203, -14602, 0, 14602, 9734, 4867]",
+                ],
+            ),
+        ),
+        (
+            format!("Resample[{one}, 132300, 0]"),
+            sc(132_300, 16, &["List[29203, 29203, 29203]"]),
+        ),
+        (
+            format!("Resample[{one}, 132300, 1]"),
+            sc(132_300, 16, &["List[29203, 29203, 29203]"]),
+        ),
+        (
+            format!("Resample[{eight}, 20000, 0]"),
+            sc(
+                20000,
+                8,
+                &["List[64, 64, 64, 38, -13, -63, -25, 13, 25, 13]"],
+            ),
+        ),
+        (
+            format!("Resample[{eight}, 20000, 1]"),
+            sc(
+                20000,
+                8,
+                &["List[64, 64, 64, 64, 64, -63, -63, -63, 32, 32]"],
+            ),
+        ),
+        (
+            format!("Resample[{deep}, 88200, 0]"),
+            sc(
+                88200,
+                24,
+                &["List[4194304, 4194304, 4194304, 0, -4194303, -1048576, 2097152, 1048576]"],
+            ),
+        ),
+        (
+            format!("Resample[{ab}, 66150, 0]"),
+            sc(
+                66150,
+                16,
+                &[
+                    "List[29203, 29203, 9734, -29203, 0, 9734]",
+                    "List[5841, 5841, 7787, 11681, 15575, 19468]",
+                ],
+            ),
+        ),
+        (
+            format!("Resample[{ab}, 66150, 1]"),
+            sc(
+                66150,
+                16,
+                &[
+                    "List[29203, 29203, 29203, -29203, -29203, 14602]",
+                    "List[5841, 5841, 5841, 11681, 11681, 17521]",
+                ],
+            ),
+        ),
+        (
+            format!("Resample[{a}]"),
+            sc(44100, 16, &["List[22068, -21986, 7576, 6577]"]),
+        ),
+        (
+            format!("Resample[{a}, 44100, 2]"),
+            sc(44100, 16, &["List[22068, -21986, 7576, 6577]"]),
+        ),
+        (
+            format!("Resample[{a}, 22050]"),
+            sc(22050, 16, &["List[4683, -1172]"]),
+        ),
+        (
+            format!("Resample[{a}, 88200, 3]"),
+            sc(
+                88200,
+                16,
+                &["List[25574, -3008, -25563, -15281, 10986, 18701, 3556, -8673]"],
+            ),
+        ),
+        (
+            format!("Resample[{a}, 48000, 4]"),
+            sc(48000, 16, &["List[27744, -26007, 4832, 11250]"]),
+        ),
+    ];
+    let cases: Vec<(String, &str)> = cases.iter().map(|(i, o)| (i.clone(), o.as_str())).collect();
+    check(&ctx, &cases);
+}
+
+/// Resampling's errors: giac's messages, ours for an empty result, odd
+/// shapes silently, and the limits.
+#[test]
+fn resample_stays() {
+    let ctx = Context::new();
+    let a = sc(44100, 16, &["List[29204, -29204, 14602, 0]"]);
+    let (rate, quality) = (
+        "Invalid sample rate specification",
+        "Invalid quality specification",
+    );
+    let cases: &[(String, &str)] = &[
+        (format!("Resample[{a}, 0]"), rate),
+        (format!("Resample[{a}, -3]"), rate),
+        (format!("Resample[{a}, 22050.0]"), rate),
+        (format!("Resample[{a}, 1/2]"), rate),
+        (format!("Resample[{a}, 22050, 5]"), quality),
+        (format!("Resample[{a}, 22050, -1]"), quality),
+        (format!("Resample[{a}, 22050, 2.0]"), quality),
+        ("Resample[x]".to_owned(), "Invalid sound data"),
+        ("Resample[List[1, 2, 3]]".to_owned(), "Invalid sound data"),
+        ("Resample[x, 22050]".to_owned(), "Invalid sound data"),
+        ("Resample[x, 0]".to_owned(), rate),
+        ("Resample[x, 22050, 7]".to_owned(), quality),
+        (
+            format!("Resample[{a}, 1]"),
+            "The resampled clip would have no samples",
+        ),
+    ];
+    for (input, message) in cases {
+        assert_eq!(warning(&ctx, input), *message, "{input}");
+    }
+    for input in [
+        "Resample[]".to_owned(),
+        format!("Resample[{a}, 22050, 2, 1]"),
+    ] {
+        let (found, report) = ctx.eval_with(&read(&input), &EvalOptions::default());
+        assert_eq!(found.unwrap(), stayed(&ctx, &input), "{input}");
+        assert!(report.warnings.is_empty(), "{input}: {:?}", report.warnings);
+    }
+    let mut small = Context::new();
+    let limits = small.limits();
+    small.set_limits(Limits {
+        terms: 20,
+        ..limits
+    });
+    let silent = |n: usize| format!("List[{}]", vec!["0"; n].join(", "));
+    let two = sc(2, 16, &[&silent(4)]);
+    let stereo = sc(2, 16, &[&silent(4), &silent(4)]);
+    let long = sc(3000, 16, &[&silent(3000)]);
+    for input in [
+        format!("Resample[{a}, 21, 0]"),
+        format!("Resample[{two}, 20, 0]"),
+        format!("Resample[{stereo}, 6, 0]"),
+        format!("Resample[{long}, 10, 4]"),
+    ] {
+        assert_eq!(warning(&small, &input), "Too many samples", "{input}");
+    }
+    check(
+        &small,
+        &[
+            (
+                format!("Resample[{long}, 10, 0]"),
+                &sc(10, 16, &[&silent(10)]),
+            ),
+            (
+                format!("Resample[{stereo}, 5, 0]"),
+                &sc(5, 16, &[&silent(10), &silent(10)]),
+            ),
+        ],
+    );
+}
