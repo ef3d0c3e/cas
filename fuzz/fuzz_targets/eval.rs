@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 688] = [
+const BUILTINS: [&str; 690] = [
     "Plus",
     "Times",
     "Power",
@@ -791,6 +791,8 @@ const BUILTINS: [&str; 688] = [
     "Splice",
     // Resampling (CAS-633).
     "Resample",
+    "DiscreteWaveletTransform",
+    "InverseDiscreteWaveletTransform",
 ];
 
 /// Builtins that apply something to parts, only in the expression

@@ -455,6 +455,18 @@ the qualities 0 and 1, a Kaiser-windowed sinc of ours at 2 to 4) and
 `resample_properties`, ours only: the lengths, a constant kept, a 440 Hz tone
 kept and a 23500 Hz tone attenuated at 48000 → 44100 Hz.
 
+`tests/transforms.rs`, Xcas's wavelet transforms `dwt` and `idwt` (CAS-634;
+giac's answers in .run/1.7/T9/giac/p1.out and p2.out, the prototype
+.run/1.7/T9/proto_dwt.py, a port of GSL's wavelet/dwt.c): 37 rows of giac's
+decimals read back within its 12 digits (C0006): Daubechies, Haar and
+B-spline members, `center`, inverse, padding of a list and of a matrix, the
+2-D standard and `image` forms, `[]`, and `idwt(dwt(x))`; giac's rounding
+noise (`2.2e-16`) against ours of about `1e-30`. Four Haar rows exact here
+(`dwt([1,2,3,4],"haar")` is `[5,-2,-sqrt(2)/2,-sqrt(2)/2]`) against their
+exact forms. Five of giac's errors that stay with its message ("Wavelet not
+implemented", "Invalid argument 2" for a bare `haar` and for `centre=true`,
+"Data must be numeric", "Unsupported wavelet type").
+
 `tests/tail_probabilities.rs`, Xcas's upper tails `UTPN`, `UTPT`, `UTPC` and
 `UTPF` (CAS-625), and `cdf`, `icdf` and `mgf` of a law by its name, of a
 `randvar` object or of a list (CAS-626):

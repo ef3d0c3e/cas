@@ -894,6 +894,9 @@ Mixdown: mixdown
 Splice: splice
 # Resampling (CAS-633), Xcas's.
 Resample: resample
+# Wavelet transforms (CAS-634), Xcas's.
+DiscreteWaveletTransform: dwt
+InverseDiscreteWaveletTransform: idwt
 # Strings (CAS-611, CAS-613), Xcas's.
 Char: char chr
 Asc: asc

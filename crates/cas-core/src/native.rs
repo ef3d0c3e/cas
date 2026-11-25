@@ -85,6 +85,7 @@ mod trig;
 mod truncation;
 mod types;
 mod vector;
+mod wavelet;
 mod zeta;
 mod ztransform;
 
@@ -183,6 +184,11 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::MIXDOWN, sound::mixdown),
         (Symbol::SPLICE, sound::splice),
         (Symbol::RESAMPLE, sound::resample),
+        (Symbol::DISCRETE_WAVELET_TRANSFORM, wavelet::transform),
+        (
+            Symbol::INVERSE_DISCRETE_WAVELET_TRANSFORM,
+            wavelet::transform,
+        ),
         (Symbol::CHAR, strings::char),
         (Symbol::ASC, strings::asc),
         (Symbol::ORD, strings::ord),
