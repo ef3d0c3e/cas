@@ -571,10 +571,21 @@ their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_p
   and `strip`, and strings in `size`/`length`, `concat`, `"abc"[k]` and slices, `==`, `<`, `>`,
   `>=` and `sort` (byte order). Departures, giac's text copied: `length("héllo")` giac 6 bytes,
   ours 5 characters; `split("abc","")` ("Invalid dimension") and a `trim` threshold not a
-  positive real ("Invalid threshold specification") stay; `join(",",[1,2])` (giac `"1,2"`) and
-  `concat("a",1)` (`"a1"`) stay until there is a printer; `"ab"+"cd"` (giac `"abcd"`) stays;
+  positive real ("Invalid threshold specification") stay; `join(",",[1,2])` (`"1,2"`) and
+  `concat("a",1)` (`"a1"`) agree since CAS-614 prints non-strings; `"ab"+"cd"` (giac `"abcd"`) stays;
   `"abc"[5]` and `"abc"[-4]` are errors in both, and `"abc"[0..5]`, giac's `"abc"`, is out of
   range here, as for a list.
+
+`tests/text.rs`, expressions as text and back (CAS-614):
+- `string`/`str` and `cat`, and non-strings in `join` and `concat`: giac's text (its quotes
+  removed, inner quotes undoubled) and ours are equal without spaces or read back to the same
+  value; `expr`/`execute` (strings, `expr("")` as `undef`, `expr(sin,x)`, `expr(f,x,y)` staying,
+  `expr(string(x^3-1))`) compared by value.
+- Departures, giac's text copied: `expr("0123")` giac's octal 83, ours 123; `expr("a:=3")` (giac
+  assigns, 3), `expr("1;2")` (giac `1,2`) and `expr("x+")` (giac's parse error) stay here with
+  the reader's message as a warning; ours prints the input form, number first and sums spaced:
+  `size(string(x+1))` giac 3, ours 5; `cat("a",x+1)` and `concat("a",x+1)` giac `"ax+1"`, ours
+  `"a1 + x"`; `join(",",[1,x+1,"z"])` giac `"1,x+1,z"`, ours `"1,1 + x,z"`.
 
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.

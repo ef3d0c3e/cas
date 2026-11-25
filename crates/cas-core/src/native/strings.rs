@@ -35,9 +35,10 @@
 //! - `levenshtein` of a string and a list stays with giac's message as a
 //!   warning; past the `terms` limit (`n·m` cells) it stays.
 //! - `hamming` answers equal-length strings or lists, where giac stays.
-//! - `split(s, "")` stays (giac's "Invalid dimension"); `join` of anything
-//!   but strings stays (giac prints them); a `trim` threshold that is not a
-//!   positive real stays (giac's "Invalid threshold specification").
+//! - `split(s, "")` stays (giac's "Invalid dimension"); `join` prints
+//!   non-strings in this CAS's input form (CAS-614, `text`); a `trim`
+//!   threshold that is not a positive real stays (giac's "Invalid threshold
+//!   specification").
 //! - Results past the `terms` limit (pieces, characters) stay.
 
 use std::cmp::Ordering;
@@ -46,6 +47,7 @@ use cas_num::Rational;
 use cas_num::ball::Ball;
 
 use super::expressions::EPSILON;
+use super::text::concatenated;
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
@@ -460,7 +462,9 @@ fn split_variables(ev: &mut Eval<'_>, e: &Expr, x: &Expr, y: &Expr) -> Native {
     Ok(Some(list(vec![xs, ys])))
 }
 
-/// `StringJoin[sep, List[s…]]`: the strings `s…` with `sep` between them.
+/// `StringJoin[sep, List[a…]]`: the items `a…` with `sep` between them,
+/// strings as they are and the others printed as `Cat` prints them
+/// (CAS-614).
 pub(super) fn string_join(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [sep, items] = e.args() else {
         return Ok(None);
@@ -468,23 +472,7 @@ pub(super) fn string_join(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let (Some(sep), true) = (sep.as_str(), is_list(items)) else {
         return Ok(None);
     };
-    let Some(items) = items
-        .args()
-        .iter()
-        .map(Expr::as_str)
-        .collect::<Option<Vec<_>>>()
-    else {
-        return Ok(None);
-    };
-    let gaps = items.len().saturating_sub(1);
-    let length = items
-        .iter()
-        .try_fold(0usize, |n, s| n.checked_add(s.chars().count()))
-        .and_then(|n| gaps.checked_mul(sep.chars().count())?.checked_add(n));
-    if length.is_none_or(|n| !within(ev, n)) {
-        return Ok(None);
-    }
-    Ok(Some(Expr::string(&items.join(sep))))
+    Ok(concatenated(ev, items.args(), sep).map(|text| Expr::string(&text)))
 }
 
 /// giac's whitespace: space, tab, line feed, vertical tab, form feed and

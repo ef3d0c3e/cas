@@ -134,6 +134,14 @@ impl Rules {
         self.symbols.get(s).is_some_and(|r| !r.up.rules.is_empty())
     }
 
+    /// Whether `s` has rules for its own applications: exact or down-rules,
+    /// or a user native.
+    pub(crate) fn has_down_rules(&self, s: Symbol) -> bool {
+        self.symbols
+            .get(s)
+            .is_some_and(|r| !r.exact.is_empty() || !r.down.rules.is_empty() || r.native.is_some())
+    }
+
     /// Records that rules of `owner` depend on each symbol of `on`.
     fn depend(&mut self, on: &[Symbol], owner: Symbol) {
         for &s in on {

@@ -200,3 +200,36 @@ fn settings_are_set_both_ways() {
     );
     assert!(!session.context().with_sqrt());
 }
+
+/// `string`, `expr` and `cat` through the session's language hook
+/// (CAS-614): the input form, read back to the same value.
+#[test]
+fn expressions_as_text_and_back() {
+    let mut session = Session::new();
+    assert_eq!(
+        results(&session.run("size(string(x + 1))\ncat(\"aaa\", c, 12*3)")),
+        [Some("5"), Some("\"aaac36\"")]
+    );
+    for text in [
+        "x^2 + 2*x + 1",
+        "[1, x, [2]]",
+        "3/4",
+        "sin(x)/2",
+        "\"ab\"",
+        "f(x, -y)",
+    ] {
+        let outputs = session.run(&format!("expr(string({text}))\n{text}"));
+        let found = results(&outputs);
+        assert!(
+            found[0].is_some() && found[0] == found[1],
+            "{text}: {found:?}"
+        );
+    }
+    // A statement is not read: it stays, with the reader's warning, and
+    // assigns nothing.
+    let outputs = session.run("expr(\"a:=3\")\na");
+    assert_eq!(outputs[0].messages.len(), 1, "{:?}", outputs[0].messages);
+    assert_eq!(outputs[0].messages[0].level, Level::Warning);
+    assert!(results(&outputs)[0].is_some_and(|t| t.starts_with("expr(")));
+    assert_eq!(results(&outputs)[1], Some("a"));
+}

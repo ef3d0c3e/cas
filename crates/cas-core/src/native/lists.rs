@@ -22,7 +22,7 @@
 //!   comes first, stably. `Reverse` (`revlist`, `reverse`), and `Rotate[l,
 //!   n]` (`rotate`) `n` places to the left, `n = −1` by default, as giac's.
 //! - **Joining and slicing**: `Join` (`concat`), a non-list counting as one
-//!   element; `Append` and `Prepend`; `First` (`head`) and `Rest` (`tail`),
+//!   element, and with no list but a string `Cat`'s text (CAS-614); `Append` and `Prepend`; `First` (`head`) and `Rest` (`tail`),
 //!   which stay on an empty list.
 //! - **Reshaping**: `Flatten` (`flatten`), and `Dimensions` (`dim`), the
 //!   length of a vector and `[rows, columns]` of a matrix.
@@ -49,6 +49,7 @@ use cas_num::ball::Ball;
 pub(super) mod xcas;
 
 use super::approximation;
+use super::text::concatenated;
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
@@ -328,26 +329,14 @@ pub(super) fn rotate(_: &mut Eval<'_>, e: &Expr) -> Native {
 }
 
 /// `Join[a, b, …]`: the elements of the lists and the other arguments, in
-/// a list; of strings only, their concatenation (CAS-612), within the
-/// `terms` limit.
+/// a list; with no list and a string among them, `Cat`'s text (CAS-612,
+/// CAS-614), within the `terms` limit.
 pub(super) fn join(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    if let Some(strings) = e
-        .args()
-        .iter()
-        .map(Expr::as_str)
-        .collect::<Option<Vec<_>>>()
-        && !strings.is_empty()
-    {
-        let length = strings
-            .iter()
-            .try_fold(0usize, |n, s| n.checked_add(s.chars().count()));
-        if length.is_none_or(|n| n > ev.context().limits().terms) {
+    if !e.args().iter().any(is_list) {
+        if !e.args().iter().any(|x| x.as_str().is_some()) {
             return Ok(None);
         }
-        return Ok(Some(Expr::string(&strings.concat())));
-    }
-    if e.args().is_empty() || !e.args().iter().any(is_list) {
-        return Ok(None);
+        return Ok(concatenated(ev, e.args(), "").map(|text| Expr::string(&text)));
     }
     let mut out = Vec::new();
     for x in e.args() {

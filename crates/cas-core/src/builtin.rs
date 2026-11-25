@@ -183,6 +183,10 @@ builtins! {
     STRING_JOIN = "StringJoin" [PROTECTED];
     TRIM = "Trim" [PROTECTED];
     STRIP = "Strip" [PROTECTED];
+    // Expressions as text and back, Xcas's (CAS-614).
+    TO_STRING = "ToString" [PROTECTED];
+    TO_EXPRESSION = "ToExpression" [PROTECTED];
+    CAT = "Cat" [PROTECTED];
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];

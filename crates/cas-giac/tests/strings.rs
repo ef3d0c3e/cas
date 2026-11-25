@@ -194,6 +194,9 @@ fn elsewhere() {
         "concat(\"ab\",\"cd\")",
         "concat(\"a\",\"b\",\"c\")",
         "concat([\"a\"],\"b\")",
+        // Non-strings printed (CAS-614).
+        "join(\",\",[1,2])",
+        "concat(\"a\",1)",
         "\"abc\"[1]",
         "\"abc\"[0]",
         "\"abc\"[-1]",
@@ -281,9 +284,7 @@ fn departures() {
             "GIAC_ERROR: Invalid threshold specification. Error: Bad Argument Value",
             None,
         ),
-        // Non-strings wait for a printer; `+` does not join strings.
-        ("join(\",\",[1,2])", "\"1,2\"", None),
-        ("concat(\"a\",1)", "\"a1\"", None),
+        // `+` does not join strings.
         ("\"ab\"+\"cd\"", "\"abcd\"", None),
     ];
     let collapsed = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
@@ -309,8 +310,6 @@ fn departures() {
                         Symbol::LEVENSHTEIN,
                         Symbol::SPLIT,
                         Symbol::TRIM,
-                        Symbol::STRING_JOIN,
-                        Symbol::JOIN,
                         Symbol::PLUS,
                     ]
                     .contains(&head)

@@ -844,6 +844,10 @@ Split: split
 StringJoin: join
 Trim: trim
 Strip: strip
+# Expressions as text and back (CAS-614), Xcas's.
+ToString: string str
+ToExpression: expr execute
+Cat: cat
 
 [planned]
 
