@@ -316,6 +316,33 @@ after giac's `restart`, ours in a new session, compared value by value:
   `randvar(student,3)` and `randvar(chisquare,3)` (giac's Bad Argument Value;
   ours real and positive decimals).
 
+`tests/markov.rs`, Xcas's Markov chains `markov` and `randmarkov` (CAS-628),
+`markov`'s four lists bracketed into one (C0023):
+- exact rows (10, and three deterministic `randmarkov` paths) agree with
+  giac's: classes in giac's Tarjan order, invariant vectors, transient
+  classes, absorption; columns summing to 1 transposed; any real `eps`;
+- giac's decimals (12 rows) within its 12 digits, or within `eps` = 10⁻³
+  where giac iterates to it; ours exact where the input is, balls on decimal
+  input; rows summing to 1 within giac's `epsilon` 10⁻¹² (off by 10⁻¹³
+  accepted, 10⁻¹⁰ and 10⁻⁶ not, as giac's);
+- invalid calls (18 rows) stay with giac's message as the warning: "Not a
+  stochastic matrix!", Bad Argument Value, Invalid dimension; ours only, the
+  limits ("too many states", "too many draws") and a plot argument, which
+  stays without one;
+- draws, seeded with 42 on both sides (C0014): paths by length, start and
+  steps of positive probability, state 1's share over 10,000 steps within
+  0.03 of 3/5 (giac 6043/10001); `randmarkov(v,nt)` by layout and by
+  `markov`'s classes of the sizes in `v` with `nt` transient states; ours
+  only, a seed repeating draws;
+- departures: giac's floats where ours is exact (`markov([[1]])` giac
+  `[[1.0]]`; absorption `3812798742493/7625597484987` and, with `eps`
+  10⁻³, `2047/4096`, ours 1/2); a transient state feeding a periodic class
+  (`markov([[1,0,0,0],[0,0,1,0],[0,1,0,0],[1/2,1/6,1/3,0]])`), where giac's
+  iteration never ends, ours only; giac's cut-off for a decimal row's sum
+  lies within a few units in the last place of 10⁻¹² (giac keeps fewer bits
+  of its doubles: `0.5+1e-12` accepted, `0.5-1e-12` not), ours exactly
+  10⁻¹² in `f64`; `randmarkov` with a plot argument (giac a graphic) stays.
+
 `tests/tail_probabilities.rs`, Xcas's upper tails `UTPN`, `UTPT`, `UTPC` and
 `UTPF` (CAS-625), and `cdf`, `icdf` and `mgf` of a law by its name, of a
 `randvar` object or of a list (CAS-626):
