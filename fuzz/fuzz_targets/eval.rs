@@ -20,8 +20,8 @@
 
 use arbitrary::{Result, Unstructured};
 use cas_core::{
-    Attributes, Context, Domain, EvalError, EvalOptions, Expr, Limits, STACK_PER_LEVEL, Step,
-    StepKind, Symbol, Trace, TraceLevel,
+    Attributes, Context, Domain, EvalError, EvalOptions, Expr, Integer, Limits, STACK_PER_LEVEL,
+    Step, StepKind, Symbol, Trace, TraceLevel,
 };
 use libfuzzer_sys::fuzz_target;
 
@@ -1181,10 +1181,16 @@ fn check(mut u: Unstructured<'_>, recursion: u32) {
     let Ok(e) = expr(u, 5, &mut room) else {
         return;
     };
+    // Drawing natives advance the context's generator (CAS-628): each
+    // evaluation compared starts from the same seed, so draws repeat.
+    let seed = || ctx.seed_random(&Integer::from(0));
+    seed();
     let plain = ctx.eval(&e);
     if let Ok(r) = &plain {
+        seed();
         assert_eq!(ctx.eval(r).as_ref(), Ok(r), "{e:?} gave {r:?}");
     }
+    seed();
     let (traced, report) = ctx.eval_with(
         &e,
         &EvalOptions {
@@ -1208,6 +1214,7 @@ fn check(mut u: Unstructured<'_>, recursion: u32) {
     // deep level, past the limit. Without caches the input stops there too.
     let limited = limit(&plain);
     if limited && let Ok(t) = &traced {
+        seed();
         assert_eq!(ctx.eval(&e).as_ref(), Ok(t), "{e:?} after a limit");
     } else if !(plain.is_ok() && limit(&traced)) {
         assert_eq!(

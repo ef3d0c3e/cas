@@ -5,7 +5,7 @@
 
 use crate::context::Limits;
 use crate::trace::Warning;
-use crate::{Context, EvalOptions, Expr, Symbol, View};
+use crate::{Context, EvalOptions, Expr, Integer, Symbol, View};
 
 fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
@@ -332,6 +332,18 @@ fn paths() {
         ),
     );
     assert_eq!(twice.args()[1], twice.args()[3]);
+}
+
+/// The fuzz harness's way (CAS-628): `Context::seed_random` before each of
+/// two evaluations repeats the draws of `randmarkov`.
+#[test]
+fn reseeded_draws_repeat() {
+    let ctx = Context::new();
+    let input = read("Table[RandomMarkovChain[x, 1], x, -2, 3]");
+    ctx.seed_random(&Integer::from(0));
+    let first = ctx.eval(&input).unwrap();
+    ctx.seed_random(&Integer::from(0));
+    assert_eq!(ctx.eval(&input).unwrap(), first);
 }
 
 /// `randmarkov(v, nt)`: rows of decimals in `[0, 1]` summing to 1, and
