@@ -4,8 +4,9 @@
 //! giac's shape by a port of the prototype's `parse.py`, and printed as
 //! giac's `latex()` and `export_mathml` did. Lowering: inputs read and
 //! evaluated here, printed through the hook as giac prints its own answer,
-//! except where our answer has another shape or order ("departure:"). The
-//! limits.
+//! except where our answer has another shape or order ("departure:"), and
+//! in giac's `mathml` document (`giac_mathml_doc.tsv`, [`crate::mathml`]).
+//! The limits.
 
 use cas_core::{Context, Expr, Form, Integer, Symbol};
 
@@ -795,6 +796,33 @@ fn answers_in_mathml_as_giac_writes_its_own() {
             if !ok || got != want {
                 failures.push(format!("{kind} {text} ({input}): {got:?}, giac {want:?}"));
             }
+        }
+    }
+    assert!(failures.is_empty(), "{}", failures.join("\n"));
+}
+
+/// giac's `mathml` document of `input` (`giac_mathml_doc.tsv`).
+fn giac_mathml_doc(input: &str) -> &'static str {
+    include_str!("giac_mathml_doc.tsv")
+        .lines()
+        .find_map(|line| match line.split('\t').collect::<Vec<_>>()[..] {
+            [i, _, _, want] if i == input => Some(want),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no mathml row of {input}"))
+}
+
+/// giac's `mathml` (the document, `crate::mathml`) of the same inputs.
+#[test]
+fn answers_in_a_mathml_document_as_giac_writes_its_own() {
+    let context = context();
+    let mut failures = Vec::new();
+    for text in SAME_SHAPE {
+        let want = giac_mathml_doc(text);
+        let (got, input) = printed(&context, text, Form::MathmlDocument);
+        let got = got.replace('\n', " | ");
+        if got != want {
+            failures.push(format!("{text} ({input}): {got:?}, giac {want:?}"));
         }
     }
     assert!(failures.is_empty(), "{}", failures.join("\n"));
