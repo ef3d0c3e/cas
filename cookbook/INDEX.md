@@ -65,3 +65,4 @@ C0062 | Iterative float optimisers with a certified stop: test in balls, one sha
 C0063 | A native applying user functions: Expr::apply + ev.eval, N[] for numbers | native,function,apply,eval,random,seed | 2026-11-24 | 1.5/T7 | T7.c1 CAS-610
 C0064 | Iterated user steps on balls: exact midpoints, or radii compound | ball,radius,random,iteration,native,annealing | 2026-11-24 | 1.5/T7 | T7.c2 CAS-610; CI 45347780940
 C0065 | giac string order is byte order: compare with str::cmp, not Expr's Ord | giac,strings,sort,order,compare | 2026-11-25 | 1.6/T2 | T2.c2 CAS-612 sort on strings
+C0066 | A Context input a cached result depends on: a State field set via state_mut | context,cache,stamps,state-id,hook,settings | 2026-11-25 | 1.6/T3 | T3.c1 725956e
