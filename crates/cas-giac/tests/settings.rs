@@ -125,12 +125,14 @@ fn cas_setup_lists_the_settings() {
         return;
     };
     let ctx = Context::new();
+    // giac's threads (element 7's first) are the host's cores: 12 here, 4
+    // on CI; so its text is not asserted.
     let answer = giac.eval("cas_setup()").unwrap();
-    assert_eq!(answer, "[0,0,0,1,0,[1e-12,1e-15],12,[12,100,0,25],0,1,0,1]");
     let theirs = ours(&answer).unwrap();
     let [mine] = &session_values("cas_setup()")[..] else {
         panic!("one value");
     };
+    assert_eq!(theirs.args().len(), 12, "{answer}");
     assert_eq!(theirs.args().len(), mine.args().len(), "{mine:?}");
     for i in [0, 1, 2, 3, 4, 9, 10, 11] {
         assert_eq!(theirs.args()[i], mine.args()[i], "element {i}: {mine:?}");
