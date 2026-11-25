@@ -187,6 +187,10 @@ builtins! {
     // Wavelet transforms (CAS-634).
     DISCRETE_WAVELET_TRANSFORM = "DiscreteWaveletTransform" [PROTECTED];
     INVERSE_DISCRETE_WAVELET_TRANSFORM = "InverseDiscreteWaveletTransform" [PROTECTED];
+    // Analytic signals (CAS-635).
+    INSTANTANEOUS_FREQUENCY = "InstantaneousFrequency" [PROTECTED];
+    INSTANTANEOUS_PHASE = "InstantaneousPhase" [PROTECTED];
+    EMPIRICAL_MODE_DECOMPOSITION = "EmpiricalModeDecomposition" [PROTECTED];
     // Strings, Xcas's (CAS-611, CAS-613).
     CHAR = "Char" [PROTECTED];
     ASC = "Asc" [PROTECTED];

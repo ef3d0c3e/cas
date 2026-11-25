@@ -897,6 +897,10 @@ Resample: resample
 # Wavelet transforms (CAS-634), Xcas's.
 DiscreteWaveletTransform: dwt
 InverseDiscreteWaveletTransform: idwt
+# Analytic signals (CAS-635), Xcas's.
+InstantaneousFrequency: instfreq
+InstantaneousPhase: instphase
+EmpiricalModeDecomposition: emd
 # Strings (CAS-611, CAS-613), Xcas's.
 Char: char chr
 Asc: asc

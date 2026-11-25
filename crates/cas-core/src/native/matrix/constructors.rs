@@ -96,6 +96,10 @@ pub(in crate::native) fn hilbert_matrix(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let [n] = e.args() else {
         return Ok(None);
     };
+    // A list of numbers: giac's analytic signal (CAS-635).
+    if n.head().and_then(Expr::as_symbol) == Some(Symbol::LIST) {
+        return crate::native::analytic::hilbert(ev, e, n);
+    }
     let Some(n) = size(ev, n) else {
         return Ok(None);
     };

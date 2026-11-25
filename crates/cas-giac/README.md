@@ -467,6 +467,20 @@ exact forms. Five of giac's errors that stay with its message ("Wavelet not
 implemented", "Invalid argument 2" for a bare `haar` and for `centre=true`,
 "Data must be numeric", "Unsupported wavelet type").
 
+`tests/transforms.rs` also holds Xcas's analytic signals `hilbert` on a
+list, `instfreq`, `instphase` and `emd` (CAS-635; giac's answers in
+.run/1.7/T9/giac/p3.out, the prototypes .run/1.7/T9/proto_emd.py and
+proto_analytic.py, emd bit-exact with libgsl through ctypes): 25 rows within
+giac's 12 digits by real and imaginary parts (C0006, C0010): `emd` bracketed
+(C0023), its options, the decimal 41-sample row within giac's noise
+(`5.6e-17` where giac's decimal reading differs from strtod's); `hilbert` of
+exact, decimal and complex lists and `hilbert(3)`; the list forms of
+`instfreq` and `instphase`. Seven expression rows by `Simplify` of the
+difference (C0032; giac's `cos(x)^2+sin(x)^2` and `floor(1/2)` are ours
+closed), else by values at two points. Departures: `emd([x,1,2])` stays with
+"Data must be numeric", three options giac refuses stay, and
+`hilbert(sin(t),t)` (giac's `-cos(t)`) stays.
+
 `tests/tail_probabilities.rs`, Xcas's upper tails `UTPN`, `UTPT`, `UTPC` and
 `UTPF` (CAS-625), and `cdf`, `icdf` and `mgf` of a law by its name, of a
 `randvar` object or of a list (CAS-626):

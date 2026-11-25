@@ -12,6 +12,7 @@
     reason = "natives share the `NativeFn` signature, which can fail"
 )]
 
+mod analytic;
 mod arith;
 mod ball;
 mod bessel;
@@ -188,6 +189,15 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (
             Symbol::INVERSE_DISCRETE_WAVELET_TRANSFORM,
             wavelet::transform,
+        ),
+        (
+            Symbol::INSTANTANEOUS_FREQUENCY,
+            analytic::instantaneous_frequency,
+        ),
+        (Symbol::INSTANTANEOUS_PHASE, analytic::instantaneous_phase),
+        (
+            Symbol::EMPIRICAL_MODE_DECOMPOSITION,
+            analytic::empirical_mode_decomposition,
         ),
         (Symbol::CHAR, strings::char),
         (Symbol::ASC, strings::asc),

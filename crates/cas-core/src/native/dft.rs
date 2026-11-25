@@ -37,13 +37,13 @@ use crate::trace::Warning;
 type Native = Result<Option<Expr>, EvalError>;
 
 /// The longest list transformed by the direct sum: `n²` products.
-const MAX_DIRECT: usize = 1 << 11;
+pub(in crate::native) const MAX_DIRECT: usize = 1 << 11;
 
 /// The longest list transformed modulo a prime, by the direct sum.
 const MAX_MODULAR: usize = 1 << 12;
 
 /// The longest power of 2 transformed.
-const MAX_RADIX_TWO: usize = 1 << 20;
+pub(in crate::native) const MAX_RADIX_TWO: usize = 1 << 20;
 
 fn warn(ev: &mut Eval<'_>, e: &Expr, message: String) {
     ev.warn(Warning::Native {
@@ -53,7 +53,7 @@ fn warn(ev: &mut Eval<'_>, e: &Expr, message: String) {
 }
 
 /// A number as a complex ball at `prec` bits.
-fn ball(x: &Expr, prec: u64) -> Option<ComplexBall> {
+pub(in crate::native) fn ball(x: &Expr, prec: u64) -> Option<ComplexBall> {
     match x.view() {
         View::Ball(b) => Some(ComplexBall::from_real(b.clone())),
         View::ComplexBall(z) => Some(z.clone()),
@@ -63,7 +63,7 @@ fn ball(x: &Expr, prec: u64) -> Option<ComplexBall> {
 
 /// A complex ball as an expression, real when its imaginary part is an
 /// exact 0.
-fn number(z: ComplexBall) -> Expr {
+pub(in crate::native) fn number(z: ComplexBall) -> Expr {
     if z.im().is_exact() && *z.im() == Ball::ZERO {
         Expr::from(z.re().clone())
     } else {
@@ -72,7 +72,7 @@ fn number(z: ComplexBall) -> Expr {
 }
 
 /// `ω^m = e^(∓2πi m/n)`, the sign `−` for the transform, for `m < n`.
-fn roots(n: usize, inverse: bool, prec: u64) -> Vec<ComplexBall> {
+pub(in crate::native) fn roots(n: usize, inverse: bool, prec: u64) -> Vec<ComplexBall> {
     let n_i = i64::try_from(n).expect("a length");
     (0..n)
         .map(|m| {
@@ -90,7 +90,11 @@ fn roots(n: usize, inverse: bool, prec: u64) -> Vec<ComplexBall> {
 }
 
 /// The transform of `x` with the roots `w`, by the direct sum.
-fn direct(x: &[ComplexBall], w: &[ComplexBall], prec: u64) -> Vec<ComplexBall> {
+pub(in crate::native) fn direct(
+    x: &[ComplexBall],
+    w: &[ComplexBall],
+    prec: u64,
+) -> Vec<ComplexBall> {
     let n = x.len();
     (0..n)
         .map(|k| {
@@ -105,7 +109,11 @@ fn direct(x: &[ComplexBall], w: &[ComplexBall], prec: u64) -> Vec<ComplexBall> {
 
 /// The transform of `x`, of a length a power of 2, with the roots `w`:
 /// bit-reversed order, then the butterflies.
-fn radix_two(x: &[ComplexBall], w: &[ComplexBall], prec: u64) -> Vec<ComplexBall> {
+pub(in crate::native) fn radix_two(
+    x: &[ComplexBall],
+    w: &[ComplexBall],
+    prec: u64,
+) -> Vec<ComplexBall> {
     let n = x.len();
     let bits = n.trailing_zeros();
     let mut a: Vec<ComplexBall> = (0..n)

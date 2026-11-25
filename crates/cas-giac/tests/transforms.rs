@@ -209,3 +209,183 @@ fn errors_stay() {
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+/// Each entry's real and imaginary parts, so [`near`] compares complex
+/// values by parts (C0010, C0013).
+fn by_parts(e: &Expr) -> Expr {
+    let parts = leaves(e).into_iter().flat_map(|x| {
+        [
+            Expr::call(Symbol::RE, [x.clone()]),
+            Expr::call(Symbol::IM, [x]),
+        ]
+    });
+    Expr::call(Symbol::LIST, parts.collect::<Vec<_>>())
+}
+
+/// Each input: giac's answer, read back, is this CAS's value within giac's
+/// error, entry by entry and part by part.
+fn check_parts(inputs: &[&str]) {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in inputs {
+        match (giac.value(input), ours(input)) {
+            (Ok(theirs), Ok(mine)) if near(&ctx, &by_parts(&theirs), &by_parts(&mine)) => {}
+            (theirs, mine) => wrong.push(format!("{input}: ours {mine:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// giac's analytic signals (CAS-635, `.run/1.7/T9/giac/p3.out`, the
+/// prototypes `proto_emd.py` and `proto_analytic.py`, logs/T9.c3.md): `emd`
+/// bracketed, its answer a sequence (C0023); the decimal 41-sample row
+/// within giac's noise (`5.6·10⁻¹⁷` where its decimals differ from strtod's).
+#[test]
+fn analytic_signals() {
+    check_parts(&[
+        "[emd([0,1,0,-1,0,1,0,-1,0,1,0,-1,0])]",
+        "[emd([0,0.289739961672,0.395600889145,0.805274305596,0.680499109408,\
+         1.1440709714,0.772198812573,1.23498263843,0.637623918224,1.06498597541,\
+         0.302062656876,0.681634550085,-0.156413647973,0.180943481355,\
+         -0.625739692064,-0.316290261382,-0.987278893705,-0.693920605476,\
+         -1.14516683232,-0.868443362401,-1.05036746099,-0.808727783336,\
+         -0.713505671778,-0.542714521634,-0.20326848937,-0.14951370717,\
+         0.369313524884,0.261077675498,0.876943694741,0.576535528022,\
+         1.20619897585,0.71011413673,1.28443457025,0.622842159983,\
+         1.09693515003,0.333563368693,0.690164036867,-0.0854759492027,\
+         0.160342996143,-0.526428575903,-0.369837755626])]",
+        "[emd([1,2,3,4])]",
+        "[emd([1,2,1,3,1,2,1,3,1])]",
+        "[emd([1,2,1,3,1,2,1,3,1],threshold=0.5)]",
+        "[emd([1,2,1,3,1,2,1,3,1],limit=1)]",
+        "[emd([1,2,1,3,1,2,1,3,1],extrema=6)]",
+        "[emd([1,2,1,3,1,2,1,3,1],extrema=7)]",
+        "[emd([1/2,2,1,3,1.5,2,1,3,1])]",
+        "[emd([5])]",
+        "hilbert([1,0,0,0])",
+        "hilbert([0.7,0.2,-0.5,-0.6,-0.2,0.3,0.5,-0.1,-0.3])",
+        "hilbert([1,2,3])",
+        "hilbert([1,i,0])",
+        "hilbert(3)",
+        "instfreq(hilbert([0.7,0.2,-0.5,-0.6,-0.2,0.3,0.5,-0.1,-0.3]))",
+        "instphase(hilbert([0.7,0.2,-0.5,-0.6,-0.2,0.3,0.5,-0.1,-0.3]))",
+        "instfreq([1,i,-1,-i])",
+        "instphase([1,i,-1,-i])",
+        "instfreq([1,exp(i/2),exp(i)])",
+        "instphase([1,exp(i),exp(2*i),exp(3*i)])",
+        "instfreq([1,2])",
+        "instfreq([1])",
+        "instphase([])",
+        "instphase([1.0,-1.0,1.0])",
+    ]);
+}
+
+/// Whether `Simplify[a − b]` is 0 (C0032, `Simplify` for giac's
+/// `cos²+sin²`), else whether `a` and `b` agree within [`near`] at `x = t =
+/// 7/10` and `13/10`.
+fn same_function(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    let gap = Expr::call(
+        Symbol::SIMPLIFY,
+        [Expr::call(
+            Symbol::PLUS,
+            [a.clone(), Expr::from(-1) * b.clone()],
+        )],
+    );
+    if ctx.eval(&gap).is_ok_and(|g| g == Expr::from(0)) {
+        return true;
+    }
+    [7, 13].into_iter().all(|k| {
+        let v = Expr::from(k) / Expr::from(10);
+        let rule = |s: &str| Expr::call(Symbol::RULE, [Expr::from(Symbol::new(s)), v.clone()]);
+        let at = |f: &Expr| {
+            Expr::call(
+                Symbol::REPLACE_ALL,
+                [f.clone(), Expr::call(Symbol::LIST, [rule("x"), rule("t")])],
+            )
+        };
+        near(ctx, &at(a), &at(b))
+    })
+}
+
+/// giac's expression forms of `instfreq` and `instphase` (p3.out): its
+/// `cos²+sin²` and `floor(1/2)` are ours closed.
+#[test]
+fn analytic_expressions() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let mut wrong = Vec::new();
+    for input in [
+        "instfreq(exp(i*x^2),x)",
+        "instphase(exp(i*x^2),x)",
+        "instfreq(exp(2*i*x))",
+        "instphase(exp(2*i*x))",
+        "instfreq(cos(x)+i*sin(x),x)",
+        "instphase(cos(t)+i*sin(t),t)",
+        "instfreq(exp(i*t^3),t)",
+    ] {
+        match (giac.value(input), ours(input)) {
+            (Ok(theirs), Ok(mine)) if same_function(&ctx, &mine, &theirs) => {}
+            (theirs, mine) => wrong.push(format!("{input}: ours {mine:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Departures (p3.out): `emd` of symbolic data stays with giac's message as
+/// the warning; `emd`'s options giac refuses stay; giac's transform of an
+/// expression, `hilbert(sin(t),t)` = `-cos(t)`, is not ported: it stays.
+#[test]
+fn analytic_departures() {
+    let giac = giac();
+    let mut wrong = Vec::new();
+    let refused = [
+        "emd([x,1,2])",
+        "emd([1,2,1,3,1,2,1,3,1],extrema=1)",
+        "emd([1,2,1,3,1,2,1,3,1],threshold=-1)",
+        "emd([1,2,1,3,1,2,1,3,1],residue=0)",
+    ];
+    for input in refused {
+        if let Some(giac) = giac {
+            let printed = giac.eval(input).unwrap_or_default();
+            if !printed.starts_with("GIAC_ERROR") {
+                wrong.push(format!("{input}: giac prints {printed}, recorded an error"));
+            }
+        }
+    }
+    for input in [refused[0], "hilbert(sin(t),t)"] {
+        if let Some(giac) = giac {
+            let printed = giac.eval(input).unwrap_or_default();
+            let recorded = if input == refused[0] {
+                "GIAC_ERROR: Data must be numeric Error: Bad Argument Value"
+            } else {
+                "-cos(t)"
+            };
+            if collapsed(&printed) != recorded {
+                wrong.push(format!(
+                    "{input}: giac prints {printed}, recorded {recorded}"
+                ));
+            }
+        }
+    }
+    for input in refused.iter().chain(&["hilbert(sin(t),t)"]) {
+        let stays = evaluated(input).is_some_and(|(e, found, warnings)| {
+            found.head() == e.head()
+                && (*input != refused[0]
+                    || warnings.iter().any(|w| {
+                        matches!(w, Warning::Native { message: m, .. } if m == "Data must be numeric")
+                    }))
+        });
+        if !stays {
+            wrong.push(format!(
+                "{input}: ours {:?}, wanted the call",
+                evaluated(input)
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
