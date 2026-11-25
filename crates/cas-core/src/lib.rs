@@ -63,7 +63,7 @@ pub use assume::{Domain, Sign, Truth};
 pub use attributes::Attributes;
 pub use cas_num::{Complex, Integer, Rational};
 pub use context::{
-    Context, ContextError, DEFAULT_WORKING_PRECISION, EvalError, Interrupt, Limits, StateId,
+    Angle, Context, ContextError, DEFAULT_WORKING_PRECISION, EvalError, Interrupt, Limits, StateId,
 };
 pub use eval::{Eval, NativeFn, STACK_PER_LEVEL};
 pub use expr::{Expr, View};

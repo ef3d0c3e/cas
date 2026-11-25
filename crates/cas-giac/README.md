@@ -193,9 +193,9 @@ by the reduced basis (giac's 0 for `x^2` in `(x+y,x-y)`), `gbasis_vars`'
 ties in the evaluated order and its symbols only (`sin(x)`), `syzygy`
 with variables (giac's `[1]`), giac's syzygies of `[x-1,x^2-1]` (missing
 one) and `[x^2,x*y,y^2]` (not the minimal ones), another separating form
-for `[x^2-1,y^2-1]`, and the calls of giac's F4 knobs
-(`gbasis_max_pairs`, `gbasis_simult_primes`, `gbasis_reinject`,
-`rur_gbasis`, `rur_certify`) staying.
+for `[x^2-1,y^2-1]`, and the calls of giac's F4 knobs `gbasis_reinject`
+and `rur_gbasis` staying (`gbasis_max_pairs`, `gbasis_simult_primes` and
+`rur_certify` are settings, in `tests/settings.rs`).
 
 `tests/all_trig_solutions.rs` and `tests/with_sqrt.rs`, giac's settings
 (CAS-545), one setting a file, as giac's instance is shared by the tests of
@@ -212,6 +212,27 @@ a file and giac's input sets and resets it within one call:
 - the departures: giac's `increasing_power` changes printing and is left for
   phase 1.6 (CAS-546); a setting's bare name reads its value here, 0 or 1,
   where giac gives the symbol.
+
+`tests/settings.rs`, Xcas's settings of phase 1.6 (CAS-617, CAS-618), each
+input setting and resetting within one call, ours run in a session and
+compared value by value with giac's sequence:
+- read by name (`approx_mode`, `complex_variables`, `angle_radian`,
+  `epsilon` within giac's printed digits) and by `name()`, set by `name(v)`
+  or `name := v` (`approx_mode`, `complex_mode`, `keep_algext`,
+  `increasing_power`, `angle_radian(0)`, `epsilon:=1e-6`);
+- giac's answers of `rur_certify(1)` (0), `gbasis_max_pairs(100)` and
+  `gbasis_simult_primes(4)` (the old values, 32768 and 20; solve.cc);
+- `cas_setup()` element by element, but its `Digits`, its threads and
+  recursion list and its `increasing_power` (departures), and
+  `cas_setup([0,0,0])` staying where giac refuses it (Invalid dimension);
+- the departures, with giac's text: the bare names `complex_mode`,
+  `keep_algext`, `increasing_power`, `eval_level`, `autosimplify` (giac the
+  symbol, ours the value); `approx_mode:=1` (giac's library leaves
+  `1/3+sqrt(2)` exact, ours a decimal); `autosimplify(factor)` (giac leaves
+  `x^2-1`, ours factors); `eval_level(1)` (giac evaluates once, ours to a
+  fixpoint); `autosimplify()` (giac's `regroup`, ours none, 0); and giac's
+  `xcas_mode(0)`, `maple_mode(0)`, `python_compat(0)`, not builtins here
+  (CAS-DOC-7's one grammar): the calls stay.
 
 `tests/complex_solving.rs`, complex roots by number and real roots
 (CAS-536, CAS-537):

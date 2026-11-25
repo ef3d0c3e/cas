@@ -1007,3 +1007,51 @@ fn algebraic_substitution() {
         assert_eq!(zero, Expr::from(0), "{input}: {got:?}");
     }
 }
+
+/// Xcas's settings read by name from the context, and `CasSetup[]`, giac's
+/// `cas_setup()` (CAS-617, CAS-618).
+#[test]
+fn settings_read_the_context() {
+    check(&[
+        ("ApproxMode", "0"),
+        ("ComplexMode", "0"),
+        ("ComplexVariables", "0"),
+        ("AngleRadian", "1"),
+        ("KeepAlgext", "0"),
+        ("IncreasingPower", "1"),
+        ("EvalLevel", "25"),
+        ("AutoSimplify", "0"),
+        ("RurCertify", "1"),
+        ("GbasisMaxPairs", "32768"),
+        ("GbasisSimultPrimes", "20"),
+        ("CasSetup[1]", "CasSetup[1]"),
+    ]);
+    let mut ctx = Context::new();
+    let epsilon = ctx.eval(&Expr::from(Symbol::EPSILON)).unwrap();
+    let View::Ball(epsilon) = epsilon.view() else {
+        panic!("epsilon is not a decimal: {epsilon:?}");
+    };
+    assert_eq!(epsilon.mid().to_f64().to_bits(), 1e-12_f64.to_bits());
+    ctx.set_angle(crate::Angle::Degree);
+    ctx.set_autosimplify(Some(Expr::from(Symbol::FACTOR)));
+    ctx.set_complex_variables(true);
+    ctx.set_rur_certify(-1);
+    assert_eq!(
+        ctx.eval(&read(
+            "List[AngleRadian, AutoSimplify, ComplexVariables, RurCertify]"
+        )),
+        Ok(read("List[0, Factor, 1, 0]"))
+    );
+    let setup = ctx.eval(&read("CasSetup[]")).unwrap();
+    let digits = ctx.eval(&Expr::from(Symbol::DIGITS)).unwrap();
+    let recursion = i64::from(ctx.limits().recursion);
+    let expected =
+        format!("List[0, 1, 0, 0, 0, List[], 1, List[1, {recursion}, 0, 25], 1, 1, 0, 1]");
+    let mut found = setup.args().to_vec();
+    assert_eq!(found.len(), 12, "{setup:?}");
+    assert_eq!(found[6], digits);
+    assert_eq!(found[5].args().len(), 2, "{setup:?}");
+    found[5] = read("List[]");
+    found[6] = Expr::from(1);
+    assert_eq!(Expr::call(Symbol::LIST, found), read(&expected));
+}

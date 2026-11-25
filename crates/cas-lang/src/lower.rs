@@ -451,11 +451,26 @@ impl Lowerer<'_> {
     }
 
     /// The setting `node` names, which an assignment sets: `Digits`,
-    /// `all_trig_solutions` or `with_sqrt`.
+    /// `all_trig_solutions`, `with_sqrt`, or one of phase 1.6's
+    /// (CAS-617, CAS-618), `approx_mode` … `gbasis_simult_primes`.
     fn setting(&self, node: &SyntaxNode) -> Option<Symbol> {
         match self.target(node)? {
             &Target::Builtin(
-                s @ (Symbol::DIGITS | Symbol::ALL_TRIG_SOLUTIONS | Symbol::WITH_SQRT),
+                s @ (Symbol::DIGITS
+                | Symbol::ALL_TRIG_SOLUTIONS
+                | Symbol::WITH_SQRT
+                | Symbol::APPROX_MODE
+                | Symbol::COMPLEX_MODE
+                | Symbol::COMPLEX_VARIABLES
+                | Symbol::ANGLE_RADIAN
+                | Symbol::KEEP_ALGEXT
+                | Symbol::INCREASING_POWER
+                | Symbol::EPSILON
+                | Symbol::EVAL_LEVEL
+                | Symbol::AUTO_SIMPLIFY
+                | Symbol::RUR_CERTIFY
+                | Symbol::GBASIS_MAX_PAIRS
+                | Symbol::GBASIS_SIMULT_PRIMES),
             ) => Some(s),
             _ => None,
         }
@@ -482,7 +497,8 @@ impl Lowerer<'_> {
         match lhs.kind() {
             // `Digits := n`, the working precision (CAS-151), and the
             // settings `all_trig_solutions := v`, `with_sqrt := v`
-            // (CAS-545), which only the session sets.
+            // (CAS-545) and phase 1.6's (CAS-617, CAS-618), which only the
+            // session sets.
             K::Name if self.setting(&lhs).is_some() => {
                 if self.scope.is_some() {
                     return self.fail(range, LowerErrorKind::DefinitionInBlock);

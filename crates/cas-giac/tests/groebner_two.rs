@@ -200,16 +200,15 @@ fn departures() {
             "[rur,x+2*y,-x^4+10*x^2-9,-4*x^3+20*x,-4*x^2-12,-8*x^2+24]",
         ),
         // Knobs of giac's modular F4 engine; ours is Buchberger over ℚ
-        // (CAS-542): the calls stay.
-        ("gbasis_max_pairs(4096)", "32768", "gbasis_max_pairs(4096)"),
-        ("gbasis_simult_primes(16)", "20", "gbasis_simult_primes(16)"),
+        // (CAS-542): the calls stay. `gbasis_max_pairs`,
+        // `gbasis_simult_primes` and `rur_certify` are settings, answered
+        // in a session (tests/settings.rs, CAS-618).
         (
             "gbasis_reinject(0.1,0.05)",
             "[0.2,0.125]",
             "gbasis_reinject(0.1,0.05)",
         ),
         ("rur_gbasis(0)", "-1", "rur_gbasis(0)"),
-        ("rur_certify(1)", "0", "rur_certify(1)"),
     ];
     let mut wrong = Vec::new();
     for (input, answer, decided) in cases {

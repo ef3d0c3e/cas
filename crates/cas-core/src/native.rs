@@ -66,6 +66,7 @@ mod rounding;
 mod rsolve;
 mod series;
 mod sets;
+mod settings;
 mod signal;
 mod simplify;
 mod solve;
@@ -1207,6 +1208,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::REPLACE, replace::replace),
         (Symbol::REPLACE_REPEATED, replace::replace_repeated),
         (Symbol::MATCH_Q, replace::match_q),
+        (Symbol::CAS_SETUP, settings::cas_setup),
     ];
     let mut table: [Option<NativeFn>; builtin::COUNT] = [None; builtin::COUNT];
     let mut i = 0;
@@ -1222,19 +1224,13 @@ pub(crate) fn get(s: Symbol) -> Option<NativeFn> {
     NATIVES.get(s.id() as usize).copied().flatten()
 }
 
-/// The value of a builtin symbol: `I` is the complex number `i` (CAS-51).
+/// The value of a builtin symbol: `I` is the complex number `i` (CAS-51),
+/// a setting's name its value in the context.
 pub(crate) fn value(context: &Context, s: Symbol) -> Option<Expr> {
     match s {
         Symbol::I => Some(build::i()),
-        // CAS-151.
-        Symbol::DIGITS => {
-            let digits = crate::print::shown_digits(context.working_precision());
-            Some(Expr::from(i64::try_from(digits).unwrap_or(i64::MAX)))
-        }
-        // CAS-545.
-        Symbol::ALL_TRIG_SOLUTIONS => Some(Expr::from(i64::from(context.all_trig_solutions()))),
-        Symbol::WITH_SQRT => Some(Expr::from(i64::from(context.with_sqrt()))),
-        _ => None,
+        // The settings (CAS-151, CAS-545, CAS-617, CAS-618).
+        _ => settings::value(context, s),
     }
 }
 

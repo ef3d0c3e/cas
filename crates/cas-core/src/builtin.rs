@@ -866,6 +866,22 @@ builtins! {
     // read as 0 or 1; the session sets them (CAS-545).
     ALL_TRIG_SOLUTIONS = "AllTrigSolutions" [PROTECTED];
     WITH_SQRT = "WithSqrt" [PROTECTED];
+    // Xcas's settings of phase 1.6 (CAS-617, CAS-618), read from the context
+    // by name; the session sets them. `CasSetup[]` lists them, as giac's
+    // `cas_setup()`.
+    APPROX_MODE = "ApproxMode" [PROTECTED];
+    COMPLEX_MODE = "ComplexMode" [PROTECTED];
+    COMPLEX_VARIABLES = "ComplexVariables" [PROTECTED];
+    ANGLE_RADIAN = "AngleRadian" [PROTECTED];
+    KEEP_ALGEXT = "KeepAlgext" [PROTECTED];
+    INCREASING_POWER = "IncreasingPower" [PROTECTED];
+    EPSILON = "Epsilon" [PROTECTED];
+    EVAL_LEVEL = "EvalLevel" [PROTECTED];
+    AUTO_SIMPLIFY = "AutoSimplify" [PROTECTED];
+    CAS_SETUP = "CasSetup" [PROTECTED];
+    RUR_CERTIFY = "RurCertify" [PROTECTED];
+    GBASIS_MAX_PAIRS = "GbasisMaxPairs" [PROTECTED];
+    GBASIS_SIMULT_PRIMES = "GbasisSimultPrimes" [PROTECTED];
     // Logical values, infinities and nothing (CAS-DOC-4 §6.1, R14).
     TRUE = "True" [PROTECTED];
     FALSE = "False" [PROTECTED];

@@ -2,8 +2,14 @@
 //!
 //! Besides values, rules, attributes and assumptions, a context holds the
 //! settings evaluation reads: the working precision (Xcas's `Digits`),
-//! `all_trig_solutions` and `with_sqrt` (CAS-545), which the session sets,
-//! and the [`Language`] natives print and read text with (CAS-614).
+//! `all_trig_solutions` and `with_sqrt` (CAS-545), Xcas's settings of
+//! phase 1.6 (CAS-617, CAS-618), which the session sets, and the
+//! [`Language`] natives print and read text with (CAS-614).
+//!
+//! Of those settings, `keep_algext`, `eval_level`, `rur_certify`,
+//! `gbasis_max_pairs` and `gbasis_simult_primes` are stored only: this CAS
+//! evaluates to a fixpoint, and its Gröbner bases and rational univariate
+//! representations are exact, so nothing reads them.
 
 use std::fmt;
 use std::num::NonZeroU64;
@@ -124,6 +130,7 @@ struct WarnedTable {
 /// of one map, never a whole map: a session that keeps each state it passes
 /// through loads n definitions in O(n log n).
 #[derive(Clone)]
+#[allow(clippy::struct_excessive_bools, reason = "Xcas's settings are flags")]
 struct State {
     values: SymbolMap<Expr>,
     /// User symbols only; builtin attributes are fixed.
@@ -146,10 +153,46 @@ struct State {
     /// Xcas's `with_sqrt` (CAS-545): `Factor` splits quadratics over
     /// square roots.
     with_sqrt: bool,
+    /// Xcas's `approx_mode` (CAS-617): results shown as decimals.
+    approx_mode: bool,
+    /// Xcas's `complex_mode` (CAS-617): solving and factoring over ℂ.
+    complex_mode: bool,
+    /// Xcas's `angle_radian` (CAS-617): the unit of the trigonometric
+    /// functions.
+    angle: Angle,
+    /// Xcas's `keep_algext` (CAS-618): stored only.
+    keep_algext: bool,
+    /// Xcas's `increasing_power` (CAS-617): polynomials printed by
+    /// increasing degree, as this CAS's canonical order does: true by
+    /// default, where giac's is false.
+    increasing_power: bool,
+    /// Xcas's `epsilon` (CAS-617): what counts as 0 among decimals.
+    epsilon: f64,
+    /// Xcas's `eval_level` (CAS-618): stored only.
+    eval_level: u64,
+    /// Xcas's `autosimplify` (CAS-617): the command each result of the
+    /// session goes through, none by default (giac's is `regroup`).
+    autosimplify: Option<Expr>,
+    /// giac's `rur_certify` (CAS-618), as giac stores it: stored only.
+    rur_certify: i64,
+    /// giac's `gbasis_max_pairs` (CAS-618): stored only.
+    gbasis_max_pairs: i64,
+    /// giac's `gbasis_simult_primes` (CAS-618): stored only.
+    gbasis_simult_primes: i64,
     /// The surface language (CAS-614), in the state so that setting it
     /// gives a new id: nothing cached under one hook is reused under
     /// another.
     language: Option<Arc<dyn Language>>,
+}
+
+/// The unit of angles, Xcas's `angle_radian` (CAS-617): giac's codes, 0
+/// degrees, 1 radians, 2 grads.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Angle {
+    Degree = 0,
+    #[default]
+    Radian = 1,
+    Grad = 2,
 }
 
 /// The working precision of a new context: 53 bits, a double's.
@@ -169,6 +212,17 @@ impl Default for State {
             strict_comparisons: false,
             all_trig_solutions: false,
             with_sqrt: true,
+            approx_mode: false,
+            complex_mode: false,
+            angle: Angle::Radian,
+            keep_algext: false,
+            increasing_power: true,
+            epsilon: 1e-12,
+            eval_level: 25,
+            autosimplify: None,
+            rur_certify: 0,
+            gbasis_max_pairs: 32768,
+            gbasis_simult_primes: 20,
             language: None,
         }
     }
@@ -638,6 +692,147 @@ impl Context {
     /// Sets [`Context::with_sqrt`].
     pub fn set_with_sqrt(&mut self, on: bool) {
         self.state_mut().with_sqrt = on;
+    }
+
+    /// Whether results are shown as decimals, Xcas's `approx_mode`
+    /// (CAS-617): false by default.
+    #[must_use]
+    pub fn approx_mode(&self) -> bool {
+        self.state.approx_mode
+    }
+
+    /// Sets [`Context::approx_mode`].
+    pub fn set_approx_mode(&mut self, on: bool) {
+        self.state_mut().approx_mode = on;
+    }
+
+    /// Whether solving and factoring work over ℂ, Xcas's `complex_mode`
+    /// (CAS-617): false by default.
+    #[must_use]
+    pub fn complex_mode(&self) -> bool {
+        self.state.complex_mode
+    }
+
+    /// Sets [`Context::complex_mode`].
+    pub fn set_complex_mode(&mut self, on: bool) {
+        self.state_mut().complex_mode = on;
+    }
+
+    /// Whether symbols without facts are complex, Xcas's
+    /// `complex_variables` (CAS-617): the domain, real by default.
+    #[must_use]
+    pub fn complex_variables(&self) -> bool {
+        self.state.domain == Domain::Complex
+    }
+
+    /// Sets [`Context::complex_variables`]: the domain.
+    pub fn set_complex_variables(&mut self, on: bool) {
+        self.set_domain(if on { Domain::Complex } else { Domain::Real });
+    }
+
+    /// The unit of angles, Xcas's `angle_radian` (CAS-617): radians by
+    /// default.
+    #[must_use]
+    pub fn angle(&self) -> Angle {
+        self.state.angle
+    }
+
+    /// Sets [`Context::angle`].
+    pub fn set_angle(&mut self, angle: Angle) {
+        self.state_mut().angle = angle;
+    }
+
+    /// Xcas's `keep_algext` (CAS-618), stored only: false by default.
+    #[must_use]
+    pub fn keep_algext(&self) -> bool {
+        self.state.keep_algext
+    }
+
+    /// Sets [`Context::keep_algext`].
+    pub fn set_keep_algext(&mut self, on: bool) {
+        self.state_mut().keep_algext = on;
+    }
+
+    /// Whether polynomials print by increasing degree, Xcas's
+    /// `increasing_power` (CAS-617): true by default, this CAS's
+    /// canonical order.
+    #[must_use]
+    pub fn increasing_power(&self) -> bool {
+        self.state.increasing_power
+    }
+
+    /// Sets [`Context::increasing_power`].
+    pub fn set_increasing_power(&mut self, on: bool) {
+        self.state_mut().increasing_power = on;
+    }
+
+    /// What counts as 0 among decimals, Xcas's `epsilon` (CAS-617): 1e-12
+    /// by default.
+    #[must_use]
+    pub fn epsilon(&self) -> f64 {
+        self.state.epsilon
+    }
+
+    /// Sets [`Context::epsilon`], a positive finite number.
+    pub fn set_epsilon(&mut self, epsilon: f64) {
+        self.state_mut().epsilon = epsilon;
+    }
+
+    /// Xcas's `eval_level` (CAS-618), stored only: 25 by default.
+    #[must_use]
+    pub fn eval_level(&self) -> u64 {
+        self.state.eval_level
+    }
+
+    /// Sets [`Context::eval_level`].
+    pub fn set_eval_level(&mut self, level: u64) {
+        self.state_mut().eval_level = level;
+    }
+
+    /// The command the session applies to each result, Xcas's
+    /// `autosimplify` (CAS-617): none by default.
+    #[must_use]
+    pub fn autosimplify(&self) -> Option<&Expr> {
+        self.state.autosimplify.as_ref()
+    }
+
+    /// Sets [`Context::autosimplify`].
+    pub fn set_autosimplify(&mut self, command: Option<Expr>) {
+        self.state_mut().autosimplify = command;
+    }
+
+    /// giac's `rur_certify` as giac stores it (CAS-618), stored only: 0 by
+    /// default; `rur_certify()` reads one more.
+    #[must_use]
+    pub fn rur_certify(&self) -> i64 {
+        self.state.rur_certify
+    }
+
+    /// Sets [`Context::rur_certify`].
+    pub fn set_rur_certify(&mut self, n: i64) {
+        self.state_mut().rur_certify = n;
+    }
+
+    /// giac's `gbasis_max_pairs` (CAS-618), stored only: 32768 by default.
+    #[must_use]
+    pub fn gbasis_max_pairs(&self) -> i64 {
+        self.state.gbasis_max_pairs
+    }
+
+    /// Sets [`Context::gbasis_max_pairs`].
+    pub fn set_gbasis_max_pairs(&mut self, n: i64) {
+        self.state_mut().gbasis_max_pairs = n;
+    }
+
+    /// giac's `gbasis_simult_primes` (CAS-618), stored only: 20 by default.
+    #[must_use]
+    pub fn gbasis_simult_primes(&self) -> i64 {
+        self.state.gbasis_simult_primes
+    }
+
+    /// Sets [`Context::gbasis_simult_primes`].
+    pub fn set_gbasis_simult_primes(&mut self, n: i64) {
+        self.state_mut().gbasis_simult_primes = n;
     }
 
     /// The language natives print and read text with (CAS-614): none in a

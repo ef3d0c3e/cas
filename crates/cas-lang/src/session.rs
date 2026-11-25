@@ -16,7 +16,25 @@
 //! - `Digits := n` sets the working precision (CAS-151), and
 //!   `all_trig_solutions := v`, `with_sqrt := v` or giac's calls
 //!   `all_trig_solutions(v)`, `with_sqrt(v)` the context's flags, `v` 0 or
-//!   1 (CAS-545).
+//!   1 (CAS-545);
+//! - Xcas's settings of phase 1.6 (CAS-617, CAS-618) are set the same ways,
+//!   `name := v` or `name(v)`, and `name()` reads one: `approx_mode`,
+//!   `complex_mode`, `complex_variables` (the domain), `keep_algext`,
+//!   `increasing_power` (0 or 1), `angle_radian` (0 degrees, 1 radians, 2
+//!   grads), `epsilon` (a positive number), `eval_level` (a positive
+//!   integer), `autosimplify` (0 none, 1 `regroup`, 2 `simplify`, or a
+//!   command's name; it answers 1), and giac's `rur_certify`,
+//!   `gbasis_max_pairs`, `gbasis_simult_primes`, answered as giac does
+//!   (solve.cc). `keep_algext`, `eval_level`, `rur_certify` and the
+//!   `gbasis_*` are stored only: this CAS evaluates to a fixpoint, and its
+//!   Gröbner bases and rational univariate representations are exact.
+//!   `cas_setup(l)`, a list of at least 7 elements or as many arguments,
+//!   sets giac's elements 0 to 10 (`approx_mode`, `complex_variables`,
+//!   `complex_mode`, `angle_radian`, -, `epsilon`, `Digits`, `[…,
+//!   eval_level]`, `increasing_power`, `with_sqrt`, `all_trig_solutions`)
+//!   and answers `l`; `cas_setup()` lists them;
+//! - an expression's result goes through the `autosimplify` command when
+//!   one is set, then `N` when `approx_mode` is 1.
 //!
 //! Each statement gives an [`Output`]: the result unless `;` follows it or
 //! it is a definition, and [`Message`]s: the parser's and lowering's
@@ -32,13 +50,15 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use cas_core::{
-    Attributes, Context, DefineError, EvalError, EvalOptions, Expr, Interrupt, Limits, Symbol, View,
+    Angle, Attributes, Context, DefineError, EvalError, EvalOptions, Expr, Interrupt, Limits,
+    Symbol, View,
 };
+use cas_num::ball::Ball;
 
 use crate::hook::Hook;
 use crate::literal::decimal_balls;
 use crate::lower::{Fix, Severity, Statement, lower};
-use crate::names::{Names, unescape_name};
+use crate::names::{Names, Target, unescape_name};
 use crate::parser::parse;
 use crate::print::{Balls, print_with};
 
@@ -46,6 +66,22 @@ use crate::print::{Balls, print_with};
 /// cas-core's do: a larger one could take long, sharing parts that its text
 /// repeats.
 const MAX_WRITTEN: u32 = 1000;
+
+/// The settings `cas_setup(l)` sets, at giac's positions in `l` (prog.cc):
+/// `Null` for the one ignored.
+const CAS_SETUP: [Symbol; 11] = [
+    Symbol::APPROX_MODE,
+    Symbol::COMPLEX_VARIABLES,
+    Symbol::COMPLEX_MODE,
+    Symbol::ANGLE_RADIAN,
+    Symbol::NULL,
+    Symbol::EPSILON,
+    Symbol::DIGITS,
+    Symbol::EVAL_LEVEL,
+    Symbol::INCREASING_POWER,
+    Symbol::WITH_SQRT,
+    Symbol::ALL_TRIG_SOLUTIONS,
+];
 
 /// A context, the names of the language, and the handle that interrupts
 /// evaluation.
@@ -288,12 +324,22 @@ impl Session {
                 }
             }
             // `all_trig_solutions(v)`, `with_sqrt(v)`: giac's form of
-            // setting them (CAS-545).
-            (Some(s @ (Symbol::ALL_TRIG_SOLUTIONS | Symbol::WITH_SQRT)), [_]) => {
+            // setting them (CAS-545), and of phase 1.6's (CAS-617, CAS-618).
+            (Some(s), [_]) if is_setting(s) => {
                 if let Some(value) = self.evaluate(statement, &[1], out) {
-                    self.set_flag(statement, s, &value, &[1], out);
+                    self.set(statement, s, &value, &[1], out);
                 }
             }
+            // `name()` reads a setting: the head alone would evaluate to
+            // its value before a native could see the call.
+            (Some(s), []) if is_setting(s) => {
+                if !statement.quiet {
+                    if let Ok(value) = self.context.eval(&Expr::from(s)) {
+                        self.show(&value, statement.spans.range(), out);
+                    }
+                }
+            }
+            (Some(Symbol::CAS_SETUP), [_, ..]) => self.cas_setup(statement, out),
             (Some(Symbol::ASSUME), facts) => {
                 for fact in facts {
                     self.context = self.context.assuming(fact.clone());
@@ -309,44 +355,96 @@ impl Session {
                     }
                 }
             }
-            _ => {
-                if let Some(value) = self.evaluate(statement, &[], out) {
-                    if !statement.quiet {
-                        self.show(&value, statement.spans.range(), out);
-                    }
+            _ => self.expression(statement, out),
+        }
+    }
+
+    /// An expression statement: its value, through the `autosimplify`
+    /// command when one is set, then `N` when `approx_mode` is 1
+    /// (CAS-617).
+    fn expression(&mut self, statement: &Statement, out: &mut Output) {
+        let Some(mut value) = self.evaluate(statement, &[], out) else {
+            return;
+        };
+        if statement.quiet {
+            return;
+        }
+        let mut commands = Vec::new();
+        commands.extend(self.context.autosimplify().cloned());
+        if self.context.approx_mode() {
+            commands.push(Expr::from(Symbol::N));
+        }
+        for command in commands {
+            match self.context.eval(&Expr::apply(&command, &[value])) {
+                Ok(next) => value = next,
+                Err(e) => {
+                    out.messages
+                        .push(error(statement.spans.range(), e.to_string()));
+                    return;
                 }
             }
         }
+        self.show(&value, statement.spans.range(), out);
     }
 
-    /// `Digits := n` (CAS-151): the working precision set to the most bits
-    /// that show `n` digits, for the statements after it.
-    fn set_digits(&mut self, statement: &Statement, value: &Expr, out: &mut Output) {
-        let bits = value
-            .as_i64()
-            .and_then(|n| u64::try_from(n).ok())
-            .filter(|&n| n >= 1)
-            .map(cas_core::digits_bits)
-            .filter(|&bits| bits <= self.context.limits().number_bits);
-        let Some(bits) = bits else {
-            let message = format!(
-                "Digits takes a positive integer, up to {}: the decimal digits balls are made and shown with",
-                cas_core::shown_digits(self.context.limits().number_bits)
-            );
-            out.messages
-                .push(error(statement.spans.find(&[2]), message));
-            return;
+    /// `cas_setup(l)`, giac's (prog.cc): `l` a list of at least 7 elements,
+    /// or as many arguments, sets the settings at giac's positions 0 to 10
+    /// and is the answer; others are left to evaluation, where they stay.
+    fn cas_setup(&mut self, statement: &Statement, out: &mut Output) {
+        let args = statement.expr.args();
+        let elements = if let [_] = args {
+            let Some(value) = self.evaluate(statement, &[1], out) else {
+                return;
+            };
+            if !has_head(&value, Symbol::LIST) || value.args().len() < 7 {
+                return self.expression(statement, out);
+            }
+            value
+        } else if args.len() >= 7 {
+            let mut values = Vec::with_capacity(args.len());
+            for i in 1..=args.len() {
+                let Some(value) = self.evaluate(statement, &[i], out) else {
+                    return;
+                };
+                values.push(value);
+            }
+            Expr::call(Symbol::LIST, values)
+        } else {
+            return self.expression(statement, out);
         };
-        self.context.set_working_precision(bits);
+        let mut context = self.context.clone();
+        for (&s, element) in CAS_SETUP.iter().zip(elements.args()) {
+            let value = match s {
+                Symbol::NULL => continue,
+                Symbol::EPSILON if has_head(element, Symbol::LIST) => match element.args() {
+                    [first, ..] => first,
+                    [] => continue,
+                },
+                Symbol::EVAL_LEVEL => match element.args() {
+                    [_, _, _, level, ..] if has_head(element, Symbol::LIST) => level,
+                    _ => continue,
+                },
+                _ => element,
+            };
+            match changed(&context, &self.names, s, value) {
+                Ok((next, _)) => context = next,
+                Err(message) => {
+                    out.messages.push(error(statement.spans.range(), message));
+                    return;
+                }
+            }
+        }
+        self.context = context;
         if !statement.quiet {
-            self.show(value, statement.spans.range(), out);
+            self.show(&elements, statement.spans.range(), out);
         }
     }
 
-    /// `all_trig_solutions := v` or `with_sqrt := v`, or their calls
-    /// (CAS-545): the flag `s` of the context set, for the statements after
-    /// it; `v` is 0, 1, `false` or `true`, at `path` in the statement.
-    fn set_flag(
+    /// `name := v` or `name(v)` for a setting `s` (`Digits`, CAS-151; the
+    /// flags of CAS-545; phase 1.6's, CAS-617, CAS-618): the context
+    /// changed for the statements after it, and the answer shown; a value
+    /// the setting does not take is an error at `path`, and nothing is set.
+    fn set(
         &mut self,
         statement: &Statement,
         s: Symbol,
@@ -354,28 +452,16 @@ impl Session {
         path: &[usize],
         out: &mut Output,
     ) {
-        let name = if s == Symbol::ALL_TRIG_SOLUTIONS {
-            "all_trig_solutions"
-        } else {
-            "with_sqrt"
-        };
-        let on = match (value.as_i64(), value.as_symbol()) {
-            (Some(0), _) | (_, Some(Symbol::FALSE)) => false,
-            (Some(1), _) | (_, Some(Symbol::TRUE)) => true,
-            _ => {
-                let message = format!("{name} takes 0 or 1, false or true");
-                out.messages
-                    .push(error(statement.spans.find(path), message));
-                return;
+        match changed(&self.context, &self.names, s, value) {
+            Ok((context, answer)) => {
+                self.context = context;
+                if !statement.quiet {
+                    self.show(&answer, statement.spans.range(), out);
+                }
             }
-        };
-        if s == Symbol::ALL_TRIG_SOLUTIONS {
-            self.context.set_all_trig_solutions(on);
-        } else {
-            self.context.set_with_sqrt(on);
-        }
-        if !statement.quiet {
-            self.show(value, statement.spans.range(), out);
+            Err(message) => out
+                .messages
+                .push(error(statement.spans.find(path), message)),
         }
     }
 
@@ -385,12 +471,11 @@ impl Session {
         let Some(value) = self.evaluate(statement, &[2], out) else {
             return;
         };
-        if target.as_symbol() == Some(Symbol::DIGITS) {
-            self.set_digits(statement, &value, out);
-            return;
-        }
-        if let Some(s @ (Symbol::ALL_TRIG_SOLUTIONS | Symbol::WITH_SQRT)) = target.as_symbol() {
-            self.set_flag(statement, s, &value, &[2], out);
+        if let Some(s) = target
+            .as_symbol()
+            .filter(|&s| s == Symbol::DIGITS || is_setting(s))
+        {
+            self.set(statement, s, &value, &[2], out);
             return;
         }
         let spans = &statement.spans;
@@ -582,6 +667,138 @@ fn defined(range: Range<usize>, result: Result<(), DefineError>, out: &mut Outpu
             false
         }
     }
+}
+
+/// Whether `s` is a setting giac sets by its call `s(v)` and reads by `s()`:
+/// `all_trig_solutions`, `with_sqrt` (CAS-545) and phase 1.6's (CAS-617,
+/// CAS-618).
+fn is_setting(s: Symbol) -> bool {
+    matches!(
+        s,
+        Symbol::ALL_TRIG_SOLUTIONS
+            | Symbol::WITH_SQRT
+            | Symbol::APPROX_MODE
+            | Symbol::COMPLEX_MODE
+            | Symbol::COMPLEX_VARIABLES
+            | Symbol::ANGLE_RADIAN
+            | Symbol::KEEP_ALGEXT
+            | Symbol::INCREASING_POWER
+            | Symbol::EPSILON
+            | Symbol::EVAL_LEVEL
+            | Symbol::AUTO_SIMPLIFY
+            | Symbol::RUR_CERTIFY
+            | Symbol::GBASIS_MAX_PAIRS
+            | Symbol::GBASIS_SIMULT_PRIMES
+    )
+}
+
+/// `context` with the setting `s` set from `value`, and the answer of
+/// setting it: `value` itself, but `autosimplify`'s 1, and giac's answers
+/// of `rur_certify` (the stored value, or `-n` for `n < 0`, unset) and of
+/// `gbasis_max_pairs`, `gbasis_simult_primes` (the old value; solve.cc,
+/// giac 2.0.0.21). An error message for a value `s` does not take.
+fn changed(
+    context: &Context,
+    names: &Names,
+    s: Symbol,
+    value: &Expr,
+) -> Result<(Context, Expr), String> {
+    let name = names
+        .spelling(&Target::Builtin(s))
+        .unwrap_or_else(|| spelling(s));
+    let mut context = context.clone();
+    let flag = || match (value.as_i64(), value.as_symbol()) {
+        (Some(0), _) | (_, Some(Symbol::FALSE)) => Ok(false),
+        (Some(1), _) | (_, Some(Symbol::TRUE)) => Ok(true),
+        _ => Err(format!("{name} takes 0 or 1, false or true")),
+    };
+    let integer = || {
+        value
+            .as_i64()
+            .ok_or_else(|| format!("{name} takes an integer"))
+    };
+    let mut answer = value.clone();
+    match s {
+        Symbol::DIGITS => {
+            let number_bits = context.limits().number_bits;
+            let bits = value
+                .as_i64()
+                .and_then(|n| u64::try_from(n).ok())
+                .filter(|&n| n >= 1)
+                .map(cas_core::digits_bits)
+                .filter(|&bits| bits <= number_bits)
+                .ok_or_else(|| {
+                    format!(
+                        "Digits takes a positive integer, up to {}: the decimal digits balls are made and shown with",
+                        cas_core::shown_digits(number_bits)
+                    )
+                })?;
+            context.set_working_precision(bits);
+        }
+        Symbol::ALL_TRIG_SOLUTIONS => context.set_all_trig_solutions(flag()?),
+        Symbol::WITH_SQRT => context.set_with_sqrt(flag()?),
+        Symbol::APPROX_MODE => context.set_approx_mode(flag()?),
+        Symbol::COMPLEX_MODE => context.set_complex_mode(flag()?),
+        Symbol::COMPLEX_VARIABLES => context.set_complex_variables(flag()?),
+        Symbol::KEEP_ALGEXT => context.set_keep_algext(flag()?),
+        Symbol::INCREASING_POWER => context.set_increasing_power(flag()?),
+        Symbol::ANGLE_RADIAN => context.set_angle(match value.as_i64() {
+            Some(0) => Angle::Degree,
+            Some(1) => Angle::Radian,
+            Some(2) => Angle::Grad,
+            _ => return Err(format!("{name} takes 0, 1 or 2: degrees, radians or grads")),
+        }),
+        Symbol::EPSILON => {
+            let x = match value.view() {
+                View::Ball(b) => Some(b.mid().to_f64()),
+                _ => value
+                    .to_rational()
+                    .map(|q| Ball::from_rational(&q, 64).mid().to_f64()),
+            };
+            match x {
+                Some(x) if x.is_finite() && x > 0.0 => context.set_epsilon(x),
+                _ => return Err(format!("{name} takes a positive number")),
+            }
+        }
+        Symbol::EVAL_LEVEL => match value.as_i64().and_then(|n| u64::try_from(n).ok()) {
+            Some(n) if n >= 1 => context.set_eval_level(n),
+            _ => return Err(format!("{name} takes a positive integer")),
+        },
+        Symbol::AUTO_SIMPLIFY => {
+            context.set_autosimplify(match (value.as_i64(), value.as_symbol()) {
+                (Some(0), _) => None,
+                (Some(1), _) => Some(Expr::from(Symbol::REGROUP)),
+                (Some(2), _) => Some(Expr::from(Symbol::SIMPLIFY)),
+                (_, Some(command)) => Some(Expr::from(command)),
+                _ => return Err(format!("{name} takes 0, 1, 2 or the name of a command")),
+            });
+            answer = Expr::from(1);
+        }
+        // solve.cc:8684: n ≥ 0 stores n - 1, n < 0 answers -n.
+        Symbol::RUR_CERTIFY => {
+            let n = integer()?;
+            if n >= 0 {
+                context.set_rur_certify(n - 1);
+                answer = Expr::from(n - 1);
+            } else {
+                answer = Expr::from(n.saturating_neg());
+            }
+        }
+        // solve.cc:9274.
+        Symbol::GBASIS_MAX_PAIRS => {
+            let n = integer()?;
+            answer = Expr::from(context.gbasis_max_pairs());
+            context.set_gbasis_max_pairs(if n < 256 { 1 << 30 } else { n });
+        }
+        // solve.cc:9289.
+        Symbol::GBASIS_SIMULT_PRIMES => {
+            let n = integer()?;
+            answer = Expr::from(context.gbasis_simult_primes());
+            context.set_gbasis_simult_primes(n.max(1));
+        }
+        _ => return Err(format!("{name} is not a setting")),
+    }
+    Ok((context, answer))
 }
 
 fn has_head(e: &Expr, s: Symbol) -> bool {

@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 611] = [
+const BUILTINS: [&str; 624] = [
     "Plus",
     "Times",
     "Power",
@@ -679,6 +679,19 @@ const BUILTINS: [&str; 611] = [
     // Settings (CAS-545).
     "AllTrigSolutions",
     "WithSqrt",
+    "ApproxMode",
+    "ComplexMode",
+    "ComplexVariables",
+    "AngleRadian",
+    "KeepAlgext",
+    "IncreasingPower",
+    "Epsilon",
+    "EvalLevel",
+    "AutoSimplify",
+    "CasSetup",
+    "RurCertify",
+    "GbasisMaxPairs",
+    "GbasisSimultPrimes",
     // Strings (CAS-611, CAS-613).
     "Char",
     "Asc",

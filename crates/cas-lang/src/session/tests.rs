@@ -201,6 +201,105 @@ fn settings_are_set_both_ways() {
     assert!(!session.context().with_sqrt());
 }
 
+/// Xcas's settings of phase 1.6 (CAS-617, CAS-618): read by name or by
+/// `name()`, set by assignment or giac's call, with giac's answers;
+/// `autosimplify` and `approx_mode` act on the results; `cas_setup` sets
+/// them in giac's order.
+#[test]
+fn phase_1_6_settings() {
+    let mut session = Session::new();
+    assert_eq!(
+        results(&session.run(
+            "approx_mode\ncomplex_mode\ncomplex_variables\nangle_radian\nkeep_algext\n\
+             increasing_power\neval_level\nautosimplify"
+        )),
+        [
+            Some("0"),
+            Some("0"),
+            Some("0"),
+            Some("1"),
+            Some("0"),
+            Some("1"),
+            Some("25"),
+            Some("0")
+        ]
+    );
+    assert_eq!(
+        results(&session.run("approx_mode(1)\napprox_mode()\n1/3\napprox_mode := 0\n1/3")),
+        [
+            Some("1"),
+            Some("1"),
+            Some("0.333333333333333"),
+            Some("0"),
+            Some("1/3")
+        ]
+    );
+    let expanded = results(&session.run("expand((x + 1)^2)"))[0].map(str::to_owned);
+    let outputs = session.run("autosimplify(expand)\n(x + 1)^2\nautosimplify()\nautosimplify(0)");
+    assert_eq!(
+        results(&outputs),
+        [Some("1"), expanded.as_deref(), Some("expand"), Some("1")]
+    );
+    assert!(session.context().autosimplify().is_none());
+    assert_eq!(
+        results(
+            &session.run("complex_mode := 1\nkeep_algext(true)\neval_level(3)\nangle_radian(0)")
+        ),
+        [Some("1"), Some("true"), Some("3"), Some("0")]
+    );
+    let ctx = session.context();
+    assert!(ctx.complex_mode() && ctx.keep_algext());
+    assert_eq!((ctx.eval_level(), ctx.angle()), (3, Angle::Degree));
+    session.run("epsilon := 1e-6");
+    assert_eq!(session.context().epsilon().to_bits(), 1e-6_f64.to_bits());
+    for (input, message) in [
+        (
+            "angle_radian := 3",
+            "angle_radian takes 0, 1 or 2: degrees, radians or grads",
+        ),
+        ("epsilon(-1)", "epsilon takes a positive number"),
+        ("eval_level := 0", "eval_level takes a positive integer"),
+        (
+            "approx_mode := 2",
+            "approx_mode takes 0 or 1, false or true",
+        ),
+    ] {
+        let outputs = session.run(input);
+        assert_eq!(results(&outputs), [None], "{input}");
+        assert_eq!(outputs[0].messages[0].text, message, "{input}");
+    }
+    assert_eq!(session.context().angle(), Angle::Degree);
+    assert_eq!(
+        results(&session.run(
+            "rur_certify(1)\nrur_certify()\nrur_certify(-3)\ngbasis_max_pairs(100)\n\
+             gbasis_max_pairs()\ngbasis_simult_primes(0)\ngbasis_simult_primes()"
+        )),
+        [
+            Some("0"),
+            Some("1"),
+            Some("3"),
+            Some("32768"),
+            Some("1073741824"),
+            Some("20"),
+            Some("1")
+        ]
+    );
+    session.run("cas_setup(1, 1, 0, 2, 0, [1e-3, 1e-15], 20, [1, 50, 0, 10], 0, 0, 1);");
+    let ctx = session.context();
+    assert!(ctx.approx_mode() && ctx.complex_variables() && !ctx.complex_mode());
+    assert_eq!((ctx.angle(), ctx.eval_level()), (Angle::Grad, 10));
+    assert_eq!(ctx.epsilon().to_bits(), 1e-3_f64.to_bits());
+    assert_eq!(ctx.working_precision(), cas_core::digits_bits(20));
+    assert!(!ctx.increasing_power() && !ctx.with_sqrt() && ctx.all_trig_solutions());
+    assert_eq!(
+        results(&session.run("approx_mode(0)\ncas_setup([0, 0, 0])")),
+        [Some("0"), Some("cas_setup([0, 0, 0])")]
+    );
+    let outputs = session.run("cas_setup()");
+    let setup = results(&outputs)[0].unwrap_or_default();
+    assert!(setup.starts_with("[0, 1, 0, 2, 0, ["), "{setup}");
+}
+
 /// `string`, `expr` and `cat` through the session's language hook
 /// (CAS-614): the input form, read back to the same value.
 #[test]

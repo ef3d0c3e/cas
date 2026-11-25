@@ -636,6 +636,20 @@ Exact: exact
 Digits: Digits
 AllTrigSolutions: all_trig_solutions
 WithSqrt: with_sqrt
+# Xcas's settings of phase 1.6 (CAS-617, CAS-618).
+ApproxMode: approx_mode
+ComplexMode: complex_mode
+ComplexVariables: complex_variables
+AngleRadian: angle_radian
+KeepAlgext: keep_algext
+IncreasingPower: increasing_power
+Epsilon: epsilon
+EvalLevel: eval_level
+AutoSimplify: autosimplify
+CasSetup: cas_setup
+RurCertify: rur_certify
+GbasisMaxPairs: gbasis_max_pairs
+GbasisSimultPrimes: gbasis_simult_primes
 # Numeric evaluation with balls, Xcas's evalf (CAS-DOC-5 §9.2, CAS-84).
 N: evalf approx
 # Polynomials, phase 1 (CAS-DOC-8 §10, §15 detail 1; CAS-140).
