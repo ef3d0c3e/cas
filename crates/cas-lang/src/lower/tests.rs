@@ -204,6 +204,8 @@ fn calls_and_products() {
         ("f(a)(b)", "f[a][b]"),
         ("x(x)(y)", "Times[Times[x, x], y]"),
         ("g(g(u))", "g[g[u]]"),
+        // A function's name in its argument keeps the call (CAS-624).
+        ("mean(f(mean = 5))", "Mean[f[Equation[Mean, 5]]]"),
         ("call(x, x + 1)", "x[Plus[x, 1]]"),
         ("(x -> x^2)(3)", "Function[List[x], Power[x, 2]][3]"),
         ("v[0](x)", "At[v, 0][x]"),
@@ -215,6 +217,7 @@ fn calls_and_products() {
     assert_eq!(note.severity, Severity::Note);
     assert_eq!(note.to_string(), "read as x*(x + 1)");
     assert!(self::lowered("pi(x + 1)").diagnostics.is_empty());
+    assert!(self::lowered("mean(f(mean = 5))").diagnostics.is_empty());
 }
 
 #[test]

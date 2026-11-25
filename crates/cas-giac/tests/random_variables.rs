@@ -108,10 +108,19 @@ fn stays_with(input: &str, expected: &str) -> bool {
     })
 }
 
+/// Giac's text, whitespace collapsed and a lone `|` dropped: the recorded
+/// texts come from scripts/caseval.py, which prints giac's line break as
+/// ` | `, while libgiac's own text keeps the break (CI run 45565458930).
+fn collapsed(s: &str) -> String {
+    s.split_whitespace()
+        .filter(|w| *w != "|")
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// Each `(input, giac's error)`: giac's text, whitespace collapsed, and ours
 /// staying with giac's message as its warning.
 fn check_stays(rows: &[(&str, &str)]) {
-    let collapsed = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut wrong = Vec::new();
     for (input, error) in rows {
         if let Some(giac) = giac() {
@@ -296,7 +305,6 @@ fn departures() {
             "randvar([1/2,1/2])",
         ),
     ];
-    let collapsed = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut wrong = Vec::new();
     for (input, answer, mine) in cases {
         if let Some(giac) = giac() {
@@ -558,7 +566,6 @@ fn departures_that_draw() {
             &list_of(4, integer_in(0, 1)),
         ),
     ];
-    let collapsed = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
     let mut wrong = Vec::new();
     for (input, answer, property) in cases {
         if let Some(giac) = giac() {

@@ -1151,7 +1151,12 @@ impl Lowerer<'_> {
                     Some(ref t) if is_constant(t) && args.len() == 1 => {
                         (self.reading_product(&callee, &args[0], range, false), true)
                     }
-                    _ if args.len() == 1 && occurs_in(&n, &args[0]) => {
+                    // A function's name in its argument keeps the call, as
+                    // giac's: `mean(sample(randvar(normal,mean=5),9))`.
+                    _ if args.len() == 1
+                        && self.function_name(&callee).is_none()
+                        && occurs_in(&n, &args[0]) =>
+                    {
                         (self.reading_product(&callee, &args[0], range, true), true)
                     }
                     Some(Target::Planned(_)) => {
