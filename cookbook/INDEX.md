@@ -71,3 +71,4 @@ C0068 | Printer departure rows under R74: prototype printer on our lowered shape
 C0069 | giac quoted products nest binary; mathml's aplatir_fois_plus multiplies them out | giac,port,prototype,quote,mathml,shape | 2026-11-25 | 1.6/T5 | T5.c3 CAS-616
 C0070 | Settings with a bare value: name() goes through the session, not a native | settings,session,eval,head,native | 2026-11-25 | 1.6/T6 | T6.c1 settings
 C0071 | Mode rerouting between natives: split the body; degree-mode trig traps | settings,native,recursion,factor,trig | 2026-11-25 | 1.6/T6 | T6.c2 complex_mode, angle_radian
+C0072 | Natives reading data outside State: Eval::volatile, no stamp or memo; Context Debug fields | eval,memo,cache,native,context,clippy,session | 2026-11-25 | 1.6/T7 | T7.c1 CAS-620
