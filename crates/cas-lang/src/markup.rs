@@ -1,6 +1,7 @@
-//! LaTeX as giac writes it (CAS-615): a port of giac's `gen2markup`
-//! (giac 2.0.0.21, `src/markup.cc`), the converter behind Xcas's `latex()`,
-//! LaTeX arms only, so `latex(e)` gives giac's text for giac's answer.
+//! LaTeX and `MathML` as giac writes them (CAS-615, CAS-616): a port of
+//! giac's `gen2markup` (giac 2.0.0.21, `src/markup.cc`), the converter
+//! behind Xcas's `latex()` and `export_mathml`, so [`latex`] and
+//! [`export_mathml`] give giac's text for giac's answer.
 //!
 //! - [`lower`]: our expression as the tree giac's evaluator would leave
 //!   ([`Gen`](tree::Gen)): `x/2` is `prod(x, inv(2))`, `x^(1/2)` `sqrt(x)`,
@@ -17,16 +18,40 @@
 //!   the general application (:3532-3611). A [`MarkupBlock`](engine::MarkupBlock)
 //!   carries a text with its priority, kind bits and a pending minus;
 //!   [`Flags`](engine::Flags) select LaTeX, the top level, powers of
-//!   elementary functions on their names (`ELEMPOW`) and factors. `MathML`
-//!   (T5) adds its fields and flags to the same engine.
-//! - [`ident`]: identifiers (`x_{1}`, `\alpha`, `\mathrm{abc}`), function
-//!   names (`\sin `, `\operatorname{arsinh}`) and strings.
+//!   elementary functions on their names (`ELEMPOW`) and factors.
+//! - `MathML`: the same arms write presentation (`markup`, flag
+//!   `MATHML_PRESENTATION`) and content (`content`, `MATHML_CONTENT`) in the
+//!   one run their flags select. Content elements take ids from one counter
+//!   in post-order (giac's `idc`), the presentation tag of the same node
+//!   refers to it (`xref`); giac counts only in content, so a
+//!   presentation-only run has no ids. Arms: numbers `<cn>`/`<mn>`
+//!   (:1323-1407), identifiers and constants (:1486-1542), a bare builtin
+//!   giac's `_FUNC` (:1647-1657, [`Gen::Func`](tree::Gen::Func)), vectors
+//!   and matrices `<vector>`, `<set>`, `<matrix>` (:1658-1773), `<plus/>` and the
+//!   `&minus;` of a pending minus (:972, :1793), `<times/>`/`<divide/>`
+//!   over all factors (:1993-2018), `<power/>` and an elementary power on
+//!   the name (:2248-2257), `<int/>`/`<sum/>`/`<product/>` with
+//!   `<bvar>`, `<lowlimit>`, `<uplimit>` (:2375-2487), `<limit/>` with
+//!   `<tendsto>` (:2488-2548), `<diff/>`, `<partialdiff/>`, `nthdiff`
+//!   (:2560-2727), `<selector/>`/`<msub>` (:3434), and the application
+//!   `<apply>` / `<mo>&af;</mo>` (:3532-3611). The forms: [`MathmlKind`]
+//!   (`export_mathml` :3765, `export_mathml_presentation` :3755,
+//!   `export_mathml_content` :3747).
+//! - `mml`: tags with ids (`mml_tag` :248, `insert_id` :293, `extract_id`
+//!   :277) and text escaped (`str_to_mml` :382).
+//! - [`ident`]: identifiers (`x_{1}`, `\alpha`, `\mathrm{abc}`; `<mi>x</mi>`),
+//!   function names (`\sin `, `\operatorname{arsinh}`; `<sin/>`,
+//!   `<mi>sin</mi>`) and strings.
 //!
 //! The text keeps giac's quirks: trailing spaces (`\pi `, `\sin `,
 //! `\cdot `), `\frac1{…}` from `inv` only, `abs` dropping its argument's
 //! minus. The prototype that fixed each step against giac's `latex()` on 301
 //! inputs is 1.6/T4.c1's (`.run/1.6/T4/proto/`); its table is the engine's
-//! test data (`markup/giac_latex.tsv`).
+//! test data (`markup/giac_latex.tsv`). The `MathML` prototype (1.6/T5.c1,
+//! `.run/1.6/T5/proto/`) matched giac's `export_mathml` on the same inputs
+//! in its three forms, 893 texts (`markup/giac_mathml.tsv`); it keeps giac's
+//! quirks too (`<true>` unclosed in content, `f(x)` inside a derivative
+//! with two `&af;`).
 
 mod engine;
 mod ident;

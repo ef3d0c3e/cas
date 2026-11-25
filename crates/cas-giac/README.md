@@ -605,6 +605,18 @@ giac prints its own answer, `rootof([1,0],[1,0,1,1])` (held in both), and 57 mor
 - Algebraic extensions and points (tex.cc's `gen2tex`, giac's `latex` on geometry) have no
   counterpart in ours.
 
+`tests/mathml.rs`, `export_mathml` (CAS-616): `latex.rs`'s 115 inputs (not `TeX(x^2)` nor
+`diff(f(x),x,x)`, which giac's MathML table lacks) in giac's three forms, `export_mathml(x,display)`,
+`export_mathml(x,content)` and `export_mathml(x)`: giac's text (quotes removed, doubled quotes
+undone, whitespace collapsed, C0047) is ours. In the default form the annotation
+(`<annotation encoding='giac'>`) is each one's input form, so it is left out of the comparison and
+ours is checked to be our `string(x)`, escaped (giac `x+1`, ours `1 + x`).
+- Departures (17), ours asserted in presentation and content: `latex.rs`'s, for the same reasons
+  (giac's evaluation order and rewrites; the printers agree on the same shape); giac's MathML of
+  each is in `crates/cas-lang/src/markup/giac_mathml.tsv`. `x<y`: giac
+  `<mi>y</mi><mo>&gt;</mo><mi>x</mi>`, ours `<mi>x</mi><mo>&lt;</mo><mi>y</mi>`.
+- giac's `mathml()` (mathml.cc), a separate printer, is not ported yet.
+
 `src/format.rs` tests the rewriting on outputs giac gave. Nine sabotages are
 caught.
 
