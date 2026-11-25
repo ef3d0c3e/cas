@@ -402,8 +402,8 @@ fn logistic() {
     ]);
     let ctx = Context::new();
     for claim in [
-        "Less[Abs[Plus[Logistic[0.5], -0.622459331202]], Power[10, -11]]",
-        "Less[Abs[Plus[Logistic[0.0, 0.5, 10, 2], -2.6894142137]], Power[10, -9]]",
+        "Less[Abs[Plus[Logistic[0x1p-1], -0x1.3eb2fd4d348afp-1]], Power[10, -11]]",
+        "Less[Abs[Plus[Logistic[0x0p+0, 0x1p-1, 10, 2], -0x1.583eb9969e996p+1]], Power[10, -9]]",
     ] {
         assert!(holds(&ctx, claim), "{claim}");
     }
@@ -444,9 +444,9 @@ fn logistic_regressions() {
         )
     };
     let at_peak = |n: usize| format!("ReplaceAll[Part[{EXACT}, {n}], Rule[x, Part[{EXACT}, 5]]]");
-    let decimal = "LogisticRegression[List[0.5, 1, 2, 3.5, 4.5, 4], 1, 1]";
+    let decimal = "LogisticRegression[List[0x1p-1, 1, 2, 0x1.cp+1, 0x1.2p+2, 4], 1, 1]";
     for claim in [
-        near(format!("Part[{EXACT}, 5]"), "6.24947835314", 9),
+        near(format!("Part[{EXACT}, 5]"), "0x1.8ff7740df2f59p+2", 9),
         // At the peak, half the total and the greatest production.
         near(at_peak(1), "38177/502", 9),
         near(at_peak(2), "1457483329/74396400", 9),
@@ -455,12 +455,12 @@ fn logistic_regressions() {
             "N[Times[-251/39, Power[Times[1482/1521, Power[46, 1/2]], -1]], 30]",
             20,
         ),
-        near(format!("Part[{decimal}, 3]"), "57.0147984942", 9),
-        near(format!("Part[{decimal}, 5]"), "7.39922355351", 9),
-        near(format!("Part[{decimal}, 6]"), "-0.585719114374", 9),
+        near(format!("Part[{decimal}, 3]"), "0x1.c81e4eac44f3dp+5", 9),
+        near(format!("Part[{decimal}, 5]"), "0x1.d98ce0f287932p+2", 9),
+        near(format!("Part[{decimal}, 6]"), "-0x1.2be36031c1bf7p-1", 9),
         near(
-            "Part[LogisticRegression[List[1, 2, 4, 7, 11], 0, 1.0], 3]".into(),
-            "152.099601594",
+            "Part[LogisticRegression[List[1, 2, 4, 7, 11], 0, 0x1p+0], 3]".into(),
+            "0x1.3032fefae9b81p+7",
             9,
         ),
     ] {

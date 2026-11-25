@@ -26,7 +26,8 @@
 //! - `LogisticRegression[w, t0, P0]` (`logistic_regression`, CAS-627),
 //!   giac's closed form (misc.cc `logistic_regression`): the productions
 //!   `wᵢ` at times `t0, t0 + 1, …`, cumulated from `P0`, `Cᵢ`; the line
-//!   `wᵢ/Cᵢ = a Cᵢ + b`, exact, gives the total `U = −b/a`; the line of
+//!   `wᵢ/Cᵢ = a Cᵢ + b`, exact (balls for decimal data, as giac's), gives
+//!   the total `U = −b/a`; the line of
 //!   `ln(U/Cᵢ − 1)`, certified balls, on the times gives `b₂ x + c₂`. The
 //!   answer is giac's `{U/(1 + e^(b₂x + c₂)), U b/2/(1 + cosh(b₂x + c₂)), U,
 //!   U b/4, −c₂/b₂, r}` in the symbol `x`, `r` the correlation of `Cᵢ` and
@@ -77,7 +78,8 @@ fn product_sum(u: &[Expr], u_mean: &Expr, v: &[Expr], v_mean: &Expr) -> Expr {
 }
 
 /// The least-squares line `y = a x + b` through the points: `(a, b)`, `a`
-/// put together and `b` expanded.
+/// put together and `b` expanded. A ball `a` stays a ball: `Together`
+/// takes exact data only and would stay around it (CAS-627).
 fn line(ev: &mut Eval<'_>, xs: &[Expr], ys: &[Expr]) -> Result<(Expr, Expr), EvalError> {
     let n = Expr::from(i64::try_from(xs.len()).unwrap_or(i64::MAX));
     let mean = |v: &[Expr]| Expr::call(Symbol::PLUS, v.to_vec()) / &n;
@@ -85,7 +87,12 @@ fn line(ev: &mut Eval<'_>, xs: &[Expr], ys: &[Expr]) -> Result<(Expr, Expr), Eva
     let y_mean = ev.eval(&mean(ys))?;
     let sxy = ev.eval(&product_sum(xs, &x_mean, ys, &y_mean))?;
     let sxx = ev.eval(&product_sum(xs, &x_mean, xs, &x_mean))?;
-    let slope = ev.eval(&Expr::call(Symbol::TOGETHER, [sxy / sxx]))?;
+    let slope = ev.eval(&(sxy / sxx))?;
+    let slope = if matches!(slope.view(), View::Ball(_)) {
+        slope
+    } else {
+        ev.eval(&Expr::call(Symbol::TOGETHER, [slope]))?
+    };
     let intercept = Expr::call(Symbol::EXPAND, [y_mean - &slope * x_mean]);
     Ok((slope, ev.eval(&intercept)?))
 }
