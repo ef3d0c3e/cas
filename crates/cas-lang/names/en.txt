@@ -793,7 +793,7 @@ CauchyCDF: cauchyd_cdf cauchy_cdf
 CauchyICDF: cauchyd_icdf cauchy_icdf
 
 # Random numbers (CAS-DOC-33).
-SeedRandom: srand randseed
+SeedRandom: srand randseed RandSeed
 Random: rand random
 RandomInteger: randint
 RandomNormal: randnorm randNorm
@@ -893,6 +893,10 @@ DOM_FUNC: DOM_FUNC
 IntegerPart: iPart
 FractionalPart: fPart frac
 Truncate: trunc
+# Sorting (CAS-622), Xcas's.
+SortAscending: SortA sorta
+SortDescending: SortD sortd
+SortPermutation: sortperm
 
 [planned]
 

@@ -910,6 +910,10 @@ builtins! {
     INTEGER_PART = "IntegerPart" [LISTABLE, PROTECTED];
     FRACTIONAL_PART = "FractionalPart" [LISTABLE, PROTECTED];
     TRUNCATE = "Truncate" [LISTABLE, PROTECTED];
+    // Xcas's `SortA`, `SortD` and `sortperm` (CAS-622), in `Sort`'s order.
+    SORT_ASCENDING = "SortAscending" [PROTECTED];
+    SORT_DESCENDING = "SortDescending" [PROTECTED];
+    SORT_PERMUTATION = "SortPermutation" [PROTECTED];
     // Logical values, infinities and nothing (CAS-DOC-4 §6.1, R14).
     TRUE = "True" [PROTECTED];
     FALSE = "False" [PROTECTED];

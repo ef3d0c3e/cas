@@ -258,8 +258,8 @@ after giac's `restart`, ours in a new session, compared value by value:
   only: `time(1+1)` one nonnegative decimal (giac `[real, cpu]`),
   `monotonic()` a nonnegative decimal, `version()` starting `cas `.
 
-`tests/ti_names.rs`, Xcas's `type` (CAS-621), `iPart`, `fPart`, `frac` and
-`trunc` (CAS-622):
+`tests/ti_names.rs`, Xcas's `type` (CAS-621), `iPart`, `fPart`, `frac`,
+`trunc`, the sorting commands and `RandSeed` (CAS-622):
 - `type(e)==DOM_X` on both sides (giac prints its answer as the type's name):
   integers of any size, rationals, decimals, complex numbers exact and
   decimal, symbols (`x`, `pi`, `infinity`, `undef`), strings, lists,
@@ -273,6 +273,11 @@ after giac's `restart`, ours in a new session, compared value by value:
   `DOM_IDENT`), `fPart(x)` (giac `x-sign(x)*floor(x*sign(x))`, ours stays),
   `trunc(x)` (giac `floor(x)`), `trunc(-sqrt(2),3)` (giac floors, -1.415;
   ours toward zero, -707/500).
+- `SortA`, `sorta`, `SortD`, `sortd` and `sortperm` (CAS-622): lists,
+  sequences of values, matrices and sequences of rows sorted by their first
+  row, ties (`SortD` reverses the ascending order, ties too), symbols and
+  strings; `sortperm(l)` and `sortperm(l, p)`; `RandSeed(321)` and
+  `RandSeed(5)==srand(5)`.
 
 `tests/angle_radian.rs`, `tests/complex_mode.rs`,
 `tests/complex_variables.rs` and `tests/epsilon.rs`, the settings that change

@@ -1226,6 +1226,9 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::INTEGER_PART, truncation::integer_part),
         (Symbol::FRACTIONAL_PART, truncation::integer_part),
         (Symbol::TRUNCATE, truncation::truncate),
+        (Symbol::SORT_ASCENDING, lists::ordering::sort_ascending),
+        (Symbol::SORT_DESCENDING, lists::ordering::sort_descending),
+        (Symbol::SORT_PERMUTATION, lists::ordering::sort_permutation),
     ];
     let mut table: [Option<NativeFn>; builtin::COUNT] = [None; builtin::COUNT];
     let mut i = 0;

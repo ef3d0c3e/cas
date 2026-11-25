@@ -1,6 +1,7 @@
-//! Xcas's `type` and its `DOM_` answers (CAS-621), `iPart`, `fPart`, `frac`
-//! and `trunc` (CAS-622) against giac: giac's answers read back are this
-//! CAS's value of the same input, exact answers against giac's decimals
+//! Xcas's `type` and its `DOM_` answers (CAS-621), `iPart`, `fPart`, `frac`,
+//! `trunc`, `SortA`, `SortD`, `sortperm` and `RandSeed` (CAS-622) against
+//! giac: giac's answers read back are this CAS's value of the same input,
+//! exact answers against giac's decimals
 //! within their error (C0006, C0032); departures, giac's answer as caseval
 //! prints it, whitespace collapsed (C0047), and this CAS's own.
 
@@ -91,6 +92,42 @@ fn truncation() {
         "trunc([4.3333,sqrt(2)])",
         "trunc([4.3333,sqrt(2)],2)",
         "trunc(sqrt(2)+i*sqrt(5),4)",
+    ]);
+}
+
+/// `SortA`, `sorta`, `SortD`, `sortd` and `sortperm` (CAS-622): lists,
+/// sequences, matrices and sequences of rows by their first row, ties
+/// (`SortD` reverses them, as giac), symbols and strings; `RandSeed`, `srand`
+/// (c2probe1, c2probe2).
+#[test]
+fn sorting() {
+    check(&[
+        "SortA([3,4,2])",
+        "SortA(3,4,2)",
+        "SortA([[3,4,2],[6,4,5]])",
+        "SortA([3,4,2],[6,4,5])",
+        "SortD([3,4,2])",
+        "SortD([[3,4,2],[6,4,5]])",
+        "sorta([3,1,2],[6,5,4])",
+        "sortd(3,4,2)",
+        "SortA([x,1,y])",
+        "SortD([x,1,y])",
+        "SortD([\"a\",\"c\",\"b\"])",
+        "SortD([1/2,0.3,1])",
+        "SortA([2,1,2,1])",
+        "SortA([[2,1,2],[3,2,1]])",
+        "SortD([[2,1,2],[3,2,1]])",
+        "SortA([[x,3,1],[1,2,3]])",
+        "SortA([[3,1],[6,5],[9,8]])",
+        "SortA([5])",
+        "sortperm([30,25,40,10,20])",
+        "sortperm([3,1,2,1])",
+        "sortperm([\"b\",\"a\",\"c\"])",
+        "sortperm([5])",
+        "sortperm([\"ab\",\"cd\",\"ad\",\"bc\",\"de\"],[3,4,1,0,2])",
+        "sortperm([3,1,2],[2,0,1])",
+        "RandSeed(321)",
+        "RandSeed(5)==srand(5)",
     ]);
 }
 

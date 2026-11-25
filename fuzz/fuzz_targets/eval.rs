@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 647] = [
+const BUILTINS: [&str; 650] = [
     "Plus",
     "Times",
     "Power",
@@ -739,6 +739,10 @@ const BUILTINS: [&str; 647] = [
     "IntegerPart",
     "FractionalPart",
     "Truncate",
+    // Sorting (CAS-622).
+    "SortAscending",
+    "SortDescending",
+    "SortPermutation",
 ];
 
 /// Builtins that apply something to parts, only in the expression

@@ -46,6 +46,7 @@ use std::cmp::Ordering;
 
 use cas_num::ball::Ball;
 
+pub(super) mod ordering;
 pub(super) mod xcas;
 
 use super::approximation;
@@ -259,40 +260,53 @@ pub(super) fn sort(ev: &mut Eval<'_>, e: &Expr) -> Native {
         };
         return Ok(merge_sort(l.args().to_vec(), &mut before)?.map(list));
     }
-    let mut numbers: Vec<(Ball, Expr)> = Vec::new();
-    let mut rest: Vec<Expr> = Vec::new();
-    for x in l.args() {
+    let Some(order) = order(ev, l.args())? else {
+        return Ok(None);
+    };
+    Ok(Some(list(
+        order.into_iter().map(|i| l.args()[i].clone()).collect(),
+    )))
+}
+
+/// `Sort`'s order of `items` as the positions it takes them from: the real
+/// numbers first, by value (their balls, overlapping ones in their order),
+/// then the rest in the canonical order, strings among themselves in byte
+/// order; stable. `None` when a comparison is undecided.
+pub(super) fn order(ev: &mut Eval<'_>, items: &[Expr]) -> Result<Option<Vec<usize>>, EvalError> {
+    let mut numbers: Vec<(Ball, usize)> = Vec::new();
+    let mut rest: Vec<usize> = Vec::new();
+    for (i, x) in items.iter().enumerate() {
         match real_ball(ev, x) {
-            Some(b) => numbers.push((b, x.clone())),
-            None => rest.push(x.clone()),
+            Some(b) => numbers.push((b, i)),
+            None => rest.push(i),
         }
     }
     // Strictly below comes first; an overlap keeps the order.
     let mut below =
-        |(a, _): &(Ball, Expr), (b, _): &(Ball, Expr)| -> Result<Option<bool>, EvalError> {
+        |(a, _): &(Ball, usize), (b, _): &(Ball, usize)| -> Result<Option<bool>, EvalError> {
             Ok(Some(a.sub(b, BITS).sign() == Some(Ordering::Less)))
         };
     let Some(numbers) = merge_sort(numbers, &mut below)? else {
         return Ok(None);
     };
-    rest.sort();
+    rest.sort_by(|&a, &b| items[a].cmp(&items[b]));
     // Strings among themselves in byte order, as giac's (CAS-612), in the
     // places the canonical order gives them.
-    let mut strings: Vec<Expr> = rest
+    let mut strings: Vec<usize> = rest
         .iter()
-        .filter(|x| x.as_str().is_some())
-        .cloned()
+        .copied()
+        .filter(|&i| items[i].as_str().is_some())
         .collect();
-    strings.sort_by(|a, b| a.as_str().cmp(&b.as_str()));
+    strings.sort_by(|&a, &b| items[a].as_str().cmp(&items[b].as_str()));
     let mut strings = strings.into_iter();
-    for x in &mut rest {
-        if x.as_str().is_some() {
-            *x = strings.next().expect("as many strings");
+    for i in &mut rest {
+        if items[*i].as_str().is_some() {
+            *i = strings.next().expect("as many strings");
         }
     }
-    let mut all: Vec<Expr> = numbers.into_iter().map(|(_, x)| x).collect();
+    let mut all: Vec<usize> = numbers.into_iter().map(|(_, i)| i).collect();
     all.extend(rest);
-    Ok(Some(list(all)))
+    Ok(Some(all))
 }
 
 pub(super) fn reverse(_: &mut Eval<'_>, e: &Expr) -> Native {
