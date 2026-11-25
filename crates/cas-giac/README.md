@@ -298,8 +298,10 @@ answers (CAS-617), one group a file, giac's flag set and reset within one
 call, ours in a session:
 - `angle_radian:=0` (degrees) and `:=2` (grads): numbers converted in the
   trigonometric functions and their inverses (`sin(30)`, `asin(1/2)`,
-  `sec(60)`, `acot(0)`, `sin(15)`, decimals), `sin(pi)`, `sin(x+30)`,
+  `sec(60)`, `acot(0)`, decimals), `sin(pi)`, `sin(x+30)`,
   `asin(x)`, `atan(x)` staying, the hyperbolic functions and `exp` unchanged;
+  the departure `sin(15)` in degrees (giac `(sqrt(6)-sqrt(2))/4`, ours stays:
+  no closed form of `sin(pi/12)`);
 - `complex_mode:=1`: `solve` as `csolve` and `factor` as `cfactor`, `[]`
   again after the reset;
 - `complex_variables:=1`: `conj`, `re`, `im`, `abs` of a symbol staying; the
