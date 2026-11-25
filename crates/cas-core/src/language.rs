@@ -27,6 +27,9 @@ pub enum Form {
     MathmlDisplay,
     /// `MathML` content, giac's `export_mathml(e, content)`.
     MathmlContent,
+    /// An XHTML document with the formula in presentation `MathML`, as
+    /// giac's `mathml(e)` writes it (`mathml.cc`, CAS-616).
+    MathmlDocument,
 }
 
 /// A language that prints expressions as text and reads text back.

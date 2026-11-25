@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 610] = [
+const BUILTINS: [&str; 611] = [
     "Plus",
     "Times",
     "Power",
@@ -701,6 +701,7 @@ const BUILTINS: [&str; 610] = [
     "Cat",
     "LaTeX",
     "ExportMathML",
+    "MathML",
 ];
 
 /// Builtins that apply something to parts, only in the expression

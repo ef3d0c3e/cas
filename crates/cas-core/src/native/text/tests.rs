@@ -1,5 +1,5 @@
 //! Tests of `ToString`, `ToExpression`, `Cat` (CAS-614), `LaTeX`
-//! (CAS-615) and `ExportMathML` (CAS-616), and of the
+//! (CAS-615), `ExportMathML` and `MathML` (CAS-616), and of the
 //! non-strings in `StringJoin` and `Join`: what each does with no language
 //! hook, and the logic (caps, warnings) through a stub language that prints
 //! and reads full form. cas-lang's session tests run them with the
@@ -103,6 +103,7 @@ fn without_a_hook() {
             "LaTeX[x]",
             "ExportMathML[x]",
             "ExportMathML[x, display]",
+            "MathML[x]",
             "ToExpression[\"1\"]",
             "Cat[\"a\", x]",
             "Cat[1]",
@@ -143,6 +144,8 @@ fn shapes_that_stay() {
             "ExportMathML[x, y]",
             "ExportMathML[x, \"display\"]",
             "ExportMathML[x, display, y]",
+            "MathML[]",
+            "MathML[x, 1]",
             "ToExpression[]",
             "ToExpression[x]",
             "ToExpression[\"1\", 2]",
@@ -179,7 +182,8 @@ fn through_the_hook() {
 }
 
 /// `ExportMathML`'s second argument picks the form: none the default,
-/// `display` presentation, `content` (or `Content`, its builtin) content.
+/// `display` presentation, `content` (or `Content`, its builtin) content;
+/// `MathML` is the document form.
 #[test]
 fn export_mathml_forms() {
     let mut ctx = Context::new();
@@ -192,6 +196,7 @@ fn export_mathml_forms() {
             ("ExportMathML[f[x], content]", "\"MathmlContent:f[x]\""),
             ("ExportMathML[f[x], Content]", "\"MathmlContent:f[x]\""),
             ("LaTeX[f[x]]", "\"Latex:f[x]\""),
+            ("MathML[f[x]]", "\"MathmlDocument:f[x]\""),
         ],
     );
 }

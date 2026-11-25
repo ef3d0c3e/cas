@@ -852,6 +852,7 @@ Cat: cat
 LaTeX: latex TeX
 # MathML (CAS-616), Xcas's.
 ExportMathML: export_mathml
+MathML: mathml
 
 [planned]
 

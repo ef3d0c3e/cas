@@ -68,6 +68,12 @@ pub(super) fn export_mathml(ev: &mut Eval<'_>, e: &Expr) -> Native {
     print_form(ev, e, x, form)
 }
 
+/// `MathML[e]` (CAS-616): `e` in an XHTML document as `MathML`, giac's
+/// `mathml` (mathml.cc `_mathml` :1987). Another arity stays.
+pub(super) fn mathml(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    printed(ev, e, Form::MathmlDocument)
+}
+
 /// `head[x]`: `x` printed in `form` through the hook, as a string.
 fn printed(ev: &mut Eval<'_>, e: &Expr, form: Form) -> Native {
     let [x] = e.args() else {

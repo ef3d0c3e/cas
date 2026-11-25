@@ -1,6 +1,7 @@
 //! The language as cas-core's [`Language`] hook (CAS-614): natives that
 //! turn expressions into text and back, `string`, `expr`, `cat` and `join`,
-//! `latex` (CAS-615, [`Form::Latex`]) and later `mathml`, call it through
+//! `latex` (CAS-615, [`Form::Latex`]), `export_mathml` and `mathml`
+//! (CAS-616), call it through
 //! the context, since cas-core cannot depend on this crate. The session and
 //! the oracle install it ([`Context::set_language`]); it is part of the
 //! context's state, so a context with another hook has another id and
@@ -13,6 +14,7 @@ use cas_core::{Context, Expr, Form, Language, Symbol};
 use crate::literal::decimal_balls;
 use crate::lower::{Severity, lower};
 use crate::markup::{MathmlKind, export_mathml, latex};
+use crate::mathml::mathml;
 use crate::names::Names;
 use crate::parser::parse;
 use crate::print::{Balls, print_capped};
@@ -65,6 +67,9 @@ impl Language for Hook {
                 };
                 export_mathml(e, &self.names, balls, max_len, kind)
                     .map_err(|error| error.to_string())
+            }
+            Form::MathmlDocument => {
+                mathml(e, &self.names, balls, max_len).map_err(|error| error.to_string())
             }
             _ => Err(format!("no printer for the form {form:?}")),
         }
