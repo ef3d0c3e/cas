@@ -316,6 +316,30 @@ after giac's `restart`, ours in a new session, compared value by value:
   `randvar(student,3)` and `randvar(chisquare,3)` (giac's Bad Argument Value;
   ours real and positive decimals).
 
+`tests/tail_probabilities.rs`, Xcas's upper tails `UTPN`, `UTPT`, `UTPC` and
+`UTPF` (CAS-625), and `cdf`, `icdf` and `mgf` of a law by its name, of a
+`randvar` object or of a list (CAS-626):
+- exact and symbolic rows (`UTPN(0,1,x)`, `cdf(normald,0,1)`, `cdf(exp,2,1)`,
+  every law's `mgf` in `t` and giac's `undef` for five of them), the
+  difference expanded 0 or the two within 10⁻²⁰ at a rational point; the
+  calls giac leaves (`UTPC(0.5,2)`, `UTPF(2.5,2,1)`), which ours leaves;
+  `icdf` of a list at `p` outside `(0, 1)`, `undef`;
+- giac's decimals within its 12 digits (C0006), ours exact where the input
+  is: the four tails (`UTPC(2,6)`, ours `exp(-3)`), integral decimal
+  degrees, `cdf` and `icdf` of the laws and of `randvar` objects, `icdf`
+  of a list (giac `1.0`, ours `1`);
+- invalid calls (20 rows) stay with giac's message as the warning: Bad
+  Argument Value, and "Invalid dimension" for `UTPT`'s degree below 1 and
+  `UTPF`'s outside `1 … 300`;
+- departures: a list's `cdf` (giac's dichotomy answers an index, `(#{Lᵢ ≤
+  x} − 1)/n`, `−1/n` below the least value, steps `[x₍ᵢ₎, i/n]`; ours the
+  empirical distribution function `#{Lᵢ ≤ x}/n`, steps `(i + 1)/n`, which
+  giac's own `icdf` inverts), `icdf(normald,0,1,1/2)` (giac
+  `-1.88884303598e-19`, ours 0), `cdf` of `gammad` and `betad` (giac keeps
+  `igamma` and `Beta`, ours evaluates), of `negbinomial` (giac `undef(…)`,
+  ours `negbinomial_cdf`, `negbinomial_icdf`), and `UTPT(3,x)`,
+  `UTPC(2,x)` (giac stays, ours `1 − F` expanded).
+
 `tests/angle_radian.rs`, `tests/complex_mode.rs`,
 `tests/complex_variables.rs` and `tests/epsilon.rs`, the settings that change
 answers (CAS-617), one group a file, giac's flag set and reset within one

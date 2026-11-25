@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 657] = [
+const BUILTINS: [&str; 664] = [
     "Plus",
     "Times",
     "Power",
@@ -752,6 +752,14 @@ const BUILTINS: [&str; 657] = [
     // Random variables (CAS-624).
     "RandomVariable",
     "RandomMultinomial",
+    // Upper tails and the functions of a law by its name (CAS-625, CAS-626).
+    "UpperTailNormal",
+    "UpperTailStudent",
+    "UpperTailChiSquare",
+    "UpperTailFisher",
+    "CDF",
+    "InverseCDF",
+    "MomentGeneratingFunction",
 ];
 
 /// Builtins that apply something to parts, only in the expression

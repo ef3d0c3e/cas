@@ -68,8 +68,28 @@ impl Law {
         })
     }
 
+    /// Its cumulative function.
+    pub(in crate::native) fn cumulative(self) -> Symbol {
+        match self {
+            Law::Normal => Symbol::NORMAL_CDF,
+            Law::Exponential => Symbol::EXPONENTIAL_CDF,
+            Law::Uniform => Symbol::UNIFORM_CDF,
+            Law::Binomial => Symbol::BINOMIAL_CDF,
+            Law::Poisson => Symbol::POISSON_CDF,
+            Law::Geometric => Symbol::GEOMETRIC_CDF,
+            Law::NegativeBinomial => Symbol::NEGATIVE_BINOMIAL_CDF,
+            Law::StudentT => Symbol::STUDENT_T_CDF,
+            Law::ChiSquare => Symbol::CHI_SQUARE_CDF,
+            Law::Fisher => Symbol::FISHER_CDF,
+            Law::Gamma => Symbol::GAMMA_CDF,
+            Law::Beta => Symbol::BETA_CDF,
+            Law::Weibull => Symbol::WEIBULL_CDF,
+            Law::Cauchy => Symbol::CAUCHY_CDF,
+        }
+    }
+
     /// Its inverse cumulative function.
-    fn inverse(self) -> Symbol {
+    pub(in crate::native) fn inverse(self) -> Symbol {
         match self {
             Law::Normal => Symbol::NORMAL_ICDF,
             Law::Exponential => Symbol::EXPONENTIAL_ICDF,

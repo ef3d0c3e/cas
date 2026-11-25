@@ -13,6 +13,9 @@
 //! - Student's t, χ² and Fisher's F ([`degrees`], §4, CAS-304), through the
 //!   closed forms of the regularized incomplete gamma and beta functions
 //!   at integer and half-integer parameters ([`incomplete`]).
+//! - The upper tails `UTPN`, `UTPT`, `UTPC` and `UTPF`, and `cdf`, `icdf`
+//!   and `mgf` of a law by its name, of a random variable's object or of a
+//!   list of values ([`tails`], CAS-625, CAS-626).
 //!
 //! A parameter that is a number must be valid (a probability in `[0, 1]`,
 //! a rate above 0, a natural count), as comparisons decide; otherwise the
@@ -26,6 +29,7 @@ pub(in crate::native) mod discrete;
 pub(in crate::native) mod incomplete;
 pub(in crate::native) mod inversion;
 pub(in crate::native) mod shapes;
+pub(in crate::native) mod tails;
 
 use std::cmp::Ordering;
 

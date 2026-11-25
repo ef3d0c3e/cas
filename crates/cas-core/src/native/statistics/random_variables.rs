@@ -96,7 +96,7 @@ fn refuse(ev: &mut Eval<'_>, e: &Expr, why: &'static str) -> Native {
 }
 
 /// The number of parameters of a law's object.
-fn arity(law: Law) -> usize {
+pub(in crate::native) fn arity(law: Law) -> usize {
     match law {
         Law::Exponential | Law::Poisson | Law::Geometric | Law::StudentT | Law::ChiSquare => 1,
         Law::Normal

@@ -983,6 +983,31 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::CAUCHY_ICDF,
             statistics::distributions::shapes::cauchy_icdf,
         ),
+        (
+            Symbol::UPPER_TAIL_NORMAL,
+            statistics::distributions::tails::upper_tail_normal,
+        ),
+        (
+            Symbol::UPPER_TAIL_STUDENT,
+            statistics::distributions::tails::upper_tail_student,
+        ),
+        (
+            Symbol::UPPER_TAIL_CHI_SQUARE,
+            statistics::distributions::tails::upper_tail_chi_square,
+        ),
+        (
+            Symbol::UPPER_TAIL_FISHER,
+            statistics::distributions::tails::upper_tail_fisher,
+        ),
+        (Symbol::CDF, statistics::distributions::tails::cdf),
+        (
+            Symbol::INVERSE_CDF,
+            statistics::distributions::tails::inverse_cdf,
+        ),
+        (
+            Symbol::MOMENT_GENERATING_FUNCTION,
+            statistics::distributions::tails::moment_generating_function,
+        ),
         (Symbol::RANDOM_GAMMA, random::variates::random_gamma),
         (Symbol::RANDOM_BETA, random::variates::random_beta),
         (Symbol::RANDOM_WEIBULL, random::variates::random_weibull),

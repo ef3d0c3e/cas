@@ -338,3 +338,190 @@ fn fractional_degrees() {
         assert!(holds(&ctx, claim), "{claim}");
     }
 }
+
+/// The one warning of `input`, which stays.
+fn warning(ctx: &Context, input: &str) -> String {
+    use crate::EvalOptions;
+    use crate::trace::Warning;
+    let e = read(input);
+    let (found, report) = ctx.eval_with(&e, &EvalOptions::default());
+    assert_eq!(found.unwrap(), e, "{input}");
+    match &report.warnings[..] {
+        [Warning::Native { message, .. }] => message.to_string(),
+        other => panic!("{input}: {other:?}"),
+    }
+}
+
+/// The upper tails: `1 − F` through the cumulative builtins, expanded;
+/// giac's checks on the degrees, its values within its 12 digits, and
+/// `UTPC(2, 6) = e⁻³` (CAS-625).
+#[test]
+fn upper_tails() {
+    check(&[
+        (
+            "UpperTailNormal[x]",
+            "Expand[Plus[1, Times[-1, NormalCDF[x]]]]",
+        ),
+        (
+            "UpperTailNormal[1, 4, x]",
+            "Expand[Plus[1, Times[-1, NormalCDF[1, 2, x]]]]",
+        ),
+        ("UpperTailNormal[0, 1, 0]", "1/2"),
+        (
+            "UpperTailStudent[3, x]",
+            "Expand[Plus[1, Times[-1, StudentTCDF[3, x]]]]",
+        ),
+        // An integral decimal is a degree, as giac's is_integral reads it.
+        (
+            "UpperTailStudent[0x1.8p+1, 2]",
+            "Expand[Plus[1, Times[-1, StudentTCDF[3, 2]]]]",
+        ),
+        (
+            "UpperTailChiSquare[4, x]",
+            "Expand[Plus[1, Times[-1, ChiSquareCDF[4, x]]]]",
+        ),
+        ("UpperTailChiSquare[3, 0]", "1"),
+        ("UpperTailChiSquare[2, -3]", "1"),
+        ("UpperTailChiSquare[1/2, 0]", "1"),
+        (
+            "UpperTailFisher[4, 10, x]",
+            "Expand[Plus[1, Times[-1, FisherCDF[4, 10, x]]]]",
+        ),
+        ("UpperTailFisher[2, 2, -1]", "1"),
+        ("UpperTailFisher[0, 2, 0]", "1"),
+    ]);
+    let ctx = Context::new();
+    for claim in [
+        "Less[Abs[N[Plus[UpperTailChiSquare[2, 6], Times[-1, Power[E, -3]]], 30]], Power[10, -25]]",
+        "Less[Abs[Plus[N[UpperTailNormal[1, 4, 74/25], 30], Times[-163543059328, Power[10, -12]]]], Power[10, -11]]",
+        "Less[Abs[Plus[N[UpperTailStudent[3, 47/20], 30], Times[-50152899407, Power[10, -12]]]], Power[10, -11]]",
+        "Less[Abs[Plus[N[UpperTailChiSquare[4, 61/10], 30], Times[-191803643784, Power[10, -12]]]], Power[10, -11]]",
+        "Less[Abs[Plus[N[UpperTailFisher[4, 10, 7/2], 30], Times[-491881403249, Power[10, -13]]]], Power[10, -11]]",
+    ] {
+        assert!(holds(&ctx, claim), "{claim}");
+    }
+    for (input, message) in [
+        ("UpperTailNormal[1, 0, 2]", "Bad Argument Value"),
+        ("UpperTailNormal[1, 2]", "Bad Argument Value"),
+        ("UpperTailStudent[3/2, 1]", "Bad Argument Value"),
+        ("UpperTailStudent[0, 1]", "Invalid dimension"),
+        ("UpperTailStudent[3]", "Bad Argument Value"),
+        ("UpperTailChiSquare[-1, 2]", "Bad Argument Value"),
+        ("UpperTailFisher[0, 2, 1]", "Invalid dimension"),
+        ("UpperTailFisher[400, 2, 1]", "Invalid dimension"),
+    ] {
+        assert_eq!(warning(&ctx, input), message, "{input}");
+    }
+    stays(&[
+        "UpperTailChiSquare[1/2, 2]",
+        "UpperTailChiSquare[1/2, -1]",
+        "UpperTailFisher[5/2, 2, 1]",
+    ]);
+}
+
+/// `cdf`, `icdf` and `mgf` of a law by its name (giac's, `exp` among them)
+/// or of a random variable's object; what stays (CAS-626).
+#[test]
+fn laws_by_name() {
+    check(&[
+        ("CDF[NormalPDF, 0, 1, x]", "NormalCDF[0, 1, x]"),
+        ("CDF[NormalPDF, 0, 1]", "NormalCDF[0, 1, x]"),
+        ("CDF[Binomial, 10, 1/2, 3]", "11/64"),
+        ("CDF[Exp, 2, 1]", "ExponentialCDF[2, 1]"),
+        (
+            "CDF[NegativeBinomialPDF, 3, 1/2, 2]",
+            "NegativeBinomialCDF[3, 1/2, 2]",
+        ),
+        ("CDF[NormalPDF[0, 1], 2]", "NormalCDF[0, 1, 2]"),
+        ("CDF[RandomVariable[Binomial, 10, 1/2], 3]", "11/64"),
+        ("InverseCDF[UniformPDF, 0, 1, 1/4]", "1/4"),
+        (
+            "InverseCDF[ExponentialPDF, 2, 1/2]",
+            "ExponentialICDF[2, 1/2]",
+        ),
+        ("InverseCDF[PoissonPDF[3], 1/2]", "PoissonICDF[3, 1/2]"),
+        (
+            "MomentGeneratingFunction[NormalPDF, mu, sigma]",
+            "Exp[Plus[Times[mu, t], Times[1/2, Power[sigma, 2], Power[t, 2]]]]",
+        ),
+        (
+            "MomentGeneratingFunction[NormalPDF[0, 1]]",
+            "Exp[Times[1/2, Power[t, 2]]]",
+        ),
+        (
+            "MomentGeneratingFunction[Binomial, n, p]",
+            "Power[Plus[1, Times[-1, p], Times[p, Exp[t]]], n]",
+        ),
+        (
+            "MomentGeneratingFunction[PoissonPDF, 5]",
+            "Exp[Times[5, Plus[Exp[t], -1]]]",
+        ),
+        (
+            "MomentGeneratingFunction[ChiSquarePDF, k]",
+            "Power[Plus[1, Times[-2, t]], Times[-1/2, k]]",
+        ),
+        (
+            "MomentGeneratingFunction[Exp, 2]",
+            "Power[Plus[1, Times[-1/2, t]], -1]",
+        ),
+        ("MomentGeneratingFunction[StudentTPDF, 3]", "Indeterminate"),
+        ("MomentGeneratingFunction[FisherPDF, 2, 3]", "Indeterminate"),
+        ("MomentGeneratingFunction[CauchyPDF, 0, 1]", "Indeterminate"),
+        (
+            "MomentGeneratingFunction[WeibullPDF, 2, 3]",
+            "Indeterminate",
+        ),
+        ("MomentGeneratingFunction[BetaPDF, 2, 3]", "Indeterminate"),
+    ]);
+    let ctx = Context::new();
+    for input in [
+        "CDF[Together, 0, 1, 1]",
+        "CDF[NormalPDF, 0, 1, 1, 2]",
+        "CDF[RandomVariable[List[1, 2, 3]], 1]",
+        "CDF[x]",
+        "CDF[1, 2]",
+        "InverseCDF[NormalPDF, 0]",
+        "MomentGeneratingFunction[NormalPDF]",
+        "MomentGeneratingFunction[NormalPDF, 0]",
+        "MomentGeneratingFunction[NormalPDF[0, 1], t]",
+    ] {
+        assert_eq!(warning(&ctx, input), "Bad Argument Value", "{input}");
+    }
+}
+
+/// A list's empirical distribution function and its order statistics,
+/// exact (the Python prototype's rows); where they depart from giac's
+/// index, `cdf([1,2,3,4], 2)` giac's 1/4 (CAS-626).
+#[test]
+fn empirical() {
+    check(&[
+        ("CDF[List[1, 2, 3, 4], 2]", "1/2"),
+        ("CDF[List[1, 2, 3, 4], 0]", "0"),
+        ("CDF[List[1, 2, 3, 4], 5]", "1"),
+        ("CDF[List[1, 2, 3, 4], 0x1.4p+1]", "1/2"),
+        ("CDF[List[3, 1, 2, 2], 2]", "3/4"),
+        (
+            "CDF[List[3, 1, 2, 2]]",
+            "List[List[1, 1/4], List[2, 1/2], List[2, 3/4], List[3, 1]]",
+        ),
+        ("InverseCDF[List[1, 2, 3, 4], 0x1p-2]", "1"),
+        ("InverseCDF[List[1, 2, 3, 4], 1/2]", "2"),
+        ("InverseCDF[List[1, 2, 3, 4], 0x1.3333333333333p-1]", "3"),
+        ("InverseCDF[List[3, 1, 2, 2], 1/2]", "2"),
+        ("InverseCDF[List[4, 3, 2, 1], 99/100]", "4"),
+        ("InverseCDF[List[1, 2, 3, 4], 0]", "Indeterminate"),
+        ("InverseCDF[List[1, 2, 3, 4], 1]", "Indeterminate"),
+        ("InverseCDF[List[1, 2, 3, 4], x]", "Indeterminate"),
+    ]);
+    let ctx = Context::new();
+    for input in [
+        "CDF[List[1, 2, 3, 4], x]",
+        "CDF[List[1, x], 1]",
+        "CDF[List[], 1]",
+        "InverseCDF[List[1, 2, 3, 4]]",
+    ] {
+        assert_eq!(warning(&ctx, input), "Bad Argument Value", "{input}");
+    }
+    // giac's frequency classes, not ported: the call stays, no warning.
+    stays(&["CDF[List[List[1, 2], List[3, 4]], 2]"]);
+}

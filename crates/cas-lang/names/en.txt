@@ -791,6 +791,14 @@ WeibullICDF: weibulld_icdf weibull_icdf
 CauchyPDF: cauchyd cauchy
 CauchyCDF: cauchyd_cdf cauchy_cdf
 CauchyICDF: cauchyd_icdf cauchy_icdf
+# Upper tails and the functions of a law by its name (CAS-625, CAS-626).
+UpperTailNormal: UTPN
+UpperTailStudent: UTPT
+UpperTailChiSquare: UTPC
+UpperTailFisher: UTPF
+CDF: cdf
+InverseCDF: icdf
+MomentGeneratingFunction: mgf
 
 # Random numbers (CAS-DOC-33).
 SeedRandom: srand randseed RandSeed

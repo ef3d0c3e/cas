@@ -648,6 +648,14 @@ builtins! {
     CAUCHY_PDF = "CauchyPDF" [PROTECTED];
     CAUCHY_CDF = "CauchyCDF" [PROTECTED];
     CAUCHY_ICDF = "CauchyICDF" [PROTECTED];
+    // Upper tails and the functions of a law by its name (CAS-625, CAS-626).
+    UPPER_TAIL_NORMAL = "UpperTailNormal" [PROTECTED];
+    UPPER_TAIL_STUDENT = "UpperTailStudent" [PROTECTED];
+    UPPER_TAIL_CHI_SQUARE = "UpperTailChiSquare" [PROTECTED];
+    UPPER_TAIL_FISHER = "UpperTailFisher" [PROTECTED];
+    CDF = "CDF" [PROTECTED];
+    INVERSE_CDF = "InverseCDF" [PROTECTED];
+    MOMENT_GENERATING_FUNCTION = "MomentGeneratingFunction" [PROTECTED];
     RANDOM_GAMMA = "RandomGamma" [PROTECTED];
     RANDOM_BETA = "RandomBeta" [PROTECTED];
     RANDOM_WEIBULL = "RandomWeibull" [PROTECTED];
