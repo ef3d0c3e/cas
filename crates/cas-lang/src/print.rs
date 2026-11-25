@@ -52,6 +52,8 @@ pub enum PrintErrorKind {
     /// A ball whose decimal exponent is beyond the literals of the
     /// language ([`MAX_DECIMAL_EXPONENT`](crate::MAX_DECIMAL_EXPONENT)).
     Ball,
+    /// Text longer than the cap of [`print_capped`].
+    TooLong,
 }
 
 impl fmt::Display for PrintError {
@@ -76,6 +78,7 @@ impl fmt::Display for PrintError {
             PrintErrorKind::Ball => {
                 f.write_str("the exponent of this ball is beyond decimal literals")
             }
+            PrintErrorKind::TooLong => f.write_str("the text is longer than the length allowed"),
         }
     }
 }
@@ -190,19 +193,50 @@ pub enum Balls {
 ///
 /// A [`PrintError`] for a part the language cannot write.
 pub fn print_with(e: &Expr, names: &Names, balls: Balls) -> Result<String, PrintError> {
+    print_capped(e, names, balls, usize::MAX)
+}
+
+/// [`print_with`], refusing text longer than `max_len` bytes: the printer
+/// stops as soon as it is past the cap, and an expression of more than
+/// `max_len` atoms and applications is refused before it starts. The
+/// language hook prints so (CAS-614).
+///
+/// # Errors
+///
+/// A [`PrintError`] for a part the language cannot write, and
+/// [`PrintErrorKind::TooLong`] for `e` itself when its text is longer than
+/// `max_len`.
+pub fn print_capped(
+    e: &Expr,
+    names: &Names,
+    balls: Balls,
+    max_len: usize,
+) -> Result<String, PrintError> {
     if usize::from(e.depth()) > MAX_PRINT_DEPTH {
         return Err(PrintError {
             part: e.clone(),
             kind: PrintErrorKind::TooDeep,
         });
     }
+    let too_long = || PrintError {
+        part: e.clone(),
+        kind: PrintErrorKind::TooLong,
+    };
+    if usize::try_from(e.size()).unwrap_or(usize::MAX) > max_len {
+        return Err(too_long());
+    }
     let mut printer = Printer {
         names,
         balls,
+        max_len,
         out: String::new(),
     };
-    printer.expr(e)?;
-    Ok(printer.out)
+    match printer.expr(e) {
+        Err(error) if error.kind == PrintErrorKind::TooLong => Err(too_long()),
+        Err(error) => Err(error),
+        Ok(()) if printer.out.len() > max_len => Err(too_long()),
+        Ok(()) => Ok(printer.out),
+    }
 }
 
 /// How tightly a printed form binds, weakest first: the levels of
@@ -721,6 +755,8 @@ fn spelled<'n>(names: &'n Names, target: &Target) -> &'n str {
 struct Printer<'a> {
     names: &'a Names,
     balls: Balls,
+    /// The longest text written, in bytes; checked as each part starts.
+    max_len: usize,
     out: String,
 }
 
@@ -759,6 +795,12 @@ impl<'a> Printer<'a> {
 
     /// Writes `e` without parentheses around it.
     fn expr(&mut self, e: &Expr) -> Result<(), PrintError> {
+        if self.out.len() > self.max_len {
+            return Err(PrintError {
+                part: e.clone(),
+                kind: PrintErrorKind::TooLong,
+            });
+        }
         match e.view() {
             View::Symbol(Symbol::INFINITY) => {
                 self.out.push('+');

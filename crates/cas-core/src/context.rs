@@ -2,7 +2,8 @@
 //!
 //! Besides values, rules, attributes and assumptions, a context holds the
 //! settings evaluation reads: the working precision (Xcas's `Digits`),
-//! `all_trig_solutions` and `with_sqrt` (CAS-545), which the session sets.
+//! `all_trig_solutions` and `with_sqrt` (CAS-545), which the session sets,
+//! and the [`Language`] natives print and read text with (CAS-614).
 
 use std::fmt;
 use std::num::NonZeroU64;
@@ -17,6 +18,7 @@ use hashbrown::HashMap;
 use crate::assume::{Domain, Facts};
 use crate::attributes::Attributes;
 use crate::expr::{Expr, Repr};
+use crate::language::Language;
 use crate::rules::Rules;
 use crate::symbol::Symbol;
 use crate::symbol_map::SymbolMap;
@@ -144,6 +146,10 @@ struct State {
     /// Xcas's `with_sqrt` (CAS-545): `Factor` splits quadratics over
     /// square roots.
     with_sqrt: bool,
+    /// The surface language (CAS-614), in the state so that setting it
+    /// gives a new id: nothing cached under one hook is reused under
+    /// another.
+    language: Option<Arc<dyn Language>>,
 }
 
 /// The working precision of a new context: 53 bits, a double's.
@@ -163,6 +169,7 @@ impl Default for State {
             strict_comparisons: false,
             all_trig_solutions: false,
             with_sqrt: true,
+            language: None,
         }
     }
 }
@@ -633,6 +640,18 @@ impl Context {
         self.state_mut().with_sqrt = on;
     }
 
+    /// The language natives print and read text with (CAS-614): none in a
+    /// new context; cas-lang's session installs its own.
+    #[must_use]
+    pub fn language(&self) -> Option<&dyn Language> {
+        self.state.language.as_deref()
+    }
+
+    /// Sets [`Context::language`].
+    pub fn set_language(&mut self, language: Option<Arc<dyn Language>>) {
+        self.state_mut().language = language;
+    }
+
     /// The context `N` evaluates in at `bits` bits (CAS-DOC-5 §9.4): this
     /// one, at that working precision, where comparisons of balls decide
     /// only what they prove. A state of its own, so that nothing cached in
@@ -730,6 +749,7 @@ impl fmt::Debug for Context {
             .field("domain", &self.state.domain)
             .field("limits", &self.state.limits)
             .field("working_precision", &self.state.working_precision)
+            .field("language", &self.state.language.is_some())
             .field("warned_fixpoints", &self.warned.lock().warnings.len())
             .field(
                 "interrupted",

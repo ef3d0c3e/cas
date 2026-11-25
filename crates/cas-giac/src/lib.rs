@@ -44,7 +44,7 @@ use std::fmt;
 use std::sync::OnceLock;
 
 use cas_core::{Context, Expr};
-use cas_lang::{Names, decimal_balls, lower, parse, print};
+use cas_lang::{Hook, Names, decimal_balls, lower, parse, print};
 
 use library::Library;
 
@@ -220,7 +220,7 @@ impl Giac {
             &[value.clone(), expected.clone()],
         );
         if value == *expected
-            || Context::new().eval(&equal).ok().and_then(|e| e.as_symbol())
+            || english().eval(&equal).ok().and_then(|e| e.as_symbol())
                 == Some(cas_core::Symbol::TRUE)
         {
             return Ok(());
@@ -234,6 +234,13 @@ impl Giac {
     }
 }
 
+/// A new context with the English language hook (CAS-614).
+fn english() -> Context {
+    let mut context = Context::new();
+    context.set_language(Some(Hook::english()));
+    context
+}
+
 /// `e` in the language, or in the evaluator's notation where the language
 /// cannot write it.
 fn written(e: &Expr) -> String {
@@ -242,7 +249,7 @@ fn written(e: &Expr) -> String {
 
 /// The value of `text` in this CAS: one statement, parsed and lowered with
 /// the English names, its decimals balls at 53 bits, evaluated in a new
-/// context.
+/// context with the English language hook.
 ///
 /// # Errors
 ///
@@ -262,7 +269,7 @@ pub fn ours(text: &str) -> Result<Expr, OracleError> {
         return Err(unreadable("not one statement".to_owned()));
     };
     let e = decimal_balls(&statement.expr, cas_core::DEFAULT_WORKING_PRECISION);
-    Context::new()
+    english()
         .eval(&e)
         .map_err(|error| unreadable(error.to_string()))
 }

@@ -898,6 +898,7 @@ fn pattern(u: &mut Unstructured<'_>, depth: u8, tests: bool) -> Result<Expr> {
 /// the caller's thread.
 fn context(u: &mut Unstructured<'_>, recursion: u32) -> Result<Context> {
     let mut ctx = Context::new();
+    ctx.set_language(Some(cas_lang::Hook::english()));
     // First: definitions and assumptions evaluate too.
     let mut limits: Limits = ctx.limits();
     limits.recursion = recursion;

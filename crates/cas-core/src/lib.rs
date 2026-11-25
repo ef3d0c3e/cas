@@ -33,6 +33,8 @@
 //! - [`poly`]: expressions as polynomials and rational functions over
 //!   cas-poly (CAS-DOC-8 §2): their generators, numerators and
 //!   denominators, and the way back.
+//! - [`Language`]: the hook through which natives print and read the
+//!   surface language, which cas-lang installs in a [`Context`].
 
 mod assume;
 mod attributes;
@@ -43,6 +45,7 @@ mod context;
 mod eval;
 mod expr;
 mod intern;
+mod language;
 mod native;
 mod node;
 mod order;
@@ -65,6 +68,7 @@ pub use context::{
 pub use eval::{Eval, NativeFn, STACK_PER_LEVEL};
 pub use expr::{Expr, View};
 pub use intern::{InternerStats, interner_stats};
+pub use language::{Form, Language};
 pub use pattern::{Pattern, PatternError, PatternErrorKind, Rule};
 pub use print::{FullForm, ball_decimal, digits_bits, shown_digits};
 pub use read::{FullFormError, FullFormErrorKind};

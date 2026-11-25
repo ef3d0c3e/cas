@@ -22,6 +22,42 @@ fn context_is_send_and_sync() {
     send_sync::<Context>();
 }
 
+/// A language that writes and reads nothing, to set as a hook.
+struct Stub;
+
+impl crate::Language for Stub {
+    fn print(&self, _: &Expr, _: crate::Form, _: &Context, _: usize) -> Result<String, String> {
+        Err("stub".to_owned())
+    }
+
+    fn read(&self, _: &str, _: &Context) -> Result<Expr, String> {
+        Err("stub".to_owned())
+    }
+}
+
+#[test]
+fn language_is_part_of_the_state() {
+    let mut ctx = Context::new();
+    assert!(ctx.language().is_none());
+    assert!(format!("{ctx:?}").contains("language: false"));
+    let before = ctx.id();
+    ctx.set_language(Some(Arc::new(Stub)));
+    assert_ne!(ctx.id(), before);
+    assert!(ctx.language().is_some());
+    assert!(format!("{ctx:?}").contains("language: true"));
+    assert!(ctx.clone().language().is_some());
+    let child = ctx.assuming(Expr::apply(
+        &sym("Greater").into(),
+        &[sym("x").into(), 0.into()],
+    ));
+    assert!(child.language().is_some());
+    let unset = ctx.id();
+    ctx.set_language(None);
+    assert_ne!(ctx.id(), unset);
+    assert!(ctx.language().is_none());
+    assert!(child.language().is_some());
+}
+
 #[test]
 fn builtins_cannot_change() {
     let mut ctx = Context::new();

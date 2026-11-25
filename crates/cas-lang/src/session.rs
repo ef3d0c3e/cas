@@ -29,11 +29,13 @@
 //! session goes on with the next one.
 
 use std::ops::Range;
+use std::sync::Arc;
 
 use cas_core::{
     Attributes, Context, DefineError, EvalError, EvalOptions, Expr, Interrupt, Limits, Symbol, View,
 };
 
+use crate::hook::Hook;
 use crate::literal::decimal_balls;
 use crate::lower::{Fix, Severity, Statement, lower};
 use crate::names::{Names, unescape_name};
@@ -125,11 +127,13 @@ impl Session {
         Session::with_names(Names::english().clone())
     }
 
-    /// A session with the names of a locale ([`Names::with_locale`]).
+    /// A session with the names of a locale ([`Names::with_locale`]),
+    /// which its context's language hook ([`Hook`]) uses too.
     #[must_use]
     pub fn with_names(names: Names) -> Session {
         let mut context = Context::new();
         context.set_limits(Limits::deep());
+        context.set_language(Some(Arc::new(Hook::new(names.clone()))));
         let interrupt = Interrupt::new();
         context.set_interrupt(interrupt.clone());
         Session {
