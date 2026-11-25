@@ -31,6 +31,7 @@
 mod engine;
 mod ident;
 mod lower;
+mod mml;
 mod tree;
 
 use cas_core::Expr;
@@ -58,7 +59,7 @@ pub fn latex(e: &Expr, names: &Names, balls: Balls, max_len: usize) -> Result<St
         });
     }
     let g = lower::Lowering { names, balls }.tree(e)?;
-    engine::Engine { max_len }
+    engine::Engine::new(max_len)
         .export_latex(&g)
         .map_err(|engine::TooLong| PrintError {
             part: e.clone(),

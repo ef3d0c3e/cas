@@ -451,9 +451,7 @@ fn parse(text: &str, quote: bool) -> Gen {
 
 #[test]
 fn the_engine_writes_giacs_latex_of_giacs_answers() {
-    let engine = Engine {
-        max_len: usize::MAX,
-    };
+    let engine = Engine::new(usize::MAX);
     let mut failures = Vec::new();
     let mut rows = 0;
     for line in include_str!("giac_latex.tsv").lines() {

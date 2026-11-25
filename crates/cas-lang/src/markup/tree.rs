@@ -1,11 +1,11 @@
-//! The tree the LaTeX printer works on: giac's `gen`, in the shapes giac's
+//! The tree the LaTeX and MathML printers work on: giac's `gen`, in the shapes giac's
 //! evaluator leaves (markup.cc reads `g.type`, `g._SYMBptr->sommet` and
 //! `feuille`). Built by [`lower`](super::lower) from our expressions, and by
 //! the tests from giac's printed answers.
 
 use cas_core::Integer;
 
-/// A giac `gen`, as far as the LaTeX printer looks at it.
+/// A giac `gen`, as far as the printers look at it.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum Gen {
     /// `_INT_`/`_ZINT`.
@@ -23,6 +23,8 @@ pub(super) enum Gen {
     Idnt(String),
     /// `_STRNG`.
     Str(String),
+    /// `_FUNC`: a builtin by its giac name, not applied (`Gamma`).
+    Func(String),
     /// `_VECT` with its subtype.
     Vect(Vec<Gen>, Sub),
     /// `_SYMB`: the operator's name (giac's `sommet`) and its argument, a
