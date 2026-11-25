@@ -52,3 +52,14 @@
 1.5 | T8 | done | push master for the phase's final CI and Fuzz runs | - | phase-1.5/tasks/T8.md | phase-1.5/logs/T8.md | -
 1.5 | T9 | done | CI and Fuzz check on the pushed head; tickets done and CAS-DOC-57 in step | - | phase-1.5/tasks/T9.md | phase-1.5/logs/T9.md | -
 1.5 | T10 | done | phase cleanup | - | phase-1.5/tasks/T10.md | phase-1.5/logs/T10.md | -
+1.6 | T1 | done | design page CAS-DOC-58 and one ticket per family | - | phase-1.6/tasks/T1.md | phase-1.6/logs/T1.md | R1.6-009,R1.6-001,R1.6-003,R1.6-005,R1.6-008
+1.6 | T2 | done | string commands: access, search, splitting, joining, trimming and distances | - | phase-1.6/tasks/T2.md | phase-1.6/logs/T2.md | R1.6-003,R1.6-007,R1.6-006
+1.6 | T3 | done | the printer and reader hook: string, str, expr, execute and cat | - | phase-1.6/tasks/T3.md | phase-1.6/logs/T3.md | R1.6-003,R1.6-006,R1.6-007
+1.6 | T4 | done | the LaTeX printer: latex and TeX on a port of giac's markup engine | - | phase-1.6/tasks/T4.md | phase-1.6/logs/T4.md | R1.6-001,R1.6-004,R1.6-007,R1.6-010
+1.6 | T5 | done | the MathML printers: export_mathml and mathml | - | phase-1.6/tasks/T5.md | phase-1.6/logs/T5.md | R1.6-001,R1.6-005,R1.6-006
+1.6 | T6 | done | settings: angle, complex and approximate modes, increasing_power, epsilon, cas_setup and giac's tuning words | - | phase-1.6/tasks/T6.md | phase-1.6/logs/T6.md | R1.6-002,R1.6-006
+1.6 | T7 | done | session commands: restart, the variable lists, history, clocks, version and nodisp | - | phase-1.6/tasks/T7.md | phase-1.6/logs/T7.md | R1.6-002,R1.6-006,R1.5-003
+1.6 | T8 | done | area 18's names: type and the DOM_* constants, iPart, fPart, trunc, the TI sorts, sortperm, RandSeed, symbols and TI matrix names | - | phase-1.6/tasks/T8.md | phase-1.6/logs/T8.md | R1.6-003,R1.6-006
+1.6 | T9 | done | push master for the phase's final CI and Fuzz runs | - | phase-1.6/tasks/T9.md | phase-1.6/logs/T9.md | -
+1.6 | T10 | done | CI and Fuzz check on the pushed head; tickets done and CAS-DOC-58 in step | - | phase-1.6/tasks/T10.md | phase-1.6/logs/T10.md | -
+1.6 | T11 | done | phase cleanup | - | phase-1.6/tasks/T11.md | phase-1.6/logs/T11.md | -
