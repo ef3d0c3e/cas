@@ -3,6 +3,7 @@
 //! balls on decimals, each warning, and seeded `randmarkov` paths and
 //! matrices by their properties.
 
+use crate::context::Limits;
 use crate::trace::Warning;
 use crate::{Context, EvalOptions, Expr, Symbol, View};
 
@@ -251,7 +252,6 @@ fn warnings() {
             "RandomMarkovChain[List[List[1/2, 1/2], List[1/3, 2/3]], 0, 1000000]",
             "too many draws",
         ),
-        ("MarkovChain[IdentityMatrix[1001]]", "too many states"),
     ];
     let mut wrong = Vec::new();
     for (input, expected) in cases {
@@ -261,6 +261,14 @@ fn warnings() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    // A chain of more entries than `terms`.
+    let mut small = Context::new();
+    let limits = small.limits();
+    small.set_limits(Limits { terms: 3, ..limits });
+    assert_eq!(
+        warning(&small, &format!("MarkovChain[{HALVES}]")),
+        "too many states"
+    );
     // A plot argument stays without a warning.
     let e = read("RandomMarkovChain[List[List[1/2, 1/2], List[1/3, 2/3]], 0, 4, plot]");
     let (found, report) = ctx.eval_with(&e, &EvalOptions::default());
