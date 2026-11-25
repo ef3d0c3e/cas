@@ -412,7 +412,8 @@ impl Parser {
             Tok::Op if val == "'" => {
                 let (_, name) = self.take();
                 self.expect("'");
-                Gen::Idnt(name)
+                // A bare builtin evaluates to giac's _FUNC (:1647).
+                Gen::Func(name)
             }
             Tok::Op if val == "(" => {
                 let mut args = vec![self.expr()];

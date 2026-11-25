@@ -19,6 +19,14 @@ pub enum Form {
     Input,
     /// LaTeX, as giac's `latex()` writes it (CAS-615).
     Latex,
+    /// MathML, as giac's `export_mathml(e)` writes it (CAS-616):
+    /// presentation and content in `<semantics>`, the input form as the
+    /// annotation.
+    Mathml,
+    /// MathML presentation, giac's `export_mathml(e, display)`.
+    MathmlDisplay,
+    /// MathML content, giac's `export_mathml(e, content)`.
+    MathmlContent,
 }
 
 /// A language that prints expressions as text and reads text back.

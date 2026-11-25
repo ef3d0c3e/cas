@@ -182,6 +182,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         (Symbol::TO_EXPRESSION, text::to_expression),
         (Symbol::CAT, text::cat),
         (Symbol::LA_TE_X, text::latex),
+        (Symbol::EXPORT_MATH_ML, text::export_mathml),
         (Symbol::BESSEL_J, bessel::bessel),
         (Symbol::BESSEL_Y, bessel::bessel),
         (Symbol::BESSEL_I, bessel::bessel),

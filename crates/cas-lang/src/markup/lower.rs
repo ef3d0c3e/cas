@@ -261,7 +261,8 @@ impl Lowering<'_> {
             Symbol::INDETERMINATE => Gen::idnt("undef"),
             Symbol::COMPLEX_INFINITY => Gen::idnt("infinity"),
             Symbol::INFINITY => Gen::symb("plus", Gen::idnt("infinity")),
-            s if s.is_builtin() => Gen::Idnt(self.op_name(s)),
+            // A bare builtin is giac's _FUNC (:1647): `\sin `, `<sin/>`.
+            s if s.is_builtin() => Gen::Func(self.op_name(s)),
             s => Gen::idnt(unescape_name(s.name())),
         }
     }

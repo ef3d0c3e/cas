@@ -12,7 +12,7 @@ use cas_core::{Context, Expr, Form, Language, Symbol};
 
 use crate::literal::decimal_balls;
 use crate::lower::{Severity, lower};
-use crate::markup::latex;
+use crate::markup::{MathmlKind, export_mathml, latex};
 use crate::names::Names;
 use crate::parser::parse;
 use crate::print::{Balls, print_capped};
@@ -57,6 +57,15 @@ impl Language for Hook {
                 print_capped(e, &self.names, balls, max_len).map_err(|error| error.to_string())
             }
             Form::Latex => latex(e, &self.names, balls, max_len).map_err(|error| error.to_string()),
+            Form::Mathml | Form::MathmlDisplay | Form::MathmlContent => {
+                let kind = match form {
+                    Form::Mathml => MathmlKind::Default,
+                    Form::MathmlDisplay => MathmlKind::Display,
+                    _ => MathmlKind::Content,
+                };
+                export_mathml(e, &self.names, balls, max_len, kind)
+                    .map_err(|error| error.to_string())
+            }
             _ => Err(format!("no printer for the form {form:?}")),
         }
     }

@@ -48,7 +48,7 @@ pub use literal::{
     superscript_value,
 };
 pub use lower::{Diagnostic, Fix, LowerErrorKind, Lowered, Severity, Spans, Statement, lower};
-pub use markup::latex;
+pub use markup::{MathmlKind, export_mathml, latex};
 pub use names::{
     Names, NamesError, NamesErrorKind, SyntaxForm, Target, TypeName, escape_name, unescape_name,
 };

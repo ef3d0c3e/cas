@@ -37,7 +37,7 @@ mod tree;
 use cas_core::Expr;
 
 use crate::names::Names;
-use crate::print::{Balls, MAX_PRINT_DEPTH, PrintError, PrintErrorKind};
+use crate::print::{Balls, MAX_PRINT_DEPTH, PrintError, PrintErrorKind, print_capped};
 
 /// `e` in LaTeX as giac's `latex()` writes the same answer (`export_latex`,
 /// markup.cc :3629): `x/2` is `\frac{x}{2}`, `cos(x)^2` `\cos ^{2}x`. Names
@@ -52,19 +52,70 @@ use crate::print::{Balls, MAX_PRINT_DEPTH, PrintError, PrintErrorKind};
 /// `max_len` bytes; [`PrintErrorKind::Ball`] for a decimal whose exponent
 /// is beyond `i64`.
 pub fn latex(e: &Expr, names: &Names, balls: Balls, max_len: usize) -> Result<String, PrintError> {
+    let g = tree(e, names, balls)?;
+    engine::Engine::new(max_len)
+        .export_latex(&g)
+        .map_err(|engine::TooLong| too_long(e))
+}
+
+/// The forms of giac's `export_mathml` (markup.cc :3747-3776).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MathmlKind {
+    /// `export_mathml(e)` (:3765): presentation in `<semantics>`, its tags
+    /// referring (`xref`) to the content's ids, the content in
+    /// `<annotation-xml encoding='MathML-Content'>`, and the input form in
+    /// `<annotation encoding='giac'>`.
+    Default,
+    /// `export_mathml(e, display)` (:3755): presentation only.
+    Display,
+    /// `export_mathml(e, content)` (:3747): content only.
+    Content,
+}
+
+/// `e` in MathML as giac's `export_mathml` writes the same answer, in the
+/// form `kind`; names and balls as [`latex`] has them. The annotation of
+/// [`MathmlKind::Default`] is our input form of `e` (giac's is its own),
+/// escaped (`str_to_mml`).
+///
+/// # Errors
+///
+/// As [`latex`]'s, and the input form's for the annotation.
+pub fn export_mathml(
+    e: &Expr,
+    names: &Names,
+    balls: Balls,
+    max_len: usize,
+    kind: MathmlKind,
+) -> Result<String, PrintError> {
+    let g = tree(e, names, balls)?;
+    let engine = engine::Engine::new(max_len);
+    match kind {
+        MathmlKind::Default => {
+            let printed = print_capped(e, names, balls, max_len)?;
+            engine.export_mathml(&g, &printed)
+        }
+        MathmlKind::Display => engine.export_mathml_presentation(&g),
+        MathmlKind::Content => engine.export_mathml_content(&g),
+    }
+    .map_err(|engine::TooLong| too_long(e))
+}
+
+/// `e` as giac's tree, refused when deeper than [`MAX_PRINT_DEPTH`].
+fn tree(e: &Expr, names: &Names, balls: Balls) -> Result<tree::Gen, PrintError> {
     if usize::from(e.depth()) > MAX_PRINT_DEPTH {
         return Err(PrintError {
             part: e.clone(),
             kind: PrintErrorKind::TooDeep,
         });
     }
-    let g = lower::Lowering { names, balls }.tree(e)?;
-    engine::Engine::new(max_len)
-        .export_latex(&g)
-        .map_err(|engine::TooLong| PrintError {
-            part: e.clone(),
-            kind: PrintErrorKind::TooLong,
-        })
+    lower::Lowering { names, balls }.tree(e)
+}
+
+fn too_long(e: &Expr) -> PrintError {
+    PrintError {
+        part: e.clone(),
+        kind: PrintErrorKind::TooLong,
+    }
 }
 
 #[cfg(test)]

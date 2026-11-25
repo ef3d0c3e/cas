@@ -47,11 +47,37 @@ pub(super) fn latex(ev: &mut Eval<'_>, e: &Expr) -> Native {
     printed(ev, e, Form::Latex)
 }
 
+/// `ExportMathML[e]` (CAS-616): `e` as MathML, giac's `export_mathml`
+/// (markup.cc :3765); `ExportMathML[e, display]` presentation only,
+/// `ExportMathML[e, content]` content only. Another second argument stays.
+pub(super) fn export_mathml(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let form = match e.args() {
+        [_] => Form::Mathml,
+        // `content` is an alias of `Content` (C0008).
+        [_, kind] => match kind.as_symbol() {
+            Some(Symbol::CONTENT) => Form::MathmlContent,
+            Some(s) if s.name() == "content" => Form::MathmlContent,
+            Some(s) if s.name() == "display" => Form::MathmlDisplay,
+            _ => return Ok(None),
+        },
+        _ => return Ok(None),
+    };
+    let [x, ..] = e.args() else {
+        return Ok(None);
+    };
+    print_form(ev, e, x, form)
+}
+
 /// `head[x]`: `x` printed in `form` through the hook, as a string.
 fn printed(ev: &mut Eval<'_>, e: &Expr, form: Form) -> Native {
     let [x] = e.args() else {
         return Ok(None);
     };
+    print_form(ev, e, x, form)
+}
+
+/// `x`, an argument of `e`, printed in `form` through the hook.
+fn print_form(ev: &mut Eval<'_>, e: &Expr, x: &Expr, form: Form) -> Native {
     let context = ev.context();
     let Some(language) = context.language() else {
         return Ok(None);

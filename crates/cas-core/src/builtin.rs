@@ -189,6 +189,8 @@ builtins! {
     CAT = "Cat" [PROTECTED];
     // LaTeX, Xcas's (CAS-615).
     LA_TE_X = "LaTeX" [PROTECTED];
+    // MathML, Xcas's (CAS-616).
+    EXPORT_MATH_ML = "ExportMathML" [PROTECTED];
     // Laplace transforms (CAS-DOC-18).
     LAPLACE_TRANSFORM = "LaplaceTransform" [PROTECTED];
     INVERSE_LAPLACE_TRANSFORM = "InverseLaplaceTransform" [PROTECTED];

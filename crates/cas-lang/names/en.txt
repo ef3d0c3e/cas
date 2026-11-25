@@ -850,6 +850,8 @@ ToExpression: expr execute
 Cat: cat
 # LaTeX (CAS-615), Xcas's.
 LaTeX: latex TeX
+# MathML (CAS-616), Xcas's.
+ExportMathML: export_mathml
 
 [planned]
 
