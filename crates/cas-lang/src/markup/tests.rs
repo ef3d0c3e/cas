@@ -439,7 +439,7 @@ impl Parser {
     }
 }
 
-fn parse(text: &str, quote: bool) -> Gen {
+pub(crate) fn parse(text: &str, quote: bool) -> Gen {
     let mut p = Parser {
         t: tokenize(text),
         i: 0,

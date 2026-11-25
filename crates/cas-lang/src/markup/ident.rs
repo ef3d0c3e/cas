@@ -43,7 +43,7 @@ pub(super) fn is_greek_letter(s: &str) -> bool {
 }
 
 /// giac's `my_isalpha`: an ASCII letter or any non-ASCII character.
-pub(super) fn my_isalpha(c: char) -> bool {
+pub(crate) fn my_isalpha(c: char) -> bool {
     c.is_ascii_alphabetic() || !c.is_ascii()
 }
 

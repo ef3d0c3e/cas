@@ -35,6 +35,7 @@ mod lexer;
 mod literal;
 mod lower;
 mod markup;
+mod mathml;
 mod names;
 mod parser;
 mod print;
@@ -49,6 +50,7 @@ pub use literal::{
 };
 pub use lower::{Diagnostic, Fix, LowerErrorKind, Lowered, Severity, Spans, Statement, lower};
 pub use markup::{MathmlKind, export_mathml, latex};
+pub use mathml::mathml;
 pub use names::{
     Names, NamesError, NamesErrorKind, SyntaxForm, Target, TypeName, escape_name, unescape_name,
 };

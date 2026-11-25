@@ -7,7 +7,7 @@ use cas_core::Integer;
 
 /// A giac `gen`, as far as the printers look at it.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) enum Gen {
+pub(crate) enum Gen {
     /// `_INT_`/`_ZINT`.
     Int(Integer),
     /// A boolean (`_INT_` of subtype `_INT_BOOLEAN`).
@@ -34,7 +34,7 @@ pub(super) enum Gen {
 
 /// The subtypes of a `_VECT` the printer tells apart.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Sub {
+pub(crate) enum Sub {
     /// A list, `[…]` (subtype 0).
     List,
     /// A sequence, `(…)`, bare at the top level (`_SEQ__VECT`).
@@ -44,31 +44,31 @@ pub(super) enum Sub {
 }
 
 impl Gen {
-    pub(super) fn int(n: i64) -> Gen {
+    pub(crate) fn int(n: i64) -> Gen {
         Gen::Int(Integer::from(n))
     }
 
     /// The imaginary unit.
-    pub(super) fn i() -> Gen {
+    pub(crate) fn i() -> Gen {
         Gen::Cplx(Box::new(Gen::int(0)), Box::new(Gen::int(1)))
     }
 
-    pub(super) fn idnt(name: &str) -> Gen {
+    pub(crate) fn idnt(name: &str) -> Gen {
         Gen::Idnt(name.to_owned())
     }
 
     /// `op(arg)`.
-    pub(super) fn symb(op: &str, arg: Gen) -> Gen {
+    pub(crate) fn symb(op: &str, arg: Gen) -> Gen {
         Gen::Symb(op.to_owned(), Box::new(arg))
     }
 
     /// `op(args…)`: the argument a sequence.
-    pub(super) fn symb_n(op: &str, args: Vec<Gen>) -> Gen {
+    pub(crate) fn symb_n(op: &str, args: Vec<Gen>) -> Gen {
         Gen::symb(op, Gen::Vect(args, Sub::Seq))
     }
 
     /// The arguments of a `Symb`: its sequence's items, or the one argument.
-    pub(super) fn args(&self) -> &[Gen] {
+    pub(crate) fn args(&self) -> &[Gen] {
         match self {
             Gen::Symb(_, arg) => match &**arg {
                 Gen::Vect(items, _) => items,
@@ -79,13 +79,13 @@ impl Gen {
     }
 
     /// Whether this is a `Symb` of one of `ops`.
-    pub(super) fn is_sym(&self, ops: &[&str]) -> bool {
+    pub(crate) fn is_sym(&self, ops: &[&str]) -> bool {
         matches!(self, Gen::Symb(op, _) if ops.contains(&op.as_str()))
     }
 
     /// Whether this is a number equal to `p/q` (giac's `is_one`,
     /// `is_zero`, `is_minus_one` and `2*e == 1`).
-    pub(super) fn equals(&self, p: i64, q: i64) -> bool {
+    pub(crate) fn equals(&self, p: i64, q: i64) -> bool {
         match self {
             Gen::Int(n) => q == 1 && *n == Integer::from(p),
             Gen::Frac(a, b) => match (&**a, &**b) {
@@ -101,15 +101,15 @@ impl Gen {
         }
     }
 
-    pub(super) fn is_zero(&self) -> bool {
+    pub(crate) fn is_zero(&self) -> bool {
         self.equals(0, 1)
     }
 
-    pub(super) fn is_one(&self) -> bool {
+    pub(crate) fn is_one(&self) -> bool {
         self.equals(1, 1)
     }
 
-    pub(super) fn is_minus_one(&self) -> bool {
+    pub(crate) fn is_minus_one(&self) -> bool {
         self.equals(-1, 1)
     }
 }

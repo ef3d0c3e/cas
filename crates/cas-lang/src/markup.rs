@@ -54,10 +54,10 @@
 //! with two `&af;`).
 
 mod engine;
-mod ident;
+pub(crate) mod ident;
 mod lower;
 mod mml;
-mod tree;
+pub(crate) mod tree;
 
 use cas_core::Expr;
 
@@ -126,7 +126,7 @@ pub fn export_mathml(
 }
 
 /// `e` as giac's tree, refused when deeper than [`MAX_PRINT_DEPTH`].
-fn tree(e: &Expr, names: &Names, balls: Balls) -> Result<tree::Gen, PrintError> {
+pub(crate) fn tree(e: &Expr, names: &Names, balls: Balls) -> Result<tree::Gen, PrintError> {
     if usize::from(e.depth()) > MAX_PRINT_DEPTH {
         return Err(PrintError {
             part: e.clone(),
@@ -144,4 +144,4 @@ fn too_long(e: &Expr) -> PrintError {
 }
 
 #[cfg(test)]
-mod tests;
+pub(crate) mod tests;
