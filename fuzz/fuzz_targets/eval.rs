@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 655] = [
+const BUILTINS: [&str; 657] = [
     "Plus",
     "Times",
     "Power",
@@ -749,6 +749,9 @@ const BUILTINS: [&str; 655] = [
     "LeastSquares",
     "LQDecomposition",
     "AscendingSingularValueDecomposition",
+    // Random variables (CAS-624).
+    "RandomVariable",
+    "RandomMultinomial",
 ];
 
 /// Builtins that apply something to parts, only in the expression

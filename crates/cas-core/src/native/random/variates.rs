@@ -2,7 +2,8 @@
 //! `randnorm`, `randexp`, `randbinomial`, `randpoisson`, `randgeometric`,
 //! `randchisquare`, `randstudent` and `randfisher`, `randgammad`,
 //! `randbetad` and `randweibulld` (CAS-DOC-46 §4), and the laws of
-//! `randvector`, `randmatrix` and `randpoly`, named by their densities.
+//! `randvector`, `randmatrix` and `randpoly`, named by their densities,
+//! with the Cauchy law's (CAS-624) for `randvar`'s objects.
 //!
 //! A variate is the inverse cumulative function of its law (CAS-DOC-23) at
 //! a uniform `u` in `(0, 1)`, an exact ball, made one number by `N` where
@@ -41,6 +42,7 @@ pub(in crate::native) enum Law {
     Gamma,
     Beta,
     Weibull,
+    Cauchy,
 }
 
 impl Law {
@@ -61,6 +63,7 @@ impl Law {
             Symbol::GAMMA_PDF => Law::Gamma,
             Symbol::BETA_PDF => Law::Beta,
             Symbol::WEIBULL_PDF => Law::Weibull,
+            Symbol::CAUCHY_PDF => Law::Cauchy,
             _ => return None,
         })
     }
@@ -81,13 +84,15 @@ impl Law {
             Law::Gamma => Symbol::GAMMA_ICDF,
             Law::Beta => Symbol::BETA_ICDF,
             Law::Weibull => Symbol::WEIBULL_ICDF,
+            Law::Cauchy => Symbol::CAUCHY_ICDF,
         }
     }
 
-    /// Whether it takes `n` parameters: the normal 0, standard, or 2.
+    /// Whether it takes `n` parameters: the normal and the Cauchy law 0,
+    /// standard, or 2.
     fn takes(self, n: usize) -> bool {
         match self {
-            Law::Normal => n == 0 || n == 2,
+            Law::Normal | Law::Cauchy => n == 0 || n == 2,
             Law::Uniform
             | Law::Binomial
             | Law::NegativeBinomial

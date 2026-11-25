@@ -997,6 +997,14 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             random::collections::random_permutation,
         ),
         (Symbol::RANDOM_SAMPLE, random::collections::random_sample),
+        (
+            Symbol::RANDOM_VARIABLE,
+            statistics::random_variables::random_variable,
+        ),
+        (
+            Symbol::RANDOM_MULTINOMIAL,
+            statistics::random_variables::random_multinomial,
+        ),
         (Symbol::SOLVE, solve::solve),
         (Symbol::CSOLVE, solve::complex_solve),
         (Symbol::FSOLVE, solve::fsolve),

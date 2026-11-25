@@ -812,6 +812,8 @@ RandomMatrix: randmatrix ranm
 RandomPolynomial: randpoly
 RandomPermutation: randperm shuffle
 RandomSample: sample
+RandomVariable: randvar random_variable
+RandomMultinomial: randmultinomial
 
 # Bessel and Airy functions (CAS-DOC-34), the order first; giac's
 # lowercase `besselJ(x, n)` takes the argument first and is not these.

@@ -32,11 +32,14 @@
 //! - The regressions (§5, CAS-297), least squares: [`regression`].
 //! - Probability distributions (CAS-DOC-23): [`distributions`].
 //! - Hypothesis tests (CAS-DOC-52): [`hypothesis`].
+//! - Random variables, Xcas's `randvar` objects (CAS-624):
+//!   [`random_variables`].
 
 pub(super) mod descriptive;
 pub(super) mod distributions;
 pub(super) mod hypothesis;
 mod order;
+pub(super) mod random_variables;
 pub(super) mod regression;
 
 use cas_num::Rational;

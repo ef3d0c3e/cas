@@ -658,6 +658,9 @@ builtins! {
     RANDOM_POLYNOMIAL = "RandomPolynomial" [PROTECTED];
     RANDOM_PERMUTATION = "RandomPermutation" [PROTECTED];
     RANDOM_SAMPLE = "RandomSample" [PROTECTED];
+    // Random variables (CAS-624).
+    RANDOM_VARIABLE = "RandomVariable" [PROTECTED];
+    RANDOM_MULTINOMIAL = "RandomMultinomial" [PROTECTED];
     // Simplification (CAS-DOC-14).
     SIMPLIFY = "Simplify" [PROTECTED];
     TRIG_EXPAND = "TrigExpand" [PROTECTED];

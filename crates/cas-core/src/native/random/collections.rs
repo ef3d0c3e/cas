@@ -16,18 +16,34 @@
 //!   elements of `l` in a random order: Fisher–Yates.
 //! - `RandomSample[l, k]` (`sample`): `k` elements of `l` at distinct
 //!   places, in a random order, `Random[k, l]`.
+//! - Over random variables (CAS-624, [`random_variables`]):
+//!   `RandomSample[X, n]` `n` values of the object `X` and
+//!   `RandomSample[X]` one; `RandomSample[e, n]` `n` values of an
+//!   expression holding objects, each occurrence drawn afresh in each
+//!   (giac vecteur.cc `find_randvars`), `n` times the occurrences at most
+//!   `Limits::terms`; an expression without one stays.
+//!   `RandomVector[n, X]` draws `X`; `RandomVector[n, multinomial, P, V]`
+//!   `n` elements of `V`, and `RandomVector[n, multinomial, P]` the counts
+//!   of each index of `P` in `n` draws, as giac answers.
+//!
+//! [`random_variables`]: crate::native::statistics::random_variables
 //!
 //! Sizes are natural numbers, and the entries drawn at most
 //! `Limits::terms`; past it, or with an entry that does not draw, the call
 //! stays.
 
 use cas_num::{Integer, Natural};
+use foldhash::fast::FixedState;
+use hashbrown::HashMap;
 
 use super::variates::{Law, variate};
 use super::{between, count, distinct, is_list, list, refuse, sample, uniform};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::Expr;
+use crate::native::statistics::random_variables::{
+    Variable, draw, is_multinomial, multinomial, variable,
+};
 use crate::symbol::Symbol;
 
 type Native = Result<Option<Expr>, EvalError>;
@@ -40,12 +56,19 @@ enum Entry<'e> {
     Real(&'e Expr, &'e Expr),
     /// A variate of a law with its parameters.
     Variate(Law, &'e [Expr]),
+    /// A value of a random variable.
+    Variable(Variable<'e>),
 }
 
-/// What follows the sizes, read; `None` when no form fits.
-fn entry(spec: &[Expr]) -> Option<Entry<'_>> {
+/// What follows the sizes, read, decimal probabilities summed at `wp`
+/// bits; `None` when no form fits.
+fn entry(spec: &[Expr], wp: u64) -> Option<Entry<'_>> {
     match spec {
         [] => Some(Entry::Integer(Integer::from(-99), Integer::from(99))),
+        [x] if variable(x).is_some() => variable(x).map(Entry::Variable),
+        [m, p, v] if is_multinomial(m) && is_list(p) && is_list(v) => {
+            multinomial(p.args(), Some(v.args()), wp).map(Entry::Variable)
+        }
         [range] if range.head() == Some(&Expr::from(Symbol::RANGE)) => match range.args() {
             [a, b] => Some(Entry::Real(a, b)),
             _ => None,
@@ -73,6 +96,7 @@ fn entries(
             Entry::Integer(low, high) => Some(Expr::from(between(ev, low, high))),
             Entry::Real(a, b) => uniform(ev, a, b)?,
             Entry::Variate(law, parameters) => variate(ev, *law, parameters)?,
+            Entry::Variable(x) => draw(ev, x)?,
         };
         let Some(drawn) = drawn else {
             return Ok(None);
@@ -102,10 +126,38 @@ pub(in crate::native) fn random_vector(ev: &mut Eval<'_>, e: &Expr) -> Native {
         Ok(None) => return Ok(None),
         Err(refused) => return refused,
     };
-    let Some(entry) = entry(spec) else {
+    let wp = ev.context().working_precision();
+    if let [m, p] = spec
+        && is_multinomial(m)
+        && is_list(p)
+    {
+        return counts(ev, n, p.args(), wp);
+    }
+    let Some(entry) = entry(spec, wp) else {
         return Ok(None);
     };
     Ok(entries(ev, &entry, n)?.map(list))
+}
+
+/// `RandomVector[n, multinomial, P]`: how many of `n` draws gave each
+/// index of `P`.
+fn counts(ev: &mut Eval<'_>, n: u64, p: &[Expr], wp: u64) -> Native {
+    let Some(x) = multinomial(p, None, wp) else {
+        return Ok(None);
+    };
+    let mut counts = vec![0u64; p.len()];
+    for _ in 0..n {
+        let Some(i) = draw(ev, &x)?.and_then(|i| i.as_i64()) else {
+            return Ok(None);
+        };
+        counts[usize::try_from(i).expect("an index")] += 1;
+    }
+    Ok(Some(list(
+        counts
+            .into_iter()
+            .map(|c| Expr::from(Integer::from(c)))
+            .collect(),
+    )))
 }
 
 /// `RandomMatrix[n]`, `RandomMatrix[n, p, …]`.
@@ -124,7 +176,7 @@ pub(in crate::native) fn random_matrix(ev: &mut Eval<'_>, e: &Expr) -> Native {
     if n.checked_mul(p).is_none_or(|all| all > most) {
         return refuse(ev, e, "too many draws");
     }
-    let Some(entry) = entry(spec) else {
+    let Some(entry) = entry(spec, ev.context().working_precision()) else {
         return Ok(None);
     };
     let mut rows = Vec::new();
@@ -157,7 +209,7 @@ pub(in crate::native) fn random_polynomial(ev: &mut Eval<'_>, e: &Expr) -> Nativ
         Ok(None) => return Ok(None),
         Err(refused) => return refused,
     };
-    let Some(entry) = entry(spec) else {
+    let Some(entry) = entry(spec, ev.context().working_precision()) else {
         return Ok(None);
     };
     // The coefficients of x^(n−1) down to x^0, as giac draws them.
@@ -200,13 +252,93 @@ pub(in crate::native) fn random_permutation(ev: &mut Eval<'_>, e: &Expr) -> Nati
     )))
 }
 
-/// `RandomSample[l, k]`.
+/// `RandomSample[l, k]`, `RandomSample[X]`, `RandomSample[e, n]`.
 pub(in crate::native) fn random_sample(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    let [l, k] = e.args() else {
-        return Ok(None);
+    match e.args() {
+        [x] => match variable(x) {
+            Some(x) => draw(ev, &x),
+            None => Ok(None),
+        },
+        [l, k] if is_list(l) => sample(ev, e, k, l.args()),
+        [x, n] => values(ev, e, x, n),
+        _ => Ok(None),
+    }
+}
+
+/// The deepest expression whose random variables `RandomSample` finds.
+const DEPTH: u16 = 1000;
+
+/// How many objects `e` holds, counted per occurrence (saturating), once
+/// per distinct subexpression.
+fn occurrences(e: &Expr, seen: &mut HashMap<Expr, u64, FixedState>) -> u64 {
+    if variable(e).is_some() {
+        return 1;
+    }
+    if e.is_atom() {
+        return 0;
+    }
+    if let Some(&n) = seen.get(e) {
+        return n;
+    }
+    let n = e
+        .args()
+        .iter()
+        .fold(0u64, |n, a| n.saturating_add(occurrences(a, seen)));
+    seen.insert(e.clone(), n);
+    n
+}
+
+/// `e` with each occurrence of an object replaced by a draw of its own;
+/// `None` when one does not draw.
+fn filled(
+    ev: &mut Eval<'_>,
+    e: &Expr,
+    seen: &HashMap<Expr, u64, FixedState>,
+) -> Result<Option<Expr>, EvalError> {
+    if let Some(x) = variable(e) {
+        return draw(ev, &x);
+    }
+    let Some(head) = e.head() else {
+        return Ok(Some(e.clone()));
     };
-    if !is_list(l) {
+    if seen.get(e).is_none_or(|&n| n == 0) {
+        return Ok(Some(e.clone()));
+    }
+    let mut args = Vec::with_capacity(e.args().len());
+    for a in e.args() {
+        let Some(a) = filled(ev, a, seen)? else {
+            return Ok(None);
+        };
+        args.push(a);
+    }
+    Ok(Some(Expr::apply(head, &args)))
+}
+
+/// `RandomSample[X, n]` and `RandomSample[e, n]`.
+fn values(ev: &mut Eval<'_>, e: &Expr, x: &Expr, n: &Expr) -> Native {
+    if x.depth() > DEPTH {
         return Ok(None);
     }
-    sample(ev, e, k, l.args())
+    let mut seen = HashMap::default();
+    let each = occurrences(x, &mut seen);
+    if each == 0 {
+        return Ok(None);
+    }
+    let n = match size(ev, e, n) {
+        Ok(Some(n)) => n,
+        Ok(None) => return Ok(None),
+        Err(refused) => return refused,
+    };
+    let most = u64::try_from(ev.context().limits().terms).unwrap_or(u64::MAX);
+    if n.checked_mul(each).is_none_or(|all| all > most) {
+        return refuse(ev, e, "too many draws");
+    }
+    let mut out = Vec::new();
+    for _ in 0..n {
+        let Some(drawn) = filled(ev, x, &seen)? else {
+            return Ok(None);
+        };
+        out.push(ev.eval(&drawn)?);
+    }
+    Ok(Some(list(out)))
 }
