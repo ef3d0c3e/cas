@@ -5,3 +5,4 @@ T2 | done | random variables: randvar and random_variable, sample over them, ran
 T3 | done | tail probabilities, distribution functions and the logistic | - | tasks/T3.md | logs/T3.md | R1.7-010,R1.7-005
 T4 | done | Markov chains: markov and randmarkov | - | tasks/T4.md | logs/T4.md | R1.7-005,R1.7-003,R1.7-004
 T5 | done | density estimation and fitting: kernel_density kde, bandwidth, bins, fitdistr | - | tasks/T5.md | logs/T5.md | R1.7-011,R1.7-005
+T6 | done | clustering: kmeans and cluster | - | tasks/T6.md | logs/T6.md | R1.7-012,R1.7-005
