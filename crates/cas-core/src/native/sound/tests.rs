@@ -484,7 +484,7 @@ fn equality() {
 }
 
 /// `About`: a clip with giac's description, a list mapped, a symbol's
-/// assumptions.
+/// assumptions, held.
 #[test]
 fn about() {
     let ctx = Context::new();
@@ -519,10 +519,16 @@ fn about() {
         .assuming(read("Less[y, 1]"))
         .assuming(read("Less[x, 5]"));
     let cases = [
-        ("About[x]".to_owned(), "List[Greater[x, 0], Less[x, 5]]"),
+        (
+            "About[x]".to_owned(),
+            "Hold[List[Greater[x, 0], Less[x, 5]]]",
+        ),
         ("About[z]".to_owned(), "z"),
         ("About[3]".to_owned(), "3"),
-        ("About[List[y, 2]]".to_owned(), "List[List[Less[y, 1]], 2]"),
+        (
+            "About[List[y, 2]]".to_owned(),
+            "List[Hold[List[Less[y, 1]]], 2]",
+        ),
     ];
     for (input, expected) in &cases {
         let found = eval(&assumed, input);

@@ -426,6 +426,20 @@ R1.7-012):
 - seeded rows (C0014): `srand(s)` then `kmeans(E6,3)` twice gives the same
   labels, s = 1, 7, 42, 2024.
 
+`tests/sound.rs`, Xcas's sound clips (CAS-631; giac's answers in probe5,
+probe9, probe10, probe11 and .run/1.7/T7/dur.out, the prototype
+.run/1.7/T7/proto.py): 49 value rows (properties, `channel_data` with
+channels, `matrix`, `range=`, bit depths, `normalize=`, `duration=`, and
+`soundsec`; several channels bracketed, C0023) giac's decimals read back
+within its error; 16 of giac's errors stay with its message (C0056); 24
+departures, giac's text and ours: the printed form, `string` and `about` of
+a clip (ours `soundclip(44100, 16, [29204, -29204, 14602, 0])`), `type`,
+`+`, `-`, `*`, `A - A` (ours 0), `abs`, `A[0]`, `S[1]`, `size`, `evalf`,
+`concat`, `size=3` and the `duration=0.001` / `1/1000` rows (ours 9 samples,
+giac 8: its 47-bit doubles, C0088); session rows: a clip prints as that
+call, reads back and is its `string`, and `about(x)` after `assume(x>0)` is
+`hold([x > 0])`.
+
 `tests/tail_probabilities.rs`, Xcas's upper tails `UTPN`, `UTPT`, `UTPC` and
 `UTPF` (CAS-625), and `cdf`, `icdf` and `mgf` of a law by its name, of a
 `randvar` object or of a list (CAS-626):

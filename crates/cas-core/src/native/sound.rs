@@ -13,8 +13,8 @@
 //! `string()`, the language hook), so what is printed reads back. `Plus`,
 //! `Times`, `Part`, `Length` and `N` see a call like any other, departures
 //! from giac's clip arithmetic: `A + B` stays, `A − A` is 0, `−A` stays,
-//! `size(A)` is `2 +` the channels, `A[0]` the rate, `N(A)` turns the codes
-//! to decimals (no longer a clip). `==` on clips is giac's: a well-formed
+//! `size(A)` is `2 +` the channels, `A[0]` stays (`At` selects in lists),
+//! `N(A)` turns the codes to decimals (no longer a clip). `==` on clips is giac's: a well-formed
 //! clip compares like a number (`logic.rs` `equal`), so two different clips,
 //! or a clip and a number or a string, are not equal. The natives are pure:
 //! nothing to declare volatile.
@@ -41,8 +41,9 @@
 //! `floor(1/2 + sr·a)`, length `floor(1/2 + sr·(b − a))`); all channels are
 //! a `Sequence` of lists, or a matrix with `matrix`. `About` answers a clip
 //! with giac's description as a note, a list mapped, a symbol the
-//! assumptions that mention it (the symbol itself when none) and anything
-//! else itself.
+//! assumptions that mention it, held (`Hold[{facts}]`, printed
+//! `hold([x > 0])`, so re-evaluation cannot decide them; the symbol itself
+//! when none) and anything else itself.
 //!
 //! giac's errors stay with its message; sizes are checked against
 //! `Limits::terms` before anything is built (C0019).
@@ -619,7 +620,9 @@ fn about_one(ev: &mut Eval<'_>, x: &Expr) -> Expr {
             .cloned()
             .collect();
         if !facts.is_empty() {
-            return list(facts);
+            // Held: re-evaluated under the same assumptions, each fact
+            // would turn into True (C0026).
+            return Expr::call(Symbol::HOLD, [list(facts)]);
         }
     }
     x.clone()
