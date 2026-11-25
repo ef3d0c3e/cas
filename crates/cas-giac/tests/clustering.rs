@@ -196,7 +196,13 @@ fn kmeans_departures() {
         &[0, 1, 2, 2, 2, 2],
         &[0, 0, 0, 0, 1, 2],
     ];
-    const AUTO: [&[i64]; 2] = [&[0, 0, 1, 1, 2, 2], &[0, 0, 0, 0, 1, 1]];
+    // E6 is symmetric under x -> 10 - x: each 2-cluster answer has its
+    // mirror ([0,0,1,1,1,1], seen on CI 45606968339 at seed 3).
+    const AUTO: [&[i64]; 3] = [
+        &[0, 0, 1, 1, 2, 2],
+        &[0, 0, 0, 0, 1, 1],
+        &[0, 0, 1, 1, 1, 1],
+    ];
     let rows: [Row; 9] = [
         // giac [1,0,1,2,1,0].
         (
