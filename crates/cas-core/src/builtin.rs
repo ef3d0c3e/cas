@@ -497,6 +497,19 @@ builtins! {
     COL_SPACE = "ColSpace" [PROTECTED];
     INTERSECTION_BASIS = "IntersectionBasis" [PROTECTED];
     SYSTEM_MATRIX = "SystemMatrix" [PROTECTED];
+    // giac's reshaping, quadratic forms and changes of basis (CAS-639).
+    REDIMENSION = "Redimension" [PROTECTED];
+    BORDER = "Border" [PROTECTED];
+    SEMI_AUGMENT = "SemiAugment" [PROTECTED];
+    SIMULTANEOUS = "Simultaneous" [PROTECTED];
+    NEW_MATRIX = "NewMatrix" [PROTECTED];
+    UPPER_TRIANGLE = "UpperTriangle" [PROTECTED];
+    LOWER_TRIANGLE = "LowerTriangle" [PROTECTED];
+    MATRIX_TO_QUADRATIC = "MatrixToQuadratic" [PROTECTED];
+    QUADRATIC_TO_MATRIX = "QuadraticToMatrix" [PROTECTED];
+    CHANGE_BASIS = "ChangeBasis" [PROTECTED];
+    CONJUGATE_TRANSPOSE = "ConjugateTranspose" [PROTECTED];
+    BASIS = "Basis" [PROTECTED];
     // giac's minors, echelon forms and pivots (CAS-530, CAS-528).
     DET_MINOR = "DetMinor" [PROTECTED];
     ADJOINT_MATRIX = "AdjointMatrix" [PROTECTED];

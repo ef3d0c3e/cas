@@ -47,6 +47,13 @@
 //!   `Pivot`, `pivot`; `JordanMatrix`, `egvl`: giac's minors, echelon
 //!   forms and pivots, ported from its source, in [`echelon`] (CAS-530,
 //!   CAS-528).
+//! - `Redimension`, Xcas's `REDIM`; `Border`, `border`; `SemiAugment`,
+//!   `semi_augment`; `Simultaneous`, `simult`; `NewMatrix`, `newMat`;
+//!   `UpperTriangle`, `upper`; `LowerTriangle`, `lower`;
+//!   `MatrixToQuadratic`, `a2q`; `QuadraticToMatrix`, `q2a`; `ChangeBasis`,
+//!   `changebase`; `ConjugateTranspose`, `trn`; `Basis`, `basis`: giac's
+//!   reshaping, quadratic forms and changes of basis in [`reshape`]
+//!   (CAS-639). `charpoly(A, fadeev)` ignores giac's method option.
 //!
 //! A matrix of modular values of one modulus goes to `modular::matrices`
 //! first (CAS-DOC-44 §2).
@@ -1063,7 +1070,12 @@ fn faddeev(ev: &mut Eval<'_>, a: &[Vec<Expr>]) -> Result<(Vec<Expr>, Matrices), 
 /// monic in `x`; `CharacteristicPolynomial[m]`, its coefficients from the
 /// leading one, as giac's `poly1[1,-5,-2]`.
 pub(super) fn characteristic_polynomial(ev: &mut Eval<'_>, e: &Expr) -> Native {
-    let (m, x) = match e.args() {
+    // giac's method option `fadeev` changes nothing in the answer.
+    let args = match e.args() {
+        [rest @ .., last] if last.as_symbol().map(Symbol::name) == Some("fadeev") => rest,
+        all => all,
+    };
+    let (m, x) = match args {
         [m] => (m, None),
         [m, x] if x.as_symbol().is_some() && !m.contains(x) => (m, Some(x)),
         _ => return Ok(None),
@@ -1121,6 +1133,7 @@ pub(super) mod decompose;
 pub(super) mod echelon;
 mod eigen;
 mod elimination;
+pub(super) mod reshape;
 pub(super) mod slicing;
 #[cfg(test)]
 mod tests;

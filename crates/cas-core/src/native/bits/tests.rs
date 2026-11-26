@@ -73,6 +73,14 @@ fn digits_and_falling_factorials() {
 #[test]
 fn convert_options() {
     check(&[
+        // giac's matrix[[1,2],[3,4]], matrix[1,2,3], x+1 and 5 for array (CAS-639).
+        (
+            "Convert[List[List[1, 2], List[3, 4]], array]",
+            "List[List[1, 2], List[3, 4]]",
+        ),
+        ("Convert[List[1, 2, 3], array]", "List[1, 2, 3]"),
+        ("Convert[Plus[x, 1], array]", "Plus[x, 1]"),
+        ("Convert[5, array]", "5"),
         // giac's 1/2/(x-1)-1/2/(x+1) for partfrac, parfrac and fullparfrac.
         (
             "Convert[Power[Plus[Power[x, 2], -1], -1], parfrac]",

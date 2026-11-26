@@ -1026,3 +1026,156 @@ fn rational_jordan_forms_are_similar() {
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
+
+const M22: &str = "List[List[1, 2], List[3, 4]]";
+const R33: &str = "List[List[1, 2, 3], List[3, -9, 6], List[4, 5, 6]]";
+
+/// giac's `REDIM`, `border`, `semi_augment` and `newMat` (CAS-639), as
+/// giac 2.0 answers, and what stays where giac errs or takes `|r|`.
+#[test]
+fn reshapes() {
+    check(&[
+        (&format!("Redimension[{R33}, 1, 2]"), "List[List[1, 2]]"),
+        (
+            &format!("Redimension[{R33}, List[2, 5]]"),
+            "List[List[1, 2, 3, 0, 0], List[3, -9, 6, 0, 0]]",
+        ),
+        (
+            &format!("Redimension[{M22}, 3, 1]"),
+            "List[List[1], List[3], List[0]]",
+        ),
+        ("Redimension[List[1, 2, 3], 5]", "List[1, 2, 3, 0, 0]"),
+        ("Redimension[List[1, 2, 3], 2]", "List[1, 2]"),
+        (&format!("Redimension[{M22}, 3]"), "List[1, 2, 3]"),
+        ("Redimension[List[1, 2], List[3]]", "List[1, 2, 0]"),
+        ("Redimension[List[1, 2], 0]", "List[]"),
+        ("Redimension[List[1, 2], -1]", "List[]"),
+        (
+            "Redimension[List[1, 2, 3, 4, 5], 2, 3]",
+            "List[List[1, 2, 3], List[4, 5, 0]]",
+        ),
+        (
+            &format!("Redimension[{M22}, 0, 0]"),
+            &format!("Redimension[{M22}, 0, 0]"),
+        ),
+        ("Redimension[5, 2]", "Redimension[5, 2]"),
+        (
+            &format!("Border[{M22}, List[5, 6]]"),
+            "List[List[1, 2, 5], List[3, 4, 6]]",
+        ),
+        (
+            &format!("Border[{M22}, List[List[5, 7], List[6, 8]]]"),
+            "List[List[1, 2, 5, 7], List[3, 4, 6, 8]]",
+        ),
+        (
+            &format!("Border[{M22}, List[1, 2, 3]]"),
+            &format!("Border[{M22}, List[1, 2, 3]]"),
+        ),
+        (
+            "SemiAugment[List[List[1, 2]], List[List[3, 4, 5]]]",
+            "List[List[1, 2], List[3, 4, 5]]",
+        ),
+        ("SemiAugment[List[List[1, 2]], 5]", "List[List[1, 2], 5]"),
+        ("SemiAugment[5, List[1, 2]]", "List[5, 1, 2]"),
+        ("NewMatrix[2, 3]", "List[List[0, 0, 0], List[0, 0, 0]]"),
+        ("NewMatrix[0, 2]", "List[]"),
+        ("NewMatrix[2, -1]", "NewMatrix[2, -1]"),
+        ("NewMatrix[2, x]", "NewMatrix[2, x]"),
+    ]);
+}
+
+/// giac's `upper`, `lower`, `trn`, `simult`, `changebase`, `a2q`, `q2a`,
+/// `basis` and `charpoly(A, fadeev)` (CAS-639), as giac 2.0 answers, and
+/// what stays where giac errs.
+#[test]
+fn triangles_and_forms() {
+    check(&[
+        (
+            &format!("UpperTriangle[{M23}]"),
+            "List[List[1, 2, 3], List[0, 5, 6]]",
+        ),
+        (
+            "LowerTriangle[List[List[1, 2], List[3, 4], List[5, 6]]]",
+            "List[List[1, 0], List[3, 4], List[5, 6]]",
+        ),
+        (
+            "UpperTriangle[\"Hello World 1\u{e9}\"]",
+            "\"HELLO WORLD 1\u{e9}\"",
+        ),
+        ("LowerTriangle[\"\u{c9}A b\"]", "\"\u{c9}a b\""),
+        (
+            "UpperTriangle[List[1, 2, 3]]",
+            "UpperTriangle[List[1, 2, 3]]",
+        ),
+        (
+            "ConjugateTranspose[List[List[1, Plus[2, I]], List[3, 4]]]",
+            "List[List[1, 3], List[Plus[2, Times[-1, I]], 4]]",
+        ),
+        (
+            "ConjugateTranspose[List[1, Plus[2, I]]]",
+            "List[List[1], List[Plus[2, Times[-1, I]]]]",
+        ),
+        ("ConjugateTranspose[2]", "ConjugateTranspose[2]"),
+        (
+            "Simultaneous[List[List[3, 1], List[3, 2]], List[List[-2, 1], List[2, -1]]]",
+            "List[List[-2, 1], List[4, -2]]",
+        ),
+        (
+            "Simultaneous[List[List[3, 1], List[3, 2]], List[-2, 2]]",
+            "Simultaneous[List[List[3, 1], List[3, 2]], List[-2, 2]]",
+        ),
+        (
+            "ChangeBasis[List[List[1, 2], List[1, 3]], List[List[1, 1], List[0, 1]]]",
+            "List[List[0, -1], List[1, 4]]",
+        ),
+        (
+            "ChangeBasis[List[List[a, b], List[c, d]], List[List[1, 1], List[0, 1]]]",
+            "List[List[Plus[a, Times[-1, c]], Plus[a, b, Times[-1, c], Times[-1, d]]], List[c, Plus[c, d]]]",
+        ),
+        (
+            "MatrixToQuadratic[List[List[1, 2], List[4, 4]], List[x, y]]",
+            "Plus[Power[x, 2], Times[6, x, y], Times[4, Power[y, 2]]]",
+        ),
+        (
+            "MatrixToQuadratic[List[List[1, 2], List[2, 1]], List[x, y, z]]",
+            "MatrixToQuadratic[List[List[1, 2], List[2, 1]], List[x, y, z]]",
+        ),
+        (
+            "QuadraticToMatrix[Plus[Times[x, y], Times[y, z]], List[x, y, z]]",
+            "List[List[0, 1/2, 0], List[1/2, 0, 1/2], List[0, 1/2, 0]]",
+        ),
+        (
+            "QuadraticToMatrix[Plus[Times[a, Power[x, 2]], Times[b, x, y]], List[x, y]]",
+            "List[List[a, Times[1/2, b]], List[Times[1/2, b], 0]]",
+        ),
+        (
+            "QuadraticToMatrix[0, List[x, y]]",
+            "List[List[0, 0], List[0, 0]]",
+        ),
+        (
+            "QuadraticToMatrix[Power[x, 3], List[x]]",
+            "QuadraticToMatrix[Power[x, 3], List[x]]",
+        ),
+        (
+            "QuadraticToMatrix[Plus[Power[x, 2], Power[y, 2]], List[x]]",
+            "QuadraticToMatrix[Plus[Power[x, 2], Power[y, 2]], List[x]]",
+        ),
+        (
+            "Basis[List[List[1, 2], List[2, 4]]]",
+            "FiniteSet[List[1, 2]]",
+        ),
+        (
+            "Basis[List[List[0, 1], List[1, 0]]]",
+            "FiniteSet[List[1, 0], List[0, 1]]",
+        ),
+        ("Basis[List[List[0, 0], List[0, 0]]]", "FiniteSet[]"),
+        (
+            &format!("CharacteristicPolynomial[{M22}, fadeev]"),
+            "List[1, -5, -2]",
+        ),
+        (
+            &format!("CharacteristicPolynomial[{M22}, x, fadeev]"),
+            "Plus[Power[x, 2], Times[-5, x], -2]",
+        ),
+    ]);
+}

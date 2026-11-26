@@ -579,6 +579,33 @@ CAS-528), sums of squares and rational Jordan forms (CAS-535):
   quadratic stays (giac returns it); giac's inert `Det`, `Inverse`,
   `Nullspace` and `Rref` stay user calls (giac prints `det(...)` etc.).
 
+`tests/matrices_five.rs`, reshaping, triangles, quadratic forms and changes
+of basis (CAS-639):
+- giac's `REDIM` (`redim`), `border`, `semi_augment`, `simult`, `newMat`,
+  `upper` and `lower` (matrices and strings, ASCII letters only, as
+  giac's), `trn`, `a2q`, `q2a`, `changebase`, `charpoly(A,fadeev)` and
+  `pcar(A,fadeev)` (the option ignored), `convert(x,array)` (`x`) read back
+  and compared; `basis` (a set, as giac's) where giac's is in reduced row
+  echelon form, and the same span where its rows are fraction-free
+  multiples;
+- the departures, each with giac's answer: where giac errs, the call stays
+  with a warning (`REDIM` with a dimension below 1 or of a scalar,
+  `border` with rows that do not fit, `simult` singular, of a vector or
+  not square, `upper` and `lower` of a scalar, a vector or `[]`, `a2q`
+  with sizes that do not fit, `q2a` of a form not quadratic in the
+  variables, `changebase` singular or of other sizes); `newMat` with a
+  negative or zero dimension stays (giac takes `|r|` and `|c|`:
+  `newMat(2,-1)` is `[[0],[0]]`, `newMat(2,0)` `[[],[]]`), as `makemat`'s;
+  `semi_augment(5,6)` stays (giac's `0`); `trn` of symbols conjugates them
+  (giac takes them as real: `trn([[a,b],[c,d]])` is `[[a,c],[b,d]]`), of a
+  scalar stays (giac's `conj(tran(2+i))`);
+- recorded here only: `moyal` is not built, as giac 1.9's is a stub
+  (moyal.cc:41-58, `symb_moyal`) answering its own `aide` example
+  unevaluated (`moyal(x^2+y^4,x^4-y^2,[x,y],5)`); `Det` and `Inverse` are
+  not aliases of `det` and `inv` but user calls held as giac's inert forms
+  (`Det([[1,2],[3,4]])` prints `det([[1,2],[3,4]])`, which evaluates when
+  read back), the departure rows in `tests/matrices_four.rs`.
+
 `tests/integers.rs`, Xcas's integer functions (CAS-548 to CAS-553): giac's
 `chrem` of integers and of polynomials with integer moduli (coefficient by
 coefficient, modulo the product), `lgcd`, `fracmod` and `iratrecon`, `icomp`
@@ -964,18 +991,20 @@ Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
     `polynom` (`convert` options); `base` (`convert(p,base,b)`); `mod %` (`%`, Modular); `!` postfix
     (`factorial`).
   - Inert, held as an unknown call: `Int` (`integrate`), `Rref` (`rref`), `Nullspace` (`nullspace`),
-    `Fourier` (`fourier`), `Hilbert` (`hilbert(f,t)`). `Det` (`det`) and `Inverse` (`inv`) are our
-    builtins and evaluate where giac holds them: T3 pins them with an oracle row or a departure row.
+    `Fourier` (`fourier`), `Hilbert` (`hilbert(f,t)`). `Det` (`det`) and `Inverse` (`inv`) are held
+    user calls here too, giac's printing `det(...)`: departure rows in `tests/matrices_four.rs` (T3).
   - Operator syntax, not built: `'` (`diff`; the lexer rejects it), `|` (`subst`; the lexer rejects
     it), `/%` and `%/` twice (`iquo`, `irem`), `div` (`iquo`), `!` prefix (`not`).
   - Not handled yet, assigned: `rdiv` (`/`), `getType` (`type`), `at` (`At`) and `subs` (`subst`) to
     T5; `maple_ifactors` (`ifactors`) to T4; `list` (`convert`) to T5; `expln` (`convert`, as trig2exp)
-    to T4; `array` (`convert`) and `fadeev` (`charpoly`, which currently reads `fadeev` as the
-    variable) to T3.
+    to T4; `array` (`convert`, `x` itself) and `fadeev` (`charpoly`, the option ignored) built in
+    T3 (`tests/matrices_five.rs`).
 - Computational in an existing module, 50: the 1.8 plan said 49, and `box_constraints` moved in from
   ML. Each is marked with its task:
-  - Algebra (15): `REDIM`, `border`, `semi_augment`, `simult`, `newMat`, `Fill`, `upper`, `lower`
-    (matrix and string forms), `a2q`, `q2a`, `basis`, `changebase`, `moyal`, `trn` T3. `GF` is not
+  - Algebra (15): `REDIM`, `border`, `semi_augment`, `simult`, `newMat`, `upper`, `lower` (matrix
+    and string forms), `a2q`, `q2a`, `basis`, `changebase`, `trn` built in T3
+    (`tests/matrices_five.rs`); `moyal` not built, a departure (giac's is a stub answering
+    unevaluated); `Fill` T3. `GF` is not
     built: giac's Galois-field elements need a new value type (gen 2).
   - Calculus (4): `envelope`, `avgRC`, `addtable` T4. `taux_accroissement` is not built: it is a
     French spelling (CAS-DOC-7 §5).

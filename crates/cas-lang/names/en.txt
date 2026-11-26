@@ -449,6 +449,19 @@ RowSpace: rowspace
 ColSpace: colspace
 IntersectionBasis: ibasis
 SystemMatrix: syst2mat
+# giac's reshaping, quadratic forms and changes of basis (CAS-639).
+Redimension: REDIM redim
+Border: border
+SemiAugment: semi_augment
+Simultaneous: simult
+NewMatrix: newMat
+UpperTriangle: upper
+LowerTriangle: lower
+MatrixToQuadratic: a2q
+QuadraticToMatrix: q2a
+ChangeBasis: changebase
+ConjugateTranspose: trn
+Basis: basis
 # giac's minors, echelon forms and pivots (CAS-530, CAS-528).
 DetMinor: det_minor
 AdjointMatrix: adjoint_matrix

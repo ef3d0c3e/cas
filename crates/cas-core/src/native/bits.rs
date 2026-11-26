@@ -188,7 +188,8 @@ pub(super) fn convert(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// `Convert[x, option, rest…]` with `partfrac`, `parfrac`, `fullparfrac`,
 /// `polynom`, `confrac` (a third argument too, ignored), and `interval`
 /// (CAS-592), `N[x]` or with a positive integer `d` `N[x, d]`: giac's
-/// interval as a ball; `None` for another option or count.
+/// interval as a ball, and `array` (CAS-639), `x` itself; `None` for
+/// another option or count.
 fn convert_to(ev: &mut Eval<'_>, x: &Expr, option: &Expr, rest: &[Expr]) -> Native {
     let name = option.as_symbol().map(Symbol::name);
     let found = match (name, rest) {
@@ -218,6 +219,8 @@ fn convert_to(ev: &mut Eval<'_>, x: &Expr, option: &Expr, rest: &[Expr]) -> Nati
         (Some("interval" | "Interval"), [d]) if d.to_integer().is_some_and(|d| d.is_positive()) => {
             Expr::call(Symbol::N, [x.clone(), d.clone()])
         }
+        // giac's `array` keeps a list, and anything else, as it is.
+        (Some("array"), []) => x.clone(),
         _ => return Ok(None),
     };
     Ok(Some(ev.eval(&found)?))
