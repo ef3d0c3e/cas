@@ -22,8 +22,7 @@
 //!   `QuadraticToMatrix[q, [x…]]` (`q2a`): the symmetric matrix of a
 //!   quadratic form, half its Hessian;
 //! - `ChangeBasis[A, P]` (`changebase`): `P⁻¹ A P`, expanded;
-//! - `ConjugateTranspose[A]` (`trn`): the conjugate of the transpose, a
-//!   symbol's conjugate staying where giac takes symbols as real;
+//! - `ConjugateTranspose[A]` (`trn`): the conjugate of the transpose;
 //! - `Basis[A]` (`basis`): the rows of `RowSpace[A]` as a set, as giac's.
 //!
 //! Sizes beyond `Limits::terms` stay. Results are built unevaluated, for

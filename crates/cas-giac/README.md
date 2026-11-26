@@ -596,9 +596,8 @@ of basis (CAS-639):
   variables, `changebase` singular or of other sizes); `newMat` with a
   negative or zero dimension stays (giac takes `|r|` and `|c|`:
   `newMat(2,-1)` is `[[0],[0]]`, `newMat(2,0)` `[[],[]]`), as `makemat`'s;
-  `semi_augment(5,6)` stays (giac's `0`); `trn` of symbols conjugates them
-  (giac takes them as real: `trn([[a,b],[c,d]])` is `[[a,c],[b,d]]`), of a
-  scalar stays (giac's `conj(tran(2+i))`);
+  `semi_augment(5,6)` stays (giac's `0`); `trn` of a scalar stays (giac's
+  `conj(tran(2+i))`);
 - recorded here only: `moyal` is not built, as giac 1.9's is a stub
   (moyal.cc:41-58, `symb_moyal`) answering its own `aide` example
   unevaluated (`moyal(x^2+y^4,x^4-y^2,[x,y],5)`); `Det` and `Inverse` are

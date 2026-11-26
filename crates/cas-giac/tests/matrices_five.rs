@@ -92,6 +92,7 @@ fn triangles_and_transposes() {
         "trn([[1,2+i],[3,4]])",
         "trn([[1,2],[3,4],[5,6]])",
         "trn([[1,2],[3,4]])",
+        "trn([[a,b],[c,d]])",
         "trn([1,2+i])",
         "trn([[i,1],[2,3-2*i]])",
     ]);
@@ -176,7 +177,7 @@ fn same_spans() {
 }
 
 /// Departures of CAS-639: giac errs (its error text by `rror`, or no
-/// answer), takes `|r|` and `|c|`, or takes symbols as real; this CAS's as
+/// answer) or takes `|r|` and `|c|`; this CAS's as
 /// decided, the call staying with a warning where giac errs.
 fn departed(cases: &[(&str, Option<&str>, &str)]) {
     let Some(giac) = giac() else {
@@ -311,12 +312,6 @@ fn form_departures() {
             "changebase([[1,2],[1,3]],[[1,2,3],[4,5,6],[7,8,10]])",
             None,
             "changebase([[1,2],[1,3]],[[1,2,3],[4,5,6],[7,8,10]])",
-        ),
-        // A symbol's conjugate stays, where giac takes symbols as real.
-        (
-            "trn([[a,b],[c,d]])",
-            Some("[[a,c],[b,d]]"),
-            "[[conj(a),conj(c)],[conj(b),conj(d)]]",
         ),
         // A scalar stays as written, where giac holds `conj(tran(...))`.
         ("trn(2+i)", Some("conj(tran(2+i))"), "trn(2+i)"),
