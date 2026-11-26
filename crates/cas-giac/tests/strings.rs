@@ -2,10 +2,12 @@
 //! strings in `size`, `concat`, `[]`, the comparisons and `sort`: giac's answers
 //! read back are this CAS's value of the same input; departures, giac's
 //! answer as caseval prints it, whitespace collapsed (C0007, C0047), and
-//! this CAS's own.
+//! this CAS's own; and random ASCII strings a run to each command but
+//! `strip`, `size`, `concat`, `[]`, the comparisons and `sort`.
 
 use cas_core::{Expr, Symbol};
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the checks skip.
 fn giac() -> Option<&'static Giac> {
@@ -320,4 +322,158 @@ fn departures() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Printable ASCII, often `a`, `b`, a space, `"` or `\`, at most `max`
+/// characters.
+fn ascii(max: usize) -> impl Strategy<Value = String> {
+    let c = prop_oneof![0x20u8..=0x7e, prop::sample::select(&b"ab \"\\"[..])];
+    prop::collection::vec(c, 0..=max).prop_map(|v| v.into_iter().map(char::from).collect())
+}
+
+/// `s` as a string literal: `"` and `\` escaped.
+fn literal(s: &str) -> String {
+    format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""))
+}
+
+/// Whether giac reads `s` written as [`literal`]: its lexer takes a string
+/// ending in `\` for an unclosed one (`size("a\\")` is `undef`, caseval).
+fn writable(s: &str) -> bool {
+    !s.ends_with('\\')
+}
+
+/// Each input agrees ([`Giac::agrees`]), or the failure names it.
+fn agree(giac: &Giac, inputs: &[String]) -> Result<(), TestCaseError> {
+    for input in inputs {
+        giac.agrees(input)
+            .map_err(|e| TestCaseError::fail(format!("{input}: {e}")))?;
+    }
+    Ok(())
+}
+
+// giac prints a string's `"` doubled and its `\` bare (caseval:
+// `"a\"b"` is `"a""b"`), which do not read back: commands answering a
+// string are compared through `asc`.
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `asc`, `ord` and `char` (through `asc`) on ASCII; `ord("")` and
+    /// non-ASCII are departures.
+    #[test]
+    fn random_codes(
+        s in ascii(12),
+        t in ascii(4),
+        codes in prop::collection::vec(0x20i64..=0x7e, 0..=4),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        if !writable(&s) || !writable(&t) {
+            return Ok(());
+        }
+        let (s, t) = (literal(&s), literal(&t));
+        let codes: Vec<String> = codes.iter().map(i64::to_string).collect();
+        let mut inputs = vec![
+            format!("asc({s})"),
+            format!("asc(char([{}]))", codes.join(",")),
+        ];
+        if let Some(c) = codes.first() {
+            inputs.push(format!("asc(char({c}))"));
+        }
+        if s != "\"\"" {
+            inputs.push(format!("ord({s})"));
+            if t != "\"\"" {
+                inputs.push(format!("ord([{s},{t}])"));
+            }
+        }
+        agree(giac, &inputs)?;
+    }
+
+    /// `inString`, with and without a start, and `contains`, of a random
+    /// needle or a piece of the string.
+    #[test]
+    fn random_positions(
+        s in ascii(12),
+        other in ascii(2),
+        piece in any::<bool>(),
+        at in 0usize..=12,
+        n in 0usize..=3,
+        start in -1i64..=13,
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let t = if piece {
+            s.chars().skip(at).take(n).collect()
+        } else {
+            other
+        };
+        if !writable(&s) || !writable(&t) {
+            return Ok(());
+        }
+        let (s, t) = (literal(&s), literal(&t));
+        agree(giac, &[
+            format!("inString({s},{t})"),
+            format!("inString({s},{t},{start})"),
+            format!("contains({s},{t})"),
+        ])?;
+    }
+
+    /// `mid`, `left` and `right` (through `asc`).
+    #[test]
+    fn random_pieces(s in ascii(12), a in -1i64..=13, n in -1i64..=13) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        if !writable(&s) {
+            return Ok(());
+        }
+        let s = literal(&s);
+        agree(giac, &[
+            format!("asc(mid({s},{a}))"),
+            format!("asc(mid({s},{a},{n}))"),
+            format!("asc(left({s},{n}))"),
+            format!("asc(right({s},{n}))"),
+        ])?;
+    }
+
+    /// `levenshtein` of two strings.
+    #[test]
+    fn random_levenshtein(s in ascii(12), t in ascii(12)) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        if !writable(&s) || !writable(&t) {
+            return Ok(());
+        }
+        agree(giac, &[format!("levenshtein({},{})", literal(&s), literal(&t))])?;
+    }
+
+    /// `join` and `trim` (through `asc`), and `split` by a nonempty
+    /// separator: `split(s, "")` is giac's error (a departure), and `split`
+    /// answers a list of strings, so its strings hold no `"` or `\`.
+    #[test]
+    fn random_words(
+        s in ascii(12),
+        sep in ascii(2),
+        words in prop::collection::vec(ascii(4), 0..=3),
+        plain in "[ ab,x]{0,12}",
+        by in "[ ab,x]{1,2}",
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        if !writable(&s) || !writable(&sep) || !words.iter().all(|w| writable(w)) {
+            return Ok(());
+        }
+        let (s, sep) = (literal(&s), literal(&sep));
+        let words: Vec<String> = words.iter().map(|w| literal(w)).collect();
+        agree(giac, &[
+            format!("asc(join({sep},[{}]))", words.join(",")),
+            format!("asc(trim({s}))"),
+            format!("asc(trim({s},left))"),
+            format!("asc(trim({s},right))"),
+            format!("split({},{})", literal(&plain), literal(&by)),
+        ])?;
+    }
 }

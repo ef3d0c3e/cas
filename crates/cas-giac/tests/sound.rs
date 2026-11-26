@@ -12,12 +12,16 @@
 //! session prints a clip as that call, which reads back, and `about(x)`
 //! holds its facts (C0026). The clip edits (CAS-632): `set_channel_data`,
 //! `stereo2mono`, `mixdown` and `splice` (crates/cas-core/proto/sound/edit/probe1.cas and the
-//! prototype crates/cas-core/proto/sound/edit/proto.py, logs/T8.c1.md).
+//! prototype crates/cas-core/proto/sound/edit/proto.py, logs/T8.c1.md). Random
+//! clips of integer codes, `createwav` of `code/(2^(depth-1)-1)` with
+//! `normalize=0`, a run to the properties, `channel_data`, `stereo2mono`,
+//! `mixdown` and `splice`.
 
 use cas_core::{Context, Expr, Symbol, Warning};
 use cas_core::{EvalOptions, View};
 use cas_giac::{Giac, ours};
 use cas_lang::{Hook, Names, Session, decimal_balls, lower, parse};
+use proptest::prelude::*;
 
 /// `createwav([0.5,-0.5,0.25,0])` as ours prints it.
 const A: &str = "soundclip(44100, 16, [29204, -29204, 14602, 0])";
@@ -898,4 +902,187 @@ fn resample_properties() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// A clip's bit depth, sample rate and channels of integer codes.
+type Clip = (u32, u32, Vec<Vec<i64>>);
+
+/// `channels` channels of `len` codes at bit depth `depth`, full range.
+fn codes_of(depth: u32, channels: usize, len: usize) -> impl Strategy<Value = Vec<Vec<i64>>> {
+    let top = (1_i64 << (depth - 1)) - 1;
+    prop::collection::vec(prop::collection::vec(-top..=top, len), channels)
+}
+
+/// A clip of 1 or 2 channels and 1 to 16 samples, at a depth of `depths`
+/// and a rate of the rows'.
+fn clip(depths: &'static [u32]) -> impl Strategy<Value = Clip> {
+    (
+        prop::sample::select(depths),
+        prop::sample::select(&[8000_u32, 22050, 44100, 48000][..]),
+        1usize..=2,
+        1usize..=16,
+    )
+        .prop_flat_map(|(depth, rate, channels, len)| {
+            (Just(depth), Just(rate), codes_of(depth, channels, len))
+        })
+}
+
+/// Two clips of one depth of `depths` and one rate, of 1 or 2 channels
+/// each when `free`, else the same number, and 1 to 16 samples each.
+fn pair(depths: &'static [u32], free: bool) -> impl Strategy<Value = (Clip, Clip)> {
+    (
+        prop::sample::select(depths),
+        prop::sample::select(&[8000_u32, 22050, 44100, 48000][..]),
+        1usize..=2,
+        1usize..=2,
+        1usize..=16,
+        1usize..=16,
+    )
+        .prop_flat_map(move |(depth, rate, c, d, m, n)| {
+            let d = if free { d } else { c };
+            (
+                (Just(depth), Just(rate), codes_of(depth, c, m)),
+                (Just(depth), Just(rate), codes_of(depth, d, n)),
+            )
+        })
+}
+
+/// `createwav` of `clip`'s codes over `2^(depth-1)-1`, `normalize=0`:
+/// giac's and ours keep each code (caseval).
+fn wav((depth, rate, channels): &Clip) -> String {
+    let top = (1_i64 << (depth - 1)) - 1;
+    let channels: Vec<String> = channels
+        .iter()
+        .map(|c| {
+            let x: Vec<String> = c
+                .iter()
+                .map(|&k| {
+                    if k == 0 {
+                        "0".to_owned()
+                    } else {
+                        format!("{k}/{top}")
+                    }
+                })
+                .collect();
+            format!("[{}]", x.join(","))
+        })
+        .collect();
+    format!(
+        "createwav([{}],samplerate={rate},bit_depth={depth},normalize=0)",
+        channels.join(",")
+    )
+}
+
+/// Each input: giac's answer within its error of ours ([`near`]), or the
+/// failure names input, giac's and ours.
+fn near_all(giac: &Giac, inputs: &[String]) -> Result<(), TestCaseError> {
+    let ctx = Context::new();
+    for input in inputs {
+        match (giac.value(input), ours(input)) {
+            (Ok(theirs), Ok(mine)) if near(&ctx, &theirs, &mine) => {}
+            (theirs, mine) => {
+                return Err(TestCaseError::fail(format!(
+                    "{input}: giac {theirs:?}, ours {mine:?}"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// A `mixdown` placement: an offset alone, or `[offset, gain dB, pan]`.
+fn placement() -> impl Strategy<Value = String> {
+    prop_oneof![
+        (0i64..=4).prop_map(|k| k.to_string()),
+        (
+            0i64..=4,
+            -6i64..=0,
+            prop::sample::select(&["-1", "-1/2", "0", "1/2", "1"][..]),
+        )
+            .prop_map(|(k, g, p)| format!("[{k},{g},{p}]")),
+    ]
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `channels`, `bit_depth`, `samplerate`, `duration` and
+    /// `channel_data` of a random clip, every channel and each alone.
+    #[test]
+    fn random_properties(c in clip(&[8, 16, 24])) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let w = wav(&c);
+        let mut inputs = vec![
+            format!("channels({w})"),
+            format!("bit_depth({w})"),
+            format!("samplerate({w})"),
+            format!("duration({w})"),
+            format!("[channel_data({w})]"),
+            format!("channel_data({w},0)"),
+        ];
+        if c.2.len() == 2 {
+            inputs.push(format!("channel_data({w},1)"));
+            inputs.push(format!("channel_data({w},matrix)"));
+            inputs.push(format!("channel_data({w},left)"));
+            inputs.push(format!("channel_data({w},right)"));
+        }
+        near_all(giac, &inputs)?;
+    }
+
+    /// `stereo2mono` of a random clip.
+    #[test]
+    fn random_stereo2mono(c in clip(&[8, 16, 24])) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let w = wav(&c);
+        near_all(giac, &[
+            format!("channel_data(stereo2mono({w}))"),
+            format!("channels(stereo2mono({w}))"),
+        ])?;
+    }
+
+    /// `mixdown` of two random clips of one rate and depth, placed by an
+    /// offset, a gain and a pan. 8 bits are out: giac mixes two 8-bit
+    /// clips to codes near -128 (caseval: the codes `[1,-127,5]` and
+    /// `[1,9]` at offset 0 give `[-123,-117,-121]`, not `[2,-118,5]`), a
+    /// departure.
+    #[test]
+    fn random_mixdown(
+        (a, b) in pair(&[16, 24], true),
+        p in placement(),
+        q in placement(),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let input = format!("mixdown({},{p},{},{q})", wav(&a), wav(&b));
+        near_all(giac, &[
+            format!("[channel_data({input})]"),
+            format!("channels({input})"),
+        ])?;
+    }
+
+    /// `splice` of two random clips of one depth, rate and channel count,
+    /// with no crossfade, a length, or a length and an exponent.
+    #[test]
+    fn random_splice(
+        (a, b) in pair(&[8, 16, 24], false),
+        len in 1i64..=6,
+        exponent in prop::sample::select(&["-1", "0", "1/2", "1", "2"][..]),
+        args in 0usize..=2,
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let tail = match args {
+            0 => String::new(),
+            1 => format!(",{len}"),
+            _ => format!(",{len},{exponent}"),
+        };
+        let input = format!("splice({},{}{tail})", wav(&a), wav(&b));
+        near_all(giac, &[format!("[channel_data({input})]")])?;
+    }
 }
