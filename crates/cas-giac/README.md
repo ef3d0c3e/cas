@@ -723,7 +723,11 @@ gap ledger (CAS-644, CAS-645, CAS-646, CAS-647):
   two arguments; `fitdistr([0,1,2,3,4],exponential)`, "Expected a positive number");
   `subs(x=2,e)` (giac's error in xcas mode) stays without a warning, `subst` finding no rule in
   `e`; `format` of a symbol or a non-real stays (giac prints it: `"x"`, `"2.00+i"`);
-  `divis(-x^2+1)` lists the factor −1 first, as our `factors` does (giac last).
+  `divis(-x^2+1)` lists the factor −1 first, as our `factors` does (giac last);
+- `choice` (`rand` of a list; C0014, the seeded generators differ): `choice([a,b,c])`, a list of
+  strings and three draws after `srand(3)` each an element of the list, giac's and ours; ours
+  after `srand(k)` the same draw as `rand(l)` (k = 5, 3, 42); `choice([])`, `choice(5)` and
+  `choice(1,2,3)` giac's "Bad Argument Value", ours stays with it as a warning.
 
 `tests/integers.rs`, Xcas's integer functions (CAS-548 to CAS-553): giac's
 `chrem` of integers and of polynomials with integer moduli (coefficient by
@@ -1139,11 +1143,11 @@ Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
     (`tests/gap_leftovers_three.rs`).
   - Polynomials (3): `roots` (its order departs, compared as multisets), `truncate`, `divis` built
     in T5 (`tests/gap_leftovers_three.rs`).
-  - Statistics (2): `choice` T5. `hasard` is not built: it is a French spelling, and `rand` is built.
+  - Statistics (2): `choice` built in T5 (`tests/gap_leftovers_three.rs`). `hasard` is not built: it is a French spelling, and `rand` is built.
   - Infrastructure (1): `dayofweek` built in T5 (`tests/gap_leftovers_three.rs`).
   - Signal processing (6): `stft`, `istft`, `hht`, `boxcar`, `tri`, `sinc` T6.
 - Option-level items under covered names: `output=part`, `cluster`'s `index=` and clustering of
-  strings built in T5 (CAS-646; `kmeans`' `index=` next); `hilbert(f,t)`, the transform form, T6. `fitdistr` on
+  strings built in T5 (CAS-646); `hilbert(f,t)`, the transform form, T6. `fitdistr` on
   exponential data with a 0 already agrees: giac refuses `fitdistr([0,1,2,3,4],exponential)` with
   "Expected a positive number" (caseval probe), and so does ours, because it requires data > 0
   (`fitting.rs:645,666-668`); its oracle row is in `tests/gap_leftovers_three.rs` (T5).

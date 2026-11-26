@@ -1,6 +1,7 @@
 //! Tests of giac's list, type, format, date and polynomial leftovers
 //! (CAS-644, CAS-645, CAS-647): giac's answers, as its `caseval` prints
-//! them, and the calls that stay where giac errs.
+//! them, and the calls that stay where giac errs; `choice` against `rand`
+//! after the same seed.
 
 use crate::{Context, Expr};
 
@@ -176,5 +177,26 @@ fn polynomials() {
     stay(&[
         "TruncateDegree[Power[Plus[1, x], -1], 2]",
         "TruncateDegree[Plus[1, Power[x, 2]], 3/2]",
+    ]);
+}
+
+/// `choice` is `rand` of a list: the same draw after the same seed.
+#[test]
+fn choice() {
+    check(&[
+        ("RandomChoice[List[a]]", "a"),
+        (
+            "List[SeedRandom[5], RandomChoice[List[1, 2, 3, 4, 5, 6]]]",
+            "List[SeedRandom[5], Random[List[1, 2, 3, 4, 5, 6]]]",
+        ),
+        (
+            "List[SeedRandom[3], RandomChoice[List[a, b, c]], RandomChoice[List[a, b, c]]]",
+            "List[SeedRandom[3], Random[List[a, b, c]], Random[List[a, b, c]]]",
+        ),
+    ]);
+    stay(&[
+        "RandomChoice[List[]]",
+        "RandomChoice[5]",
+        "RandomChoice[1, 2, 3]",
     ]);
 }

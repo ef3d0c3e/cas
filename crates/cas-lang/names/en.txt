@@ -494,6 +494,7 @@ DayOfWeek: dayofweek
 RootsWithMultiplicity: roots
 TruncateDegree: truncate
 PolynomialDivisors: divis
+RandomChoice: choice
 # giac's minors, echelon forms and pivots (CAS-530, CAS-528).
 DetMinor: det_minor
 AdjointMatrix: adjoint_matrix

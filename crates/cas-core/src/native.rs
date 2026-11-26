@@ -1200,6 +1200,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::POLYNOMIAL_DIVISORS,
             leftovers_three::polynomial_divisors,
         ),
+        (Symbol::RANDOM_CHOICE, leftovers_three::random_choice),
         (Symbol::DET_MINOR, matrix::echelon::det_minor),
         (Symbol::ADJOINT_MATRIX, matrix::echelon::adjoint_matrix),
         (Symbol::ROW_ECHELON, matrix::echelon::row_echelon),

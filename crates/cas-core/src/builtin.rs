@@ -546,6 +546,8 @@ builtins! {
     ROOTS_WITH_MULTIPLICITY = "RootsWithMultiplicity" [PROTECTED];
     TRUNCATE_DEGREE = "TruncateDegree" [PROTECTED];
     POLYNOMIAL_DIVISORS = "PolynomialDivisors" [PROTECTED];
+    // giac's `choice`, `rand` of a list (CAS-646).
+    RANDOM_CHOICE = "RandomChoice" [PROTECTED];
     // giac's minors, echelon forms and pivots (CAS-530, CAS-528).
     DET_MINOR = "DetMinor" [PROTECTED];
     ADJOINT_MATRIX = "AdjointMatrix" [PROTECTED];

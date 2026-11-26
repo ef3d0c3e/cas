@@ -198,7 +198,7 @@ fn uniform(ev: &mut Eval<'_>, a: &Expr, b: &Expr) -> Native {
 }
 
 /// `Random[l]`: an element of `l`.
-fn element(ev: &mut Eval<'_>, items: &[Expr]) -> Native {
+pub(super) fn element(ev: &mut Eval<'_>, items: &[Expr]) -> Native {
     if items.is_empty() {
         return Ok(None);
     }

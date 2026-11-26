@@ -1,7 +1,7 @@
 //! giac's list, type, format, date and polynomial leftovers of the gap
 //! ledger (CAS-644 to CAS-647) against giac 2.0: `back`, `range`, `shift`,
 //! `suppress`, `at`, `rdiv`, `getType`, `subs`, `format`, `dayofweek`,
-//! `convert(e, list)`, `roots`, `truncate`, `divis`, and `fitdistr`'s
+//! `convert(e, list)`, `roots`, `truncate`, `divis`, `choice`, and `fitdistr`'s
 //! refusal of an exponential fit with a 0 datum. giac's answers read back
 //! are this CAS's: the same, equal by `==`, or numbers within giac's 12
 //! printed digits (C0100). `roots` lists the roots of giac's solver in its
@@ -347,5 +347,69 @@ fn departures() {
             Some("[1,x-1,x+1,(x-1)*(x+1),-1,-x+1,-x-1,-(x-1)*(x+1)]"),
             "[1,-1,x-1,-(x-1),x+1,-(x+1),(x-1)*(x+1),-(x-1)*(x+1)]",
         ),
+    ]);
+}
+
+/// Whether `e` is an item of the list `expected` (C0014: the seeded
+/// generators differ, so draws are checked by property).
+fn one_of(e: &Expr, expected: &str) -> bool {
+    ours(expected).is_ok_and(|l| l.args().contains(e))
+}
+
+/// `choice(l)` is `rand(l)` (CAS-646): an element of `l` from giac and
+/// ours, three after `srand(3)`; ours the same draw as `rand(l)` after the
+/// same seed; anything else giac's "Bad Argument Value", ours stays.
+#[test]
+fn choice() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let mut wrong = Vec::new();
+    for (input, items) in [
+        ("choice([a,b,c])", "[a,b,c]"),
+        (
+            "choice([\"r\",\"r\",\"r\",\"b\",\"n\"])",
+            "[\"r\",\"b\",\"n\"]",
+        ),
+    ] {
+        match (giac.value(input), ours(input)) {
+            (Ok(theirs), Ok(mine)) if one_of(&theirs, items) && one_of(&mine, items) => {}
+            (theirs, mine) => wrong.push(format!("{input}: ours {mine:?}, giac's {theirs:?}")),
+        }
+    }
+    let three = "[choice([a,b,c]),choice([a,b,c]),choice([a,b,c])]";
+    let printed = giac.eval(&format!("srand(3);{three}"));
+    let theirs = printed
+        .as_deref()
+        .ok()
+        .and_then(|p| p.strip_prefix("3,"))
+        .map(ours);
+    let mine = ours(&format!("[srand(3),{three}]"));
+    let mine = mine.as_ref().ok().and_then(|l| l.args().get(1));
+    let drawn = |l: &Expr| l.args().len() == 3 && l.args().iter().all(|e| one_of(e, "[a,b,c]"));
+    match (&theirs, mine) {
+        (Some(Ok(t)), Some(m)) if drawn(t) && drawn(m) => {}
+        _ => wrong.push(format!(
+            "srand(3);{three}: ours {mine:?}, giac prints {printed:?}"
+        )),
+    }
+    for (k, l) in [
+        (5, "[1,2,3,4,5,6]"),
+        (3, "[a,b,c]"),
+        (42, "[\"r\",\"b\",\"n\"]"),
+    ] {
+        let chosen = ours(&format!("[srand({k}),choice({l})]"));
+        let drawn = ours(&format!("[srand({k}),rand({l})]"));
+        if chosen.is_err() || chosen != drawn {
+            wrong.push(format!(
+                "srand({k});choice({l}): ours {chosen:?}, rand {drawn:?}"
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    departed(&[
+        ("choice([])", None, "choice([])"),
+        ("choice(5)", None, "choice(5)"),
+        ("choice(1,2,3)", None, "choice(1,2,3)"),
     ]);
 }

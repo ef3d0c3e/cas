@@ -55,7 +55,10 @@
 //! - `PolynomialDivisors[p]` (`divis`, CAS-645): the divisors of `p` from
 //!   `FactorList`, giac's enumeration: `[1]`, then for each factor `d` of
 //!   multiplicity `k` the list so far times `d`, …, `dᵏ` appended; a list
-//!   maps.
+//!   maps;
+//! - `RandomChoice[l]` (`choice`, CAS-646, misc.cc `_choice`): `Random[l]`,
+//!   an element of the non-empty list `l`, the same draw from the session
+//!   generator; anything else stays with "Bad Argument Value".
 //!
 //! giac's `subs` is `subst` (`ReplaceAll`); `subs(x=2, e)`, giac's error,
 //! stays. `convert(e, list)` is `e` (`Convert`).
@@ -726,6 +729,14 @@ pub(super) fn polynomial_divisors(ev: &mut Eval<'_>, e: &Expr) -> Native {
         divisors.extend(more);
     }
     Ok(Some(list(divisors)))
+}
+
+/// `RandomChoice[l]` (`choice`): `Random[l]` on a non-empty list.
+pub(super) fn random_choice(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    match e.args() {
+        [l] if is_list(l) && !l.args().is_empty() => super::random::element(ev, l.args()),
+        _ => refuse(ev, e, BAD),
+    }
 }
 
 #[cfg(test)]
