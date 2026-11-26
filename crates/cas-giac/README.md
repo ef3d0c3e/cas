@@ -541,8 +541,29 @@ exact, decimal and complex lists and `hilbert(3)`; the list forms of
 `instfreq` and `instphase`. Seven expression rows by `Simplify` of the
 difference (C0032; giac's `cos(x)^2+sin(x)^2` and `floor(1/2)` are ours
 closed), else by values at two points. Departures: `emd([x,1,2])` stays with
-"Data must be numeric", three options giac refuses stay, and
-`hilbert(sin(t),t)` (giac's `-cos(t)`) stays.
+"Data must be numeric", and three options giac refuses stay.
+
+`tests/signal_leftovers.rs`, Xcas's pulses `sinc`, `tri`, `boxcar` and the
+Hilbert transform of an expression `hilbert(f,t)`, `hilbert(f)` (CAS-648;
+giac's answers in crates/cas-core/proto/wavelet/giac/p5.cas and p5.out):
+- 30 exact rows by `Giac::agrees`: `sinc` at 0, `0.0`, π, 2π, π/2 (ours
+  `2/π`); `tri` and `boxcar` at their ties (`1/2`) and beyond, `boxcar`
+  with `a > b` (`-1`), symbolic `boxcar` as giac's steps; `hilbert(1,t)` 0,
+  `hilbert(t^2,t)`, `hilbert(t,t)`, `hilbert(x)` giac's `undef` (C0081),
+  `hilbert(exp(-t^2),t)` and `hilbert(f(t),t)` giac's inert
+  `Hilbert(f,t)`;
+- 21 expression rows by `Simplify` of the difference (C0032), else values
+  at two points: `sinc(x)`, its derivative, `tri(x)`, `tri(x-1)`, decimals
+  within giac's 12 digits, `fourier(sinc(x),x,s)`, `hilbert` of cosines and
+  sines (`hilbert(sin(t),t)` = `-cos(t)`) and their sums;
+- `boxcar(1,2)` and `boxcar(1,2,3,4)` stay with giac's "Bad Argument Type"
+  as the warning;
+- departures: 12 `hilbert` rows giac closes where our Fourier transforms
+  leave a term, ours the inert `Hilbert(f,t)` (rational functions, whose
+  transform holds `e^(−|ω|)`, `hilbert(1/(1+t^2),t)` giac's `t/(t^2+1)`; a
+  symbolic scale `sin(a*t)`; `sinc`; `boxcar(0,1,x)` and `rect(x)`, giac's
+  logarithms); `sinc([0,pi,x])` (giac `[undef]`) and `tri([0,1/2])` (giac
+  `poly1[1/2]`), ours mapped over the list.
 
 `tests/tail_probabilities.rs`, Xcas's upper tails `UTPN`, `UTPT`, `UTPC` and
 `UTPF` (CAS-625), and `cdf`, `icdf` and `mgf` of a law by its name, of a
@@ -1145,9 +1166,11 @@ Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
     in T5 (`tests/gap_leftovers_three.rs`).
   - Statistics (2): `choice` built in T5 (`tests/gap_leftovers_three.rs`). `hasard` is not built: it is a French spelling, and `rand` is built.
   - Infrastructure (1): `dayofweek` built in T5 (`tests/gap_leftovers_three.rs`).
-  - Signal processing (6): `stft`, `istft`, `hht`, `boxcar`, `tri`, `sinc` T6.
+  - Signal processing (6): `boxcar`, `tri`, `sinc` built in T6 (`tests/signal_leftovers.rs`);
+    `stft`, `istft`, `hht` T6.
 - Option-level items under covered names: `output=part`, `cluster`'s `index=` and clustering of
-  strings built in T5 (CAS-646); `hilbert(f,t)`, the transform form, T6. `fitdistr` on
+  strings built in T5 (CAS-646); `hilbert(f,t)`, the transform form, built in T6
+  (`tests/signal_leftovers.rs`; rational functions, symbolic scales, `sinc` and the box depart: inert). `fitdistr` on
   exponential data with a 0 already agrees: giac refuses `fitdistr([0,1,2,3,4],exponential)` with
   "Expected a positive number" (caseval probe), and so does ours, because it requires data > 0
   (`fitting.rs:645,666-668`); its oracle row is in `tests/gap_leftovers_three.rs` (T5).

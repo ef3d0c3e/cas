@@ -3,7 +3,9 @@
 //! - `DiagonalMatrix[l]` (`diag`): the diagonal matrix of a list, and the
 //!   diagonal of a matrix, as giac's `diag([[1,2],[3,4]])` is `[1,4]`;
 //! - `HilbertMatrix[n]` (`hilbert`): `[1/(i + j − 1)]`, `1 ≤ n` with `n²`
-//!   within `Limits::terms`;
+//!   within `Limits::terms`; on a list the analytic signal (CAS-635), on
+//!   another expression, or `HilbertMatrix[f, t]`, the Hilbert transform
+//!   (CAS-648), both in `analytic`;
 //! - `VandermondeMatrix[l]` (`vandermonde`): the rows `[1, l_i, l_i², …]`,
 //!   as giac's;
 //! - `Norm[v]` (`l2norm`): `√(Σ |v_i|²)`, and `FrobeniusNorm[A]`
@@ -32,7 +34,7 @@
 use super::conjugate;
 use crate::context::EvalError;
 use crate::eval::Eval;
-use crate::expr::Expr;
+use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 
 type Native = Result<Option<Expr>, EvalError>;
@@ -93,12 +95,25 @@ fn size(ev: &Eval<'_>, n: &Expr) -> Option<usize> {
 }
 
 pub(in crate::native) fn hilbert_matrix(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let is_list = |f: &Expr| f.head().and_then(Expr::as_symbol) == Some(Symbol::LIST);
+    // An expression and its variable: giac's Hilbert transform (CAS-648).
+    if let [f, t] = e.args() {
+        if is_list(f) {
+            return Ok(None);
+        }
+        return crate::native::analytic::hilbert_transform(ev, e, f, t);
+    }
     let [n] = e.args() else {
         return Ok(None);
     };
     // A list of numbers: giac's analytic signal (CAS-635).
-    if n.head().and_then(Expr::as_symbol) == Some(Symbol::LIST) {
+    if is_list(n) {
         return crate::native::analytic::hilbert(ev, e, n);
+    }
+    // Neither an integer nor a list: the transform in giac's `x`.
+    if !matches!(n.view(), View::Int(_) | View::Integer(_)) {
+        let x = Expr::from(Symbol::new("x"));
+        return crate::native::analytic::hilbert_transform(ev, e, n, &x);
     }
     let Some(n) = size(ev, n) else {
         return Ok(None);

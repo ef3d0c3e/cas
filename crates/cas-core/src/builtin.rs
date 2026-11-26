@@ -121,6 +121,10 @@ builtins! {
     DIRAC_DELTA = "DiracDelta" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     // The box, giac's `rect` (CAS-DOC-41 §1).
     UNIT_BOX = "UnitBox" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    // Xcas's pulses `sinc`, `tri`, `boxcar` (CAS-648).
+    SINC = "Sinc" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    UNIT_TRIANGLE = "UnitTriangle" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
+    BOXCAR = "Boxcar" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     SQRT = "Sqrt" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
     SURD = "Surd" [PROTECTED];
     FACTORIAL = "Factorial" [LISTABLE, NUMERIC_FUNCTION, PROTECTED];
@@ -228,6 +232,8 @@ builtins! {
     // Fourier transforms (CAS-DOC-41).
     FOURIER_TRANSFORM = "FourierTransform" [PROTECTED];
     INVERSE_FOURIER_TRANSFORM = "InverseFourierTransform" [PROTECTED];
+    // giac's inert Hilbert transform `Hilbert(f,t)` (CAS-648).
+    HILBERT = "Hilbert" [PROTECTED];
     // Z-transforms and recurrences (CAS-DOC-24): Xcas's `ztrans` and
     // `Kronecker`.
     ZTRANSFORM = "ZTransform" [PROTECTED];

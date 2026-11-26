@@ -9,7 +9,8 @@
 //!
 //! Their calculus is elsewhere: `D` of the step is the delta (`calculus`),
 //! and `Integrate` has both at linear arguments and sifts the delta out of
-//! definite integrals (`integrate`).
+//! definite integrals (`integrate`). Xcas's pulses built of them, `sinc`,
+//! `tri` and `boxcar`, are in [`pulses`] (CAS-648).
 //!
 //! Two rewritings in a variable `x` (giac's `x` when omitted), ports of
 //! giac's signalprocessing.cc:
@@ -65,6 +66,8 @@ use crate::eval::Eval;
 use crate::expr::{Expr, View};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
+
+pub(super) mod pulses;
 
 type Native = Result<Option<Expr>, EvalError>;
 

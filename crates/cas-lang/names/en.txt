@@ -79,6 +79,10 @@ InverseErf: erfinv
 HeavisideTheta: Heaviside
 DiracDelta: Dirac
 UnitBox: rect
+# Pulses (CAS-648), Xcas's.
+Sinc: sinc
+UnitTriangle: tri
+Boxcar: boxcar
 Sqrt: sqrt
 Surd: surd
 Factorial: factorial
@@ -123,6 +127,7 @@ LaplaceTransform: laplace
 InverseLaplaceTransform: ilaplace
 FourierTransform: fourier
 InverseFourierTransform: ifourier
+Hilbert: Hilbert
 HermiteDecomposition: ihermite
 SmithDecomposition: ismith smith
 LatticeReduce: lll

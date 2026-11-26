@@ -13,7 +13,7 @@
 //!   `3.06e-17`), else a ball. A nonzero imaginary part draws giac's warning
 //!   "hilbert ignores the imaginary part of input". `HilbertMatrix[n]` stays
 //!   the Hilbert matrix (permu.cc); giac's transform of an expression
-//!   (`hilbert(sin(t),t)`, `hilbtrans`) is not ported: it stays.
+//!   (`hilbert(sin(t),t)`, `hilbtrans`) is [`transform`]'s (CAS-648).
 //! - `InstantaneousFrequency[z]`, giac's `instfreq` (:5583-5610), on a
 //!   list: `ω_k = arg(z_(k+1) conj(z_k))`, `n − 1` values, built and
 //!   evaluated, so exact on exact samples (`[π/2,π/2,π/2]` for
@@ -51,8 +51,10 @@ use crate::symbol::Symbol;
 use crate::trace::Warning;
 
 mod emd;
+mod transform;
 
 pub(super) use emd::empirical_mode_decomposition;
+pub(super) use transform::hilbert_transform;
 
 type Native = Result<Option<Expr>, EvalError>;
 

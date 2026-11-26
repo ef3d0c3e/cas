@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 736] = [
+const BUILTINS: [&str; 740] = [
     "Plus",
     "Times",
     "Power",
@@ -189,6 +189,10 @@ const BUILTINS: [&str; 736] = [
     "FourierTransform",
     "InverseFourierTransform",
     "UnitBox",
+    "Sinc",
+    "UnitTriangle",
+    "Boxcar",
+    "Hilbert",
     // Integer matrices (CAS-DOC-42).
     "HermiteDecomposition",
     "SmithDecomposition",

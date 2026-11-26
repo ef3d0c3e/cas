@@ -337,8 +337,9 @@ fn analytic_expressions() {
 }
 
 /// Departures (p3.out): `emd` of symbolic data stays with giac's message as
-/// the warning; `emd`'s options giac refuses stay; giac's transform of an
-/// expression, `hilbert(sin(t),t)` = `-cos(t)`, is not ported: it stays.
+/// the warning; `emd`'s options giac refuses stay. giac's transform of an
+/// expression, `hilbert(sin(t),t)`, is built (CAS-648,
+/// `tests/signal_leftovers.rs`).
 #[test]
 fn analytic_departures() {
     let giac = giac();
@@ -357,22 +358,17 @@ fn analytic_departures() {
             }
         }
     }
-    for input in [refused[0], "hilbert(sin(t),t)"] {
-        if let Some(giac) = giac {
-            let printed = giac.eval(input).unwrap_or_default();
-            let recorded = if input == refused[0] {
-                "GIAC_ERROR: Data must be numeric Error: Bad Argument Value"
-            } else {
-                "-cos(t)"
-            };
-            if collapsed(&printed) != recorded {
-                wrong.push(format!(
-                    "{input}: giac prints {printed}, recorded {recorded}"
-                ));
-            }
+    if let Some(giac) = giac {
+        let printed = giac.eval(refused[0]).unwrap_or_default();
+        let recorded = "GIAC_ERROR: Data must be numeric Error: Bad Argument Value";
+        if collapsed(&printed) != recorded {
+            wrong.push(format!(
+                "{}: giac prints {printed}, recorded {recorded}",
+                refused[0]
+            ));
         }
     }
-    for input in refused.iter().chain(&["hilbert(sin(t),t)"]) {
+    for input in &refused {
         let stays = evaluated(input).is_some_and(|(e, found, warnings)| {
             found.head() == e.head()
                 && (*input != refused[0]
