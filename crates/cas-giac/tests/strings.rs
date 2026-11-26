@@ -244,6 +244,8 @@ fn departures() {
         ("asc(\"\u{e9}\")", "[195,169]", Some("[233]")),
         ("ord(\"\u{e9}\")", "-61", Some("233")),
         ("char(233)", "\"\u{fffd}\"", Some("\"\u{e9}\"")),
+        // giac's parser spaces `..` inside a string (T9, random_words).
+        ("asc(\"..\")", "[32,46,46]", Some("[46,46]")),
         (
             "char(65.5)",
             "GIAC_ERROR: char(65.5) \n Error: Bad Argument Value",

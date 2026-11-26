@@ -78,6 +78,8 @@ fn departures() {
         // found it: shrunk input modgcd(((-2))*((-2)*x),((-2))*((-2)*x)).
         ("modgcd(4*x,4*x)", "x", "4*x"),
         ("modgcd(4*x,6*x)", "x", "2*x"),
+        // In y alone too; T9: shrunk input modgcd(((-2))*(2*y),((-1))*(2*y)).
+        ("modgcd(6*y,4*y)", "y", "2*y"),
         (
             "ezgcd(x^2-1,x+1)",
             "GIAC_ERROR: Args must be multivariate polynomials Error: Bad Argument Value",
