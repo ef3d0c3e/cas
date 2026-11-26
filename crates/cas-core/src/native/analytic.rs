@@ -28,6 +28,11 @@
 //! - `EmpiricalModeDecomposition[data, options…]`, giac's `emd` (:5131-5281,
 //!   adapted by giac from Ivan Magrin-Chagnolleau's Matlab code): see
 //!   [`emd`].
+//! - `ShortTimeFourierTransform[x, m, window]` and
+//!   `InverseShortTimeFourierTransform[y]`, giac's `stft` and `istft`
+//!   (:754-860, CAS-648): see [`stft`].
+//! - `HilbertHuangTransform[data, options…]`, giac's `hht` with
+//!   `output=matrix` (:5391-5450, :5674-5791, CAS-648): see [`hht`].
 //!
 //! Departures: giac's transform of an expression stays; `emd` of symbolic
 //! data stays with giac's warning "Data must be numeric"; giac's errors
@@ -51,9 +56,13 @@ use crate::symbol::Symbol;
 use crate::trace::Warning;
 
 mod emd;
+mod hht;
+mod stft;
 mod transform;
 
 pub(super) use emd::empirical_mode_decomposition;
+pub(super) use hht::hilbert_huang_transform;
+pub(super) use stft::{inverse_short_time_fourier_transform, short_time_fourier_transform};
 pub(super) use transform::hilbert_transform;
 
 type Native = Result<Option<Expr>, EvalError>;

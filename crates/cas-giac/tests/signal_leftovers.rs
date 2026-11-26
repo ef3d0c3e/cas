@@ -6,6 +6,11 @@
 //! difference (C0032), else values within giac's digits at two points
 //! (C0006). Departures: rows where our Fourier transforms leave a term giac
 //! closes are ours inert, giac's lists of `sinc` and `tri` its oddities.
+//! `stft`, `istft` and `hht(…, output=matrix)` (giac's answers in `p6` and
+//! `p7`, checked by `proto_stft.py` and `proto_hht.py`): numbers within
+//! giac's digits and FFT noise (C0084); giac's errors stay with its message;
+//! departures: any function as `stft`'s window, `hht`'s plots and MIDI
+//! ranges, and `bins=n` (giac's 161 rows).
 
 use cas_core::{Context, EvalOptions, Expr, Symbol, View, Warning};
 use cas_giac::{Giac, ours};
@@ -295,6 +300,207 @@ fn list_departures() {
         if ours(input) != ours(mine) {
             wrong.push(format!("{input}: ours {:?}, wanted {mine}", ours(input)));
         }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `stft` and `istft` (CAS-648; giac's answers in `p6.cas` and `p6.out`,
+/// checked by `proto_stft.py`): entries within giac's digits and its FFT
+/// noise (C0084, C0006), complex ones by the modulus of the difference
+/// (C0010).
+#[test]
+fn stft_rows() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let s = "[0.3,-0.1,0.7,0.2,-0.5,0.4,0.9,-0.6,0.1,0.8,-0.2,0.5,-0.7,0.6,0.2,-0.4]";
+    let mut wrong = Vec::new();
+    for input in [
+        "stft([0.2,-0.8,0.4,0.6,0.1,-0.2,0.5,-0.3],2)".to_owned(),
+        "stft([0.2,-0.8,0.4,0.6,0.1,-0.2,0.5,-0.3])".to_owned(),
+        "stft([1,2,3,4,5,6,7,8],4)".to_owned(),
+        "stft([1,2,3,4,5,6,7,8],2)".to_owned(),
+        "stft([1,2,3,4,5,6,7,8,9,10],4)".to_owned(),
+        "stft([1,2,3,4],4)".to_owned(),
+        "stft([1,2,3,4,5,6,7,8],8)".to_owned(),
+        "stft([1,2,3,4,5,6,7,8],4,hann_window)".to_owned(),
+        format!("stft({s},4,blackman_window)"),
+        format!("stft({s},8,bartlett_hann_window)"),
+        format!("stft({s},2)"),
+        "stft([1,2+i,3,4],2)".to_owned(),
+        "stft([1/2,1/3,1/4,1/5],2)".to_owned(),
+        "stft([1,2,3,4,5,6,7],2)".to_owned(),
+        "stft([1,2,3,4,5,6,7,8],2,hann_window)".to_owned(),
+        "istft(stft([1,2,3,4,5,6,7,8],2))".to_owned(),
+        "istft(stft([1,2,3,4,5,6,7,8],4))".to_owned(),
+        "istft(stft([0.2,-0.8,0.4,0.6,0.1,-0.2,0.5,-0.3],2))".to_owned(),
+        "istft([[1,2],[3,4]])".to_owned(),
+        "istft([[1+i,2],[3,4-2*i]])".to_owned(),
+        "istft([[0.5,-1,2,0.25]])".to_owned(),
+        "istft([[1,2,3]])".to_owned(),
+        format!("istft(stft({s},4,blackman_window))"),
+    ] {
+        match (giac.value(&input), ours(&input)) {
+            (Ok(theirs), Ok(mine)) if near(&ctx, &theirs, &mine) => {}
+            (theirs, mine) => wrong.push(format!("{input}: ours {mine:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `hht(…, output=matrix)` (CAS-648; giac's answers in `p7.cas` and
+/// `p7.out`, checked by `proto_hht.py`): the matrices within giac's digits.
+/// The top of the range lands one bin low as giac's does (`[[1,-1,1,-1]]`:
+/// row 98 of 100); a range that is not positive or not numeric gives zeros.
+#[test]
+fn hht_rows() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let ctx = Context::new();
+    let p = "[0.7,0.2,-0.5,-0.6,-0.2,0.3,0.5,-0.1,-0.3]";
+    let q = "[0.1,0.4,0.2,-0.3,-0.1,0.2,0.6,0.1,-0.2]";
+    let mut wrong = Vec::new();
+    for input in [
+        "hht([[1,0,-1,0,1,0,-1,0],[1,1,0,0,1,1,0,0]],output=matrix)".to_owned(),
+        "hht([[1,0,-1,0]],output=matrix,samplerate=8,frequencies=0..4)".to_owned(),
+        format!("hht([{p}],output=matrix)"),
+        format!("hht([{p},{q}],output=matrix,frequencies=0.5..2.5)"),
+        format!("hht([{p}],output=matrix,samplerate=100,ln)"),
+        format!("hht([{p}],output=matrix,samplerate=100,ln=true,frequencies=10..40)"),
+        "hht([0.1,0.9,-0.4,0.6,-0.8,0.3,0.7,-0.9,0.2,0.5,-0.6,0.8,-0.1,0.4,-0.7,0.2],output=matrix)"
+            .to_owned(),
+        "hht([[1,-1,1,-1]],output=matrix)".to_owned(),
+        "hht([[1,-1,1,-1]],output=matrix,frequencies=0..4)".to_owned(),
+        "hht([[1,0,-1,0]],output=matrix,samplerate=8,frequencies=0..1.99999)".to_owned(),
+        "hht([[1,0,-1,0]],output=matrix,frequencies=a..b)".to_owned(),
+        "hht([[1,0,-1,0]],output=matrix,frequencies=2..2)".to_owned(),
+    ] {
+        match (giac.value(&input), ours(&input)) {
+            (Ok(theirs), Ok(mine)) if near(&ctx, &theirs, &mine) => {}
+            (theirs, mine) => wrong.push(format!("{input}: ours {mine:?}, giac's {theirs:?}")),
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// giac's errors of `stft`, `istft` and `hht` (p6.out, p7.out): ours stays
+/// with giac's message as the warning.
+#[test]
+fn transform_errors_stay() {
+    let giac = giac();
+    let mut wrong = Vec::new();
+    for (input, message) in [
+        (
+            "stft([1,2,3,4,5,6,7,8],3)",
+            "Window size must be a power of 2",
+        ),
+        (
+            "stft([1,2,3,4,5,6,7,8],1)",
+            "Window size should be at least 2",
+        ),
+        ("stft([1,2,3,4,5,6,7,8],2,4)", "Expected a window function"),
+        ("stft([1,2,3,4,5,6,7,8],0)", "Expected a positive integer"),
+        ("stft([1,2,3,4,5,6,7,8],2.0)", "Expected a positive integer"),
+        (
+            "stft([1,2,3,4,5,6,7,8],2,hann_window,1)",
+            "Too many input arguments",
+        ),
+        ("stft([x,1,2,3],2)", "Bad Argument Value"),
+        ("stft([])", "Invalid dimension"),
+        ("stft(3)", "Bad Argument Type"),
+        ("istft([[1,2],[3]])", "Bad Argument Type"),
+        ("istft([[1,x],[3,4]])", "Bad Argument Value"),
+        ("istft([1,2])", "Bad Argument Type"),
+        ("hht(3)", "Bad Argument Type"),
+        ("hht([1,2,3],output=matrix)", "No IMF found"),
+        ("hht([[1,0,-1,0]],output=foo)", "Unknown output type"),
+        (
+            "hht([[1,0,-1,0]],ln,output=matrix)",
+            "Log-frequency requires sample rate",
+        ),
+        (
+            "hht([[1,0,-1,0]],output=matrix,samplerate=0)",
+            "Sample rate must be a positive integer",
+        ),
+        (
+            "hht([[1,0,-1,0]],output=matrix,ln=3,samplerate=8)",
+            "Expected a boolean value",
+        ),
+        (
+            "hht([[1,0,-1,0]],output=matrix,foo=3)",
+            "Unknown optional argument",
+        ),
+    ] {
+        if let Some(giac) = giac {
+            let printed = giac.eval(input).unwrap_or_default();
+            if !(printed.starts_with("GIAC_ERROR") && printed.contains(message)) {
+                wrong.push(format!(
+                    "{input}: giac prints {printed}, recorded {message}"
+                ));
+            }
+        }
+        let stays = evaluated(input).is_some_and(|(e, found, warnings)| {
+            found.head() == e.head()
+                && warnings
+                    .iter()
+                    .any(|w| matches!(w, Warning::Native { message: m, .. } if m == message))
+        });
+        if !stays {
+            wrong.push(format!(
+                "{input}: ours {:?}, wanted the call with {message}",
+                evaluated(input)
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Departures (p6.out, p7.out): giac's `stft` applies any function as the
+/// window (ours takes the window functions); giac draws `hht`'s plot and
+/// image (the default) and reads MIDI note ranges, which stay in ours; and
+/// giac's `bins=n` gives 161 rows (it stores the option's tag), ours `n`.
+#[test]
+fn transform_departures() {
+    let giac = giac();
+    let mut wrong = Vec::new();
+    for (input, recorded) in [
+        ("stft([1,2,3,4,5,6,7,8],2,sin)", "[[-18.0376956654,"),
+        ("hht([[1,0,-1,0]])", "Graphic_object"),
+        ("hht([[1,2],[3,4]],output=plot)", "labels="),
+        (
+            "hht([[1,0,-1,0]],output=matrix,frequencies=[\"C4\",\"C5\"],samplerate=8)",
+            "[[0,0,0,0],[0,0,0,0],",
+        ),
+    ] {
+        if let Some(giac) = giac {
+            let printed = giac.eval(input).unwrap_or_default();
+            if !collapsed(&printed).starts_with(recorded) {
+                wrong.push(format!(
+                    "{input}: giac prints {printed}, recorded {recorded}…"
+                ));
+            }
+        }
+        let stays = evaluated(input)
+            .is_some_and(|(e, found, warnings)| found.head() == e.head() && !warnings.is_empty());
+        if !stays {
+            wrong.push(format!(
+                "{input}: ours {:?}, wanted the call with a warning",
+                evaluated(input)
+            ));
+        }
+    }
+    let bins = "hht([[1,0,-1,0,1,0,-1,0],[1,1,0,0,1,1,0,0]],output=matrix,bins=4)";
+    if let Some(giac) = giac {
+        let printed = giac.eval(&format!("size({bins})")).unwrap_or_default();
+        if printed != "161" {
+            wrong.push(format!("size({bins}): giac prints {printed}, recorded 161"));
+        }
+    }
+    match ours(bins) {
+        Ok(m) if m.args().len() == 4 && m.args().iter().all(|r| r.args().len() == 8) => {}
+        found => wrong.push(format!("{bins}: ours {found:?}, wanted 4 rows of 8")),
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }

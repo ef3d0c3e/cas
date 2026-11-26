@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 740] = [
+const BUILTINS: [&str; 743] = [
     "Plus",
     "Times",
     "Power",
@@ -844,6 +844,10 @@ const BUILTINS: [&str; 740] = [
     "InstantaneousFrequency",
     "InstantaneousPhase",
     "EmpiricalModeDecomposition",
+    // Short-time Fourier and Hilbert-Huang transforms (CAS-648).
+    "ShortTimeFourierTransform",
+    "InverseShortTimeFourierTransform",
+    "HilbertHuangTransform",
 ];
 
 /// Builtins that apply something to parts, only in the expression

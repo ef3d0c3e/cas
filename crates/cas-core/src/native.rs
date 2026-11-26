@@ -202,6 +202,18 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             Symbol::EMPIRICAL_MODE_DECOMPOSITION,
             analytic::empirical_mode_decomposition,
         ),
+        (
+            Symbol::SHORT_TIME_FOURIER_TRANSFORM,
+            analytic::short_time_fourier_transform,
+        ),
+        (
+            Symbol::INVERSE_SHORT_TIME_FOURIER_TRANSFORM,
+            analytic::inverse_short_time_fourier_transform,
+        ),
+        (
+            Symbol::HILBERT_HUANG_TRANSFORM,
+            analytic::hilbert_huang_transform,
+        ),
         (Symbol::CHAR, strings::char),
         (Symbol::ASC, strings::asc),
         (Symbol::ORD, strings::ord),

@@ -564,6 +564,20 @@ giac's answers in crates/cas-core/proto/wavelet/giac/p5.cas and p5.out):
   symbolic scale `sin(a*t)`; `sinc`; `boxcar(0,1,x)` and `rect(x)`, giac's
   logarithms); `sinc([0,pi,x])` (giac `[undef]`) and `tri([0,1/2])` (giac
   `poly1[1/2]`), ours mapped over the list.
+- `stft`, `istft` and `hht(…, output=matrix)` (CAS-648; giac's answers in
+  p6.cas/p6.out and p7.cas/p7.out, checked by `proto_stft.py` and
+  `proto_hht.py`): 23 `stft`/`istft` rows (Hamming, Hann, Blackman and
+  Bartlett-Hann windows, padding, the dropped imaginary part, round trips)
+  and 12 `hht` matrices (IMF matrices and a list through `emd`,
+  `samplerate=`, `frequencies=`, `ln`, the top of the range one bin low as
+  giac's, zeros for a range not positive or not numeric), entries within
+  giac's digits and FFT noise (C0084, C0006, C0010);
+- 19 giac errors of the three (window size, window function, data, options,
+  "No IMF found") stay with giac's message as the warning;
+- departures: `stft(x,2,sin)` (giac takes any function as the window, ours
+  the window functions), `hht`'s plot and image (giac's default) and MIDI
+  note ranges stay with a warning; `hht(…,bins=4)` is 4 rows in ours, 161 in
+  giac (it stores the option's tag, signalprocessing.cc:5727).
 
 `tests/tail_probabilities.rs`, Xcas's upper tails `UTPN`, `UTPT`, `UTPC` and
 `UTPF` (CAS-625), and `cdf`, `icdf` and `mgf` of a law by its name, of a
@@ -1167,7 +1181,7 @@ Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
   - Statistics (2): `choice` built in T5 (`tests/gap_leftovers_three.rs`). `hasard` is not built: it is a French spelling, and `rand` is built.
   - Infrastructure (1): `dayofweek` built in T5 (`tests/gap_leftovers_three.rs`).
   - Signal processing (6): `boxcar`, `tri`, `sinc` built in T6 (`tests/signal_leftovers.rs`);
-    `stft`, `istft`, `hht` T6.
+    `stft`, `istft`, `hht` (`output=matrix`) built in T6 (`tests/signal_leftovers.rs`).
 - Option-level items under covered names: `output=part`, `cluster`'s `index=` and clustering of
   strings built in T5 (CAS-646); `hilbert(f,t)`, the transform form, built in T6
   (`tests/signal_leftovers.rs`; rational functions, symbolic scales, `sinc` and the box depart: inert). `fitdistr` on

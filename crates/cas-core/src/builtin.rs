@@ -195,6 +195,10 @@ builtins! {
     INSTANTANEOUS_FREQUENCY = "InstantaneousFrequency" [PROTECTED];
     INSTANTANEOUS_PHASE = "InstantaneousPhase" [PROTECTED];
     EMPIRICAL_MODE_DECOMPOSITION = "EmpiricalModeDecomposition" [PROTECTED];
+    // Short-time Fourier and Hilbert-Huang transforms (CAS-648).
+    SHORT_TIME_FOURIER_TRANSFORM = "ShortTimeFourierTransform" [PROTECTED];
+    INVERSE_SHORT_TIME_FOURIER_TRANSFORM = "InverseShortTimeFourierTransform" [PROTECTED];
+    HILBERT_HUANG_TRANSFORM = "HilbertHuangTransform" [PROTECTED];
     // Strings, Xcas's (CAS-611, CAS-613).
     CHAR = "Char" [PROTECTED];
     ASC = "Asc" [PROTECTED];

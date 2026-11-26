@@ -952,6 +952,10 @@ InverseDiscreteWaveletTransform: idwt
 InstantaneousFrequency: instfreq
 InstantaneousPhase: instphase
 EmpiricalModeDecomposition: emd
+# Short-time Fourier and Hilbert-Huang transforms (CAS-648), Xcas's.
+ShortTimeFourierTransform: stft
+InverseShortTimeFourierTransform: istft
+HilbertHuangTransform: hht
 # Strings (CAS-611, CAS-613), Xcas's.
 Char: char chr
 Asc: asc

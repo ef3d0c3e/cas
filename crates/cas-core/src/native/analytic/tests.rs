@@ -379,3 +379,190 @@ fn two_imfs() {
         "residue",
     );
 }
+
+/// `input` evaluates to a matrix whose rows are `expected` within `tol`.
+fn near_rows(input: &str, expected: &[&[(f64, f64)]], tol: f64) {
+    let ctx = Context::new();
+    let found = ctx.eval(&read(input)).unwrap();
+    assert_eq!(found.args().len(), expected.len(), "{input}: {found:?}");
+    for (k, (row, want)) in found.args().iter().zip(expected).enumerate() {
+        let got = parts(&ctx, row);
+        assert_eq!(got.len(), want.len(), "{input}[{k}]: {got:?}");
+        for ((a, b), (c, d)) in got.iter().zip(*want) {
+            assert!(
+                (a - c).abs() <= tol && (b - d).abs() <= tol,
+                "{input}[{k}]: {got:?}, expected {want:?}"
+            );
+        }
+    }
+}
+
+const EIGHT: &str = "List[1, 2, 3, 4, 5, 6, 7, 8]";
+
+/// giac's `stft` and `istft` (`proto_stft.py`, `giac/p6.out`), and what stays.
+#[test]
+fn short_time_fourier_transforms() {
+    let tail = (-0.16, 0.16);
+    near_rows(
+        &format!("ShortTimeFourierTransform[{EIGHT}, 2]"),
+        &[
+            &[(0.8, 0.0), tail],
+            &[(1.44, 0.0), tail],
+            &[(2.08, 0.0), tail],
+        ],
+        1e-12,
+    );
+    near_rows(
+        &format!("ShortTimeFourierTransform[{EIGHT}, 4, HannWindow]"),
+        &[&[
+            (13.5, 0.0),
+            (-9.053_300_858_899_11, -1.189_339_828_220_18),
+            (1.5, -1.5),
+            (1.553_300_858_899_11, 3.310_660_171_779_82),
+        ]],
+        1e-12,
+    );
+    // Seven samples padded to eight; the imaginary part is dropped.
+    near_rows(
+        "ShortTimeFourierTransform[List[1, 2, 3, 4, 5, 6, 7], 2]",
+        &[
+            &[(0.8, 0.0), tail],
+            &[(1.44, 0.0), tail],
+            &[(1.44, 0.0), (-0.16, -0.48)],
+        ],
+        1e-12,
+    );
+    near_rows(
+        "ShortTimeFourierTransform[List[1, Complex[2, 1], 3, 4], 2]",
+        &[&[(0.8, 0.0), tail]],
+        1e-12,
+    );
+    check(&[
+        (&format!("ShortTimeFourierTransform[{EIGHT}]"), "List[]"),
+        (&format!("ShortTimeFourierTransform[{EIGHT}, 8]"), "List[]"),
+    ]);
+    near(
+        "InverseShortTimeFourierTransform[List[List[1, 2], List[3, 4]]]",
+        &real(&[1.5, 0.0, 3.0, 0.0, -0.5, 0.0]),
+        1e-12,
+    );
+    near(
+        "InverseShortTimeFourierTransform[List[List[1, 2, 3]]]",
+        &real(&[2.0, -1.0 / 6.0, -0.5, 1.0 / 3.0, -0.5, -1.0 / 6.0]),
+        1e-12,
+    );
+    let s = 0.220_970_869_120_796;
+    near(
+        "InverseShortTimeFourierTransform[List[List[1/2, -1, 2, 1/4]]]",
+        &real(&[0.4375, -s, -0.375, s, 0.8125, s, -0.375, -s]),
+        1e-12,
+    );
+    stays(&[
+        &format!("ShortTimeFourierTransform[{EIGHT}, 3]"),
+        &format!("ShortTimeFourierTransform[{EIGHT}, 1]"),
+        &format!("ShortTimeFourierTransform[{EIGHT}, 0]"),
+        &format!("ShortTimeFourierTransform[{EIGHT}, 2, 4]"),
+        &format!("ShortTimeFourierTransform[{EIGHT}, 2, Sin]"),
+        &format!("ShortTimeFourierTransform[{EIGHT}, 2, HannWindow, 1]"),
+        "ShortTimeFourierTransform[List[x, 1, 2, 3], 2]",
+        "ShortTimeFourierTransform[List[]]",
+        "ShortTimeFourierTransform[3]",
+        "InverseShortTimeFourierTransform[List[List[1, 2], List[3]]]",
+        "InverseShortTimeFourierTransform[List[List[1, x], List[3, 4]]]",
+        "InverseShortTimeFourierTransform[List[1, 2]]",
+    ]);
+}
+
+/// A matrix cell: row, column, value.
+type Cell = (usize, usize, f64);
+
+/// The nonzero cells of a matrix, and its size.
+fn cells(input: &str) -> ((usize, usize), Vec<Cell>) {
+    let ctx = Context::new();
+    let found = ctx.eval(&read(input)).unwrap();
+    let rows = found.args();
+    let n = rows.first().map_or(0, |r| r.args().len());
+    let mut out = Vec::new();
+    for (i, row) in rows.iter().enumerate() {
+        assert_eq!(row.args().len(), n, "{input}: {found:?}");
+        for (j, v) in doubles(&ctx, row).into_iter().enumerate() {
+            if v != 0.0 {
+                out.push((i, j, v));
+            }
+        }
+    }
+    ((rows.len(), n), out)
+}
+
+fn same_cells(input: &str, size: (usize, usize), expected: &[Cell]) {
+    let (found_size, found) = cells(input);
+    assert_eq!(found_size, size, "{input}");
+    assert_eq!(found.len(), expected.len(), "{input}: {found:?}");
+    for ((i, j, v), (k, l, w)) in found.iter().zip(expected) {
+        assert!(
+            i == k && j == l && (v - w).abs() <= 1e-12,
+            "{input}: {found:?}"
+        );
+    }
+}
+
+const MATRIX: &str = "Equation[output, Matrix]";
+
+/// giac's `hht` matrices (`proto_hht.py`, `giac/p7.out`), and what stays.
+#[test]
+fn hilbert_huang_transforms() {
+    // giac's top of the range lands one bin low: 98 of 100.
+    same_cells(
+        &format!("HilbertHuangTransform[List[List[1, -1, 1, -1]], {MATRIX}]"),
+        (100, 4),
+        &[(0, 0, 1.0), (98, 1, 1.0), (98, 2, 1.0), (98, 3, 1.0)],
+    );
+    same_cells(
+        &format!(
+            "HilbertHuangTransform[List[List[1, 0, -1, 0]], {MATRIX}, Equation[SampleRate, 8], \
+             Equation[Frequencies, Range[0, 4]]]"
+        ),
+        (100, 4),
+        &[(0, 0, 1.0), (49, 1, 1.0), (49, 2, 1.0), (49, 3, 1.0)],
+    );
+    // Ours honours bins=n (giac's 161 rows).
+    same_cells(
+        &format!(
+            "HilbertHuangTransform[List[List[1, -1, 1, -1]], {MATRIX}, Equation[Bins, 5], \
+             Equation[Frequencies, Range[0, 4]]]"
+        ),
+        (5, 4),
+        &[(0, 0, 1.0), (3, 1, 1.0), (3, 2, 1.0), (3, 3, 1.0)],
+    );
+    // A range that is not positive, or not numeric: zeros.
+    same_cells(
+        &format!(
+            "HilbertHuangTransform[List[List[1, 0, -1, 0]], {MATRIX}, \
+             Equation[Frequencies, Range[a, b]]]"
+        ),
+        (100, 4),
+        &[],
+    );
+    same_cells(
+        &format!(
+            "HilbertHuangTransform[List[List[1, 0, -1, 0]], {MATRIX}, \
+             Equation[Frequencies, Range[2, 2]]]"
+        ),
+        (100, 4),
+        &[],
+    );
+    let ones = "List[List[1, 0, -1, 0]]";
+    stays(&[
+        "HilbertHuangTransform[3]",
+        &format!("HilbertHuangTransform[{ones}]"),
+        &format!("HilbertHuangTransform[{ones}, Equation[output, foo]]"),
+        &format!("HilbertHuangTransform[{ones}, Log, {MATRIX}]"),
+        &format!("HilbertHuangTransform[{ones}, {MATRIX}, Equation[SampleRate, 0]]"),
+        &format!("HilbertHuangTransform[{ones}, {MATRIX}, Equation[Bins, 0]]"),
+        &format!("HilbertHuangTransform[{ones}, {MATRIX}, Equation[foo, 3]]"),
+        &format!(
+            "HilbertHuangTransform[{ones}, {MATRIX}, Equation[Log, 3], Equation[SampleRate, 8]]"
+        ),
+        &format!("HilbertHuangTransform[List[1, 2, 3], {MATRIX}]"),
+    ]);
+}
