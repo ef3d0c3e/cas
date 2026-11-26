@@ -10,3 +10,4 @@ T7 | done | random-input oracle sweeps: polynomial tools, real roots, gcd by nam
 T8 | done | random-input oracle sweeps: lists, sorts, matrices, integers, TI names, exact numerics, ASCII strings, sound codes (G3, G4, G5) | - | tasks/T8.md | logs/T8.md | R1.8-001,R1.8-004
 T9 | done | raise fuzz.yml's job cap for one-hour targets and push the campaign head | - | tasks/T9.md | logs/T9.md | -
 T10 | done | one-hour-per-target fuzz campaign on T9's head; findings triaged | - | tasks/T10.md | logs/T10.md | -
+T11 | done | campaign findings fixed under regression tests; final gate green; tickets done | - | tasks/T11.md | logs/T11.md | -
