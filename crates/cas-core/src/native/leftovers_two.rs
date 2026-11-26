@@ -32,7 +32,7 @@
 //! - `ShiftPhase[e]` (`shift_phase`, CAS-640, subst.cc `shift_phase`):
 //!   `sin u` as `−cos(u + π/2)`, `cos u` as `sin(u + π/2)`, `tan u` as
 //!   `−1/tan(u + π/2)`, innermost first, the shifted arguments written
-//!   `(2 u + π)/2`, `2 u + π` expanded (giac's `(pi+2*x)/2`, which
+//!   `(2 u + π)/2`, the 2 distributed over the sum `u` (giac's `(pi+2*x)/2`, which
 //!   evaluation leaves as it is);
 //! - `NonRecursiveTogether[e]` (`non_recursive_normal`, CAS-640,
 //!   sym2poly.cc): `Together` without reaching inside function arguments;
@@ -234,8 +234,10 @@ fn shifted(ev: &mut Eval<'_>, e: &Expr) -> Result<Expr, EvalError> {
     if let ([u], Some(Symbol::SIN | Symbol::COS | Symbol::TAN)) = (&new[..], s) {
         // giac's `ratnormal(u + pi/2)` takes `pi` as a variable: `(pi + 2 x)/2`,
         // which evaluation leaves; `x + Pi/2` would fold back.
-        let twice = Expr::from(2) * u.clone() + Expr::from(Symbol::PI);
-        let twice = ev.eval(&Expr::call(Symbol::EXPAND, [twice]))?;
+        // Distributed over the sum only: `Expand` would reach inside an
+        // inner shift and fold it (`sin(sin(x))`).
+        let twice: Expr = terms(u).into_iter().map(|t| Expr::from(2) * t).sum();
+        let twice = ev.eval(&(twice + Expr::from(Symbol::PI)))?;
         let v = ev.eval(&(Expr::from(1) / Expr::from(2) * twice))?;
         return Ok(match s {
             Some(Symbol::SIN) => -Expr::call(Symbol::COS, [v]),
