@@ -120,6 +120,42 @@ fn departures() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// Where giac misreads negative abscissae in `linear_interpolate` (1.8 T8,
+/// the sweep's probes): giac's answer as caseval prints it, and ours, exact.
+#[test]
+fn negative_abscissae() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let cases = [
+        (
+            "linear_interpolate([[-3,-2,-1],[2,3,9]],-3,-1,1/2)",
+            "GIAC_ERROR: Values out of range Error: Bad Argument Value",
+            "[[-3,-5/2,-2,-3/2,-1],[2,5/2,3,6,9]]",
+        ),
+        (
+            "linear_interpolate([[-1,-1/4,0,1/2,5/3],[1/2,7,1,-1/2,9/5]],0,0,3)",
+            "[[0.0],[4.5]]",
+            "[[0],[1]]",
+        ),
+    ];
+    let collapsed = |s: &str| s.split_whitespace().collect::<Vec<_>>().join(" ");
+    let mut wrong = Vec::new();
+    for (input, answer, expected) in cases {
+        let printed = giac.eval(input).unwrap();
+        if collapsed(&printed) != collapsed(answer) {
+            wrong.push(format!("{input}: giac prints {printed}, recorded {answer}"));
+        }
+        if ours(input).ok() != ours(expected).ok() {
+            wrong.push(format!(
+                "{input}: ours {:?}, wanted {expected}",
+                ours(input)
+            ));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
 /// `p/q` in the language, an integer when `q` divides `p`.
 fn ratio(p: i64, q: i64) -> String {
     if p % q == 0 {

@@ -114,3 +114,4 @@ C0111 | giac's univariate modgcd drops the gcd's integer content; gcd, heugcd ke
 C0112 | Sweeping a giac predicate (==): generate only true pairs; trunc(x,n<0) and bernoulli_mod p=2 traps | proptest,oracle,giac,equality,symbolic,trunc,sweep | 2026-11-26 | 1.8/T8 | CI 45823905195 random_type
 C0113 | giac string answers with quote or backslash do not read back: compare through asc | giac,strings,oracle,sweep,quote,printing | 2026-11-26 | 1.8/T8 | T8.c3 CI 45824175835
 C0114 | Sweep inputs: run a generated batch in one giac process; caseval's per-line children hide heap overruns | giac,oracle,crash,heap,caseval,sweep,splice | 2026-11-26 | 1.8/T8 | T8.c3 CI 45824175835 sound SIGABRT
+C0115 | Sweeping an optimiser (tpsolve, lpsolve): compare the optimum, check our point feasible; ties are common | giac,oracle,sweep,tpsolve,lpsolve,optimization,ties,proptest,linear_interpolate | 2026-11-26 | 1.8/T8 | T8.c4 random_tpsolve

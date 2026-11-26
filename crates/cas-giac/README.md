@@ -967,6 +967,12 @@ bracketed (C0023). Departures, each with giac's error as caseval prints it:
 `linspace(1,2,1)` (Invalid dimension), a range past the points of
 `linear_interpolate` (Values out of range) and one centre for
 `center2interval` (Bad Argument Value), where ours stays.
+Random inputs (128 cases a run each, 1.8 T8): `random_linspace`, small rationals with `n ≥ 2`;
+`random_linear_interpolate`, 2 to 6 sorted nonnegative dyadic abscissae from one abscissa to a later one with a
+dyadic step (giac's doubles land on the last point), within `10⁻¹⁰`. Departure (`negative_abscissae`): giac
+misreads negative abscissae, `linear_interpolate([[-3,-2,-1],[2,3,9]],-3,-1,1/2)` "Values out of range" and
+`linear_interpolate([[-1,-1/4,0,1/2,5/3],[1/2,7,1,-1/2,9/5]],0,0,3)` `[[0.0],[4.5]]` for the point `(0,1)`;
+ours exact (`[[-3,-5/2,-2,-3/2,-1],[2,5/2,3,6,9]]`, `[[0],[1]]`); the sweep keeps abscissae nonnegative.
 
 `tests/interpolation.rs`, besides `lagrange`, `spline`, `thiele` and the
 orthogonal polynomials, Xcas's `ratinterp` and `triginterp` (CAS-594):
@@ -987,6 +993,9 @@ each with giac's answer as caseval prints it: an order not a nonnegative
 integer, unequal lists and two arguments (giac's errors), a repeated
 abscissa (`undef`), and `nDeriv` of a variable not a symbol (`0.0`), where
 ours stays.
+Random inputs (128 cases a run each, 1.8 T8): `random_numdiff`, 1 to 6 points with distinct rational abscissae at a
+rational point, of order 0 to the number of points or none, exactly; `random_n_deriv`, a polynomial of degree ≤ 4,
+perhaps over `x^2+k`, with a rational step, by value at three points within `10⁻¹⁰`.
 
 `tests/fits.rs`, Xcas's `bspline` and `fitspline` (CAS-596): `bspline` by
 `Expand` and `Together` of the difference element by element (C0032), with
@@ -1015,6 +1024,9 @@ where ours is the coefficient list, highest first; `cos(x)` on `0..2` with
 where ours has degree 5 near the prototype's; `abs(x)` on `-1..1`, giac's
 coefficients off ours by up to `1.3·10⁻⁶` (its doubles in the degree-15
 expansion), where ours is near the prototype's.
+Random inputs (128 cases a run each, 1.8 T8): `random_fitspline`, 5 or 6 sorted rational points at 1 to 3 points
+inside the data, within `10⁻¹⁰` (giac needs more samples than control points and does not sort);
+`random_bspline`, degree 1 to 3 with more rational control points than the degree, knots `x` or `x=a..b`, exactly.
 
 `tests/minimax.rs`, Xcas's `minimax` (CAS-599): giac's converged rows
 (`exp(x)` on `0..1` degree 3, `sin(x)` on `0..1` `[2,1]`,
@@ -1059,6 +1071,8 @@ points.
   difference, the decimal row numerically. Departure: a negative right side, from which giac
   pivots an infeasible basis (`-9/2,[0,0,-3/2,0,11/2],…`); ours warns and stays
   `SimplexReduce[…]`.
+- Random problems (128 cases a run, 1.8 T8): `random_tpsolve`, 1 to 3 sources and sinks, supplies, demands and
+  costs in `0..9`: giac's answer, or its optimal cost with another feasible allocation of ours (random costs tie).
 
 `tests/find_minimum.rs`, Xcas's `find_minimum` (CAS-608): giac's 7 probe rows that compile
 (`cosh`, with `eps=1e-5, maxiter=20` too, `x^2-2*x`, `(x-1/3)^2`, `x->x^4-3*x^2+x`, `sin`,
