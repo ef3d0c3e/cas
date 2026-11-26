@@ -94,7 +94,7 @@ Piecewise: piecewise
 ComplexInfinity: infinity
 Infinity: inf
 Hold: hold
-ReplaceAll: subst replace
+ReplaceAll: subst replace subs
 # Structure (CAS-DOC-4 §6.1, CAS-DOC-7 §4).
 Length: size length
 Map: map
@@ -481,6 +481,19 @@ ExpLinearize: lin
 ShiftPhase: shift_phase
 NonRecursiveTogether: non_recursive_normal
 Envelope: envelope
+# giac's list, type, format, date and polynomial leftovers (CAS-644, CAS-645, CAS-647).
+LastElement: back
+ArithmeticRange: range
+ShiftList: shift
+DeleteAt: suppress
+ElementAt: at
+Divide: rdiv
+GetType: getType
+FormatNumber: format
+DayOfWeek: dayofweek
+RootsWithMultiplicity: roots
+TruncateDegree: truncate
+PolynomialDivisors: divis
 # giac's minors, echelon forms and pivots (CAS-530, CAS-528).
 DetMinor: det_minor
 AdjointMatrix: adjoint_matrix

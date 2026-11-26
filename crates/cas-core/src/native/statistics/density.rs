@@ -256,7 +256,7 @@ fn options(ev: &Eval<'_>, given: &[Expr]) -> Result<Options, Stop> {
                 }
             } else if name == Some(Symbol::BINS) {
                 o.bins = positive(v).ok_or(Some(BINS))?;
-            } else if name.is_some_and(|s| s.name() == "range") {
+            } else if name.is_some_and(|s| s == Symbol::ARITHMETIC_RANGE || s.name() == "range") {
                 let ends = if is_list(v) {
                     match v.args() {
                         [l, r] => interval(ev, l, r),

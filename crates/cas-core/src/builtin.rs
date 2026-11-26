@@ -532,6 +532,20 @@ builtins! {
     SHIFT_PHASE = "ShiftPhase" [PROTECTED];
     NON_RECURSIVE_TOGETHER = "NonRecursiveTogether" [PROTECTED];
     ENVELOPE = "Envelope" [PROTECTED];
+    // giac's list, type, format, date and polynomial leftovers (CAS-644,
+    // CAS-645, CAS-647).
+    LAST_ELEMENT = "LastElement" [PROTECTED];
+    ARITHMETIC_RANGE = "ArithmeticRange" [PROTECTED];
+    SHIFT_LIST = "ShiftList" [PROTECTED];
+    DELETE_AT = "DeleteAt" [PROTECTED];
+    ELEMENT_AT = "ElementAt" [PROTECTED];
+    DIVIDE = "Divide" [PROTECTED];
+    GET_TYPE = "GetType" [PROTECTED];
+    FORMAT_NUMBER = "FormatNumber" [PROTECTED];
+    DAY_OF_WEEK = "DayOfWeek" [PROTECTED];
+    ROOTS_WITH_MULTIPLICITY = "RootsWithMultiplicity" [PROTECTED];
+    TRUNCATE_DEGREE = "TruncateDegree" [PROTECTED];
+    POLYNOMIAL_DIVISORS = "PolynomialDivisors" [PROTECTED];
     // giac's minors, echelon forms and pivots (CAS-530, CAS-528).
     DET_MINOR = "DetMinor" [PROTECTED];
     ADJOINT_MATRIX = "AdjointMatrix" [PROTECTED];

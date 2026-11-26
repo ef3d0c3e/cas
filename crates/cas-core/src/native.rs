@@ -38,6 +38,7 @@ mod lambert;
 mod laplace;
 mod lattice;
 mod leftovers;
+mod leftovers_three;
 mod leftovers_two;
 mod limit;
 mod linear;
@@ -1181,6 +1182,24 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             leftovers_two::non_recursive_together,
         ),
         (Symbol::ENVELOPE, leftovers_two::envelope),
+        (Symbol::LAST_ELEMENT, leftovers_three::last_element),
+        (Symbol::ARITHMETIC_RANGE, leftovers_three::arithmetic_range),
+        (Symbol::SHIFT_LIST, leftovers_three::shift_list),
+        (Symbol::DELETE_AT, leftovers_three::delete_at),
+        (Symbol::ELEMENT_AT, leftovers_three::element_at),
+        (Symbol::DIVIDE, leftovers_three::divide),
+        (Symbol::GET_TYPE, leftovers_three::get_type),
+        (Symbol::FORMAT_NUMBER, leftovers_three::format_number),
+        (Symbol::DAY_OF_WEEK, leftovers_three::day_of_week),
+        (
+            Symbol::ROOTS_WITH_MULTIPLICITY,
+            leftovers_three::roots_with_multiplicity,
+        ),
+        (Symbol::TRUNCATE_DEGREE, leftovers_three::truncate_degree),
+        (
+            Symbol::POLYNOMIAL_DIVISORS,
+            leftovers_three::polynomial_divisors,
+        ),
         (Symbol::DET_MINOR, matrix::echelon::det_minor),
         (Symbol::ADJOINT_MATRIX, matrix::echelon::adjoint_matrix),
         (Symbol::ROW_ECHELON, matrix::echelon::row_echelon),

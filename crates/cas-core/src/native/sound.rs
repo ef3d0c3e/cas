@@ -491,7 +491,8 @@ pub(super) fn channel_data(ev: &mut Eval<'_>, e: &Expr) -> Native {
         } else if is(o, Symbol::MATRIX, "matrix") {
             matrix = true;
         } else if let Some((lhs, v)) = equation(o) {
-            if !is(lhs, Symbol::RANGE, "range") {
+            // `range` is giac's `range` builtin too (CAS-644).
+            if !is(lhs, Symbol::RANGE, "range") && !is(lhs, Symbol::ARITHMETIC_RANGE, "range") {
                 continue;
             }
             if is_list(v) {

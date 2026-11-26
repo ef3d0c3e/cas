@@ -427,7 +427,8 @@ pub(in crate::native) fn random_variable(ev: &mut Eval<'_>, e: &Expr) -> Native 
                     }
                     spread = Some((true, rh));
                 }
-                Some(s) if s.name() == "range" => {
+                // `range` is giac's `range` builtin too (CAS-644).
+                Some(s) if s == Symbol::ARITHMETIC_RANGE || s.name() == "range" => {
                     if is_list(rh) {
                         let [a, b] = rh.args() else {
                             return refuse(ev, e, BAD);

@@ -647,6 +647,28 @@ envelope of the gap ledger (CAS-640, CAS-641):
   `[x(t),y(t)]` of `F=0`, `dF/dt=0` (a list of them when several), compared at `t = 1/3`
   (`envelope(y+x*tan(t)-2*sin(t),t)` is `[2*cos(t)^3,2*sin(t)^3]`).
 
+`tests/gap_leftovers_three.rs`, giac's list, type, format, date and polynomial leftovers of the
+gap ledger (CAS-644, CAS-645, CAS-646, CAS-647):
+- giac's `back`, `range` (integers, or giac's doubles once an argument is not an integer, within
+  its 12 digits), `shift` (lists, strings padded with spaces, integers' bits), `suppress` (an
+  index, a list of them, a range; a string out of range is `""`), `at` (0-based, `at(m,[j,k])`),
+  `rdiv`, `getType` (`pi`, `undef`, `infinity` are `"VAR"`, `e` and `i` `"EXPR"`, `true`
+  `"NUM"`, `sin` `"OTHER"`), `subs(e,x=a)` (`subst`), `format` (C's `%.nf`, `%.ne`, `%.ng` of
+  the double, `"invalid format"`), `dayofweek` (giac's proleptic Gregorian formula),
+  `convert(e,list)` (`e` itself), `truncate` (degree in `x` or the given variables, other
+  factors degree 0) and `divis` (giac's enumeration over `factors`) read back and compared;
+  `roots` compared as multisets of `[root,multiplicity]`, roots within 10⁻⁹ at `a = y = 7/3`,
+  as giac lists its solver's roots of each square-free factor in its order and ours those of
+  `CSolve` on each irreducible factor;
+- the departures, each with giac's answer: where giac errs, the call stays with a warning
+  (`range` with a zero or wrong-signed step, of a symbol, a negative or a non-integer count;
+  `at` out of range, "Index outside range"; `suppress` with a symbol; `truncate` over a
+  denominator in `x` or with a non-integer order; `dayofweek` out of range, of a decimal or of
+  two arguments; `fitdistr([0,1,2,3,4],exponential)`, "Expected a positive number");
+  `subs(x=2,e)` (giac's error in xcas mode) stays without a warning, `subst` finding no rule in
+  `e`; `format` of a symbol or a non-real stays (giac prints it: `"x"`, `"2.00+i"`);
+  `divis(-x^2+1)` lists the factor −1 first, as our `factors` does (giac last).
+
 `tests/integers.rs`, Xcas's integer functions (CAS-548 to CAS-553): giac's
 `chrem` of integers and of polynomials with integer moduli (coefficient by
 coefficient, modulo the product), `lgcd`, `fracmod` and `iratrecon`, `icomp`
@@ -1036,8 +1058,8 @@ Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
     user calls here too, giac's printing `det(...)`: departure rows in `tests/matrices_four.rs` (T3).
   - Operator syntax, not built: `'` (`diff`; the lexer rejects it), `|` (`subst`; the lexer rejects
     it), `/%` and `%/` twice (`iquo`, `irem`), `div` (`iquo`), `!` prefix (`not`).
-  - Not handled yet, assigned: `rdiv` (`/`), `getType` (`type`), `at` (`At`) and `subs` (`subst`) to
-    T5; `list` (`convert`) to T5. `maple_ifactors` (`ifactors`, Maple's `[sign,[[p,e],...]]`) and
+  - Built in T5 (`tests/gap_leftovers_three.rs`): `rdiv` (`/`), `getType` (`type`), `at` (`At`),
+    `subs` (`subst`, an alias), `list` (`convert`, `e` itself). `maple_ifactors` (`ifactors`, Maple's `[sign,[[p,e],...]]`) and
     `expln` (`convert`, as trig2exp) built in T4 (`tests/gap_leftovers.rs`); `array` (`convert`, `x` itself) and `fadeev` (`charpoly`, the option ignored) built in
     T3 (`tests/matrices_five.rs`).
 - Computational in an existing module, 50: the 1.8 plan said 49, and `box_constraints` moved in from
@@ -1057,13 +1079,15 @@ Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
     T4 (`tests/gap_leftovers.rs`). Its finite-field form is not built: it needs `GF`.
   - Numerical analysis (1): `box_constraints` built in T4 (`tests/gap_leftovers.rs`;
     `box_constraints([x,y],[[-2,2],[-5,5]])` = `x=-2..2,y=-5..5`).
-  - Language (5): `back`, `range`, `shift`, `format`, `suppress` T5.
-  - Polynomials (3): `roots`, `truncate`, `divis` T5.
+  - Language (5): `back`, `range`, `shift`, `format`, `suppress` built in T5
+    (`tests/gap_leftovers_three.rs`).
+  - Polynomials (3): `roots` (its order departs, compared as multisets), `truncate`, `divis` built
+    in T5 (`tests/gap_leftovers_three.rs`).
   - Statistics (2): `choice` T5. `hasard` is not built: it is a French spelling, and `rand` is built.
-  - Infrastructure (1): `dayofweek` T5.
+  - Infrastructure (1): `dayofweek` built in T5 (`tests/gap_leftovers_three.rs`).
   - Signal processing (6): `stft`, `istft`, `hht`, `boxcar`, `tri`, `sinc` T6.
 - Option-level items under covered names: `kmeans`/`cluster` `output=part`, `index=` and clustering
   of strings T5; `hilbert(f,t)`, the transform form beside the list form, T6. `fitdistr` on
   exponential data with a 0 already agrees: giac refuses `fitdistr([0,1,2,3,4],exponential)` with
   "Expected a positive number" (caseval probe), and so does ours, because it requires data > 0
-  (`fitting.rs:645,666-668`). T5 adds the oracle row.
+  (`fitting.rs:645,666-668`); its oracle row is in `tests/gap_leftovers_three.rs` (T5).
