@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-25T15:45:00.617Z
+# filed through: 2026-11-26T00:34:32.233Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
@@ -93,7 +93,7 @@ R89 | 2026-11-25 | open | superseded by R93 | Phase 1.6 Strings, printers and se
 R90 | 2026-11-25 | open | in force | Phase 1.6 Strings, printers and session commands | CAS-DOC-58 is still a draft in Lific (like CAS-DOC-57, R81) -> Claude or the developer publishes it | .claude-state/journal/2026-11-25/065052-020r-claude-record.md
 R91 | 2026-11-25 | decision | in force | Phase 1.6 Strings, printers and session commands | Phase 1.6 is closed. | .claude-state/journal/2026-11-25/070752-026r-claude-record.md
 R92 | 2026-11-25 | open | superseded by R93 | Phase 1.7 Statistics III and signal processing II | phase 1.7 draft in progress by pa-planner -> present with plan(kind: phase) when its report arrives | .claude-state/journal/2026-11-25/070752-026r-claude-record.md
-R93 | 2026-11-25 | decision | in force | Phase 1.7 Statistics III and signal processing II | The phase 1.7 plan is installed and runs on its own. | .claude-state/journal/2026-11-25/075453-037r-claude-record.md
+R93 | 2026-11-25 | decision | superseded by R107 | Phase 1.7 Statistics III and signal processing II | The phase 1.7 plan is installed and runs on its own. | .claude-state/journal/2026-11-25/075453-037r-claude-record.md
 R94 | 2026-11-25 | decision | in force | Frontends (language server and desktop app) | The frontends are generation 2, starting right after 1.8: first the language server (completion, hi… | .claude-state/journal/2026-11-25/075453-037r-claude-record.md
 R95 | 2026-11-25 | open | in force | Frontends (language server and desktop app) | gen 2 frontend choices: the new Lific module(s), which need the developer's word; the desktop app's… | .claude-state/journal/2026-11-25/075453-037r-claude-record.md
 R96 | 2026-11-25 | finding | in force | Frontends (language server and desktop app) | commit_task.sh swept unnamed files into a partner commit. | .claude-state/journal/2026-11-25/075453-037r-claude-record.md
@@ -102,8 +102,12 @@ R98 | 2026-11-25 | finding | in force | Phase 1.7 Statistics III and signal proc
 R99 | 2026-11-25 | finding | in force | Phase 1.7 Statistics III and signal processing II | The phase's cited prototypes and giac probe inputs now live in crates/cas-core/proto/ (README; .py… | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
 R100 | 2026-11-25 | finding | in force | Phase 1.7 Statistics III and signal processing II | R74 was broken twice: coders in T6 and T7.c2 ran local programs that printed our answers. | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
 R101 | 2026-11-25 | finding | in force | Phase 1.7 Statistics III and signal processing II | commit_task.sh stages all of logs/ again (T8): the coders' commits carried the expert's progress no… | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
-R102 | 2026-11-25 | open | in force | Phase 1.7 Statistics III and signal processing II | giac's Weibull fit drops a square in its moment equation (graphtheory.cc:759). | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
-R103 | 2026-11-25 | open | in force | Phase 1.7 Statistics III and signal processing II | unported pieces: kmeans/cluster output=part, index=, string clustering (named in CAS-630's text); h… | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
-R104 | 2026-11-25 | open | in force | Phase 1.7 Statistics III and signal processing II | future coder briefs should restate R74 explicitly -> next phase planner brief | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R102 | 2026-11-25 | open | superseded by R108 | Phase 1.7 Statistics III and signal processing II | giac's Weibull fit drops a square in its moment equation (graphtheory.cc:759). | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R103 | 2026-11-25 | open | superseded by R108 | Phase 1.7 Statistics III and signal processing II | unported pieces: kmeans/cluster output=part, index=, string clustering (named in CAS-630's text); h… | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R104 | 2026-11-25 | open | superseded by R108 | Phase 1.7 Statistics III and signal processing II | future coder briefs should restate R74 explicitly -> next phase planner brief | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
 R105 | 2026-11-25 | open | in force | Phase 1.7 Statistics III and signal processing II | CAS-DOC-59 is still a draft in Lific (like CAS-DOC-57/58, R81/R90) -> Claude or the developer publi… | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
-R106 | 2026-11-25 | open | in force | Phase 1.7 Statistics III and signal processing II | the phase 1.7 close question is asked, and the developer's answer is pending -> release close on yes | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R106 | 2026-11-25 | open | superseded by R107 | Phase 1.7 Statistics III and signal processing II | the phase 1.7 close question is asked, and the developer's answer is pending -> release close on yes | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R107 | 2026-11-26 | decision | in force | Phase 1.7 Statistics III and signal processing II | Phase 1.7 is closed. | .claude-state/journal/2026-11-26/014955-050r-claude-record.md
+R108 | 2026-11-26 | decision | in force | Phase 1.7 Statistics III and signal processing II | The 1.7 carry-overs are routed to 1.8 through the inbox (I2): the Weibull fix, the gap-check items… | .claude-state/journal/2026-11-26/014955-050r-claude-record.md
+R109 | 2026-11-26 | finding | in force | Phase 1.8 Validation | The 1.8 draft (.run/plans/phase-1.8.md, lint OK, R1.8-001..004) has 12 tasks. | .claude-state/journal/2026-11-26/014955-050r-claude-record.md
+R110 | 2026-11-26 | open | in force | Phase 1.8 Validation | the developer's decision on which missing entries may stay unbuilt. | .claude-state/journal/2026-11-26/014955-050r-claude-record.md
