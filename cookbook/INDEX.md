@@ -103,3 +103,4 @@ C0100 | giac oracle rows: 12-digit decimals need a tolerance; session state is p
 C0101 | Reproducing giac's ratnormal forms: distribute, never Expand; n/Abs[d] | giac,oracle,together,expand,abs,forms | 2026-11-26 | 1.8/T4 | T4.c2 CAS-640
 C0102 | Two coders in one working tree: build in a detached worktree | worktree,parallel,coders,build,shared-tree | 2026-11-26 | 1.8/T5 | T5.c2 CAS-646
 C0103 | giac clustering index= traps: silhouette aborts libgiac, message without period | giac,oracle,cluster,kmeans,silhouette,abort,index | 2026-11-26 | 1.8/T5 | T5.c2 CAS-646
+C0104 | giac's roundoff doubles (low 5 mantissa bits cleared): mask in double-counting ports | giac,float,double,roundoff,range,port,full-form | 2026-11-26 | 1.8/T5 | T5.c1 CAS-644
