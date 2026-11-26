@@ -1,9 +1,14 @@
 //! The gcd algorithms by name against giac (CAS-526): `heugcd`, `modgcd`,
 //! `psrgcd`, `ezgcd` and `icontent`, giac's answers read back; the
 //! departures, each as decided: `psrgcd`'s leading coefficient positive,
-//! and `ezgcd` where giac gives up or refuses one variable.
+//! and `ezgcd` where giac gives up or refuses one variable; and 128 random
+//! inputs a run to each.
 
+use std::collections::BTreeMap;
+
+use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the checks skip.
 fn giac() -> Option<&'static Giac> {
@@ -90,4 +95,168 @@ fn departures() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+const VARIABLES: [&str; 2] = ["x", "y"];
+
+/// The terms of a polynomial in `x, y`: exponents to coefficient.
+type Terms = BTreeMap<Vec<u32>, i64>;
+
+/// Up to `len` terms with exponents below 3 and coefficients in `-5..=5`,
+/// none 0, so a nonzero polynomial.
+fn nonzero(len: usize) -> impl Strategy<Value = Terms> {
+    prop::collection::btree_map(
+        prop::collection::vec(0u32..3, 2),
+        prop_oneof![-5i64..=-1, 1i64..=5],
+        1..=len,
+    )
+}
+
+/// The polynomial as Xcas text, in parentheses.
+fn text(terms: &Terms) -> String {
+    let parts: Vec<String> = terms
+        .iter()
+        .filter(|&(_, &c)| c != 0)
+        .map(|(exps, c)| {
+            let mut factors = vec![if *c < 0 {
+                format!("({c})")
+            } else {
+                c.to_string()
+            }];
+            for (v, &k) in VARIABLES.iter().zip(exps) {
+                match k {
+                    0 => {}
+                    1 => factors.push((*v).to_owned()),
+                    _ => factors.push(format!("{v}^{k}")),
+                }
+            }
+            factors.join("*")
+        })
+        .collect();
+    if parts.is_empty() {
+        "(0)".to_owned()
+    } else {
+        format!("({})", parts.join("+"))
+    }
+}
+
+/// The terms in `x` alone: the other exponents dropped, like terms added,
+/// those that cancel left out.
+fn in_x(terms: Terms) -> Terms {
+    let mut only = Terms::new();
+    for (exps, c) in terms {
+        let mut e = vec![0; exps.len()];
+        e[0] = exps[0];
+        *only.entry(e).or_default() += c;
+    }
+    only.retain(|_, c| *c != 0);
+    only
+}
+
+/// `name(a*g,b*g)` in this CAS and in giac, the same up to sign, which giac
+/// takes from the inputs. `None` for a draw that cancels to 0.
+fn gcd_input(name: &str, univariate: bool, a: Terms, b: Terms, g: Terms) -> Option<String> {
+    let strip = |t: Terms| if univariate { in_x(t) } else { t };
+    let (a, b, g) = (strip(a), strip(b), strip(g));
+    // giac returns a nonzero input as it is when the other is 0.
+    if [&a, &b, &g].iter().any(|t| t.is_empty()) {
+        return None;
+    }
+    let (a, b, g) = (text(&a), text(&b), text(&g));
+    Some(format!("{name}({a}*{g},{b}*{g})"))
+}
+
+/// Whether this CAS's answer to `input` is giac's, or giac's negated.
+fn up_to_sign(giac: &Giac, input: &str) -> Result<(), TestCaseError> {
+    let fail = |e: cas_giac::OracleError| TestCaseError::fail(format!("{input}: {e}"));
+    let ctx = Context::new();
+    let ours = ours(input).map_err(fail)?;
+    let theirs = giac.value(input).map_err(fail)?;
+    let expand = |e: Expr| {
+        ctx.eval(&Expr::call(Symbol::EXPAND, [e]))
+            .map_err(|e| TestCaseError::fail(format!("{input}: {e}")))
+    };
+    let (theirs, negated) = (expand(theirs.clone())?, expand(-theirs)?);
+    prop_assert!(
+        ours == theirs || ours == negated,
+        "{}: giac {}, ours {}",
+        input,
+        theirs,
+        ours
+    );
+    Ok(())
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `heugcd` of two products with a common factor, in one or two
+    /// variables: giac's answer up to sign.
+    #[test]
+    fn random_heugcd(univariate in any::<bool>(), a in nonzero(3), b in nonzero(3), g in nonzero(3)) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let Some(input) = gcd_input("heugcd", univariate, a, b, g) else {
+            return Ok(());
+        };
+        up_to_sign(giac, &input)?;
+    }
+
+    /// `modgcd`, as [`random_heugcd`].
+    #[test]
+    fn random_modgcd(univariate in any::<bool>(), a in nonzero(3), b in nonzero(3), g in nonzero(3)) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let Some(input) = gcd_input("modgcd", univariate, a, b, g) else {
+            return Ok(());
+        };
+        up_to_sign(giac, &input)?;
+    }
+
+    /// `psrgcd`, as [`random_heugcd`]. Up to sign covers the departure:
+    /// ours has a positive leading coefficient where giac keeps the sign
+    /// of its remainders.
+    #[test]
+    fn random_psrgcd(univariate in any::<bool>(), a in nonzero(3), b in nonzero(3), g in nonzero(3)) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let Some(input) = gcd_input("psrgcd", univariate, a, b, g) else {
+            return Ok(());
+        };
+        up_to_sign(giac, &input)?;
+    }
+
+    /// `ezgcd` in two variables, up to sign. Excluded, the departures: one
+    /// variable, which giac refuses ("Args must be multivariate
+    /// polynomials", also when a draw has no `y`), and the inputs where
+    /// giac gives up ("GCD not successful"): draws giac answers with an
+    /// error are skipped.
+    #[test]
+    fn random_ezgcd(a in nonzero(3), b in nonzero(3), g in nonzero(3)) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let Some(input) = gcd_input("ezgcd", false, a, b, g) else {
+            return Ok(());
+        };
+        let printed = giac.eval(&input).map_err(|e| TestCaseError::fail(e.to_string()))?;
+        if printed.trim_matches('"').starts_with("GIAC_ERROR") {
+            return Ok(());
+        }
+        up_to_sign(giac, &input)?;
+    }
+
+    /// `icontent` of a multiple of a product, in two variables: giac's
+    /// answer.
+    #[test]
+    fn random_icontent(k in 1i64..=6, a in nonzero(3), g in nonzero(3)) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let input = format!("icontent({k}*{}*{})", text(&a), text(&g));
+        giac.agrees(&input).map_err(|e| TestCaseError::fail(e.to_string()))?;
+    }
 }

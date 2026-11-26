@@ -102,7 +102,10 @@ and `set[…]` is `{…}`.
 `tests/gcd_methods.rs`, the gcd algorithms by name (CAS-526): giac's
 `heugcd`, `modgcd`, `psrgcd`, `ezgcd` and `icontent` read back, and the
 departures: `psrgcd` with a positive leading coefficient, `ezgcd` where giac
-gives up or refuses one variable, with giac's message.
+gives up or refuses one variable, with giac's message; and random sweeps
+(128 cases a run each) of all five on `name(a*g,b*g)` with small polynomials
+in `x, y` (`icontent` of `k*a*g`), compared up to sign; `ezgcd` in two
+variables only, draws giac answers with an error skipped (the departures).
 
 `tests/partial_fractions.rs`, partial fractions and fraction forms
 (CAS-529, CAS-540, CAS-544): giac's `cpartfrac`, `convert` with `partfrac`,
@@ -114,6 +117,9 @@ gives up or refuses one variable, with giac's message.
 `-7/3` is `[-3,1,2]` (giac `[2,3]`, the sign lost), `sqrt(2)` the period
 `[1,[2]]` (giac 15 quotients), `pi` stays `dfc(pi)` (giac 9 quotients); and
 a third argument (giac's `'L'`, which giac assigns) taken and not assigned.
+Random sweeps (128 cases a run each) of `cpartfrac`, `propfrac` and `f2nd`
+on `p/q`, `q` up to three linear factors `a*x-b` and maybe one `x^2+c`;
+quartics like `x^4+1` excluded (the `cpartfrac` departure).
 
 `tests/ndsolve.rs`, `NDSolve` and `BVPSolve` (CAS-DOC-35 §5, CAS-520):
 - giac's `odesolve` within `10⁻⁸`, relative;

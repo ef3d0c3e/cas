@@ -3,10 +3,12 @@
 //! `fullparfrac`, `confrac` and `polynom`, `propfrac`, `f2nd`, `fxnd` and
 //! `ratnormal`, giac's answers read back and compared after `Expand` and
 //! `Together` of the difference, `i` and square roots included. The
-//! departures, each with giac's answer and ours as decided.
+//! departures, each with giac's answer and ours as decided. And 128 random
+//! fractions a run to `cpartfrac`, `propfrac` and `f2nd`.
 
 use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the comparisons skip.
 fn giac() -> Option<&'static Giac> {
@@ -141,4 +143,95 @@ fn departures() {
         wrong.push("convert(sqrt(2),confrac,L): ours is not [1,[2]]".to_owned());
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// A numerator of degree below 5, coefficients in `-5..=5` from `x^0` up.
+fn numerator() -> impl Strategy<Value = Vec<i64>> {
+    prop::collection::vec(-5i64..=5, 1..=5)
+}
+
+/// A denominator: one to three linear factors `a*x-b`, `a` in `1..=2`, `b`
+/// in `-3..=3`, and maybe a quadratic `x^2+c`, `c` in `1..=5`, roots
+/// `±i*sqrt(c)`. Never a quartic like `x^4+1`: there giac splits `x^2±i`
+/// and ours keeps it whole (README departure).
+fn denominator() -> impl Strategy<Value = (Vec<(i64, i64)>, Option<i64>)> {
+    (
+        prop::collection::vec((1i64..=2, -3i64..=3), 1..=3),
+        prop::option::of(1i64..=5),
+    )
+}
+
+/// `name(p/q)` as Xcas text; `None` for a zero numerator.
+fn fraction(name: &str, p: &[i64], q: &(Vec<(i64, i64)>, Option<i64>)) -> Option<String> {
+    let terms: Vec<String> = p
+        .iter()
+        .enumerate()
+        .filter(|&(_, &c)| c != 0)
+        .map(|(k, c)| format!("({c})*x^{k}"))
+        .collect();
+    if terms.is_empty() {
+        return None;
+    }
+    let mut factors: Vec<String> = q.0.iter().map(|(a, b)| format!("({a}*x-({b}))")).collect();
+    if let Some(c) = q.1 {
+        factors.push(format!("(x^2+{c})"));
+    }
+    Some(format!(
+        "{name}(({})/({}))",
+        terms.join("+"),
+        factors.join("*")
+    ))
+}
+
+/// Whether giac's answer to `input` and ours differ by 0 ([`same`]).
+fn check(giac: &Giac, input: &str) -> Result<(), TestCaseError> {
+    match (giac.value(input), ours(input)) {
+        (Ok(theirs), Ok(ours)) if same(&Context::new(), &ours, &theirs) => Ok(()),
+        (theirs, ours) => Err(TestCaseError::fail(format!(
+            "{input}: ours {ours:?}, giac's {theirs:?}"
+        ))),
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `cpartfrac` of `p/q`, [`denominator`]'s `q`: real linear factors and
+    /// maybe `x^2+c`, split over `ℂ`. Excluded: quartics like `x^4+1`
+    /// (README departure, giac splits `x^2±i` in square roots of `i`).
+    #[test]
+    fn random_cpartfrac(p in numerator(), q in denominator()) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let Some(input) = fraction("cpartfrac", &p, &q) else {
+            return Ok(());
+        };
+        check(giac, &input)?;
+    }
+
+    /// `propfrac` of `p/q`, as [`random_cpartfrac`].
+    #[test]
+    fn random_propfrac(p in numerator(), q in denominator()) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let Some(input) = fraction("propfrac", &p, &q) else {
+            return Ok(());
+        };
+        check(giac, &input)?;
+    }
+
+    /// `f2nd` of `p/q`, as [`random_cpartfrac`]: numerator and denominator,
+    /// each compared.
+    #[test]
+    fn random_f2nd(p in numerator(), q in denominator()) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let Some(input) = fraction("f2nd", &p, &q) else {
+            return Ok(());
+        };
+        check(giac, &input)?;
+    }
 }
