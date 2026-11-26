@@ -210,7 +210,8 @@ proptest! {
 
     /// `modgcd`, as [`random_heugcd`]. Excluded, the departure: one
     /// variable with a gcd whose integer content is not 1, which giac's
-    /// modgcd drops (`modgcd(4*x,6*x)` is `x`); those draws are skipped.
+    /// modgcd drops (`modgcd(4*x,6*x)` is `x`, `modgcd(6*y,4*y)` is `y`);
+    /// those draws are skipped.
     #[test]
     fn random_modgcd(univariate in any::<bool>(), a in nonzero(3), b in nonzero(3), g in nonzero(3)) {
         let Some(giac) = giac() else {
@@ -219,7 +220,8 @@ proptest! {
         let Some(input) = gcd_input("modgcd", univariate, a, b, g) else {
             return Ok(());
         };
-        if univariate {
+        // One variable is x alone or y alone: modgcd(6*y,4*y) is y too (T9).
+        if univariate || !input.contains('x') || !input.contains('y') {
             let content = format!("icontent({})", input.replacen("modgcd", "gcd", 1));
             let printed = giac.eval(&content).map_err(|e| TestCaseError::fail(e.to_string()))?;
             if printed.trim() != "1" {

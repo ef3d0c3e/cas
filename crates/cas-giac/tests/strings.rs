@@ -339,7 +339,8 @@ fn literal(s: &str) -> String {
 /// Whether giac reads `s` written as [`literal`]: its lexer takes a string
 /// ending in `\` for an unclosed one (`size("a\\")` is `undef`, caseval).
 fn writable(s: &str) -> bool {
-    !s.ends_with('\\')
+    // giac's parser spaces `..` even in a string: asc("..") is [32,46,46] (T9).
+    !s.ends_with('\\') && !s.contains("..")
 }
 
 /// Each input agrees ([`Giac::agrees`]), or the failure names it.

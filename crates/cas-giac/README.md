@@ -109,7 +109,9 @@ variables only, draws giac answers with an error skipped (the departures).
 `modgcd` in one variable drops the gcd's integer content (giac
 `modgcd(4*x,6*x)` is `x`, its `gcd` `2*x`); ours is `gcd`'s answer, a
 departure the sweep found (shrunk input `modgcd(4*x,4*x)`, giac `x`, ours
-`4*x`, T7), and its univariate draws with content not 1 are skipped.
+`4*x`, T7), and its draws in one variable with content not 1 are skipped:
+`x` alone or `y` alone (`modgcd(6*y,4*y)` giac `y`, shrunk input
+`modgcd(-2*(2*y),-1*(2*y))`, 1.8 T9).
 
 `tests/partial_fractions.rs`, partial fractions and fraction forms
 (CAS-529, CAS-540, CAS-544): giac's `cpartfrac`, `convert` with `partfrac`,
@@ -1147,7 +1149,9 @@ their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_p
   `random_pieces` (mid, left, right), `random_levenshtein`, `random_words` (join, trim, split by a nonempty
   separator) on printable ASCII up to 12 characters, `"` and `\` included; string answers compared through `asc`
   (giac prints `"` doubled and `\` bare, C0113); strings ending in `\` skipped (giac's lexer reads them unclosed);
-  departure `contains("","")`, giac 0, ours 1 (giac's `contains("abc","")` is 1), excluded.
+  departure `contains("","")`, giac 0, ours 1 (giac's `contains("abc","")` is 1), excluded. Strings with `..`
+  skipped: giac's parser spaces it even inside a string literal (`asc("..")` is `[32,46,46]`, `size("..")` 3;
+  found by `random_words`, shrunk input `asc(join("",[".."]))`, 1.8 T9), a departure.
 
 `tests/text.rs`, expressions as text and back (CAS-614):
 - `string`/`str` and `cat`, and non-strings in `join` and `concat`: giac's text (its quotes
