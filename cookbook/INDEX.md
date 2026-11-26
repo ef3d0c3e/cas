@@ -101,3 +101,5 @@ C0098 | Unit-test full forms: no decimals in parse_full_form; capital user names
 C0099 | A new builtin captures a bare word natives match by name: grep it first | builtin,names,lowering,regression,en.txt | 2026-11-26 | 1.8/T4 | T4.c1 CAS-642
 C0100 | giac oracle rows: 12-digit decimals need a tolerance; session state is process-global | giac,oracle,tolerance,session,assume,addtable | 2026-11-26 | 1.8/T4 | T4.c1 CAS-640
 C0101 | Reproducing giac's ratnormal forms: distribute, never Expand; n/Abs[d] | giac,oracle,together,expand,abs,forms | 2026-11-26 | 1.8/T4 | T4.c2 CAS-640
+C0102 | Two coders in one working tree: build in a detached worktree | worktree,parallel,coders,build,shared-tree | 2026-11-26 | 1.8/T5 | T5.c2 CAS-646
+C0103 | giac clustering index= traps: silhouette aborts libgiac, message without period | giac,oracle,cluster,kmeans,silhouette,abort,index | 2026-11-26 | 1.8/T5 | T5.c2 CAS-646
