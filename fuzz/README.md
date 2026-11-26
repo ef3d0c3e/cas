@@ -75,7 +75,9 @@ within minutes.
 
 The corpus is carried between runs with the actions cache, one cache per target, and
 crash artifacts are uploaded with the failed run. A longer or narrower run is
-`gh workflow run fuzz.yml -f time_per_target=<seconds> [-f targets="<names>"]`.
+`gh workflow run fuzz.yml -f time_per_target=<seconds> [-f targets="<names>"]`. Each job is capped at
+120 minutes (`timeout-minutes`, was 60 until phase 1.8): enough for `time_per_target=3600` plus
+the build; a longer run needs the cap raised too.
 
 The ball function targets (`ball_fns`, `special_fns`, `complex_fns`, `machine_fns`, `ball_consts`, CAS-113),
 `eval` (CAS-60), `poly_factor` (CAS-182), `poly_sparse` (CAS-155), `poly_gcd` (CAS-192) and `poly_integrate` (CAS-197) run with debug assertions and without AddressSanitizer (the workflow's
