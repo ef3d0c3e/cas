@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-25T06:39:35.281Z
+# filed through: 2026-11-25T15:45:00.617Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
@@ -97,3 +97,13 @@ R93 | 2026-11-25 | decision | in force | Phase 1.7 Statistics III and signal pro
 R94 | 2026-11-25 | decision | in force | Frontends (language server and desktop app) | The frontends are generation 2, starting right after 1.8: first the language server (completion, hi… | .claude-state/journal/2026-11-25/075453-037r-claude-record.md
 R95 | 2026-11-25 | open | in force | Frontends (language server and desktop app) | gen 2 frontend choices: the new Lific module(s), which need the developer's word; the desktop app's… | .claude-state/journal/2026-11-25/075453-037r-claude-record.md
 R96 | 2026-11-25 | finding | in force | Frontends (language server and desktop app) | commit_task.sh swept unnamed files into a partner commit. | .claude-state/journal/2026-11-25/075453-037r-claude-record.md
+R97 | 2026-11-25 | finding | in force | Phase 1.7 Statistics III and signal processing II | Phase 1.7 built giac's 37 entries under CAS-DOC-59 (still a draft), and CAS-624..635 are done. | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R98 | 2026-11-25 | finding | in force | Phase 1.7 Statistics III and signal processing II | Final gate green on 0e22fdf (CI 45637752766, Fuzz 45637752779). | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R99 | 2026-11-25 | finding | in force | Phase 1.7 Statistics III and signal processing II | The phase's cited prototypes and giac probe inputs now live in crates/cas-core/proto/ (README; .py… | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R100 | 2026-11-25 | finding | in force | Phase 1.7 Statistics III and signal processing II | R74 was broken twice: coders in T6 and T7.c2 ran local programs that printed our answers. | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R101 | 2026-11-25 | finding | in force | Phase 1.7 Statistics III and signal processing II | commit_task.sh stages all of logs/ again (T8): the coders' commits carried the expert's progress no… | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R102 | 2026-11-25 | open | in force | Phase 1.7 Statistics III and signal processing II | giac's Weibull fit drops a square in its moment equation (graphtheory.cc:759). | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R103 | 2026-11-25 | open | in force | Phase 1.7 Statistics III and signal processing II | unported pieces: kmeans/cluster output=part, index=, string clustering (named in CAS-630's text); h… | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R104 | 2026-11-25 | open | in force | Phase 1.7 Statistics III and signal processing II | future coder briefs should restate R74 explicitly -> next phase planner brief | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R105 | 2026-11-25 | open | in force | Phase 1.7 Statistics III and signal processing II | CAS-DOC-59 is still a draft in Lific (like CAS-DOC-57/58, R81/R90) -> Claude or the developer publi… | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
+R106 | 2026-11-25 | open | in force | Phase 1.7 Statistics III and signal processing II | the phase 1.7 close question is asked, and the developer's answer is pending -> release close on yes | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
