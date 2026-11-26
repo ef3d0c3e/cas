@@ -106,3 +106,5 @@ C0103 | giac clustering index= traps: silhouette aborts libgiac, message without
 C0104 | giac's roundoff doubles (low 5 mantissa bits cleared): mask in double-counting ports | giac,float,double,roundoff,range,port,full-form | 2026-11-26 | 1.8/T5 | T5.c1 CAS-644
 C0105 | giac kmeans cluster_crit indices: numeric quirks to reproduce (WG identity, exact det, pivots) | giac,kmeans,cluster,index,port,float,determinant | 2026-11-26 | 1.8/T5 | T5.c3 CAS-646
 C0106 | eval SIGSEGV, no artifact: replay cached corpus on CI; bound native recursion with ev.enter | fuzz,eval,sigsegv,stack-overflow,replay,corpus,recursion,native | 2026-11-26 | 1.8/T5 | T5.c4 CAS-640
+C0107 | giac's Hilbert transform via our Fourier pair; inert giac heads need a builtin | giac,hilbert,fourier,ifourier,inert,oracle | 2026-11-26 | 1.8/T6 | T6.c1 CAS-648
+C0108 | giac's hht bins: top edge in fbins-2; near-zero imaginary part flips inst_freq | giac,hht,fft,bins,ties,oracle,prototype | 2026-11-26 | 1.8/T6 | T6.c2 CAS-648
