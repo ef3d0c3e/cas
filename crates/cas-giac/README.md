@@ -635,8 +635,8 @@ ledger (CAS-640, CAS-641, CAS-642, CAS-643):
 `tests/gap_leftovers_two.rs`, giac's period, linearisations, phase shift, outer normal and
 envelope of the gap ledger (CAS-640, CAS-641):
 - giac's `period` (`+infinity` when not periodic, as for `abs(sin(x))` and `sin(x)+x`; `0` free
-  of `x`; `floor(x)-x` has 1), `lin` (lists too), `shift_phase` (equations too; evaluation
-  brings the shifted forms back alike on both sides) and `non_recursive_normal` (function
+  of `x`; `floor(x)-x` has 1), `lin` (lists too), `shift_phase` (equations too; the
+  shifted argument as giac's `(pi+2*x)/2`, which evaluation leaves) and `non_recursive_normal` (function
   arguments left as they are) read back and compared; `linabs` and
   `non_recursive_normal(sqrt(x^2+2*x+1)+x)` (giac's `x+abs(x+1)`) compared by value at `x` =
   −7/3, −2/3, 1/3, 2/3, 5/3, 8/3, as `linabs` picks the smallest of equal rewritings by

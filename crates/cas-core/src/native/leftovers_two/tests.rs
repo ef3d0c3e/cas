@@ -81,7 +81,7 @@ fn periods() {
         // giac's 2*pi*1/abs(a).
         (
             "Period[Sin[Times[a, x]]]",
-            "Abs[Times[2, Pi, Power[a, -1]]]",
+            "Times[2, Pi, Power[Abs[a], -1]]",
         ),
         // giac's +infinity: not periodic, or not found so.
         ("Period[x]", "Infinity"),
@@ -160,19 +160,18 @@ fn abs_linearisations() {
 #[test]
 fn shifts_and_normals() {
     check(&[
-        // giac's -cos((pi+2*x)/2), sin((pi+2*t)/2), -1/tan((pi+2*u)/2):
-        // evaluation brings both back alike.
+        // giac's -cos((pi+2*x)/2), sin((pi+2*t)/2), -1/tan((pi+2*u)/2).
         (
             "ShiftPhase[Sin[x]]",
-            "Times[-1, Cos[Together[Plus[x, Times[1/2, Pi]]]]]",
+            "Times[-1, Cos[Times[1/2, Plus[Pi, Times[2, x]]]]]",
         ),
         (
             "ShiftPhase[Cos[t]]",
-            "Sin[Together[Plus[t, Times[1/2, Pi]]]]",
+            "Sin[Times[1/2, Plus[Pi, Times[2, t]]]]",
         ),
         (
             "ShiftPhase[Tan[u]]",
-            "Times[-1, Power[Tan[Together[Plus[u, Times[1/2, Pi]]]], -1]]",
+            "Times[-1, Power[Tan[Times[1/2, Plus[Pi, Times[2, u]]]], -1]]",
         ),
         ("ShiftPhase[Plus[x, Exp[x]]]", "Plus[x, Exp[x]]"),
         // giac's 1 and x+exp((x^2-1)/(x-1))+1: the argument stays.

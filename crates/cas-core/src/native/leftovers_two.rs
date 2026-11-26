@@ -31,8 +31,9 @@
 //!   products;
 //! - `ShiftPhase[e]` (`shift_phase`, CAS-640, subst.cc `shift_phase`):
 //!   `sin u` as `−cos(u + π/2)`, `cos u` as `sin(u + π/2)`, `tan u` as
-//!   `−1/tan(u + π/2)`, innermost first, the shifted arguments `Together`.
-//!   Evaluation brings the shifts back as it does giac's printed answers;
+//!   `−1/tan(u + π/2)`, innermost first, the shifted arguments written
+//!   `(2 u + π)/2`, `2 u + π` expanded (giac's `(pi+2*x)/2`, which
+//!   evaluation leaves as it is);
 //! - `NonRecursiveTogether[e]` (`non_recursive_normal`, CAS-640,
 //!   sym2poly.cc): `Together` without reaching inside function arguments;
 //! - `Envelope[F, t]`, `Envelope[F, [x, y, t]]` (`envelope`, CAS-641,
@@ -231,8 +232,11 @@ fn shifted(ev: &mut Eval<'_>, e: &Expr) -> Result<Expr, EvalError> {
     }
     let s = h.as_symbol();
     if let ([u], Some(Symbol::SIN | Symbol::COS | Symbol::TAN)) = (&new[..], s) {
-        let half_pi = Expr::from(Symbol::PI) / Expr::from(2);
-        let v = ev.eval(&together(u.clone() + half_pi))?;
+        // giac's `ratnormal(u + pi/2)` takes `pi` as a variable: `(pi + 2 x)/2`,
+        // which evaluation leaves; `x + Pi/2` would fold back.
+        let twice = Expr::from(2) * u.clone() + Expr::from(Symbol::PI);
+        let twice = ev.eval(&Expr::call(Symbol::EXPAND, [twice]))?;
+        let v = ev.eval(&(Expr::from(1) / Expr::from(2) * twice))?;
         return Ok(match s {
             Some(Symbol::SIN) => -Expr::call(Symbol::COS, [v]),
             Some(Symbol::COS) => Expr::call(Symbol::SIN, [v]),
@@ -370,7 +374,8 @@ fn periodic(
                         return Ok(false);
                     }
                     let two_pi = Expr::from(2) * Expr::from(Symbol::PI);
-                    unit = Some(ev.eval(&Expr::call(Symbol::ABS, [two_pi / c]))?);
+                    // giac prints `2*pi*1/abs(a)`.
+                    unit = Some(ev.eval(&(two_pi / Expr::call(Symbol::ABS, [c])))?);
                 }
                 Some((a, _)) if !is_zero(&a) => {
                     let one = Expr::from(1);
@@ -624,7 +629,7 @@ pub(super) fn envelope(ev: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(None);
     };
     let f = match (head(f), f.args()) {
-        (Some(Symbol::EQUAL), [l, r]) => l.clone() - r.clone(),
+        (Some(Symbol::EQUAL | Symbol::EQUATION), [l, r]) => l.clone() - r.clone(),
         _ => f.clone(),
     };
     let derivative = Expr::call(Symbol::D, [f.clone(), t]);
