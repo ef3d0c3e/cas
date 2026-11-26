@@ -555,13 +555,14 @@ giac's answers in crates/cas-core/proto/wavelet/giac/p5.cas and p5.out):
 - 21 expression rows by `Simplify` of the difference (C0032), else values
   at two points: `sinc(x)`, its derivative, `tri(x)`, `tri(x-1)`, decimals
   within giac's 12 digits, `fourier(sinc(x),x,s)`, `hilbert` of cosines and
-  sines (`hilbert(sin(t),t)` = `-cos(t)`) and their sums;
+  sines (`hilbert(sin(t),t)` = `-cos(t)`, `hilbert(sin(a*t),t)` =
+  `-cos(t*a)*sign(a)`, values at `a = 7/10, 13/10`) and their sums;
 - `boxcar(1,2)` and `boxcar(1,2,3,4)` stay with giac's "Bad Argument Type"
   as the warning;
-- departures: 12 `hilbert` rows giac closes where our Fourier transforms
+- departures: 10 `hilbert` rows giac closes where our Fourier transforms
   leave a term, ours the inert `Hilbert(f,t)` (rational functions, whose
-  transform holds `e^(−|ω|)`, `hilbert(1/(1+t^2),t)` giac's `t/(t^2+1)`; a
-  symbolic scale `sin(a*t)`; `sinc`; `boxcar(0,1,x)` and `rect(x)`, giac's
+  transform holds `e^(−|ω|)`, `hilbert(1/(1+t^2),t)` giac's `t/(t^2+1)`;
+  `sinc`; `boxcar(0,1,x)` and `rect(x)`, giac's
   logarithms); `sinc([0,pi,x])` (giac `[undef]`) and `tri([0,1/2])` (giac
   `poly1[1/2]`), ours mapped over the list.
 - `stft`, `istft` and `hht(…, output=matrix)` (CAS-648; giac's answers in
@@ -1184,7 +1185,7 @@ Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
     `stft`, `istft`, `hht` (`output=matrix`) built in T6 (`tests/signal_leftovers.rs`).
 - Option-level items under covered names: `output=part`, `cluster`'s `index=` and clustering of
   strings built in T5 (CAS-646); `hilbert(f,t)`, the transform form, built in T6
-  (`tests/signal_leftovers.rs`; rational functions, symbolic scales, `sinc` and the box depart: inert). `fitdistr` on
+  (`tests/signal_leftovers.rs`; rational functions, `sinc` and the box depart: inert). `fitdistr` on
   exponential data with a 0 already agrees: giac refuses `fitdistr([0,1,2,3,4],exponential)` with
   "Expected a positive number" (caseval probe), and so does ours, because it requires data > 0
   (`fitting.rs:645,666-668`); its oracle row is in `tests/gap_leftovers_three.rs` (T5).

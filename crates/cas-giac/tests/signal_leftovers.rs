@@ -65,7 +65,7 @@ fn near(ctx: &Context, a: &Expr, b: &Expr) -> bool {
 }
 
 /// Whether `Simplify[a − b]` is 0 (C0032), else whether `a` and `b` agree
-/// within [`near`] at `x = t = s = 7/10` and `13/10`.
+/// within [`near`] at `x = t = s = a = 7/10` and `13/10`.
 fn same_function(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     let gap = Expr::call(
         Symbol::SIMPLIFY,
@@ -85,7 +85,7 @@ fn same_function(ctx: &Context, a: &Expr, b: &Expr) -> bool {
                 Symbol::REPLACE_ALL,
                 [
                     f.clone(),
-                    Expr::call(Symbol::LIST, [rule("x"), rule("t"), rule("s")]),
+                    Expr::call(Symbol::LIST, [rule("x"), rule("t"), rule("s"), rule("a")]),
                 ],
             )
         };
@@ -194,6 +194,8 @@ fn expression_rows() {
         "hilbert(sin(3*t),t)",
         "hilbert(2*cos(t),t)",
         "hilbert(cos(t)+sin(2*t),t)",
+        "hilbert(sin(a*t),t)",
+        "hilbert(cos(a*t),t)",
     ] {
         match (giac.value(input), ours(input)) {
             (Ok(theirs), Ok(mine)) if same_function(&ctx, &mine, &theirs) => {}
@@ -234,7 +236,7 @@ fn errors_stay() {
 
 /// Departures (p5.out): giac closes the transform where our
 /// `FourierTransform` or `InverseFourierTransform` leaves a term (rational
-/// functions, whose transform holds `e^(−|ω|)`; a symbolic scale; `sinc`;
+/// functions, whose transform holds `e^(−|ω|)`; `sinc`;
 /// the box); ours is the inert `Hilbert(f,t)`.
 #[test]
 fn hilbert_departures() {
@@ -246,8 +248,6 @@ fn hilbert_departures() {
         ("hilbert(t/(1+t^2),t)", "-1/(t^2+1)"),
         ("hilbert(x/(1+x^2),x)", "-1/(x^2+1)"),
         ("hilbert(1/(1+t^4),t)", "(t^3*sqrt(2)+t*sqrt(2))/(2*t^4+2)"),
-        ("hilbert(sin(a*t),t)", "-cos(t*a)*sign(a)"),
-        ("hilbert(cos(a*t),t)", "sign(a)*sin(t*a)"),
         ("hilbert(sinc(x))", "(-cos(x)+1)/x"),
         ("hilbert(sinc(t),t)", "(-cos(t)+1)/t"),
         ("hilbert(sin(t)/t,t)", "(-cos(t)+1)/t"),
