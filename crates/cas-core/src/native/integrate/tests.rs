@@ -930,6 +930,20 @@ fn integrals_that_stay() {
     }
 }
 
+/// A denominator identically 0, `3 − 3cos² − 3sin²`: Bioche's tangent
+/// substitution leaves a `Together` that does not convert, and the
+/// derivative-divides a level deeper used to evaluate `Together` of it
+/// without end (CAS-638, the `integrate_two` fuzz target).
+#[test]
+fn a_zero_denominator_ends() {
+    let ctx = Context::new();
+    let input = "Integrate[Times[Power[Plus[3, Times[-3, Power[Cos[Plus[1, x]], 2]], \
+        Times[-3, Power[Sin[Plus[1, x]], 2]]], -1], Plus[3, Times[3, Cos[Plus[1, x]], \
+        Sin[Plus[1, x]]], Times[-3, Power[Sin[Plus[1, x]], 2]]], Tan[Plus[1, x]]], x]";
+    let found = ctx.eval(&read(input));
+    assert!(found.is_ok(), "{input}: {found:?}");
+}
+
 /// One `"Integrate"` step a call, which `Trace::verify` checks through the
 /// derivative of the antiderivative, as it checks the threading of lists.
 #[test]

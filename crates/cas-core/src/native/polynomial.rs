@@ -199,13 +199,19 @@ fn infinite(e: &Expr) -> bool {
 /// `e` with `head` around the arguments of every part the conversion takes
 /// as a generator, so that `Expand` and `Together` reach inside them
 /// (P6): `Sin[(x + 1)^2]` becomes `Sin[Expand[(x + 1)^2]]`. Parts whose
-/// head holds an argument in `ctx`, or is no symbol, stay as they are.
-/// `None` when nothing changes.
+/// head holds an argument in `ctx`, or is no symbol, stay as they are, and
+/// so do parts with `head` itself: evaluated already, they stayed because
+/// they do not convert, and wrapping their argument again would rebuild
+/// `Together[Together[e]]` without end (CAS-638). `None` when nothing
+/// changes.
 fn inside(ctx: &Context, e: &Expr, head: Symbol) -> Option<Expr> {
     let View::Apply { head: h, args } = e.view() else {
         return None;
     };
     let symbol = h.as_symbol();
+    if symbol == Some(head) {
+        return None;
+    }
     let arithmetic = matches!(symbol, Some(Symbol::PLUS | Symbol::TIMES))
         || symbol == Some(Symbol::POWER) && args.len() == 2 && args[1].as_i64().is_some();
     let holds = symbol
