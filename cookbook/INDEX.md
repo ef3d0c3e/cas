@@ -97,3 +97,4 @@ C0094 | A new rewrite rule breaks held-form pins in other crates' departure list
 C0095 | Reach-inside wrappers skip held parts of their own head: Together[Together[r]] nests to the recursion limit | fuzz,recursion-limit,together,expand,held,integrate,zero-denominator | 2026-11-26 | 1.8/T1 | Fuzz 45734501868, T1.c2 777f31e CAS-638
 C0096 | Gap ledger: tally giac-gap buckets by a failing script; verify alias claims in code | giac,gap,ledger,tally,alias,validation | 2026-11-26 | 1.8/T2 | R1.8-003 hand tally
 C0097 | Clippy on oracle departure tables (split + helper) and Option<Option> natives | clippy,oracle,departures,native,lint | 2026-11-26 | 1.8/T3 | T3.c1 CAS-639
+C0098 | Unit-test full forms: no decimals in parse_full_form; capital user names are $A | test,full-form,parse,lowering,cas-lang,ci | 2026-11-26 | 1.8/T3 | T3.c2 CAS-639
