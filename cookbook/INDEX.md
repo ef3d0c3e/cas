@@ -108,3 +108,4 @@ C0105 | giac kmeans cluster_crit indices: numeric quirks to reproduce (WG identi
 C0106 | eval SIGSEGV, no artifact: replay cached corpus on CI; bound native recursion with ev.enter | fuzz,eval,sigsegv,stack-overflow,replay,corpus,recursion,native | 2026-11-26 | 1.8/T5 | T5.c4 CAS-640
 C0107 | giac's Hilbert transform via our Fourier pair; inert giac heads need a builtin | giac,hilbert,fourier,ifourier,inert,oracle | 2026-11-26 | 1.8/T6 | T6.c1 CAS-648
 C0108 | giac's hht bins: top edge in fbins-2; near-zero imaginary part flips inst_freq | giac,hht,fft,bins,ties,oracle,prototype | 2026-11-26 | 1.8/T6 | T6.c2 CAS-648
+C0109 | eval fuzz idempotence: limit error on re-eval of the answer is a cache artefact | fuzz,eval,idempotence,recursion,cache,harness | 2026-11-26 | 1.8/T6 | T6.c3 Fuzz 45802274513

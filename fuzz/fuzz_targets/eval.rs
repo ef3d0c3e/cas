@@ -1239,7 +1239,18 @@ fn check(mut u: Unstructured<'_>, recursion: u32) {
     let plain = ctx.eval(&e);
     if let Ok(r) = &plain {
         seed();
-        assert_eq!(ctx.eval(r).as_ref(), Ok(r), "{e:?} gave {r:?}");
+        // A part that warned in its own rewrites is memoised for the call
+        // only, never stamped (CAS-149's memoise_warned): re-evaluating `r`
+        // in a new call pays its levels again and may pass the limit where
+        // the first call took the memo hit. Without caches `e` stops there
+        // too (T6.c3, fuzz run 45802274513), so a limit here is tolerated.
+        let again = ctx.eval(r);
+        if !matches!(
+            again,
+            Err(EvalError::RecursionLimit | EvalError::IterationLimit | EvalError::MatchLimit)
+        ) {
+            assert_eq!(again.as_ref(), Ok(r), "{e:?} gave {r:?}");
+        }
     }
     seed();
     let (traced, report) = ctx.eval_with(
