@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-26T00:34:32.233Z
+# filed through: 2026-11-26T01:02:32.043Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
@@ -109,5 +109,7 @@ R105 | 2026-11-25 | open | in force | Phase 1.7 Statistics III and signal proces
 R106 | 2026-11-25 | open | superseded by R107 | Phase 1.7 Statistics III and signal processing II | the phase 1.7 close question is asked, and the developer's answer is pending -> release close on yes | .claude-state/journal/2026-11-25/170032-042r-claude-record.md
 R107 | 2026-11-26 | decision | in force | Phase 1.7 Statistics III and signal processing II | Phase 1.7 is closed. | .claude-state/journal/2026-11-26/014955-050r-claude-record.md
 R108 | 2026-11-26 | decision | in force | Phase 1.7 Statistics III and signal processing II | The 1.7 carry-overs are routed to 1.8 through the inbox (I2): the Weibull fix, the gap-check items… | .claude-state/journal/2026-11-26/014955-050r-claude-record.md
-R109 | 2026-11-26 | finding | in force | Phase 1.8 Validation | The 1.8 draft (.run/plans/phase-1.8.md, lint OK, R1.8-001..004) has 12 tasks. | .claude-state/journal/2026-11-26/014955-050r-claude-record.md
-R110 | 2026-11-26 | open | in force | Phase 1.8 Validation | the developer's decision on which missing entries may stay unbuilt. | .claude-state/journal/2026-11-26/014955-050r-claude-record.md
+R109 | 2026-11-26 | finding | superseded by R111 | Phase 1.8 Validation | The 1.8 draft (.run/plans/phase-1.8.md, lint OK, R1.8-001..004) has 12 tasks. | .claude-state/journal/2026-11-26/014955-050r-claude-record.md
+R110 | 2026-11-26 | open | superseded by R112 | Phase 1.8 Validation | the developer's decision on which missing entries may stay unbuilt. | .claude-state/journal/2026-11-26/014955-050r-claude-record.md
+R111 | 2026-11-26 | decision | in force | Phase 1.8 Validation | The phase 1.8 plan is installed and runs on its own; the developer's next touchpoint is the close q… | .claude-state/journal/2026-11-26/021750-057r-claude-record.md
+R112 | 2026-11-26 | decision | in force | Phase 1.8 Validation | Every missing computational giac entry in an existing module gets built; only French spellings, GF… | .claude-state/journal/2026-11-26/021750-057r-claude-record.md
