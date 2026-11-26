@@ -9,6 +9,7 @@
 
 use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the comparisons skip.
 fn giac() -> Option<&'static Giac> {
@@ -527,4 +528,89 @@ fn fitpoly_departures() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `p/q` in the language, an integer when `q` divides `p`.
+fn ratio(p: i64, q: i64) -> String {
+    if p % q == 0 {
+        (p / q).to_string()
+    } else {
+        format!("{p}/{q}")
+    }
+}
+
+/// A small rational.
+fn rational() -> impl Strategy<Value = String> {
+    (-9i64..=9, 1i64..=5).prop_map(|(p, q)| ratio(p, q))
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `fitspline` of 5 or 6 points with distinct sorted abscissae (giac
+    /// wants more samples than control points: 4 points err) at 1 to 3
+    /// points inside the data (outside: departure rows): ours within
+    /// `10⁻¹⁰` of giac's doubles, as in [`fitspline_points`].
+    #[test]
+    fn random_fitspline(
+        (xs, ys) in prop::collection::btree_set(-20i64..=20, 5..=6).prop_flat_map(|xs| {
+            let n = xs.len();
+            (Just(xs.into_iter().collect::<Vec<_>>()), prop::collection::vec(rational(), n))
+        }),
+        d in 1i64..=4,
+        eighths in prop::collection::vec(0i64..=8, 1..=3),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let data: Vec<String> = xs
+            .iter()
+            .zip(&ys)
+            .map(|(&x, y)| format!("[{},{y}]", ratio(x, d)))
+            .collect();
+        let (first, last) = (xs[0], xs[xs.len() - 1]);
+        let points: Vec<String> = eighths
+            .iter()
+            .map(|&k| ratio(8 * first + (last - first) * k, 8 * d))
+            .collect();
+        let input = format!("fitspline([{}],[{}])", data.join(","), points.join(","));
+        let (Ok(theirs), Ok(ours)) = (giac.value(&input), ours(&input)) else {
+            return Err(TestCaseError::fail(format!("{input}: no answer")));
+        };
+        let ctx = Context::new();
+        if !near(&ctx, &ours, &theirs, &Expr::from(10).pow(-10)) {
+            return Err(TestCaseError::fail(format!(
+                "{input}: giac {theirs:?}, ours {ours:?}"
+            )));
+        }
+    }
+
+    /// `bspline` of more rational control points than the degree (giac's
+    /// "Invalid dimension" otherwise), knots `x` or `x=a..b`: exactly, as
+    /// [`same`].
+    #[test]
+    fn random_bspline(
+        (degree, control) in (1usize..=3).prop_flat_map(|k| {
+            (Just(k), prop::collection::vec(rational(), k + 1..=6))
+        }),
+        range in prop::option::of((-9i64..=9, 1i64..=9, 1i64..=4)),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let knots = match range {
+            Some((a, width, d)) => format!("x={}..{}", ratio(a, d), ratio(a + width, d)),
+            None => "x".to_owned(),
+        };
+        let input = format!("bspline([{}],{knots},{degree})", control.join(","));
+        let ctx = Context::new();
+        match (giac.value(&input), ours(&input)) {
+            (Ok(theirs), Ok(ours)) if same(&ctx, &ours, &theirs) => {}
+            (theirs, ours) => {
+                return Err(TestCaseError::fail(format!(
+                    "{input}: giac {theirs:?}, ours {ours:?}"
+                )));
+            }
+        }
+    }
 }

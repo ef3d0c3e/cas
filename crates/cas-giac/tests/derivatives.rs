@@ -6,6 +6,7 @@
 
 use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the comparisons skip.
 fn giac() -> Option<&'static Giac> {
@@ -207,4 +208,94 @@ fn departures() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `p/q` in the language, an integer when `q` divides `p`.
+fn ratio(p: i64, q: i64) -> String {
+    if p % q == 0 {
+        (p / q).to_string()
+    } else {
+        format!("{p}/{q}")
+    }
+}
+
+/// A small rational.
+fn rational() -> impl Strategy<Value = String> {
+    (-9i64..=9, 1i64..=5).prop_map(|(p, q)| ratio(p, q))
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `numdiff` of 1 to 6 points with distinct abscissae at a rational
+    /// point, of an order from 0 to the number of points or none: exactly,
+    /// as [`same`].
+    #[test]
+    fn random_numdiff(
+        (xs, ys) in prop::collection::btree_set(-20i64..=20, 1..=6).prop_flat_map(|xs| {
+            let n = xs.len();
+            (Just(xs.into_iter().collect::<Vec<_>>()), prop::collection::vec(rational(), n))
+        }),
+        d in 1i64..=4,
+        at in rational(),
+        order in any::<prop::sample::Index>(),
+        given in any::<bool>(),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let abscissae: Vec<String> = xs.iter().map(|&x| ratio(x, d)).collect();
+        let order = if given {
+            format!(",{}", order.index(xs.len() + 1))
+        } else {
+            String::new()
+        };
+        let input = format!(
+            "numdiff([{}],[{}],{at}{order})",
+            abscissae.join(","),
+            ys.join(","),
+        );
+        let ctx = Context::new();
+        match (giac.value(&input), ours(&input)) {
+            (Ok(theirs), Ok(ours)) if same(&ctx, &ours, &theirs) => {}
+            (theirs, ours) => {
+                return Err(TestCaseError::fail(format!(
+                    "{input}: giac {theirs:?}, ours {ours:?}"
+                )));
+            }
+        }
+    }
+
+    /// `nDeriv` of a polynomial of degree ≤ 4, perhaps over `x^2+k` (no
+    /// real pole), with a rational step: giac's doubles against ours by
+    /// value at three points within `10⁻¹⁰`, as in [`n_deriv`].
+    #[test]
+    fn random_n_deriv(
+        c in prop::collection::vec(-5i64..=5, 1..=5),
+        k in 0i64..=4,
+        h in (1i64..=3, 1i64..=9),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let terms: Vec<String> = (0..).zip(&c).map(|(e, a)| format!("({a})*x^{e}")).collect();
+        let mut f = terms.join("+");
+        if k > 0 {
+            f = format!("({f})/(x^2+{k})");
+        }
+        let input = format!("nDeriv({f},x,{})", ratio(h.0, h.1));
+        let (Ok(theirs), Ok(ours)) = (giac.value(&input), ours(&input)) else {
+            return Err(TestCaseError::fail(format!("{input}: no answer")));
+        };
+        let ctx = Context::new();
+        let x = Expr::symbol("x");
+        for point in [Expr::from(3) / 10, Expr::from(17) / 10, Expr::from(29) / 10] {
+            let at = |e: &Expr| e.substitute(&[(x.clone(), point.clone())]);
+            if !near(&ctx, &at(&ours), &at(&theirs), Expr::from(10).pow(-10)) {
+                return Err(TestCaseError::fail(format!(
+                    "{input} at {point:?}: giac {theirs:?}, ours {ours:?}"
+                )));
+            }
+        }
+    }
 }

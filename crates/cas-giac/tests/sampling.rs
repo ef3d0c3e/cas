@@ -5,6 +5,7 @@
 
 use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the comparisons skip.
 fn giac() -> Option<&'static Giac> {
@@ -117,4 +118,78 @@ fn departures() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `p/q` in the language, an integer when `q` divides `p`.
+fn ratio(p: i64, q: i64) -> String {
+    if p % q == 0 {
+        (p / q).to_string()
+    } else {
+        format!("{p}/{q}")
+    }
+}
+
+/// A small rational.
+fn rational() -> impl Strategy<Value = String> {
+    (-9i64..=9, 1i64..=5).prop_map(|(p, q)| ratio(p, q))
+}
+
+/// giac's answer to `input` near ours by [`near`]; else a failure naming
+/// the input and both answers.
+fn compare(giac: &Giac, input: &str) -> Result<(), TestCaseError> {
+    let ctx = Context::new();
+    match (giac.value(input), ours(input)) {
+        (Ok(theirs), Ok(ours)) if near(&ctx, &ours, &theirs) => Ok(()),
+        (theirs, ours) => Err(TestCaseError::fail(format!(
+            "{input}: giac {theirs:?}, ours {ours:?}"
+        ))),
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `linspace(a, b, n)` of small rationals, `n ≥ 2` (giac errs on
+    /// `n = 1`: departure row linspace(1,2,1)).
+    #[test]
+    fn random_linspace(a in rational(), b in rational(), n in 2u32..=7) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        compare(giac, &format!("linspace({a},{b},{n})"))?;
+    }
+
+    /// `linear_interpolate` of 2 to 6 points with distinct sorted
+    /// abscissae, from one abscissa to a later one. The abscissae are
+    /// nonnegative: giac misreads negative ones (probe:
+    /// `linear_interpolate([[-3,-2,-1],[2,3,9]],-3,-1,1/2)` errs "Values out
+    /// of range", `linear_interpolate([[-1,-1/4,0,1/2,5/3],[1/2,7,1,-1/2,9/5]],0,0,3)`
+    /// answers `[[0.0],[4.5]]` for the point `(0,1)`). Abscissae and steps
+    /// are dyadic, so giac's doubles reach the last point exactly.
+    #[test]
+    fn random_linear_interpolate(
+        (xs, ys) in prop::collection::btree_set(0i64..=40, 2..=6).prop_flat_map(|xs| {
+            let n = xs.len();
+            (Just(xs.into_iter().collect::<Vec<_>>()), prop::collection::vec(rational(), n))
+        }),
+        d in prop::sample::select(&[1i64, 2, 4][..]),
+        bounds in (any::<prop::sample::Index>(), any::<prop::sample::Index>()),
+        step in (1i64..=4, prop::sample::select(&[1i64, 2, 4][..])),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let (i, j) = (bounds.0.index(xs.len()), bounds.1.index(xs.len()));
+        let (i, j) = (i.min(j), i.max(j));
+        let abscissae: Vec<String> = xs.iter().map(|&x| ratio(x, d)).collect();
+        let input = format!(
+            "linear_interpolate([[{}],[{}]],{},{},{})",
+            abscissae.join(","),
+            ys.join(","),
+            abscissae[i],
+            abscissae[j],
+            ratio(step.0, step.1),
+        );
+        compare(giac, &input)?;
+    }
 }

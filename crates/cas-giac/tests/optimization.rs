@@ -4,6 +4,7 @@
 
 use cas_core::{Context, Expr, Symbol, View};
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the checks skip.
 fn giac() -> Option<&'static Giac> {
@@ -708,5 +709,97 @@ fn simplex_reduce_departures() {
                 .and_then(Expr::as_symbol)
                 == Some(Symbol::SIMPLEX_REDUCE) => {}
         o => panic!("{input}: ours {o:?}, giac's {theirs:?}"),
+    }
+}
+
+/// A `tpsolve` answer `[cost, allocation]` as integers.
+fn plan(e: &Expr) -> Option<(i64, Vec<Vec<i64>>)> {
+    let [cost, allocation] = e.args() else {
+        return None;
+    };
+    let rows = allocation
+        .args()
+        .iter()
+        .map(|row| row.args().iter().map(Expr::as_i64).collect())
+        .collect::<Option<Vec<Vec<i64>>>>()?;
+    Some((cost.as_i64()?, rows))
+}
+
+/// Whether `allocation` ships nonnegative amounts within `supply` and
+/// `demand`, the whole of the smaller total, at `cost`.
+fn feasible(
+    supply: &[i64],
+    demand: &[i64],
+    costs: &[Vec<i64>],
+    cost: i64,
+    allocation: &[Vec<i64>],
+) -> bool {
+    let shipped: i64 = allocation.iter().flatten().sum();
+    allocation.len() == supply.len()
+        && allocation.iter().all(|row| row.len() == demand.len())
+        && allocation.iter().flatten().all(|&a| a >= 0)
+        && allocation
+            .iter()
+            .zip(supply)
+            .all(|(row, &s)| row.iter().sum::<i64>() <= s)
+        && (0..demand.len()).all(|j| allocation.iter().map(|row| row[j]).sum::<i64>() <= demand[j])
+        && shipped == supply.iter().sum::<i64>().min(demand.iter().sum())
+        && allocation
+            .iter()
+            .flatten()
+            .zip(costs.iter().flatten())
+            .map(|(a, c)| a * c)
+            .sum::<i64>()
+            == cost
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `tpsolve` of 1 to 3 sources and sinks, supplies, demands and costs
+    /// in `0..=9` (no `M`), bracketed (C0023): the same answer, or, as
+    /// random costs often tie, giac's optimal cost with another feasible
+    /// allocation of ours at that cost.
+    #[test]
+    fn random_tpsolve(
+        (supply, demand, costs) in (1usize..=3, 1usize..=3).prop_flat_map(|(m, n)| {
+            (
+                prop::collection::vec(0i64..=9, m),
+                prop::collection::vec(0i64..=9, n),
+                prop::collection::vec(prop::collection::vec(0i64..=9, n), m),
+            )
+        }),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let list = |v: &[i64]| {
+            format!("[{}]", v.iter().map(i64::to_string).collect::<Vec<_>>().join(","))
+        };
+        let matrix: Vec<String> = costs.iter().map(|row| list(row)).collect();
+        let input = format!(
+            "[tpsolve({},{},[{}])]",
+            list(&supply),
+            list(&demand),
+            matrix.join(",")
+        );
+        let ctx = Context::new();
+        let (theirs, ours) = (giac.value(&input), ours(&input));
+        let agreed = match (&theirs, &ours) {
+            (Ok(t), Ok(o)) => {
+                same(&ctx, o, t, 10_000_000_000)
+                    || matches!(
+                        (plan(t), plan(o)),
+                        (Some((tc, _)), Some((oc, allocation)))
+                            if tc == oc && feasible(&supply, &demand, &costs, oc, &allocation)
+                    )
+            }
+            _ => false,
+        };
+        if !agreed {
+            return Err(TestCaseError::fail(format!(
+                "{input}: giac {theirs:?}, ours {ours:?}"
+            )));
+        }
     }
 }
