@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 013e94892dbf7b8d953bc5d1e4b66236265688d3c62249dccaaee32945e6a949 # shrinks to univariate = true, a = {[0, 0]: -2}, b = {[0, 0]: -2}, g = {[1, 0]: -2}

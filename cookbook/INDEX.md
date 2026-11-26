@@ -109,3 +109,5 @@ C0106 | eval SIGSEGV, no artifact: replay cached corpus on CI; bound native recu
 C0107 | giac's Hilbert transform via our Fourier pair; inert giac heads need a builtin | giac,hilbert,fourier,ifourier,inert,oracle | 2026-11-26 | 1.8/T6 | T6.c1 CAS-648
 C0108 | giac's hht bins: top edge in fbins-2; near-zero imaginary part flips inst_freq | giac,hht,fft,bins,ties,oracle,prototype | 2026-11-26 | 1.8/T6 | T6.c2 CAS-648
 C0109 | eval fuzz idempotence: limit error on re-eval of the answer is a cache artefact | fuzz,eval,idempotence,recursion,cache,harness | 2026-11-26 | 1.8/T6 | T6.c3 Fuzz 45802274513
+C0110 | proptest failure on CI: transcribe the printed cc seed into tests/<file>.proptest-regressions | proptest,regression,ci,oracle,seed | 2026-11-26 | 1.8/T7 | CI 45818464735 random_modgcd
+C0111 | giac's univariate modgcd drops the gcd's integer content; gcd, heugcd keep it | giac,gcd,modgcd,oracle,departure,normalisation | 2026-11-26 | 1.8/T7 | CI 45818464735; caseval probes
