@@ -1070,13 +1070,18 @@ proptest! {
     #[test]
     fn random_splice(
         (a, b) in pair(&[8, 16, 24], false),
-        len in 1i64..=6,
+        len in 1usize..=6,
         exponent in prop::sample::select(&["-1", "0", "1/2", "1", "2"][..]),
         args in 0usize..=2,
     ) {
         let Some(giac) = giac() else {
             return Ok(());
         };
+        // A crossfade longer than a clip overruns giac's buffers: stereo
+        // clips of 10 and 2 samples with length 6 abort the process ("free():
+        // invalid next size", a lone caseval process, C0021), so the length
+        // stays within both clips.
+        let len = len.min(a.2[0].len()).min(b.2[0].len());
         let tail = match args {
             0 => String::new(),
             1 => format!(",{len}"),

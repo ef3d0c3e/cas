@@ -411,12 +411,18 @@ proptest! {
         if !writable(&s) || !writable(&t) {
             return Ok(());
         }
+        let empty = s.is_empty() && t.is_empty();
         let (s, t) = (literal(&s), literal(&t));
-        agree(giac, &[
+        let mut inputs = vec![
             format!("inString({s},{t})"),
             format!("inString({s},{t},{start})"),
-            format!("contains({s},{t})"),
-        ])?;
+        ];
+        // `contains("","")` is 0 in giac, though its `inString("","")` is 0
+        // and `contains("abc","")` 1 (caseval); ours 1: a departure.
+        if !empty {
+            inputs.push(format!("contains({s},{t})"));
+        }
+        agree(giac, &inputs)?;
     }
 
     /// `mid`, `left` and `right` (through `asc`).
