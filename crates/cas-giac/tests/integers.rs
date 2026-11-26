@@ -5,9 +5,11 @@
 //! with giac's answer as it prints it: its errors, where ours leaves the
 //! call with a warning, its Horner form, its sign of a polynomial gcd,
 //! and the inputs that crash libgiac or whose certificate rests on giac's
-//! random ECM, checked on our side only.
+//! random ECM, checked on our side only; and random inputs a run to each
+//! function but `iratrecon`, `is_prime` without its certificate.
 
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the comparisons skip.
 fn giac() -> Option<&'static Giac> {
@@ -414,4 +416,115 @@ fn departures() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// giac's answer to `input`, read back, is ours; else a failure naming the
+/// input and both answers.
+fn agree(giac: &Giac, input: &str) -> Result<(), TestCaseError> {
+    giac.agrees(input)
+        .map_err(|e| TestCaseError::fail(e.to_string()))
+}
+
+fn gcd(a: i64, b: i64) -> i64 {
+    if b == 0 { a.abs() } else { gcd(b, a % b) }
+}
+
+/// A list of integers in the language.
+fn list(values: &[i64]) -> String {
+    let items: Vec<String> = values.iter().map(i64::to_string).collect();
+    format!("[{}]", items.join(","))
+}
+
+/// The odd primes from 5 to 113 and two larger ones.
+const PRIMES: [i64; 30] = [
+    5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41, 43, 47, 53, 59, 61, 67, 71, 73, 79, 83, 89, 97, 101,
+    103, 107, 109, 113, 1009, 10007,
+];
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `chrem` of random residues and moduli `2..=30`, coprime or not.
+    #[test]
+    fn random_chrem(pairs in prop::collection::vec((-30i64..=30, 2i64..=30), 1..=3)) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        // Residues that disagree modulo a common factor: giac's "No
+        // Integer Solution" (departure row chrem([2,3],[4,6])).
+        for (i, &(a, m)) in pairs.iter().enumerate() {
+            for &(b, n) in &pairs[i + 1..] {
+                if (a - b) % gcd(m, n) != 0 {
+                    return Ok(());
+                }
+            }
+        }
+        let (residues, moduli): (Vec<i64>, Vec<i64>) = pairs.into_iter().unzip();
+        agree(giac, &format!("chrem({},{})", list(&residues), list(&moduli)))?;
+    }
+
+    /// `lgcd` of a random list of integers.
+    #[test]
+    fn random_lgcd(values in prop::collection::vec(-60i64..=60, 1..=4)) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        agree(giac, &format!("lgcd({})", list(&values)))?;
+    }
+
+    /// `fracmod` of a random integer modulo a prime (a composite modulus
+    /// may reconstruct a denominator it shares: departure rows).
+    #[test]
+    fn random_fracmod(a in -300i64..=300, p in prop::sample::select(&PRIMES[..])) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        agree(giac, &format!("fracmod({a},{p})"))?;
+    }
+
+    /// `bernoulli_mod` of an even index modulo a prime from 5 (p = 2
+    /// crashes libgiac, p = 3 never inverts).
+    #[test]
+    fn random_bernoulli_mod(half in 1i64..=150, p in prop::sample::select(&PRIMES[..])) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let n = 2 * half;
+        // p − 1 dividing n: giac's "Not invertible" (departure row
+        // bernoulli_mod(4,5)).
+        if n % (p - 1) == 0 {
+            return Ok(());
+        }
+        agree(giac, &format!("bernoulli_mod({n},{p})"))?;
+    }
+
+    /// `icomp(n, k)`, with and without `zeros`, `k ≤ n` (giac errs on
+    /// `k > n`: departure row icomp(3,4)).
+    #[test]
+    fn random_icomp(
+        (n, k) in (1u32..=7).prop_flat_map(|n| (Just(n), 1..=n)),
+        zeros in prop::sample::select(&["", ",zeros=true", ",zeros=false"][..]),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        agree(giac, &format!("icomp({n},{k}{zeros})"))?;
+    }
+
+    /// `is_prime` of a random integer below 2^64, small or large, signed;
+    /// never the certificate form `is_prime(n,1)`, whose PARI and ECM
+    /// paths crash libgiac or draw at random (C0021, departures).
+    #[test]
+    fn random_is_prime(
+        n in prop_oneof![
+            (-1000i128..=100_000),
+            any::<u64>().prop_map(i128::from),
+            any::<u32>().prop_map(i128::from),
+        ],
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        agree(giac, &format!("is_prime({n})"))?;
+    }
 }

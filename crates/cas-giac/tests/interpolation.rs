@@ -2,10 +2,12 @@
 //! CAS-PLAN-21): polynomials and rational functions compared after
 //! `Expand` and `Together` of the difference, lists element by element,
 //! since giac's Newton forms nest otherwise; `ratinterp` and `triginterp`
-//! too (CAS-594), decimal `triginterp` by value at three points.
+//! too (CAS-594), decimal `triginterp` by value at three points; and random
+//! rational points a run to `ratinterp`.
 
 use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the comparisons skip.
 fn giac() -> Option<&'static Giac> {
@@ -220,4 +222,40 @@ fn orthogonal_polynomials() {
         "hermite(5,3/2)",
         "tchebyshev1(9,y)",
     ]);
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `ratinterp` of 2 to 5 random rational points, abscissae distinct
+    /// `k/q` (repeated ones give giac's `undef`: departure row
+    /// ratinterp([1,1,3],…)), with the default `d` or `d < n` (`d = n` is
+    /// `undef`, `d > n` an error: departure rows), compared as [`check`].
+    #[test]
+    fn random_ratinterp(
+        ks in prop::collection::btree_set(-8i64..=8, 2..=5),
+        q in 1i64..=3,
+        ys in prop::collection::vec((-9i64..=9, 1i64..=4), 5),
+        d in prop::option::of(0usize..5),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let n = ks.len();
+        let xs: Vec<String> = ks.iter().map(|k| format!("{k}/{q}")).collect();
+        let ys: Vec<String> = ys[..n].iter().map(|(p, r)| format!("{p}/{r}")).collect();
+        let d = match d {
+            Some(d) if d < n => format!(",{d}"),
+            _ => String::new(),
+        };
+        let input = format!("ratinterp([{}],[{}],x{d})", xs.join(","), ys.join(","));
+        match (giac.value(&input), ours(&input)) {
+            (Ok(theirs), Ok(mine)) if same(&Context::new(), &mine, &theirs) => {}
+            (theirs, mine) => {
+                return Err(TestCaseError::fail(format!(
+                    "{input}: giac {theirs:?}, ours {mine:?}"
+                )));
+            }
+        }
+    }
 }

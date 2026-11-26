@@ -4,10 +4,13 @@
 //! against giac: giac's answers read back are this CAS's value of the same input,
 //! exact answers against giac's decimals
 //! within their error (C0006, C0032); departures, giac's answer as caseval
-//! prints it, whitespace collapsed (C0047), and this CAS's own.
+//! prints it, whitespace collapsed (C0047), and this CAS's own; and random
+//! rationals and integer lists a run to `type`, the parts, `trunc` and the
+//! sorts.
 
 use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the checks skip.
 fn giac() -> Option<&'static Giac> {
@@ -344,4 +347,78 @@ fn decompositions() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// A random rational `p/q` in the language, `q` from 1.
+fn rational() -> impl Strategy<Value = String> {
+    (-60i64..=60, 1i64..=9).prop_map(|(p, q)| format!("{p}/{q}"))
+}
+
+/// giac's answer to `input`, read back, is ours (`exact`) or ours within
+/// giac's error ([`near`]); else a failure naming both.
+fn sweep_check(giac: &Giac, input: &str, exact: bool) -> Result<(), TestCaseError> {
+    if exact {
+        return giac
+            .agrees(input)
+            .map_err(|e| TestCaseError::fail(e.to_string()));
+    }
+    match (giac.value(input), ours(input)) {
+        (Ok(theirs), Ok(mine)) if near(&Context::new(), &theirs, &mine) => Ok(()),
+        (theirs, mine) => Err(TestCaseError::fail(format!(
+            "{input}: giac {theirs:?}, ours {mine:?}"
+        ))),
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `type` of a random rational against each of `DOM_INT`, `DOM_RAT`
+    /// and `DOM_FLOAT`, through `==` as in [`types`].
+    #[test]
+    fn random_type(
+        r in rational(),
+        dom in prop::sample::select(&["DOM_INT", "DOM_RAT", "DOM_FLOAT"][..]),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        sweep_check(giac, &format!("type({r})=={dom}"), true)?;
+    }
+
+    /// `fPart`, `frac` and `trunc` of a random rational, exact; `iPart`,
+    /// giac's decimal, near; `trunc(r, n)` near, for `r ≥ 0` and `n` in
+    /// `0..=3` only: giac floors a negative (departure row
+    /// trunc(-sqrt(2),3)), and its negative `n`, significant digits
+    /// through doubles, gives trunc(150,-2) = 140.0 and errs on
+    /// trunc(0,-1) (caseval, T8.c2).
+    #[test]
+    fn random_parts(
+        r in rational(),
+        name in prop::sample::select(&["fPart", "frac", "trunc", "iPart"][..]),
+        n in prop::option::of(0i64..=3),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        match n {
+            Some(n) if !r.starts_with('-') => {
+                sweep_check(giac, &format!("trunc({r},{n})"), false)?;
+            }
+            _ => sweep_check(giac, &format!("{name}({r})"), name != "iPart")?,
+        }
+    }
+
+    /// `SortA`, `SortD` and `sortperm` of a random list of integers.
+    #[test]
+    fn random_sorting(
+        values in prop::collection::vec(-9i64..=9, 1..=7),
+        name in prop::sample::select(&["SortA", "SortD", "sortperm"][..]),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let items: Vec<String> = values.iter().map(i64::to_string).collect();
+        sweep_check(giac, &format!("{name}([{}])", items.join(",")), true)?;
+    }
 }
