@@ -115,3 +115,4 @@ C0112 | Sweeping a giac predicate (==): generate only true pairs; trunc(x,n<0) a
 C0113 | giac string answers with quote or backslash do not read back: compare through asc | giac,strings,oracle,sweep,quote,printing | 2026-11-26 | 1.8/T8 | T8.c3 CI 45824175835
 C0114 | Sweep inputs: run a generated batch in one giac process; caseval's per-line children hide heap overruns | giac,oracle,crash,heap,caseval,sweep,splice | 2026-11-26 | 1.8/T8 | T8.c3 CI 45824175835 sound SIGABRT
 C0115 | Sweeping an optimiser (tpsolve, lpsolve): compare the optimum, check our point feasible; ties are common | giac,oracle,sweep,tpsolve,lpsolve,optimization,ties,proptest,linear_interpolate | 2026-11-26 | 1.8/T8 | T8.c4 random_tpsolve
+C0116 | Sweep skip guards test the drawn input, not the strategy flag; giac spaces .. in strings | proptest,oracle,sweep,giac,modgcd,strings,departure | 2026-11-26 | 1.8/T9 | CI 45831113300 random_modgcd, random_words

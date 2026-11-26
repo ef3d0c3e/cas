@@ -8,3 +8,4 @@ T5 | done | Language, Polynomials, Statistics and Infrastructure leftovers and k
 T6 | done | Signal processing leftovers (stft, istft, hht, boxcar, tri, sinc) and hilbert(f,t) | - | tasks/T6.md | logs/T6.md | R1.8-003
 T7 | done | random-input oracle sweeps: polynomial tools, real roots, gcd by name, partial fractions (G1, G2) | - | tasks/T7.md | logs/T7.md | R1.8-001,R1.8-004
 T8 | done | random-input oracle sweeps: lists, sorts, matrices, integers, TI names, exact numerics, ASCII strings, sound codes (G3, G4, G5) | - | tasks/T8.md | logs/T8.md | R1.8-001,R1.8-004
+T9 | done | raise fuzz.yml's job cap for one-hour targets and push the campaign head | - | tasks/T9.md | logs/T9.md | -
