@@ -1,0 +1,1004 @@
+besselY | Real(x),Int(p) | besselY(x,p) returns the Bessel function of the second kind Yp(x).
+besselJ | Real(x),Int(p) | besselJ(x,p) returns the Bessel function of the first kind Jp(x).
+batons | Mtrx | Draws for k=0..nrows, the segments (xk,0)-(xk,yk) where xk=element row k column 0 and yk=element row k column j (j=1..ncols).
+() |  | () returns the value of a function or substitutes values in an expression.
+REDIM redim | Mtrx||Vect,Intg(n1),Intg(n2) | Shrink or enlarge with 0s a matrix (or vector) according to the new n1 and n2 dimensions.
+fadeev | Opt | Option of the pcar or charpoly command to specify the algorithm.
+bezier | Lst,[plot] | Bezier curve defined by control points.
+plotcdf | Func,FuncParams | Graphic representation of a cumulative distribution function.
+back | Vect or Seq or Str | Returns the last element of a vector or a sequence or a string.
+taux_accroissement | Expr,Var,Val1,(Val1+Var or Val2) | Returns the rate of change of an expression when the variable goes from Val1 to Val2 (by default Var=x).
+shift_phase | Expr | shift_phase returns the expressions where the phase of the evaluated trigonometric expressions is increased by pi/2.
+linabs | Expr,[Var] | Rewrites signum/Heaviside/piecewise subexpressions by using absolute values.
+polar_coordinates | Pnt or Cplx or LstRectCoord | Returns the list of the norm and of the argument of the affix of a point (for 2D) or of a complex number or of the the list of rectangular coordinates.
+rectangular_coordinates | LstPolCoord | Returns the list of the abscissa and of the ordinate of a point given by the list of its polar coordinates.
+polar_point | Real(r),Real(t) | Returns the point (for 2D) with the arguments r and t as polar coordinates (i.e. with r*exp(i*t) as affix).
+vector | Pnt,Pnt || Pnt,Vect | Defines a vector (origin is 0 if 1 arg) with two points or two components or two affixes (for 2D) or with a point and a vector or with a point (its extremity and its origin is [0,0,0]). You have to u
+unfactored sans_factoriser | Opt. | Option of the plotimplicit command.
+set[] %{%} | Seq | set[] or %{%} is used to define a set.
+i[] [..] | Seq(a,b) | i[] is used to define a real interval(i[a,b]=[a..b]).
+plotarea areaplot | Expr,x=a..b,[n],[Method] | Displays the area below a curve, optionally with a quadrature method (trapezoid,left_rectangle,right_rectangle,middle_point).
+plotinequation inequationplot | Expr,[x=xrange,y=yrange],[xstep],[ystep] | Shows the graph of the solutions of inequalities with 2 variables.
+plotdensity densityplot | Expr,[x=xrange,y=yrange],[z],[xstep],[ystep] | Shows in the plane with colors the graph of an expression of 2 variables.
+frames trames | Opt | Option of animate and animate3d commands to give the number of pictures.
+animate | Expr(Xpr),x=xmin..xmax,t=tmin..tmax,frames=nframes | Animates a plot of Xpr, depending on x, parameter t by calling plot.
+animate3d | Expr(Xpr),[x=xmin..xmax,y=ymin..ymax],t=tmin..tmax,frames=nframes | Animate a plot of Xpr, depending on [x,y], parameter t by calling plotfunc.
+animation | Mtrx | Draws in a loop each object of a geometric object sequence.
+camembert pie | Mtrx | Draws pie chart of a one variable statistical series.
+bar_plot barplot | Mtrx | Draws a barplot of a one variable statistical series.
+listplot plotlist | Lst(l)||Mtrx(M) | Draws the polygonal line through the points with abscissas 0,...,n and ordinates l=[y0,...,yn] or the line through the points with abscissas the first column of M and ordinates the second colu
+pari | Str,arguments | Executes a PARI/GP command or exports all PARI/GP commands.
+convexhull | Lst | Convex hull of a list of 2-d points.
+as_function_of | VarResult,VarArg | Returns an element defined as a function of an element previously defined.
+save_history | Str(str) | Save the history in a file with name str.
+DispG |  | Shows DispG windows (DispG without ()).
+DispHome |  | Closes DispG windows.
+ClrIO | NULL | Clears the output screen.
+assign | (Var,value) or Equal or LstEq. | Stores the second argument (of the equality) in the variable given as the first argument (of the equality) (Maple compatibility).
+GF | Intg(p), Intg(n)|Minpoly,[Variable],[0|undef|Poly] | Creates a Galois Field of characteristic p with p^n elements. The minimal polynomial is primitive except if given or if 0 is passed as the last argument.
+droite_tangente | Expr(f(x)),[Var],Expr(a) | Draws the tangent to y=f(x) at x=a.
+LineTan | Expr(f(x)),[Var],Expr(a) | Draws the tangent to y=f(x) at x=a. Do not use parentheses or put the parenthesis around the entire expression.
+xor | Expr, Expr | Exclusive or (infix operator).
+is_coplanar | Pnt,Pnt,Pnt,Pnt | Test if 4 points are in the same plane.
+is_cospherical | Pnt,Pnt,Pnt,Pnt | Test if 5 points are on the same sphere.
+gnuplot | Str | Runs a gnuplot command (in the 3-d screen).
+current_sheet | [Intg||Inter],[Intg||Letter],[Letter] | Content of the matrix editor or spreadsheet.
+stft | Lst(data) | Short-time Fourier transform.
+istft | Mtrx(data) | Inverse short-time Fourier transform.
+imfplot plotimf | Lst(imf),[opts] | Displays selected intrinsic mode functions in a stacked layout.
+hht | Lst(data)||Mtrx(imf),[opts] | Hilbert-Huang transform.
+cote | Vect | Third coordinate (z) of a 3-d point.
+ecris | Str(s),[Intg(n)],[Real(x)],[Real(y)] | Writes the string s with the font n (by default n=14) at the point [x,y] (by default at the point where the turtle is).
+signe | Str(s) | Writes the string s with the font 20 at the point [10,10].
+prism | LstPnt([A,B,C,D]),Pnt(A1) | Draws a prism with plane base ABCD...and with edges parallel to AA1 (the faces are parallelograms).
+common_perpendicular | Line(D1),Line(D2) | Draws the common perpendicular of the lines D1 and D2.
+point2d | SeqVar(A,B,C...) | Defines at random, the coordinates (between -5 and +5) of the 2d points given as argument.
+point3d | SeqVar(A,B,C...) | Defines at random, the coordinates (between -5 and +5) of the 3d points given as argument.
+octahedron | Pnt(A),Pnt(B),Pnt(C) | Draws an octahedron with center A, vertex B and such that the plane ABC contains 4 vertices.
+icosahedron | Pnt(A),Pnt(B),Pnt(C) | Draws an icosahedron with center A, vertex B and such that the plane ABC contains one vertex among the 5 nearest vertices from B.
+dodecahedron | Pnt(A),Pnt(B),Pnt(C) | Draws a dodecahedron with center A, vertex B and such that the plane ABC contains an axis of symmetry of the dodecahedron.
+parallelepiped | Pnt(A),Pnt(B),Pnt(C),Pnt(D) | Draws a parallelepiped with sides AB,AC,AD (the faces are parallelograms).
+polyhedron | SeqPnt(A,B,C...) | Draws a convex polyhedron with vertices among the arguments.
+pyramid tetrahedron | Pnt(A),Pnt(B),Pnt(C),[Pnt(D)] | Draws the regular direct pyramid ABCD with vertices A,B and a face in the plane (A,B,C) when there is 3 arguments and the pyramid ABCD when there are 4 arguments.
+cube | Pnt(A),Pnt(B),Pnt(C) | Draws the direct cube with vertices A,B with a face in the plane (A,B,C).
+centered_tetrahedron | Pnt(A),Pnt(B),Pnt(C) | Draws the regular direct pyramid with center A, vertex B and a vertex in the plane (A,B,C).
+centered_cube | Pnt(A),Pnt(B),Pnt(C) | Draws the direct cube with center A, vertex B and such that the plane ABC contains an axis of symmetry of the cube.
+cone | Pnt(A),Vect(v),Real(t),[Real(h)] | Draws a cone with vertex A, direction v, and with half_angle t [and with altitudes h and -h].
+half_cone | Pnt(A),Vect(v),Real(t),[Real(h)] | Draws a half-cone with vertex A, direction v and with half_angle=t [and with altitude h].
+cylinder | Pnt(A),Vect(v),Real(r),[Real(h)] | Draws a cylinder with axis (A,v), with radius r [and with altitude h].
+erase3d | NULL | Erases the graphic screen 3d
+sphere | (Pnt or Vect),(Pnt or Real) | sphere(A,B) (resp sphere(A,r)) draws the sphere with diameter AB (resp center A and radius r) in 3D space.
+plane | Pnt or Eq, [Pnt or Line],[Pnt] | plane(A,B,C) or plane(A,line(B,C)) (resp plane(a*x+b*y+c*z+d=0)) draws the plane ABC (resp of equation a*x+b*y+c*z+d=0) in 3D space.
+line | Pnt||Cplx||Eq,[Pnt||slope||Var] | line(A,B) (resp line(A,slope=m) or line(A,[1,m]) or line(a*x+b*y+c=0) or line(a*x+b*y+c*z+d=0,aa*x+bb*y+cc*z+dd=0) or line(A,u)) draws the line AB (resp the line going through A with slope 
+point | Cplx(za)||Vect | A:=point(za) or A:=point(a,b) (resp A:=point([a,b,c])) draws a point with affix za=a+ib (resp of coordinates (a,b,c)) with the legend A.
+efface | NULL or Real(n) | Erases the turtle screen or the turtle takes n steps back and erases.
+si alors sinon fsi |  | Conditional instruction : (si...alors...sinon...fsi).
+pour |  | Pour (for) loop (pour...de ...jusque... [pas...] faire...fpour;).
+de from |  | Used in a for loop (for...from ...to... [step...] do...od;).
+jusque to |  | Used in a for loop (for...from ...to... [step...] do...od;).
+tantque |  | Tantque (while) loop (tantque...faire...ftantque;).
+do faire |  | Key word used in a loop.
+return | Expr | Instruction that interrupts a function and returns its value.
+dessine_tortue | [Intg(n)] | Draws the full (or not full if n=1) triangle representing the turtle.
+avance forward | NULL or Real(n) | The turtle takes n steps forward (by default n=10).
+recule backward | NULL or Real(n) | The turtle takes n steps back (by default n=10).
+saute | NULL or Real(n) | The turtle takes n steps forward without traces (by default n=10).
+pas_de_cote | NULL or Real(n) | The turtle does n side-steps to the left (-n steps to the right if n negative) without trace (by default n=10).
+tourne_droite | NULL or Real(n) | The turtle turns right by n degrees (by default n=90).
+tourne_gauche | NULL or Real(n) | The turtle turns left by n degrees (by defaults n=90).
+leve_crayon penup | NULL | Lifts the pencil up so that the turtle moves without traces.
+baisse_crayon pendown | NULL | Presses the pencil down so that the turtle move with traces.
+crayon pencolor | Color | Changes the color of the pencil (without parameter, returns the current color).
+position | NULL or LstCoord | Returns the turtle position in pixels or puts the turtle at the position given by the argument with the same direction.
+cap heading | NULL or Real | Returns the turtle cap in degrees or turns the turtle in the direction given by the argument.
+vers | Real,Real | Points the turtle in the direction given by the argument.
+rond | Real(r),[Real(a)],[Real(b)] | Draws a circle (resp a arc) with radius r (resp and with angle (0,a) or (a,b)), tangent at the turtle position.
+disque | Real(r),[Real(a)],[Real(b)] | Draws a disk with radius r (resp a sector with angle (0,a) or (a,b)), tangent at the turtle position.
+disque_centre | Real(r),[Real(a)],[Real(b)] | Draws a disk with radius r (resp a sector with angle (0,a) or (a,b)) with center at the turtle position.
+rectangle_plein | Real(a),[Real(b)] | Draws a full direct rectangle (resp square) with sides a,b (resp a) from the turtle position and on the left (by default b=a).
+triangle_plein | Real(a),[Real(b)],[Real(t)] | Draws a full direct triangle with sides a,b and with angle t, from the turtle position (by default t=90 or (b=a and t=60)).
+polygone_rempli | Intg(n) | The argument is an integer <-1 which gives the number of previous turtle positions drawing a polygon and created this full polygon.
+repete | Intg,SeqCmds | Repeats the sequence of instruction k times.
+debut_enregistrement | Var(nom_du_dessin) | Begins recording the commands making up the drawing; the name of the resulting procedure is the argument.
+fin_enregistrement | Str(nom_de_fichier) | Finishes recording the commands and saves these commands in the file whose name is the argument.
+cache_tortue | NULL | Hides the turtle.
+montre_tortue | NULL | Shows the turtle.
+envelope | Expr(Xpr),Var(t)||[x,y,t] | Returns the envelope of the curves with equation Xpr=0 as t varies.
+powerpc | Cercle,Pnt or Cplx | Returns the real number d^2-R^2 (d=distance between point and center, R=radius).
+cross_ratio | Pnt or Cplx(a),Pnt or Cplx(b),Pnt or Cplx(c),Pnt or Cplx(d) | Returns the complex number equal to ((c-a)/(c-b))/((d-a)/(d-b)).
+division_point | Pnt or Cplx(a),Pnt or Cplx(b),Cplx(k) | Returns the point M such that (z-a)=k*(z-b) and z=affix of M (MA=k*MB).
+radical_axis | Crcle,Crcle | Returns the line of points with same powerpc with respect to the 2 circles.
+pole | Crcle,Line | Returns the point having the line as polar with respect to the circle .
+polar | Crcle,Pnt or Cplxe(A) | Returns the line of the conjugated points of A with respect to the circle.
+reciprocation | Crcle,Lst(Pnt,Line) | Returns the list where the points (resp lines) are replaced with their polars (resp poles) with respect to the circle C.
+harmonic_conjugate | Line or Pnt(A),Line or Pnt(B),Line or Pnt(C) | Returns the harmonic conjugate C with respect to A and B of 3 points or of 3 parallel or concurrent lines or the line of conjugates of a point with respect to 2 l
+harmonic_division | Pnt or Line,Pnt or Line,Pnt or Line,Var | Returns 4 points (resp lines) and affects the last argument, such that the 4 points (resp lines) are in a harmonic division and assigns the fourth point to the variable
+is_conjugate | Crcle||Line,Pnt||Line,Pnt||Line,[Pnt||Line] | Returns 1 if the 3 (resp 4) arguments are conjugate with repect to the circle (resp 2 lines) and 0 otherwise.
+is_harmonic | Pnt or Cplx,Pnt or Cplx,Pnt or Cplx,Pnt or Cplx | Returns 1 if the 4 points are in a harmonic division and 0 otherwise.
+is_harmonic_circle_bundle | Lst(Crcle) | Returns 1 if the circles have a common point, 2 if they have the same center, 3 if they are the same and 0 otherwise.
+is_harmonic_line_bundle | Lst(Line) | Returns 1 if the lines have a common point, 2 if they are parallels, 3 if they are the same and 0 otherwise.
+is_orthogonal | Line||Crcle,Line||Crcle | Returns 1 if the 2 circles are orthogonal (orthogonal tangents at a point of intersection) or if the 2 lines are orthogonal and 0 otherwise.
+is_isosceles | Pnt or Cplx,Pnt or Cplx,Pnt or Cplx | Returns 1, 2 or 3 if the 3 points (or the object) form an isosceles triangle with equal sides at vertex 1, 2, or 3, returns 4 if the 3 points (or the object) form an equilateral
+is_equilateral | Pnt||Cplx,Pnt||Cplx,Pnt||Cplx | Returns 1 if the 3 points (or the object) form an equilateral triangle and 0 otherwise.
+is_rectangle | Pnt||Cplx,Pnt||Cplx,Pnt||Cplx,[Pnt||Cplx] | Returns 1, 2 or 3 if the 3 points (or the object) form a right triangle with right angle at vertex 1, 2 or 3 and 0 otherwise [or 1 if the 4 points (or the object) form a r
+is_square | Pnt,Pnt,Pnt,Pnt | Returns 1 if the 4 points form a square and 0 otherwise.
+is_parallelogram | Pnt or Cplx,Pnt or Cplx,Pnt or Cplx,Pnt or Cplx | Returns 1,2,3 or 4 if the 4 points (or the object) form a parallelogram, (2 for a rhombus, 3 for a rectangle, 4 for a square) and 0 otherwise.
+is_rhombus | Pnt or Cplx,Pnt or Cplx,Pnt or Cplx,Pnt or Cplx | Returns 1 or 2 if the 4 points (or the object) form a rhombus (2 for a square) and 0 otherwise.
+coordinates | Pnt or Cplx or Vect | Returns the list (resp matrix) of the abscissa and of the ordinate of a point or a vector (resp of points or vectors).
+or || ou | Expr, Expr | Infixed boolean operator (or).
+and && et | Expr, Expr | Infixed boolean operator (and).
+end end_for fpour end_while ftantque end_if fi fsi od ffaire ffonction ffunction |  | Ends a block.
+_cm |  | Centimetre.
+_mm |  | Millimetre.
+_km |  | Kilometre.
+_m^2 |  | Square metre.
+_m^3 |  | Cubic metre.
+_cm^2 |  | Square centimetre.
+_cm^3 |  | Cubic centimetre.
+_km^2 |  | Square kilometre.
+_yd^2 |  | Square yard.
+_yd^3 |  | Cubic yard.
+_ft^2 |  | Square foot.
+_ft^3 |  | Cubic foot.
+_in^2 |  | Square inch.
+_in^3 |  | Cubic inch.
+_mi^2 |  | Square international mile.
+_miUS^2 |  | Square US statute mile.
+_ml |  | Millilitre.
+_s |  | Second.
+_mn |  | Minute.
+_(m/s) |  | Metre per second.
+_(cm/s) |  | Centimetre per second.
+_(ft/s) |  | Foot per second.
+_(m/s^2) |  | Metre per second squared.
+_Wh |  | Watt-hour.
+_kWh |  | Kilowatt-hour.
+_Kcal |  | Kilocalorie.
+_MeV |  | Megaelectronvolt.
+_(ft*lb) |  | Foot pound.
+_tep |  | Tonne of oil equivalent.
+_lep |  | Litre of oil equivalent.
+_bblep |  | Barrel of oil equivalent.
+_MW |  | Megawatt.
+_degreeF |  | Degree Fahrenheit.
+_deg |  | Degree (angle).
+_Rankine |  | Degree Rankine.
+_MHz |  | Megahertz.
+_tec |  | Tonne of coal equivalent.
+_tr |  | Tour=2*pi _rad.
+_tex |  | tex=10^-6 _(kg/m).
+_(rad/s) |  | Radian per second.
+_(tr/min) |  | Revolutions per minute.
+_(tr/s) |  | Revolutions per second.
+_Gal |  | Gal=0.01_(m/s^2).
+_(rad/s^2) |  | Radian per square square.
+_NA_ |  | Avogadro's number.
+_k_ |  | Boltzmann constant.
+_Vm_ |  | Molar volume.
+_R_ |  | Universal gas constant.
+_StdT_ |  | Standard temperature.
+_StdP_ |  | Standard pressure.
+_sigma_ |  | Stefan-Boltzmann constant.
+_c_ |  | Speed of light in a vacuum.
+_epsilon0_ |  | Permittivity of vacuum.
+_mu0_ |  | Permeability of vacuum.
+_g_ |  | Acceleration of gravity.
+_G_ |  | Gravitational constant.
+_h_ |  | Planck's constant.
+_hbar_ |  | Dirac's constant.
+_qe_ |  | Electron charge.
+_me_ |  | Electron rest mass.
+_qme_ |  | Quotient q/me (charge/mass of the electron).
+_mp_ |  | Proton rest mass.
+_mpme_ |  | Quotient mp/me (mass of the proton/mass of the electron).
+_alpha_ |  | Fine structure constant.
+_phi_ |  | Magnetic flux quantum.
+_F_ |  | Faraday constant.
+_Rinfinity_ |  | Rydberg constant.
+_RSun_ |  | Radius of the Sun.
+_PSun_ |  | Power at the surface of the Sun.
+_mEarth_ |  | Mass of the Earth.
+_REarth_ |  | Radius of the Earth.
+_sd_ |  | Duration of a sidereal day.
+_syr_ |  | Duration of a sidereal year.
+_a0_ |  | Bohr radius.
+_muB_ |  | Bohr magneton.
+_muN_ |  | Nuclear magneton.
+_lambda0_ |  | Photon wavelength (ch/e).
+_f0_ |  | Photon frequency (e/h).
+_lambdac_ |  | Compton wavelength.
+_rad_ |  | 1 radian.
+_c3_ |  | Wien displacement constant.
+_kq_ |  | k/q (Boltzmann constant/charge of the electron).
+_epsilon0q_ |  | epsilon0/q (permittivity/charge of the electron)
+_qepsilon0_ |  | q*epsilon0 (charge of the electron*permittivity)
+_epsilonsi_ |  | Dielectric constant.
+_epsilonox_ |  | Dielectric constant of Silicon dioxide.
+_a |  | Are (100 m^2).
+_A |  | Ampere.
+_acre |  | Acre.
+_arcmin |  | Minute of arc.
+_arcs |  | Second of arc.
+_atm |  | Atmosphere.
+_au |  | Astronomical unit.
+_Angstrom |  | Angstrom.
+_b |  | Barn.
+_bar |  | Bar.
+_bbl |  | Barrel.
+_Bq |  | Becquerel.
+_Btu |  | British thermal unit.
+_bu |  | Bushel (1_bu=8_galUK).
+_buUS |  | Coulomb.
+_cal |  | Calorie.
+_cd |  | Candela.
+_chain |  | Chain (1 chain = 66 feet or 22 yards).
+_Ci |  | Curie.
+_ct |  | Carat.
+_cu |  | US cup.
+_d |  | Day.
+_j |  | Day.
+_dB |  | Decibel.
+_dyn |  | Dyne.
+_erg |  | Erg.
+_eV |  | Electron volt.
+_F |  | Farad.
+_fm |  | Fathom.
+_fath |  | Fathom.
+_fbm |  | Board foot.
+_fc |  | Footcandle (1 footcandle ≈ 10.764 lux).
+_Fdy |  | Faraday.
+_fermi |  | Fermi.
+_flam |  | Footlambert.
+_ft |  | International foot.
+_ftUS |  | Survey foot.
+_g |  | Gram.
+_ga |  | Standard freefall.
+_galUS |  | US gallon.
+_galC |  | Canadian gallon.
+_galUK |  | UK gallon.
+_gf |  | Gram-force.
+_gmol |  | Gram-mole.
+_grad |  | Grade.
+_gon |  | Grade.
+_grain |  | Grain (1 grain ≈ 0,0648 grams).
+_Gy |  | Gray.
+_H |  | Henry.
+_ha |  | Hectare.
+_h |  | Hour.
+_hp |  | Horsepower.
+_Hz |  | Hertz.
+_in |  | Inch.
+_inHg |  | Inches of mercury at 0 degrees Celsius.
+_inH20 |  | Inches of water at 60 degrees Fahrenheit.
+_J |  | Joule.
+_K |  | Kelvins.
+_kg |  | Kilogram.
+_kip |  | Kilopound-force.
+_knot |  | Nautical miles per hour.
+_kph |  | Kilometers per hour.
+_l |  | Liter.
+_lam |  | Lambert.
+_lb |  | Pound (1 pound = 16 oz).
+_lbf |  | Pound-force.
+_lbmol |  | Pound-mole.
+_lbt |  | Troy pound.
+_lm |  | Lumen.
+_lx |  | Lux.
+_lyr |  | Light year.
+_m |  | Metre (unit).
+_µ |  | Micron.
+_mho |  | Mho.
+_mile |  | International mile.
+_mil |  | Mil.
+_miUS |  | US statute mile.
+_mmHg |  | Millimeter of mercury (torr) at 0 degree Celsius.
+_mol |  | Mole.
+_mph |  | Miles per hour.
+_N |  | Newton.
+_mille |  | Nautical mile.
+_Ohm |  | Ohm.
+_oz |  | Ounce.
+_ozfl |  | US fluid ounce.
+_ozt |  | Troy ounce.
+_ozUK |  | UK fluid ounce.
+_P |  | Poise (measures viscosity).
+_Pa |  | Pascal.
+_pc |  | Parsec.
+_pdl |  | Poundal (force).
+_ph |  | Phot.
+_pk |  | US peck.
+_psi |  | Pounds per square inch.
+_liqpt |  | US liquid pint (1_galUS=8_liqpt).
+_ptUK |  | UK pint (1_galUK=8_ptUK).
+_qt |  | Quart.
+_rad |  | Radian.
+_R |  | Roentgen (1_R=0.258_(mC/kg)).
+_rd |  | Rad 1_rd=0.01_Gy.
+_rod |  | Rod 1_rod=5.029215842_m.
+_rem |  | Rem.
+_rpm |  | Revolutions per minute.
+_s |  | Second.
+_S |  | Siemens.
+_sb |  | Stilb.
+_slug |  | Slug.
+_sr |  | Steradian.
+_st |  | Stere.
+_St |  | Stokes.
+_Sv |  | Sievert.
+_t |  | Metric ton.
+_T |  | Tesla.
+_tbsp |  | Tablespoon.
+_therm |  | EEC therm.
+_ton |  | Short ton (1 short ton = 2000 pounds).
+_tonUK |  | Long ton (UK).
+_torr |  | Torr (mmHg).
+_tsp |  | Teaspoon.
+_u |  | Atomic mass unit.
+_V |  | Volt.
+_W |  | Watt.
+_Wb |  | Weber.
+_yd |  | International yard.
+_yr |  | Year.
+grid_paper | Real(ux),Real(t),Real(uy),[x=xmin..xmax,y=ymin..ymax] | Draws in the rectangle [xmin..xmax]*[ymin..ymax], the lines of the grid formed by the lines y=n*uy and the lines x=n*ux at of angle t!=0 from the horizontal.
+line_paper | Real(ux),Real(t),[x=xmin..xmax,y=ymin..ymax] | Draws in the rectangle [xmin..xmax]*[ymin..ymax], the lines x=n*ux at an angle of t!=0 from the horizontal.
+triangle_paper | Real(ux),Real(t),Real(uy),[x=xmin..xmax,y=ymin..ymax] | Draws in the rectangle [xmin..xmax]*[ymin..ymax], the lines of the grid formed by the lines y=n*uy, the lines, the lines x=n*ux at an angle of t!=0, and the 
+dot_paper | Real(ux),Real(uy),Real(t) | Draws in the rectangle [xmin..xmax]*[ymin..ymax], the vertices of the grid formed by the lines y=n*uy and the lines x=u*ux at an angle of t!=0 with the horizontal.
+ufactor | Unit,Unit | Factors a unit in a unit object.
+usimplify | Unit | Simplifies a unit in a unit object.
+Celsius2Fahrenheit | Unit | Converts Celsius into Fahrenheit.
+Fahrenheit2Celsius | Unit | Converts Fahrenheit into Celsius.
+mksa | Unit | Converts units to the MKSA international unit system.
+CST | Lst | Name of the variable creating the cust menu of the bandeau.
+isopolygon | Pnt,Pnt,[Pnt],Intg(n) | Draws a regular polygon having abs(n) vertices, given by 2 vertices (or 2 vertices and 1 point of the plane) if n<0 by its center and 1 vertex (or its center, 1 vertex and 1 point of the plane)
+arc | Pnt, Pnt, Real,[Var(C)],[Var(r)],[Opt(segment)] | Draws a circular arc given by 2 vertices and the central angle [Xcas will put the center in C and the radius in r].
+border | Mtrx(A),Lst(b) | Returns the matrix obtained by augmenting A with b as the last column, if nrows(A)=size(b), border(A,b)=tran(append(tran(A),b)).
+is_element | Pnt,GeoObj | Returns 1 if the point is on the geometric object and 0 otherwise.
+NewPic | Mtrx_nrows_2cols(A),Var(pic1) | Creates a picture named pic1, made with the points defined by the rows of A.
+RclPic | Var(pic1) | Adds the picture stored with StoPic to the graphic in the DispG screen.
+RplcPic | Var(pic1) | Erases and replaces the graphic in the DispG screen with the picture stored with StoPic.
+non_recursive_normal | Expr | Simplifies the expressions, but without simplification inside of non-rational expressions.
+unquote | Expr | Evaluates a quoted expression (for example purge(c);a:=c;unquote(a):=3; put 3 in the variables a and c).
+DropDown | Str,LstVal,Var | In a program, instruction of a dialog box.
+Request | Str,Var | In a program, instruction of a dialog box.
+Text | Str | In a program, instruction of a dialog box.
+Title | Str | In a program, instruction of a dialog box.
+Dialog EndDlog | Title;Text;Request;Request;DropDown;EndDlog | In a program, do inputs: Dialog{Title("title");Text("Pupil"+ string(c));Request("Name=",a);Request("Age=",b);DropDown("Level",["un","deux"],n);} (you can replace {} wi
+choosebox PopUp | Str(titel),LstVal,Var | In a program, provide an input with a list of choices.
+rdiv | Expr(a),Expr(b) | Division of a by b (prefixed version of /).
+semi_augment | Mtrx(A),Mtrx(B) | Returns a matrix made with A and B, with n1+n2 rows and p columns if dim(A)=[n1,p] and dim(B)=[n2,p].
+goto | Var(nom) | In a program, is used to jump to an instruction with the label nom.
+label | Var(nom) | In a program, is used to mark an instruction with the label nom.
+lsmod | NULL | Displays the installed dynamic libraries.
+insmod | Str(pwd) | Installs a dynamic module (by entering the pwd of this file), creates the commands that are, for example, in the file libprogfr
+rmmod | Str(pwd) | Removes the installed dynamic libraries.
+widget_size | Intg(n) | Changes the character sizes of the display on the xcas screen (size=n) and with more parameters define the general configuration.
+CyclePic | Str(),Intg(n),Real(p),Intg(n) | Creates an automatic sequence of n pictures (stored with StoPic for example with names des1,des2,des3..desn). The display is done n times with a pause p seconds between each picture.
+StoPic | Var | Stores graphics in variables with same root-name (radical1,radical2..); the graphics can be animated with CyclePic.
+maple_ifactors | Intg(n) | Returns 1 or -1 for the sign and the prime factors with their multiplicity of n in a matrix, such as ifactors in Maple.
+.+ | Lst||Mtrx, Real(a)||Lst||Mtrx | Performs an element by element addition of 2 lists or 2 matrices or adds a to each element of the list or matrix (infixed operator, TI compatibility).
+.- | Lst||Mtrx,Real(a)||Lst||Mtrx | Performs an element by element subtraction of 2 lists or 2 matrices or subtracts a from each element of the list or matrix (infixed operator, TI compatibility).
+./ | Lst||Mtrx,Lst||Mtrx | Performs an element by element division of 2 lists or 2 matrices (infixed operator, TI compatibility).
+.* | Lst||Mtrx,Lst||Mtrx | Performs an element by element multiplication of 2 lists or 2 matrices with the same size dimension (infixed operator, TI compatibility).
+.^ | Mtrx,Intg(n) | Calculates the power of each element of the matrix (infixed operator, TI compatibility).
+&^ | Mtrx,Intg(n) | Calculates the nth power of the matrix (infixed operator, &^ Maple compatibility).
+^ | Expr(a),Intg(n) | Calculates the nth power of a number (infixed operator).
+&* | Mtrx,Mtrx | Matrix multiplication (infixed operator, &* Maple compatibility).
++ | Str||Lst||Expr||Pnt, Str||Lst||Expr||Pnt | String/audio concatenation or addition element by element of 2 expressions or 2 lists or 2 matrices or of 2 points (infixed operator).
+- | Lst||Expr||Pnt,Lst||Expr||Pnt | Subtraction element by element of 2 expressions or 2 lists or 2 matrices or of 2 points (infixed operator).
++& | Str||Lst, Str||Lst, Expr||Expr | String concatenation or addition element by element of 2 expressions or 2 lists or 2 matrices (infixed operator, TI compatibility).
+inputform | [Str],Var,[Str],[Var],[Str],[Var] | In a program, is used to do inputs.
+# | Str | Transforms (in a Xcas program) a string into the name of a variable. Assumes the program begins with // in order to avoid Python compatibility check.
+DrawInv | Expr,[Var] | Draws the graph of the symmetry of the expression with respect to y=x.
+LineHorz | Expr(a) | Draws the horizontal line y=a.
+Line | Expr(a),Expr(b),Expr(c),Expr(d) | Draws the segment [a+i*b,c+i*d].
+LineVert | Expr(a) | Draws the vertical line x=a.
+plot3d graphe3d | Expr||Lst(3*Expr),Var,Var | Erases and plots a 2 variable expression or of a surface defined with a list of the 3 functions or of 3 expression of 2 variables.
+table | SeqEqual(index=value) | Defines an array where the indices are strings or real numbers or defines a table with a matrix.
+read ramene | Str(fich_name) | Reads variables and their values from the file fich_name.
+write sauve | Str(fich_name),SeqVar | Writes the variables and their values into the file fich_name.
+csv2gen | Strng(filename),Strng(sep),Strng(nl),Strng(decsep),Strng(eof),[string] | Reads a file (or string) in CSV format.
+xml_print | Str | Indents a XML code given in a string (pretty print).
+Col | NULL | Returns the index of the column of the lightened cell in the matrixwriter.
+Row | NULL | Returns the index of the row of the lightened cell in the matrixwriter.
+polygonplot ligne_polygonale | Mtrx | Draws the polygons joining for j fixed and for k=0..nrows, the points (xk,yk) where xk=element row k column 0 and yk=element row k column j, after the xk are sorted (we obtain ncols-1 polygons
+polygonscatterplot ligne_polygonale_pointee | Mtrx | Draws the points (xk,yk) and the polygons joining for j fixed and for k=0..nrows, the points (xk,yk) where xk=element row k column 0 et yk=element row k column j, after the xk a
+scatterplot nuage_points | Mtrx | Draws for k=0..nrows, the points (xk,yk) where xk=element row k column 0 and yk=element row k column j (j=1..ncols).
+user_operator | Str(R),Fnc(f),Opt(Binary||Unary||Delete) | Defines a binary operator and returns 0 (failure) or 1(success).
+root | Expr(a),Expr(b) | Returns b^(1/a) (root(2,3)=sqrt(3)).
+plotcontour contourplot DrwCtour | Expr(Xpr),[LstVar],[LstVal] | Draws 11 equirepartited contour-lines z=z_min,,...z=z_max of the surface z=Xpr, or the contour-lines defined by the 3-rd argument.
+xstep ystep zstep nstep tstep ustep vstep | Opt | Option for plotting commands.
+Circle | Real(xc),Real(yc),Real(r),[Intg(option)] | Draws the circle with center (xc,yc) and radius r (by default option=1 and option=0 is to remove this circle).
+range | Intg(n)||Intg(a),Intg(b),[Intg(p)] | Returns the list [0,1..n-1] or the list [a,a+1..b[ or the list [a,a+p,a+2p..b[
+$ | (Expr(Var)||Int(a..b)),(Var(Var)=Int(a..b))||Intg(n)||Real(p) | Infixed version of seq.
+roots | Poly,[Var] | Returns a matrix having 2 columns and where the rows are the roots of the polynomial with their multiplicity (for 1 variable).
+Int | Expr,[Var(x)],[Real(a)],[Real(b)] | Returns the primitive or the definite integral (bounds a and b) without evaluation.
+reduced_conic | Expr,[LstVar] | Returns the origin and the matrix of a base in which the conic given by its equation is reduced, 0 or 1 (0 if the conic is degenerate) and the equation of the conic in this base and also its paramet
+reduced_quadric | Expr, [LstVar] | Returns the origin and the matrix of a basis in which the quadric (given by its equation) is reduced, the list of its eigenvalues, the equation of the quadric in this basis and its parametric equ
+parallelogram | Pnt(A)||Cplx,Pnt(B)||Cplx,Pnt(C)||Cplx,[Var(D)] | Returns and draws the parallelogram ABCD such that vector(AB)+vector(AD)=vector(AC).
+subs | Expr or Var=value,Var=value or Expr | Equivalent of subst except in maple_mode where the arguments are switched over, in maple_mode choose the second example.
+simult | Mtrx(A),Mtrx(B) | Returns the matrix where the column of index k is solution of A*X=column of index k of B (=B[0..nr-1,k..k] with nr=number of rows of B).
+Pause sleep |  | Pause; in a program stops its execution (the execution goes on if you press ENTER) [Pause n; stops its execution for n seconds].
+WAIT | Var(n) | WAIT(n); in a program stops its execution for n seconds.
+newMat | Intg(n),Intg(p) | Returns the list with n rows and p columns, made with zeros.
+QR | Mtrx,Var(Q),Var(R),[Real(eps)] | For a numerical matrix A, stores in Q a orthogonal matrix and in U a lower triangular matrix such that A=Q*R [replacing by 0 the elements such that abs(el)<eps].
+LU | Mtrx(A),Var(L),Var(U),Var(P) | For a numerical matrix A, stores in L a lower triangular matrix, in U an upper triangular  matrix and in P a permutation matrix such that P*A=L*U.
+output Output | [Str],Var(Var) | Instruction in a program so that outputs an expression stored in var.
+input Input lis | [Str],Var(Var) | Instruction in a program so that an expression can be input and stored in var.
+InputStr textinput lis_phrase | [Str],Var(Var) | Instruction in a program so that a string expression can be input and stored in var.
+getType | Expr | Returns the type of the argument (STR,EXPR,FUNC,NUM,LIST,MAT,VAR,NONE,PIC...).
+getKey | NULL | Instruction in a program, returns 0 if no key is pressed and otherwise returns the ascii code of the pressed key.
+assert | Boolean(b) | Instruction in a program, returns an error if b==false.
+list | Opt | Option of the convert or convertir command (n-poly=>list).
+polynom | Opt | Option of the convert or convertir command and of the taylor and series commands (list=>n-poly or series=>poly).
+DrawSlp | Real(a),Real(b),Real(m) | Draws the line with slope m, going through the point (a,b): y-b=m(x-a).
+findhelp ? | Cmd | Returns help about the command (if ? is infixed see when) .
+Fill | Expr(Xpr),Var(A) | Fills the list or the matrix stored in A with Xpr.
+ClrGraph ClrDraw | NULL | Clears the graphs and the geometric objects on the graphic screen DispG.
+NewFold | Var | Makes a new folder and makes it current.
+SetFold | Var | Returns the name of the current folder and makes the appointed folder th new folder (main for the root folder).
+DelFold | Var | Removes the named folder (there is an error if this folder is not empty).
+GetFold | Var | Returns the name of the current folder.
+avgRC | Expr(Xpr),Var(Var),[Real(h)] | Returns (Xpr(var+h)-Xpr(Var))/h (by default h=0.001).
+Archive | SeqVar | Protects the variables given as argument in an archive file.
+Unarchiv | SeqVar | Unprotects the variables given as argument.
+archive | Str(namefich),Seq(Var) | Archives the value of a variable or of a list of variables given as argument in the specified file (readable with unarchive).
+unarchive | Str(namefich),Seq(Var) | Reads the value of a variable or of a list of variables which are in the file given as argument (file created with archive).
+tar | String || Buffer || Buffer,String || Buffer,Int,String | fclose
+CopyVar | Var(var1),Var(var2) | Copies the storage without evaluation of var1 into var2.
+abscissa | Pnt or Vect | Returns the abscissa of a point or a vector.
+multinomial | Intg(n),Vect(p),Vect(k) | Returns n!/(k0!*k1!*..;kj!)*(p0^k0*p1^k1..*pj^kj) (sum(p)=1 and sum(k)=n).
+@@ | Fnc(f),Intg(n) | f @@ n is the function fof..of (n times) (infixed operator).
+@ | Fnc,Fnc | The infixed operator for composition of functions.
+variables_are_files | :=Intg(0 or 1) | Pseudo-variable to specify if you want to save the variables as file "nameofthevariable.cas".
+id | Seq | The name of the identity function (ℝ^n -> ℝ^n).
+ordinate | Pnt or Vect | Returns the ordinate of a point or a vector.
+logistic_regression_plot | Lst(L),Real(x0),Real(y0) | Returns the plot of a logistic function y such that y(x0)=y0 and where [y'(x0),y'(x0+1)...] is the best approximation of L.
+linear_regression_plot | Lst||Mtrx(A),[Lst] | Returns the plot of y=a*x+b ;it is the best line approx the points where the coordinates are the rows of A (or the 2 lists).
+logarithmic_regression_plot | Lst||Mtrx(A),[Lst] | Returns the plot of y=a*ln(x)+b : it is the best logarithm which approx the points where the coordinates are the rows of A (or the 2 lists).
+polynomial_regression_plot | Lst||Mtrx(A),[Lst],Intg(n) | Returns the plot of y=an*x^n+..a1x+a0 : it is the best polynomial which approx the points where the coordinates are the rows of A (or the 2 lists) (n is the 2nd argument).
+power_regression_plot | Lst||Mtrx(A),[Lst] | Returns the plot of y=b*x^m : it is the best monomial which approx the points where the coordinates are the rows of A (or the 2 lists).
+parfrac fullparfrac | Opt | Option of the convert or convertir command (id at the option partfrac).
+confrac | Opt | Option of the convert or convertir command (ex id L:=dfc(sqrt(2),1e-10)).
+base | Opt | Option for convert : convert(p,base,b)= [a0,a1,..an] or convert([a0,a1,..an],base,b)=p with p=a0+a1*b+....an*b^(n-1).
+array | Opt | Option for convert for definitions of sparse matrices.
+square | (Pnt(A) or Cplx),(Pnt(B) or Cplx),[Pnt(P),Var(C),Var(D)] | Returns and draws the square of side AB (ABCD is direct) (in the plane ABP).
+hexagon | Pnt(A)||Cplx,Pnt(B)||Cplx,[Pnt(P)],[Var(C)],[Var(D)],[Var(E)],[Var(F)] | Returns and draws the hexagon of side AB (ABCDEF is direct) (in the plane ABP).
+rhombus | Pnt(A)||Cplx,Pnt(B)||Cplx,Angle(a)||Pnt(P)||Lst(P,a)),[Var(C)],[Var(D)] | Returns and draws the rhombus ABCD such that the angle (AB,AD)=a (or in the plane ABP angle(AB,AD)=angle(AB,AP) or such that angle(AB,AD)=a).
+polygon | LstPnt||LstCplx | Returns and draws the polygon where its vertices are the elements of l.
+open_polygon | LstPnt||LstCplx | Returns and draws the polygonal line where its vertices are the element of l.
+quadrilateral | Pnt(A)||Cplx,Pnt(B)||Cplx,Pnt(C)||Cplx,Pnt(D)||Cplx | Returns and draws the quadrilateral ABCD.
+rectangle | Pnt(A)||Cplx,Pnt(B)||Cplx,Real(k)||Pnt(P)||Lst(P,k),[Var(D)],[Var(C)] | Returns and draws the rectangle ABCD, AD=k*AB; if k>0 ABCD is direct else indirect (in the plane ABP AD=AP or AD=k*AB).
+shift | Lst,[Intg(n)] | Returns the list where the last element [or the tail beginning with the n-th element] is moved to the first element and then completed with 0s (by default n=-1);L:=shift(L,2) o L.shift(2).
+exponential_regression_plot | Lst||Mtrx(A),[Lst] | Returns the plot of y=b*a^x : it is the best exponential which approx the points where the coordinates are the rows of A (or the 2 lists).
+histogram | Lst(data),[Lst(eff) || Intg(nc) || Real(classmin)],[Real(classsize)] | Draws the histogram of data, optional arguments are eff (number of data for each data element) or nc the number of classes or the classes minimum a
+boxwhisker moustache | Lst,[Lst],[x=a..b||y=a..b] | Box and Whisker plot for a statistical series.
+Inverse | Expr||Mtrx | Returns the reciprocal or the matrix inverse without evaluation.
+upper | Mtrx||Strng | Returns the upper triangular matrix (over the diagonal, included) or writes a string in uppercase.
+lower | Mtrx||Strng | Returns the lower triangular matrix (under the diagonal, included) or writes a string in lowercase.
+format | Real,Str("f4"||"s5"||"e6") | Transforms the real into a string with the indicated format (f=float,s=scientific,e=engineering).
+affix | Pnt||Vect | Complex number equal to the affix of a point or of a vector.
+angle | (Pnt or Cplx),(Pnt or Cplx),(Pnt or Cplx) | angle(A,B,C) is the value of the measure of the angle (AB,AC).
+angleat | Pnt(A),Pnt(B),Pnt(C),(Pnt or Cplx(z0)) | angleat(A,B,C,z0) displays at point(z0) with a legend, the value of the measure of the angle (AB,AC).
+angleatraw | Pnt(A),Pnt(B),Pnt(C),(Pnt or Cplx(z0)) | angleatraw(A,B,C,z0) displays at point(z0), the value of the measure of the angle (AB,AC).
+distanceat | GeoObj(A),GeoObj(B),(Pnt or Cplx) | distanceat(A,B,z0) displays at point(z0), with a legend, the distance between 2 geometrical objects
+distanceatraw | GeoObj(A),GeoObj(B),(Pnt or Cplx(z0)) | distanceatraw(A,B,z0) displays at the point(z0), the distance between 2 geometrical objects.
+slope | Line||Pnt||Cplx,[Pnt||Cplx] | Returns the slope of the line defined in the argument or is an attribute of line.
+slopeat | Line, Pnt||Cplx(z0) | slopeat(d,z0) displays at the point(z0), with a legend, the value of the slope of the line or segment d.
+slopeatraw | Line, Pnt||Cplx(z0) | slopeatraw(d,z0) displays at point(z0), the value of the slope of the line or segment d.
+areaat | Polygone, Pnt||Cplx(z0) | Displays at point(z0), with a legend, the algebraic area of a circle or of a (star) polygon (e.g. triangle, square, ...)
+areaatraw | Polygone, Pnt||Cplx(z0) | Displays at point(z0), the algebraic area of a circle or of a (star-)polygon (e.g. triangle, square, ...)
+perimeter | Polygone | Perimeter of a polygon (e.g. triangle, square, ...)
+perimeterat | Polygone, Pnt||Cplx(z0) | Displays at point(z0), with a legend, the perimeter of a circle or of a polygon (e.g. triangle, square, ...)
+perimeteratraw | Polygone, Pnt||Cplx(z0) | Displays at point(z0), the perimeter of a circle or of a polygon (e.g. triangle, square, ...)
+extract_measure | Var | extract_measure gives as answer the value calculated by the argument.
+args | NULL | Inside a program args(NULL) is the list of the function and its arguments.
+additionally | Expr | Makes an additionally assumption on a variable.
+at | Lst(l)||Mtrx(m),Index(j)||Lst([j,k]) | at(l,j) (or at(m,[j,k])) is the element of the list l (or matrix m) for index=j (or for index j,k).
+atan2 | Real(y),Real(x) | Returns the four-quadrant inverse tangent of real numbers y and x.
+a2q | Mtrx,VectVar | a2q(A,X)=the quadratic form q associated to A, X=vector of variables.
+backquote | Expr | ``
+basis | Lst(vector1,..,vectorn) | Extracts a basis from a spanning set of vectors.
+bisector | (Pnt(A) or Cplx),(Pnt(B) or Cplx),(Pnt(C) or Cplx) | Draws the bisector of the angle (AB,AC) given by 3 points A,B,C.
+exbisector | (Pnt(A) or Cplx),(Pnt(B) or Cplx),(Pnt(C) or Cplx) | Draws the exterior bisector of the angle (AB,AC) given by 3 points A,B,C.
+bloc |  | Reserved word.
+begin |  | Block begin.
+break |  | Interrupts a loop: while (cond) {inst1; if (cond) {inst2;break;}}.
+breakpoint | Intg | Adds a breakpoint.
+case |  | Test (multiple choice): switch(variable){case 1: {block1;} default: {block2;}};
+catch | Var | Error protection: try {instructions} catch(variable) {error_instructions}(in a program).
+cd | Str | Change directory.
+center | Crcle | Returns the center of a circle or sphere. For ellipse or hyperbola, returns center, one focus and a point on the conic. For a parabola, returns focus and vertex.
+orthocenter | (Pnt or Cplx),(Pnt or Cplx),(Pnt or Cplx) | Shows the orthocenter of a triangle or of the triangle made with 3 points.
+changebase | Mtrx(A),Mtrx(P) | Returns the matrix B=inv(P)*A*P.
+continue |  | In a program, don't do the end of the iteration but do the next iteration: while (cond) {i1; if(cond) continue; i2;}.
+cont | NULL | Continues execution of a stopped program.
+conic | Expr,[LstVar] | Defines a conic by its equation with x,y as default variables and draws it.
+quadric | Expr,[Lst(Var)] | Defines a quadric by its cartesian equation with x,y,z as default variables and draws it.
+circle | (Pnt(M) or Cplx(M),(Pnt(N) or Cplx(zN)),[Real(a)],[Real(b)],[Var(A)],[Var(B)] | Define for 2-d a circle with a diameter MN (arg1=M or zM,arg2=N) or  with center and radius (arg1=M or zM,arg2=zN) and (center=M and radius=a
+circumcircle | (Pnt or Cplx),(Pnt or Cplx),((Pnt or Cplx) | circumcircle(A,B,C)=circumcircle of the triangle ABC.
+circumcenter | (Pnt or Cplx),(Pnt or Cplx),((Pnt or Cplx) | circumcenter(A,B,C)=center of circumcircle of the triangle ABC.
+click | NULL | Interactive input of a complex number with a click on a geometric screen.
+comment | Expr | Comment in a program.
+curve | Expr | Reserved word.
+debug | Expr | Launch a debugging session.
+default otherwise |  | Default case in a switch instruction.
+Det | Mtrx | Determinant of a square matrix M, without evaluation.
+* | Vect,Vect||Mtrx,Mtrx,||Xpr,Xpr | Scalar product infixed (or product of 2 expressions or 2 matrices).
+' | Expr or Fnc,[SeqVar or LstVar] | Returns the derivative with respect to the 2nd argument (postfixed version of diff).
+else |  | Starts false clause of an "if" statement: if (condition){instruction1;} else {instruction2;}
+elif |  | Uses elif when you execute a series of tests (elif=else if). if condition1 then instruction1; elif condition2 then instruction2;...[else instruction;] end
+element | (Curve or Real_interval),[Val] | Shows a point chosen on a curve or a real chosen in an interval or an element of (Z/nZ)^dim or from a finite field^dim
+ellipse | Pnt(F1),Pnt(F2),(Pnt(M) or Real(a)) | ellipse(F1,F2,M)=ellipse with foci F1,F2 through M or such that MF1+MF2=2*a (geo2d) and ellipse(p(x,y)) draws the conic if deg(p)=2.
+= | Expr,Expr | Infixed symbol that connects the 2 members of an equation.
+equal | Expr,Expr | Prefixed version of =.
+equation | GeoObj, VectParam | equation returns the cartesian equation of a curve.
+erase | NULL | Erases the graphic screen.
+error ERROR throw | Str | Generates the display of an error in a program.
+is_collinear | LstPnt | Returns 1 if the points are aligned, 2 if the points are the same and 0 otherwise.
+is_concyclic | LstPnt | Returns 1 if the points are on a circle and 0 otherwise.
+is_cycle | Lst | Returns 1 if the argument is a cycle and 0 otherwise.
+is_parallel | Line or Plan ,Line or Plan | Returns 1 if 2 lines are parallel and 0 otherwise.
+is_perpendicular | Line or Plan,Line or Plan | Returns 1 if 2 lines are perpendicular.
+Factor | Expr | Factors a polynomial without evaluation.
+for |  | Loop: for (init;do_if_true;increment) {action;}
+feuille op | Op or Fnc | Returns the arguments of an operator as a sequence.
+Gcd | (Intg or Poly),(Intg or Poly) | Returns the greatest common divisor of 2 polynomials or of 2 integers without evaluation.
+graph2tex | [Str("filename")] | Converts the graphic screen to a LaTeX file.
+graph3d2tex | [Str"filename")] | Converts the 3d graphic screen to a LaTeX file.
+halt | NULL | Puts a program in step-by-step debug mode.
+has | Expr,Var | Checks if a variable is in an expression.
+altitude | (Pnt or Cplx),(Pnt or Cplx),(Pnt or Cplx) | altitude(A,B,C) draws the altitude through A of the triangle ABC.
+barycenter | [Pnt,Real],[Pnt,Real],[Pnt,Real] | barycenter([point1,coeff1],...) draws the barycenter of point1 with weight coeff1...
+isobarycenter | (Pnt or Cplx),(Pnt or Cplx),(Pnt or Cplx) | isobarycenter(A,B,C,...) draws the isobarycenter of the n points A,B,C,...
+median_line | (Pnt or Cplx),(Pnt or Cplx),(Pnt or Cplx) | median_line(A,B,C) draws the median-line through A of the triangle ABC.
+perpen_bisector | (Pnt or Cplx),(Pnt or Cplx) | perpen_bisector(A,B) draws the bisector (line or plane) of the segment AB.
+midpoint | (Pnt or Cplx),(Pnt or Cplx) | midpoint(A,B) draws the midpoint of the segment AB.
+Hilbert | Expr(f),Var(x) | The inert form of hilbert command.
+homothety | Pnt(C),Real(k),Pnt(A) | homothety(C,k,A)=point A1 such as vect(C,A1)=k*vect(C,A) i.e in 2d it is the similarity with center C, coeff abs(k) and angle arg(k).
+inversion | Pnt(C),Real(k),Pnt(A) | inversion(C,k,A)=point A1 such that A1 is on line(C,A) and algebraic mesure of (CA1*CA)=k.
+hyperbola | Focus(F1),Focus(F2),(Pnt(M) or Real(a)) | hyperbola(F1,F2,M)=hyperbola with foci F1,F2 through M or (|MF1-MF2|=2*a geo2d) and hyperbola(p(x,y)) draws the conic if deg(p)=2.
+-infinity |  | Minus infinity.
+if |  | Test: if (condition){ true_action; } else { false_action; }
+in |  | Iteration for ...end_for in a set or a list.
+incircle | (Pnt or Cplx),(Pnt or Cplx),(Pnt or Cplx) | incircle(A,B,C) draws the incircle of the triangle ABC.
+excircle | (Pnt or Cplx),(Pnt or Cplx),(Pnt or Cplx) | excircle(A,B,C) draws the A-excircle of the triangle ABC.
+incenter | (Pnt or Cplx),(Pnt or Cplx),(Pnt or Cplx) | incenter(A,B,C) draws the incircle center of the triangle ABC.
+excenter | (Pnt or Cplx),(Pnt or Cplx),(Pnt or Cplx) | excenter(A,B,C) draws the A-excenter of the triangle ABC.
+inter | Curve,Curve,[Pnt|Lst] | With 2 arguments (resp 3 arguments) gives the intersection of 2 curves or surfaces as a vector (resp a point close to the point given as third argument or not in the list given as 3rd argument).
+single_inter line_inter | Curve,Curve,[Pnt(A)||LstPnt(L)] | Gives one of the points of intersection of 2 curves or surfaces (or the intersection near A or not in L).
+/% |  | Euclidean quotient of 2 integers : it is the infixed version of iquo.
+%/ | Intg(a),Intg(b) | Euclidean remainder of 2 integers : it is the infixed version of irem.
+div | Intg,Intg | Euclidean quotient of 2 integers (infixed operator).
+%/ | Intg(a),Intg(b) | Euclidean remainder of 2 integers : it is the infixed version of irem.
+isom | Mtrx | Finds elements of a 2-d or 3-d isometry.
+Nullspace | Mtrx | Inert form of nullspace for modular computation (irem/mod).
+Resultant | Poly,Poly,Var | Inert form of resultant for modular computation (irem/mod).
+kill tuer | NULL | Stop step-by-step execution of a program (with debug).
+locus | Pnt,Elem | locus(M,A) draws the locus of M (or locus(d,A) draws the envelope of d) when A:=element(C) (C is a curve). The example instructions below must be written in a geometric level on different lines.
+lin lineariser | Expr | Linearization of exponentials.
+thickness epaisseur | Opt | Option (Maple compatibility) of a graphic command to define the thickness of lines.
+axes | Opt | Global option (Maple compatibility) of a graphic command to put or not the axes.
+style | Opt | Local option (Maple compatibility) of a graphic command to plot a line with dots with style=point.
+title titre | Opt | Global option of a graphic command to put a title in a graphic.
+gl_texture | Opt=NameFich | Option that puts a picture in a rectangle of sides parallel to the axis (2-d) or on a 3-d surface or to fill the background (2-d).
+gl_shownames | Opt=Boolean | Option that shows or hides objects names.
+gl_showaxes | Opt=Boolean | Option that shows or hides axes.
+gl_quaternion | Opt=Lst | Option that defines the quaternion for the visualization in 3-d scenes (do not use for interactive scenes).
+gl_rotation | Opt=NameFich | Global option that defines the rotation axis for the animation rotation of 3-d scene.
+gl_ortho | Opt=Interval | Global option that sets a orthonormal graphic configuration.
+gl_x gl_y gl_z | Opt=Interval | Global option that sets the graphic configuration.
+axis | xmin,xmax,ymin,ymax,[zmin,zmaz] | Defines the graphic display
+gl_xtick gl_ytick gl_ztick | Opt=Real | Global option that defines the interval between tick marks on the x (resp. y, z) axis.
+gl_x_axis_unit gl_y_axis_unit gl_z_axis_unit | Opt=Str | Global option that is an individual definition of the units of the x, (or y or z) axis.
+gl_x_axis_color gl_y_axis_color gl_z_axis_color | Opt=Intg | Global option that is an individual definition of the colors of the x, (or y or z) axis.
+gl_x_axis_name gl_y_axis_name gl_z_axis_name | Opt=Str | Global option that is an individual definition of the names of the x (or y or z) axis.
+legend | Cplx or Lst,Str | legend(za,"here") (or legend([20,60],"here")) "here" is written at the point of affix za (or at the pixel position [20,60]) and legend=["m","s"] writes "m","s" as units on the axis.
+labels | Cplx or Lst,Str | labels=["u","v"] renames the axes with "u" and "v".
+expln | Opt | Option of the convert or convertir command (id trig2exp).
+local var |  | Local variables definition: f(x):={local (var1:=x),var2; instruction;};
+distance | (Pnt or Cplx),(Pnt or Cplx or Curve) | Calculates the distance between 2 points or a point and a curve.
+distance2 | (Pnt or Cplx),(Pnt or Cplx or Curve) | Calculates the square of the distance between 2 points or a point and a curve.
+xcas_mode maple_mode | Intg(0) or 1 or 2 or 3 | Switches to mode Xcas (0), Maple (1), Mupad (2), TI89 (3).
+python_compat | Intg(0) or 1 | Sets Python-syntax compatibility (1) or not (0).
+maple2mupad | Str("Name_Maplefile"),Str("Name_Mupadfile") | maple2mupad("file1","file2") translates file1(Maple) to file2(MuPAD).
+maple2xcas | Str("NameMapleFile"),Str("NameXcasFile") | maple2xcas("file1","file2") translates file1(Maple) to file2(Xcas).
+mupad2maple | Str("NameMupadFile"),Str("NameMapleFile") | mupad2maple("file1","file2") translates file1(MuPAD) to file2(Maple).
+mupad2xcas | Str("NameMupadFile"),Str("NameXcasFile") | mupad2xcas("file1","file2") translates file1(MuPAD) to file2(Xcas).
+mkisom | Vect,(Sign(1) or -1) | Matrix of an isometry given by its proper elements.
+minus | (Vect or Set),(Vect or Set) | minus is a infixed operator to get the difference of 2 sets.
+moyal | Expr,Expr,VectVar | Moyal product of 2 symbols.
+not non | Boolean | Returns the logical inverse of the argument.
+! | Boolean | Returns the logical inverse of the argument if prefixed or factorial if infixed.
+nop | NULL | No OPeration instruction.
+of | Fnc(f),Real(a) | Returns the value : f(a).
+option |  | Reserved word for compatibility.
+parabola | Pnt(F)||Pnt(xA+i*yA),Pnt(A)||Real(c),[Pnt(P)] | parabola(F,A)=focus F, top A (in the plane ABP) or (parabola(A,c) of equa. y=yA+c*(x-xA)^2 c=1/(2*p) and FA=p/2 geo2d) and parabola(P(x,y)) draws the conic if deg(P)=2.
+parallel | Pnt or Line,Line or Plan,[Line] | parallel(A,D) (resp parallel(A,P) or parallel(A,D,DD)) draws the line (resp plane) through A parallel to the line D (resp parallel to the plane P or to the lines D,DD) and parallel(d,D)
+parameter |  | Reserved word.
+plotparam paramplot DrawParm courbe_parametrique | Cplx||Lst,Var||Lst(Var) | plotparam(a(x)+i*b(x),x=x0..x1) draws the curve X=a(x),Y=b(x) x=x0..x1 or plotparam([a(u,v),b(u,v),c(u,v)],[u=u0..u1,v=v0..v1]) draws the surface X=a(u,v
+parameq | GeoObj | parameq(C) returns the complex number=parametric equation of the curve C.
+perpendicular | (Pnt or Line),(Line or Plan) | perpendicular(A,line(B,C)) or perpendicular(A,B,C) draws the orthogonal line of line BC through A and perpendicular(d,plane(B,C,D)) draws the orthogonal plane of plane(B,C,D) through 
+orthogonal | (Pnt),(Line or Plan) | orthogonal(A,line(B,C)) draws the orthogonal plane of line BC through A and orthogonal(A,plane(B,C,D)) draws the orthogonal line of plane(B,C,D) through A.
+plot graphe | (Expr or LstExpr),Var[=VarMin..VarMax],[color=LstColor] | Plots a one-variable expression (or list of expressions). Optional argument: color=list of colors for each connected component of the graph. 
+plotfunc funcplot DrawFunc Graph | Expr,[Var(x) or VectVar] ,[Intg(color)] | Plots a 1 variable or 2 variables expression with superposition.
+plotimplicit implicitplot | Expr,Var1,Var2 | plotimplicit(f(x,y),x,y) or plotimplicit(f(x,y),[x,y]) draws graph of f(x,y)=0.
+plotfield fieldplot | Expr,VectVar,[Opt] | plotfield(f(t,y),[t,y]) draws the plotfield of the diff equation y'=f(t,y).
+interactive_plotode interactive_odeplot | Expr,VectVar | Draws (in DispG) a solution for each point t0+i*y0 clicked with the mouse (Esc=halt).
+plotode odeplot | Expr,VectVar,VectInitCond | plotode(f(t,y),[t,y],[t0,y0]) draws the solution of y'=f(t,y) and y(t0)=y0 or of the system [x'=g(t,x,y),y'=h(t,x,y)] with x(t0)=x0 and y(t0)=y0.
+order | g | Returns element order of g in (Z/nZ)^* or in a finite field.
+plotpolar polarplot DrawPol courbe_polaire | Expr,Var,VarMin,VarMax | plotpolar(f(x),x,a,b) draws the polar curve r=f(x) for x in [a,b].
+rgb | Lst(r,g,b)||Intg(rrggbb)||Str(rrggbb)||Color(c) | Convert a RGB triple [r,g,b] or a hexadecimal integer or string rrggbb into xcas color or return RGB specification of xcas color c.
+hsv | Lst(h,s,v)||Color(c) | Convert a HSV specification [h,s,v] to xcas color or return the HSV specification of a xcas color c.
+rgb2hsv | Lst(r,g,b) | Convert RGB to HSV.
+hsv2rgb | Lst(h,s,v) | Convert HSV to RGB.
+rgb2xyz | Lst(r,g,b)||Color(c) | Convert RGB to XYZ.
+xyz2rgb | Lst(x,y,z) | Convert XYZ to RGB.
+colormap | Str(palette)||Lst(palettes),[Intg(n)||Real(t)||Str(colorname)||display] | Return the colormap index for a given palette name or a extract specified color(s) or display selected colormap(s).
+set_screen | Intg(x),Intg(y) | Defines the virtual screen sizes for get_key()
+set_pixel draw_pixel | Intg(x),Intg(y),Intg(col) | Pixel on and adds to the list of pixels. Run set_pixel() or show_pixels() to display, set_pixel(n) to zoom.
+draw_line | Intg(x1),Intg(y1),Intg(x2),Intg(y2),Intg(col) | Pixelised segment.
+draw_rectangle | Intg(x),Intg(y),Intg(w),Intg(h),Intg(col) | Pixelised rectangle, add filled to the color to fill the rectangle.
+draw_polygon | Lst(l),Intg(col) | Pixelised polygon, add filled to the color to fill the rectangle.
+draw_circle | Intg(x),Intg(y),Intg(r),Intg(col) | Pixelised circle, add filled to the color to fill the circle.
+draw_arc | Intg(x),Intg(y),Intg(rx),Intg(ry),Real(theta1),Real(theta2),Intg(col) | Pixelised ellipsis arc.
+clear | NULL | Clears the list of pixels.
+show_pixels | NULL | Displays the list of pixels.
+pixon | Real(x),Real(y) | Pixel on.
+pixoff | Real(x),Real(y) | Pixel off.
+print Disp | Expr|| Str | Prints a result in a program.
+printf | Expr | 2d printing.
+projection | Curve,Pnt | projection(C,A) is the orthogonal projection of A on the curve C.
+program |  | Reserved word.
+proc |  | Begin a procedure (like with MuPAD).
+pwd | NULL | Current working directory.
+Quo | (Vect or Poly),(Vect or Poly),[Var] | Returns the euclidean quotient of 2 polynomials without evaluation.
+q2a | QuadraForm, VectVar | q2a(q(x,y),[x,y])=the symmetric matrix associated to the quadratic form q.
+choice | Lst(L) | choice(L)=rand(L)=one extracted element of L.
+hasard | Intg(n) or Interval(p..n) or NULL,[Intg(b1) or Lst(L)],[Intg(b2)] | (hasard n)=a random integer (resp (hasard p,n)=a real or hasard(p..n)=a real function) with uniform distribution in 0..n-1 (resp in [p;n])(hasard= (hasar
+radius | Crcle | radius(C) gives the radius of the circle C. For a conic, returns a list containing a, b, c and e.
+radius2 | Crcle | radius2(C) gives the square of the radius of the circle C.
+Rem | (Vect or Poly),(Vect or Poly),[Var] | Returns the euclidean remainder of 2 polynomials without evaluation.
+rotation | (Pnt(B) or Cplx or Dr3),Angle(a1),(Pnt(A) or Curve) | rotation(B,a1,A) (resp rotation(d,a1,A)) is the transformation of A by rotation with center B (resp of axis d) and angle a1.
+rmbreakpoint | Intg | Removes a breakpoint.
+rmwatch | Var | Clears a variables from the table of displayed variables in step/step.
+Rref | Mtrx(M) | Returns the row reduction to echelon form of AX=b (M=A|b) without evaluation.
+same | Expr,Expr | Equality test.
+segment | (Pnt or Cplx or Lst([xM,yM])),(Pnt or Cplx or Lst([xN,yN]),[Var],[Var] or Opt | segment(A,B) draws the segment AB and segment([xM,yM],[xN,yN]) draws the vector as origin [xM,yM], of coordinates [xN,yN] (i.e draws segment
+half_line | (Pnt or Cplx),(Pnt or Cplx) | half_line(A,B) draws the half-line AB with A as origin.
+similarity | Pnt or Dr3,Real,Angle,Pnt | similarity(B,k,a1,A)=transformation of A in the similarity (center B or axis d, coeff k,angle a1) (or also homothety(B,k*exp(i*a1),A)).
+line_segments | Polygon or Polyedr(P) | Returns the list of the line_segments (1 line=segment) of the polyhedron P.
+faces | Polygon or Polyedr(P) | Returns the list of the faces (1 face=matrix(n,3) where the n rows are the n vertices of the face) of the polyhedron P.
+vertices vertices_abc | Polygon or Polyedr(P) | Returns the list of the vertices of the polygon or polyhedron P.
+vertices_abca | Polygon or Polyedr(P) | Returns the closed list [A,B,...A] of the vertices of the polygon or polyhedron P.
+sommet | Op or Fnct | Returns the top of an operator.
+sst | NULL | Steps 1 instruction.
+sst_in | NULL | Enters into a function in step-by-step mode.
+stack |  | Reserved word.
+step by pas |  | Step in an iteration (step size of incrementation).
+sto Store | (Real or Str),Var | Store the first argument in the variable given as second argument.
+<= | Expr,Expr | Boolean infixed operator that tests the inequality.
+>= | Expr,Expr | Boolean infixed operator that tests the inequality.
+> | Expr,Expr | Boolean infixed operator that tests the inequality.
+< | Expr,Expr | Boolean infixed operator that tests the inequality.
+== | Expr,Expr | Boolean infixed operator that tests the equality.
+!= | Expr,Expr | Boolean infixed operator that tests the difference.
+:= | Var,(Real or Str) | Infixed operator that stores the second argument in the variable given as first argument.
+=< | Var,(Real or Str) | Infixed operator that stores by reference the second argument in a variable (containing a list) given as first argument.
++= | Var,(Real or Str) | Infixed operator : a+=b equivalent to a:=a+b.
+*= | Var,Real | Infixed operator : a*=b equivalent to a:=a*b.
+-= | Var,Real | Infixed operator : a-=b equivalent to a:=a-b.
+/= | Var,Real | Infixed operator : a/=b equivalent to a:=a/b.
+=> | (Real or Str),Var | Infixed operator that stores the first argument in the variable given as second argument or is the infixed version of convert.
+| | Expr, Var(v1)=value(a1)[,v2=a2,...] | Infixed operator. Substitutes a value for a variable in an expression.
+suppress | Vect(L)||Str(l),Intg(n) | Returns L without the element of index n; L:=suppress(L,n) or L.suppress(n).
+switch |  | Test (multiple choice): switch(variable) {case 1: {bloc1;} default: {bloc2;}};
+switch_axes | [Intg(0 or 1)] | switch_axes() puts or erases the axes of the graphic-screen.
+xyztrange | SeqReal | xyztrange puts or erases the axes on the graphic-screen (cf button Cfg).
+Ox_2d_unit_vector | NULL | Ox_2d_unit_vector() draws the unit vector of the x-axis of the 2-d graphic-screen.
+Oy_2d_unit_vector | NULL | Oy_2d_unit_vector() draws the unit vector of the y-axis of the 2-d graphic-screen.
+Ox_3d_unit_vector | NULL | Ox_3d_unit_vector() draws the unit vector of the x-axis of the 3-d graphic-screen.
+Oy_3d_unit_vector | NULL | Oy_3d_unit_vector() draws the unit vector of the y-axis of the 3-d graphic-screen.
+Oz_3d_unit_vector | NULL | Oz_3d_unit_vector() draws the unit vector of the z-axis of the 3-d graphic-screen 3-d.
+frame_2d | NULL | frame_2d() draws the axes of the 2-d graphic-screen.
+frame_3d | NULL | frame_3d() draws the axes of the 3-d graphic-screen.
+reflection | (Pnt(A) or Line(D)),(Pnt(C) or Curve(C)) | reflection(D,C) (or reflection(A,C))=symmetry of C with the symmetry-line D (or sym-point A).
+tablefunc | Expr,Var | Table of values of a function : you must be in a spreadsheet.
+tableseq | Expr,(Var or LstVar),(InitVal or LstInitVal) | Table of values of a sequence (in a spreadsheet.)
+tangent tangente | Curve(C),Pnt(A) | tangent(C,A) draws the tangents (line or plane) to C through A.
+test | Var | Test function for system developers.
+then |  | Used in an if test: if (condition) then instruction; end_if;
+translation | Vect, Pnt(C) | translation(B-A,C) (resp translation([a,b,c],C)) is the translation of C in the translation of vector AB (resp [a,b,c]).
+triangle | (Pnt or Cplx),(Pnt or Cplx),(Pnt or Cplx) | triangle(A,B,C) draws the triangle ABC.
+equilateral_triangle | (Pnt(A) or Cplx),(Pnt(B) or Cplx),[Pnt(P)],[Var(C)] | equilateral_triangle(A,B) (resp equilateral_triangle(A,B,P)) draws the direct equilateral triangle ABC with side AB (resp in the half-plane ABP).
+isosceles_triangle | (Pnt(A) or Cplx),(Pnt(B) or Cplx),(Angle(t) or Pnt(P) or Lst(P,t)),[Var(C)] | Draws the isosceles triangle ABC AB=AC and angle(AB,AC)=t (or in the plane ABP angle(AB,AC)=angle(AB,AP) or angle(AB,AC)=t).
+right_triangle | (Pnt(A) or Cplx),(Pnt(B) or Cplx),(Real(k) or Pnt(P) or Lst(P,k)),[Var(C)] | Draws the A_rectangular triangle ABC with AC=k*AB (or in the plane ABP AC=AP or AC=k*AB).
+trn | Mtrx | Returns the adjoint matrix of A =tran(conj(A)).
+truncate | Poly(P),Intg(n) | Truncates the polynomial P at order n.
+try |  | Error protection: try {instructions;} catch(variable) {error_instructions;} (in a program).
+subtype | Expr | Returns 1 for a sequence,2 for a set, 10 for a polynomial and 0 otherwise.
+union | (Vect or Set),(Vect or Set) | union is an infixed operator to get the union of 2 sets.
+watch | Var | Adds a variable to the list of displayed variables in step by step.
+while |  | While loop (do the instructions while cond==true): while (cond) {i1;i2;};
+repeat until repeter jusqua jusqu_a |  | Repeat loop (repeat the instructions until cond==true): repeat i1;i2; until cond; or repeter i1;i2;jusqua cond;
+{} |  | Instructions block.
+divis | Poly(P) or LstPoly | Returns the list of divisors of a polynomial.
+gbasis_reinject | Real(a),[Real(b)] | Gbasis fine-tuning: in the modular algorithm of a gbasis over Q, adds a partial reconstruction of the basis if the ratio of new elements is greater than a and the speed ratio of the 2nd run/1s
+rur_gbasis | Intg(n) | Gbasis fine-tuning; in the modular algorithm of a rur over Q, reconstruct a gbasis over Q if n=1, or if the number of monomials of the gbasis is <n if n>1. If n=0 no gbasis reconstruction over Q. If n==-1 an
+ifte IFTE | Cond,Expr1,Expr2 | If condition returns Expr1 else returns Expr2.
+when | Cond,Expr1,Expr2 | If condition (even symbolic) returns Expr1 else returns Expr2 (? is the infixed version of when).
+? | Cond,Expr1,Expr2 | ? is the infixed version of when : (Cond) ? Expr1:Expr2. If condition Cond=1 (even symbolic) returns Expr1 else returns Expr2.
+intersect | (Vect or Set),(Vect or Set) | intersect is a infixed operator to get the intersection of 2 sets.
+display color | [GeoObj or legende],Intg | Draws a geometrical object with colors black=0 red=1 green=2 yellow=3 blue=4, filled with the color in the interior of a closed curve,line_width_n (0<n<8) is for the width of the line and
+point_width_1 point_width_2 point_width_3 point_width_4 point_width_5 point_width_6 point_width_7 epaisseur_point_1 epaisseur_point_2 epaisseur_point_3 epaisseur_point_4 epaisseur_point_5 epaisseur_point_6 epaisseur_point_7 | Opt 
+line_width_1 line_width_2 line_width_3 line_width_4 line_width_5 line_width_6 line_width_7 epaisseur_ligne_1 epaisseur_ligne_2 epaisseur_ligne_3 epaisseur_ligne_4 epaisseur_ligne_5 epaisseur_ligne_6 epaisseur_ligne_7 | Opt | Optio
+dash_line ligne_tiret solid_line ligne_trait_plein dashdot_line ligne_tiret_point dashdotdot_line ligne_tiret_pointpoint cap_flat_line ligne_chapeau_plat cap_square_line ligne_chapeau_carre cap_round_line ligne_chapeau_rond | Opt 
+rhombus_point point_losange plus_point point_plus square_point point_carre cross_point point_croix triangle_point point_triangle star_point point_etoile point_point invisible_point point_invisible | Opt | Option of the display com
+hidden_name | Opt | Option of the display command to hide the name.
+filled | Opt | Option of the display command to fill figures.
+filled_1 | Opt | Option of the display command to fill figures with transparency
+filled_2 | Opt | Option of the display command to fill figures with transparency
+filled_3 | Opt | Option of the display command to fill figures with transparency
+filled_4 | Opt | Option of the display command to fill figures with transparency
+filled_5 | Opt | Option of the display command to fill figures with transparency
+filled_6 | Opt | Option of the display command to fill figures with transparency
+white black red green blue yellow magenta cyan orange purple pink grey brown olive teal navy gold violet | Opt | Option of the display command to display with color.
+quadrant1 quadrant2 quadrant3 quadrant4 | Opt | Option of the display command to write a legend.
+-< | GeoObj,Attribut | Infixed operator (equivalent to the prefixed instruction color) which defines the attributes of a geometrical figure.
+-> | VectVar(x),Expr(f(x)) | Infixed operator which defines a user function: x->f(x).
+function fonction | Fnc(f) | Instruction which defines a user function.
+mod % | Intg(n),Intg(p) | Infixed operator which returns n mod p a number of ℤ/pℤ.
+fmod | Real(a),Real(b) | Returns a mod b for a and b floats.
+modf | Real(a) | Returns (a-trunc(a),trunc(a)).
+plotseq seqplot graphe_suite | Expr(f(Var)),Var=[a,xm,xM],Intg(p) | For seeing the pth terms of the sequence u(0)=a,u(n)=f(u(n-1)).
+open | Str(s) | Opens a file named s, returns the file handle.
+fopen | Str(s) | Opens a file named s, returns a variable of type file.
+fclose close | File(f) | Closes the file f.
+fprint | File(f),Var,[Var,Var...] | Writes in the file f some data.
+readwav | Str(s) | Reads a WAV sound file.
+writewav | Str(s),Lst(l) | Writes a WAV sound file.
+playsnd | Vect | Plays a sound data.
+readrgb | Str(s),[Intg(w)],[Intg(h)] | Reads a picture file, using it's natural dimensions, or using specified dimensions.
+writergb | Str(s),Lst | Write a PNG picture file named s either from a list [[number_channels,width,height],red,green,alpha,blue] where red,green,alpha,blue are matrices of pixels color or from a matrix of grey pixels or from 3 ma
+plotproba | Matrix,[Vector] | Graph of a transition matrix with at most 7x7 entries (optionally with list of vertex positions).
+is_inside | Pnt,Polygon or Circle | Checks whether a point is inside a polygon or a circle.
+osculating_circle | Curve,Point | Osculating circle at point M to the curve C.
+dayofweek | Int,Int,Int | dayofweek(d,m,y) returns the day of the given date (day,month,year) : 0 for sunday, 1 for monday ...6 for saturday.
+period | Expr,[Var] | Returns a period of a given periodic expression with respect to a single real variable (by default x).
+plotwav | Audio(clip),[range=a..b] | Plots the waveform of an audio clip (optionally at the specified range).
+plotspectrum | Audio(clip),[range=a..b] | Plots the power spectrum of an audio clip (on the specified frequency range).
+boxcar | Real(a),Real(b),Expr(x) | Returns the value at x of the boxcar function corresponding to a and b.
+tri | Expr(x) | Returns the value of the triangle function at x.
+sinc | Expr(x) | Returns the value of the cardinal sine function at x.
+Fourier | Expr(f),Var(t),Var(omega) | The inert form of fourier command.
+addtable | fourier||laplace,f(x),F(s),Var(x),Var(s) | Stores an unknown Fourier/Laplace transform pair (f,F).
+trail | Seq(V) | Returns a trail of vertices from V (inert command).
+graph | [Lst(V)],[Set(E)],[Mtrx(A)],[options] | Create an (un)directed (un)weighted graph from vertices V, edges E, and/or adjacency or weight matrix A. All parameters are optional.
+digraph | [Lst(V)],[Set(E)],[Mtrx(A)],[options] | Create a directed (un)weighted graph from vertices V, edges E and/or adjacency or weight matrix A. All parameters are optional.
+export_graph | Graph(G),Str("filename"),[opts] | Writes G to the file 'filename' in dot/lst/LaTeX format, returns 1 on success and 0 on failure.
+import_graph | Str("filename"),[opts] | Returns the graph constructed from instructions in the file 'filename' in dot/lst format, or "undef" on failure.
+graph_vertices | Graph(G) | Return the list of vertices in G.
+edges | Graph(G),[weights] | Return the list of edges in G [including weights].
+has_edge | Graph(G),Edge(e) | Returns true iff the edge e=[i,j] is contained in an undirected graph G.
+has_arc | Graph(G),Edge(e) | Returns true iff the arc e=[i,j] is contained in a digraph G or, if e={i,j} is a set, iff G has both edges [i,j] and [j,i].
+adjacency_matrix | Graph(G) | Returns the adjacency matrix of G (rows and columns correspond to vertex indices).
+incidence_matrix | Graph(G) | Returns the incidence matrix of G whose rows are indexed by the vertices and columns by the edges (in order defined by the commands 'vertices' and 'edges', respectively).
+weight_matrix | Graph(G) | Returns the weight matrix of G.
+graph_complement | Graph(G) | Return the graph with the same vertex set as in G, but whose edge (arc) set consists of the edges (arcs) not present in G.
+subgraph | Graph(G),Lst(E) | Returns the subgraph of G defined by the edges in list E.
+vertex_degree | Graph(G),Vrtx(v) | Returns the degree of the vertex v in G (i.e. the number of edges incident to v).
+vertex_in_degree | Graph(G),Vrtx(v) | Returns the number of arcs in G entering the vertex v.
+vertex_out_degree | Graph(G),Vrtx(v) | Returns the number of arcs in G emanating from the vertex v.
+induced_subgraph | Graph(G),Lst(V) | Returns the subgraph of G induced by the vertices in list V.
+maximal_independent_set | Graph(G) | Returns a maximal set of mutually independent (non-adjacent) vertices in G.
+maximum_matching | Graph(G) | Returns the list of edges representing a maximum matching in G.
+make_directed | Graph(G),[Mrtx(A)] | Returns a copy of an undirected graph G in which every edge is converted to a pair of arcs [with weights specified by matrix A].
+underlying_graph | Graph(G) | Returns the graph obtained by stripping directions and weights from arcs in G (pairs of arcs connecting the same vertices are merged to a single edge).
+cycle_graph | Intg(n)||Lst(V) | Returns a cyclic graph on n vertices (or with vertices from list V).
+lcf_graph | Lst(J),[Intg(k)] | Returns a graph constructed from the LCF notation J[^k] given the list of integers J [and a positive integer k, by default 1].
+hypercube_graph | Intg(n) | Constructs and returns a hypercube graph in dimension n (with 2^n vertices).
+seidel_switch | Graph(G),Lst(V) | Returns a copy of G in which the edges between vertices in list V and vertices not in V are inverted (replaced with a set of edges from V to other vertices which are not present in G).
+draw_graph | Graph(G),[opts] | Returns the graphic representation of G obtained by using various algorithms (which can optionally be fine tuned by appending a sequence of options after the first argument).
+sierpinski_graph | Intg(n),Intg(k),[triangle] | Returns the Sierpiński (triangle) graph S(n,k) (resp. ST(n,k)).
+complete_graph | Intg(n)||Lst(V)||Seq(n1,n2,...,nk) | Returns a complete graph with vertices from list V or enumerated with first n integers or, when two or more positive integers n1,n2,...,nk are given, a complete k-partite graph
+petersen_graph | Intg(n),[Intg(k)] | Returns the generalized Petersen graph G(n,k), where n and k are positive integers (k defaults to 2).
+random_graph | Intg(n)||Lst(V),Real(p)||Intg(m) | Returns a random undirected unweighted graph on n vertices (list V of labels may be specified) where two vertices are connected with probability p or where m edges are created at r
+random_digraph | Intg(n)||Lst(V),Real(p)||Intg(m) | Returns a random directed unweighted graph on n vertices (list V of labels may me specified) where two vertices are connected with probability p or where m edges are created at r
+random_bipartite_graph | Intg(n)||Lst(a,b),Real(p)||Intg(m) | Returns a random undirected unweighted bipartite graph on n vertices where each possible edge is present with probability p or where m edges are created at random. When
+random_tournament | Intg(n)||Lst(V) | Returns a random tournament graph on n vertices, which may be specified as list V of their labels.
+random_regular_graph | Intg(n)||Lst(V),Intg(d),[connected] | Returns a random d-regular graph with n vertices, which may be specified as list V of their labels.
+random_sequence_graph | Lst(L) | Returns a random undirected graph with degree sequence L.
+random_tree | Intg(n)||Lst(V),[Intg(d)||root[=Vrtx(v)]] | Returns a random tree graph on n vertices, which may be specified as list V of their labels [with the upper bound d (positive integer) for the degree of graph or 'root' for
+random_planar_graph | Intg(n)||Lst(V),Real(p),[Intg(c)] | Returns a random planar graph with n vertices, which can also be specified as a list V of their labels, obtained by trying to remove each edge of a random triangulated grap
+assign_edge_weights | Graph(G),Seq(m,n)||Intrv(a..b) | Assigns random edge weights to the edges in G and returns a modified copy of G. If integers n and m such that n>=m are specified, then the weights are integers randomly chosen
+articulation_points | Graph(G) | Returns the list of articulation points (cut vertices) in G.
+biconnected_components | Graph(G) | Returns a list of lists of vertices, each sublist representing a biconnected component of G.
+add_arc | Graph(G),Edge(e)||Trail(T)||Lst(E) | Returns a modified copy of a digraph G with the arc e (or trail T or list of arcs E) added to G.
+delete_arc | Graph(G),Edge(e)||Trail(T)||Lst(E) | Returns a modified copy of a digraph G with the arc e (or trail T or list of arcs E) removed from G.
+add_edge | Graph(G),Edge(e)||Trail(T)||Lst(E) | Returns a modified copy of an undirected graph G with the edge e (or trail T or list of edges E) added to G.
+delete_edge | Graph(G),Edge(e)||Trail(T)||Lst(E) | Returns a modified copy of an undirected graph G with the edge e (or trail T or list of edges E) removed from G.
+add_vertex | Graph(G),Vrtx(v)||Lst(V) | Returns a modified copy of G with vertex v [or vertices from list V] added to G.
+delete_vertex | Graph(G),Vrtx(v)||Lst(V) | Returns a modified copy of G with the vertex v (or vertices from V) removed.
+contract_edge | Graph(G),Edge(e) | Returns a modified copy of an undirected graph G with the edge e contracted into one of its endpoints (to contract more edges apply the foldl command).
+connected_components | Graph(G) | Returns a list of lists of vertices, each sublist representing a connected component of G.
+departures | Graph(G),[Vrtx(v)] | Returns the list of vertices of digraph G which are connected to v with arcs pointing away from v. If v is omitted, a list of departures is computed for every vertex in G.
+arrivals | Graph(G),[Vrtx(v)] | Returns the list of vertices in a digraph G which are connected to v with arcs pointing to v. If v is omitted, the list of arrivals is computed for every vertex in G.
+incident_edges | Graph(G),Vrtx(v) | Returns the list of all edges incident to the vertex v in G (or to the vertices in the list v).
+make_weighted | Graph(G),[Mrtx(M)] | Returns a copy of G with edge/arc weights set as specified by matrix M. If M is omitted, then a square matrix of ones is used. If G is undirected, then M is assumed to be symmetric.
+set_graph_attribute | Graph(G),Seq(tag1=value1,tag2=value2,..) | Stores the attributes where each tag is a string, and returns a modified copy of G.
+get_graph_attribute | Graph(G),Seq(tag1=value1,tag2=value2,..) | Return the graph attributes tag1, tag2, ..., as a sequence of the corresponding values.
+discard_graph_attribute | Graph(G),Seq(tag1=value1,tag2=value2,..) | Discards the graph attributes with tags tag1, tag2, ... and returns a modified copy of G.
+set_vertex_attribute | Graph(G),Vrtx(v),Seq(tag1=value1,tag2=value2,..) | Stores the attributes to the vertex v and returns a modified copy of G.
+get_vertex_attribute | Graph(G),Vrtx(v),Seq(tag1=value1,tag2=value2,..) | Returns the attributes tag1, tag2, ... assigned to the vertex v in G as a sequence of the corresponding values.
+discard_vertex_attribute | Graph(G),Vrtx(v),Seq(tag1=value1,tag2=value2,..) | Discards the attributes with tags tag1, tag2, ... assigned to the vertex v in G and returns a modified copy of G.
+set_edge_attribute | Graph(G),Edge(e),Seq(tag1=value1,tag2=value2,..) | Stores the attributes to the edge e and returns a modified copy of G.
+get_edge_attribute | Graph(G),Edge(e),Seq(tag1=value1,tag2=value2,..) | Returns the attributes tag1, tag2, ... assigned to edge e in G as a sequence of the corresponding values.
+discard_edge_attribute | Graph(G),Edge(e),Seq(tag1=value1,tag2=value2,..) | Discards the attributes with tags tag1, tag2, ... assigned to the edge e in G and returns a modified copy of G.
+list_graph_attributes | Graph(G) | Returns the list of graph attributes of G. Each attribute has the form tag=value.
+list_vertex_attributes | Graph(G),Vrtx(v) | Returns the list of attributes assigned to the vertex v in G. Each attribute has the form tag=value.
+list_edge_attributes | Graph(G),Edge(e) | Returns the list of attributes assigned to the edge e in G. Each attribute has the form tag=value.
+number_of_edges | Graph(G) | Returns the number of edges/arcs in G.
+number_of_vertices | Graph(G) | Returns the number of vertices in G.
+get_edge_weight | Graph(G),Edge(e) | Returns the weight of the edge e in a weighted graph G.
+set_edge_weight | Graph(G),Edge(e),Real(w) | Sets the weight of the edge e in the weighted graph G to w and returns a modified copy of G.
+is_directed | Graph(G) | Returns true iff G is a digraph.
+neighbors | Graph(G),[Vrtx(v)] | Returns the list of vertices adjacent to vertex v of G. If v is omitted, a list of adjacency lists of all vertices in G is returned.
+minimum_degree | Graph(G) | Returns the smallest degree of a vertex in G.
+maximum_degree | Graph(G) | Returns the largest degree of a vertex in G.
+is_regular | Graph(G) | Returns true iff the max and min degrees of G are equal (if G is directed then out- and in-degrees must be pairwise equal for each vertex of G).
+isomorphic_copy | Graph(G),Permu(sigma) | Returns a copy of G with the neighborhood structure of each vertex reordered according to sigma.
+permute_vertices | Graph(G),Lst(V) | Returns a copy of G with vertices reordered according to the order in V.
+relabel_vertices | Graph(G),Lst(L) | Returns a copy of G with vertex labels changed to those in L.
+is_tree | Graph(G) | Returns true iff G is a tree.
+is_forest | Graph(G) | Returns true iff G is a forest (disjoint union of trees).
+is_tournament | Graph(G) | Returns true iff G is a tournament.
+tree_height | Graph(T),[Vrtx(r)] | Returns the height of a tree graph T with r as the root node, or the minimal height and the corresponding root node if r is omitted.
+number_of_triangles | Graph(G) | Returns the number of 3-cliques if G is undirected resp. the number of directed cycles on 3 vertices if G is directed.
+is_connected | Graph(G) | Returns true iff G is connected.
+is_biconnected | Graph(G) | Returns true iff G is biconnected.
+is_triconnected | Graph(G) | Returns true iff G is triconnected.
+is_weighted | Graph(G) | Returns true iff G is weighted.
+is_planar | Graph(G) | Returns true iff G is planar.
+complete_binary_tree | Intg(n) | Returns a complete binary tree with depth n.
+complete_kary_tree | Intg(k),Intg(n) | Returns a complete k-ary tree with depth n.
+prism_graph | Intg(n) | Returns the generalized Petersen graph GP(n,1).
+antiprism_graph | Intg(n) | Returns an antiprism graph of order n.
+star_graph | Intg(n) | Returns a complete bipartite graph complete_graph(1,n).
+wheel_graph | Intg(n) | Returns a wheel graph with n+1 vertices.
+grid_graph | Intg(m),Intg(n),[triangle] | Returns a [triangular] grid graph on m*n vertices, where m,n>=2.
+torus_grid_graph | Intg(m),Intg(n) | Returns a torus grid graph on m*n vertices, where m,n>=3.
+web_graph | Intg(a),Intg(b) | Returns a web graph on a*b vertices, where a>=3 and b>=2.
+cartesian_product | Seq(G1,G2,[G3]) | Returns the Cartesian product of graphs G1, G2, ... with vertices labeled as "u:v:..." where u, v, ... are vertices from G1, G2, ..., respectively.
+tensor_product | Seq(G1,G2,[G3]) | Returns the tensor product of the input graphs G1, G2, ... with vertices labeled as "u:v:..." where u, v, ... are vertices from G1, G2, ..., respectively.
+path_graph | Intg(n)||Lst(V) | Returns a path graph on n vertices [with labels from V].
+is_eulerian | Graph(G),[Var(T)] | Returns true iff G is Eulerian [and writes the corresponding Eulerian trail to T].
+kneser_graph | Intg(n),Intg(k) | Returns the Kneser graph K(n,k) with comb(n,k) vertices (n<=20).
+odd_graph | Intg(n) | Returns the odd graph of order n as Kneser graph K(2n-1,n-1), where n<=8.
+johnson_graph | Intg(n),Intg(k) | Returns the Johnson graph J(n,k) with comb(n,k) vertices (n<=20).
+flower_snark | Intg(n) | Returns the n-th flower snark, where n>2 is odd.
+goldberg_snark | Intg(n) | Returns the Goldberg snark on 8n vertices, where n>2 is odd.
+haar_graph | Intg(n) | Returns the Haar graph with index n.
+paley_graph | Intg(p),[Intg(k)] | Returns the Paley (di)graph on p^k vertices, where p>2 is prime and k>0.
+pruefer_code | Vect(S)|Graph(T) | Returns the Pruefer code for a tree graph T or converts a Pruefer sequence S into the corresponding tree.
+highlight_vertex | Graph(G),Vrtx(v)||Lst(V),[Color(c)||Lst(C)] | Changes the color of vertex v resp. colors of vertices from V in G to c resp. C (green by default) and returns a modified copy of G.
+highlight_edges | Graph(G),Edge(e)||Lst(E),[Color(c)||Lst(C)] | Changes color of edge e resp. colors of edges in E of the input graph G to c resp. C (by default red) and returns a modified copy of G.
+highlight_trail | Graph(G),Trail(t)||Lst(T),[Color(c)||Lst(C)] | Changes the colors of edges in G which lie along a trail t resp. trails in T to c resp. C (by default red) and returns a modified copy of G.
+highlight_subgraph | Graph(G),Graph(S)||Lst(S1,S2,..),Seq(c1,c2) | Changes the colors of edges and vertices from a sugbraph S or subgraphs S1, S2, ... of G to c1 and c2, respectively (red and green by default), and returns a modif
+disjoint_union | Seq(G1,G2,...) | Returns the disjoint union of graphs G1, G2, ... Vertices in the resulting graph are labelled with "k:v", where k is index of the corresponding k-th graph Gk and v is vertex in Gk.
+graph_union | Seq(G1,G2,...) | Returns the union of graphs G1, G2, ... The set of vertices of the resulting graph is the union of the sets of vertices of the input graphs and the set of edges of the resulting graph is the union of
+graph_join | Graph(G),Graph(H) | Returns the graph obtained by connecting every vertex in G to every vertex in H. The vertex labels in the resulting graph are strings in the form "1:u" resp. "2:v", where u and v are vertices from 
+graph_equal | Graph(G1),Graph(G2) | Returns true iff input graphs G1 and G2 are equal, that is when the sets of vertices and edges of G1 and G2, as well as the orderings of vertices in both graphs, coincide. If the graphs are weig
+reverse_graph | Graph(G) | Returns a copy of G in which the directions of all edges are reversed.
+interval_graph | Seq||Lst(a..b,c..d,...) | Returns an interval graph with respect to the intervals a..b, c..d, ... on the real line. It has one vertex per interval and two vertices are connected iff the corresponding intervals int
+subdivide_edges | Graph(G),Lst(E),[Intg(r)] | Inserts r (by default 1) new vertices to each edge/arc in G contained in the list E (which may be a single edge/arc) and returns a modified copy of G. New vertices are labeled by the s
+graph_power | Graph(G),Intg(k) | Returns the k-th power of G, where two vertices are connected iff there exists a path of length at most k in the original graph.
+vertex_distance | Graph(G),Vrtx(s),Vrtx(t)||Lst(T) | Returns the number of edges in the shortest path from vertex s to vertex t in G, or +infinity if there is no such path. For a vector T of vertices from G returns the list of dis
+shortest_path | Graph(G),Vrtx(s),Vrtx(t)||Lst(T) | Returns the shortest path from vertex s to vertex t in G, or an empty list if there is no such path. If vector T of vertices from G is given, then the list of shortest paths from 
+allpairs_distance | Graph(G) | Returns a square matrix D of order equal to the number of vertices in G such that D(i,j) is the distance between i-th and j-th vertex of the (weighted) graph G.
+graph_diameter | Graph(G) | Returns the maximum distance between a pair of vertices in G or +infinity if G is disconnected.
+dijkstra | Graph(G),Vrtx(v),[Vrtx(w)||Lst(W)] | Returns the cheapest weighted path from the vertex v to w (or to vertices from W) in an undirected graph G. The output is a list [[v1,v2,...,vk],d] (or a list of such lists) where v1
+bellman_ford | Graph(G),Vrtx(s),Vrtx(t)||Lst(T) | Returns the length of the shortest path resp. of the shortest paths from s to vertex t resp. vertices in T in weighted graph G.
+topologic_sort topological_sort | Graph(G) | Returns the list of vertices sorted according to the topological ordering in a directed acyclic graph G.
+is_acyclic | Graph(G) | Returns true iff a digraph G contains no directed cycles.
+is_clique | Graph(G) | Returns true iff an undirected graph G is complete.
+maximum_clique | Graph(G) | Returns the maximum clique in an undirected graph G as a list of vertices.
+clique_number | Graph(G) | Returns the clique number of G, which is equal to the size of a maximum clique in G.
+clique_cover | Graph(G),[Intg(k)] | Returns a clique vertex cover of G [containing at most k cliques].
+clique_cover_number | Graph(G) | Returns the clique cover number of G.
+simplicial_vertices | Graph(G) | Returns the list of simplicial vertices in an undirected graph G.
+chromatic_number | Graph(G) | Returns the chromatic number of G.
+maximum_independent_set | Graph(G) | Returns a maximum independent vertex set in G.
+independence_number | Graph(G) | Returns the independence number of G.
+strongly_connected_components | Graph(G) | Returns the list of strongly connected components in a digraph G.
+is_strongly_connected | Graph(G) | Returns true iff a digraph G is strongly connected.
+degree_sequence | Graph(G) | Returns the list of degrees of the vertices of G (arc directions are ignored).
+is_graphic_sequence | Lst(L) | Returns true iff there exists a graph with degree sequence equal to L.
+sequence_graph | Lst(L) | Returns an undirected graph with degree sequence equal to L.
+girth | Graph(G) | Returns the length of a shortest cycle in an undirected unweighted graph G.
+odd_girth | Graph(G) | Returns the length of a shortest odd cycle in an undirected unweighted graph G.
+is_arborescence | Graph(G) | Returns true iff a directed graph G is an arborescence.
+graph_spectrum | Graph(G) | Returns the graph spectrum of G as a list of lists with two elements, each containing an eigenvalue and its multiplicity.
+seidel_spectrum | Graph(G) | Returns the Seidel spectrum of G as a list of lists with two elements, each containing an eigenvalue and its multiplicity.
+graph_charpoly | Graph(G),[Var(x)] | Returns the value p(x) of the characteristic polynomial p of G. If x is omitted, the list of coefficients of p is returned.
+is_integer_graph | Graph(G) | Returns true iff the spectrum of G consists only of integers.
+spanning_tree | Graph(G),[Vrtx(r)] | Returns a spanning tree of an undirected graph G [with r as the root node].
+number_of_spanning_trees | Graph(G) | Returns the number of spanning trees in an undirected graph G.
+minimal_spanning_tree | Graph(G) | Returns a minimal spanning tree in an undirected graph G.
+graph_rank | Graph(G),[Lst(E)] | Returns the graph rank of G. If an optional set E of edges is given, the rank of the spanning subgraph of G with edge set E is returned.
+lowest_common_ancestor | Graph(T),Vrtx(r),Seq(u,v)||Lst([u1,v1],[u2,v2],...) | Returns the lowest common ancestor of nodes u and v in a tree graph T with root r, or the list of lowest common ancestors of all pairs [uk,vk].
+connected | Opt | Option for the random_regular_graph command.
+spring | Opt | Option for the draw_graph command.
+tree | Opt | Option for the draw_graph command.
+planar | Opt | Option for the draw_graph command.
+directed | Opt | Option for graph and digraph commands.
+weighted | Opt | Option for graph and digraph commands.
+weights | Opt | Option for the edges command.
+bipartite | Opt | Option for the draw_graph command
+st_ordering | Graph(G),Vrtx(s),Vrtx(t) | Returns ST numbering for a biconnected graph G with source s and sink (target) t.
+greedy_color | Graph(G),[Permu(p)] | Returns the list of vertex colors (positive integers) obtained by coloring vertices one at a time [in the order given by permutation p], assigning to it the smallest available color.
+is_bipartite | Graph(G),[Var(P)] | Returns true iff G is a bipartite graph [and assigns to P the corresponding vertex partition].
+plane_dual | Graph(G)||Lst(F) | Returns the plane dual of a biconnected planar graph G or constructs it from the list F of its faces.
+is_vertex_colorable | Graph(G),Intg(k),[Var(col)] | Returns true iff the vertices of G can be colored by using at most k colors. If true is returned and an identifier col is given, the colors of the vertices are stored there.
+set_vertex_positions | Graph(G),Lst(vp) | Sets the coordinates, given in the list vp, to the vertices of G and returns a modified copy of G.
+find_cliques | Graph(G),[Intg(k)||Intrv(m..n)] | Returns the list of numbers of maximal cliques of size s in an undirected graph G for each s. If parameter k is given, the number of k-cliques is returned. If an interval m..n is gi
+minimal_vertex_coloring | Graph(G),[sto] | Computes the minimal vertex coloring for G and returns the colors in the order of vertices. If optional parameter "sto" is given, the colors are assigned to vertices and a modified copy o
+bipartite_matching | Graph(G,[maximize||minimize,[epsilon=Real(eps)]]) | Returns the list of edges in a maximum matching of an undirected bipartite graph G. If G is weighted, output either minimum or maximum weighted matching, dep
+line_graph | Graph(G) | Returns the line graph of an undirected graph G.
+transitive_closure | Graph(G),[weighted[=true||false]] | Returns the [weighted (by default false)] transitive closure of G.
+is_isomorphic | Graph(G1),Graph(G2),[Var(I)] | Returns true iff G1 and G2 are isomorphic graphs. If an unassigned identifier 'I' is given, the isomorphism is assigned to it as a permutation.
+is_subgraph_isomorphic | Graph(G1),Graph(G2),[opts] | Returns true iff G1 is isomorphic to a subgraph of G2.
+identify_graph | Graph(G) | Returns the list of named graphs known to Giac which are isomorphic to G.
+graph_automorphisms | Graph(G) | Returns the sequence of generators of Aut(G), the automorphism group of G. Each element is a permutation in the form of a list of disjoint cycles.
+canonical_labeling | Graph(G) | Returns the canonical labeling of G as a permutation.
+minimal_edge_coloring | Graph(G),[sto] | Finds a minimal edge coloring of G and returns the sequence n,L where n is the class of G (1 for D colors and 2 for D+1 colors) and L is the list of colors of edges of G as returned by the 
+chromatic_index | Graph(G) | Returns the number of colors in a minimal edge coloring of G.
+trail2edges | Trail(T) | Converts a trail T to the list of its edges.
+traveling_salesman | Graph(G),[Mtrx(M)],[opts] | Returns a Hamiltonian cycle in an unweighted graph G or solves a traveling salesman problem if G is weighted (matrix M can be used for edge weights), returning a sequence containing
+is_hamiltonian | Graph(G),[Var(hc)] | Returns true iff G is a Hamiltonian graph [and assigns a Hamiltonian circuit to an unassigned identifier hc].
+is_network | Graph(G),[Vrtx(s),Vrtx(t)] | Returns true iff G is a network with the source s and sink t. If s and t are not provided, the output is a sequence of two sets of vertices: sources and sinks.
+random_network | Intg(a),Intg(b),[Real(p)],[opts] | Returns a random network composed of b frames of size a*a in which every edge appears with the probability p (by default 0.5).
+maxflow | Graph(G),Vrtx(s),Vrtx(t) | Returns the optimal value for a max flow problem in a network G with source s and sink t along with an optimal flow (as a matrix).
+minimum_cut | Graph(G),Vrtx(s),Vrtx(t) | Returns the list of edges forming a minimum cut in a directed graph G with source s and sink t.
+is_cut_set | Graph(G),Lst(E) | Returns true iff removing edges in the list E from G increases the number of connected components of G.
+acyclic | Opt | Option for the random_network command.
+is_strongly_regular | Graph(G),[Var(srg)] | Returns true iff G is strongly regular and optionally outputs srg=[k,l,m] where k is the vertex degree and l resp. m is the number of common neighbors for adjacent resp. non-adjacent ver
+laplacian_matrix | Graph(G),[normal] | Returns the Laplacian matrix L=D-A of an undirected graph G where D resp. A is the degree matrix resp. the adjacency matrix of G.
+tutte_polynomial | Graph(G),[Var(x),Var(y)] | Returns the Tutte polynomial [or its value at point (x,y)] of an undirected graph G. If G is weighted, then all weights must be positive integers which are interpreted as edge multipli
+flow_polynomial | Graph(G),[Var(x)] | Returns the flow polynomial [or its value at point x] of an undirected unweighted graph G.
+chromatic_polynomial | Graph(G),[Var(t)] | Returns the chromatic polynomial [or its value at point t] of an undirected unweighted graph G.
+reliability_polynomial | Graph(G),[Var(p)] | Returns the reliability polynomial [or its value at point p] of an undirected graph G. If G is weighted, then all weights must be positive integers which are interpreted as edge multipl
+mycielski | Graph(G) | Returns the Mycielskian of an undirected graph G.
+edge_connectivity | graph(G) | Returns the largest integer k such that an undirected connected graph G remains connected after fewer than k edges are removed.
+vertex_connectivity | Graph(G) | Returns the largest integer k such that an undirected connected graph G remains connected when fewer than k vertices are removed.
+is_two_edge_connected | Graph(G) | Returns true iff an undirected graph G contains no bridges.
+two_edge_connected_components | Graph(G) | Returns the list of two-edge-connected components of an undirected graph G, each of them represented by the list of its vertices.
+clustering_coefficient | Graph(G),[Vrtx(v)] | Returns the average clustering coefficient of an undirected graph G, or the local clustering coefficient of the vertex v in G.
+network_transitivity | Graph(G) | Returns the transitivity (also called triangle density or global clustering coefficient) of a network G.
+tonnetz | Intg(a),Intg(b),Intg(c),[Intg(d)] | Returns the graph corresponding to the [a,b,c] resp. [a,b,c,d] tone network (tonnetz) used in neo-Riemannian music theory.
+truncate_graph | Graph(G) | Returns the graph obtained by truncating the biconnected planar graph G.
+condensation | Graph(G) | Returns the graph obtained by contracting strongly connected components of the digraph G to single vertices.
+find_cycles | Graph(G,[length=k||l..u]) | Returns the list of elementary cycles of the digraph G. If option "length" is specified, only cycles of length k resp. of length between l and u are returned.
+fundamental_cycle | Graph(G) | Returns the fundamental cycle of an unicyclic undirected connected graph G.
+cycle_basis | Graph(G) | Returns the list of fundamental cycles in an undirected graph G.
+kspaths | Graph(G),Vrtx(s),Vrtx(t),Intg(k) | Returns a list of k shortest paths from s to t in the (weighted) (di)graph G.
+degree_centrality | Graph(G),[Vrtx(v)] | Returns the degree centrality of a vertex v in a graph G or the list of degree centralities of vertices in G.
+betweenness_centrality | Graph(G),[Vrtx(v)] | Returns the betweenness centrality of a vertex v in a graph G or the list of betweenness centralities of vertices in G.
+closeness_centrality | Graph(G),[Vrtx(v)] | Returns the closeness centrality of a vertex v in a graph G or the list of closeness centralities of vertices in G.
+harmonic_centrality | Graph(G),[Vrtx(v)] | Returns the harmonic centrality of a vertex v in a graph G or the list of harmonic centralities of vertices in G.
+information_centrality | Graph(G),[Vrtx(v)],[approx] | Returns the information centrality of a vertex v in a graph G or the list of information centralities of vertices in G.
+katz_centrality | Graph(G),Real(alpha),[Vrtx(v)] | Returns the Katz centrality of a vertex v in a graph G or the list of Katz centralities of vertices in G, where alpha is the attenuation factor.
+is_split_graph | Graph(G),[part] | Returns true iff the vertex set of G can be partitioned into a clique and an independent set. These are also returned if the keyword 'part' is provided.
+contract_subgraph | Graph(G),Lst(S),[lb] | Returns a copy of G in which the subgraph induced by S is contracted into a single vertex (optionally labeled by lb).
+greedy_clique | Graph(G),[Intg(n)] | Returns a large clique in an undirected graph G using the GRASP algorithm with n iterations (default 5).
+greedy_independent_set | Graph(G),[Intg(n)] | Returns a large independent set in an undirected graph G using the GRASP algorithm with n iterations (default 5).
+find_vertex_cover | Graph(G),[Intg(k)] | Returns a list of (k) vertices which comprise a vertex cover in an undirected graph G.
+minimum_vertex_cover | Graph(G),[approx] | Returns a list of vertices which comprise a minimum vertex cover in an undirected graph G.
+vertex_cover_number | Graph(G) | Returns the size of a minimum vertex cover in an undirected graph G.
+is_reachable | Graph(G),Vrtx(u),Vrtx(v) | Returns true iff there exists a path from u to v in a (di)graph G.
+reachable | Graph(G),Vrtx(u) | Returns the list of vertices in G which are reachable from u.
+box_constraints | Vect(x),Mtrx(bounds) | Converts variable bounds, given in matrix form, into interval form x=a..b,y=c..d,...
+neural_network | Vect(topology)||NeuralNet(net),[opts] | Creates a feed-forward neural network with given parameters or creates a copy of the given network with parameter modifications.
+train | NeuralNet(net),Mtrx(input),Mtrx||Vect(expected_output),[Intg(batchsize)]) | Performs neural network training and returns the trained network.
+MSE cross_entropy log_loss ReLU learning_rate weight_decay block_size adaptive momentum topology | Opt | Option for the neural_network command.
+geodetic2ecef | Real(latitude),Real(longitude),Real(height) | Converts geodetic LLA coordinates to ECEF (WGS84 standard).
+ecef2geodetic | Real(x),Real(y),Real(z) | Converts ECEF coordinates to geodetic LLA (WGS84 standard).
+fork_timeout | Expr(f),Real(dt) | Linux command to run a benchmark of evaluatinf an expression with timeout. Evaluation is run in a forked process.

@@ -5,7 +5,8 @@ Buckets of missing_described.txt (gap_describe.py missing), from R1.8-003, re-ch
 N new module, P plotting, S syntax, I I/O / TI screens / GUI, M ML/music/geodesy,
 D already a README departure, A alias/inert spelling/option of a built name, C computational, existing module.
 C, A, D and M are keyed by an entry's first name; N, P, S and I by line ranges of the 2026-11-26 list
-(giac 1.9.0 aide_cas, en.txt at 1.8 T2). The script fails when a line has no bucket or two, or a named entry
+(giac 1.9.0 aide_cas, en.txt at 1.8 T2;
+kept as crates/cas-giac/gap/missing_described-2026-11-26.txt). The script fails when a line has no bucket or two, or a named entry
 is missing, so a changed list (new giac, new names) shows up instead of shifting the counts.
 """
 import sys

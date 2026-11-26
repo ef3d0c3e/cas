@@ -763,7 +763,7 @@ ledger (CAS-640, CAS-641, CAS-642, CAS-643):
   holds already, its table outliving `restart`, ours 1 each time).
 
 `tests/gap_leftovers_two.rs`, giac's period, linearisations, phase shift, outer normal and
-envelope of the gap ledger (CAS-640, CAS-641):
+envelope of the gap ledger (CAS-640, CAS-641; prototypes in `crates/cas-core/proto/leftovers/`):
 - giac's `period` (`+infinity` when not periodic, as for `abs(sin(x))` and `sin(x)+x`; `0` free
   of `x`; `floor(x)-x` has 1), `lin` (lists too), `shift_phase` (equations too; the
   shifted argument as giac's `(pi+2*x)/2`, which evaluation leaves) and `non_recursive_normal` (function
@@ -1205,7 +1205,9 @@ Gap ledger (phase 1.8 T2, 2026-11-26; giac 1.9.0's `aide_cas`): every giac entry
 `cas-lang` is accounted for. Regenerate the list with `bash scripts/giac_gap.sh <dir>` and
 `python3 scripts/gap_describe.py missing <dir> > <dir>/missing_described.txt`. Then
 `python3 scripts/gap_ledger.py <dir>/missing_described.txt` re-tallies the buckets. It fails when an entry
-has no bucket, two buckets, or a named entry is gone. There are 1738 entries: 734 covered and 1004 missing,
+has no bucket, two buckets, or a named entry is gone. The ledger's own list is kept as
+`gap/missing_described-2026-11-26.txt` (gap_ledger.py's line ranges are of that list; a list made after
+1.8's builds fails by design). There are 1738 entries: 734 covered and 1004 missing,
 bucketed below. Build tasks: T3 Algebra, T4 Expressions/Calculus/Integers, T5
 Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
 - Out of scope, 913 entries. New module, 565 (units 216, geometry 128, graph theory 221): these

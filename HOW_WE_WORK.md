@@ -50,8 +50,8 @@ PY = /usr/bin/python3
 
 ## Paths <!-- roles: claude expert coder planner review auditor curator -->
 - Oracles (the ground truth X3 names): libgiac through `crates/cas-giac` (tests compare with Xcas's answers; CI job `oracle`); giac lookups outside tests: `PY scripts/caseval.py <inputs.cas> [timeout_s]` (libgiac caseval, one child per line, C0018), `PY scripts/aide.py <name>... [--cas]` (aide_cas entries and examples), `bash scripts/giac_gap.sh <outdir>` (missing names), `PY scripts/gap_describe.py missing|all|lines` (the missing entries described)
-- Generated (never hand-edited, H1): `Cargo.lock`, `target/`, `crates/*/proptest-regressions/` (proptest seeds)
-- Hand-edited: `crates/*/src`, `crates/*/doc/algorithms/`, `crates/cas-lang/proto/` (Python printer ports, R74), `crates/cas-core/proto/` (1.7 statistics and signal prototypes, giac probe inputs; README), `crates/cas-lang/names/en.txt`, `fuzz/`, `.github/workflows/`
+- Generated (never hand-edited, H1): `Cargo.lock`, `target/`, `crates/*/proptest-regressions/` (proptest seeds), `crates/cas-giac/gap/` (gap_describe.py output, the 1.8 ledger's input)
+- Hand-edited: `crates/*/src`, `crates/*/doc/algorithms/`, `crates/cas-lang/proto/` (Python printer ports, R74), `crates/cas-core/proto/` (1.7-1.8 prototypes, giac probe inputs; README), `crates/cas-lang/names/en.txt`, `fuzz/`, `.github/workflows/`
 - Scratch: all of a phase's work in `.run/` goes under `.run/<phase>/` (gitignored; never the system temp), nowhere
   else in `.run/`. It is a temp folder only, never a home for long-term content: what the project needs lives in its
   proper place in the repo. The phase's cleanup task checks it and

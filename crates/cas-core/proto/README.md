@@ -38,6 +38,11 @@ only in their paths and a line naming the task they came from.
   with GSL's spline; `proto_analytic.py` dht, instfreq, instphase against `giac/p3.out`; `giac/p4.cas`
   decimal read-back probes. Cited by `src/native/wavelet/tests.rs`,
   `crates/cas-giac/tests/transforms.rs`.
+- `leftovers/` (1.8/T4, CAS-640, CAS-641; moved from scratch in 1.8/T12): `lin_period.py` ports lin
+  (lin.cc) and period (signalprocessing.cc); `proto_linabs.py` linabs' reduce_Heaviside tail;
+  `proto_env.py` the envelope curves (giac answers a plot, so these are the expected rows);
+  `probe1.cas`, `probe2.cas` giac's shift_phase, linabs, lin, period answers. Cited by
+  `crates/cas-giac/tests/gap_leftovers_two.rs` (README ## Tests).
 
 The wavelet scripts read GSL 2.7.1's sources (GPL-3, C0091): fetch
 `https://ftp.gnu.org/gnu/gsl/gsl-2.7.1.tar.gz` (sha256
@@ -51,6 +56,7 @@ Rerun (repo root). Answers: `/usr/bin/python3 scripts/caseval.py <x>.cas > <x>.o
 sound/clip (and `proto_f64.py`), sound/edit (and `resample.py`); `markov/markov.py
 crates/cas-core/proto/giac/probe1.out ... crates/cas-core/proto/markov/probe_f.out`;
 `/usr/bin/python3 -I wavelet/proto_dwt.py <gsl wavelet dir>`, `wavelet/proto_emd.py`,
-`wavelet/proto_analytic.py`, `wavelet/proto/gen_filters.py <gsl wavelet dir>` (to stdout).
+`wavelet/proto_analytic.py`, `wavelet/proto/gen_filters.py <gsl wavelet dir>` (to stdout);
+`leftovers/lin_period.py`, `leftovers/proto_linabs.py`, `leftovers/proto_env.py` (sympy, to stdout).
 Generated, not committed (`.gitignore`): every `.out`, `table.txt`, `table_f64.txt`, `expected.txt`,
 `resample.log`.
