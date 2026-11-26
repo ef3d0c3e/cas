@@ -315,6 +315,10 @@ after giac's `restart`, ours in a new session, compared value by value:
   `symbol_array("%a",2)` (giac `[0a,1a]`) stays, `QR(A,Q,R)` and
   `LU(A,L,U,P)` store into variables in giac (ours stay),
   `SVL([[1,4],[4,1]])` giac `[5.0,3.0]`, ours `[3,5]`.
+- Random rationals (128 cases a run, 1.8 T8): `type` against its own `DOM_INT` or `DOM_RAT` (`==` of two
+  distinct `DOM_` names stays here, where giac answers false, C0112), `fPart`, `frac`, `trunc`, `iPart` and
+  `trunc(r, n)` for `r ≥ 0`, `n` in `0..3` (giac's negative `n` counts significant digits through doubles:
+  `trunc(150,-2)` = 140.0, `trunc(0,-1)` an error); integer lists to `SortA`, `SortD` and `sortperm`.
 
 `tests/random_variables.rs`, Xcas's `randvar` objects, `sample` and
 `randvector` over them, and `randmultinomial` (CAS-624):
@@ -537,6 +541,12 @@ the clip, libsamplerate's linear and zero-order hold converters exactly at
 the qualities 0 and 1, a Kaiser-windowed sinc of ours at 2 to 4) and
 `resample_properties`, ours only: the lengths, a constant kept, a 440 Hz tone
 kept and a 23500 Hz tone attenuated at 48000 → 44100 Hz.
+Random clips a run (128 cases each, 1.8 T8): `random_properties` (channels, bit_depth, samplerate, duration,
+channel_data), `random_stereo2mono`, `random_mixdown`, `random_splice` on integer codes, each clip
+`createwav` of `code/(2^(depth-1)-1)` with `normalize=0` (giac keeps each code), depths 8/16/24, rates
+8000/22050/44100/48000, 1-2 channels, 1-16 samples; departures excluded: `mixdown` of 8-bit clips (giac's sum
+is garbage near -128: codes `[1,-127,5]` and `[1,9]` at 0 give `[-123,-117,-121]`, ours `[2,-118,5]`) and a
+`splice` crossfade longer than a clip (giac overruns its buffer and aborts the process, C0114).
 
 `tests/transforms.rs`, Xcas's wavelet transforms `dwt` and `idwt` (CAS-634;
 giac's answers in crates/cas-core/proto/wavelet/giac/p1.cas and p2.cas, the prototype
@@ -694,6 +704,12 @@ CAS-528), sums of squares and rational Jordan forms (CAS-535):
   rational Jordan form (`P = I` here); `gauss` of a form that is not
   quadratic stays (giac returns it); giac's inert `Det`, `Inverse`,
   `Nullspace` and `Rref` stay user calls (giac prints `det(...)` etc.).
+- Random integer matrices (entries `-5..5`, 1×1 to 4×4, 128 cases a run, 1.8 T8): `random_minors`,
+  `random_echelon_forms`, `random_pivots`, `random_egvl`, `random_gauss`, `random_rat_jordan`; `egvl` and
+  `rat_jordan` compared as a multiset of diagonal blocks (giac's order of a conjugate pair or of Jordan blocks
+  follows no rule we reproduce: `egvl([[2,1],[-1,1]])`, `rat_jordan([[0,-1],[0,1]])` J giac `[[0,0],[0,1]]`, ours
+  `[[1,0],[0,0]]`), `P` not compared; an `egvl` with giac's `rootof(...)` skipped (unreadable). The sweep found
+  `pivot([[0,0],[0,1]],0,0)` (ours zeroed a row giac leaves: rows with 0 in the pivot's column now stay, CAS-528).
 
 `tests/matrices_five.rs`, reshaping, triangles, quadratic forms and changes
 of basis (CAS-639):
@@ -802,6 +818,10 @@ first) and the inputs that crash libgiac: `chrem` with polynomial moduli (ours f
 whose `n - 1` ours does not factor far enough to prove them
 (`is_prime(2^607-1)`, a 62-digit `2*96*p*q+1`): giac answers 1 through
 PARI's APRCL where PARI does not fail, ours leaves the call with a warning.
+Random inputs a run (128 cases each, 1.8 T8) to `chrem` (moduli 2..30, consistent residues only: giac's "No
+Integer Solution" otherwise), `lgcd` (up to 4 integers), `fracmod` (prime moduli), `bernoulli_mod` (even `n`, a
+prime from 5, `(p-1) ∤ n`; `p = 2` aborts libgiac), `icomp` (`k ≤ n ≤ 7`, with and without `zeros`) and
+`is_prime` (signed, below 2^64, never the certificate form); all agree with giac.
 
 `tests/list_commands.rs`, Xcas's list commands (CAS-555 to CAS-561): giac's
 `find` and `index` from 0 (`1` found at `1.0`), `count_eq`, `count_inf` and
@@ -833,6 +853,12 @@ and giac's errors (not a list, not a permutation, `heappop([])`). giac's
 0 in a fresh process, a crash in the oracle's shared one or on
 `heappop([9,6,5,1,1,4,2,3])`): no giac row, unit tests of ours (the heap
 after the pop) in `cas-core`.
+Random sweeps (128 cases a run, 1.8 T8): `random_positions`, `random_counts`, `random_differences_and_sums`,
+`random_builders`, `random_maps_and_folds`, `random_products`, `random_insertions_and_substitutions`,
+`random_heappush`, `random_permutations` on lists of `k` or `k/d` (`-5..5` over `1..4`) and matrices up to 4×4;
+excluded as the rows above: the index of a missing element, `deltalist` of fewer than 2, `accumulate_head_tail`
+outside `h, t ≥ 1, h + t ≤ len`, `row`/`col` of non-matrices, `multiply` of unfitting dimensions, positions out
+of range, `apply` with exponent 0 (giac's `0^0` is undef), permutations of other than `0..n`.
 
 `tests/expressions.rs`, Xcas's expression commands (CAS-562 to CAS-567):
 giac's `pow`, `comDenom` (with a variable), `getNum` and `getDenom`, `simp2`,
@@ -949,6 +975,8 @@ by value at three points within `10⁻¹⁰`. Departures, each with giac's answe
 as caseval prints it: `d` out of `0 … |X|` and one point for `ratinterp`,
 one value for `triginterp` (giac's errors), and `d = |X|`, a repeated
 abscissa and `a = b` (giac's `undef`), where ours stays.
+Random rational points a run (128 cases, 1.8 T8) to `ratinterp`: 2 to 5 distinct abscissae `k/q`, the default
+`d` or `d < n`, compared as the rows are.
 
 `tests/derivatives.rs`, Xcas's `numdiff` and `nDeriv` (CAS-595): exact
 `numdiff` by `Expand` and `Together` of the difference; giac's aide example
@@ -1101,6 +1129,11 @@ their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_p
   `concat("a",1)` (`"a1"`) agree since CAS-614 prints non-strings; `"ab"+"cd"` (giac `"abcd"`) stays;
   `"abc"[5]` and `"abc"[-4]` are errors in both, and `"abc"[0..5]`, giac's `"abc"`, is out of
   range here, as for a list.
+- Random sweeps (128 cases a run, 1.8 T8): `random_codes` (asc, ord, char), `random_positions` (inString, contains),
+  `random_pieces` (mid, left, right), `random_levenshtein`, `random_words` (join, trim, split by a nonempty
+  separator) on printable ASCII up to 12 characters, `"` and `\` included; string answers compared through `asc`
+  (giac prints `"` doubled and `\` bare, C0113); strings ending in `\` skipped (giac's lexer reads them unclosed);
+  departure `contains("","")`, giac 0, ours 1 (giac's `contains("abc","")` is 1), excluded.
 
 `tests/text.rs`, expressions as text and back (CAS-614):
 - `string`/`str` and `cat`, and non-strings in `join` and `concat`: giac's text (its quotes
