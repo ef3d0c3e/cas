@@ -271,9 +271,15 @@ fn classes(next: &[Vec<usize>]) -> (Vec<Vec<usize>>, Vec<Vec<usize>>) {
 }
 
 /// Whether `eps` is a real number, as giac's `evalf_double` reads it.
+/// `eps` is already evaluated: one not structurally numeric (a symbol, a
+/// held call) is refused before `approximation`, which would evaluate it
+/// again with fresh limits, 2^n for a held `MarkovChain` n deep (CAS-649).
 fn real(ev: &Eval<'_>, eps: &Expr) -> bool {
     if eps.to_rational().is_some() {
         return true;
+    }
+    if !eps.is_numeric() {
+        return false;
     }
     let wp = ev.context().working_precision();
     approximation(ev.context(), eps, wp)

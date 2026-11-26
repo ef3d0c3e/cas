@@ -77,6 +77,11 @@ fn exact_chains() {
             format!("List[MarkovChain[{HALVES}, 1/1000000]]"),
             "List[List[List[1, 0]], List[List[2/5, 3/5]], List[], List[List[1], List[1]]]".into(),
         ),
+        // A numeric eps that is not rational.
+        (
+            format!("List[MarkovChain[{HALVES}, Times[Pi, Power[10, -7]]]]"),
+            "List[List[List[1, 0]], List[List[2/5, 3/5]], List[], List[List[1], List[1]]]".into(),
+        ),
         // Columns summing to 1: transposed.
         row(
             "List[List[1/2, 1/3], List[1/2, 2/3]]",
@@ -274,6 +279,23 @@ fn warnings() {
     let (found, report) = ctx.eval_with(&e, &EvalOptions::default());
     assert_eq!(found.unwrap(), e);
     assert!(report.warnings.is_empty(), "{:?}", report.warnings);
+}
+
+/// CAS-649: an eps holding a held `MarkovChain` 30 deep is refused at once,
+/// not approximated again at each level (2^n).
+#[test]
+fn nested_eps() {
+    let mut text = String::from("c");
+    for _ in 0..30 {
+        text = format!("MarkovChain[0, {text}]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let (found, _) = ctx.eval_with(&e, &EvalOptions::default());
+    let elapsed = start.elapsed();
+    assert_eq!(found.unwrap().head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
 }
 
 /// Seeded paths: their length, states of positive probability, absorbing
