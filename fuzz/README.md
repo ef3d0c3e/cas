@@ -97,8 +97,8 @@ names the input.
 The workflow does this on CI in its replay mode,
 `gh workflow run fuzz.yml -f targets=<names> -f replay=true`: no fuzzing, the restored corpus
 runs once in batches of 500 files, and each failing batch prints its last input's name and
-base64 (`REPLAY CRASH`, `REPLAY BASE64`) and copies it to `artifacts/<target>/`, uploaded with
-the failed run.
+base64 (`REPLAY CRASH`, `REPLAY BASE64`), copies it to `artifacts/<target>/`, uploaded with
+the failed run, and goes on with the files after it.
 
 A finding is saved under `artifacts/<target>/` and uploaded with the failed run; fetch it
 with `gh run download`. Replaying that one input

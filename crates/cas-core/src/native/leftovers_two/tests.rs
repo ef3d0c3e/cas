@@ -2,7 +2,7 @@
 //! `non_recursive_normal` and `envelope` (CAS-640, CAS-641): giac's answers
 //! as its `caseval` prints them, values where the forms differ.
 
-use crate::{Context, Expr, Symbol};
+use crate::{Context, Domain, Expr, Symbol};
 
 fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
@@ -95,6 +95,20 @@ fn periods() {
         ("Period[y]", "0"),
     ]);
     stay(&["Period[]", "Period[x, 2]", "Period[x, y, z]"]);
+}
+
+/// The eval fuzz target's input (Fuzz 45773886813): `Together` left this
+/// as it is, which `periodic` took for a function of one argument and met
+/// again without end, overflowing the stack (CAS-640).
+#[test]
+fn period_of_together_left_as_it_is() {
+    let mut ctx = Context::new();
+    ctx.set_domain(Domain::Complex);
+    let ctx = ctx
+        .assuming(read("Greater[x, 0]"))
+        .assuming(read("Unequal[y, 0]"));
+    let e = read("Period[s[-3, False, -3][k[ExpExpand[b, Infinity], x, Infinity]]]");
+    assert_eq!(ctx.eval(&e), Ok(Expr::from(Symbol::INFINITY)));
 }
 
 #[test]

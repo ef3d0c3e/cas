@@ -30,8 +30,9 @@
 # no fuzzing; the chosen targets' restored corpus runs once, in batches of
 # 500 files (`-runs=1`). A batch that fails has its last `Running:` file's
 # name and base64 printed (`REPLAY CRASH`) and copied to artifacts/<target>/,
-# which the failed run uploads; the job fails after the last batch. This
-# finds the input behind a crash without an artifact (fuzz/README.md).
+# which the failed run uploads; the batch goes on after it, and the job
+# fails after the last batch. This finds the input behind a crash without
+# an artifact (fuzz/README.md).
 name: Fuzz
 
 on:
@@ -219,18 +220,23 @@ jobs:
           echo "$(wc -l < replay/all) files"
           split -a 4 -l 500 replay/all replay/batch.
           failed=0
+          # A crash ends its batch: the files after the crashing one run on.
           for b in replay/batch.*; do
-            if ! xargs -a "$b" "$bin" -runs=1 ${{ steps.cfg.outputs.libfuzzer }} \
-                > replay/out 2>&1; then
+            while [ -s "$b" ]; do
+              if xargs -a "$b" "$bin" -runs=1 ${{ steps.cfg.outputs.libfuzzer }} \
+                  > replay/out 2>&1; then
+                break
+              fi
               failed=1
               f=$(grep '^Running: ' replay/out | tail -n 1 | sed 's/^Running: //')
               echo "REPLAY CRASH in batch $b: ${f:-before the first input}"
               tail -n 30 replay/out
-              if [ -n "$f" ]; then
-                echo "REPLAY BASE64 $(base64 -w0 "$f")"
-                cp "$f" "artifacts/$t/"
-              fi
-            fi
+              [ -n "$f" ] || break
+              echo "REPLAY BASE64 $(base64 -w0 "$f")"
+              cp "$f" "artifacts/$t/"
+              awk -v f="$f" 'p; $0 == f { p = 1 }' "$b" > "$b.rest"
+              mv "$b.rest" "$b"
+            done
           done
           exit $failed
       - name: Save corpus

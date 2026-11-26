@@ -13,7 +13,9 @@
 //!   argument; the period is their lcm when their ratios are rational, and
 //!   none when one is not, when `x` occurs outside the functions, or under
 //!   `Abs` or a non-integer power (giac's `period(abs(sin(x)))` is
-//!   `+infinity`);
+//!   `+infinity`). Each level of its search takes a level of
+//!   `Limits::recursion`, and a `Together` left as it is counts as its
+//!   argument (CAS-640: the eval fuzz target's stack overflow);
 //! - `AbsLinearize[f, x]` (`linabs`, CAS-640, `_linabs`): `f` as steps
 //!   (`LinearStep`'s rewriting before it collects), each step
 //!   `θ(x − a) g(x)` rewritten with `|x − a|` (`reduce_Heaviside`: of the
@@ -343,14 +345,34 @@ fn kernels(f: &Expr, x: &Expr, found: &mut Vec<Expr>) -> bool {
 }
 
 /// Whether `g` is periodic in `x`, `period` updated to the lcm of the
-/// periods found; giac's `is_periodic_wrt`.
+/// periods found; giac's `is_periodic_wrt`. Each call takes a level of
+/// `Limits::recursion` (CAS-640: a cycle overflowed the stack).
 fn periodic(
     ev: &mut Eval<'_>,
     g: &Expr,
     x: &Expr,
     period: &mut Option<Expr>,
 ) -> Result<bool, EvalError> {
+    ev.enter()?;
+    let found = periodic_in(ev, g, x, period);
+    ev.leave();
+    found
+}
+
+/// [`periodic`] within its level.
+fn periodic_in(
+    ev: &mut Eval<'_>,
+    g: &Expr,
+    x: &Expr,
+    period: &mut Option<Expr>,
+) -> Result<bool, EvalError> {
     let g = ev.eval(&together(g.clone()))?;
+    // `Together` left as it is: its argument, else it is a function of one
+    // argument whose period is that of `g`, met again without end (CAS-640).
+    let g = match g.args() {
+        [a] if head(&g) == Some(Symbol::TOGETHER) => a.clone(),
+        _ => g,
+    };
     if !g.contains(x) {
         return Ok(true);
     }
