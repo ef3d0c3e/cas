@@ -81,6 +81,8 @@ fn convert_options() {
         ("Convert[List[1, 2, 3], array]", "List[1, 2, 3]"),
         ("Convert[Plus[x, 1], array]", "Plus[x, 1]"),
         ("Convert[5, array]", "5"),
+        // giac's `expln` is its `trig2exp` (CAS-640).
+        ("Convert[Sin[x], expln]", "TrigToExp[Sin[x]]"),
         // giac's 1/2/(x-1)-1/2/(x+1) for partfrac, parfrac and fullparfrac.
         (
             "Convert[Power[Plus[Power[x, 2], -1], -1], parfrac]",

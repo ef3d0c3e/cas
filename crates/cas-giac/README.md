@@ -609,6 +609,26 @@ of basis (CAS-639):
   (`Det([[1,2],[3,4]])` prints `det([[1,2],[3,4]])`, which evaluates when
   read back), the departure rows in `tests/matrices_four.rs`.
 
+`tests/gap_leftovers.rs`, giac's expression, calculus, integer and box leftovers of the gap
+ledger (CAS-640, CAS-641, CAS-642, CAS-643):
+- giac's `root` (`b^(1/a)`, `undef` for `a = 0`), `atan2` (four quadrants, exact on exact
+  input, giac's symbolic `atan(y/x)+(1-sign(x))*sign(y)*pi/2`), `has` (names only:
+  `has(x+y,x+y)` and `has(sin(x),sin)` are 0, as giac's), `fmod` (`a-b*floor(a/b)`, `undef`
+  for `b = 0`), `modf` (decimals, as giac's), `convert(e,expln)` (`trig2exp`, compared at
+  `x = 1/3`), `avgRC` (its default step 0.001 compared at `x = 2`), `multinomial`, `order` of
+  `a % n`, `maple_ifactors` and `box_constraints` (sequences compared inside `[...]`) read back
+  and compared; `addtable(fourier,...)` and `additionally` (also `assume(fact,additionally)`)
+  in one session on both sides, the latter pinned by `sign` and `abs` queries that need the
+  added fact (giac's `about` prints its own record);
+- the departures, each with giac's answer: where giac errs, the call stays with a warning
+  (`order(2 % 8)`, not invertible; `multinomial` with counts not summing to `n` or of other
+  lengths; `maple_ifactors` of a non-integer; `modf` of a symbol or a non-real number;
+  `box_constraints` with bounds that do not fit); `order(3)` stays (giac's `undef`);
+  `avgRC(x^2,x,1/10)` stays exact (giac's `10.0*((x+0.1)^2-x^2)`, R67); `atan2(x,0)` is
+  `sign(x)*pi/2` (giac's `pi/2+(1-sign(x))*pi/2-2*pi*floor(...)`, equal for real `x != 0`);
+  `addtable(laplace,g(t),G(s),t,s)` then `laplace(g(t),t,s)` answers `G(s)` (giac's `laplace`
+  does not consult the table: `integrate(g(t)*exp(-s*t),t,0,+infinity)`).
+
 `tests/integers.rs`, Xcas's integer functions (CAS-548 to CAS-553): giac's
 `chrem` of integers and of polynomials with integer moduli (coefficient by
 coefficient, modulo the product), `lgcd`, `fracmod` and `iratrecon`, `icomp`
@@ -999,8 +1019,8 @@ Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
   - Operator syntax, not built: `'` (`diff`; the lexer rejects it), `|` (`subst`; the lexer rejects
     it), `/%` and `%/` twice (`iquo`, `irem`), `div` (`iquo`), `!` prefix (`not`).
   - Not handled yet, assigned: `rdiv` (`/`), `getType` (`type`), `at` (`At`) and `subs` (`subst`) to
-    T5; `maple_ifactors` (`ifactors`) to T4; `list` (`convert`) to T5; `expln` (`convert`, as trig2exp)
-    to T4; `array` (`convert`, `x` itself) and `fadeev` (`charpoly`, the option ignored) built in
+    T5; `list` (`convert`) to T5. `maple_ifactors` (`ifactors`, Maple's `[sign,[[p,e],...]]`) and
+    `expln` (`convert`, as trig2exp) built in T4 (`tests/gap_leftovers.rs`); `array` (`convert`, `x` itself) and `fadeev` (`charpoly`, the option ignored) built in
     T3 (`tests/matrices_five.rs`).
 - Computational in an existing module, 50: the 1.8 plan said 49, and `box_constraints` moved in from
   ML. Each is marked with its task:
@@ -1009,14 +1029,14 @@ Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
     (`tests/matrices_five.rs`); `moyal` not built, a departure (giac's is a stub answering
     unevaluated); `Fill` built in T3 (`tests/session.rs`). `GF` is not
     built: giac's Galois-field elements need a new value type (gen 2).
-  - Calculus (4): `envelope`, `avgRC`, `addtable` T4. `taux_accroissement` is not built: it is a
+  - Calculus (4): `avgRC`, `addtable` built in T4 (`tests/gap_leftovers.rs`); `envelope` T4. `taux_accroissement` is not built: it is a
     French spelling (CAS-DOC-7 §5).
-  - Expressions (11): `shift_phase`, `linabs`, `non_recursive_normal`, `root`, `additionally`,
-    `atan2`, `has`, `lin`, `fmod`, `modf`, `period` T4.
-  - Integers (2): `multinomial` T4; `order` T4 for the `(Z/nZ)^*` form (`order(3 % 7)` = 6). Its
-    finite-field form is not built: it needs `GF`.
-  - Numerical analysis (1): `box_constraints` T4 (`box_constraints([x,y],[[-2,2],[-5,5]])` =
-    `x=-2..2,y=-5..5`).
+  - Expressions (11): `root`, `additionally`, `atan2`, `has`, `fmod`, `modf` built in T4
+    (`tests/gap_leftovers.rs`); `shift_phase`, `linabs`, `non_recursive_normal`, `lin`, `period` T4.
+  - Integers (2): `multinomial`, and `order` for the `(Z/nZ)^*` form (`order(3 % 7)` = 6), built in
+    T4 (`tests/gap_leftovers.rs`). Its finite-field form is not built: it needs `GF`.
+  - Numerical analysis (1): `box_constraints` built in T4 (`tests/gap_leftovers.rs`;
+    `box_constraints([x,y],[[-2,2],[-5,5]])` = `x=-2..2,y=-5..5`).
   - Language (5): `back`, `range`, `shift`, `format`, `suppress` T5.
   - Polynomials (3): `roots`, `truncate`, `divis` T5.
   - Statistics (2): `choice` T5. `hasard` is not built: it is a French spelling, and `rand` is built.

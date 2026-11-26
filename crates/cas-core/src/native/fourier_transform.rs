@@ -4,6 +4,8 @@
 //!
 //! By the first rule that applies, recursively (§2, CAS-439):
 //!
+//! - **Added pairs**: giac's `addtable(fourier, f(x), F(s), x, s)` (CAS-641)
+//!   stores a pair, which comes before every rule, in other variables too.
 //! - **Linearity**: sums term by term, factors free of `x` out; `c` free of
 //!   `x` is `2π c δ(s)`.
 //! - **Deltas**: `g(x) δ(a x + b)` is `g(x₀) e^(−i s x₀)/|a|`, `x₀ = −b/a`.
@@ -159,6 +161,13 @@ fn exponent(e: &Expr) -> Option<&Expr> {
 
 /// The transform of `f` in `x` into `s`; `None` when no rule applies.
 fn transform(ev: &mut Eval<'_>, f: &Expr, x: &Expr, s: &Expr) -> Found {
+    // A pair giac's `addtable` stored (CAS-641) comes first.
+    if let Some(image) = ev
+        .context()
+        .added_transform(Symbol::FOURIER_TRANSFORM, f, x, s)
+    {
+        return Ok(Some(image));
+    }
     if !f.contains(x) {
         return Ok(Some(Expr::from(2) * pi() * f.clone() * delta(s.clone())));
     }

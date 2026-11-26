@@ -22,6 +22,9 @@
 //!   first.
 //! - **Unknown functions**: `f(t)` stays as `LaplaceTransform[f[t], t, s]`,
 //!   `F`, and `f⁽ⁿ⁾(t)` is `sⁿ F − Σ_{k<n} s^(n−1−k) f⁽ᵏ⁾(0)`.
+//! - **Added pairs**: giac's `addtable(laplace, f(t), F(s), t, s)` (CAS-641)
+//!   stores a pair, which comes before every rule, in other variables too;
+//!   giac's own `laplace` does not consult it.
 //!
 //! The answer is `Together`'s, as giac's `1/(s^2-2*s+1)`; what no rule
 //! transforms stays.
@@ -115,6 +118,13 @@ fn step_at(ev: &mut Eval<'_>, u: &Expr, t: &Expr) -> Result<Option<Expr>, EvalEr
 
 /// The transform of `f` in `t` into `s`; `None` when no rule applies.
 fn transform(ev: &mut Eval<'_>, f: &Expr, t: &Expr, s: &Expr) -> Result<Option<Expr>, EvalError> {
+    // A pair giac's `addtable` stored (CAS-641) comes first.
+    if let Some(image) = ev
+        .context()
+        .added_transform(Symbol::LAPLACE_TRANSFORM, f, t, s)
+    {
+        return Ok(Some(image));
+    }
     if !f.contains(t) {
         return Ok(Some(f.clone() / s.clone()));
     }

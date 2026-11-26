@@ -228,6 +228,10 @@ struct State {
     /// gives a new id: nothing cached under one hook is reused under
     /// another.
     language: Option<Arc<dyn Language>>,
+    /// giac's `addtable` (CAS-641): transform pairs `(kind, f, F, x, s)`,
+    /// `kind` `LaplaceTransform` or `FourierTransform`, consulted first by
+    /// the transforms; the last added first.
+    transform_table: Arc<Vec<(Symbol, [Expr; 4])>>,
 }
 
 /// The unit of angles, Xcas's `angle_radian` (CAS-617): giac's codes, 0
@@ -269,6 +273,7 @@ impl Default for State {
             gbasis_max_pairs: 32768,
             gbasis_simult_primes: 20,
             language: None,
+            transform_table: Arc::default(),
         }
     }
 }
@@ -756,6 +761,28 @@ impl Context {
             random: Arc::default(),
             history: Arc::clone(&self.history),
         }
+    }
+
+    /// giac's `addtable(kind, f(x), F(s), x, s)` (CAS-641): the pair is
+    /// the transform `kind` (`LaplaceTransform`, `FourierTransform`) of
+    /// `f` in `x` into `s`, before any rule.
+    pub fn add_transform(&mut self, kind: Symbol, f: Expr, image: Expr, x: Expr, s: Expr) {
+        Arc::make_mut(&mut self.state_mut().transform_table).push((kind, [f, image, x, s]));
+    }
+
+    /// The image of `f` in `x` into `s` under the transform `kind` by a
+    /// pair [`add_transform`](Self::add_transform) stored, the last first.
+    #[must_use]
+    pub fn added_transform(&self, kind: Symbol, f: &Expr, x: &Expr, s: &Expr) -> Option<Expr> {
+        self.state
+            .transform_table
+            .iter()
+            .rev()
+            .filter(|(k, _)| *k == kind)
+            .find_map(|(_, [g, image, y, t])| {
+                (g.substitute(&[(y.clone(), x.clone())]) == *f)
+                    .then(|| image.substitute(&[(t.clone(), s.clone())]))
+            })
     }
 
     /// Sets what symbols without facts range over (CAS-DOC-4 §7.1).

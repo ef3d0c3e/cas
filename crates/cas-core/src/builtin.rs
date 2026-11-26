@@ -511,6 +511,19 @@ builtins! {
     CONJUGATE_TRANSPOSE = "ConjugateTranspose" [PROTECTED];
     BASIS = "Basis" [PROTECTED];
     FILL_VALUE = "FillValue" [PROTECTED];
+    // giac's expression, calculus, integer and box leftovers (CAS-640 to
+    // CAS-643).
+    NTH_ROOT = "NthRoot" [PROTECTED];
+    ARC_TAN2 = "ArcTan2" [PROTECTED];
+    HAS = "Has" [PROTECTED];
+    FLOOR_MOD = "FloorMod" [PROTECTED];
+    FRACTIONAL_INTEGER_PARTS = "FractionalIntegerParts" [PROTECTED];
+    MULTINOMIAL_PROBABILITY = "MultinomialProbability" [PROTECTED];
+    MODULAR_ORDER = "ModularOrder" [PROTECTED];
+    SIGNED_FACTOR_LIST = "SignedFactorList" [PROTECTED];
+    AVERAGE_RATE_OF_CHANGE = "AverageRateOfChange" [PROTECTED];
+    BOX_CONSTRAINTS = "BoxConstraints" [PROTECTED];
+    ADD_TABLE = "AddTable" [HOLD_ALL, PROTECTED];
     // giac's minors, echelon forms and pivots (CAS-530, CAS-528).
     DET_MINOR = "DetMinor" [PROTECTED];
     ADJOINT_MATRIX = "AdjointMatrix" [PROTECTED];

@@ -462,6 +462,18 @@ QuadraticToMatrix: q2a
 ChangeBasis: changebase
 ConjugateTranspose: trn
 Basis: basis
+# giac's expression, calculus, integer and box leftovers (CAS-640 to CAS-643).
+NthRoot: root
+ArcTan2: atan2
+Has: has
+FloorMod: fmod
+FractionalIntegerParts: modf
+MultinomialProbability: multinomial
+ModularOrder: order
+SignedFactorList: maple_ifactors
+AverageRateOfChange: avgRC
+BoxConstraints: box_constraints
+AddTable: addtable
 # giac's minors, echelon forms and pivots (CAS-530, CAS-528).
 DetMinor: det_minor
 AdjointMatrix: adjoint_matrix
@@ -973,7 +985,7 @@ imaginary: i
 
 [syntax]
 call: call
-assume: assume
+assume: assume additionally
 purge: purge
 Fill: Fill
 

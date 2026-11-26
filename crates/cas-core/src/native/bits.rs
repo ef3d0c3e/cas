@@ -17,7 +17,8 @@
 //!   give `Apart[x]`; `confrac` gives `ContinuedFraction[x]`, a third
 //!   argument (giac's variable to store it in) accepted and not assigned;
 //!   `polynom` gives `x` with each `OrderSize[_]` 0, a series' polynomial
-//!   part, and any other `x` itself.
+//!   part, and any other `x` itself; `expln` (CAS-640) gives
+//!   `TrigToExp[x]`, giac's `trig2exp`.
 //! - `FactorialPower[n, k]`, Xcas's `perm(n, k)`: `n (n − 1) ⋯ (n − k + 1)`
 //!   for an integer `0 ≤ k`, a product for a symbol up to [`MAX_SYMBOLIC`]
 //!   factors; 0 for an integer `0 ≤ n < k`. A product of numbers estimated
@@ -188,8 +189,8 @@ pub(super) fn convert(ev: &mut Eval<'_>, e: &Expr) -> Native {
 /// `Convert[x, option, rest…]` with `partfrac`, `parfrac`, `fullparfrac`,
 /// `polynom`, `confrac` (a third argument too, ignored), and `interval`
 /// (CAS-592), `N[x]` or with a positive integer `d` `N[x, d]`: giac's
-/// interval as a ball, and `array` (CAS-639), `x` itself; `None` for
-/// another option or count.
+/// interval as a ball, `array` (CAS-639), `x` itself, and `expln`
+/// (CAS-640), `TrigToExp[x]`; `None` for another option or count.
 fn convert_to(ev: &mut Eval<'_>, x: &Expr, option: &Expr, rest: &[Expr]) -> Native {
     let name = option.as_symbol().map(Symbol::name);
     let found = match (name, rest) {
@@ -221,6 +222,8 @@ fn convert_to(ev: &mut Eval<'_>, x: &Expr, option: &Expr, rest: &[Expr]) -> Nati
         }
         // giac's `array` keeps a list, and anything else, as it is.
         (Some("array"), []) => x.clone(),
+        // giac's `expln` is its `trig2exp` (CAS-640).
+        (Some("expln"), []) => Expr::call(Symbol::TRIG_TO_EXP, [x.clone()]),
         _ => return Ok(None),
     };
     Ok(Some(ev.eval(&found)?))

@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 706] = [
+const BUILTINS: [&str; 717] = [
     "Plus",
     "Times",
     "Power",
@@ -496,6 +496,17 @@ const BUILTINS: [&str; 706] = [
     "ConjugateTranspose",
     "Basis",
     "FillValue",
+    "NthRoot",
+    "ArcTan2",
+    "Has",
+    "FloorMod",
+    "FractionalIntegerParts",
+    "MultinomialProbability",
+    "ModularOrder",
+    "SignedFactorList",
+    "AverageRateOfChange",
+    "BoxConstraints",
+    "AddTable",
     "DetMinor",
     "AdjointMatrix",
     "RowEchelon",

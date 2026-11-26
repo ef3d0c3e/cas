@@ -379,6 +379,22 @@ impl Session {
                     self.context = self.context.assuming(fact.clone());
                 }
             }
+            // giac's `addtable(kind, f(x), F(s), x, s)` (CAS-641): the pair
+            // goes in the context, the answer 1.
+            (Some(Symbol::ADD_TABLE), [kind, f, image, x, s])
+                if matches!(
+                    kind.as_symbol(),
+                    Some(Symbol::LAPLACE_TRANSFORM | Symbol::FOURIER_TRANSFORM)
+                ) && [x, s]
+                    .iter()
+                    .all(|v| v.as_symbol().is_some_and(|v| !v.is_builtin())) =>
+            {
+                let kind = kind.as_symbol().expect("a transform");
+                let (f, image) = (f.clone(), image.clone());
+                self.context
+                    .add_transform(kind, f, image, x.clone(), s.clone());
+                self.give(statement, Expr::from(1), out);
+            }
             (Some(Symbol::CLEAR), names) => {
                 for s in names.iter().filter_map(Expr::as_symbol) {
                     self.purge(statement, s, out);

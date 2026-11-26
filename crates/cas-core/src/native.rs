@@ -37,6 +37,7 @@ mod interpolation;
 mod lambert;
 mod laplace;
 mod lattice;
+mod leftovers;
 mod limit;
 mod linear;
 mod lists;
@@ -1151,6 +1152,25 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
         ),
         (Symbol::BASIS, matrix::reshape::basis),
         (Symbol::FILL_VALUE, matrix::reshape::fill_value),
+        (Symbol::NTH_ROOT, leftovers::nth_root),
+        (Symbol::ARC_TAN2, leftovers::arc_tan2),
+        (Symbol::HAS, leftovers::has),
+        (Symbol::FLOOR_MOD, leftovers::floor_mod),
+        (
+            Symbol::FRACTIONAL_INTEGER_PARTS,
+            leftovers::fractional_integer_parts,
+        ),
+        (
+            Symbol::MULTINOMIAL_PROBABILITY,
+            leftovers::multinomial_probability,
+        ),
+        (Symbol::MODULAR_ORDER, leftovers::modular_order),
+        (Symbol::SIGNED_FACTOR_LIST, leftovers::signed_factor_list),
+        (
+            Symbol::AVERAGE_RATE_OF_CHANGE,
+            leftovers::average_rate_of_change,
+        ),
+        (Symbol::BOX_CONSTRAINTS, leftovers::box_constraints),
         (Symbol::DET_MINOR, matrix::echelon::det_minor),
         (Symbol::ADJOINT_MATRIX, matrix::echelon::adjoint_matrix),
         (Symbol::ROW_ECHELON, matrix::echelon::row_echelon),

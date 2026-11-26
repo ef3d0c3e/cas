@@ -416,6 +416,13 @@ impl Lowerer<'_> {
         let range = range(node);
         Some(match form {
             SyntaxForm::Assume => {
+                // giac's `assume(fact, additionally)` adds, as every
+                // `assume` here does (CAS-640): the word goes.
+                let additionally = Some(&Target::Syntax(SyntaxForm::Assume));
+                let args: Vec<_> = args
+                    .into_iter()
+                    .filter(|a| self.target(a) != additionally)
+                    .collect();
                 let facts = args.iter().map(|a| self.expr(a)).collect();
                 apply(Symbol::ASSUME, facts, range)
             }
