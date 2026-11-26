@@ -73,6 +73,11 @@ fn departures() {
             "GIAC_ERROR: GCD not successful Error: Bad Argument Value",
             "x*y-y",
         ),
+        // giac's modgcd in one variable drops the integer content of the
+        // gcd (its own gcd keeps it); ours is gcd's answer. T7's sweep
+        // found it: shrunk input modgcd(((-2))*((-2)*x),((-2))*((-2)*x)).
+        ("modgcd(4*x,4*x)", "x", "4*x"),
+        ("modgcd(4*x,6*x)", "x", "2*x"),
         (
             "ezgcd(x^2-1,x+1)",
             "GIAC_ERROR: Args must be multivariate polynomials Error: Bad Argument Value",
@@ -203,7 +208,9 @@ proptest! {
         up_to_sign(giac, &input)?;
     }
 
-    /// `modgcd`, as [`random_heugcd`].
+    /// `modgcd`, as [`random_heugcd`]. Excluded, the departure: one
+    /// variable with a gcd whose integer content is not 1, which giac's
+    /// modgcd drops (`modgcd(4*x,6*x)` is `x`); those draws are skipped.
     #[test]
     fn random_modgcd(univariate in any::<bool>(), a in nonzero(3), b in nonzero(3), g in nonzero(3)) {
         let Some(giac) = giac() else {
@@ -212,6 +219,13 @@ proptest! {
         let Some(input) = gcd_input("modgcd", univariate, a, b, g) else {
             return Ok(());
         };
+        if univariate {
+            let content = format!("icontent({})", input.replacen("modgcd", "gcd", 1));
+            let printed = giac.eval(&content).map_err(|e| TestCaseError::fail(e.to_string()))?;
+            if printed.trim() != "1" {
+                return Ok(());
+            }
+        }
         up_to_sign(giac, &input)?;
     }
 

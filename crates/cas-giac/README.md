@@ -106,6 +106,10 @@ gives up or refuses one variable, with giac's message; and random sweeps
 (128 cases a run each) of all five on `name(a*g,b*g)` with small polynomials
 in `x, y` (`icontent` of `k*a*g`), compared up to sign; `ezgcd` in two
 variables only, draws giac answers with an error skipped (the departures).
+`modgcd` in one variable drops the gcd's integer content (giac
+`modgcd(4*x,6*x)` is `x`, its `gcd` `2*x`); ours is `gcd`'s answer, a
+departure the sweep found (shrunk input `modgcd(4*x,4*x)`, giac `x`, ours
+`4*x`, T7), and its univariate draws with content not 1 are skipped.
 
 `tests/partial_fractions.rs`, partial fractions and fraction forms
 (CAS-529, CAS-540, CAS-544): giac's `cpartfrac`, `convert` with `partfrac`,
