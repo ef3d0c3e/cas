@@ -78,7 +78,7 @@ Approved: 2026-11-26   Planner: claude-opus-5-5/medium   Plan-hash: 6c8fda029147
   No research needed. Wait idle: one background watcher at `--interval 60` (C0004), no poll loop; about four hours with job queueing. Diagnosis only needs local replays of single inputs under scripts/capped.sh (the one local run the standing constraints allow); a replay that prints our answers stays in the log, never in a test's expected value. The summary and log commit stays local until T11 (a push cancels the campaign).
 - T11 | done | title: campaign findings fixed under regression tests; final gate green; tickets done | deps: T10 | reads: T2, T10 | coder: opus55 | verify: gh run list --branch master --limit 3 | done-when: each T10 finding is fixed with a regression test in its owning crate (and the timeout/OOM limits per C0019 where it applies); the targets that failed are re-dispatched with `-f time_per_target=3600 -f targets="<names>"` on the final head and pass; CI and the push-triggered Fuzz are green on that same head; every ticket from T1, T2 and T10 is `done` (`lific issue get CAS-<n> --backend http --json` each) and CAS-636 too; `bash scripts/giac_gap.sh .run/1.8/gap` on the final head matches T2's ledger counts (new names built in T3-T6 now covered)
   No research needed. With no T10 findings this task is the ticket and ledger check plus the green read. Coder brief restates R74. Cookbook: C0002, C0005, C0019, C0042, C0043, C0052-C0055, C0093.
-- T12 | next | title: phase cleanup | deps: T11 | coder: none | done-when: what the project still needs from .run/1.8/ is in its proper place in the repo, and .run/logs/gen1-gap/ is deleted (R45)
+- T12 | done | title: phase cleanup | deps: T11 | coder: none | done-when: what the project still needs from .run/1.8/ is in its proper place in the repo, and .run/logs/gen1-gap/ is deleted (R45)
   .run/1.8/ holds the gap lists (regenerable with giac_gap.sh; not kept), T2's tally script (kept in scripts/ only if the ledger cites it), the tasks' prototypes (those a test or doc cites move to crates/<crate>/proto/<area>/ with its README, as 1.7/T12 did, R99) and CI logs (not kept). No research needed.
 
 ## Risks
@@ -106,3 +106,4 @@ Approved: 2026-11-26   Planner: claude-opus-5-5/medium   Plan-hash: 6c8fda029147
 - 2026-11-26 router: T9 next -> done
 - 2026-11-26 router: T10 next -> done
 - 2026-11-26 router: T11 next -> done
+- 2026-11-26 router: T12 next -> done
