@@ -5,3 +5,4 @@ T2 | done | gap ledger: every missing giac entry accounted for, the 49 split int
 T3 | done | Algebra matrix leftovers (REDIM, border, semi_augment, simult, newMat, Fill, upper, lower, a2q, q2a, basis, changebase, moyal, trn) | - | tasks/T3.md | logs/T3.md | -
 T4 | done | Expressions, Calculus, Integers and Numerical-analysis gap leftovers (CAS-640..643) | - | tasks/T4.md | logs/T4.md | R1.8-003
 T5 | done | Language, Polynomials, Statistics and Infrastructure leftovers and kmeans/cluster options | - | tasks/T5.md | logs/T5.md | R1.8-003
+T6 | done | Signal processing leftovers (stft, istft, hht, boxcar, tri, sinc) and hilbert(f,t) | - | tasks/T6.md | logs/T6.md | R1.8-003
