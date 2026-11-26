@@ -145,8 +145,7 @@ fn check_stays(rows: &[(&str, &str)]) {
 /// and `variance=` (exact where giac's are: `gammad(36,3)`,
 /// `uniformd(10-2*sqrt(3),10+2*sqrt(3))`, `geometric(1/4)` from giac's
 /// unsimplified radical), giac's decimals for decimal input
-/// (`normald(5.0,1.5)`) and for its numeric Weibull fit
-/// (`weibulld(3.08574940721,13.9803128143)`) within its error.
+/// (`normald(5.0,1.5)`) within its error.
 #[test]
 fn objects() {
     check_laws(&[
@@ -155,7 +154,6 @@ fn objects() {
         "randvar(uniform,mean=10,stddev=2)",
         "randvar(normal,mean=5,stddev=1.5)",
         "randvar(normal,mean=5,variance=2,stddev=1)",
-        "randvar(weibull,mean=12.5,variance=1)",
         "randvar(exp,2)",
         "randvar(poisson,3)",
         "randvar(geometric,1/4)",

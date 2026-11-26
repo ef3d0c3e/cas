@@ -90,6 +90,7 @@ fn derivatives() {
         ("D[Power[x, 3], List[x, 0]]", "Power[x, 3]"),
         ("D[Power[x, 3], List[x, 2]]", "Times[6, x]"),
         ("D[Power[x, 3], List[x, 3]]", "6"),
+        ("D[Power[x, 3], x, 2]", "Times[6, x]"),
         (
             "D[Times[Power[x, 2], Power[y, 3]], x, y]",
             "Times[6, x, Power[y, 2]]",

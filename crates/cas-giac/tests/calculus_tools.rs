@@ -30,15 +30,11 @@ fn check(inputs: &[&str]) {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
-/// giac's answer to `input`, written for this CAS: its second derivatives
-/// `diff(f,v,2)` as `diff(f,v,v)` (ours would differentiate in 2), and its
-/// constants `K_n`, numbered by a counter global to giac's session, as
-/// `K_0`, `K_1`, … in the order they appear, as ours number them per call.
+/// giac's answer to `input`, written for this CAS: its constants `K_n`,
+/// numbered by a counter global to giac's session, as `K_0`, `K_1`, … in
+/// the order they appear, as ours number them per call.
 fn giac_text(giac: &Giac, input: &str) -> String {
-    let mut text = giac.eval(input).unwrap();
-    for v in ["x", "t"] {
-        text = text.replace(&format!(",{v},2)"), &format!(",{v},{v})"));
-    }
+    let text = giac.eval(input).unwrap();
     let mut seen: Vec<String> = Vec::new();
     let mut out = String::new();
     let mut rest = text.as_str();
@@ -238,8 +234,8 @@ fn wz_certificates() {
 }
 
 /// `euler_lagrange` (CAS-575): giac's examples and the argument forms,
-/// compared by value ([`compare`]): giac's `diff(f,t,2)` does
-/// not read back, and its constants `K_n` count across its calls. The
+/// compared by value ([`compare`]): giac's constants `K_n` count across
+/// its calls. The
 /// first input is giac's, the second ours where the language lacks `y'`.
 #[test]
 fn euler_lagrange_equations() {

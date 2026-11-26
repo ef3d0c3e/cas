@@ -918,11 +918,6 @@ fn mathml_departures() {
             r"<mrow><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>&it;</mo><mi>n</mi><mo>&it;</mo><mfenced><mrow><mn>1</mn><mo>+</mo><mi>n</mi></mrow></mfenced></mrow>",
             r"<apply id='id6'><times/><cn id='id1' type='rational'>1<sep/>2</cn><ci id='id2'>n</ci><apply id='id5'><plus/><cn id='id3' type='integer'>1</cn><ci id='id4'>n</ci></apply></apply>",
         ),
-        (
-            "diff(f(x),x,2)",
-            r"<mrow><mi>derive</mi><mfenced><mrow><mfrac><mi mathvariant='normal'>d</mi><mrow><mi>x</mi></mrow></mfrac><mo>&af;</mo><mrow><mi>f</mi><mo>&af;</mo><mo>&af;</mo><mfenced><mi>x</mi></mfenced></mrow></mrow><mn>2</mn></mfenced></mrow>",
-            r"<apply id='id13'><ci id='id6' type='function'>derive</ci><apply id='id11'><diff/><bvar><ci id='id10'>x</ci></bvar><apply id='id9'><ci id='id7'>f</ci><ci id='id8'>x</ci></apply></apply><cn id='id12' type='integer'>2</cn></apply>",
-        ),
     ];
     let math = |body: &str| {
         format!("<math mode='display' xmlns='http://www.w3.org/1998/Math/MathML'>{body}</math>")

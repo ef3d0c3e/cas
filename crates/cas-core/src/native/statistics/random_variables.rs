@@ -23,10 +23,11 @@
 //!   or `a..b`, the last given winning, fitted as giac fits them, exactly
 //!   (giac gives decimals): `uniformd(m − √3 s, m + √3 s)`, `gammad(m²/v,
 //!   m/v)`, the binomial's `n` rounded, and Weibull's shape by Newton's
-//!   method from `max(1, 1/v)` on giac's equation `Γ(1 + 2/k)/Γ(1 + 1/k)
-//!   − v/m² − 1 = 0`, whose denominator giac does not square (so the law
-//!   found has not the variance asked; ported as it is), in certified
-//!   balls. `multinomial, P(, V)`, a list of weights with values or not,
+//!   method on the moment equation `Γ(1 + 2/k)/Γ(1 + 1/k)² − 1 − v/m² =
+//!   0`, from the coefficient of variation's approximation `k₀ =
+//!   (√v/m)^−1.086`, in certified balls (giac's equation leaves the
+//!   denominator unsquared, so its law has not the variance asked:
+//!   CAS-637). `multinomial, P(, V)`, a list of weights with values or not,
 //!   a matrix of `[v, w]` rows, or a function with `range=a..b` between
 //!   integers (its weights `f(a) … f(b)` over `a … b`) give discrete laws.
 //!   giac's errors leave the call with giac's message as a warning; a
@@ -766,10 +767,12 @@ fn fit(
     Ok(Some(object(law, parameters)))
 }
 
-/// Weibull's `(k, λ)` from the mean `m` and the variance `v` as giac
-/// finds them (:752-764): `Γ(1 + 2/k)/Γ(1 + 1/k) − v/m² − 1 = 0` by
-/// Newton's method from `max(1, 1/v)`, certified by `FSolve`, and `λ =
-/// m/Γ(1 + 1/k)`; `None` when no root is found.
+/// Weibull's `(k, λ)` from the mean `m` and the variance `v`: the moment
+/// equation `Γ(1 + 2/k)/Γ(1 + 1/k)² − 1 − v/m² = 0` by Newton's method
+/// from `k₀ = (√v/m)^−1.086` (the coefficient of variation's
+/// approximation), certified by `FSolve`, and `λ = m/Γ(1 + 1/k)`; `None`
+/// when no root is found. giac (:752-764) leaves the denominator unsquared
+/// and starts from `max(1, 1/v)` (CAS-637).
 fn weibull(ev: &mut Eval<'_>, m: &Expr, v: &Expr) -> Result<Option<(Expr, Expr)>, EvalError> {
     if sign(ev, v) != Some(Ordering::Greater) {
         return Ok(None);
@@ -777,16 +780,11 @@ fn weibull(ev: &mut Eval<'_>, m: &Expr, v: &Expr) -> Result<Option<(Expr, Expr)>
     let k = Expr::from(Symbol::new("RandomVariable$k"));
     let n = |k: i64| Expr::from(k);
     let gamma = |x: Expr| Expr::call(Symbol::GAMMA, [x]);
-    let f = gamma(n(1) + n(2) / k.clone()) / gamma(n(1) + n(1) / k.clone())
-        - v.clone() / m.clone().pow(n(2))
-        - n(1);
-    let inverse = ev.eval(&(n(1) / v.clone()))?;
-    let over = ev.eval(&(inverse.clone() - n(1)))?;
-    let start = if sign(ev, &over) == Some(Ordering::Greater) {
-        inverse
-    } else {
-        n(1)
-    };
+    let f = gamma(n(1) + n(2) / k.clone()) / gamma(n(1) + n(1) / k.clone()).pow(n(2))
+        - n(1)
+        - v.clone() / m.clone().pow(n(2));
+    let cv = Expr::call(Symbol::SQRT, [v.clone()]) / m.clone();
+    let start = ev.eval(&Expr::call(Symbol::N, [cv.pow(n(-543) / n(500))]))?;
     let solve = Expr::call(
         Symbol::FSOLVE,
         [

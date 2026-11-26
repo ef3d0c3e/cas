@@ -294,11 +294,11 @@ after giac's `restart`, ours in a new session, compared value by value:
 
 `tests/random_variables.rs`, Xcas's `randvar` objects, `sample` and
 `randvector` over them, and `randmultinomial` (CAS-624):
-- objects (no draws), 17 rows: the law's head and each parameter against
+- objects (no draws), 16 rows: the law's head and each parameter against
   giac's, `normal(ours − giac)` 0 or within giac's 12 digits (C0006, C0032):
   parameters given, from `mean=`, `stddev=`, `variance=` (`gammad(36,3)`,
   `uniformd(10-2*sqrt(3),10+2*sqrt(3))`, `geometric(1/4)`), giac's decimals
-  for decimal input and its numeric Weibull fit; invalid calls (14 rows) stay
+  for decimal input; invalid calls (14 rows) stay
   with giac's message as the warning (libgiac's text checked), and ours only
   `sample(randvar(poisson,3),10^7)` with "too many draws";
 - draws, seeded with 42 on both sides in the same input (C0014), never giac's
@@ -314,7 +314,10 @@ after giac's `restart`, ours in a new session, compared value by value:
   `uniformd(a,b)`), `randvar(multinomial,P)` (giac's sequence does not
   sample; ours the weights form, drawing indices), and `sample` of
   `randvar(student,3)` and `randvar(chisquare,3)` (giac's Bad Argument Value;
-  ours real and positive decimals).
+  ours real and positive decimals), `randvar(weibull,mean=12.5,variance=1)`
+  (giac `weibulld(3.08574940721,13.9803128143)`, ours
+  `weibulld(15.3481994802,12.9351890156)`; giac's denominator unsquared,
+  CAS-637).
 
 `tests/markov.rs`, Xcas's Markov chains `markov` and `randmarkov` (CAS-628),
 `markov`'s four lists bracketed into one (C0023):
@@ -908,7 +911,7 @@ their names (`nlp_initialpoint` points and regions, `nlp_iterationlimit`, `nlp_p
 whitespace collapsed) is ours: the plan's probes, `cas_lang::markup`'s lowering rows that print as
 giac prints its own answer, `rootof([1,0],[1,0,1,1])` (held in both), and 57 more rows of
 `crates/cas-lang/src/markup/giac_latex.tsv`.
-- Departures (17), ours asserted, giac's text copied: all come from giac's evaluation order, not
+- Departures (16), ours asserted, giac's text copied: all come from giac's evaluation order, not
   the printer (the same shape prints the same). Constants first in sums: `sqrt(x+1)` giac
   `\sqrt{x+1}`, `(x^4-1)/(x^2+3)`, `2*x^2-3*x+1` (ascending degree), `1/(x+1)`, `(x+1)^2`,
   `(x+1)*(x-1)`, `-(x+1)` (ours keeps `-(1+x)`, giac `-x-1`); our product order: `sin(x)*cos(x)` (giac
@@ -916,9 +919,7 @@ giac prints its own answer, `rootof([1,0],[1,0,1,1])` (held in both), and 57 mor
   (giac `y>x`), `x<=y` (giac `y\geq x`), `x!=y` (giac `\mathrm{true}`), `ceil(x)` (giac
   `-\left\lfloor -x\right\rfloor`), `binomial(n,k)` (giac's factorial quotient), `x^(2/3)` (giac
   `\left(x^{\frac{1}{3}}\right)^{2}`), `sum(k,k,1,n)` (giac
-  `\frac{-n-1+\left(n+1\right)^{2}}{2}`, ours `\frac{1}{2} n \left(1+n\right)`, as giac prints `n*(n+1)/2`),
-  `diff(f(x),x,2)` (ours differentiates by `x`, then holds `derive(…, 2)`; giac's second
-  derivative; `diff(f(x),x,x)` is a row).
+  `\frac{-n-1+\left(n+1\right)^{2}}{2}`, ours `\frac{1}{2} n \left(1+n\right)`, as giac prints `n*(n+1)/2`).
 - Algebraic extensions and points (tex.cc's `gen2tex`, giac's `latex` on geometry) have no
   counterpart in ours.
 
@@ -928,13 +929,13 @@ giac prints its own answer, `rootof([1,0],[1,0,1,1])` (held in both), and 57 mor
 undone, whitespace collapsed, C0047) is ours. In the default form the annotation
 (`<annotation encoding='giac'>`) is each one's input form, so it is left out of the comparison and
 ours is checked to be our `string(x)`, escaped (giac `x+1`, ours `1 + x`).
-- Departures (17), ours asserted in presentation and content: `latex.rs`'s, for the same reasons
+- Departures (16), ours asserted in presentation and content: `latex.rs`'s, for the same reasons
   (giac's evaluation order and rewrites; the printers agree on the same shape); giac's MathML of
   each is in `crates/cas-lang/src/markup/giac_mathml.tsv`. `x<y`: giac
   `<mi>y</mi><mo>&gt;</mo><mi>x</mi>`, ours `<mi>x</mi><mo>&lt;</mo><mi>y</mi>`.
 - giac's `mathml()` (mathml.cc, a separate printer, `cas_lang::mathml`): the same 115 inputs,
   `mathml(x)`: giac's text (quotes removed, doubled quotes undone, a newline written ' | ' on both
-  sides, C0047) is ours exactly. The 17 departures, ours asserted (the formula of the prototype on
+  sides, C0047) is ours exactly. The 16 departures, ours asserted (the formula of the prototype on
   our shapes, C0068, in giac's XHTML); giac's texts are in
   `crates/cas-lang/src/markup/giac_mathml_doc.tsv`.
 

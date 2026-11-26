@@ -224,12 +224,6 @@ fn departures() {
         ("latex(x*sqrt(2))", r"\sqrt{2} x"),
         // Our closed form, factored: giac \frac{-n-1+\left(n+1\right)^{2}}{2}.
         ("latex(sum(k,k,1,n))", r"\frac{1}{2} n \left(1+n\right)"),
-        // Our diff(e, x, 2) differentiates by x, then by 2 (held):
-        // giac \frac{\mathrm{d}^{2}}{\mathrm{d}x^{2}}f\left(x\right).
-        (
-            "latex(diff(f(x),x,2))",
-            r"\mathrm{derive}\left(\frac{\mathrm{d}}{\mathrm{d}x}f\left(x\right),2\right)",
-        ),
     ];
     let mut wrong = Vec::new();
     for (input, mine) in cases {

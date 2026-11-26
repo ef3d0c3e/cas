@@ -237,9 +237,11 @@ fn discrete_forms() {
     ]);
 }
 
-/// Weibull's fit by Newton's method on giac's equation: giac's
-/// `weibulld(3.08574940721, 13.9803128143)` for `mean=12.5, variance=1`
-/// (the prototype's digits), from a decimal mean and an exact one.
+/// Weibull's fit by Newton's method on the moment equation:
+/// `weibulld(15.3481994802, 12.9351890156)` for `mean=12.5, variance=1`
+/// (the Python prototype's digits; giac's unsquared equation gives
+/// `weibulld(3.08574940721, 13.9803128143)`, CAS-637), from a decimal
+/// mean and an exact one.
 #[test]
 fn weibull() {
     let ctx = Context::new();
@@ -256,9 +258,9 @@ fn weibull() {
         let [k, lambda] = found.args() else {
             panic!("{input}: {found:?}");
         };
-        assert!((float(k) - 3.085_749_407_212_56).abs() < 1e-9, "{k:?}");
+        assert!((float(k) - 15.348_199_480_203_705).abs() < 1e-9, "{k:?}");
         assert!(
-            (float(lambda) - 13.980_312_814_270_7).abs() < 1e-9,
+            (float(lambda) - 12.935_189_015_588_424).abs() < 1e-9,
             "{lambda:?}"
         );
     }

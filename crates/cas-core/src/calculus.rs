@@ -355,6 +355,11 @@ pub(crate) fn rules() -> Vec<SystemRule> {
             "Condition[D[D[f, x], List[x, Plus[n, -1]]], Greater[n, 0]]",
         ),
         SystemRule::new(
+            "D/nth",
+            &format!("D[Pattern[f, Blank[]], {X}, PatternTest[Pattern[n, Blank[]], IntegerQ]]"),
+            "Condition[D[f, List[x, n]], Greater[n, 0]]",
+        ),
+        SystemRule::new(
             "D/partial",
             "D[Pattern[f, Blank[]], Pattern[x, Blank[]], Pattern[y, BlankSequence[]]]",
             "D[D[f, x], y]",
