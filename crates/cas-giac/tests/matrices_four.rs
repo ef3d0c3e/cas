@@ -2,10 +2,12 @@
 //! and `rat_jordan` (CAS-535) against giac 2.0: its answers read back are
 //! this CAS's, and the departures, each with giac's answer as it prints it
 //! and this CAS's as decided. `rat_jordan` returns a sequence, read in
-//! brackets as a list.
+//! brackets as a list. Random integer matrices, entries -5 to 5, a run to
+//! each of them.
 
 use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the checks skip.
 fn giac() -> Option<&'static Giac> {
@@ -237,4 +239,137 @@ fn departures() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// An `r` by `c` integer matrix, entries -5 to 5.
+fn entries(r: usize, c: usize) -> impl Strategy<Value = Vec<Vec<i64>>> {
+    prop::collection::vec(prop::collection::vec(-5i64..=5, c), r)
+}
+
+/// A matrix of 1 to 4 rows and columns.
+fn matrix() -> impl Strategy<Value = Vec<Vec<i64>>> {
+    (1usize..=4, 1usize..=4).prop_flat_map(|(r, c)| entries(r, c))
+}
+
+/// A square matrix of size 1 to `max`.
+fn square(max: usize) -> impl Strategy<Value = Vec<Vec<i64>>> {
+    (1usize..=max).prop_flat_map(|n| entries(n, n))
+}
+
+/// `[[a,b],…]`.
+fn text(m: &[Vec<i64>]) -> String {
+    let rows: Vec<String> = m
+        .iter()
+        .map(|r| {
+            let r: Vec<String> = r.iter().map(i64::to_string).collect();
+            format!("[{}]", r.join(","))
+        })
+        .collect();
+    format!("[{}]", rows.join(","))
+}
+
+/// giac's answer to `input`, read back, is ours; else the failure names
+/// the input, giac's answer and ours.
+fn agree(giac: &Giac, input: &str) -> Result<(), TestCaseError> {
+    giac.agrees(input)
+        .map_err(|e| TestCaseError::fail(e.to_string()))
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `det_minor` and `adjoint_matrix` of a square matrix.
+    #[test]
+    fn random_minors(a in square(4)) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        agree(giac, &format!("det_minor({})", text(&a)))?;
+        agree(giac, &format!("adjoint_matrix({})", text(&a)))?;
+    }
+
+    /// `ref` and `rref` with `keep_pivot` of an integer matrix (a float
+    /// one is a departure).
+    #[test]
+    fn random_echelon_forms(a in matrix()) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        agree(giac, &format!("ref({})", text(&a)))?;
+        agree(giac, &format!("rref({},keep_pivot)", text(&a)))?;
+    }
+
+    /// `pivot` at any entry, zero or not.
+    #[test]
+    fn random_pivots(a in matrix(), i in 0usize..4, j in 0usize..4) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let (i, j) = (i % a.len(), j % a[0].len());
+        agree(giac, &format!("pivot({},{i},{j})", text(&a)))?;
+    }
+
+    /// `egvl` of a square matrix of size 1 to 3, entry by entry once put
+    /// together, as `jordan_matrices`.
+    #[test]
+    fn random_egvl(a in square(3)) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let input = format!("egvl({})", text(&a));
+        let printed = giac.eval(&input).map_err(|e| TestCaseError::fail(e.to_string()))?;
+        // giac's roots of an irreducible cubic print as `rootof([…],[…])`,
+        // which this CAS does not read: no comparison.
+        if printed.contains("rootof") {
+            return Ok(());
+        }
+        let fail = |e: cas_giac::OracleError| TestCaseError::fail(e.to_string());
+        let theirs = giac.value(&input).map_err(fail)?;
+        let mine = ours(&input).map_err(fail)?;
+        if !same(&Context::new(), &theirs, &mine) {
+            return Err(TestCaseError::fail(format!(
+                "{input}: giac {printed}, ours {mine:?}"
+            )));
+        }
+    }
+
+    /// `gauss` of a quadratic form in 1 to 3 variables, integer
+    /// coefficients.
+    #[test]
+    fn random_gauss(n in 1usize..=3, c in prop::collection::vec(-5i64..=5, 6)) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let vars = &["x", "y", "z"][..n];
+        let mut terms = Vec::new();
+        let mut k = 0;
+        for i in 0..n {
+            for j in i..n {
+                if c[k] != 0 {
+                    terms.push(format!("{}*{}*{}", c[k], vars[i], vars[j]));
+                }
+                k += 1;
+            }
+        }
+        let form = if terms.is_empty() { "0".to_owned() } else { terms.join("+").replace("+-", "-") };
+        agree(giac, &format!("gauss({form},[{}])", vars.join(",")))?;
+    }
+
+    /// `rat_jordan` of a square matrix of size 1 to 3: the same `J`. giac's
+    /// `P` comes from its own kernels (a departure): not compared.
+    #[test]
+    fn random_rat_jordan(a in square(3)) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let input = format!("rat_jordan({})", text(&a));
+        let fail = |e: cas_giac::OracleError| TestCaseError::fail(e.to_string());
+        let theirs = giac.value(&format!("[{input}]")).map_err(fail)?;
+        let mine = ours(&input).map_err(fail)?;
+        if mine.args().len() != 2 || theirs.args().len() != 2 || theirs.args()[1] != mine.args()[1] {
+            return Err(TestCaseError::fail(format!(
+                "{input}: giac {theirs:?}, ours {mine:?}"
+            )));
+        }
+    }
 }

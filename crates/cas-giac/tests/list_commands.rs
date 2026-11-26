@@ -6,10 +6,12 @@
 //! `groupermu`, giac's answers read back
 //! and compared with ours (`Giac::agrees`); and the departures, each with
 //! giac's answer as it prints it: its errors, where ours leaves the call
-//! with a warning, and the forms ours leaves.
+//! with a warning, and the forms ours leaves; and random small integer and
+//! rational lists a run to each family but the departures.
 
 use cas_core::{Expr, Symbol};
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the comparisons skip.
 fn giac() -> Option<&'static Giac> {
@@ -615,4 +617,210 @@ fn departures() {
         wrong.push(format!("{input}: ours is not an error"));
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// A small integer or rational, as text: `k` or `k/d`.
+fn number() -> impl Strategy<Value = String> {
+    (-5i64..=5, 1i64..=4).prop_map(|(k, d)| {
+        if d == 1 || k % d == 0 {
+            (k / d).to_string()
+        } else {
+            format!("{k}/{d}")
+        }
+    })
+}
+
+/// Up to `max` numbers.
+fn numbers(min: usize, max: usize) -> impl Strategy<Value = Vec<String>> {
+    prop::collection::vec(number(), min..=max)
+}
+
+/// A `rows` by `cols` matrix of numbers, rows and columns 1 to 4.
+fn matrix() -> impl Strategy<Value = Vec<Vec<String>>> {
+    (1usize..=4, 1usize..=4)
+        .prop_flat_map(|(r, c)| prop::collection::vec(prop::collection::vec(number(), c), r))
+}
+
+/// `[a,b,…]`.
+fn list<T: ToString>(items: &[T]) -> String {
+    let items: Vec<String> = items.iter().map(T::to_string).collect();
+    format!("[{}]", items.join(","))
+}
+
+/// `[[…],…]`.
+fn rows(m: &[Vec<String>]) -> String {
+    let rows: Vec<String> = m.iter().map(|r| list(r)).collect();
+    format!("[{}]", rows.join(","))
+}
+
+/// giac's answer to `input`, read back, is ours; else the failure names
+/// the input, giac's answer and ours.
+fn agree(giac: &Giac, input: &str) -> Result<(), TestCaseError> {
+    giac.agrees(input)
+        .map_err(|e| TestCaseError::fail(e.to_string()))
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `find` and `index` of an element of the list (`index` of a missing
+    /// one is giac's error, a departure).
+    #[test]
+    fn random_positions(l in numbers(1, 6), k in 0usize..6) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let v = &l[k % l.len()];
+        agree(giac, &format!("find({v},{})", list(&l)))?;
+        agree(giac, &format!("index({},{v})", list(&l)))?;
+    }
+
+    /// `count_eq`, `count_inf` and `count_sup` of a list, and of a matrix
+    /// flattened, by `row` or by `col` (`row` of a vector is giac's error).
+    #[test]
+    fn random_counts(
+        v in number(),
+        l in numbers(0, 6),
+        m in matrix(),
+        how in 0usize..3,
+        name in prop::sample::select(vec!["count_eq", "count_inf", "count_sup"]),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        agree(giac, &format!("{name}({v},{})", list(&l)))?;
+        let by = ["", ",row", ",col"][how];
+        agree(giac, &format!("{name}({v},{}{by})", rows(&m)))?;
+    }
+
+    /// `deltalist` of two or more, `accumulate_head_tail` with head and
+    /// tail at least 1 and fitting the list (else giac's errors,
+    /// departures), and `sizes` of lists.
+    #[test]
+    fn random_differences_and_sums(
+        l in numbers(2, 6),
+        h in 1usize..=5,
+        t in 1usize..=5,
+        ls in prop::collection::vec(numbers(0, 3), 0..=4),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        agree(giac, &format!("deltalist({})", list(&l)))?;
+        if h + t <= l.len() {
+            agree(giac, &format!("accumulate_head_tail({},{h},{t})", list(&l)))?;
+        }
+        let ls: Vec<String> = ls.iter().map(|l| list(l)).collect();
+        agree(giac, &format!("sizes({})", list(&ls)))?;
+    }
+
+    /// `makevector`, `newList`, `enumerate` from an integer start and
+    /// `copy`.
+    #[test]
+    fn random_builders(l in numbers(0, 6), n in -2i64..=6, k in -3i64..=3) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        agree(giac, &format!("makevector({})", l.join(",")))?;
+        agree(giac, &format!("newList({n})"))?;
+        agree(giac, &format!("enumerate({},{k})", list(&l)))?;
+        agree(giac, &format!("copy({})", list(&l)))?;
+    }
+
+    /// `apply` of a power or a shift to a list, and to a matrix with
+    /// `matrix`; `foldl` and `foldr` of a difference.
+    #[test]
+    fn random_maps_and_folds(
+        l in numbers(0, 6),
+        m in matrix(),
+        // From 1: giac's 0^0 is undef, a power's convention, not apply's.
+        e in 1u32..=3,
+        c in number(),
+        init in number(),
+        args in numbers(1, 5),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        agree(giac, &format!("apply(x->x^{e},{})", list(&l)))?;
+        agree(giac, &format!("apply(x->x+{c},{},matrix)", rows(&m)))?;
+        let args = args.join(",");
+        agree(giac, &format!("foldl((x,y)->x-y,{init},{args})"))?;
+        agree(giac, &format!("foldr((x,y)->x-y,{init},{args})"))?;
+    }
+
+    /// `multiply` of vectors (over the shorter), of matrices that fit,
+    /// of a matrix and a vector of its columns' or rows' length (a vector
+    /// longer than the rows is a departure), and of a scalar.
+    #[test]
+    fn random_products(
+        u in numbers(1, 4),
+        w in numbers(1, 4),
+        (a, b) in (1usize..=3, 1usize..=3, 1usize..=3).prop_flat_map(|(r, k, c)| (
+            prop::collection::vec(prop::collection::vec(number(), k), r),
+            prop::collection::vec(prop::collection::vec(number(), c), k),
+        )),
+        s in number(),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        agree(giac, &format!("multiply({},{})", list(&u), list(&w)))?;
+        agree(giac, &format!("multiply({},{})", rows(&a), rows(&b)))?;
+        let column: Vec<String> = b.iter().map(|r| r[0].clone()).collect();
+        agree(giac, &format!("multiply({},{})", rows(&a), list(&column)))?;
+        agree(giac, &format!("multiply({},{})", list(&a[0]), rows(&b)))?;
+        agree(giac, &format!("multiply({s},{})", rows(&a)))?;
+    }
+
+    /// `insert` at a position within the list, `subsop` of an index from
+    /// `-len` to `len-1` by a value or `NULL` (outside: giac's errors,
+    /// departures).
+    #[test]
+    fn random_insertions_and_substitutions(
+        l in numbers(1, 6),
+        p in 0usize..=6,
+        k in -6i64..6,
+        v in number(),
+        delete in any::<bool>(),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let len = i64::try_from(l.len()).expect("a short list");
+        let p = p % (l.len() + 1);
+        agree(giac, &format!("insert({},{p},{v})", list(&l)))?;
+        let k = k.rem_euclid(2 * len) - len;
+        let v = if delete { "NULL" } else { v.as_str() };
+        agree(giac, &format!("subsop({},{k}={v})", list(&l)))?;
+    }
+
+    /// `heappush` onto any list of numbers (libstdc++'s `push_heap` sifts
+    /// up whether or not it is a heap), by `<` or by `>`.
+    #[test]
+    fn random_heappush(l in numbers(0, 6), v in number(), greater in any::<bool>()) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let by = if greater { ",(a,b)->a>b" } else { "" };
+        agree(giac, &format!("heappush({},{v}{by})", list(&l)))?;
+    }
+
+    /// `nextperm` and `prevperm` of a permutation of `0..n`, and
+    /// `groupermu` of two of the same length (other lists: giac's errors,
+    /// departures).
+    #[test]
+    fn random_permutations(
+        (p, q) in (1usize..=6).prop_flat_map(|n| {
+            let perm = Just((0..n).collect::<Vec<_>>()).prop_shuffle();
+            (perm.clone(), perm)
+        }),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        agree(giac, &format!("nextperm({})", list(&p)))?;
+        agree(giac, &format!("prevperm({})", list(&p)))?;
+        agree(giac, &format!("groupermu({},{})", list(&p), list(&q)))?;
+    }
 }
