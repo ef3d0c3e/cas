@@ -94,6 +94,11 @@ A stack overflow on `eval`'s evaluation thread ends the process with SIGSEGV and
 libFuzzer's handler having no stack to run on; replay the corpus in batches
 (`…/release/eval -runs=1 corpus/eval/<files>`), and the last `Running:` line before the crash
 names the input.
+The workflow does this on CI in its replay mode,
+`gh workflow run fuzz.yml -f targets=<names> -f replay=true`: no fuzzing, the restored corpus
+runs once in batches of 500 files, and each failing batch prints its last input's name and
+base64 (`REPLAY CRASH`, `REPLAY BASE64`) and copies it to `artifacts/<target>/`, uploaded with
+the failed run.
 
 A finding is saved under `artifacts/<target>/` and uploaded with the failed run; fetch it
 with `gh run download`. Replaying that one input

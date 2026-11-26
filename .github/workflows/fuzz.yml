@@ -25,6 +25,13 @@
 # Caveat from fuzz/README.md: a stack overflow on eval's evaluation thread
 # ends the process with SIGSEGV and no artifact; the last `Running:` line in
 # the log names the input.
+#
+# Replay mode (`gh workflow run fuzz.yml -f targets=<names> -f replay=true`):
+# no fuzzing; the chosen targets' restored corpus runs once, in batches of
+# 500 files (`-runs=1`). A batch that fails has its last `Running:` file's
+# name and base64 printed (`REPLAY CRASH`) and copied to artifacts/<target>/,
+# which the failed run uploads; the job fails after the last batch. This
+# finds the input behind a crash without an artifact (fuzz/README.md).
 name: Fuzz
 
 on:
@@ -37,6 +44,9 @@ on:
       targets:
         description: Space-separated targets to run (empty = all)
         default: ''
+      replay:
+        description: Replay the restored corpus in batches instead of fuzzing (true/false)
+        default: 'false'
 
 concurrency:
   group: fuzz-${{ github.ref }}
@@ -186,7 +196,7 @@ jobs:
       # quarantine and returning freed pages keep the rest down; the crates
       # have no `unsafe`, so the shorter use-after-free window costs little.
       - name: Fuzz
-        if: steps.want.outputs.run == 'true'
+        if: steps.want.outputs.run == 'true' && inputs.replay != 'true'
         env:
           ASAN_OPTIONS: malloc_context_size=5:quarantine_size_mb=32:allocator_release_to_os_interval_ms=500
         run: |
@@ -196,8 +206,35 @@ jobs:
               ${{ steps.cfg.outputs.flags }} '${{ matrix.target }}' \
               'corpus/${{ matrix.target }}' ${seed:+"corpus/$seed"} -- \
               -max_total_time="$FUZZ_TIME" ${{ steps.cfg.outputs.libfuzzer }}
+      - name: Replay corpus
+        if: steps.want.outputs.run == 'true' && inputs.replay == 'true'
+        run: |
+          t='${{ matrix.target }}'
+          seed='${{ steps.cfg.outputs.seed }}'
+          cargo fuzz build --target x86_64-unknown-linux-gnu \
+              ${{ steps.cfg.outputs.flags }} "$t"
+          bin="target/x86_64-unknown-linux-gnu/release/$t"
+          mkdir -p "corpus/$t" ${seed:+"corpus/$seed"} "artifacts/$t" replay
+          find "corpus/$t" ${seed:+"corpus/$seed"} -type f | sort > replay/all
+          echo "$(wc -l < replay/all) files"
+          split -a 4 -l 500 replay/all replay/batch.
+          failed=0
+          for b in replay/batch.*; do
+            if ! xargs -a "$b" "$bin" -runs=1 ${{ steps.cfg.outputs.libfuzzer }} \
+                > replay/out 2>&1; then
+              failed=1
+              f=$(grep '^Running: ' replay/out | tail -n 1 | sed 's/^Running: //')
+              echo "REPLAY CRASH in batch $b: ${f:-before the first input}"
+              tail -n 30 replay/out
+              if [ -n "$f" ]; then
+                echo "REPLAY BASE64 $(base64 -w0 "$f")"
+                cp "$f" "artifacts/$t/"
+              fi
+            fi
+          done
+          exit $failed
       - name: Save corpus
-        if: always() && steps.want.outputs.run == 'true'
+        if: always() && steps.want.outputs.run == 'true' && inputs.replay != 'true'
         uses: actions/cache/save@v4
         with:
           path: fuzz/corpus/${{ matrix.target }}
