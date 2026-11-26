@@ -281,7 +281,7 @@ fn assignments_and_definitions() {
         ),
         ("assume(x > 0)", "Assume[Greater[x, 0]]"),
         ("purge(f, g)", "Clear[f, g]"),
-        ("Fill(7, A)", "Set[A, FillValue[7, A]]"),
+        ("Fill(7, A)", "Set[$A, FillValue[7, $A]]"),
     ]);
 }
 
