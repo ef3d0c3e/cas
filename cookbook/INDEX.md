@@ -98,3 +98,5 @@ C0095 | Reach-inside wrappers skip held parts of their own head: Together[Togeth
 C0096 | Gap ledger: tally giac-gap buckets by a failing script; verify alias claims in code | giac,gap,ledger,tally,alias,validation | 2026-11-26 | 1.8/T2 | R1.8-003 hand tally
 C0097 | Clippy on oracle departure tables (split + helper) and Option<Option> natives | clippy,oracle,departures,native,lint | 2026-11-26 | 1.8/T3 | T3.c1 CAS-639
 C0098 | Unit-test full forms: no decimals in parse_full_form; capital user names are $A | test,full-form,parse,lowering,cas-lang,ci | 2026-11-26 | 1.8/T3 | T3.c2 CAS-639
+C0099 | A new builtin captures a bare word natives match by name: grep it first | builtin,names,lowering,regression,en.txt | 2026-11-26 | 1.8/T4 | T4.c1 CAS-642
+C0100 | giac oracle rows: 12-digit decimals need a tolerance; session state is process-global | giac,oracle,tolerance,session,assume,addtable | 2026-11-26 | 1.8/T4 | T4.c1 CAS-640
