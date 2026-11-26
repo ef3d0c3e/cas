@@ -260,9 +260,11 @@ pub(in crate::native) fn multinomial<'e>(
     one.then_some(Variable::Discrete { weights: p, values })
 }
 
-/// Whether `e` is the symbol `multinomial`.
+/// Whether `e` is the symbol `multinomial`, which the language lowers to
+/// `MultinomialProbability` since giac's `multinomial` is built (CAS-642).
 pub(in crate::native) fn is_multinomial(e: &Expr) -> bool {
-    e.as_symbol().is_some_and(|s| s.name() == "multinomial")
+    e.as_symbol()
+        .is_some_and(|s| s == Symbol::MULTINOMIAL_PROBABILITY || s.name() == "multinomial")
 }
 
 /// `RandomMultinomial[P]`, `RandomMultinomial[P, V]`.

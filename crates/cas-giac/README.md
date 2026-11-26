@@ -617,7 +617,9 @@ ledger (CAS-640, CAS-641, CAS-642, CAS-643):
   for `b = 0`), `modf` (decimals, as giac's), `convert(e,expln)` (`trig2exp`, compared at
   `x = 1/3`), `avgRC` (its default step 0.001 compared at `x = 2`), `multinomial`, `order` of
   `a % n`, `maple_ifactors` and `box_constraints` (sequences compared inside `[...]`) read back
-  and compared; `addtable(fourier,...)` and `additionally` (also `assume(fact,additionally)`)
+  and compared, decimals within giac's 12 digits; `randvar(multinomial,...)` and the other
+  distribution forms keep reading `multinomial` (now `MultinomialProbability`) as the
+  distribution; `addtable(fourier,...)` and `additionally` (also `assume(fact,additionally)`)
   in one session on both sides, the latter pinned by `sign` and `abs` queries that need the
   added fact (giac's `about` prints its own record);
 - the departures, each with giac's answer: where giac errs, the call stays with a warning
@@ -627,7 +629,8 @@ ledger (CAS-640, CAS-641, CAS-642, CAS-643):
   `avgRC(x^2,x,1/10)` stays exact (giac's `10.0*((x+0.1)^2-x^2)`, R67); `atan2(x,0)` is
   `sign(x)*pi/2` (giac's `pi/2+(1-sign(x))*pi/2-2*pi*floor(...)`, equal for real `x != 0`);
   `addtable(laplace,g(t),G(s),t,s)` then `laplace(g(t),t,s)` answers `G(s)` (giac's `laplace`
-  does not consult the table: `integrate(g(t)*exp(-s*t),t,0,+infinity)`).
+  does not consult the table: `integrate(g(t)*exp(-s*t),t,0,+infinity)`); giac's `addtable` answers 0 for a pair it
+  holds already, its table outliving `restart`, ours 1 each time).
 
 `tests/integers.rs`, Xcas's integer functions (CAS-548 to CAS-553): giac's
 `chrem` of integers and of polynomials with integer moduli (coefficient by

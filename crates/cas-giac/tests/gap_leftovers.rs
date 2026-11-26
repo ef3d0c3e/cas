@@ -20,16 +20,44 @@ fn giac() -> Option<&'static Giac> {
     giac
 }
 
-/// giac's answers to `inputs`, read back, are this CAS's.
+/// giac's answers to `inputs`, read back, are this CAS's: the same, equal
+/// by `==`, or numbers within giac's 12 printed digits (C0006).
 fn check(inputs: &[&str]) {
     let Some(giac) = giac() else {
         return;
     };
+    let ctx = Context::new();
     let wrong: Vec<String> = inputs
         .iter()
-        .filter_map(|input| giac.agrees(input).err().map(|e| e.to_string()))
+        .filter_map(|input| {
+            let error = giac.agrees(input).err()?;
+            let close = match (giac.value(input), ours(input)) {
+                (Ok(theirs), Ok(mine)) => near(&ctx, &theirs, &mine),
+                _ => false,
+            };
+            (!close).then(|| error.to_string())
+        })
         .collect();
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Whether `a` and `b`, lists entry by entry, are numbers within 10⁻⁹ of
+/// each other once approximated.
+fn near(ctx: &Context, a: &Expr, b: &Expr) -> bool {
+    let list = Expr::from(Symbol::LIST);
+    if a.head() == Some(&list) && b.head() == Some(&list) {
+        return a.args().len() == b.args().len()
+            && a.args().iter().zip(b.args()).all(|(a, b)| near(ctx, a, b));
+    }
+    let gap = Expr::call(
+        Symbol::N,
+        [Expr::call(Symbol::ABS, [a.clone() - b.clone()])],
+    );
+    let bound = Expr::from(1) / Expr::from(1_000_000_000_i64);
+    ctx.eval(&Expr::call(Symbol::LESS, [gap, bound]))
+        .ok()
+        .and_then(|e| e.as_symbol())
+        == Some(Symbol::TRUE)
 }
 
 /// Departures: giac's printed answer (`None` for an error), and this CAS's
@@ -114,8 +142,8 @@ fn expressions() {
         "[modf(5)]",
         "[modf(7/2)]",
         "[modf(-7/2)]",
-        "evalf(subst(convert(sin(x),expln),x,1/3))",
-        "evalf(subst(convert(cos(x)+exp(x),expln),x,1/3))",
+        "evalf(subst(convert(sin(x),expln),x=1/3))",
+        "evalf(subst(convert(cos(x)+exp(x),expln),x=1/3))",
     ]);
 }
 
@@ -124,8 +152,8 @@ fn calculus_integers_and_boxes() {
     check(&[
         "avgRC(f(x),x,h)",
         "avgRC(x^2,x,0)",
-        "subst(avgRC(x^2,x),x,2)",
-        "subst(avgRC(x^2,x,1/10),x,2)",
+        "subst(avgRC(x^2,x),x=2)",
+        "subst(avgRC(x^2,x,1/10),x=2)",
         "multinomial(10,[0.5,0.5],[3,7])",
         "multinomial(10,[0.2,0.3,0.5],[1,3,6])",
         "multinomial(10,[1/2,1/2],[3,7])",
@@ -246,8 +274,9 @@ fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
 
 /// giac's `addtable(fourier, …)` and `additionally`, in a session: giac's
 /// values, one by one; `true` where giac's `assume` answers its variable
-/// and ours nothing: the last values only are compared, which depend on
-/// the added fact. The assumptions are on `w`, which no other row of
+/// and ours nothing, or giac's `addtable` answers 0 for a pair it holds
+/// already (its table outlives `restart`): the last values only are
+/// compared, which depend on the added fact or pair. The assumptions are on `w`, which no other row of
 /// this binary uses: giac's session is shared by the threads.
 #[test]
 fn sessions() {
@@ -258,8 +287,8 @@ fn sessions() {
     let mut wrong = Vec::new();
     for (input, last_only) in [
         ("addtable(fourier,y(x),Y(s),x,s);fourier(y(x),x,s)", false),
-        ("addtable(fourier,y(x),Y(s),x,s);fourier(y(t),t,u)", false),
-        ("addtable(fourier,y(x),Y(s),x,s);fourier(2*y(x),x,s)", false),
+        ("addtable(fourier,y(x),Y(s),x,s);fourier(y(t),t,u)", true),
+        ("addtable(fourier,y(x),Y(s),x,s);fourier(2*y(x),x,s)", true),
         ("assume(w>-5);additionally(w>1);sign(w-1)", true),
         ("assume(w>-5);assume(w>1,additionally);sign(w-1)", true),
         ("assume(w>-5);additionally(w>1);abs(w-1)", true),
