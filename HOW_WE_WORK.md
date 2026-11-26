@@ -64,7 +64,7 @@ PY = /usr/bin/python3
   close); Python prototypes and giac probes (`scripts/caseval.py`) are fine.
 - Test / the gate: CI only, never `cargo test`/`cargo fuzz`/benchmarks locally (`AGENTS.md`). Green means every job of
   `.github/workflows/ci.yml` (fmt, clippy on stable, test, fuzz-check, oracle) and `fuzz.yml` passes on the pushed commit
-- Modes: `gh workflow run fuzz.yml -f time_per_target=<s> [-f targets="<names>"]`; perf A/B `workload.yml` (C0001)
+- Modes: `gh workflow run fuzz.yml -f time_per_target=<s> [-f targets="<names>"]`; corpus replay `-f replay=true` (SIGSEGV with no artifact, C0106); perf A/B `workload.yml` (C0001)
 Long gates go through `tools/run.sh` with a raised timeout, never a poll loop.
 
 ## Conventions & house style <!-- roles: claude expert coder planner review auditor curator -->

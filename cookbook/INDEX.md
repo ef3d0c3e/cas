@@ -105,3 +105,4 @@ C0102 | Two coders in one working tree: build in a detached worktree | worktree,
 C0103 | giac clustering index= traps: silhouette aborts libgiac, message without period | giac,oracle,cluster,kmeans,silhouette,abort,index | 2026-11-26 | 1.8/T5 | T5.c2 CAS-646
 C0104 | giac's roundoff doubles (low 5 mantissa bits cleared): mask in double-counting ports | giac,float,double,roundoff,range,port,full-form | 2026-11-26 | 1.8/T5 | T5.c1 CAS-644
 C0105 | giac kmeans cluster_crit indices: numeric quirks to reproduce (WG identity, exact det, pivots) | giac,kmeans,cluster,index,port,float,determinant | 2026-11-26 | 1.8/T5 | T5.c3 CAS-646
+C0106 | eval SIGSEGV, no artifact: replay cached corpus on CI; bound native recursion with ev.enter | fuzz,eval,sigsegv,stack-overflow,replay,corpus,recursion,native | 2026-11-26 | 1.8/T5 | T5.c4 CAS-640
