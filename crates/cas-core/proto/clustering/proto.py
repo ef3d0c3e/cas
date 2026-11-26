@@ -283,6 +283,307 @@ def kmeans_core(x, k, min_k, max_k, maxiter, rng):
     if k > max_k: k = max_k
     return 0, k, [v-1 for v in (b_best if rough else b)]
 
+# ---------------- cluster_crit (optimization.cc:10784-11091), T5.c3 ----------------
+# Values: Fraction (giac exact), float (giac double), None (undef), complex (a non-real ln),
+# INF (giac's unsigned infinity, trace-WiB on a singular W).
+import cmath
+INF = float('inf')
+
+def real(v):
+    return v is not None and not isinstance(v, complex) and v == v
+
+EPS = 1e-12  # giac's epsilon(contextptr)
+
+def doublerref_det(a):
+    """in_doublerref's determinant (vecteur.cc:9752-9871, rref_or_det_or_lu=1): the column's largest
+    pivot, entries under epspivot zeroed (1e-12 first, then eps*|pivot|)."""
+    N = [[float(v) for v in r] for r in a]; n = len(N)
+    idet = 1.0; epspivot = max(EPS, 1e-13); l = c = 0
+    while l < n and c < n:
+        pivot = N[l][c]
+        if abs(pivot) < epspivot: pivot = N[l][c] = 0.0
+        if l == n - 1: return idet * pivot
+        pl = l
+        for lt in range(l + 1, n):
+            t = N[lt][c]
+            if abs(t) < epspivot: t = N[lt][c] = 0.0
+            if abs(t) > abs(pivot): pivot = t; pl = lt
+        if pivot == 0: return 0.0
+        epspivot = abs(EPS * pivot)
+        if pl != l: N[l], N[pl] = N[pl], N[l]; idet = -idet
+        N[l] = [v / pivot for v in N[l]]
+        idet = idet * pivot
+        for lt in range(l + 1, n):
+            f = -N[lt][c]
+            for j in range(c + 1, n): N[lt][j] += f * N[l][j]
+        c += 1; l += 1
+    return idet
+
+def det(a):
+    """_det: exact on an exact matrix, else doublerref on its doubles (mrref, vecteur.cc:7414-7450)."""
+    if all(isinstance(v, (int, Fraction)) for r in a for v in r):
+        n = len(a); m = [[Fraction(v) for v in r] for r in a]; d = Fraction(1)
+        for c in range(n):
+            piv = next((r for r in range(c, n) if m[r][c] != 0), None)
+            if piv is None: return Fraction(0)
+            if piv != c: m[c], m[piv] = m[piv], m[c]; d = -d
+            d *= m[c][c]
+            for r in range(c + 1, n):
+                f = m[r][c] / m[c][c]
+                m[r] = [x - f*y for x, y in zip(m[r], m[c])]
+        return d
+    return doublerref_det(a)
+
+def inverse(a):
+    """A double matrix's inverse by Gauss-Jordan; None when singular (giac: infinity)."""
+    if doublerref_det(a) == 0: return None
+    n = len(a); m = [[float(v) for v in r] + [1.0 if i == j else 0.0 for j in range(n)] for i, r in enumerate(a)]
+    for c in range(n):
+        piv = max(range(c, n), key=lambda r: abs(m[r][c]))
+        m[c], m[piv] = m[piv], m[c]
+        pv = m[c][c]; m[c] = [v / pv for v in m[c]]
+        for r in range(n):
+            if r != c:
+                f = m[r][c]; m[r] = [x - f*y for x, y in zip(m[r], m[c])]
+    return [r[n:] for r in m]
+
+def blocks(a):
+    """The index sets of is_blockmatrix's recursive split (vecteur.cc:11907): the connected
+    components of i ~ j when a[i][j] or a[j][i] is non-zero, each in increasing order."""
+    n = len(a); seen = [False]*n; out = []
+    for st in range(n):
+        if seen[st]: continue
+        comp = [st]; seen[st] = True; q = [st]
+        while q:
+            i = q.pop()
+            for j in range(n):
+                if not seen[j] and (a[i][j] != 0 or a[j][i] != 0): seen[j] = True; comp.append(j); q.append(j)
+        out.append(sorted(comp))
+    return out
+
+def fdiv(a, b):
+    """A double division as giac's: by 0.0 an infinity (giac prints infinity), 0/0 undef."""
+    if b == 0: return None if a == 0 else (INF if a > 0 else -INF)
+    return a / b
+
+def gdiv(a, b):
+    """giac's a/b with b a double: b == 1.0 leaves a (exact) as is."""
+    return a if b == 1.0 else a / b
+
+class ClusterCrit:
+    def __init__(s, pts):
+        s.pts = pts; s.N = len(pts); s.p = len(pts[0])
+        s.mu0 = [sum((q[j] for q in pts), 0) / s.N for j in range(s.p)]
+        s.T = [[1 if i == j else 0 for j in range(s.p)] for i in range(s.p)]  # _T=midn(p)
+        s.ET = 0
+        for q in pts: s.ET += float(sum(((a - b)**2 for a, b in zip(q, s.mu0)), 0))
+        s.vmap = {}; s.optvals = {}
+    def init(s, K, b, centers, wss):
+        s.K = K; s.ci = [v - 1 for v in b]
+        s.n = [0]*K
+        for c in s.ci: s.n[c] += 1
+        s.mu = [list(c) for c in centers]; s.wgss = list(wss)
+        s.WGSS = 0
+        for w in wss: s.WGSS += w
+        s.have_T = s.have_WG = False; s.dcache = {}; s.dbmm = None
+    def Tm(s):
+        if not s.have_T:
+            p, N = s.p, s.N
+            for i in range(p):
+                for j in range(i, p):
+                    v = 0
+                    for l in range(N): v += (s.pts[l][i] - s.mu0[i]) * (s.pts[l][j] - s.mu0[j])
+                    s.T[i][j] = v
+                    if i != j: s.T[j][i] = v
+            s.have_T = True
+        return s.T
+    def TSS(s, j):
+        v = 0
+        for l in range(s.N): v += (s.pts[l][j] - s.mu0[j])**2
+        return v
+    def WG(s, k=-1):
+        if not s.have_WG:
+            p = s.p; s.WGk = []; s.WGsum = None
+            for c in range(s.K):
+                W = [[0]*p for _ in range(p)]
+                for i in range(p):
+                    for j in range(i, p):
+                        v = 0
+                        for l in range(s.N):
+                            if s.ci[l] == c: v += (s.pts[l][i] - s.mu[c][i]) * (s.pts[l][j] - s.mu[c][j])
+                        W[i][j] = v
+                        if i != j: W[j][i] = s.T[i][j]  # giac's quirk: _T's entry (optimization.cc:10880)
+                s.WGk.append(W)
+                s.WGsum = W if s.WGsum is None else [[x + y for x, y in zip(r1, r2)] for r1, r2 in zip(s.WGsum, W)]
+            s.have_WG = True
+        return s.WGsum if k < 0 else s.WGk[k]
+    def BGSS(s, j=-1):
+        if j < 0:
+            t = 0
+            for jj in range(s.p): t += s.BGSS(jj)
+            return t
+        v = 0
+        for c in range(s.K): v += s.n[c] * (s.mu[c][j] - s.mu0[j])**2
+        return v
+    def BG(s):
+        p = s.p; B = [[0]*p for _ in range(p)]
+        for i in range(p):
+            for j in range(i, p):
+                v = 0
+                for c in range(s.K): v += s.n[c] * (s.mu[c][i] - s.mu0[i]) * (s.mu[c][j] - s.mu0[j])
+                B[i][j] = v; B[j][i] = v
+        return B
+    def Delta(s, k, l):
+        key = (min(k, l), max(k, l))
+        if key not in s.dcache:
+            s.dcache[key] = float(sum((a - b)**2 for a, b in zip(s.mu[k], s.mu[l])))**0.5
+        return s.dcache[key]
+    def DB(s, d):
+        if s.dbmm is None:
+            lo, hi = INF, -INF
+            for k in range(s.K):
+                for l in range(k+1, s.K):
+                    D = s.Delta(k, l); lo = min(lo, D); hi = max(hi, D)
+            s.dbmm = (lo, hi)
+        return s.dbmm[0] if d < 0 else s.dbmm[1]
+    # the indices
+    def banfeld_raftery(s):
+        r = 0
+        for k in range(s.K):
+            if s.wgss[k] == 0: return None
+            r += s.n[k] * cmath.log(s.wgss[k] / s.n[k]).real
+        return float(r)
+    def calinski_harabasz(s):
+        if s.K <= 1: return None
+        return fdiv((s.N - s.K) * s.BGSS(), (s.K - 1) * s.WGSS)
+    def davies_bouldin(s):
+        M = [-INF]*s.K
+        for k in range(s.K):
+            for l in range(s.K):
+                if k != l:
+                    v = fdiv(s.wgss[k]/s.n[k] + s.wgss[l]/s.n[l], s.Delta(k, l))
+                    if v is None: return None
+                    M[k] = max(v, M[k])
+        return sum(M) / s.K
+    def pbm(s):
+        v = fdiv(s.ET * s.DB(1), s.K * s.WGSS)
+        return None if v is None else v**2
+    def ratkowsky_lance(s):
+        r = 0
+        for j in range(s.p):
+            t = s.TSS(j)
+            if t == 0: return None
+            r += s.BGSS(j) / t
+        return float(r / s.p)**0.5
+    def ray_turi(s):
+        return fdiv(s.WGSS, s.N * s.DB(-1)**2)
+    def scott_symons(s):
+        r = 0
+        for k in range(s.K):
+            d = det(s.WG(k))
+            if d == 0: return None
+            x = d / s.n[k]
+            if x < 0: return None
+            r += s.n[k] * cmath.log(x).real
+        return float(r)
+    def det_ratio(s):
+        den = det(s.WG())
+        if den == 0: return None
+        return gdiv(det(s.Tm()), den)
+    def log_det_ratio(s):
+        num = det(s.Tm()); den = det(s.WG())
+        if num == 0 or den == 0: return None
+        r = gdiv(num, den)
+        if isinstance(r, Fraction): return 0 if r == 1 else complex(0, 0)  # ln of a rational: symbolic, not real
+        return s.N * cmath.log(r) if r < 0 else s.N * cmath.log(r).real
+    def ksq_detW(s):
+        return s.K * s.K * det(s.WG())
+    def log_ss_ratio(s):
+        num, den = s.BGSS(), s.WGSS
+        if num == 0 or den == 0: return None
+        return cmath.log(num / den).real
+    def trace_W(s): return s.WGSS
+    def trace_WiB(s):
+        """minv (vecteur.cc:11996) splits W into is_blockmatrix's blocks (:11907); a singular block's
+        LU inverse has infinities: its trace undef (NaN) when B is 0 on it, else infinity (probes)."""
+        W, B = s.WG(), s.BG(); t = 0.0
+        for blk in blocks(W):
+            Wb = [[W[i][j] for j in blk] for i in blk]
+            inv = inverse(Wb)
+            if inv is None:
+                if all(B[i][j] == 0 for i in blk for j in blk): return None
+                t = INF; continue
+            t += sum(inv[a][b] * B[blk[b]][blk[a]] for a in range(len(blk)) for b in range(len(blk)))
+        return float(t)
+    def ball_hall(s):
+        r = 0
+        for k in range(s.K): r += s.wgss[k] / s.n[k]
+        return r / s.K
+    def update(s, pos, val, d):
+        v = s.vmap.setdefault(pos, []); v.append(val)
+        if val is None: return
+        V = val
+        elbow = d in (-2, 2)
+        if elbow:
+            if len(v) < 3: return
+            if any(x is None for x in v[-3:]): return
+            V = v[-1] - 2*v[-2] + v[-3]
+        if not real(V): return
+        Vd = float(V)
+        o = s.optvals.get(pos)
+        if o is None or (d < 0 and o[1] > Vd) or (d > 0 and o[1] < Vd):
+            s.optvals[pos] = (s.K - 1 if elbow else s.K, Vd)
+    def compute_indices(s, crit):
+        pos = 0
+        for bit, f, d in ((1, s.banfeld_raftery, -1), (2, s.davies_bouldin, -1), (4, s.ray_turi, -1),
+                          (8, s.scott_symons, -1), (16, s.calinski_harabasz, 1), (32, s.pbm, 1),
+                          (64, s.ratkowsky_lance, 1), (128, s.det_ratio, -2), (256, s.log_det_ratio, -2),
+                          (512, s.log_ss_ratio, -2), (2048, s.ball_hall, 2), (1024, s.ksq_detW, 2),
+                          (4096, s.trace_W, 2), (8192, s.trace_WiB, 2)):
+            if crit & bit: s.update(pos, f(), d); pos += 1
+    def ncopt(s):
+        sugg = {}
+        for k_, _ in s.optvals.values(): sugg[k_] = sugg.get(k_, 0) + 1
+        best, num = 0, 0
+        for k_ in sorted(sugg):
+            if best == 0 or sugg[k_] > num: best, num = k_, sugg[k_]
+        return best
+
+KMEANS_INDEX = {'banfeld-raftery': 1, 'davies-bouldin': 2, 'ray-turi': 4, 'scott-symons': 8,
+                'calinski-harabasz': 16, 'pbm': 32, 'ratkowsky-lance': 64, 'det': 128, 'log-det': 128,
+                'ksq-detW': 1024, 'log-ss': 512, 'ball-hall': 2048, 'trace-W': 4096, 'trace-WiB': 8192,
+                'all': 16383}
+
+def kmeans_index(x, pts, meth, min_k, max_k, maxiter, rng):
+    """kmeans' index path (optimization.cc:10682-10750, meth > 0): per-k runs seeded by the
+    previous labels, Hartigan's rough optimum caps max_k at 2k, labels of cluster_crit's ncopt.
+    Returns (code, k, res, kvals, values of the first index)."""
+    m, n = len(x), len(x[0])
+    W_prev = 0.0; rough = False; b = None
+    ccr = ClusterCrit(pts); b_map = {}; kvals = []
+    k = min_k
+    while k <= max_k:
+        tries = 0
+        while True:
+            d = init_cluster_centers(x, None if (k == min_k or tries > 0) else b, m, k, rng)
+            ifault, b2, e, dev, c = kmns(x, m, n, d, k, maxiter)
+            if b2 is not None: b = b2
+            if not (ifault == 1 and tries < 10): break
+            tries += 1
+        if ifault != 0: return ifault, k, None, None, None
+        if not rough:
+            W = 0.0
+            for i in range(k): W += dev[i]
+            if W > 0 and W_prev > 0:
+                if (W_prev/W - 1)*(m - k) <= 10:
+                    rough = True; max_k = min(max_k, 2*k)
+            W_prev = W
+        ccr.init(k, b, c, dev); ccr.compute_indices(meth)
+        kvals.append(k); b_map[k] = [v-1 for v in b]
+        k += 1
+    k = ccr.ncopt()
+    return 0, k, b_map.get(k, []), kvals, ccr.vmap.get(0, [])
+
 # ---------------- hclust (optimization.cc:11102-11443) ----------------
 SINGLE, AVERAGE, COMPLETE, WEIGHTED, WARD = 1, 2, 3, 4, 5
 DBL_MAX = sys.float_info.max
@@ -485,6 +786,14 @@ def raw(g):
 
 def fmt_list(v): return '[' + ','.join(str(x) for x in v) + ']'
 
+def fmt_val(v):
+    """An index value as giac prints it: 12 digits, a/b, "not defined" (undef), infinity."""
+    if v is None: return '"not defined"'
+    if v in (INF, -INF): return 'infinity' if v > 0 else '-infinity'
+    if isinstance(v, Fraction): return str(v)
+    if isinstance(v, complex): return '(%r)' % v
+    return '%.12g' % v
+
 def clustering_result(data, p, out_what, k, res):
     if out_what == 2: return fmt_list(res)
     if out_what == 4: return str(k)
@@ -524,6 +833,29 @@ def kmeans_cmd(args, rng):
                 c = parse_count(rh)
                 if c[0] == 'k': k = c[1]
                 else: min_k, max_k = c[1], c[2]
+            elif is_sym(lh, 'count_sup'):
+                if not is_int(rh): raise GErr('Expected a positive integer')
+                max_k = min(int(rh.v), NP-1)
+            elif is_sym(lh, 'count_inf'):
+                if not is_int(rh): raise GErr('Expected a positive integer')
+                min_k = max(int(rh.v), 2)
+            elif is_sym(lh, 'limit'):
+                if not is_int(rh) or rh.v < 1: raise GErr('Expected a positive integer')
+                maxiter = int(rh.v)
+            elif is_sym(lh, 'index'):  # :11668-11686
+                if is_sym(rh, 'true') or is_sym(rh, 'false'): k = -16 if rh.n == 'true' else 0
+                elif isinstance(rh, Str):
+                    cr = KMEANS_INDEX.get(rh.v, -1)
+                    if cr < 0: raise GErr('Unknown index name')
+                    k = -cr
+                elif isinstance(rh, Lst) and rh.items and all(isinstance(t, Str) for t in rh.items):
+                    agg = 0
+                    for t in rh.items:
+                        cr = KMEANS_INDEX.get(t.v, -1)
+                        if cr < 0: raise GErr('Unknown index name')
+                        agg |= cr
+                    k = -agg
+                else: raise GErr('Expected a string or list of strings', True)
             elif is_sym(lh, 'output'):
                 if is_sym(rh, 'part'): out_what = 1
                 elif is_sym(rh, 'list'): out_what = 2
@@ -546,8 +878,15 @@ def kmeans_cmd(args, rng):
         x = [[float(g.v)] for g in data]
     else:
         x = [[float(c.v) for c in g.items] for g in data]
+    if k < 0:
+        pts = [[c.v for c in g.items] for g in data] if isinstance(data[0], Lst) else [[g.v] for g in data]
+        code, k, res, kvals, ind = kmeans_index(x, pts, -k, min_k, max_k, maxiter, rng)
+        if code != 0: return '[]'
+        if out_what == 5: return fmt_list('[%d,%s]' % (kv, fmt_val(v)) for kv, v in zip(kvals, ind))
+        return clustering_result(data, p, out_what, k, res)
     code, k, res = kmeans_core(x, k, min_k, max_k, maxiter, rng)
     if code != 0: return '[]'
+    if out_what == 5: return '[]'  # count=a..a with an index: k fixed, no index values (probe c3/p1)
     return clustering_result(data, p, out_what, k, res)
 
 def cluster_cmd(args, want_dg=False, depart=False):
@@ -691,6 +1030,7 @@ def main():
     print('TOTAL rows=%d OK=%d FAIL=%d UB=%d seed-dependent kmeans rows=%d' % (len(rows), nok, nfail, nub, len(seeddep)))
     extras()
     nfail += t5()
+    nfail += t5c3()
     return 0 if nfail == 0 else 1
 
 NUM = re.compile(r'-?\d+(?:\.\d*)?(?:e[-+]?\d+)?')
@@ -721,10 +1061,12 @@ def t5():
             name = None
         if name not in ('cluster', 'kmeans'):
             print('T5 | %s | skip (not cluster/kmeans)' % c); continue
-        try:
-            ours = run(c, seed or 0)
-        except NotImplementedError:
-            print('T5 | %s | skip (kmeans index=, not ported here)' % c); continue
+        ours = run(c, seed or 0)
+        if name == 'kmeans' and 'index=' in c and not giac.startswith('GIAC'):
+            g = giac.split(',', 1)[1] if seed is not None else giac
+            st = 'OK' if reachable(re.sub(r'^srand\(\d+\);', '', c), g) else 'FAIL'
+            print('T5 | %s | giac: %s | kmeans index=, over %d seeds (T5.c3) | %s' % (c, giac, NSEEDS, st))
+            nfail += st == 'FAIL'; continue
         if seed is not None and not ours.startswith('GIAC_ERROR'): ours = '%d,%s' % (seed, ours) if ',' not in ours[:len(str(seed)) + 1] else ours
         if giac.startswith('<stderr>'):
             st = 'OK(abort)' if ours == '<abort>' else 'FAIL'
@@ -743,6 +1085,43 @@ def t5():
             print('T5 | %s | giac: %s | ours: %s | %s' % (c, giac, ours, st))
         nfail += st == 'FAIL'
     print('T5 TOTAL FAIL=%d' % nfail)
+    return nfail
+
+def reachable(line, g):
+    """Whether some Python seed of 0..NSEEDS-1 gives giac's answer g to line (giac's _rand stream is not
+    ours): labels up to renaming, parts as sets of groups, index values within 12 digits, the whole
+    vector or else each [k, value] by some seed. Returns None or 'seed' or 'per-k'."""
+    def key(a):
+        if a.startswith('list['): return ('part', groups(a))
+        lab = labels_of(a)
+        if lab is not None and not a.startswith('[['): return ('lab', canon(lab))
+        return ('txt', a)
+    runs = [run(line, sd) for sd in range(NSEEDS)]
+    kg = key(g)
+    if any(key(r) == kg if kg[0] != 'txt' else close(g, r) for r in runs): return 'seed'
+    if g.startswith('[['):
+        per = {}
+        for r in runs:
+            for kk, v in re.findall(r'\[(\d+),([^\[\]]*)\]', r): per.setdefault(kk, []).append(v)
+        if all(any(close(v, w) for w in per.get(kk, [])) for kk, v in re.findall(r'\[(\d+),([^\[\]]*)\]', g)):
+            return 'per-k'
+    return None
+
+def t5c3():
+    """T5.c3 (CAS-646): kmeans index= against probe_clustering3, each row reachable over the seeds."""
+    cas = open(SRC + 'probe_clustering3.cas').read().splitlines()
+    out = open(SRC + 'probe_clustering3.out').read().splitlines()
+    nfail = 0; nind = 0
+    for c, o in zip(cas, out):
+        pre = c + '  =>  '
+        assert o.startswith(pre), o
+        g = o[len(pre):].rstrip()
+        line = re.sub(r'^srand\(\d+\);', '', c)
+        if re.match(r'srand\(\d+\);', c) and not g.startswith('GIAC'): g = g.split(',', 1)[1]
+        r = reachable(line, g)
+        nind += r == 'per-k'; nfail += r is None
+        if r is None: print('T5c3 FAIL | %s | giac: %s | seed 0: %s' % (c, g, run(line, 0)))
+    print('T5c3 rows=%d per-k=%d FAIL=%d' % (len(cas), nind, nfail))
     return nfail
 
 E6 = '[[0,0],[0,1],[5,5],[5,6],[10,0],[10,1]]'

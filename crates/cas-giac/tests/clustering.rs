@@ -13,9 +13,13 @@
 //! `output=part`, lists of strings, `cluster`'s `index=`; the silhouette's
 //! values within 1e-9 (C0100). giac aborts on the silhouette with `max_k ≥
 //! N` (optimization.cc:11325): those rows are departures, giac not asked
-//! (C0021).
+//! (C0021). T5.c3 (CAS-646, giac's answers in
+//! crates/cas-core/proto/giac/probe_clustering3.out, the prototype's `t5c3`):
+//! `kmeans`' `index=`, its seed-independent values and counts as rows,
+//! the seed-dependent ones as departures (each `[k, value]` among the
+//! prototype's over 200 seeds, giac's among them).
 
-use cas_core::{Context, EvalOptions, Expr, View, Warning};
+use cas_core::{Context, EvalOptions, Expr, Symbol, View, Warning};
 use cas_giac::{Giac, ours};
 use cas_lang::{Hook, Names, decimal_balls, lower, parse};
 
@@ -25,6 +29,8 @@ const E12: &str =
     "[[0,0],[0,1],[1,0],[10,10],[10,11],[11,10],[20,0],[20,1],[21,0],[0,20],[1,20],[0,21]]";
 const P8: &str = "[[0,0],[1,0],[0,2],[4,4],[5,5],[4,6],[9,1],[10,0]]";
 const WORDS: &str = r#"["hello","hallo","world","word","help"]"#;
+/// Two well-separated groups of three: `kmeans`' indices seed-independent.
+const S6: &str = "[[0,0],[0,1],[1,0],[10,10],[10,11],[11,10]]";
 
 /// The shared library, or `None` with a note: the checks skip.
 fn giac() -> Option<&'static Giac> {
@@ -873,4 +879,311 @@ fn stay_rows(rows: &[(String, String)]) {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `kmeans`' `output=index` rows: a value, `None` for "not defined",
+/// `ComplexInfinity` (giac's `infinity`) as an infinity.
+fn kmeans_rows(e: &Expr) -> Option<Vec<(i64, Option<f64>)>> {
+    e.args()
+        .iter()
+        .map(|row| match row.args() {
+            [k, v] => {
+                let v = match v.view() {
+                    View::Ball(b) => Some(b.mid().to_f64()),
+                    _ if v.as_str() == Some("not defined") => None,
+                    _ if v.as_symbol() == Some(Symbol::COMPLEX_INFINITY) => Some(f64::INFINITY),
+                    _ => return None,
+                };
+                Some((k.as_i64()?, v))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// A value within 1e-9 (giac prints 12 digits), the same infinity, or both
+/// undefined.
+fn near_value(a: Option<f64>, b: Option<f64>) -> bool {
+    match (a, b) {
+        (Some(a), Some(b)) => a.total_cmp(&b).is_eq() || (a - b).abs() <= 1e-9 * a.abs().max(1.0),
+        (None, None) => true,
+        _ => false,
+    }
+}
+
+/// `kmeans`' seed-independent `output=index` rows (the prototype's one
+/// answer over 200 seeds): giac's, ours and the recorded one alike.
+#[test]
+fn kmeans_index_values() {
+    let not = "\"not defined\"";
+    let calinski = "[[2,450.0],[3,246.136363636],[4,201.111111111],[5,151.083333333]]";
+    let ray = "[[2,0.00222222222222],[3,0.244444444444],[4,0.133333333333],[5,0.0833333333333]]";
+    let banfeld = format!("[[2,-4.8655812973],[3,{not}],[4,{not}],[5,{not}]]");
+    let trace = "[[2,2.66666666667],[3,1.83333333333],[4,1.0],[5,0.5]]";
+    let rows = [
+        (format!("kmeans({S6},index=\"calinski-harabasz\",output=index)"), calinski.to_owned()),
+        (format!("kmeans({S6},index=true,output=index)"), calinski.to_owned()),
+        (
+            "kmeans([[0.0,0],[0,1],[1,0],[10,10],[10,11],[11,10]],index=\"calinski-harabasz\",output=index)"
+                .to_owned(),
+            calinski.to_owned(),
+        ),
+        (format!("kmeans({S6},index=\"ray-turi\",output=index)"), ray.to_owned()),
+        (format!("kmeans({S6},index=[\"pbm\",\"ray-turi\"],output=index)"), ray.to_owned()),
+        (format!("kmeans({S6},index=\"banfeld-raftery\",output=index)"), banfeld.clone()),
+        (format!("kmeans({S6},index=\"all\",output=index)"), banfeld),
+        (
+            format!("kmeans({S6},index=\"scott-symons\",output=index)"),
+            format!("[[2,-11.4572550293],[3,{not}],[4,{not}],[5,{not}]]"),
+        ),
+        (
+            format!("kmeans({S6},index=\"ratkowsky-lance\",output=index)"),
+            "[[2,0.9955849674],[3,0.996966765383],[4,0.998346650839],[5,0.999173667398]]".to_owned(),
+        ),
+        (
+            format!("kmeans({S6},index=\"log-ss\",output=index)"),
+            "[[2,4.72295322164],[3,5.10042059797],[4,5.70932265503],[5,6.40412592209]]".to_owned(),
+        ),
+        (
+            format!("kmeans({S6},index=\"ball-hall\",output=index)"),
+            "[[2,0.444444444444],[3,0.231481481481],[4,0.125],[5,0.05]]".to_owned(),
+        ),
+        (format!("kmeans({S6},index=\"trace-W\",output=index)"), trace.to_owned()),
+        (format!("kmeans(matrix({S6}),index=\"trace-W\",output=index)"), trace.to_owned()),
+        (
+            "kmeans([[0,0],[0,1],[1/2,0],[10,10],[10,11],[21/2,10]],index=\"trace-W\",output=index)"
+                .to_owned(),
+            "[[2,1.66666666667],[3,0.958333333333],[4,0.25],[5,0.125]]".to_owned(),
+        ),
+    ];
+    let giac = giac();
+    let mut wrong = Vec::new();
+    let same = |a: &Option<Vec<(i64, Option<f64>)>>, b: &Option<Vec<(i64, Option<f64>)>>| {
+        matches!((a, b), (Some(a), Some(b)) if a.len() == b.len()
+            && a.iter().zip(b).all(|((k, v), (l, w))| k == l && near_value(*v, *w)))
+    };
+    for (input, answer) in &rows {
+        let expected = ours(answer).ok().as_ref().and_then(kmeans_rows);
+        let mine = ours(input).ok().as_ref().and_then(kmeans_rows);
+        if expected.is_none() || !same(&mine, &expected) {
+            wrong.push(format!("{input}: ours {mine:?}, wanted {answer}"));
+        }
+        if let Some(giac) = giac {
+            let theirs = giac.value(input).ok().as_ref().and_then(kmeans_rows);
+            if !same(&theirs, &expected) {
+                wrong.push(format!("{input}: giac {theirs:?}, recorded {answer}"));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `kmeans`' seed-independent counts and labels with `index=`: the `k` the
+/// indices suggest (none for an elbow over two `k`: no labels, count 0);
+/// the last of `k`, `count=k` and `index=` wins.
+#[test]
+fn kmeans_index_counts() {
+    let count = |index: &str, rest: &str| format!("kmeans({S6},index={index}{rest},output=count)");
+    let mut rows = vec![
+        (count("\"calinski-harabasz\"", ""), "2"),
+        (count("\"davies-bouldin\"", ""), "2"),
+        (count("\"pbm\"", ""), "5"),
+        (count("\"ratkowsky-lance\"", ""), "5"),
+        (count("\"ksq-detW\"", ""), "4"),
+        (count("\"log-ss\"", ""), "4"),
+        (count("\"ball-hall\"", ""), "3"),
+        (count("\"trace-W\"", ""), "4"),
+        (count("\"all\"", ""), "2"),
+        (count("false", ""), "2"),
+        (count("\"pbm\"", ",3"), "3"),
+        (format!("kmeans({S6},2,index=\"pbm\",output=count)"), "5"),
+        (count("\"ball-hall\"", ",count=2..3"), "0"),
+        (format!("kmeans({S6},index=\"ball-hall\",count=2..3)"), "[]"),
+        (
+            format!("kmeans({S6},index=\"ball-hall\",count=2..3,output=part)"),
+            "[]",
+        ),
+        (
+            format!("kmeans({S6},count=2..2,index=\"pbm\",output=index)"),
+            "[]",
+        ),
+        (format!("kmeans({S6},count=1..3,index=\"pbm\")"), "[]"),
+    ];
+    for (index, k) in [
+        ("davies-bouldin", "4"),
+        ("ratkowsky-lance", "4"),
+        ("det", "3"),
+        ("log-det", "3"),
+        ("ksq-detW", "3"),
+        ("log-ss", "3"),
+        ("ball-hall", "3"),
+        ("trace-W", "3"),
+        ("trace-WiB", "3"),
+        ("all", "3"),
+    ] {
+        rows.push((
+            format!("kmeans({E12},count=2..4,index=\"{index}\",output=count)"),
+            k,
+        ));
+    }
+    for index in ["det", "ksq-detW", "ball-hall", "trace-WiB"] {
+        rows.push((
+            format!("kmeans({E12},count=3..4,index=\"{index}\",output=count)"),
+            "0",
+        ));
+    }
+    answer_rows(&rows);
+    let giac = giac();
+    let mut wrong = Vec::new();
+    let partition = |e: Option<Expr>| e.and_then(|e| labels(&e)).map(|l| canonical(&l));
+    for index in [
+        "\"banfeld-raftery\"",
+        "\"ray-turi\"",
+        "\"scott-symons\"",
+        "\"calinski-harabasz\"",
+        "true",
+        "\"all\"",
+    ] {
+        let input = format!("kmeans({S6},index={index})");
+        let mine = partition(ours(&input).ok());
+        if mine.as_deref() != Some(&[0, 0, 0, 1, 1, 1][..]) {
+            wrong.push(format!("{input}: ours {mine:?}"));
+        }
+        if let Some(giac) = giac {
+            let theirs = partition(giac.value(&input).ok());
+            if theirs != mine {
+                wrong.push(format!("{input}: giac {theirs:?}"));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Departures, `kmeans`' seed-dependent `index=` rows: each `[k, value]`
+/// of giac's answer and ours among the prototype's at that `k` over 200
+/// seeds (giac's recorded answers in `probe_clustering3.out`).
+#[test]
+fn kmeans_index_departures() {
+    type Allowed = &'static [(i64, &'static [Option<f64>])];
+    let det: Allowed = &[
+        (2, &[Some(338.25)]),
+        (3, &[Some(4.005_921_539_6)]),
+        (4, &[None, Some(2_405.333_333_33)]),
+        (5, &[None]),
+    ];
+    let rows: [(&str, Allowed); 6] = [
+        ("det", det),
+        ("log-det", det),
+        (
+            "ksq-detW",
+            &[
+                (2, &[Some(7.111_111_111_11)]),
+                (3, &[Some(7.0)]),
+                (4, &[Some(0.0), Some(4.0)]),
+                (5, &[Some(0.0)]),
+            ],
+        ),
+        (
+            "trace-WiB",
+            &[
+                (2, &[Some(281.25)]),
+                (3, &[Some(418.857_142_857)]),
+                (4, &[Some(f64::INFINITY), Some(603.333_333_333)]),
+                (5, &[Some(f64::INFINITY)]),
+            ],
+        ),
+        (
+            "davies-bouldin",
+            &[
+                (2, &[Some(0.062_853_936_105_5)]),
+                (3, &[Some(0.165_571_716_426), Some(0.165_299_149_551)]),
+                (4, &[Some(0.223_606_797_75)]),
+                (5, &[Some(0.099_956_096_710_8), Some(0.100_131_499_76)]),
+            ],
+        ),
+        (
+            "pbm",
+            &[
+                (2, &[Some(644_112.5)]),
+                (3, &[Some(616_181.899_806), Some(627_538.153_25)]),
+                (4, &[Some(1_209_500.138_89), Some(1_203_774.694_44)]),
+                (5, &[Some(3_239_227.448_89), Some(3_096_320.355_56)]),
+            ],
+        ),
+    ];
+    let giac = giac();
+    let mut wrong = Vec::new();
+    for (index, allowed) in rows {
+        let input = format!("kmeans({S6},index=\"{index}\",output=index)");
+        let among = |r: &Option<Vec<(i64, Option<f64>)>>| {
+            r.as_ref().is_some_and(|r| {
+                r.len() == allowed.len()
+                    && r.iter()
+                        .zip(allowed)
+                        .all(|((k, v), (l, vs))| k == l && vs.iter().any(|w| near_value(*v, *w)))
+            })
+        };
+        let mine = ours(&input).ok().as_ref().and_then(kmeans_rows);
+        if !among(&mine) {
+            wrong.push(format!("{input}: ours {mine:?}"));
+        }
+        if let Some(giac) = giac {
+            let theirs = giac.value(&input).ok().as_ref().and_then(kmeans_rows);
+            if !among(&theirs) {
+                wrong.push(format!("{input}: giac {theirs:?}"));
+            }
+        }
+    }
+    for (index, counts) in [("trace-WiB", ["3", "4"]), ("det", ["0", "3"])] {
+        let input = format!("kmeans({S6},index=\"{index}\",output=count)");
+        let allowed: Vec<Option<Expr>> = counts.iter().map(|c| ours(c).ok()).collect();
+        let mine = ours(&input).ok();
+        if !allowed.contains(&mine) {
+            wrong.push(format!("{input}: ours {mine:?}"));
+        }
+        if let Some(giac) = giac {
+            let theirs = giac.value(&input).ok();
+            if !allowed.contains(&theirs) {
+                wrong.push(format!("{input}: giac {theirs:?}"));
+            }
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `kmeans`' `index=` errors stay with giac's message.
+#[test]
+fn kmeans_index_errors_stay() {
+    let value = |m: &str| format!("GIAC_ERROR: {m}. Error: Bad Argument Value");
+    let kind = |m: &str| format!("GIAC_ERROR: {m}. Error: Bad Argument Type");
+    let strings = "Expected a string or list of strings";
+    let none = "No index specified for output";
+    stay_rows(&[
+        (
+            format!("kmeans({S6},index=[\"foo\"])"),
+            value("Unknown index name"),
+        ),
+        (
+            format!("kmeans({S6},index=\"Ball-hall\")"),
+            value("Unknown index name"),
+        ),
+        (
+            format!("kmeans({E12},index=\"foo\")"),
+            value("Unknown index name"),
+        ),
+        (format!("kmeans({S6},index=[])"), kind(strings)),
+        (format!("kmeans({S6},index=5)"), kind(strings)),
+        (
+            format!("kmeans({S6},index=\"pbm\",count=2,output=index)"),
+            value(none),
+        ),
+        (
+            format!("kmeans({S6},index=\"pbm\",2,output=index)"),
+            value(none),
+        ),
+        (
+            format!("kmeans({E12},index=false,output=index)"),
+            value(none),
+        ),
+    ]);
 }

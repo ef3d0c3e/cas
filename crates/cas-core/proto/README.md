@@ -21,7 +21,8 @@ only in their paths and a line naming the task they came from.
   writes `expected.txt`; `extra.cas`. Cited by `src/native/statistics/{density,fitting}/tests.rs`,
   `crates/cas-giac/tests/{fitdistr,kernel_density}.rs`, C0084.
 - `clustering/` (T6.c1, CAS-630): `proto.py` ports kmeans (AS 136) and cluster (hclust) from
-  optimization.cc against `giac/probe4.out`, `probe8.out`. Cited by
+  optimization.cc against `giac/probe4.out`, `probe8.out`; 1.8/T5 `t5` (`probe_clustering2`) and
+  `t5c3` (`probe_clustering3`: kmeans' `cluster_crit` indices, every row over 200 seeds). Cited by
   `src/native/statistics/clustering{.rs,/tests.rs}`, `crates/cas-giac/tests/clustering.rs`, R1.7-012.
 - `sound/clip/` (T7.c1, CAS-631): `proto.py` the audio clip with giac's 47-bit gen doubles,
   `proto_f64.py` the same in plain f64; rows from `giac/probe5,9,10,11.out` and `dur.out`; each writes

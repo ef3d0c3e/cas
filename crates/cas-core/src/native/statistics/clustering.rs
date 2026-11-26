@@ -1,7 +1,7 @@
 //! Clustering (CAS-630): Xcas's `kmeans` and `cluster` (giac
 //! optimization.cc: AS 136 `optra` :9862, `qtran` :10096, `kmns` :10292;
 //! `init_cluster_centers` :10622, `kmeans` :10654; `comp_dist` :10765;
-//! `hclust` :11102-11443; `clustering_result` :11571, `_kmeans` :11610,
+//! `cluster_crit` :10784-11091; `hclust` :11102-11443; `clustering_result` :11571, `_kmeans` :11610,
 //! `_cluster` :11737), ported from crates/cas-core/proto/clustering/proto.py (R1.7-012).
 //!
 //! - **Data.** A list of real numbers (1-D points) or of equal-length
@@ -20,6 +20,25 @@
 //!   over a given one, as giac's. `limit=` the iterations (100). `k ≤ 1` or
 //!   `k ≥ m` answers `[]` with no draw (giac's fault 3); no convergence or
 //!   no start answers `[]` with giac's message as the warning.
+//! - **`kmeans`' `index=`** (a name, a list of them OR'd, `true` for
+//!   `"calinski-harabasz"`, `false` for Hartigan's rule; the last of `k`,
+//!   `count=k` and `index=` wins, as giac's): giac's `cluster_crit`, each `k`
+//!   from the least up, its first start from the previous `k`'s classes,
+//!   Hartigan's rough optimum capping the largest `k` at `2k`. The fourteen
+//!   indices, in giac's order: Banfeld–Raftery, Davies–Bouldin, Ray–Turi,
+//!   Scott–Symons (least), Calinski–Harabasz, PBM, Ratkowsky–Lance
+//!   (greatest), the determinant, log determinant and log sum-of-squares
+//!   ratios (least second difference), Ball–Hall, `k² det W`, `trace W`,
+//!   `trace W⁻¹B` (greatest second difference); `"log-det"` names the
+//!   determinant ratio, as giac's, the log one only comes with `"all"`. As
+//!   giac's: the total scatter exact on exact data, a double elsewhere; the
+//!   within scatter's lower triangle copied from the total scatter last
+//!   computed (the identity's zeros before), the determinant `in_doublerref`'s
+//!   (pivots under 1e-12 relative are zero), exact over a determinant of
+//!   exactly 1.0; a division by zero `ComplexInfinity` (giac's `infinity`),
+//!   `trace W⁻¹B` of a singular block of `W` too, or undefined where `B`
+//!   vanishes on it. The labels of the `k` most indices suggest (the least
+//!   of a tie; none: `[]`, count 0).
 //! - **`Cluster[data, options…]`** (`cluster`): agglomerative clustering,
 //!   single linkage by Prim's tree (the default), `type="complete"`,
 //!   `"average"`, `"weighted"` and `"ward"` by the nearest-neighbour chain
@@ -40,9 +59,10 @@
 //!   `cluster` (`output=list`, the default), the number of clusters
 //!   (`output=count`), exact integers, or the clusters by label, each the
 //!   data items in order (`output=part`). `cluster`'s `output=index`: the
-//!   rows `[k, value]` of the silhouette. `output=plot`, `tree`, `kmeans`'
-//!   `index=` (its criteria, not ported), `display=`, `color=` (and
-//!   `labels=` for `cluster`) leave the call without a warning.
+//!   rows `[k, value]` of the silhouette; `kmeans`': those of its first
+//!   index, "not defined" where undefined (`[]` when `count=a..a` fixes
+//!   `k`). `output=plot`, `tree`, `display=`, `color=` (and `labels=` for
+//!   `cluster`) leave the call without a warning.
 //! - **Errors** leave the call with giac's message as the warning: "No
 //!   data found", kmeans' "Data must be numeric", "Invalid k-range", "Invalid
 //!   output specification", "No index specified for output", "Unknown
@@ -56,7 +76,7 @@
 //!   `m(m − 1)/2` and `m n`, with the silhouette the pairs times its steps,
 //!   on strings the pairs times the longest's bytes and that length squared;
 //!   `kmeans` `11 m n Σk` over the `k` tried and `m n
-//!   k limit`; past them the call stays with "too many points". `qtran`
+//!   k limit`, with an index `(m n² + k² n + n³)` per `k`; past them the call stays with "too many points". `qtran`
 //!   stops after `terms/n` steps (giac's has no bound; a fault 2); the loops
 //!   poll the interrupt.
 
@@ -100,6 +120,8 @@ const UNKNOWN_INDEX: &str = "Unknown index name";
 const STRINGS: &str = "Expected a string or list of strings";
 /// `mtran([kvals, values])` of unequal or empty lists (optimization.h:640).
 const TRANSPOSE: &str = "Unable to transpose";
+/// An undefined index value in `kmeans`' `output=index` (:10741).
+const NOT_DEFINED: &str = "not defined";
 const POSITIVE: &str = "Expected a positive integer";
 const RANGE: &str = "Expected a range of positive integers";
 const COUNT: &str = "Expected an integer or range";
@@ -294,7 +316,7 @@ fn output(rh: &Expr, tree: bool) -> Result<Output, &'static str> {
 
 /// Options that only draw: the call stays without a warning.
 fn drawing(lh: &Expr) -> bool {
-    named(lh, "display") || named(lh, "color") || is(lh, Symbol::FIRST_POSITION, "index")
+    named(lh, "display") || named(lh, "color")
 }
 
 /// `count_sup=k` and `count_inf=k`: any integer.
@@ -523,11 +545,12 @@ enum Fault {
     Size,
 }
 
-/// A run's labels `1 … k` and each cluster's sum of squares, or its fault.
-type Clusters = Result<(Vec<usize>, Vec<f64>), Fault>;
+/// A run's labels `1 … k`, each cluster's sum of squares and its centre, or
+/// its fault.
+type Clusters = Result<(Vec<usize>, Vec<f64>, Vec<Vec<f64>>), Fault>;
 
 /// `kmns` (:10292-10589) on `points` from the centres `c0`: the labels
-/// `1 … k` of the points and each cluster's sum of squares.
+/// `1 … k` of the points, each cluster's sum of squares and its centre.
 #[allow(clippy::cast_precision_loss, reason = "cluster sizes")]
 #[allow(
     clippy::needless_range_loop,
@@ -660,7 +683,11 @@ fn kmns(
     if let Some(f) = fault {
         return Ok(Err(f));
     }
-    Ok(Ok((s.ic1[1..].to_vec(), wss[1..].to_vec())))
+    Ok(Ok((
+        s.ic1[1..].to_vec(),
+        wss[1..].to_vec(),
+        s.c.split_off(1),
+    )))
 }
 
 /// A natural below `n`, `n ≥ 1`, from the session's generator.
@@ -745,7 +772,7 @@ fn kmeans_core(
     let m = x.len();
     if k > 0 {
         return Ok(
-            run(ev, x, None, k, limits)?.map(|(b, _)| (k, b.iter().map(|l| l - 1).collect()))
+            run(ev, x, None, k, limits)?.map(|(b, _, _)| (k, b.iter().map(|l| l - 1).collect()))
         );
     }
     let mut w_prev = 0.0;
@@ -755,7 +782,7 @@ fn kmeans_core(
     let mut k = min_k;
     while k <= max_k {
         let ind = (k != min_k).then_some(&b[..]);
-        let (labels, wss) = match run(ev, x, ind, k, limits)? {
+        let (labels, wss, _) = match run(ev, x, ind, k, limits)? {
             Ok(r) => r,
             Err(f) => return Ok(Err(f)),
         };
@@ -782,6 +809,861 @@ fn kmeans_core(
     Ok(Ok((k, labels.iter().map(|l| l - 1).collect())))
 }
 
+// ---------------- cluster_crit (optimization.cc:10784-11091) ----------------
+
+/// `kmeans`' index bits (optimization.h:89-105) in `compute_indices`' order
+/// (:11040-11058), each with its direction: `-1` the least value, `1` the
+/// greatest, `∓2` the least or greatest second difference (an elbow).
+const KMEANS_INDICES: [(u32, i8); 14] = [
+    (1, -1),   // banfeld-raftery
+    (2, -1),   // davies-bouldin
+    (4, -1),   // ray-turi
+    (8, -1),   // scott-symons
+    (16, 1),   // calinski-harabasz
+    (32, 1),   // pbm
+    (64, 1),   // ratkowsky-lance
+    (128, -2), // det ratio
+    (256, -2), // log det ratio
+    (512, -2), // log ss ratio
+    (2048, 2), // ball-hall
+    (1024, 2), // ksq-detW
+    (4096, 2), // trace-W
+    (8192, 2), // trace-WiB
+];
+
+/// `index=true` on `kmeans`: Calinski and Harabasz's index (:11669).
+const CALINSKI: u32 = 16;
+
+/// giac's `epsilon` (1e-12), `in_doublerref`'s threshold.
+const EPSILON: f64 = 1e-12;
+
+/// `cluster_crit::name2index` (:11060-11076): "log-det" names the
+/// determinant ratio, as giac's (its log ratio only comes with "all").
+fn kmeans_index(name: &str) -> Option<u32> {
+    Some(match name {
+        "banfeld-raftery" => 1,
+        "davies-bouldin" => 2,
+        "ray-turi" => 4,
+        "scott-symons" => 8,
+        "calinski-harabasz" => CALINSKI,
+        "pbm" => 32,
+        "ratkowsky-lance" => 64,
+        "det" | "log-det" => 128,
+        "ksq-detW" => 1024,
+        "log-ss" => 512,
+        "ball-hall" => 2048,
+        "trace-W" => 4096,
+        "trace-WiB" => 8192,
+        "all" => 16383,
+        _ => return None,
+    })
+}
+
+/// A number of `cluster_crit`: exact on exact data, else a double; a sum
+/// or product with a double is a double, as giac's.
+#[derive(Clone, Debug)]
+enum Num {
+    Exact(Rational),
+    Real(f64),
+}
+
+impl Num {
+    fn zero() -> Num {
+        Num::Exact(Rational::from(Integer::ZERO))
+    }
+
+    fn value(&self) -> f64 {
+        match self {
+            Num::Exact(q) => to_f64(q),
+            Num::Real(v) => *v,
+        }
+    }
+
+    fn is_zero(&self) -> bool {
+        match self {
+            Num::Exact(q) => q.is_zero(),
+            Num::Real(v) => *v == 0.0,
+        }
+    }
+
+    fn add(&self, o: &Num) -> Num {
+        match (self, o) {
+            (Num::Exact(a), Num::Exact(b)) => Num::Exact(a + b),
+            _ => Num::Real(self.value() + o.value()),
+        }
+    }
+
+    fn sub(&self, o: &Num) -> Num {
+        match (self, o) {
+            (Num::Exact(a), Num::Exact(b)) => Num::Exact(a - b),
+            _ => Num::Real(self.value() - o.value()),
+        }
+    }
+
+    fn mul(&self, o: &Num) -> Num {
+        match (self, o) {
+            (Num::Exact(a), Num::Exact(b)) => Num::Exact(a * b),
+            _ => Num::Real(self.value() * o.value()),
+        }
+    }
+}
+
+/// An index value: giac's undef, a real (an infinity giac's `infinity`), an
+/// exact rational, or a value not real (the logarithm of a negative or of a
+/// rational, complex or symbolic in giac).
+#[derive(Clone, Debug)]
+enum Value {
+    Undef,
+    Real(f64),
+    Exact(Rational),
+    NotReal,
+}
+
+impl Value {
+    /// A double; NaN is undef.
+    fn real(v: f64) -> Value {
+        if v.is_nan() {
+            Value::Undef
+        } else {
+            Value::Real(v)
+        }
+    }
+
+    fn number(&self) -> Option<f64> {
+        match self {
+            Value::Real(v) => Some(*v),
+            Value::Exact(q) => Some(to_f64(q)),
+            Value::Undef | Value::NotReal => None,
+        }
+    }
+}
+
+/// giac's `is_one` on a double: a division by it leaves an exact
+/// numerator exact.
+fn is_one(x: f64) -> bool {
+    x.total_cmp(&1.0) == Ordering::Equal
+}
+
+/// A double division as giac's: by zero an infinity, `0/0` undef.
+fn ratio(a: f64, b: f64) -> Value {
+    if b == 0.0 {
+        if a == 0.0 {
+            Value::Undef
+        } else {
+            Value::Real(if a > 0.0 {
+                f64::INFINITY
+            } else {
+                f64::NEG_INFINITY
+            })
+        }
+    } else {
+        Value::real(a / b)
+    }
+}
+
+/// `in_doublerref`'s determinant (vecteur.cc:9752-9871): the column's
+/// largest pivot, entries below the threshold (1e-12, then 1e-12 times the
+/// pivot) zero.
+#[allow(
+    clippy::needless_range_loop,
+    reason = "giac's indexed loops, ported literally"
+)]
+fn doublerref_det(a: &[Vec<f64>]) -> f64 {
+    let mut m = a.to_vec();
+    let n = m.len();
+    let mut det = 1.0;
+    let mut threshold = EPSILON;
+    for c in 0..n {
+        let mut pivot = m[c][c];
+        if pivot.abs() < threshold {
+            pivot = 0.0;
+            m[c][c] = 0.0;
+        }
+        if c == n - 1 {
+            return det * pivot;
+        }
+        let mut line = c;
+        for l in c + 1..n {
+            let mut t = m[l][c];
+            if t.abs() < threshold {
+                t = 0.0;
+                m[l][c] = 0.0;
+            }
+            if t.abs() > pivot.abs() {
+                pivot = t;
+                line = l;
+            }
+        }
+        if pivot == 0.0 {
+            return 0.0;
+        }
+        threshold = (EPSILON * pivot).abs();
+        if line != c {
+            m.swap(c, line);
+            det = -det;
+        }
+        for v in &mut m[c] {
+            *v /= pivot;
+        }
+        det *= pivot;
+        for l in c + 1..n {
+            let f = -m[l][c];
+            for j in c + 1..n {
+                let t = m[c][j];
+                m[l][j] += f * t;
+            }
+        }
+    }
+    det
+}
+
+/// `_det`: exact on an exact matrix, else `in_doublerref`'s on its doubles
+/// (mrref, vecteur.cc:7414-7450).
+#[allow(
+    clippy::needless_range_loop,
+    reason = "giac's indexed loops, ported literally"
+)]
+fn determinant(a: &[Vec<Num>]) -> Num {
+    let exact: Option<Vec<Vec<Rational>>> = a
+        .iter()
+        .map(|r| {
+            r.iter()
+                .map(|v| match v {
+                    Num::Exact(q) => Some(q.clone()),
+                    Num::Real(_) => None,
+                })
+                .collect()
+        })
+        .collect();
+    let Some(mut m) = exact else {
+        let d: Vec<Vec<f64>> = a
+            .iter()
+            .map(|r| r.iter().map(Num::value).collect())
+            .collect();
+        return Num::Real(doublerref_det(&d));
+    };
+    let n = m.len();
+    let mut det = Rational::from(Integer::from(1u64));
+    for c in 0..n {
+        let Some(p) = (c..n).find(|&r| !m[r][c].is_zero()) else {
+            return Num::zero();
+        };
+        if p != c {
+            m.swap(c, p);
+            det = -det;
+        }
+        det = &det * &m[c][c];
+        for r in c + 1..n {
+            let f = &m[r][c] / &m[c][c];
+            for j in c..n {
+                let t = &f * &m[c][j];
+                m[r][j] = &m[r][j] - &t;
+            }
+        }
+    }
+    Num::Exact(det)
+}
+
+/// The inverse of a double matrix by Gauss–Jordan, `None` when
+/// `in_doublerref`'s determinant is zero.
+#[allow(
+    clippy::needless_range_loop,
+    reason = "giac's indexed loops, ported literally"
+)]
+fn inverse(a: &[Vec<f64>]) -> Option<Vec<Vec<f64>>> {
+    if doublerref_det(a) == 0.0 {
+        return None;
+    }
+    let n = a.len();
+    let mut m: Vec<Vec<f64>> = a
+        .iter()
+        .enumerate()
+        .map(|(i, r)| {
+            let mut row = r.clone();
+            row.extend((0..n).map(|j| if i == j { 1.0 } else { 0.0 }));
+            row
+        })
+        .collect();
+    for c in 0..n {
+        let p = (c..n)
+            .max_by(|&x, &y| m[x][c].abs().total_cmp(&m[y][c].abs()))
+            .unwrap_or(c);
+        m.swap(c, p);
+        let pv = m[c][c];
+        for v in &mut m[c] {
+            *v /= pv;
+        }
+        for r in 0..n {
+            if r != c {
+                let f = m[r][c];
+                for j in 0..2 * n {
+                    let t = m[c][j];
+                    m[r][j] -= f * t;
+                }
+            }
+        }
+    }
+    Some(m.into_iter().map(|r| r[n..].to_vec()).collect())
+}
+
+/// `is_blockmatrix`'s split, recursively (vecteur.cc:11907, `minv`
+/// :11996): the connected components of `i ~ j` when `a[i][j]` or
+/// `a[j][i]` is non-zero, each increasing.
+fn blocks(a: &[Vec<f64>]) -> Vec<Vec<usize>> {
+    let n = a.len();
+    let mut seen = vec![false; n];
+    let mut out = Vec::new();
+    for start in 0..n {
+        if seen[start] {
+            continue;
+        }
+        seen[start] = true;
+        let (mut component, mut queue) = (vec![start], vec![start]);
+        while let Some(i) = queue.pop() {
+            for j in 0..n {
+                if !seen[j] && (a[i][j] != 0.0 || a[j][i] != 0.0) {
+                    seen[j] = true;
+                    component.push(j);
+                    queue.push(j);
+                }
+            }
+        }
+        component.sort_unstable();
+        out.push(component);
+    }
+    out
+}
+
+/// A scatter matrix of `cluster_crit`.
+type Scatter = Vec<Vec<Num>>;
+
+/// giac's `cluster_crit`: the data's fixed parts, the clustering of the
+/// current `k` (`init`), and each index's values and optimum so far.
+struct Crit<'a> {
+    pts: &'a [Vec<Num>],
+    x: &'a [Vec<f64>],
+    p: usize,
+    /// The barycentre `mu()`.
+    mu0: Vec<Num>,
+    /// `_T`: the identity until first computed, then kept (:10880 reads it).
+    t: Vec<Vec<Num>>,
+    et: f64,
+    k: usize,
+    ci: Vec<usize>,
+    size: Vec<usize>,
+    mu: Vec<Vec<f64>>,
+    wgss: Vec<f64>,
+    wgss_sum: f64,
+    have_t: bool,
+    /// Each cluster's `WG(k)` and their sum, once computed for this `k`.
+    wg: Option<(Vec<Scatter>, Scatter)>,
+    /// `_vmap`: each index's values, by position.
+    values: Vec<Vec<Value>>,
+    /// `_optvals`: each index's suggested `k` and its value.
+    optimal: BTreeMap<usize, (usize, f64)>,
+}
+
+#[allow(
+    clippy::cast_precision_loss,
+    reason = "point and cluster counts as giac's int times double"
+)]
+impl<'a> Crit<'a> {
+    /// The constructor (:10784-10801).
+    fn new(pts: &'a [Vec<Num>], x: &'a [Vec<f64>]) -> Crit<'a> {
+        let (m, p) = (pts.len(), pts[0].len());
+        let count = Rational::from(Integer::from(m as u64));
+        let mu0: Vec<Num> = (0..p)
+            .map(
+                |j| match pts.iter().fold(Num::zero(), |s, q| s.add(&q[j])) {
+                    Num::Exact(s) => Num::Exact(&s / &count),
+                    Num::Real(s) => Num::Real(s / m as f64),
+                },
+            )
+            .collect();
+        let t = (0..p)
+            .map(|i| {
+                (0..p)
+                    .map(|j| {
+                        if i == j {
+                            Num::Exact(Rational::from(Integer::from(1u64)))
+                        } else {
+                            Num::zero()
+                        }
+                    })
+                    .collect()
+            })
+            .collect();
+        let et = pts.iter().fold(0.0, |s, q| {
+            let d = q.iter().zip(&mu0).fold(Num::zero(), |d, (a, b)| {
+                let t = a.sub(b);
+                d.add(&t.mul(&t))
+            });
+            s + d.value()
+        });
+        Crit {
+            pts,
+            x,
+            p,
+            mu0,
+            t,
+            et,
+            k: 0,
+            ci: Vec::new(),
+            size: Vec::new(),
+            mu: Vec::new(),
+            wgss: Vec::new(),
+            wgss_sum: 0.0,
+            have_t: false,
+            wg: None,
+            values: Vec::new(),
+            optimal: BTreeMap::new(),
+        }
+    }
+
+    /// `init` (:10809-10831): labels `1 … k`, centres, sums of squares.
+    fn init(&mut self, k: usize, labels: &[usize], centers: Vec<Vec<f64>>, wgss: Vec<f64>) {
+        self.k = k;
+        self.ci = labels.iter().map(|l| l - 1).collect();
+        self.size = vec![0; k];
+        for &c in &self.ci {
+            self.size[c] += 1;
+        }
+        self.mu = centers;
+        self.wgss_sum = wgss.iter().fold(0.0, |s, w| s + w);
+        self.wgss = wgss;
+        self.have_t = false;
+        self.wg = None;
+    }
+
+    /// `T()` (:10832-10850), kept in `_T`.
+    fn total(&mut self) -> Vec<Vec<Num>> {
+        if !self.have_t {
+            for i in 0..self.p {
+                for j in i..self.p {
+                    let v = self.pts.iter().fold(Num::zero(), |s, q| {
+                        s.add(&q[i].sub(&self.mu0[i]).mul(&q[j].sub(&self.mu0[j])))
+                    });
+                    self.t[j][i] = v.clone();
+                    self.t[i][j] = v;
+                }
+            }
+            self.have_t = true;
+        }
+        self.t.clone()
+    }
+
+    /// `TSS(j)` (:10851-10861).
+    fn tss(&self, j: usize) -> Num {
+        self.pts.iter().fold(Num::zero(), |s, q| {
+            let d = q[j].sub(&self.mu0[j]);
+            s.add(&d.mul(&d))
+        })
+    }
+
+    /// `WG(l)` (:10862-10884): each cluster's scatter above the diagonal;
+    /// below it giac copies `_T`'s entry (the identity's 0 before any
+    /// `T()`), and the sum adds those too.
+    fn within(&mut self) -> &(Vec<Scatter>, Scatter) {
+        if self.wg.is_none() {
+            let p = self.p;
+            let mut each = Vec::with_capacity(self.k);
+            let mut sum: Option<Vec<Vec<Num>>> = None;
+            for c in 0..self.k {
+                let mut w = vec![vec![Num::zero(); p]; p];
+                for i in 0..p {
+                    for j in i..p {
+                        let mut v = 0.0;
+                        for (l, q) in self.x.iter().enumerate() {
+                            if self.ci[l] == c {
+                                v += (q[i] - self.mu[c][i]) * (q[j] - self.mu[c][j]);
+                            }
+                        }
+                        w[i][j] = Num::Real(v);
+                        if i != j {
+                            w[j][i] = self.t[i][j].clone();
+                        }
+                    }
+                }
+                sum = Some(match sum {
+                    None => w.clone(),
+                    Some(s) => s
+                        .iter()
+                        .zip(&w)
+                        .map(|(a, b)| a.iter().zip(b).map(|(u, v)| u.add(v)).collect())
+                        .collect(),
+                });
+                each.push(w);
+            }
+            self.wg = Some((each, sum.unwrap_or_default()));
+        }
+        self.wg.as_ref().expect("computed")
+    }
+
+    fn within_det(&mut self, c: Option<usize>) -> f64 {
+        let (each, sum) = self.within();
+        determinant(c.map_or(sum, |c| &each[c])).value()
+    }
+
+    /// `BG()` (:10885-10900).
+    #[allow(
+        clippy::needless_range_loop,
+        reason = "giac's indexed loops, ported literally"
+    )]
+    fn between(&self) -> Vec<Vec<f64>> {
+        let p = self.p;
+        let mut b = vec![vec![0.0; p]; p];
+        for i in 0..p {
+            for j in i..p {
+                let mut v = 0.0;
+                for c in 0..self.k {
+                    v += self.size[c] as f64
+                        * (self.mu[c][i] - self.mu0[i].value())
+                        * (self.mu[c][j] - self.mu0[j].value());
+                }
+                b[i][j] = v;
+                b[j][i] = v;
+            }
+        }
+        b
+    }
+
+    /// `BGSS(j)` (:10901-10911).
+    fn bgss(&self, j: usize) -> f64 {
+        (0..self.k).fold(0.0, |s, c| {
+            let d = self.mu[c][j] - self.mu0[j].value();
+            s + self.size[c] as f64 * (d * d)
+        })
+    }
+
+    fn bgss_sum(&self) -> f64 {
+        (0..self.p).fold(0.0, |s, j| s + self.bgss(j))
+    }
+
+    /// `Delta(k, l)` (:10802-10808): the centres' distance.
+    fn delta(&self, k: usize, l: usize) -> f64 {
+        squared(&self.mu[k], &self.mu[l]).sqrt()
+    }
+
+    /// `DB(dir)` (:10912-10925): the least (`dir < 0`) or greatest distance
+    /// of two centres.
+    fn db(&self, least: bool) -> f64 {
+        let mut v = if least {
+            f64::INFINITY
+        } else {
+            f64::NEG_INFINITY
+        };
+        for k in 0..self.k {
+            for l in k + 1..self.k {
+                let d = self.delta(k, l);
+                v = if least { v.min(d) } else { v.max(d) };
+            }
+        }
+        v
+    }
+
+    /// The index of bit `bit` (:10926-11024).
+    #[allow(
+        clippy::too_many_lines,
+        reason = "the fourteen indices, in giac's order"
+    )]
+    fn index(&mut self, bit: u32) -> Value {
+        let (k, n) = (self.k as f64, self.x.len() as f64);
+        match bit {
+            // banfeld-raftery
+            1 => {
+                let mut r = 0.0;
+                for c in 0..self.k {
+                    if self.wgss[c] == 0.0 {
+                        return Value::Undef;
+                    }
+                    let size = self.size[c] as f64;
+                    r += size * (self.wgss[c] / size).ln();
+                }
+                Value::real(r)
+            }
+            // davies-bouldin
+            2 => {
+                let mut sum = 0.0;
+                for c in 0..self.k {
+                    let mut most = f64::NEG_INFINITY;
+                    for l in (0..self.k).filter(|&l| l != c) {
+                        let s =
+                            self.wgss[c] / self.size[c] as f64 + self.wgss[l] / self.size[l] as f64;
+                        match ratio(s, self.delta(c, l)) {
+                            Value::Real(v) => most = most.max(v),
+                            _ => return Value::Undef,
+                        }
+                    }
+                    sum += most;
+                }
+                Value::real(sum / k)
+            }
+            // ray-turi
+            4 => {
+                let d = self.db(true);
+                ratio(self.wgss_sum, n * (d * d))
+            }
+            // scott-symons
+            8 => {
+                let mut r = 0.0;
+                for c in 0..self.k {
+                    let d = self.within_det(Some(c));
+                    let size = self.size[c] as f64;
+                    if d == 0.0 || d / size < 0.0 {
+                        return Value::Undef;
+                    }
+                    r += size * (d / size).ln();
+                }
+                Value::real(r)
+            }
+            // calinski-harabasz
+            16 if self.k <= 1 => Value::Undef,
+            16 => ratio((n - k) * self.bgss_sum(), (k - 1.0) * self.wgss_sum),
+            // pbm
+            32 => match ratio(self.et * self.db(false), k * self.wgss_sum) {
+                Value::Real(v) => Value::real(v * v),
+                v => v,
+            },
+            // ratkowsky-lance
+            64 => {
+                let mut r = 0.0;
+                for j in 0..self.p {
+                    let t = self.tss(j);
+                    if t.is_zero() {
+                        return Value::Undef;
+                    }
+                    r += self.bgss(j) / t.value();
+                }
+                Value::real((r / self.p as f64).sqrt())
+            }
+            // det ratio: `det(T)/det(WG)`, exact when `det(WG)` is 1.0
+            // (giac's division by a one).
+            128 => {
+                let den = self.within_det(None);
+                if den == 0.0 {
+                    return Value::Undef;
+                }
+                match determinant(&self.total()) {
+                    Num::Exact(q) if is_one(den) => Value::Exact(q),
+                    num => Value::real(num.value() / den),
+                }
+            }
+            // log det ratio: `T()` first.
+            256 => {
+                let num = determinant(&self.total());
+                let den = self.within_det(None);
+                if num.is_zero() || den == 0.0 {
+                    return Value::Undef;
+                }
+                match num {
+                    Num::Exact(q) if is_one(den) => {
+                        if q.is_one() {
+                            Value::Exact(Rational::from(Integer::ZERO))
+                        } else {
+                            Value::NotReal
+                        }
+                    }
+                    num => {
+                        let r = num.value() / den;
+                        if r < 0.0 {
+                            Value::NotReal
+                        } else {
+                            Value::real(n * r.ln())
+                        }
+                    }
+                }
+            }
+            // log ss ratio
+            512 => {
+                let (b, w) = (self.bgss_sum(), self.wgss_sum);
+                if b == 0.0 || w == 0.0 {
+                    Value::Undef
+                } else {
+                    Value::real((b / w).ln())
+                }
+            }
+            // ksq-detW
+            1024 => Value::real(k * k * self.within_det(None)),
+            // ball-hall
+            2048 => {
+                let s = (0..self.k).fold(0.0, |s, c| s + self.wgss[c] / self.size[c] as f64);
+                Value::real(s / k)
+            }
+            // trace-W
+            4096 => Value::real(self.wgss_sum),
+            // trace-WiB: `minv` inverts each block; a singular block's LU
+            // inverse has infinities, its trace undef where `BG` is zero on
+            // it, else giac's `infinity` (probes, prototype `trace_WiB`).
+            _ => {
+                let w: Vec<Vec<f64>> = self
+                    .within()
+                    .1
+                    .iter()
+                    .map(|r| r.iter().map(Num::value).collect())
+                    .collect();
+                let b = self.between();
+                let mut t = 0.0;
+                for block in blocks(&w) {
+                    let sub: Vec<Vec<f64>> = block
+                        .iter()
+                        .map(|&i| block.iter().map(|&j| w[i][j]).collect())
+                        .collect();
+                    let Some(inv) = inverse(&sub) else {
+                        if block.iter().all(|&i| block.iter().all(|&j| b[i][j] == 0.0)) {
+                            return Value::Undef;
+                        }
+                        t = f64::INFINITY;
+                        continue;
+                    };
+                    for (u, &i) in block.iter().enumerate() {
+                        for (v, &j) in block.iter().enumerate() {
+                            t += inv[u][v] * b[j][i];
+                        }
+                    }
+                }
+                Value::real(t)
+            }
+        }
+    }
+
+    /// `update` (:11025-11039): a value, and the optimum of its index.
+    fn update(&mut self, pos: usize, value: Value, dir: i8) {
+        if self.values.len() <= pos {
+            self.values.resize(pos + 1, Vec::new());
+        }
+        self.values[pos].push(value);
+        let v = &self.values[pos];
+        let elbow = dir.abs() == 2;
+        let x = if elbow {
+            let [a, b, c] = match v.as_slice() {
+                [.., a, b, c] => [a, b, c].map(Value::number),
+                _ => return,
+            };
+            match (a, b, c) {
+                (Some(a), Some(b), Some(c)) => c - 2.0 * b + a,
+                _ => return,
+            }
+        } else {
+            match v[v.len() - 1].number() {
+                Some(x) => x,
+                None => return,
+            }
+        };
+        if x.is_nan() {
+            return;
+        }
+        let better = self
+            .optimal
+            .get(&pos)
+            .is_none_or(|&(_, o)| (dir < 0 && o > x) || (dir > 0 && o < x));
+        if better {
+            self.optimal
+                .insert(pos, (if elbow { self.k - 1 } else { self.k }, x));
+        }
+    }
+
+    /// `compute_indices` (:11040-11058).
+    fn compute(&mut self, bits: u32) {
+        let mut pos = 0;
+        for (bit, dir) in KMEANS_INDICES {
+            if bits & bit != 0 {
+                let v = self.index(bit);
+                self.update(pos, v, dir);
+                pos += 1;
+            }
+        }
+    }
+
+    /// `optimal_number_of_clusters` (:11077-11091): the `k` most indices
+    /// suggest, the least of a tie; 0 for none.
+    fn optimum(&self) -> usize {
+        let mut votes: BTreeMap<usize, usize> = BTreeMap::new();
+        for &(k, _) in self.optimal.values() {
+            *votes.entry(k).or_default() += 1;
+        }
+        let mut best = (0, 0);
+        for (k, n) in votes {
+            if best.0 == 0 || n > best.1 {
+                best = (k, n);
+            }
+        }
+        best.0
+    }
+}
+
+/// The answer of `kmeans`' index path: the number of clusters, its labels,
+/// the `k` tried and the first index's values.
+struct Indexed {
+    k: usize,
+    labels: Vec<usize>,
+    kvals: Vec<usize>,
+    values: Vec<Value>,
+}
+
+/// `kmeans`' index path (:10682-10750): each `k` from `min_k` up, its first
+/// start from the previous `k`'s classes; Hartigan's rough optimum caps
+/// `max_k` at `2k`; the labels of the `k` the indices of `bits` suggest
+/// (none for no suggestion, giac's empty `b_map[0]`).
+fn kmeans_indexed(
+    ev: &mut Eval<'_>,
+    (x, pts): (&[Vec<f64>], &[Vec<Num>]),
+    bits: u32,
+    (min_k, max_k): (usize, usize),
+    limits: (usize, i64),
+) -> Result<Result<Indexed, Fault>, EvalError> {
+    let m = x.len();
+    let mut crit = Crit::new(pts, x);
+    let (mut w_prev, mut rough, mut max_k) = (0.0, false, max_k);
+    let mut b: Vec<usize> = Vec::new();
+    let mut runs: BTreeMap<usize, Vec<usize>> = BTreeMap::new();
+    let mut kvals = Vec::new();
+    let mut k = min_k;
+    while k <= max_k {
+        let ind = (k != min_k).then_some(&b[..]);
+        let (labels, wss, centers) = match run(ev, x, ind, k, limits)? {
+            Ok(r) => r,
+            Err(f) => return Ok(Err(f)),
+        };
+        b = labels;
+        if !rough {
+            let w: f64 = wss.iter().fold(0.0, |s, v| s + v);
+            #[allow(clippy::cast_precision_loss, reason = "point counts")]
+            if w > 0.0 && w_prev > 0.0 && (w_prev / w - 1.0) * (m - k) as f64 <= 10.0 {
+                rough = true;
+                max_k = max_k.min(2 * k);
+            }
+            w_prev = w;
+        }
+        interrupted(ev.context().interrupt_flag())?;
+        crit.init(k, &b, centers, wss);
+        crit.compute(bits);
+        kvals.push(k);
+        runs.insert(k, b.iter().map(|l| l - 1).collect());
+        k += 1;
+    }
+    let k = crit.optimum();
+    Ok(Ok(Indexed {
+        k,
+        labels: runs.remove(&k).unwrap_or_default(),
+        kvals,
+        values: crit.values.into_iter().next().unwrap_or_default(),
+    }))
+}
+
+/// An index value as giac prints it: a double, a rational, `infinity`, or
+/// "not defined" (undef; a value not real never comes first: the log det
+/// ratio's bit only comes with "all").
+fn index_value(v: &Value) -> Expr {
+    match v {
+        Value::Real(r) => Float::from_f64(*r).map_or_else(
+            || Symbol::COMPLEX_INFINITY.into(),
+            |f| Expr::from(Ball::exact(f)),
+        ),
+        Value::Exact(q) => Expr::from(q.clone()),
+        Value::Undef | Value::NotReal => Expr::string(NOT_DEFINED),
+    }
+}
+
 /// `KMeans[data, options…]`.
 #[allow(
     clippy::too_many_lines,
@@ -805,6 +1687,17 @@ pub(in crate::native) fn kmeans(ev: &mut Eval<'_>, e: &Expr) -> Native {
     else {
         return refuse(ev, e, NUMERIC);
     };
+    // The points as giac's gens, for the indices: exact where rational.
+    let exact: Vec<Vec<Num>> = data
+        .points
+        .iter()
+        .flatten()
+        .map(|p| {
+            p.iter()
+                .map(|c| c.exact.clone().map_or(Num::Real(c.value), Num::Exact))
+                .collect()
+        })
+        .collect();
     let np = wide(points.len());
     let (mut out, mut min_k, mut max_k, mut k, mut maxiter) = (Output::List, 2, np - 1, 0, 100);
     let mut stays = false;
@@ -827,6 +1720,9 @@ pub(in crate::native) fn kmeans(ev: &mut Eval<'_>, e: &Expr) -> Native {
                     }
                     _ => Err(POSITIVE),
                 }
+            } else if is(lh, Symbol::FIRST_POSITION, "index") {
+                // An index runs as `k = -bits`, `false` as Hartigan's rule.
+                index(rh, kmeans_index, CALINSKI).map(|v| k = -i64::from(v))
             } else if drawing(lh) {
                 stays = true;
                 Ok(())
@@ -853,7 +1749,7 @@ pub(in crate::native) fn kmeans(ev: &mut Eval<'_>, e: &Expr) -> Native {
     if stays || out == Output::Out {
         return Ok(None);
     }
-    if out == Output::Index {
+    if out == Output::Index && k >= 0 {
         return refuse(ev, e, NO_INDEX);
     }
     max_k = max_k.min(np - 1);
@@ -871,6 +1767,7 @@ pub(in crate::native) fn kmeans(ev: &mut Eval<'_>, e: &Expr) -> Native {
     // 2 ≤ min_k ≤ max_k < m, or 0 < k < m: all fit a usize.
     let to = |v: i64| usize::try_from(v).unwrap_or(0);
     let (kk, lo, hi) = (to(k), to(min_k), to(max_k));
+    let bits = u32::try_from(-k).unwrap_or(0);
     let (sum, top) = if kk > 0 {
         (kk as u128, kk)
     } else {
@@ -880,12 +1777,44 @@ pub(in crate::native) fn kmeans(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let mn = (m as u128) * (data.n as u128);
     let terms = ev.context().limits().terms as u128;
     let maxiter = to(maxiter);
-    if mn * sum * STARTS as u128 > terms || mn * (top as u128) * (maxiter as u128) > terms {
+    // The indices per k: the scatter matrices m n², the centres' pairs k² n,
+    // determinants and inverses n³.
+    let (n, h) = (data.n as u128, hi as u128);
+    let crit = if bits > 0 {
+        (h + 1).saturating_sub(lo as u128) * (mn * n + h * h * n + n * n * n)
+    } else {
+        0
+    };
+    if mn * sum * STARTS as u128 > terms
+        || mn * (top as u128) * (maxiter as u128) > terms
+        || crit > terms
+    {
         return refuse(ev, e, TOO_MANY);
     }
     let steps = i64::try_from(terms / (data.n as u128)).unwrap_or(i64::MAX);
     ev.volatile();
-    match kmeans_core(ev, &points, kk, (lo, hi), (maxiter, steps))? {
+    let outcome = if bits > 0 {
+        match kmeans_indexed(ev, (&points, &exact), bits, (lo, hi), (maxiter, steps))? {
+            Ok(ix) if out == Output::Index => {
+                // `mtran([kvals, values])` (:10737-10745).
+                return Ok(Some(list(
+                    ix.kvals
+                        .iter()
+                        .zip(&ix.values)
+                        .map(|(&k, v)| {
+                            list(vec![Expr::from(Integer::from(k as u64)), index_value(v)])
+                        })
+                        .collect(),
+                )));
+            }
+            r => r.map(|ix| (ix.k, ix.labels)),
+        }
+    } else {
+        kmeans_core(ev, &points, kk, (lo, hi), (maxiter, steps))?
+    };
+    match outcome {
+        // A k fixed with an index: giac's empty `ind` (count=a..a).
+        Ok(_) if out == Output::Index => Ok(Some(list(Vec::new()))),
         Ok((k, labels)) => Ok(Some(answer(out, k, &labels, data.items))),
         Err(f) => {
             if f != Fault::Size {

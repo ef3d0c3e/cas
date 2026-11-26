@@ -450,6 +450,22 @@ fn clusters(u: &mut Unstructured<'_>) -> Result<()> {
                     "List[\"silhouette\", \"dunn\"]",
                     "\"foo\"",
                     "List[]",
+                    // kmeans' cluster_crit names (T5.c3).
+                    "\"calinski-harabasz\"",
+                    "\"banfeld-raftery\"",
+                    "\"davies-bouldin\"",
+                    "\"ray-turi\"",
+                    "\"scott-symons\"",
+                    "\"pbm\"",
+                    "\"ratkowsky-lance\"",
+                    "\"det\"",
+                    "\"log-det\"",
+                    "\"log-ss\"",
+                    "\"ksq-detW\"",
+                    "\"ball-hall\"",
+                    "\"trace-W\"",
+                    "\"trace-WiB\"",
+                    "List[\"pbm\", \"trace-WiB\"]",
                 ])?
             ),
             4 => "Equation[Count, Range[2, 4]]".to_owned(),
@@ -469,7 +485,9 @@ fn clusters(u: &mut Unstructured<'_>) -> Result<()> {
     let (_, parts) = call("Part");
     let (_, count) = call("Count");
     let (index_text, index) = call("FirstPosition");
-    if let Some(rows) = index {
+    // cluster's silhouette rows: k decreasing, values in [-1, 1] (kmeans'
+    // indices go up in k, with any value, "not defined" or ComplexInfinity).
+    if let (Some(rows), "Cluster") = (index, head) {
         let mut last = usize::MAX;
         for row in rows.args() {
             let [k, v] = row.args() else {

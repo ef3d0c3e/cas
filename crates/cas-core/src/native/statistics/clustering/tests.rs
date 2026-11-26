@@ -4,11 +4,13 @@
 //! partitions it found over 200 seeds, a run repeated under `SeedRandom`,
 //! each warning, and the limits; `output=part`, strings' Levenshtein
 //! distance and `cluster`'s silhouette (1.8/T5, CAS-646: giac's answers in
-//! crates/cas-core/proto/giac/probe_clustering2.out, the prototype's `t5`).
+//! crates/cas-core/proto/giac/probe_clustering2.out, the prototype's `t5`);
+//! `kmeans`' `index=` (T5.c3: `probe_clustering3.out`, the prototype's `t5c3`),
+//! its seed-independent values and counts.
 
 use crate::context::Limits;
 use crate::trace::Warning;
-use crate::{Context, EvalOptions, Expr};
+use crate::{Context, EvalOptions, Expr, Symbol};
 
 fn read(text: &str) -> Expr {
     Expr::parse_full_form(text).unwrap_or_else(|e| panic!("{text:?}: {e}"))
@@ -363,7 +365,6 @@ fn stays_silently() {
     let ctx = Context::new();
     for input in [
         format!("KMeans[{E6}, Equation[output, plot]]"),
-        format!("KMeans[{E6}, Equation[FirstPosition, True]]"),
         format!("Cluster[{E6}, Equation[output, tree]]"),
         format!("Cluster[{E6}, Equation[display, 1]]"),
         "Cluster[List[List[1, 2], List[3]]]".to_owned(),
@@ -662,5 +663,205 @@ fn index_and_string_limits() {
         "Cluster[List[\"abcdefghij\", \"b\", \"c\"]]".to_owned(),
     ] {
         assert_eq!(warning(&small, &input), "too many points", "{input}");
+    }
+}
+
+/// Two well-separated groups of three: `kmeans`' indices are
+/// seed-independent there (the prototype over 200 seeds, giac's probes).
+const S6: &str =
+    "List[List[0, 0], List[0, 1], List[1, 0], List[10, 10], List[10, 11], List[11, 10]]";
+
+/// `kmeans`' `output=index` rows: a value, `None` for "not defined",
+/// `ComplexInfinity` (giac's `infinity`) as an infinity.
+fn kmeans_values(input: &str, found: &Expr) -> Vec<(i64, Option<f64>)> {
+    found
+        .args()
+        .iter()
+        .map(|row| match row.args() {
+            [k, v] => {
+                let k = k.as_i64().unwrap_or_else(|| panic!("{input}: {found:?}"));
+                let v = match v.view() {
+                    crate::expr::View::Ball(b) => Some(b.mid().to_f64()),
+                    _ if v.as_str() == Some("not defined") => None,
+                    _ if v.as_symbol() == Some(Symbol::COMPLEX_INFINITY) => Some(f64::INFINITY),
+                    _ => panic!("{input}: {found:?}"),
+                };
+                (k, v)
+            }
+            _ => panic!("{input}: {found:?}"),
+        })
+        .collect()
+}
+
+fn kmeans_index(index: &str, rest: &str) -> String {
+    format!("KMeans[{S6}, Equation[FirstPosition, {index}]{rest}]")
+}
+
+/// `kmeans`' `output=index` (the prototype's values; giac prints them to
+/// 12 digits): the first index's, "not defined", infinities.
+#[test]
+fn kmeans_index_values() {
+    let ctx = Context::new();
+    let out = ", Equation[output, FirstPosition]";
+    let calinski = [
+        (2, Some(450.000_000_000_000_06)),
+        (3, Some(246.136_363_636_363_65)),
+        (4, Some(201.111_111_111_111_1)),
+        (5, Some(151.083_333_333_333_3)),
+    ];
+    let ray_turi = [
+        (2, Some(0.002_222_222_222_222_222)),
+        (3, Some(0.244_444_444_444_444_4)),
+        (4, Some(0.133_333_333_333_333_3)),
+        (5, Some(0.083_333_333_333_333_33)),
+    ];
+    for (input, expected) in [
+        (kmeans_index("\"calinski-harabasz\"", out), &calinski[..]),
+        (kmeans_index("True", out), &calinski[..]),
+        (kmeans_index("\"ray-turi\"", out), &ray_turi[..]),
+        // The first index in giac's order, not the list's.
+        (
+            kmeans_index("List[\"pbm\", \"ray-turi\"]", out),
+            &ray_turi[..],
+        ),
+        (
+            kmeans_index("\"ball-hall\"", out),
+            &[
+                (2, Some(0.444_444_444_444_444_5)),
+                (3, Some(0.231_481_481_481_481_48)),
+                (4, Some(0.125)),
+                (5, Some(0.05)),
+            ][..],
+        ),
+        (
+            kmeans_index("\"banfeld-raftery\"", out),
+            &[
+                (2, Some(-4.865_581_297_297_972)),
+                (3, None),
+                (4, None),
+                (5, None),
+            ][..],
+        ),
+        (
+            kmeans_index("\"all\"", out),
+            &[
+                (2, Some(-4.865_581_297_297_972)),
+                (3, None),
+                (4, None),
+                (5, None),
+            ][..],
+        ),
+    ] {
+        let found = kmeans_values(&input, &eval(&ctx, &input));
+        assert_eq!(found.len(), expected.len(), "{input}: {found:?}");
+        for ((k, v), (ek, ev)) in found.iter().zip(expected) {
+            let near = match (v, ev) {
+                (Some(v), Some(e)) => (v - e).abs() <= 1e-12 * e.abs().max(1.0),
+                (None, None) => true,
+                _ => false,
+            };
+            assert!(k == ek && near, "{input}: {found:?}");
+        }
+    }
+    // Seed-dependent at k = 4; k = 2, 3 and 5 the same in every run: an
+    // undefined determinant ratio, a singular W's infinite trace of W⁻¹B.
+    for (index, first, last) in [
+        (
+            "\"det\"",
+            [338.249_999_999_999_94, 4.005_921_539_600_296],
+            None,
+        ),
+        (
+            "\"trace-WiB\"",
+            [281.25, 418.857_142_857_142_95],
+            Some(f64::INFINITY),
+        ),
+    ] {
+        let input = kmeans_index(index, out);
+        let found = kmeans_values(&input, &eval(&ctx, &input));
+        assert_eq!(found.len(), 4, "{input}: {found:?}");
+        for ((k, v), e) in found.iter().zip(first) {
+            assert!(
+                v.is_some_and(|v| (v - e).abs() <= 1e-12 * e) && (*k == 2 || *k == 3),
+                "{input}: {found:?}"
+            );
+        }
+        assert_eq!(found[3], (5, last), "{input}");
+    }
+}
+
+/// `kmeans`' `index=`: the suggested number of clusters and its labels; the
+/// last of `k` and `index=` wins; no suggestion answers no labels.
+#[test]
+fn kmeans_index_counts() {
+    let ctx = Context::new();
+    let count = ", Equation[output, Count]";
+    for (input, k) in [
+        (kmeans_index("\"calinski-harabasz\"", count), 2),
+        (kmeans_index("\"pbm\"", count), 5),
+        (kmeans_index("\"ball-hall\"", count), 3),
+        (kmeans_index("\"trace-W\"", count), 4),
+        (kmeans_index("\"all\"", count), 2),
+        (
+            format!("KMeans[{S6}, 2, Equation[FirstPosition, \"pbm\"]{count}]"),
+            5,
+        ),
+        (kmeans_index("\"pbm\"", &format!(", 3{count}")), 3),
+        (kmeans_index("False", count), 2),
+        // An elbow needs three k: none suggested.
+        (
+            kmeans_index(
+                "\"ball-hall\"",
+                &format!(", Equation[Count, Range[2, 3]]{count}"),
+            ),
+            0,
+        ),
+    ] {
+        assert_eq!(eval(&ctx, &input), Expr::from(k), "{input}");
+    }
+    let input = kmeans_index("\"calinski-harabasz\"", "");
+    assert_eq!(
+        canonical(&labels(&input, &eval(&ctx, &input))),
+        [0, 0, 0, 1, 1, 1],
+        "{input}"
+    );
+    let empty = read("List[]");
+    for rest in [
+        ", Equation[Count, Range[2, 3]]",
+        ", Equation[Count, Range[2, 3]], Equation[output, Part]",
+        // k fixed by a range of one: no index values.
+        ", Equation[Count, Range[2, 2]], Equation[output, FirstPosition]",
+        // k = 1: AS 136's fault 3.
+        ", Equation[Count, Range[1, 3]]",
+    ] {
+        let input = kmeans_index("\"ball-hall\"", rest);
+        assert_eq!(eval(&ctx, &input), empty, "{input}");
+    }
+}
+
+/// `kmeans`' `index=` errors stay with giac's message.
+#[test]
+fn kmeans_index_errors() {
+    let ctx = Context::new();
+    let out = ", Equation[output, FirstPosition]";
+    for (input, message) in [
+        (kmeans_index("\"foo\"", ""), "Unknown index name"),
+        (kmeans_index("\"Ball-hall\"", ""), "Unknown index name"),
+        (kmeans_index("List[\"foo\"]", ""), "Unknown index name"),
+        (
+            kmeans_index("5", ""),
+            "Expected a string or list of strings",
+        ),
+        (
+            kmeans_index("List[]", ""),
+            "Expected a string or list of strings",
+        ),
+        (kmeans_index("False", out), "No index specified for output"),
+        (
+            kmeans_index("\"pbm\"", &format!(", Equation[Count, 2]{out}")),
+            "No index specified for output",
+        ),
+    ] {
+        assert_eq!(warning(&ctx, &input), message, "{input}");
     }
 }

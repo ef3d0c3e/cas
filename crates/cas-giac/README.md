@@ -448,7 +448,24 @@ R1.7-012):
   `"all"` or a list with it, no `k`, the default `max_k` 16 included): giac
   asserts (optimization.cc:11325) and aborts libgiac, so it is not asked (9
   rows); ours starts at `N − 1` clusters, which giac's code meant, and answers
-  the prototype's labels and values.
+  the prototype's labels and values;
+- T5.c3 (CAS-646; giac's answers in
+  crates/cas-core/proto/giac/probe_clustering3.out, the prototype's `t5c3`,
+  every row reached by some prototype seed over 200): `kmeans`' `index=` on
+  S6 (two groups of three, seed-independent): `output=index` values of
+  `"calinski-harabasz"`, `true`, `"ray-turi"`, a list (its first index in
+  giac's order), `"banfeld-raftery"`, `"all"`, `"scott-symons"`,
+  `"ratkowsky-lance"`, `"log-ss"`, `"ball-hall"`, `"trace-W"` (also in
+  `matrix(…)`, on rationals and decimals; 14 rows within 1e-9, "not
+  defined" alike); counts and labels (37 rows: S6 and E12 `count=2..4`,
+  `count=3..4`, the elbow with no suggestion `[]`, count 0, `count=a..a`
+  with `output=index` `[]`, `k` and `index=` the last wins); errors (8
+  rows: "Unknown index name", "Expected a string or list of strings", "No
+  index specified for output") stay with giac's message;
+- departures, `kmeans`' seed-dependent `index=` rows (8: S6's `"det"`,
+  `"log-det"`, `"ksq-detW"`, `"trace-WiB"` with giac's `infinity`,
+  `"davies-bouldin"`, `"pbm"` values, `"trace-WiB"` and `"det"` counts):
+  giac's and ours each `[k, value]` among the prototype's at that `k`.
 
 CAS-630's options, each built or a departure: data, lists of reals or of
 equal-length lists, `matrix(…)` of one, for `cluster` also lists of strings
@@ -460,8 +477,12 @@ linkage type") and `distance=` a function or builtin (built); `output=list`,
 `count`, `part` (built, both); `output=index`: `cluster`'s silhouette rows
 (built), `kmeans`' "No index specified for output" (built); `cluster`'s
 `index=` (built: the silhouette computed, `"mcclain-rao"` and `"dunn"`
-compute nothing as giac's; departure above); `kmeans`' `index=` (its
-`cluster_crit` criteria: the call stays, ported next); `output=plot`, `tree`,
+compute nothing as giac's; departure above); `kmeans`' `index=` (built:
+giac's `cluster_crit`, the 14 names, `"all"`, `true`, `false`, lists OR'd,
+`"log-det"` the determinant ratio as giac's; `output=index` its first
+index's rows; the values, `k` and labels seed-dependent as the draw, rows and
+departures above; a singular `W`'s `trace-WiB`, undefined or `infinity`,
+by giac's block rule, observed not derived); `output=plot`, `tree`,
 `labels=`, `display=`, `color=` (graphics, not ported: the call stays
 without a warning; departure: giac ignores `display=` outside `output=plot`
 and answers); `kmeans`' draw (departure: giac's `_rand` stream is not ours,
