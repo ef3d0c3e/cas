@@ -175,7 +175,11 @@ intervals do not read back) with giac's count of roots; and the
 departures, each with giac's answer: `VAS_positive` of a polynomial with a
 repeated root (giac's spurious `[0,1]`), the sign of a `sturmseq` factor
 when the highest multiplicity is even, and the order of rational roots
-within a multiplicity.
+within a multiplicity. Random polynomials of degree at most 5, 128 cases a
+run, go to `VAS`, `VAS_positive`, `sturm` with integer bounds, `sturmseq`,
+`rationalroot` and `crationalroot`, roots compared as sets; the departures
+are excluded: `VAS_positive` sees square-free polynomials only and
+`sturmseq` none whose highest multiplicity is even.
 
 `tests/polytools_three.rs`, polynomial tools III (CAS-540, CAS-543):
 giac's `rootof`, `fcoeff`, `homogeneize`, `total_degree`, `factor_xn`,
@@ -189,7 +193,10 @@ list and one not monic left (giac errs on both); `factor_xn`,
 `homogeneize` of a list stay (giac echoes them); `bezoutian` with a
 variable stays (giac errs); `is_irreducible(x*y)` and `(x*y+x)` are 0, where
 giac's 1 is wrong; and `is_irreducible(... mod 7)` is giac's 1, as the
-language does not read `mod`.
+language does not read `mod`. Random inputs, 128 cases a run, go to
+`fcoeff`, `total_degree`, `homogeneize` and `is_irreducible`; the last skips
+polynomials with a monomial content, such as `x*y+x`, where giac's 1 is the
+departure above.
 
 `tests/groebner_two.rs`, Gröbner tools II (CAS-541, CAS-542): giac's
 `in_ideal` and `gbasis_vars` compared exactly, `syzygy`'s generators as

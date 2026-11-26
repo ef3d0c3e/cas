@@ -2,9 +2,13 @@
 //! `fcoeff`, `homogeneize`, `total_degree`, `factor_xn`, `bezoutian` and
 //! `is_irreducible`, giac's answers read back and compared with ours
 //! (`Giac::agrees`: the same expression, or `==`); and the departures,
-//! each with giac's answer as it prints it.
+//! each with giac's answer as it prints it; and random inputs a run to
+//! `fcoeff`, `total_degree`, `homogeneize` and `is_irreducible`.
+
+use std::collections::BTreeMap;
 
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the comparisons skip.
 fn giac() -> Option<&'static Giac> {
@@ -208,4 +212,114 @@ fn departures() {
         wrong.push(format!("{modular}: the language reads it now"));
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The variables of the random polynomials, in order.
+const VARIABLES: [&str; 3] = ["x", "y", "z"];
+
+/// The terms of a polynomial in the first `n` of [`VARIABLES`]: exponent
+/// vector to coefficient.
+type Terms = BTreeMap<Vec<u32>, i64>;
+
+/// Up to `len` terms with exponents below 3 and coefficients in `-5..=5`,
+/// some of them 0.
+fn terms(n: usize, len: usize) -> impl Strategy<Value = Terms> {
+    prop::collection::btree_map(prop::collection::vec(0u32..3, n), -5i64..=5, 0..=len)
+}
+
+/// As [`terms`], at least one and none 0, so a nonzero polynomial.
+fn nonzero(n: usize, len: usize) -> impl Strategy<Value = Terms> {
+    prop::collection::btree_map(
+        prop::collection::vec(0u32..3, n),
+        prop_oneof![-5i64..=-1, 1i64..=5],
+        1..=len,
+    )
+}
+
+/// The polynomial as Xcas text, in parentheses.
+fn text(terms: &Terms) -> String {
+    let parts: Vec<String> = terms
+        .iter()
+        .filter(|&(_, &c)| c != 0)
+        .map(|(exps, c)| {
+            let mut factors = vec![if *c < 0 {
+                format!("({c})")
+            } else {
+                c.to_string()
+            }];
+            for (v, &k) in VARIABLES.iter().zip(exps) {
+                match k {
+                    0 => {}
+                    1 => factors.push((*v).to_owned()),
+                    _ => factors.push(format!("{v}^{k}")),
+                }
+            }
+            factors.join("*")
+        })
+        .collect();
+    if parts.is_empty() {
+        "(0)".to_owned()
+    } else {
+        format!("({})", parts.join("+"))
+    }
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `fcoeff` of up to four distinct roots `k/2`, `k` in `-6..=6`, each
+    /// with a multiplicity in `-2..=3`, perhaps in `y`.
+    #[test]
+    fn random_fcoeff(
+        roots in prop::collection::btree_map(-6i64..=6, -2i64..=3, 0..=4),
+        in_y in any::<bool>(),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let list: Vec<String> = roots
+            .iter()
+            .map(|(k, m)| if k % 2 == 0 { format!("{},{m}", k / 2) } else { format!("{k}/2,{m}") })
+            .collect();
+        let input = format!("fcoeff([{}]{})", list.join(","), if in_y { ",y" } else { "" });
+        giac.agrees(&input).map_err(|e| TestCaseError::fail(e.to_string()))?;
+    }
+
+    /// `total_degree` of a polynomial in `x`, `y`, `z` in some of them.
+    #[test]
+    fn random_total_degree(p in terms(3, 4), vars in 0usize..4) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let vars = ["[x,y]", "[x]", "[x,y,z]", "[y,z]"][vars];
+        let input = format!("total_degree({},{vars})", text(&p));
+        giac.agrees(&input).map_err(|e| TestCaseError::fail(e.to_string()))?;
+    }
+
+    /// `homogeneize` of a nonzero polynomial in `x`, `y`, with `z` or
+    /// giac's default `t`.
+    #[test]
+    fn random_homogeneize(p in nonzero(2, 4), named in any::<bool>()) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let input = format!("homogeneize({}{})", text(&p), if named { ",z" } else { "" });
+        giac.agrees(&input).map_err(|e| TestCaseError::fail(e.to_string()))?;
+    }
+
+    /// `is_irreducible` of a nonzero polynomial in `x`, `y`, over ℚ.
+    #[test]
+    fn random_is_irreducible(p in nonzero(2, 4)) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        // A monomial content, as in x*y and x*y+x: giac's 1 there is wrong
+        // (README departure).
+        let content = (0..2).any(|v| p.keys().all(|e| e[v] > 0));
+        if content {
+            return Ok(());
+        }
+        let input = format!("is_irreducible({})", text(&p));
+        giac.agrees(&input).map_err(|e| TestCaseError::fail(e.to_string()))?;
+    }
 }

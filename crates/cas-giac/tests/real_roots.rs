@@ -3,10 +3,12 @@
 //! `rationalroot` and `crationalroot` read back and compared by value;
 //! `complexroot` against closed forms within `10⁻¹⁰` (giac's `[a..b]`
 //! intervals do not read back), with giac's count of roots; and the
-//! departures, each with giac's answer.
+//! departures, each with giac's answer; and random polynomials a run to
+//! each of them but the bounds and `complexroot`.
 
 use cas_core::{Context, Expr, Symbol};
 use cas_giac::{Giac, ours};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the comparisons skip.
 fn giac() -> Option<&'static Giac> {
@@ -361,4 +363,155 @@ fn departures() {
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The polynomial in `x` with coefficients `coeffs`, lowest power first, as
+/// Xcas text in parentheses.
+fn poly(coeffs: &[i64]) -> String {
+    let parts: Vec<String> = coeffs
+        .iter()
+        .enumerate()
+        .filter(|&(_, &c)| c != 0)
+        .map(|(k, c)| match k {
+            0 => format!("({c})"),
+            1 => format!("({c})*x"),
+            _ => format!("({c})*x^{k}"),
+        })
+        .collect();
+    if parts.is_empty() {
+        "(0)".to_owned()
+    } else {
+        format!("({})", parts.join("+"))
+    }
+}
+
+/// Up to six coefficients in `-5..=5`: a polynomial of degree at most 5.
+fn coefficients() -> impl Strategy<Value = Vec<i64>> {
+    prop::collection::vec(-5i64..=5, 1..=6)
+}
+
+/// One to three factors `a*x-b`, `a` in `1..=3`, `b` in `-4..=4`.
+fn linear_factors() -> impl Strategy<Value = Vec<(i64, i64)>> {
+    prop::collection::vec((1i64..=3, -4i64..=4), 1..=3)
+}
+
+/// The product of `factors` and `cofactor`, as Xcas text.
+fn product(factors: &[(i64, i64)], cofactor: &str) -> String {
+    let mut parts: Vec<String> = factors
+        .iter()
+        .map(|(a, b)| format!("({a}*x-({b}))"))
+        .collect();
+    parts.push(cofactor.to_owned());
+    parts.join("*")
+}
+
+/// The highest multiplicity of a root of the nonzero polynomial `p`, by
+/// giac: the least `k` with `gcd(p, p⁽ᵏ⁾)` constant; 1 for a constant.
+fn highest_multiplicity(giac: &Giac, p: &str) -> Result<u32, TestCaseError> {
+    for k in 1..=5 {
+        let degree = giac
+            .eval(&format!("degree(gcd({p},diff({p},x,{k})),x)"))
+            .map_err(|e| TestCaseError::fail(e.to_string()))?;
+        if degree == "0" {
+            return Ok(k);
+        }
+    }
+    Ok(6)
+}
+
+/// giac's list for `input` and ours hold the same roots, by value, in any
+/// order: the same length, each in the other.
+fn same_roots(giac: &Giac, input: &str) -> Result<(), TestCaseError> {
+    let fail = |e: cas_giac::OracleError| TestCaseError::fail(e.to_string());
+    let theirs = giac.value(input).map_err(fail)?;
+    let ours = ours(input).map_err(fail)?;
+    let (t, o) = (theirs.args(), ours.args());
+    if t.len() != o.len() || !t.iter().all(|r| o.contains(r)) || !o.iter().all(|r| t.contains(r)) {
+        return Err(TestCaseError::fail(format!(
+            "{input}: giac {theirs:?}, ours {ours:?}"
+        )));
+    }
+    Ok(())
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `VAS` of a random polynomial, and `VAS_positive` of a square-free
+    /// one: the same isolating intervals and exact roots.
+    #[test]
+    fn random_isolation(positive in any::<bool>(), c in coefficients()) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        if c.iter().all(|&k| k == 0) {
+            return Ok(());
+        }
+        let p = poly(&c);
+        // giac's VAS_positive assumes a square-free polynomial (README
+        // departure: its spurious [0,1] for a repeated root).
+        if positive && highest_multiplicity(giac, &p)? > 1 {
+            return Ok(());
+        }
+        let name = if positive { "VAS_positive" } else { "VAS" };
+        same_roots(giac, &format!("{name}({p})"))?;
+    }
+
+    /// `sturm` with integer bounds: the count of roots in `(a, b]`, or
+    /// the sign at `a`.
+    #[test]
+    fn random_sturm_count(c in coefficients(), a in -5i64..=5, b in -5i64..=5) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        if c.iter().all(|&k| k == 0) {
+            return Ok(());
+        }
+        let input = format!("sturm({},x,{a},{b})", poly(&c));
+        giac.agrees(&input).map_err(|e| TestCaseError::fail(e.to_string()))?;
+    }
+
+    /// `sturmseq` of a random polynomial: giac's sequence.
+    #[test]
+    fn random_sturmseq(c in coefficients()) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        if c.iter().all(|&k| k == 0) {
+            return Ok(());
+        }
+        let p = poly(&c);
+        // The sign of a factor when the highest multiplicity is even
+        // (README departure): giac keeps it apart.
+        if highest_multiplicity(giac, &p)? % 2 == 0 {
+            return Ok(());
+        }
+        let input = format!("sturmseq({p})");
+        giac.agrees(&input).map_err(|e| TestCaseError::fail(e.to_string()))?;
+    }
+
+    /// `rationalroot` and `crationalroot` of products of linear factors,
+    /// a random cofactor and, for `crationalroot`, perhaps `x^2+k^2`: the
+    /// same roots, compared as sets, as giac's order within a multiplicity
+    /// is a README departure.
+    #[test]
+    fn random_rational_roots(
+        complex in any::<bool>(),
+        factors in linear_factors(),
+        cofactor in prop::collection::vec(-5i64..=5, 1..=3),
+        k in 0i64..=3,
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        if cofactor.iter().all(|&c| c == 0) {
+            return Ok(());
+        }
+        let mut cofactor = poly(&cofactor);
+        if complex && k > 0 {
+            cofactor = format!("{cofactor}*(x^2+{})", k * k);
+        }
+        let name = if complex { "crationalroot" } else { "rationalroot" };
+        same_roots(giac, &format!("{name}({})", product(&factors, &cofactor)))?;
+    }
 }
