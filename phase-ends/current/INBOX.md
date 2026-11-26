@@ -11,4 +11,3 @@
      or an earlier phase, or an id not in GENERATION_PLAN.md, routes now. -->
 
 - <note, correction, priority change, or question>
-- -> Gen 2: frontends, decided 2026-11-25. First a language server over the CAS: completion, highlighting (an editor grammar file plus meaning-based colouring from the server), documentation from en.txt and the doc chapters, and error reporting. Evaluation, the defined-symbols view and similar features go through custom requests. It needs an error-tolerant parser in cas-lang. Then a desktop app as the language server's client: a view of the defined symbols, and graphs, which need a plotting layer (giac's ~121 plot commands were out of gen 1). For the developer at gen 2 planning: the new Lific module(s), and the app's toolkit (a retriever compares the options first). For the planner: how the app is tested on CI only.

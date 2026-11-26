@@ -63,3 +63,15 @@
 1.6 | T9 | done | push master for the phase's final CI and Fuzz runs | - | phase-1.6/tasks/T9.md | phase-1.6/logs/T9.md | -
 1.6 | T10 | done | CI and Fuzz check on the pushed head; tickets done and CAS-DOC-58 in step | - | phase-1.6/tasks/T10.md | phase-1.6/logs/T10.md | -
 1.6 | T11 | done | phase cleanup | - | phase-1.6/tasks/T11.md | phase-1.6/logs/T11.md | -
+1.7 | T1 | done | design page CAS-DOC-59, one ticket per family and the diff(e,x,n) ticket | - | phase-1.7/tasks/T1.md | phase-1.7/logs/T1.md | R1.7-009,R1.7-007,R1.7-005,R1.7-002
+1.7 | T2 | done | random variables: randvar and random_variable, sample over them, randmultinomial | - | phase-1.7/tasks/T2.md | phase-1.7/logs/T2.md | R1.7-005,R1.7-004,R1.7-009
+1.7 | T3 | done | tail probabilities, distribution functions and the logistic | - | phase-1.7/tasks/T3.md | phase-1.7/logs/T3.md | R1.7-010,R1.7-005
+1.7 | T4 | done | Markov chains: markov and randmarkov | - | phase-1.7/tasks/T4.md | phase-1.7/logs/T4.md | R1.7-005,R1.7-003,R1.7-004
+1.7 | T5 | done | density estimation and fitting: kernel_density kde, bandwidth, bins, fitdistr | - | phase-1.7/tasks/T5.md | phase-1.7/logs/T5.md | R1.7-011,R1.7-005
+1.7 | T6 | done | clustering: kmeans and cluster | - | phase-1.7/tasks/T6.md | phase-1.7/logs/T6.md | R1.7-012,R1.7-005
+1.7 | T7 | done | sound clips: createwav, soundsec, samplerate, bit_depth, channels, duration, channel_data and about | - | phase-1.7/tasks/T7.md | phase-1.7/logs/T7.md | R1.7-001,R1.7-002,R1.7-006,R1.6-006,R1.4-005
+1.7 | T8 | done | clip edits and resampling: set_channel_data, stereo2mono, mixdown, splice, resample | - | phase-1.7/tasks/T8.md | phase-1.7/logs/T8.md | R1.7-002,R1.7-008
+1.7 | T9 | done | signal transforms: dwt, idwt, hilbert's list form, instfreq, instphase, emd | - | phase-1.7/tasks/T9.md | phase-1.7/logs/T9.md | R1.7-013,R1.7-002,R1.7-006
+1.7 | T10 | done | push master for the phase's final CI and Fuzz runs | - | phase-1.7/tasks/T10.md | phase-1.7/logs/T10.md | -
+1.7 | T11 | done | CI and Fuzz check on the pushed head; tickets done, CAS-DOC-59 in step, the eval target's memory read | - | phase-1.7/tasks/T11.md | phase-1.7/logs/T11.md | -
+1.7 | T12 | done | phase cleanup | - | phase-1.7/tasks/T12.md | phase-1.7/logs/T12.md | -
