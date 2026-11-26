@@ -161,7 +161,7 @@ fn factors(e: &Expr) -> Vec<Expr> {
 }
 
 /// The expression and the variable of `F[f, x]`, `x` when omitted.
-fn with_variable(args: &[Expr]) -> Option<(&Expr, Expr)> {
+pub(super) fn with_variable(args: &[Expr]) -> Option<(&Expr, Expr)> {
     match args {
         [f] => Some((f, Expr::symbol("x"))),
         [f, x] if matches!(x.view(), View::Symbol(s) if !s.is_builtin()) => Some((f, x.clone())),
@@ -190,7 +190,11 @@ fn try_replace(
 }
 
 /// `(a, b)` with `u = a x + b`, both free of `x`.
-fn linear(ev: &mut Eval<'_>, u: &Expr, x: &Expr) -> Result<Option<(Expr, Expr)>, EvalError> {
+pub(super) fn linear(
+    ev: &mut Eval<'_>,
+    u: &Expr,
+    x: &Expr,
+) -> Result<Option<(Expr, Expr)>, EvalError> {
     let a = ev.eval(&Expr::call(Symbol::D, [u.clone(), x.clone()]))?;
     if a.contains(x) {
         return Ok(None);
@@ -237,13 +241,20 @@ pub(super) fn linear_step(ev: &mut Eval<'_>, e: &Expr) -> Native {
             .map(|g| Expr::call(Symbol::LINEAR_STEP, [g.clone(), x.clone()]));
         return ev.eval(&Expr::call(Symbol::LIST, items)).map(Some);
     }
+    let g = steps(ev, f, &x)?;
+    collect_steps(ev, &g).map(Some)
+}
+
+/// `f` as a sum of steps `θ(x − c)` times coefficients, before they are
+/// collected: giac's `linH(simplify_quadratic_Heaviside(abs2Heaviside(
+/// sign2Heaviside(flatten_piecewise(f)))))`, shared with `linabs`.
+pub(super) fn steps(ev: &mut Eval<'_>, f: &Expr, x: &Expr) -> Result<Expr, EvalError> {
     let g = ev.eval(&flatten_piecewise(f))?;
     let g = ev.eval(&Expr::call(Symbol::SIGN_TO_HEAVISIDE, [g]))?;
-    let g = abs_to_heaviside(ev, &g, &x)?;
-    let g = quadratic_steps(ev, &g, &x)?;
-    let g = linear_arguments(ev, &g, &x)?;
-    let g = steps_of_products(ev, &g, &x)?;
-    collect_steps(ev, &g).map(Some)
+    let g = abs_to_heaviside(ev, &g, x)?;
+    let g = quadratic_steps(ev, &g, x)?;
+    let g = linear_arguments(ev, &g, x)?;
+    steps_of_products(ev, &g, x)
 }
 
 /// giac's `flatten_piecewise`: each `Piecewise` of comparisons as a sum of

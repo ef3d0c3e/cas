@@ -34,7 +34,7 @@ const ATOMS: [&str; 12] = [
 ];
 
 /// Builtins anywhere.
-const BUILTINS: [&str; 717] = [
+const BUILTINS: [&str; 723] = [
     "Plus",
     "Times",
     "Power",
@@ -507,6 +507,12 @@ const BUILTINS: [&str; 717] = [
     "AverageRateOfChange",
     "BoxConstraints",
     "AddTable",
+    "Period",
+    "AbsLinearize",
+    "ExpLinearize",
+    "ShiftPhase",
+    "NonRecursiveTogether",
+    "Envelope",
     "DetMinor",
     "AdjointMatrix",
     "RowEchelon",

@@ -323,7 +323,14 @@ pub(super) fn together(ev: &mut Eval<'_>, e: &Expr) -> Native {
         return Ok(Some(arg.clone()));
     }
     let arg = reach_inside(ev, arg, Symbol::TOGETHER)?;
-    let Some(p) = convert(ev, e, std::slice::from_ref(&arg), false)? else {
+    together_outer(ev, e, &arg)
+}
+
+/// `arg` over one denominator as [`together`] does, the arguments of its
+/// functions left as they are: giac's `non_recursive_normal`; `e` the call
+/// warnings name.
+pub(super) fn together_outer(ev: &mut Eval<'_>, e: &Expr, arg: &Expr) -> Native {
+    let Some(p) = convert(ev, e, std::slice::from_ref(arg), false)? else {
         return Ok(None);
     };
     if within_dense(ev, e, &p, Dense::Pair).is_none() {

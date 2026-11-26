@@ -474,6 +474,13 @@ SignedFactorList: maple_ifactors
 AverageRateOfChange: avgRC
 BoxConstraints: box_constraints
 AddTable: addtable
+# giac's period, linearisations, phase shift, outer normal and envelope (CAS-640, CAS-641).
+Period: period
+AbsLinearize: linabs
+ExpLinearize: lin
+ShiftPhase: shift_phase
+NonRecursiveTogether: non_recursive_normal
+Envelope: envelope
 # giac's minors, echelon forms and pivots (CAS-530, CAS-528).
 DetMinor: det_minor
 AdjointMatrix: adjoint_matrix

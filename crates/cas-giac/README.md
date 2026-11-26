@@ -632,6 +632,21 @@ ledger (CAS-640, CAS-641, CAS-642, CAS-643):
   does not consult the table: `integrate(g(t)*exp(-s*t),t,0,+infinity)`); giac's `addtable` answers 0 for a pair it
   holds already, its table outliving `restart`, ours 1 each time).
 
+`tests/gap_leftovers_two.rs`, giac's period, linearisations, phase shift, outer normal and
+envelope of the gap ledger (CAS-640, CAS-641):
+- giac's `period` (`+infinity` when not periodic, as for `abs(sin(x))` and `sin(x)+x`; `0` free
+  of `x`; `floor(x)-x` has 1), `lin` (lists too), `shift_phase` (equations too; evaluation
+  brings the shifted forms back alike on both sides) and `non_recursive_normal` (function
+  arguments left as they are) read back and compared; `linabs` and
+  `non_recursive_normal(sqrt(x^2+2*x+1)+x)` (giac's `x+abs(x+1)`) compared by value at `x` =
+  −7/3, −2/3, 1/3, 2/3, 5/3, 8/3, as `linabs` picks the smallest of equal rewritings by
+  expression size, which differs between the two (`linabs(sin(x)*Heaviside(x)-sin(x)*
+  Heaviside(-x))` is giac's `sin(abs(x))`, ours `sin(x)*abs(x)/x`);
+- the departure, with giac's answer: `envelope(F,t)` and `envelope(F,[x,y,t])` answer the
+  plot of the envelope (printed `Graphic_object`); ours is the curve itself, the solution
+  `[x(t),y(t)]` of `F=0`, `dF/dt=0` (a list of them when several), compared at `t = 1/3`
+  (`envelope(y+x*tan(t)-2*sin(t),t)` is `[2*cos(t)^3,2*sin(t)^3]`).
+
 `tests/integers.rs`, Xcas's integer functions (CAS-548 to CAS-553): giac's
 `chrem` of integers and of polynomials with integer moduli (coefficient by
 coefficient, modulo the product), `lgcd`, `fracmod` and `iratrecon`, `icomp`
@@ -1032,10 +1047,12 @@ Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
     (`tests/matrices_five.rs`); `moyal` not built, a departure (giac's is a stub answering
     unevaluated); `Fill` built in T3 (`tests/session.rs`). `GF` is not
     built: giac's Galois-field elements need a new value type (gen 2).
-  - Calculus (4): `avgRC`, `addtable` built in T4 (`tests/gap_leftovers.rs`); `envelope` T4. `taux_accroissement` is not built: it is a
+  - Calculus (4): `avgRC`, `addtable` built in T4 (`tests/gap_leftovers.rs`); `envelope` built in T4, as
+    the curve, not its plot (`tests/gap_leftovers_two.rs`). `taux_accroissement` is not built: it is a
     French spelling (CAS-DOC-7 §5).
   - Expressions (11): `root`, `additionally`, `atan2`, `has`, `fmod`, `modf` built in T4
-    (`tests/gap_leftovers.rs`); `shift_phase`, `linabs`, `non_recursive_normal`, `lin`, `period` T4.
+    (`tests/gap_leftovers.rs`); `shift_phase`, `linabs`, `non_recursive_normal`, `lin`, `period`
+    built in T4 (`tests/gap_leftovers_two.rs`).
   - Integers (2): `multinomial`, and `order` for the `(Z/nZ)^*` form (`order(3 % 7)` = 6), built in
     T4 (`tests/gap_leftovers.rs`). Its finite-field form is not built: it needs `GF`.
   - Numerical analysis (1): `box_constraints` built in T4 (`tests/gap_leftovers.rs`;

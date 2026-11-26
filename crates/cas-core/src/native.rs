@@ -38,6 +38,7 @@ mod lambert;
 mod laplace;
 mod lattice;
 mod leftovers;
+mod leftovers_two;
 mod limit;
 mod linear;
 mod lists;
@@ -1171,6 +1172,15 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             leftovers::average_rate_of_change,
         ),
         (Symbol::BOX_CONSTRAINTS, leftovers::box_constraints),
+        (Symbol::PERIOD, leftovers_two::period),
+        (Symbol::ABS_LINEARIZE, leftovers_two::abs_linearize),
+        (Symbol::EXP_LINEARIZE, leftovers_two::exp_linearize),
+        (Symbol::SHIFT_PHASE, leftovers_two::shift_phase),
+        (
+            Symbol::NON_RECURSIVE_TOGETHER,
+            leftovers_two::non_recursive_together,
+        ),
+        (Symbol::ENVELOPE, leftovers_two::envelope),
         (Symbol::DET_MINOR, matrix::echelon::det_minor),
         (Symbol::ADJOINT_MATRIX, matrix::echelon::adjoint_matrix),
         (Symbol::ROW_ECHELON, matrix::echelon::row_echelon),

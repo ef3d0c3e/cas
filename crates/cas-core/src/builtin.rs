@@ -524,6 +524,14 @@ builtins! {
     AVERAGE_RATE_OF_CHANGE = "AverageRateOfChange" [PROTECTED];
     BOX_CONSTRAINTS = "BoxConstraints" [PROTECTED];
     ADD_TABLE = "AddTable" [HOLD_ALL, PROTECTED];
+    // giac's period, linearisations, phase shift, outer normal and envelope
+    // (CAS-640, CAS-641).
+    PERIOD = "Period" [PROTECTED];
+    ABS_LINEARIZE = "AbsLinearize" [PROTECTED];
+    EXP_LINEARIZE = "ExpLinearize" [PROTECTED];
+    SHIFT_PHASE = "ShiftPhase" [PROTECTED];
+    NON_RECURSIVE_TOGETHER = "NonRecursiveTogether" [PROTECTED];
+    ENVELOPE = "Envelope" [PROTECTED];
     // giac's minors, echelon forms and pivots (CAS-530, CAS-528).
     DET_MINOR = "DetMinor" [PROTECTED];
     ADJOINT_MATRIX = "AdjointMatrix" [PROTECTED];
