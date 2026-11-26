@@ -111,3 +111,4 @@ C0108 | giac's hht bins: top edge in fbins-2; near-zero imaginary part flips ins
 C0109 | eval fuzz idempotence: limit error on re-eval of the answer is a cache artefact | fuzz,eval,idempotence,recursion,cache,harness | 2026-11-26 | 1.8/T6 | T6.c3 Fuzz 45802274513
 C0110 | proptest failure on CI: transcribe the printed cc seed into tests/<file>.proptest-regressions | proptest,regression,ci,oracle,seed | 2026-11-26 | 1.8/T7 | CI 45818464735 random_modgcd
 C0111 | giac's univariate modgcd drops the gcd's integer content; gcd, heugcd keep it | giac,gcd,modgcd,oracle,departure,normalisation | 2026-11-26 | 1.8/T7 | CI 45818464735; caseval probes
+C0112 | Sweeping a giac predicate (==): generate only true pairs; trunc(x,n<0) and bernoulli_mod p=2 traps | proptest,oracle,giac,equality,symbolic,trunc,sweep | 2026-11-26 | 1.8/T8 | CI 45823905195 random_type

@@ -67,6 +67,8 @@ fn pivots() {
         "pivot([[1,2],[3,4]],1,1)",
         "pivot([[1,2,3],[4,5,6],[7,8,10]],1,2)",
         "pivot([[1,2],[3,4],[5,6]],0,1)",
+        "pivot([[0,0],[0,1]],0,0)",
+        "pivot([[2,1],[3,5],[4,0]],0,1)",
         "egvl([[4,1],[-4,0]])",
         "eigVl([[4,1],[-4,0]])",
     ]);
@@ -339,19 +341,15 @@ proptest! {
         agree(giac, &format!("rref({},keep_pivot)", text(&a)))?;
     }
 
-    /// `pivot` at any entry, zero or not, where no other row has 0 in the
-    /// pivot's column: giac leaves such a row, this CAS combines it
-    /// (`pivot([[0,0],[0,1]],0,0)`: giac `[[0,0],[0,1]]`, ours
-    /// `[[0,0],[0,0]]`, CI 45823883128; reported, not fixed here).
+    /// `pivot` at any entry, zero or not; rows with 0 in the pivot's
+    /// column stay as giac leaves them (CI 45823883128 found
+    /// `pivot([[0,0],[0,1]],0,0)`, fixed in 1.8 T8).
     #[test]
     fn random_pivots(a in matrix(), i in 0usize..4, j in 0usize..4) {
         let Some(giac) = giac() else {
             return Ok(());
         };
         let (i, j) = (i % a.len(), j % a[0].len());
-        if a.iter().enumerate().any(|(k, r)| k != i && r[j] == 0) {
-            return Ok(());
-        }
         agree(giac, &format!("pivot({},{i},{j})", text(&a)))?;
     }
 

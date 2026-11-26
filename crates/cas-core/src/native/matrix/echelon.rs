@@ -26,7 +26,8 @@
 //!   monomial order, here in ours; giac interpolates `keep_pivot` of a
 //!   polynomial matrix of 5 rows and more, whose sign may differ.
 //! - `Pivot[m, l, c]`, Xcas's `pivot`: each row `i ≠ l` becomes
-//!   `m[l][c] row_i − m[i][c] row_l`, row `l` kept; indices from 0,
+//!   `m[l][c] row_i − m[i][c] row_l`, row `l` and rows with `m[i][c] = 0`
+//!   kept as giac does (1.8 T8: `pivot([[0,0],[0,1]],0,0)`); indices from 0,
 //!   negative ones from the end.
 //! - `JordanMatrix[m]`, Xcas's `egvl` and `eigVl`: the `J` of
 //!   `JordanDecomposition` ([`super::decompose`]), its blocks in giac 2.0's
@@ -128,6 +129,10 @@ pub(in crate::native) fn pivot(ev: &mut Eval<'_>, e: &Expr) -> Native {
             return list(row.iter().cloned());
         }
         let q = &row[c];
+        // giac skips a row with 0 in the pivot's column (CAS-528, 1.8 T8).
+        if *q == Expr::from(0) {
+            return list(row.iter().cloned());
+        }
         list((0..columns).map(|k| p.clone() * row[k].clone() - q.clone() * a[l][k].clone()))
     }));
     stepped(ev, "pivot", e, result)

@@ -897,6 +897,22 @@ fn minors_echelons_and_pivots() {
     ]);
 }
 
+/// giac leaves a row with 0 in the pivot's column (1.8 T8, the sweep's
+/// `pivot([[0,0],[0,1]],0,0)`).
+#[test]
+fn pivot_keeps_zero_rows() {
+    check(&[
+        (
+            "Pivot[List[List[0, 0], List[0, 1]], 0, 0]",
+            "List[List[0, 0], List[0, 1]]",
+        ),
+        (
+            "Pivot[List[List[2, 1], List[3, 5], List[4, 0]], 0, 1]",
+            "List[List[2, 1], List[-7, 0], List[4, 0]]",
+        ),
+    ]);
+}
+
 /// giac 2.0's `gauss`, `rat_jordan` and `egvl` order (CAS-535, CAS-530).
 #[test]
 fn squares_and_rational_jordan_forms() {
