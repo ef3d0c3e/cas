@@ -300,19 +300,35 @@ def longueur2(p, q):
         t = p.v - q.v; return float(t*t + 0)
     return None
 
+def levenshtein(p, q):
+    """at_levenshtein on two strings (optimization.cc:11519-11536): std::string::at, so UTF-8 bytes."""
+    if not (isinstance(p, Str) and isinstance(q, Str)): return None
+    s, t = p.v.encode(), q.v.encode()
+    if len(s) > len(t): s, t = t, s
+    v0 = list(range(len(t) + 1))
+    for i in range(len(s)):
+        v1 = [i + 1] + [0]*len(t)
+        for j in range(len(t)):
+            v1[j+1] = min(v0[j+1] + 1, v1[j] + 1, v0[j] + (0 if s[i] == t[j] else 1))
+        v0 = v1
+    return float(v0[len(t)])
+
+class Abort(Exception):
+    """giac's assertion at optimization.cc:11325 (libgiac aborts)."""
+
 class HClust:
-    def __init__(s, pts):
-        s.pts = pts; s.N = len(pts); s.S = list(range(s.N)); s.cache = {}
+    def __init__(s, pts, distf=longueur2):
+        s.pts = pts; s.N = len(pts); s.S = list(range(s.N)); s.cache = {}; s.distf = distf
     def dist(s, i, j, cache):
         if i == j: return 0.0
         if cache:
             key = (min(i, j), max(i, j))
             if key not in s.cache:
-                v = longueur2(s.pts[i], s.pts[j])
+                v = s.distf(s.pts[i], s.pts[j])
                 if v is None: return -1.0
                 s.cache[key] = v
             return s.cache[key]
-        v = longueur2(s.pts[i], s.pts[j])
+        v = s.distf(s.pts[i], s.pts[j])
         return -1.0 if v is None else v
     def formula(s, a, b, x, na, nb, nx, dab, meth):
         dax = s.dist(a, x, True); dbx = s.dist(b, x, True)
@@ -373,31 +389,98 @@ class HClust:
                 s.cache[(min(x, a), max(x, a))] = f
             size[a] += size[b]
         return dg
-    def linkage(s, meth, K, min_k, max_k):
-        """indf=0 path only (K>=0). Returns (k, ind, dg) or (-1, None, None)."""
+    def linkage(s, meth, K, min_k, max_k, depart=False):
+        """optimization.cc:11262-11443. K>0 fixes k; K=-indf<0 runs the index path (silhouette only computes:
+        mcclain-rao and dunn push k values and nothing else). depart: ours clamps max_k to N-1 on the index
+        path, where giac aborts (Abort). Returns (k, ind, dg, kvals, vals) or (-1, None, None, None, None)."""
         dg = s.mst_linkage(K < 0) if meth == SINGLE else s.nn_chain_linkage(meth)
-        if dg is None: return -1, None, None
+        if dg is None: return -1, None, None, None, None
         dg.sort()
-        par = list(range(s.N))
+        N = s.N
+        par = list(range(N))
         def find(i):
             while par[i] != i: i = par[i]
             return i
-        k = s.N
+        indf = -K if K < 0 else 0; sil = indf & 1
+        if indf > 0:
+            s.cache = {}  # true distances again (nn_chain cached Lance-Williams values)
+            if depart: max_k = min(max_k, N - 1)
+        k = N; best_k = 0
         k_lb = max(min_k, s.k_low(dg) if K <= 0 else 0)
+        ind = None; kvals = []; vals = []; opt = None
+        slh_a = [[0, 0.0] for _ in range(N)]; slh_b = [dict() for _ in range(N)]
         for d, (a, b) in dg:
             if k == (K if K > 0 else k_lb): break
             k -= 1
-            ra, rb = find(a), find(b)
-            if ra != rb: par[rb] = ra
-        cmap = {}; ind = []
-        for i in range(s.N):
-            r = find(i)
+            if indf > 0 and k <= max_k:
+                if k < max_k:
+                    ca, cb = find(a), find(b)
+                    if sil:
+                        for i in range(N):
+                            ci = find(i)
+                            if ci == ca or ci == cb:
+                                o = cb if ci == ca else ca
+                                if o not in slh_b[i]: raise Abort()
+                                c, sm = slh_b[i].pop(o)
+                                slh_a[i][0] += c; slh_a[i][1] += sm
+                    par[cb] = ca
+                    if sil:
+                        for i in range(N):
+                            if find(i) != ca:
+                                bm = slh_b[i]
+                                if ca not in bm or cb not in bm: raise Abort()
+                                x = bm.pop(cb); bm[ca][0] += x[0]; bm[ca][1] += x[1]
+                else:
+                    ra, rb = find(a), find(b)
+                    if ra != rb: par[rb] = ra
+                    if sil:
+                        slh_a = [[0, 0.0] for _ in range(N)]
+                        for i in range(N):
+                            ci = find(i)
+                            for j in range(i + 1, N):
+                                cj = find(j); dd = s.dist(i, j, True)
+                                if ci == cj:
+                                    slh_a[i][0] += 1; slh_a[j][0] += 1; slh_a[i][1] += dd; slh_a[j][1] += dd
+                                else:
+                                    p = slh_b[i].setdefault(cj, [0, 0.0]); q = slh_b[j].setdefault(ci, [0, 0.0])
+                                    p[0] += 1; q[0] += 1; p[1] += dd; q[1] += dd
+                updated = False
+                if sil:
+                    slh_s = [[0, 0.0] for _ in range(N)]
+                    for i in range(N):
+                        ci = find(i); minb = DBL_MAX; ap = slh_a[i]
+                        ai = 0.0 if ap[0] == 0 else ap[1]/ap[0]
+                        for key in sorted(slh_b[i]):
+                            bi = slh_b[i][key][1]/slh_b[i][key][0]
+                            if bi < minb: minb = bi
+                        den = ai if minb < ai else minb
+                        si = 0.0 if ap[0] == 0 else ((minb - ai)/den if den != 0 else float('nan'))
+                        slh_s[ci][0] += 1; slh_s[ci][1] += si
+                    indval = sys.float_info.min  # DBL_MIN
+                    for c, sm in slh_s:
+                        if c == 0: continue
+                        if sm/c > indval: indval = sm/c
+                    vals.append(indval)
+                    if opt is None or opt[1] < indval: opt = (k, indval); updated = True
+                kvals.append(k)
+                if updated and opt[0] != best_k:
+                    ind = [find(i) for i in range(N)]; best_k = opt[0]
+            else:
+                ra, rb = find(a), find(b)
+                if ra != rb: par[rb] = ra
+        if ind is None: ind = [find(i) for i in range(N)]
+        cmap = {}; lab = []
+        for r in ind:
             if r not in cmap: cmap[r] = len(cmap)
-            ind.append(cmap[r])
-        return k, ind, dg
+            lab.append(cmap[r])
+        return max(k, best_k), lab, dg, kvals, vals
+
+def name2index(n):  # hclust::name2index (:11481-11487)
+    return {'silhouette': 1, 'mcclain-rao': 2, 'dunn': 4, 'all': 7}.get(n, -1)
 
 # ---------------- _kmeans / _cluster (optimization.cc:11571-11920) ----------------
 def raw(g):
+    if isinstance(g, Str): return '"%s"' % g.v
     return g.raw if isinstance(g, (Num, Lst)) else str(g)
 
 def fmt_list(v): return '[' + ','.join(str(x) for x in v) + ']'
@@ -412,7 +495,7 @@ def clustering_result(data, p, out_what, k, res):
     if out_what == 1:
         cl = [[] for _ in range(k)]
         for i, r in enumerate(res): cl[r].append(raw(data[i]))
-        return '[' + ','.join(fmt_list(c) for c in cl) + ']'
+        return 'list[' + ','.join(fmt_list(c) for c in cl) + ']'
     raise AssertionError
 
 def parse_count(rh):
@@ -467,11 +550,12 @@ def kmeans_cmd(args, rng):
     if code != 0: return '[]'
     return clustering_result(data, p, out_what, k, res)
 
-def cluster_cmd(args, want_dg=False):
+def cluster_cmd(args, want_dg=False, depart=False):
     data = args[0].items if isinstance(args[0], Lst) else [args[0]]
     if not data: raise GErr('No data found')
+    distf = levenshtein if all(isinstance(x, Str) for x in data) else longueur2
     NP = len(data); p = len(data[0].items) if isinstance(data[0], Lst) else 1
-    out_what, k, min_k, max_k, lmeth = 2, 0, 0, 16, SINGLE
+    out_what, k, min_k, max_k, lmeth, indf = 2, 0, 0, 16, SINGLE, 0
     for opt in args[1:]:
         if isinstance(opt, Eq):
             lh, rh = opt.l, opt.r
@@ -479,6 +563,13 @@ def cluster_cmd(args, want_dg=False):
                 c = parse_count(rh)
                 if c[0] == 'k': k = c[1]
                 else: min_k, max_k = c[1], c[2]
+            elif is_sym(lh, 'count_sup'):
+                if not is_int(rh): raise GErr('Expected a positive integer')
+                max_k = min(int(rh.v), NP-1)
+            elif is_sym(lh, 'count_inf'):
+                if not is_int(rh): raise GErr('Expected a positive integer')
+                min_k = max(int(rh.v), 2)
+            elif is_sym(lh, 'display'): pass  # drawing only
             elif is_sym(lh, 'type'):
                 if not isinstance(rh, Str): raise GErr('Expected a string', True)
                 lt = {'single': SINGLE, 'complete': COMPLETE, 'average': AVERAGE,
@@ -486,7 +577,8 @@ def cluster_cmd(args, want_dg=False):
                 if lt is None: raise GErr('Unknown linkage type')
                 lmeth = lt
             elif is_sym(lh, 'distance'):
-                raise GErr('Invalid distance function specification', True)  # only _FUNC/program accepted
+                if is_sym(rh, 'levenshtein'): distf = levenshtein
+                else: raise GErr('Invalid distance function specification', True)  # only _FUNC/program accepted
             elif is_sym(lh, 'output'):
                 if is_sym(rh, 'part'): out_what = 1
                 elif is_sym(rh, 'list'): out_what = 2
@@ -495,29 +587,48 @@ def cluster_cmd(args, want_dg=False):
                 elif is_sym(rh, 'tree'): out_what = 5
                 elif is_sym(rh, 'index'): out_what = 6
                 else: raise GErr('Invalid output specification')
+            elif is_sym(lh, 'index'):  # :11838-11853
+                if is_sym(rh, 'true'): indf = 1
+                elif is_sym(rh, 'false'): indf = 0
+                elif isinstance(rh, Str):
+                    indf = name2index(rh.v)
+                    if indf < 0: raise GErr('Unknown index name')
+                elif isinstance(rh, Lst) and rh.items and all(isinstance(x, Str) for x in rh.items):
+                    indf = 0
+                    for x in rh.items:
+                        cr = name2index(x.v)
+                        if cr < 0: raise GErr('Unknown index name')
+                        indf |= cr
+                else: raise GErr('Expected a string or list of strings', True)
             else: raise NotImplementedError('cluster option %s' % lh)
         elif is_int(opt):
             k = int(opt.v)
             if k <= 0: raise GErr('Expected a positive integer')
         else: raise GErr('Invalid option')
     if out_what == 3 and p not in (2, 3): raise GErr('Plot output works only with 2D or 3D data')
-    if out_what == 6: raise GErr('No index specified for output')  # indf=0 always here
+    if out_what == 6 and indf <= 0: raise GErr('No index specified for output')
     if max_k < min_k: raise GErr('Invalid k-range')
     if max_k == min_k: k = min_k
-    hc = HClust(data)
-    k, ind, dg = hc.linkage(lmeth, k if k > 0 else 0, min_k, max_k)
+    hc = HClust(data, distf)
+    k, ind, dg, kvals, vals = hc.linkage(lmeth, k if k > 0 else -indf, min_k, max_k, depart)
     if k <= 0: raise GErr('Bad distance function')
     if want_dg: return fmt_list(ind), k, dg
+    if out_what == 6:  # mtran([kvals, vals])
+        if not vals or len(vals) != len(kvals):
+            e = GErr(''); e.txt = 'GIAC_ERROR: Unable to transpose Error: Bad Argument Value'; raise e
+        return '[' + ','.join('[%d,%r]' % kv for kv in zip(kvals, vals)) + ']'
     if out_what == 5: return 'Graphic_object'  # dendrogram drawing not ported
     return clustering_result(data, p, out_what, k, ind)
 
-def run(line, seed):
+def run(line, seed, depart=False):
     s, name, args = parse_call(line)
     rng = random.Random(seed)
     try:
-        r = kmeans_cmd(args, rng) if name == 'kmeans' else cluster_cmd(args)
+        r = kmeans_cmd(args, rng) if name == 'kmeans' else cluster_cmd(args, depart=depart)
     except GErr as e:
         return e.txt
+    except Abort:
+        return '<abort>'
     return r if s is None else '%d,%s' % (s, r)
 
 # ---------------- comparison ----------------
@@ -579,7 +690,60 @@ def main():
                   'SEED-DEPENDENT ' + '; '.join('%s x%d' % (list(k_), len(v)) for k_, v in outs.items())))
     print('TOTAL rows=%d OK=%d FAIL=%d UB=%d seed-dependent kmeans rows=%d' % (len(rows), nok, nfail, nub, len(seeddep)))
     extras()
+    nfail += t5()
     return 0 if nfail == 0 else 1
+
+NUM = re.compile(r'-?\d+(?:\.\d*)?(?:e[-+]?\d+)?')
+
+def close(giac, ours):
+    """The same text up to giac's 12-digit decimals (relative 1e-10)."""
+    if NUM.sub('#', giac) != NUM.sub('#', ours): return False
+    return all(abs(float(a) - float(b)) <= 1e-10 * max(1.0, abs(float(a)))
+               for a, b in zip(NUM.findall(giac), NUM.findall(ours)))
+
+def groups(ans):
+    """A part answer as a set of groups (kmeans' labels are seed-dependent)."""
+    body = ans[ans.index('list['):] if 'list[' in ans else ans
+    return frozenset(re.findall(r'\[((?:\[[^\[\]]*\],?)+|[^\[\]]*)\]', body[5:-1]))
+
+def t5():
+    """T5 (CAS-646): output=part, string data, cluster index= against probe_clustering2 (1.8/T5)."""
+    cas = open(SRC + 'probe_clustering2.cas').read().splitlines()
+    out = open(SRC + 'probe_clustering2.out').read().splitlines()
+    nfail = 0
+    for c, o in zip(cas, out):
+        pre = c + '  =>  '
+        assert o.startswith(pre), o
+        giac = o[len(pre):].rstrip()
+        try:
+            seed, name, _ = parse_call(c)
+        except Exception:
+            name = None
+        if name not in ('cluster', 'kmeans'):
+            print('T5 | %s | skip (not cluster/kmeans)' % c); continue
+        try:
+            ours = run(c, seed or 0)
+        except NotImplementedError:
+            print('T5 | %s | skip (kmeans index=, not ported here)' % c); continue
+        if seed is not None and not ours.startswith('GIAC_ERROR'): ours = '%d,%s' % (seed, ours) if ',' not in ours[:len(str(seed)) + 1] else ours
+        if giac.startswith('<stderr>'):
+            st = 'OK(abort)' if ours == '<abort>' else 'FAIL'
+            print('T5 | %s | giac: abort | ours (departure, max_k<=N-1): %s | %s' % (c, run(c, 0, True), st))
+        elif name == 'kmeans' and 'list[' in giac:
+            seen = {}
+            for sd in range(NSEEDS):
+                seen.setdefault(groups(run(c, sd)), []).append(sd)
+            st = 'OK' if groups(giac) in seen else 'FAIL'
+            print('T5 | %s | giac: %s | partitions over %d seeds: %d %s | %s' % (c, giac, NSEEDS, len(seen),
+                  ['x%d' % len(v) for v in seen.values()], st))
+        else:
+            g = giac.split(',', 1)[1] if seed is not None and not giac.startswith('GIAC') else giac
+            o2 = ours.split(',', 1)[1] if seed is not None and not ours.startswith('GIAC') else ours
+            st = 'OK' if close(g, o2) else 'FAIL'
+            print('T5 | %s | giac: %s | ours: %s | %s' % (c, giac, ours, st))
+        nfail += st == 'FAIL'
+    print('T5 TOTAL FAIL=%d' % nfail)
+    return nfail
 
 E6 = '[[0,0],[0,1],[5,5],[5,6],[10,0],[10,1]]'
 P8 = '[[0,0],[1,0],[0,2],[4,4],[5,5],[4,6],[9,1],[10,0]]'

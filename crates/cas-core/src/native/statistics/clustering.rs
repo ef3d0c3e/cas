@@ -6,8 +6,9 @@
 //!
 //! - **Data.** A list of real numbers (1-D points) or of equal-length
 //!   lists of real numbers, `Matrix[l]` of such a list too; reals are
-//!   rationals, decimals (their midpoints) and numeric constants, in `f64`.
-//!   Anything else leaves the call without a warning.
+//!   rationals, decimals (their midpoints) and numeric constants, in `f64`;
+//!   for `cluster` also a list of strings. Anything else leaves the call
+//!   without a warning.
 //! - **`KMeans[data, options…]`** (`kmeans`): Hartigan and Wong's k-means
 //!   (AS 136, Burkardt's C++ as giac has it: two clusters stop after one
 //!   `optra` and `qtran` pass), from centres drawn by giac's
@@ -25,22 +26,36 @@
 //!   with Lance and Williams' updates, on squared Euclidean distances
 //!   (exact on rational points, then `f64`) or `distance=f` (a builtin or a
 //!   `Function`, also a builtin positionally), `N[f[p, q]]` per pair, cached
-//!   as giac's. The merges sorted by height; `k` given, or giac's largest
-//!   gap of heights (at least `count_inf`, the least of `count=a..b`).
+//!   as giac's; strings by giac's Levenshtein distance on their bytes
+//!   (`levenshtein`, :11504-11536). The merges sorted by height; `k` given,
+//!   or giac's largest gap of heights (at least `count_inf`, the least of
+//!   `count=a..b`). `index=` (a name, a list of them, or `true` for the
+//!   silhouette) without `k`: from `max_k` clusters down to that gap, giac's
+//!   silhouette on the same distances, each cluster's mean of its points'
+//!   values and the largest over clusters (`DBL_MIN` at least), from its
+//!   running sums; the labels of its first best `k`. `"mcclain-rao"` and
+//!   `"dunn"` compute nothing, as giac's. Departure: giac asserts and aborts
+//!   when `max_k ≥ N` (the default 16 included); ours starts at `N − 1`.
 //! - **Answers.** The 0-based labels, numbered by first appearance for
-//!   `cluster` (`output=list`, the default), or the number of clusters
-//!   (`output=count`), exact integers. `output=plot`, `tree` and `part`,
-//!   `index=`, `display=`, `color=` (and `labels=` for `cluster`) leave the
-//!   call without a warning (graphics and indices, not ported).
+//!   `cluster` (`output=list`, the default), the number of clusters
+//!   (`output=count`), exact integers, or the clusters by label, each the
+//!   data items in order (`output=part`). `cluster`'s `output=index`: the
+//!   rows `[k, value]` of the silhouette. `output=plot`, `tree`, `kmeans`'
+//!   `index=` (its criteria, not ported), `display=`, `color=` (and
+//!   `labels=` for `cluster`) leave the call without a warning.
 //! - **Errors** leave the call with giac's message as the warning: "No
 //!   data found", kmeans' "Data must be numeric", "Invalid k-range", "Invalid
 //!   output specification", "No index specified for output", "Unknown
 //!   linkage type", "Expected a string", "Invalid distance function
-//!   specification", "Invalid option", the count parsers' texts, and "Bad
-//!   distance function" for a distance not a real `≥ 0` (a symbolic point
-//!   among them).
+//!   specification", "Invalid option", "Unknown index name", "Expected a
+//!   string or list of strings", "Unable to transpose" (`output=index` with
+//!   no silhouette values), the count parsers' texts, and "Bad distance
+//!   function" for a distance not a real `≥ 0` (a symbolic point among
+//!   them).
 //! - **Limits** before any work (`Limits::terms`): `cluster` the pairs
-//!   `m(m − 1)/2` and `m n`; `kmeans` `11 m n Σk` over the `k` tried and `m n
+//!   `m(m − 1)/2` and `m n`, with the silhouette the pairs times its steps,
+//!   on strings the pairs times the longest's bytes and that length squared;
+//!   `kmeans` `11 m n Σk` over the `k` tried and `m n
 //!   k limit`; past them the call stays with "too many points". `qtran`
 //!   stops after `terms/n` steps (giac's has no bound; a fault 2); the loops
 //!   poll the interrupt.
@@ -54,7 +69,7 @@ use std::cmp::Ordering;
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering as Atomic};
 
-use cas_num::ball::{Float, Round};
+use cas_num::ball::{Ball, Float, Round};
 use cas_num::{Integer, Natural, Rational};
 
 use crate::context::EvalError;
@@ -81,6 +96,10 @@ const STRING: &str = "Expected a string";
 const DISTANCE: &str = "Invalid distance function specification";
 const BAD_DISTANCE: &str = "Bad distance function";
 const OPTION: &str = "Invalid option";
+const UNKNOWN_INDEX: &str = "Unknown index name";
+const STRINGS: &str = "Expected a string or list of strings";
+/// `mtran([kvals, values])` of unequal or empty lists (optimization.h:640).
+const TRANSPOSE: &str = "Unable to transpose";
 const POSITIVE: &str = "Expected a positive integer";
 const RANGE: &str = "Expected a range of positive integers";
 const COUNT: &str = "Expected an integer or range";
@@ -93,6 +112,10 @@ const TOO_MANY: &str = "too many points";
 const HUGE: f64 = 1.0e30;
 /// giac's starts of one `k`: the first and 10 more (:10675-10678).
 const STARTS: usize = 11;
+
+/// `hclust`'s index bits (optimization.h:83-86); only the silhouette is
+/// computed (:11262-11443).
+const SILHOUETTE: u32 = 1;
 
 /// The call stays, with a warning.
 fn refuse(ev: &mut Eval<'_>, e: &Expr, why: &'static str) -> Native {
@@ -246,6 +269,8 @@ enum Output {
     List,
     Count,
     Index,
+    /// The clusters by label, each the data items in order.
+    Part,
     /// Not ported: the call stays without a warning.
     Out,
 }
@@ -258,7 +283,9 @@ fn output(rh: &Expr, tree: bool) -> Result<Output, &'static str> {
         Ok(Output::Count)
     } else if is(rh, Symbol::FIRST_POSITION, "index") {
         Ok(Output::Index)
-    } else if is(rh, Symbol::PART, "part") || named(rh, "plot") || (tree && named(rh, "tree")) {
+    } else if is(rh, Symbol::PART, "part") {
+        Ok(Output::Part)
+    } else if named(rh, "plot") || (tree && named(rh, "tree")) {
         Ok(Output::Out)
     } else {
         Err(OUTPUT)
@@ -275,9 +302,59 @@ fn bound(rh: &Expr) -> Result<i64, &'static str> {
     integer(rh).ok_or(POSITIVE)
 }
 
-fn answer(out: Output, k: usize, labels: &[usize]) -> Expr {
+/// `index=` (:11838-11853): a boolean (`true` is `on`), a name, or a
+/// non-empty list of names OR'd; `names` gives a name's bits.
+fn index(rh: &Expr, names: fn(&str) -> Option<u32>, on: u32) -> Result<u32, &'static str> {
+    if rh.as_symbol() == Some(Symbol::TRUE) {
+        return Ok(on);
+    }
+    if rh.as_symbol() == Some(Symbol::FALSE) {
+        return Ok(0);
+    }
+    if let Some(name) = rh.as_str() {
+        return names(name).ok_or(UNKNOWN_INDEX);
+    }
+    if is_list(rh) && !rh.args().is_empty() && rh.args().iter().all(|x| x.as_str().is_some()) {
+        return rh.args().iter().try_fold(0, |bits, x| {
+            x.as_str()
+                .and_then(names)
+                .map(|b| bits | b)
+                .ok_or(UNKNOWN_INDEX)
+        });
+    }
+    Err(STRINGS)
+}
+
+/// `hclust::name2index` (:11481-11487).
+fn hclust_index(name: &str) -> Option<u32> {
+    Some(match name {
+        "silhouette" => SILHOUETTE,
+        "mcclain-rao" => 2,
+        "dunn" => 4,
+        "all" => 7,
+        _ => return None,
+    })
+}
+
+/// `clustering_result` (:11571-11603): the labels, their count, or the
+/// clusters by label (`output=part`) of the data `items`.
+fn answer(out: Output, k: usize, labels: &[usize], items: &[Expr]) -> Expr {
     match out {
         Output::Count => Expr::from(Integer::from(k as u64)),
+        Output::Part => list(
+            (0..k)
+                .map(|c| {
+                    list(
+                        labels
+                            .iter()
+                            .zip(items)
+                            .filter(|(l, _)| **l == c)
+                            .map(|(_, x)| x.clone())
+                            .collect(),
+                    )
+                })
+                .collect(),
+        ),
         _ => list(
             labels
                 .iter()
@@ -809,7 +886,7 @@ pub(in crate::native) fn kmeans(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let steps = i64::try_from(terms / (data.n as u128)).unwrap_or(i64::MAX);
     ev.volatile();
     match kmeans_core(ev, &points, kk, (lo, hi), (maxiter, steps))? {
-        Ok((k, labels)) => Ok(Some(answer(out, k, &labels))),
+        Ok((k, labels)) => Ok(Some(answer(out, k, &labels, data.items))),
         Err(f) => {
             if f != Fault::Size {
                 ev.warn(Warning::Native {
@@ -844,6 +921,66 @@ enum Distance<'a> {
     Squared(&'a [Option<Vec<Coordinate>>]),
     /// `N[f[p, q]]`.
     Function(&'a Expr, &'a [Expr]),
+    /// Strings' Levenshtein distance (giac's for a list of strings, :11741).
+    Levenshtein(&'a [Expr]),
+}
+
+/// giac's `LevenshteinDistance` (:11519-11536), on bytes as its
+/// `std::string::at`.
+fn levenshtein(s: &[u8], t: &[u8]) -> usize {
+    let (s, t) = if s.len() > t.len() { (t, s) } else { (s, t) };
+    let mut v0: Vec<usize> = (0..=t.len()).collect();
+    let mut v1 = vec![0; t.len() + 1];
+    for (i, &x) in s.iter().enumerate() {
+        v1[0] = i + 1;
+        for (j, &y) in t.iter().enumerate() {
+            v1[j + 1] = (v0[j + 1] + 1)
+                .min(v1[j] + 1)
+                .min(v0[j] + usize::from(x != y));
+        }
+        std::mem::swap(&mut v0, &mut v1);
+    }
+    v0[t.len()]
+}
+
+/// `linkage`'s answer: the number of clusters, the labels by first
+/// appearance, the `k` values of the index path and the silhouette's.
+struct Linked {
+    k: usize,
+    labels: Vec<usize>,
+    kvals: usize,
+    values: Vec<(usize, f64)>,
+}
+
+/// A point's count and sum of distances: to its cluster, and to each other
+/// cluster by root (giac's `slh_a`, `slh_b`).
+type Sums = (usize, f64);
+
+/// The silhouette as giac takes it (:11380-11404): each point's
+/// `(b − a)/max(b, a)` (`0` alone in its cluster), each cluster's mean, the
+/// largest over clusters and `DBL_MIN` at least.
+#[allow(clippy::cast_precision_loss, reason = "point counts")]
+fn silhouette(roots: &[usize], own: &[Sums], other: &[BTreeMap<usize, Sums>]) -> f64 {
+    let mut s = vec![(0usize, 0.0f64); roots.len()];
+    for (i, &r) in roots.iter().enumerate() {
+        let (count, sum) = own[i];
+        let ai = if count == 0 { 0.0 } else { sum / count as f64 };
+        let minb = other[i]
+            .values()
+            .map(|&(c, d)| d / c as f64)
+            .fold(f64::MAX, |m, b| if b < m { b } else { m });
+        let si = if count == 0 {
+            0.0
+        } else {
+            (minb - ai) / if minb < ai { ai } else { minb }
+        };
+        s[r].0 += 1;
+        s[r].1 += si;
+    }
+    s.iter()
+        .filter(|(c, _)| *c > 0)
+        .map(|&(c, sum)| sum / c as f64)
+        .fold(f64::MIN_POSITIVE, |m, v| if v > m { v } else { m })
 }
 
 /// A merge: its height and the two points as giac records them.
@@ -897,6 +1034,11 @@ impl Hclust<'_> {
                 let v = ev.eval(&Expr::call(Symbol::N, [call]))?;
                 coordinate(ev, &v).map(|c| c.value)
             }
+            #[allow(clippy::cast_precision_loss, reason = "string lengths")]
+            Distance::Levenshtein(items) => items[i]
+                .as_str()
+                .zip(items[j].as_str())
+                .map(|(p, q)| levenshtein(p.as_bytes(), q.as_bytes()) as f64),
         };
         Ok(v.filter(|v| *v >= 0.0).unwrap_or(-1.0))
     }
@@ -1073,15 +1215,21 @@ impl Hclust<'_> {
         k
     }
 
-    /// `linkage` (:11262-11443), giac's path without an index: the number
-    /// of clusters and the labels by first appearance; `None` fails.
+    /// `linkage` (:11262-11443): `None` fails. With `k_given` 0 and index
+    /// bits, giac's index path: from `max_k` clusters down, each step's `k`,
+    /// and for the silhouette its value from giac's running sums, the labels
+    /// those of the first best value (strictly larger replaces it).
+    /// Departure: giac's first step below `max_k` asserts (:11325) and
+    /// aborts libgiac; ours starts at `N − 1` clusters at most.
+    #[allow(clippy::too_many_lines, reason = "giac's loop in its order")]
     fn linkage(
         &mut self,
         ev: &mut Eval<'_>,
         meth: Linkage,
         k_given: usize,
-        min_k: usize,
-    ) -> Result<Option<(usize, Vec<usize>)>, EvalError> {
+        (min_k, max_k): (usize, usize),
+        indf: u32,
+    ) -> Result<Option<Linked>, EvalError> {
         let dg = if meth == Linkage::Single {
             self.mst(ev)?
         } else {
@@ -1091,40 +1239,133 @@ impl Hclust<'_> {
             return Ok(None);
         };
         dg.sort_by(|x, y| x.0.total_cmp(&y.0).then(x.1.cmp(&y.1)).then(x.2.cmp(&y.2)));
-        let mut parent: Vec<usize> = (0..self.n).collect();
+        let n = self.n;
+        let mut parent: Vec<usize> = (0..n).collect();
         let find = |parent: &[usize], mut i: usize| {
             while parent[i] != i {
                 i = parent[i];
             }
             i
         };
-        let mut k = self.n;
+        let roots = |parent: &[usize]| (0..n).map(|i| find(parent, i)).collect::<Vec<_>>();
+        let indexing = k_given == 0 && indf > 0;
+        let sil = indexing && indf & SILHOUETTE != 0;
+        let max_k = if indexing {
+            // True distances again: the chain cached Lance and Williams'.
+            self.cache.fill(-1.0);
+            max_k.min(n.saturating_sub(1))
+        } else {
+            max_k
+        };
+        let mut k = n;
         let target = if k_given > 0 {
             k_given
         } else {
             min_k.max(self.k_low(&dg))
         };
+        let mut own: Vec<Sums> = vec![(0, 0.0); n];
+        let mut other: Vec<BTreeMap<usize, Sums>> = vec![BTreeMap::new(); n];
+        let (mut kvals, mut values) = (0, Vec::new());
+        let (mut best, mut best_k, mut snapshot): (Option<f64>, usize, Option<Vec<usize>>) =
+            (None, 0, None);
         for &(_, a, b) in &dg {
             if k == target {
                 break;
             }
             k -= 1;
             let (ra, rb) = (find(&parent, a), find(&parent, b));
-            if ra != rb {
-                parent[rb] = ra;
+            if !indexing || k > max_k {
+                if ra != rb {
+                    parent[rb] = ra;
+                }
+                continue;
+            }
+            interrupted(ev.context().interrupt_flag())?;
+            if k < max_k {
+                if sil {
+                    for (i, &ci) in roots(&parent).iter().enumerate() {
+                        if ci == ra || ci == rb {
+                            let o = if ci == ra { rb } else { ra };
+                            if let Some((c, d)) = other[i].remove(&o) {
+                                own[i].0 += c;
+                                own[i].1 += d;
+                            }
+                        }
+                    }
+                }
+                if ra != rb {
+                    parent[rb] = ra;
+                }
+                if sil {
+                    for (i, &ci) in roots(&parent).iter().enumerate() {
+                        if ci != ra
+                            && let Some((c, d)) = other[i].remove(&rb)
+                        {
+                            let e = other[i].entry(ra).or_insert((0, 0.0));
+                            e.0 += c;
+                            e.1 += d;
+                        }
+                    }
+                }
+            } else {
+                if ra != rb {
+                    parent[rb] = ra;
+                }
+                if sil {
+                    own.fill((0, 0.0));
+                    let r = roots(&parent);
+                    for i in 0..n {
+                        interrupted(ev.context().interrupt_flag())?;
+                        for j in i + 1..n {
+                            let d = self.dist(ev, i, j, true)?;
+                            if r[i] == r[j] {
+                                own[i].0 += 1;
+                                own[i].1 += d;
+                                own[j].0 += 1;
+                                own[j].1 += d;
+                            } else {
+                                let p = other[i].entry(r[j]).or_insert((0, 0.0));
+                                p.0 += 1;
+                                p.1 += d;
+                                let q = other[j].entry(r[i]).or_insert((0, 0.0));
+                                q.0 += 1;
+                                q.1 += d;
+                            }
+                        }
+                    }
+                }
+            }
+            kvals += 1;
+            if sil {
+                let r = roots(&parent);
+                let v = silhouette(&r, &own, &other);
+                values.push((k, v));
+                if best.is_none_or(|x| x < v) {
+                    best = Some(v);
+                    if k != best_k {
+                        snapshot = Some(r);
+                        best_k = k;
+                    }
+                }
             }
         }
-        let mut roots: Vec<usize> = Vec::new();
-        let labels = (0..self.n)
-            .map(|i| {
-                let r = find(&parent, i);
-                roots.iter().position(|&x| x == r).unwrap_or_else(|| {
-                    roots.push(r);
-                    roots.len() - 1
+        let ind = snapshot.unwrap_or_else(|| roots(&parent));
+        let mut seen: Vec<usize> = Vec::new();
+        let labels = ind
+            .iter()
+            .map(|&r| {
+                seen.iter().position(|&x| x == r).unwrap_or_else(|| {
+                    seen.push(r);
+                    seen.len() - 1
                 })
             })
             .collect();
-        Ok(Some((k, labels)))
+        Ok(Some(Linked {
+            k: k.max(best_k),
+            labels,
+            kvals,
+            values,
+        }))
     }
 }
 
@@ -1165,6 +1406,7 @@ pub(in crate::native) fn cluster(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let (mut out, mut k, mut min_k, mut max_k) = (Output::List, 0, 0, 16);
     let mut meth = Linkage::Single;
     let mut function: Option<&Expr> = None;
+    let mut indf = 0;
     let mut stays = false;
     for o in options {
         let step = if let Some((lh, rh)) = equation(o) {
@@ -1177,6 +1419,8 @@ pub(in crate::native) fn cluster(ev: &mut Eval<'_>, e: &Expr) -> Native {
                 bound(rh).map(|v| max_k = v.min(np - 1))
             } else if is(lh, Symbol::COUNT_LESS, "count_inf") {
                 bound(rh).map(|v| min_k = v.max(2))
+            } else if is(lh, Symbol::FIRST_POSITION, "index") {
+                index(rh, hclust_index, SILHOUETTE).map(|v| indf = v)
             } else if drawing(lh) || named(lh, "labels") {
                 stays = true;
                 Ok(())
@@ -1217,7 +1461,7 @@ pub(in crate::native) fn cluster(ev: &mut Eval<'_>, e: &Expr) -> Native {
     if stays || out == Output::Out {
         return Ok(None);
     }
-    if out == Output::Index {
+    if out == Output::Index && indf == 0 {
         return refuse(ev, e, NO_INDEX);
     }
     if max_k < min_k {
@@ -1232,17 +1476,61 @@ pub(in crate::native) fn cluster(ev: &mut Eval<'_>, e: &Expr) -> Native {
     if pairs.is_none_or(|p| p > terms) || m.checked_mul(data.n).is_none_or(|p| p > terms) {
         return refuse(ev, e, TOO_MANY);
     }
+    let pairs = pairs.unwrap_or(0);
+    let to = |v: i64| usize::try_from(v).unwrap_or(0);
+    // The silhouette's steps: the pairs per `k` from `N − 1` (or `max_k`) down.
+    let steps = to(max_k).min(m - 1);
+    if k <= 0 && indf & SILHOUETTE != 0 && pairs.checked_mul(steps).is_none_or(|p| p > terms) {
+        return refuse(ev, e, TOO_MANY);
+    }
+    // giac's distance for a list of strings (:11741).
+    let strings = data.items.iter().all(|x| x.as_str().is_some());
+    if function.is_none() && strings {
+        let longest = data
+            .items
+            .iter()
+            .filter_map(Expr::as_str)
+            .map(str::len)
+            .max();
+        let longest = longest.unwrap_or(0);
+        if pairs.checked_mul(longest).is_none_or(|p| p > terms)
+            || longest.checked_mul(longest).is_none_or(|p| p > terms)
+        {
+            return refuse(ev, e, TOO_MANY);
+        }
+    }
     let mut hc = Hclust {
         n: m,
         distance: match function {
             Some(f) => Distance::Function(f, data.items),
+            None if strings => Distance::Levenshtein(data.items),
             None => Distance::Squared(&data.points),
         },
-        cache: vec![-1.0; pairs.unwrap_or(0)],
+        cache: vec![-1.0; pairs],
     };
-    let to = |v: i64| usize::try_from(v).unwrap_or(0);
-    match hc.linkage(ev, meth, to(k), to(min_k))? {
-        Some((k, labels)) if k > 0 => Ok(Some(answer(out, k, &labels))),
-        _ => refuse(ev, e, BAD_DISTANCE),
+    let linked = match hc.linkage(ev, meth, to(k), (to(min_k), to(max_k)), indf)? {
+        Some(l) if l.k > 0 => l,
+        _ => return refuse(ev, e, BAD_DISTANCE),
+    };
+    if out != Output::Index {
+        return Ok(Some(answer(out, linked.k, &linked.labels, data.items)));
     }
+    // `mtran([kvals, values])` (optimization.h:640): mcclain-rao and dunn
+    // compute no value.
+    if linked.values.is_empty() || linked.values.len() != linked.kvals {
+        return refuse(ev, e, TRANSPOSE);
+    }
+    Ok(Some(list(
+        linked
+            .values
+            .iter()
+            .map(|&(k, v)| {
+                let f = Float::from_f64(v).expect("a silhouette in [-1, 1] or DBL_MIN");
+                list(vec![
+                    Expr::from(Integer::from(k as u64)),
+                    Expr::from(Ball::exact(f)),
+                ])
+            })
+            .collect(),
+    )))
 }

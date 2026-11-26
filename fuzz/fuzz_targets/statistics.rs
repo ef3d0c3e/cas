@@ -12,11 +12,15 @@
 //!   `y = b xᵃ`, which give back `a` and `b` exactly;
 //! - frequencies against the counts, cumulated ones ending at 1, classes
 //!   counting their values, the root mean square, moving averages
-//!   (CAS-DOC-50 §4, CAS-493).
+//!   (CAS-DOC-50 §4, CAS-493);
+//! - `Cluster` and `KMeans` (CAS-630, CAS-646) on small points or strings with
+//!   random options (`output=part`, `count`, `index`, `index=` names): the
+//!   parts are the data grouped by the labels, their number the count, and
+//!   the silhouette rows' `k` decrease with values in `[−1, 1]` or `DBL_MIN`.
 #![no_main]
 
 use arbitrary::{Result, Unstructured};
-use cas_core::{Context, Expr, Symbol};
+use cas_core::{Context, Expr, Symbol, View};
 use cas_num::{Integer, Rational};
 use libfuzzer_sys::fuzz_target;
 
@@ -396,7 +400,121 @@ fn second(ctx: &Context, u: &mut Unstructured<'_>, xs: &[Rational]) -> Result<()
     Ok(())
 }
 
+/// `Cluster` or `KMeans` on up to 7 points (2-D rationals or strings of
+/// `a`, `b`, `é`) with random options: the parts, the count and the labels
+/// agree; the silhouette rows are well formed.
+fn clusters(u: &mut Unstructured<'_>) -> Result<()> {
+    let ctx = Context::new();
+    let m = u.int_in_range(1..=7)?;
+    let strings = u.arbitrary::<bool>()?;
+    let mut items = Vec::with_capacity(m);
+    for _ in 0..m {
+        items.push(if strings {
+            let n = u.int_in_range(0..=4)?;
+            let mut w = String::new();
+            for _ in 0..n {
+                w.push(*u.choose(&['a', 'b', 'é'])?);
+            }
+            format!("{w:?}")
+        } else {
+            format!(
+                "List[{}, {}]",
+                u.int_in_range(-3..=3)?,
+                u.int_in_range(-3..=3)?
+            )
+        });
+    }
+    let head = if u.arbitrary::<bool>()? {
+        "Cluster"
+    } else {
+        "KMeans"
+    };
+    let mut options = Vec::new();
+    for _ in 0..u.int_in_range(0..=3)? {
+        options.push(match u.int_in_range(0..=5)? {
+            0 => format!("Equation[Count, {}]", u.int_in_range(1..=4)?),
+            1 => format!("Equation[CountGreater, {}]", u.int_in_range(0..=8)?),
+            2 => format!(
+                "Equation[Type, {:?}]",
+                u.choose(&["single", "complete", "average", "weighted", "ward"])?
+            ),
+            3 => format!(
+                "Equation[FirstPosition, {}]",
+                u.choose(&[
+                    "\"silhouette\"",
+                    "\"dunn\"",
+                    "\"mcclain-rao\"",
+                    "\"all\"",
+                    "True",
+                    "False",
+                    "List[\"silhouette\", \"dunn\"]",
+                    "\"foo\"",
+                    "List[]",
+                ])?
+            ),
+            4 => "Equation[Count, Range[2, 4]]".to_owned(),
+            _ => "Equation[CountLess, 2]".to_owned(),
+        });
+    }
+    let call = |output: &str| {
+        let mut args = vec![format!("List[{}]", items.join(", "))];
+        args.extend(options.iter().cloned());
+        args.push(format!("Equation[output, {output}]"));
+        let text = format!("{head}[{}]", args.join(", "));
+        let e = Expr::parse_full_form(&text).unwrap_or_else(|err| panic!("{text}: {err}"));
+        let found = ctx.eval(&e).unwrap_or_else(|err| panic!("{text}: {err}"));
+        (text, (found.head() != e.head()).then_some(found))
+    };
+    let (text, labels) = call("List");
+    let (_, parts) = call("Part");
+    let (_, count) = call("Count");
+    let (index_text, index) = call("FirstPosition");
+    if let Some(rows) = index {
+        let mut last = usize::MAX;
+        for row in rows.args() {
+            let [k, v] = row.args() else {
+                panic!("{index_text}: {rows:?}");
+            };
+            let k = k.as_i64().and_then(|k| usize::try_from(k).ok());
+            let v = match v.view() {
+                View::Ball(b) => b.mid().to_f64(),
+                _ => panic!("{index_text}: {rows:?}"),
+            };
+            assert!(
+                k.is_some_and(|k| k < last) && (-1.0..=1.0).contains(&v),
+                "{index_text}: {rows:?}"
+            );
+            last = k.unwrap_or(0);
+        }
+    }
+    // kmeans draws its centres anew per call: only cluster's three answers
+    // agree with one another.
+    let (Some(labels), Some(parts), Some(count), "Cluster") = (labels, parts, count, head) else {
+        return Ok(());
+    };
+    let data = ctx
+        .eval(&Expr::parse_full_form(&format!("List[{}]", items.join(", "))).expect("data"))
+        .expect("data");
+    let k = count.as_i64().and_then(|k| usize::try_from(k).ok());
+    assert_eq!(k, Some(parts.args().len()), "{text}: {count:?} {parts:?}");
+    for (c, group) in parts.args().iter().enumerate() {
+        let expected: Vec<&Expr> = labels
+            .args()
+            .iter()
+            .zip(data.args())
+            .filter(|(l, _)| l.as_i64().and_then(|l| usize::try_from(l).ok()) == Some(c))
+            .map(|(_, x)| x)
+            .collect();
+        assert!(
+            !expected.is_empty() && group.args().iter().eq(expected),
+            "{text}: {labels:?} {parts:?}"
+        );
+    }
+    Ok(())
+}
+
 fuzz_target!(|data: &[u8]| {
     let mut u = Unstructured::new(data);
     let _ = run(&mut u);
+    let _ = clusters(&mut Unstructured::new(data));
 });

@@ -431,7 +431,42 @@ R1.7-012):
 - graphics (`kmeans(E6,3,output=plot)`, `cluster(D6,output=plot)` and
   `output=tree`): giac draws, ours stays without a warning;
 - seeded rows (C0014): `srand(s)` then `kmeans(E6,3)` twice gives the same
-  labels, s = 1, 7, 42, 2024.
+  labels, s = 1, 7, 42, 2024;
+- 1.8/T5 (CAS-646; giac's answers in
+  crates/cas-core/proto/giac/probe_clustering2.out, the prototype's `t5`, all
+  rows agreeing): `output=part` (9 `cluster` rows on D6, E12, 1-D data and
+  strings, as they are; `kmeans(D6,2,output=part)` plain and under
+  `srand(42)` as a partition, one over 200 prototype seeds;
+  `kmeans(D6,3,output=part)` a departure, giac's and ours among the
+  prototype's two); lists of strings (13 rows: giac's Levenshtein distance on
+  bytes, `levenshtein("é","e")` = 2); `cluster`'s `index=` labels and counts
+  (17 rows) and its `output=index` silhouette values (16 rows, within 1e-9,
+  C0100); errors (28 rows: "Unknown index name", "Expected a string or list
+  of strings", "Unable to transpose", "Data must be numeric" for `kmeans` on
+  strings) stay with giac's message as the warning;
+- departures, the silhouette with `max_k ≥ N` (`index="silhouette"`, `true`,
+  `"all"` or a list with it, no `k`, the default `max_k` 16 included): giac
+  asserts (optimization.cc:11325) and aborts libgiac, so it is not asked (9
+  rows); ours starts at `N − 1` clusters, which giac's code meant, and answers
+  the prototype's labels and values.
+
+CAS-630's options, each built or a departure: data, lists of reals or of
+equal-length lists, `matrix(…)` of one, for `cluster` also lists of strings
+(built; `kmeans` on strings is "Data must be numeric", as giac's); `k`
+positional, `count=k`, `count=a..b`, `count_inf=`, `count_sup=` (built, both);
+`kmeans`' `limit=` (built); `cluster`'s `type=` single, complete, average,
+weighted, ward (built; centroid and median are `#if 0` in giac, "Unknown
+linkage type") and `distance=` a function or builtin (built); `output=list`,
+`count`, `part` (built, both); `output=index`: `cluster`'s silhouette rows
+(built), `kmeans`' "No index specified for output" (built); `cluster`'s
+`index=` (built: the silhouette computed, `"mcclain-rao"` and `"dunn"`
+compute nothing as giac's; departure above); `kmeans`' `index=` (its
+`cluster_crit` criteria: the call stays, ported next); `output=plot`, `tree`,
+`labels=`, `display=`, `color=` (graphics, not ported: the call stays
+without a warning; departure: giac ignores `display=` outside `output=plot`
+and answers); `kmeans`' draw (departure: giac's `_rand` stream is not ours,
+the seed-dependent rows above) and on scalar 1-D data (departure: giac
+crashes, ours clusters).
 
 `tests/sound.rs`, Xcas's sound clips (CAS-631; giac's answers in probe5,
 probe9, probe10, probe11 and crates/cas-core/proto/sound/clip/dur.cas, the prototype
@@ -1086,8 +1121,8 @@ Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
   - Statistics (2): `choice` T5. `hasard` is not built: it is a French spelling, and `rand` is built.
   - Infrastructure (1): `dayofweek` built in T5 (`tests/gap_leftovers_three.rs`).
   - Signal processing (6): `stft`, `istft`, `hht`, `boxcar`, `tri`, `sinc` T6.
-- Option-level items under covered names: `kmeans`/`cluster` `output=part`, `index=` and clustering
-  of strings T5; `hilbert(f,t)`, the transform form beside the list form, T6. `fitdistr` on
+- Option-level items under covered names: `output=part`, `cluster`'s `index=` and clustering of
+  strings built in T5 (CAS-646; `kmeans`' `index=` next); `hilbert(f,t)`, the transform form, T6. `fitdistr` on
   exponential data with a 0 already agrees: giac refuses `fitdistr([0,1,2,3,4],exponential)` with
   "Expected a positive number" (caseval probe), and so does ours, because it requires data > 0
   (`fitting.rs:645,666-668`); its oracle row is in `tests/gap_leftovers_three.rs` (T5).

@@ -2,7 +2,9 @@
 //! partitions (up to relabelling) against the prototype's answers
 //! (crates/cas-core/proto/clustering/proto.py, R1.7-012), the seed-dependent ones among the
 //! partitions it found over 200 seeds, a run repeated under `SeedRandom`,
-//! each warning, and the limits.
+//! each warning, and the limits; `output=part`, strings' Levenshtein
+//! distance and `cluster`'s silhouette (1.8/T5, CAS-646: giac's answers in
+//! crates/cas-core/proto/giac/probe_clustering2.out, the prototype's `t5`).
 
 use crate::context::Limits;
 use crate::trace::Warning;
@@ -361,7 +363,6 @@ fn stays_silently() {
     let ctx = Context::new();
     for input in [
         format!("KMeans[{E6}, Equation[output, plot]]"),
-        format!("KMeans[{E6}, Equation[output, Part]]"),
         format!("KMeans[{E6}, Equation[FirstPosition, True]]"),
         format!("Cluster[{E6}, Equation[output, tree]]"),
         format!("Cluster[{E6}, Equation[display, 1]]"),
@@ -387,6 +388,279 @@ fn limits() {
         ..limits
     });
     for input in [format!("KMeans[{E6}, 3]"), format!("Cluster[{P8}]")] {
+        assert_eq!(warning(&small, &input), "too many points", "{input}");
+    }
+}
+
+const E12: &str = "List[List[0, 0], List[0, 1], List[1, 0], List[10, 10], List[10, 11], \
+                   List[11, 10], List[20, 0], List[20, 1], List[21, 0], List[0, 20], \
+                   List[1, 20], List[0, 21]]";
+const WORDS: &str = "List[\"hello\", \"hallo\", \"world\", \"word\", \"help\"]";
+
+/// `output=part`: the clusters by label, each the data items in order.
+#[test]
+fn parts() {
+    let ctx = Context::new();
+    for (input, expected) in [
+        (
+            format!("Cluster[{E6}, Equation[output, Part]]"),
+            "List[List[List[0, 0], List[0, 1]], List[List[5, 5], List[5, 6]], \
+             List[List[10, 0], List[10, 1]]]",
+        ),
+        (
+            "Cluster[List[1, 2, 10, 11, 20, 21], Equation[output, Part]]".to_owned(),
+            "List[List[1, 2], List[10, 11], List[20, 21]]",
+        ),
+        (
+            format!("Cluster[{WORDS}, Equation[Type, \"complete\"], Equation[output, Part]]"),
+            "List[List[\"hello\", \"hallo\"], List[\"world\", \"word\"], List[\"help\"]]",
+        ),
+    ] {
+        assert_eq!(eval(&ctx, &input), read(expected), "{input}");
+    }
+    // kmeans' labels depend on the draw: the clusters as a set.
+    let input = "KMeans[List[List[0, 0], List[0, 1], List[5, 5], List[5, 6]], 2, \
+                 Equation[output, Part]]";
+    let found = eval(&ctx, input);
+    let mut groups = found.args().to_vec();
+    groups.sort();
+    let mut expected = read("List[List[List[0, 0], List[0, 1]], List[List[5, 5], List[5, 6]]]")
+        .args()
+        .to_vec();
+    expected.sort();
+    assert_eq!(groups, expected, "{input}: {found:?}");
+}
+
+/// Strings: giac's Levenshtein distance, on bytes.
+#[test]
+fn strings() {
+    assert_eq!(super::levenshtein("é".as_bytes(), b"e"), 2);
+    assert_eq!(super::levenshtein(b"kitten", b"sitting"), 3);
+    let ctx = Context::new();
+    for (input, expected) in [
+        (format!("Cluster[{WORDS}]"), vec![0, 0, 1, 1, 0]),
+        (
+            format!("Cluster[{WORDS}, Equation[Type, \"ward\"], Equation[Count, 2]]"),
+            vec![0, 0, 1, 1, 0],
+        ),
+        (
+            "Cluster[List[\"kitten\", \"sitting\", \"mitten\", \"abc\", \"abd\"], 3]".to_owned(),
+            vec![0, 1, 0, 2, 2],
+        ),
+        (
+            "Cluster[List[\"aaaa\", \"aaab\", \"bbbb\", \"bbba\", \"cccc\"]]".to_owned(),
+            vec![0, 0, 1, 1, 2],
+        ),
+        ("Cluster[List[\"x\"]]".to_owned(), vec![0]),
+    ] {
+        let found = eval(&ctx, &input);
+        assert_eq!(labels(&input, &found), expected, "{input}");
+    }
+    assert_eq!(
+        eval(&ctx, &format!("Cluster[{WORDS}, Equation[output, Count]]")),
+        Expr::from(2)
+    );
+}
+
+/// The values of an `output=index` answer: `[k, value]` rows.
+fn index_values(input: &str, found: &Expr) -> Vec<(i64, f64)> {
+    found
+        .args()
+        .iter()
+        .map(|row| match row.args() {
+            [k, v] => match (k.as_i64(), v.view()) {
+                (Some(k), crate::expr::View::Ball(b)) => (k, b.mid().to_f64()),
+                _ => panic!("{input}: {found:?}"),
+            },
+            _ => panic!("{input}: {found:?}"),
+        })
+        .collect()
+}
+
+const SIL: &str = "Equation[FirstPosition, \"silhouette\"]";
+
+/// `cluster`'s silhouette labels (giac's rows, and the prototype's where
+/// giac aborts: ours starts at `N − 1` clusters).
+#[test]
+fn silhouette_labels() {
+    let ctx = Context::new();
+    let sil = SIL;
+    for (input, expected) in [
+        (
+            format!("Cluster[{E12}, {sil}, Equation[Count, Range[2, 6]]]"),
+            vec![0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 4, 5],
+        ),
+        (
+            format!("Cluster[{E12}, {sil}, Equation[Count, Range[2, 3]]]"),
+            vec![0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3],
+        ),
+        (
+            format!("Cluster[{E12}, Equation[FirstPosition, List[\"dunn\", \"mcclain-rao\"]]]"),
+            vec![0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 3, 3],
+        ),
+        (
+            format!("Cluster[{P8}, {sil}, Equation[CountGreater, 7]]"),
+            vec![0, 0, 1, 2, 2, 2, 3, 3],
+        ),
+        (
+            format!(
+                "Cluster[{P8}, {sil}, Equation[CountGreater, 7], Equation[Type, \"complete\"]]"
+            ),
+            vec![0, 0, 0, 0, 0, 0, 1, 1],
+        ),
+        (
+            "Cluster[List[0, 0, 0, 5], Equation[FirstPosition, True], Equation[CountGreater, 3]]"
+                .to_owned(),
+            vec![0, 0, 0, 1],
+        ),
+        // Departures: giac aborts (max_k 16 ≥ N).
+        (
+            format!("Cluster[{E12}, {sil}]"),
+            vec![0, 0, 0, 1, 1, 1, 2, 2, 2, 3, 4, 5],
+        ),
+        (
+            format!("Cluster[{E12}, {sil}, Equation[Type, \"ward\"]]"),
+            vec![0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0],
+        ),
+    ] {
+        let found = eval(&ctx, &input);
+        assert_eq!(labels(&input, &found), expected, "{input}");
+    }
+    assert_eq!(
+        eval(
+            &ctx,
+            &format!("Cluster[{P8}, {sil}, Equation[CountGreater, 7], Equation[output, Count]]")
+        ),
+        Expr::from(4)
+    );
+}
+
+/// `cluster`'s `output=index`: giac's silhouette values.
+#[test]
+fn silhouette_values() {
+    let ctx = Context::new();
+    let sil = SIL;
+    let e12 = [
+        (11, 0.25),
+        (10, 0.992_808_471_454_880_3),
+        (9, 0.993_180_830_751_805_6),
+        (8, 0.993_296_570_002_618_4),
+        (7, 0.993_296_570_002_618_4),
+        (6, 0.993_313_996_053_753_3),
+        (5, 0.993_313_996_053_753_3),
+        (4, 0.993_313_996_053_753_3),
+    ];
+    for (input, expected) in [
+        (
+            format!(
+                "Cluster[{E12}, {sil}, Equation[CountGreater, 11], Equation[output, FirstPosition]]"
+            ),
+            e12.to_vec(),
+        ),
+        (
+            format!("Cluster[{E12}, {sil}, Equation[output, FirstPosition]]"),
+            e12.to_vec(),
+        ),
+        (
+            format!(
+                "Cluster[{P8}, {sil}, Equation[CountGreater, 7], Equation[output, FirstPosition]]"
+            ),
+            vec![
+                (7, 0.775),
+                (6, 0.775),
+                (5, 0.897_916_666_666_666_7),
+                (4, 0.956_896_551_724_137_9),
+                (3, 0.956_896_551_724_137_9),
+            ],
+        ),
+        (
+            format!(
+                "Cluster[{WORDS}, {sil}, Equation[CountGreater, 4], Equation[output, FirstPosition]]"
+            ),
+            vec![
+                (4, 0.583_333_333_333_333_3),
+                (3, 0.75),
+                (2, 0.767_857_142_857_142_8),
+            ],
+        ),
+        (
+            "Cluster[List[0, 0, 0, 5], Equation[FirstPosition, True], Equation[CountGreater, 3], \
+             Equation[output, FirstPosition]]"
+                .to_owned(),
+            vec![(3, f64::MIN_POSITIVE), (2, 1.0)],
+        ),
+    ] {
+        let found = index_values(&input, &eval(&ctx, &input));
+        assert_eq!(found.len(), expected.len(), "{input}: {found:?}");
+        for ((k, v), (ek, ev)) in found.iter().zip(&expected) {
+            assert!(k == ek && (v - ev).abs() <= 1e-15, "{input}: {found:?}");
+        }
+    }
+}
+
+/// `index=` and `output=index` errors stay with giac's message.
+#[test]
+fn index_errors() {
+    let ctx = Context::new();
+    let sil = SIL;
+    for (input, message) in [
+        (
+            format!("Cluster[{E12}, Equation[FirstPosition, \"foo\"]]"),
+            "Unknown index name",
+        ),
+        (
+            format!("Cluster[{E12}, Equation[FirstPosition, List[\"a\", \"b\"]]]"),
+            "Unknown index name",
+        ),
+        (
+            format!("Cluster[{E12}, Equation[FirstPosition, 1]]"),
+            "Expected a string or list of strings",
+        ),
+        (
+            format!("Cluster[{E12}, Equation[FirstPosition, List[]]]"),
+            "Expected a string or list of strings",
+        ),
+        (
+            format!(
+                "Cluster[{E12}, Equation[FirstPosition, False], Equation[output, FirstPosition]]"
+            ),
+            "No index specified for output",
+        ),
+        (
+            format!(
+                "Cluster[{E12}, Equation[FirstPosition, \"mcclain-rao\"], Equation[output, FirstPosition]]"
+            ),
+            "Unable to transpose",
+        ),
+        (
+            format!("Cluster[{E12}, {sil}, 4, Equation[output, FirstPosition]]"),
+            "Unable to transpose",
+        ),
+        (
+            format!(
+                "Cluster[{E12}, {sil}, Equation[Count, Range[2, 3]], Equation[output, FirstPosition]]"
+            ),
+            "Unable to transpose",
+        ),
+    ] {
+        assert_eq!(warning(&ctx, &input), message, "{input}");
+    }
+}
+
+/// The silhouette's steps and strings' lengths count against
+/// `Limits::terms`.
+#[test]
+fn index_and_string_limits() {
+    let mut small = Context::new();
+    let limits = small.limits();
+    small.set_limits(Limits {
+        terms: 20,
+        ..limits
+    });
+    for input in [
+        format!("Cluster[{E6}, Equation[FirstPosition, \"silhouette\"]]"),
+        "Cluster[List[\"abcdefghij\", \"b\", \"c\"]]".to_owned(),
+    ] {
         assert_eq!(warning(&small, &input), "too many points", "{input}");
     }
 }

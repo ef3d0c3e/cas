@@ -8,14 +8,23 @@
 //! partitions the prototype found over 200 seeds (giac's among them).
 //! Invalid calls stay with giac's message as the warning (C0022); graphics
 //! (`output=plot`, `output=tree`) stay without one. Seeded rows (C0014):
-//! ours repeats under `srand`.
+//! ours repeats under `srand`. 1.8/T5 (CAS-646, giac's answers in
+//! crates/cas-core/proto/giac/probe_clustering2.out, the prototype's `t5`):
+//! `output=part`, lists of strings, `cluster`'s `index=`; the silhouette's
+//! values within 1e-9 (C0100). giac aborts on the silhouette with `max_k ≥
+//! N` (optimization.cc:11325): those rows are departures, giac not asked
+//! (C0021).
 
-use cas_core::{Context, EvalOptions, Expr, Warning};
+use cas_core::{Context, EvalOptions, Expr, View, Warning};
 use cas_giac::{Giac, ours};
 use cas_lang::{Hook, Names, decimal_balls, lower, parse};
 
 const D6: &str = "[[1.1,1.5],[3.2,2.5],[1.5,0.9],[3.5,2.7],[0.8,1.1],[3.1,2.2]]";
 const E6: &str = "[[0,0],[0,1],[5,5],[5,6],[10,0],[10,1]]";
+const E12: &str =
+    "[[0,0],[0,1],[1,0],[10,10],[10,11],[11,10],[20,0],[20,1],[21,0],[0,20],[1,20],[0,21]]";
+const P8: &str = "[[0,0],[1,0],[0,2],[4,4],[5,5],[4,6],[9,1],[10,0]]";
+const WORDS: &str = r#"["hello","hallo","world","word","help"]"#;
 
 /// The shared library, or `None` with a note: the checks skip.
 fn giac() -> Option<&'static Giac> {
@@ -423,6 +432,444 @@ fn graphics_stay() {
         }
         if !stays_with(&input, None) {
             wrong.push(format!("{input}: ours {:?}", evaluated(&input)));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// giac's answer and ours, the same expression: `output=part`, strings'
+/// Levenshtein distance, and the labels of `index=` (none of these
+/// silhouette rows has `max_k ≥ N`).
+fn answer_rows(rows: &[(String, &str)]) {
+    let giac = giac();
+    let mut wrong = Vec::new();
+    for (input, answer) in rows {
+        if let Some(giac) = giac
+            && let Err(e) = giac.answers(input, answer)
+        {
+            wrong.push(format!("{input}: giac {e:?}"));
+        }
+        let (mine, expected) = (ours(input), ours(answer));
+        if !matches!((&mine, &expected), (Ok(m), Ok(x)) if m == x) {
+            wrong.push(format!("{input}: ours {mine:?}, wanted {answer}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `cluster`'s `output=part`, and `kmeans`' where one partition is reached.
+#[test]
+fn parts() {
+    let groups4 = "[[[0,0],[0,1],[1,0]],[[10,10],[10,11],[11,10]],[[20,0],[20,1],[21,0]],\
+                   [[0,20],[1,20],[0,21]]]";
+    answer_rows(&[
+        (
+            format!("cluster({D6},output=part)"),
+            "[[[1.1,1.5],[1.5,0.9],[0.8,1.1]],[[3.2,2.5],[3.5,2.7],[3.1,2.2]]]",
+        ),
+        (
+            format!("cluster({D6},count=3,output=part)"),
+            "[[[1.1,1.5],[0.8,1.1]],[[3.2,2.5],[3.5,2.7],[3.1,2.2]],[[1.5,0.9]]]",
+        ),
+        (
+            format!("cluster({D6},2,output=part,count=3)"),
+            "[[[1.1,1.5],[0.8,1.1]],[[3.2,2.5],[3.5,2.7],[3.1,2.2]],[[1.5,0.9]]]",
+        ),
+        (format!("cluster({E12},count=4,output=part)"), groups4),
+        (format!("cluster({E12},4,output=part)"), groups4),
+        (
+            "cluster([1,2,10,11,20,21],output=part)".to_owned(),
+            "[[1,2],[10,11],[20,21]]",
+        ),
+        (
+            format!("cluster({WORDS},output=part)"),
+            r#"[["hello","hallo","help"],["world","word"]]"#,
+        ),
+        (
+            format!("cluster({WORDS},type=\"complete\",output=part)"),
+            r#"[["hello","hallo"],["world","word"],["help"]]"#,
+        ),
+        (
+            format!("cluster({WORDS},type=\"average\",count=3,output=part)"),
+            r#"[["hello","hallo"],["world","word"],["help"]]"#,
+        ),
+    ]);
+    // kmeans: one partition over 200 prototype seeds (D6, 2), or giac's
+    // among the prototype's two (D6, 3; ours a departure, C0044).
+    let giac = giac();
+    let mut wrong = Vec::new();
+    let data = ours(D6).expect("D6");
+    let partition = |e: Option<Expr>| {
+        let e = e?;
+        let labels: Option<Vec<i64>> = data
+            .args()
+            .iter()
+            .map(|x| {
+                e.args()
+                    .iter()
+                    .position(|g| g.args().contains(x))
+                    .and_then(|i| i64::try_from(i).ok())
+            })
+            .collect();
+        labels.map(|l| canonical(&l))
+    };
+    let two: &[&[i64]] = &[&[0, 1, 0, 1, 0, 1]];
+    let three: &[&[i64]] = &[&[0, 1, 2, 1, 0, 1], &[0, 1, 0, 2, 0, 1]];
+    for (seed, input, allowed) in [
+        (None, format!("kmeans({D6},2,output=part)"), two),
+        (Some(42), format!("kmeans({D6},2,output=part)"), two),
+        (None, format!("kmeans({D6},3,output=part)"), three),
+    ] {
+        let among =
+            |p: &Option<Vec<i64>>| p.as_ref().is_some_and(|p| allowed.contains(&p.as_slice()));
+        if let Some(giac) = giac {
+            let theirs = partition(giac_last(giac, &with_seed(seed, &input)));
+            if !among(&theirs) {
+                wrong.push(format!("{input}: giac {theirs:?}"));
+            }
+        }
+        let mine = partition(ours_seeded(seed, &input));
+        if !among(&mine) {
+            wrong.push(format!("{input}: ours {mine:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Lists of strings: giac's Levenshtein distance, on bytes.
+#[test]
+fn strings() {
+    let kitten = r#"["kitten","sitting","mitten","abc","abd"]"#;
+    let prefixes = r#"["a","ab","abc","abcd","xyz"]"#;
+    let letters = r#"["aaaa","aaab","bbbb","bbba","cccc"]"#;
+    answer_rows(&[
+        (format!("cluster({WORDS})"), "[0,0,1,1,0]"),
+        (format!("cluster({WORDS},count=2)"), "[0,0,1,1,0]"),
+        (format!("cluster({WORDS},output=count)"), "2"),
+        (
+            format!("cluster({WORDS},type=\"ward\",count=2)"),
+            "[0,0,1,1,0]",
+        ),
+        (
+            r#"cluster(["abc","abd","xyz","xyw"],count=2,output=list)"#.to_owned(),
+            "[0,0,1,1]",
+        ),
+        (format!("cluster({kitten},count=2)"), "[0,0,0,1,1]"),
+        (format!("cluster({kitten},count=3)"), "[0,1,0,2,2]"),
+        (format!("cluster({prefixes},count=2)"), "[0,0,0,0,1]"),
+        (
+            format!("cluster({prefixes},count=2,type=\"complete\")"),
+            "[0,0,0,0,1]",
+        ),
+        (format!("cluster({letters})"), "[0,0,1,1,2]"),
+        (format!("cluster({letters},output=count)"), "3"),
+        (r#"cluster(["x"])"#.to_owned(), "[0]"),
+        (r#"cluster(["aé","ae","zz","zy"])"#.to_owned(), "[0,1,2,3]"),
+    ]);
+}
+
+/// `index=`'s labels and counts where giac does not abort.
+#[test]
+fn index_labels() {
+    let sil = "index=\"silhouette\"";
+    let split = "[0,0,0,1,1,1,2,2,2,3,4,5]";
+    let four = "[0,0,0,1,1,1,2,2,2,3,3,3]";
+    answer_rows(&[
+        (format!("cluster({E12},{sil},count=2..6)"), split),
+        (format!("cluster({E12},{sil},count=2..6,output=count)"), "6"),
+        (
+            format!("cluster({E12},{sil},count=2..6,output=part)"),
+            "[[[0,0],[0,1],[1,0]],[[10,10],[10,11],[11,10]],[[20,0],[20,1],[21,0]],\
+             [[0,20]],[[1,20]],[[0,21]]]",
+        ),
+        (format!("cluster({E12},{sil},count_sup=11)"), split),
+        (format!("cluster({E12},{sil},count=2..3)"), four),
+        (format!("cluster({E12},4,{sil})"), four),
+        (
+            format!("cluster({E12},{sil},count=11..11)"),
+            "[0,0,1,2,3,4,5,6,7,8,9,10]",
+        ),
+        (format!("cluster({E12},index=false)"), four),
+        (
+            format!("cluster({E12},index=[\"dunn\",\"mcclain-rao\"],count=2..6)"),
+            four,
+        ),
+        (format!("cluster({D6},index=\"dunn\")"), "[0,1,0,1,0,1]"),
+        (format!("cluster({D6},{sil},count_sup=5)"), "[0,1,0,1,0,1]"),
+        (
+            format!("cluster({P8},{sil},count_sup=7)"),
+            "[0,0,1,2,2,2,3,3]",
+        ),
+        (format!("cluster({P8},{sil},count_sup=7,output=count)"), "4"),
+        (
+            format!("cluster({P8},{sil},count_sup=7,type=\"complete\")"),
+            "[0,0,0,0,0,0,1,1]",
+        ),
+        (format!("cluster({WORDS},{sil},count_sup=4)"), "[0,0,1,1,0]"),
+        (
+            "cluster([0,0,0,5],index=\"silhouette\",count_sup=3)".to_owned(),
+            "[0,0,0,1]",
+        ),
+        (r#"cluster(["x"],index="silhouette")"#.to_owned(), "[0]"),
+    ]);
+}
+
+/// The `[k, value]` rows of an `output=index` answer.
+fn index_rows(e: &Expr) -> Option<Vec<(i64, f64)>> {
+    e.args()
+        .iter()
+        .map(|row| match row.args() {
+            [k, v] => match v.view() {
+                View::Ball(b) => Some((k.as_i64()?, b.mid().to_f64())),
+                _ => Some((k.as_i64()?, f64::from(i32::try_from(v.as_i64()?).ok()?))),
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+/// Rows equal in `k` and within 1e-9 in value (giac prints 12 digits).
+fn near(a: &[(i64, f64)], b: &[(i64, f64)]) -> bool {
+    a.len() == b.len()
+        && a.iter()
+            .zip(b)
+            .all(|((k, v), (l, w))| k == l && (v - w).abs() <= 1e-9 * v.abs().max(1.0))
+}
+
+const E12_VALUES: [(i64, f64); 8] = [
+    (11, 0.25),
+    (10, 0.992_808_471_454_880_3),
+    (9, 0.993_180_830_751_805_6),
+    (8, 0.993_296_570_002_618_4),
+    (7, 0.993_296_570_002_618_4),
+    (6, 0.993_313_996_053_753_3),
+    (5, 0.993_313_996_053_753_3),
+    (4, 0.993_313_996_053_753_3),
+];
+
+/// `output=index`: giac's silhouette values and ours, within 1e-9.
+#[test]
+fn silhouette_values() {
+    let sil = "index=\"silhouette\"";
+    let giac = giac();
+    let mut wrong = Vec::new();
+    let mut rows = vec![
+        format!("cluster({E12},{sil},count=2..6,output=index)"),
+        format!("cluster({E12},{sil},count_sup=11,output=index)"),
+        format!("cluster({E12},{sil},count_sup=20,output=index)"),
+        format!("cluster({E12},{sil},count_inf=3,count_sup=11,output=index)"),
+        format!("cluster({E12},index=\"all\",count=2..6,output=index)"),
+        format!("cluster({E12},index=true,count=2..6,output=index)"),
+        format!("cluster({D6},{sil},count_sup=5,output=index)"),
+        format!("cluster({D6},{sil},count_sup=5,type=\"ward\",output=index)"),
+        format!("cluster({P8},{sil},count_sup=7,output=index)"),
+        format!("cluster({P8},{sil},count_sup=7,type=\"complete\",output=index)"),
+        format!("cluster({WORDS},{sil},count_sup=4,output=index)"),
+        "cluster([0,0,0,5],index=\"silhouette\",count_sup=3,output=index)".to_owned(),
+    ];
+    for t in ["complete", "ward", "average", "weighted"] {
+        rows.push(format!(
+            "cluster({E12},{sil},count=2..6,type=\"{t}\",output=index)"
+        ));
+    }
+    for input in &rows {
+        let mine = ours(input).ok().as_ref().and_then(index_rows);
+        if mine.as_ref().is_none_or(Vec::is_empty) {
+            wrong.push(format!("{input}: ours {mine:?}"));
+        }
+        if let Some(giac) = giac {
+            let theirs = giac.value(input).ok().as_ref().and_then(index_rows);
+            if !matches!((&mine, &theirs), (Some(m), Some(t)) if near(m, t)) {
+                wrong.push(format!("{input}: ours {mine:?}, giac {theirs:?}"));
+            }
+        }
+    }
+    let first = ours(&rows[1]).ok().as_ref().and_then(index_rows);
+    if !first.as_ref().is_some_and(|v| near(v, &E12_VALUES)) {
+        wrong.push(format!("{}: ours {first:?}", rows[1]));
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Departures: the silhouette with `max_k ≥ N` (the default 16) aborts
+/// libgiac (optimization.cc:11325, `probe_clustering2.out` `<stderr>`), giac
+/// not asked; ours starts at `N − 1` clusters (the prototype's answers).
+#[test]
+fn silhouette_departures() {
+    let sil = "index=\"silhouette\"";
+    let mut wrong = Vec::new();
+    for (input, answer) in [
+        (format!("cluster({E12},{sil})"), "[0,0,0,1,1,1,2,2,2,3,4,5]"),
+        (
+            format!("cluster({E12},{sil},type=\"ward\")"),
+            "[0,0,0,0,0,0,1,1,1,0,0,0]",
+        ),
+        (format!("cluster({D6},{sil})"), "[0,1,0,1,0,1]"),
+        (format!("cluster({D6},index=true)"), "[0,1,0,1,0,1]"),
+    ] {
+        let (mine, expected) = (ours(&input), ours(answer));
+        if !matches!((&mine, &expected), (Ok(m), Ok(x)) if m == x) {
+            wrong.push(format!("{input}: ours {mine:?}, wanted {answer}"));
+        }
+    }
+    let d6: &[(i64, f64)] = &[
+        (5, 0.493_433_395_872_420_5),
+        (4, 0.960_414_356_130_622_3),
+        (3, 0.960_535_421_629_749_8),
+        (2, 0.965_962_580_045_557_6),
+    ];
+    let words: &[(i64, f64)] = &[
+        (4, 0.583_333_333_333_333_3),
+        (3, 0.75),
+        (2, 0.767_857_142_857_142_8),
+    ];
+    for (input, values) in [
+        (
+            format!("cluster({E12},{sil},output=index)"),
+            &E12_VALUES[..],
+        ),
+        (format!("cluster({D6},{sil},output=index)"), d6),
+        (
+            format!("cluster({D6},index=[\"silhouette\",\"dunn\"],output=index)"),
+            d6,
+        ),
+        (format!("cluster({D6},index=\"all\",output=index)"), d6),
+        (format!("cluster({WORDS},{sil},output=index)"), words),
+    ] {
+        let mine = ours(&input).ok().as_ref().and_then(index_rows);
+        if !mine.as_ref().is_some_and(|m| near(m, values)) {
+            wrong.push(format!("{input}: ours {mine:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `index=`'s and strings' errors stay with giac's message.
+#[test]
+fn index_errors_stay() {
+    let value = |m: &str| format!("GIAC_ERROR: {m}. Error: Bad Argument Value");
+    let kind = |m: &str| format!("GIAC_ERROR: {m}. Error: Bad Argument Type");
+    let strings = "Expected a string or list of strings";
+    let unknown = "Unknown index name";
+    let mut rows = vec![
+        (
+            format!("cluster({D6},index=[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\"])"),
+            value(unknown),
+        ),
+        (
+            format!("cluster({D6},index=[\"a\",\"b\",\"c\",\"d\",\"e\",\"f\"],output=part)"),
+            value(unknown),
+        ),
+        (format!("cluster({D6},index=\"abc\")"), value(unknown)),
+        (format!("cluster({D6},index=[\"a\",\"b\"])"), value(unknown)),
+        (format!("cluster({E12},index=\"foo\")"), value(unknown)),
+        (
+            format!("cluster({E12},index=\"Silhouette\")"),
+            value(unknown),
+        ),
+        (
+            format!("cluster({D6},index=[1,2,3,4,5,6],output=part)"),
+            kind(strings),
+        ),
+        (format!("cluster({E12},index=1)"), kind(strings)),
+        (
+            format!("cluster({E12},index=[\"silhouette\",1])"),
+            kind(strings),
+        ),
+        (format!("cluster({E12},index=[])"), kind(strings)),
+        (
+            format!("cluster({E12},index=[],output=index)"),
+            kind(strings),
+        ),
+        (
+            format!("cluster({E12},index=false,output=index)"),
+            value("No index specified for output"),
+        ),
+        (
+            r#"kmeans(["hello","hallo","world","word"],2)"#.to_owned(),
+            value("Data must be numeric"),
+        ),
+        (
+            r#"kmeans(["a","b","c"],output=part)"#.to_owned(),
+            value("Data must be numeric"),
+        ),
+        (
+            r#"cluster([["a","b"],["a","c"]])"#.to_owned(),
+            value("Bad distance function"),
+        ),
+    ];
+    for name in ["silhouette", "mcclain", "dunn", "foo"] {
+        rows.push((format!("cluster({D6},index={name})"), kind(strings)));
+    }
+    stay_rows(&rows);
+}
+
+/// `output=index` with no silhouette values: giac's `mtran` fails.
+#[test]
+fn transpose_errors_stay() {
+    let transpose = "GIAC_ERROR: Unable to transpose Error: Bad Argument Value";
+    let sil = "index=\"silhouette\"";
+    let rows = vec![
+        (
+            format!("cluster({D6},index=\"mcclain-rao\",output=index)"),
+            transpose.to_owned(),
+        ),
+        (
+            format!("cluster({E12},index=\"mcclain-rao\",count=2..3,output=index)"),
+            transpose.to_owned(),
+        ),
+        (
+            format!("cluster({E12},index=[\"dunn\",\"mcclain-rao\"],count=2..6,output=index)"),
+            transpose.to_owned(),
+        ),
+        (
+            format!("cluster({E12},{sil},count=2..3,output=index)"),
+            transpose.to_owned(),
+        ),
+        (
+            format!("cluster({E12},4,{sil},output=index)"),
+            transpose.to_owned(),
+        ),
+        (
+            format!("cluster({E12},{sil},count=11..11,output=index)"),
+            transpose.to_owned(),
+        ),
+        (
+            format!("cluster({E12},index=\"dunn\",output=index,count=2)"),
+            transpose.to_owned(),
+        ),
+        (
+            r#"cluster(["x"],index="silhouette",output=index)"#.to_owned(),
+            transpose.to_owned(),
+        ),
+        (
+            r#"cluster(["a","a","a"],index="silhouette",count_sup=2,output=index)"#.to_owned(),
+            transpose.to_owned(),
+        ),
+    ];
+    stay_rows(&rows);
+}
+
+/// giac prints each recorded error; ours stays with its message.
+fn stay_rows(rows: &[(String, String)]) {
+    let giac = giac();
+    let mut wrong = Vec::new();
+    for (input, error) in rows {
+        if let Some(giac) = giac {
+            let printed = giac.eval(input).unwrap_or_default();
+            if collapsed(&printed) != collapsed(error) {
+                wrong.push(format!("{input}: giac prints {printed}, recorded {error}"));
+            }
+        }
+        let message = error
+            .strip_prefix("GIAC_ERROR: ")
+            .and_then(|m| m.split_once(" Error:"))
+            .map_or("", |(m, _)| m.strip_suffix('.').unwrap_or(m));
+        if !stays_with(input, Some(message)) {
+            wrong.push(format!(
+                "{input}: ours {:?}, wanted the call with {message:?}",
+                evaluated(input)
+            ));
         }
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
