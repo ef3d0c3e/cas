@@ -510,6 +510,7 @@ builtins! {
     CHANGE_BASIS = "ChangeBasis" [PROTECTED];
     CONJUGATE_TRANSPOSE = "ConjugateTranspose" [PROTECTED];
     BASIS = "Basis" [PROTECTED];
+    FILL_VALUE = "FillValue" [PROTECTED];
     // giac's minors, echelon forms and pivots (CAS-530, CAS-528).
     DET_MINOR = "DetMinor" [PROTECTED];
     ADJOINT_MATRIX = "AdjointMatrix" [PROTECTED];

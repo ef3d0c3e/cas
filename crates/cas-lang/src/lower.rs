@@ -3,6 +3,8 @@
 //! Each statement becomes one [`Expr`]: the expression to evaluate, or a
 //! statement head that the session runs and evaluation leaves alone
 //! (`Set`, `SetDelayed`, `UpSetDelayed`, `Assume`, `Clear`; CAS-DOC-4 R1).
+//! giac's `Fill(v, A)`, a statement, is the assignment
+//! `A := FillValue[v, A]` (CAS-639); in a block it is misplaced, as `purge`.
 //! Expressions are built structurally, in the order of the text: a chain of
 //! one operator is flattened (`a + b - c` is one `Plus`), but nothing is
 //! sorted or evaluated, so every part keeps its position, which [`Spans`]
@@ -158,7 +160,7 @@ pub enum LowerErrorKind {
     ReservedName(String),
     /// A builtin that the design names but that does not exist yet.
     NotAvailable(String),
-    /// `call`, `assume` or `purge` somewhere it has no meaning.
+    /// `call`, `assume`, `purge` or `Fill` somewhere it has no meaning.
     MisplacedForm(String),
     /// `x :: t` outside the left-hand side of a definition or a rule.
     TypeOutsidePattern,
@@ -214,6 +216,7 @@ impl fmt::Display for LowerErrorKind {
             LowerErrorKind::NotAvailable(n) => write!(f, "{n} is not available yet"),
             LowerErrorKind::MisplacedForm(n) => match n.as_str() {
                 "call" => f.write_str("call is used as call(f, arguments…)"),
+                "Fill" => f.write_str("Fill is used as Fill(value, name)"),
                 _ => write!(f, "{n}(…) is a statement of its own"),
             },
             LowerErrorKind::TypeOutsidePattern => f.write_str(
@@ -404,7 +407,9 @@ impl Lowerer<'_> {
         }
     }
 
-    /// `assume(…)` and `purge(…)`, the statements the session runs itself.
+    /// `assume(…)` and `purge(…)`, the statements the session runs itself,
+    /// and giac's `Fill(v, A)`, the assignment `A := FillValue[v, A]` as
+    /// [`definition`](Self::definition) lowers it (CAS-639).
     fn statement_form(&mut self, node: &SyntaxNode) -> Option<Lowering> {
         let form = self.syntax_form(node)?;
         let args = arguments(node);
@@ -426,6 +431,22 @@ impl Lowerer<'_> {
                     })
                     .collect();
                 apply(Symbol::CLEAR, names, range)
+            }
+            SyntaxForm::Fill => {
+                let [v, a] = &args[..] else {
+                    let n = node.first_child().map(|c| name_of(&c)).unwrap_or_default();
+                    return Some(self.fail(range, LowerErrorKind::MisplacedForm(n)));
+                };
+                if a.kind() != K::Name {
+                    return Some(self.fail(self::range(a), LowerErrorKind::InvalidTarget));
+                }
+                let target = self.assignable(a);
+                let value = apply(
+                    Symbol::FILL_VALUE,
+                    vec![self.expr(v), self.expr(a)],
+                    range.clone(),
+                );
+                apply(Symbol::SET, vec![target, value], range)
             }
             SyntaxForm::Call => return None,
         })

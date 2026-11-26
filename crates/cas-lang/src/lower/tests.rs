@@ -281,6 +281,7 @@ fn assignments_and_definitions() {
         ),
         ("assume(x > 0)", "Assume[Greater[x, 0]]"),
         ("purge(f, g)", "Clear[f, g]"),
+        ("Fill(7, A)", "Set[A, FillValue[7, A]]"),
     ]);
 }
 
@@ -348,6 +349,8 @@ fn errors_leave_statements_out() {
         ("i -> i^2", &[("i", E::ReservedName("i".into()))]),
         ("[x, e] := l", &[("e", E::ReservedName("e".into()))]),
         ("purge(pi)", &[("pi", E::ReservedName("pi".into()))]),
+        ("Fill(3, [1, 2])", &[("[1, 2]", E::InvalidTarget)]),
+        ("Fill(3)", &[("Fill(3)", E::MisplacedForm("Fill".into()))]),
         ("x :: integer", &[("x :: integer", E::TypeOutsidePattern)]),
         (
             "f(n :: natural) := 1",

@@ -1030,8 +1030,9 @@ fn rational_jordan_forms_are_similar() {
 const M22: &str = "List[List[1, 2], List[3, 4]]";
 const R33: &str = "List[List[1, 2, 3], List[3, -9, 6], List[4, 5, 6]]";
 
-/// giac's `REDIM`, `border`, `semi_augment` and `newMat` (CAS-639), as
-/// giac 2.0 answers, and what stays where giac errs or takes `|r|`.
+/// giac's `REDIM`, `border`, `semi_augment`, `newMat` and `Fill`'s value
+/// (CAS-639), as giac 2.0 answers, and what stays where giac errs or takes
+/// `|r|`.
 #[test]
 fn reshapes() {
     check(&[
@@ -1081,6 +1082,16 @@ fn reshapes() {
         ("NewMatrix[0, 2]", "List[]"),
         ("NewMatrix[2, -1]", "NewMatrix[2, -1]"),
         ("NewMatrix[2, x]", "NewMatrix[2, x]"),
+        ("FillValue[7, List[1, 2, 3]]", "List[7, 7, 7]"),
+        (
+            &format!("FillValue[x, {M22}]"),
+            "List[List[x, x], List[x, x]]",
+        ),
+        ("FillValue[0, List[1, List[2, 3]]]", "List[0, 0]"),
+        ("FillValue[2, List[]]", "List[]"),
+        ("FillValue[1.1, a]", "1.1"),
+        ("FillValue[2, 5]", "2"),
+        ("FillValue[2]", "FillValue[2]"),
     ]);
 }
 

@@ -1150,6 +1150,7 @@ static NATIVES: [Option<NativeFn>; builtin::COUNT] = {
             matrix::reshape::conjugate_transpose,
         ),
         (Symbol::BASIS, matrix::reshape::basis),
+        (Symbol::FILL_VALUE, matrix::reshape::fill_value),
         (Symbol::DET_MINOR, matrix::echelon::det_minor),
         (Symbol::ADJOINT_MATRIX, matrix::echelon::adjoint_matrix),
         (Symbol::ROW_ECHELON, matrix::echelon::row_echelon),

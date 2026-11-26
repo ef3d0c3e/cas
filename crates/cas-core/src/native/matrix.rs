@@ -51,7 +51,8 @@
 //!   `semi_augment`; `Simultaneous`, `simult`; `NewMatrix`, `newMat`;
 //!   `UpperTriangle`, `upper`; `LowerTriangle`, `lower`;
 //!   `MatrixToQuadratic`, `a2q`; `QuadraticToMatrix`, `q2a`; `ChangeBasis`,
-//!   `changebase`; `ConjugateTranspose`, `trn`; `Basis`, `basis`: giac's
+//!   `changebase`; `ConjugateTranspose`, `trn`; `Basis`, `basis`;
+//!   `FillValue`, the value giac's `Fill(v, A)` stores: giac's
 //!   reshaping, quadratic forms and changes of basis in [`reshape`]
 //!   (CAS-639). `charpoly(A, fadeev)` ignores giac's method option.
 //!

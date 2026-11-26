@@ -252,6 +252,10 @@ after giac's `restart`, ours in a new session, compared value by value:
   bare), `rm_a_z()` (`[a,ab]` gives `[a,6]`), `restart` and `restart()` (the
   names, `[]`; `angle_radian` back to 1), and `nodisp(1+1)` (`"Done"`,
   compared raw);
+- `Fill(v, A)` (CAS-639), a store: `A:=[1,2,3];Fill(7,A);A` (`[7,7,7]`
+  twice), a matrix filled with `x`, `A` unassigned (`1.1`), `A:=5` (`2`), a
+  ragged list `[1,[2,3]]` (`[0,0]`); `Fill(3,[[1,2],[3,4]])` errs in both
+  (giac's Bad Argument Value, ours a lowering error);
 - the departures, with giac's text, ours checked alone: `ans()` and
   `quest()` after `1+1` (giac's `caseval` keeps no history, `undef`; ours 2
   and `"1+1"`), `1+restart()` (giac 1, ours stays with a warning); and ours
@@ -1003,7 +1007,7 @@ Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
   - Algebra (15): `REDIM`, `border`, `semi_augment`, `simult`, `newMat`, `upper`, `lower` (matrix
     and string forms), `a2q`, `q2a`, `basis`, `changebase`, `trn` built in T3
     (`tests/matrices_five.rs`); `moyal` not built, a departure (giac's is a stub answering
-    unevaluated); `Fill` T3. `GF` is not
+    unevaluated); `Fill` built in T3 (`tests/session.rs`). `GF` is not
     built: giac's Galois-field elements need a new value type (gen 2).
   - Calculus (4): `envelope`, `avgRC`, `addtable` T4. `taux_accroissement` is not built: it is a
     French spelling (CAS-DOC-7 §5).

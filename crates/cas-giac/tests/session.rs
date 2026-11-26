@@ -6,7 +6,9 @@
 //! compared with giac's sequence in order. The departures record giac's
 //! text (C0007, C0015) and check ours alone (C0044): its history, which
 //! `caseval` does not keep, `time`'s list, `monotonic`'s clock, its
-//! version, and its session commands nested in an expression.
+//! version, and its session commands nested in an expression. giac's
+//! `Fill(v, A)` (CAS-639) assigns, so its rows run here too; its target
+//! not a name errs in both.
 
 use cas_core::{Context, Expr, Symbol, View};
 use cas_giac::{Giac, ours};
@@ -97,6 +99,12 @@ fn session_commands_as_giac() {
         ("restart", false),
         ("a:=5;restart()", false),
         ("angle_radian:=0;restart;angle_radian", false),
+        // giac's `Fill(v, A)` stores in `A` (CAS-639).
+        ("A:=[1,2,3];Fill(7,A);A", false),
+        ("A:=[[1,2],[3,4]];Fill(x,A);A", false),
+        ("Fill(1.1,A);A", false),
+        ("A:=5;Fill(2,A);A", false),
+        ("A:=[1,[2,3]];Fill(0,A);A", false),
     ] {
         giac.restart();
         let answer = giac
@@ -126,6 +134,24 @@ fn session_commands_as_giac() {
     }
     giac.restart();
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// `Fill(3, [[1,2],[3,4]])`: giac errs, its target not a name; ours is a
+/// lowering error, with no value.
+#[test]
+fn fill_of_a_value_errs() {
+    let Some(giac) = giac() else {
+        return;
+    };
+    let input = "Fill(3,[[1,2],[3,4]])";
+    giac.restart();
+    let answer = giac.eval(input).unwrap_or_default();
+    assert!(answer.contains("GIAC_ERROR"), "{input}: giac's {answer}");
+    let outputs = Session::new().run(input);
+    assert!(
+        outputs.len() == 1 && outputs[0].result.is_none() && !outputs[0].messages.is_empty(),
+        "{input}: ours {outputs:?}"
+    );
 }
 
 /// Departures: giac's text recorded, ours checked alone (C0044).

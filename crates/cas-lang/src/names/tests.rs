@@ -30,6 +30,7 @@ fn english_names() {
         ("call", Target::Syntax(SyntaxForm::Call)),
         ("assume", Target::Syntax(SyntaxForm::Assume)),
         ("purge", Target::Syntax(SyntaxForm::Purge)),
+        ("Fill", Target::Syntax(SyntaxForm::Fill)),
         ("diff", Target::Builtin(Symbol::D)),
         ("int", Target::Builtin(Symbol::INTEGRATE)),
         ("integrate", Target::Builtin(Symbol::INTEGRATE)),

@@ -23,7 +23,10 @@
 //!   quadratic form, half its Hessian;
 //! - `ChangeBasis[A, P]` (`changebase`): `P⁻¹ A P`, expanded;
 //! - `ConjugateTranspose[A]` (`trn`): the conjugate of the transpose;
-//! - `Basis[A]` (`basis`): the rows of `RowSpace[A]` as a set, as giac's.
+//! - `Basis[A]` (`basis`): the rows of `RowSpace[A]` as a set, as giac's;
+//! - `FillValue[v, a]`, internal: the value giac's `Fill(v, A)` stores in
+//!   `A`, a matrix of `a`'s size or a list of `a`'s length with every entry
+//!   `v`, else `v`.
 //!
 //! Sizes beyond `Limits::terms` stay. Results are built unevaluated, for
 //! the loop to evaluate; each call takes one step, named after the giac
@@ -411,4 +414,23 @@ pub(in crate::native) fn basis(ev: &mut Eval<'_>, e: &Expr) -> Native {
         r.rows.into_iter().take(rank).map(list).collect::<Vec<_>>(),
     );
     stepped(ev, "basis", e, result)
+}
+
+/// `FillValue[v, a]`, what giac's `Fill(v, A)` stores: a matrix or list of
+/// `a`'s shape filled with `v`, else `v`.
+pub(in crate::native) fn fill_value(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    let [v, a] = e.args() else {
+        return Ok(None);
+    };
+    let result = match shape(a) {
+        Some(Shape::Matrix(r, c)) => {
+            if r.saturating_mul(c) > ev.context().limits().terms {
+                return Ok(None);
+            }
+            list((0..r).map(|_| list(std::iter::repeat_n(v.clone(), c))))
+        }
+        _ if is_list(a) => list(std::iter::repeat_n(v.clone(), a.args().len())),
+        _ => v.clone(),
+    };
+    stepped(ev, "Fill", e, result)
 }

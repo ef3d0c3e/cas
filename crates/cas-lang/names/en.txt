@@ -975,6 +975,7 @@ imaginary: i
 call: call
 assume: assume
 purge: purge
+Fill: Fill
 
 [types]
 any: any
@@ -1018,6 +1019,8 @@ PiecewiseMap
 Positive Negative NonNegative NonPositive Integers Rationals Reals Complexes
 # Statements, written with `:=`, `assume` and `purge` (CAS-DOC-7 §4).
 Set SetDelayed UpSetDelayed Assume Clear
+# The value giac's `Fill(v, A)` stores in `A` (CAS-639), in [syntax].
+FillValue
 # Procedures, written with `begin … end`, the statements of a body, loops and
 # `return`, `break`, `continue` (CAS-DOC-7 §8).
 Block Statements For While Return Break Continue

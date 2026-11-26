@@ -50,6 +50,9 @@ pub enum SyntaxForm {
     Assume,
     /// `purge(…)`, run by the session, which clears definitions.
     Purge,
+    /// giac's `Fill(v, A)`, which stores `FillValue[v, A]` in the name `A`
+    /// (CAS-639).
+    Fill,
 }
 
 impl SyntaxForm {
@@ -58,6 +61,7 @@ impl SyntaxForm {
             "call" => SyntaxForm::Call,
             "assume" => SyntaxForm::Assume,
             "purge" => SyntaxForm::Purge,
+            "Fill" => SyntaxForm::Fill,
             _ => return None,
         })
     }
