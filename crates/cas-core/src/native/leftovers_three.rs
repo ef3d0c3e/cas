@@ -115,6 +115,12 @@ fn double(x: &Expr) -> Option<f64> {
     }
 }
 
+/// giac's roundoff (gen.cc `print_DOUBLE_`): the five low bits of the
+/// mantissa cleared.
+fn roundoff(x: f64) -> f64 {
+    f64::from_bits(x.to_bits() & !0x1f)
+}
+
 /// A decimal of the double `x`.
 fn decimal(x: f64) -> Expr {
     Float::from_f64(x).map_or_else(|| Expr::from(0), |f| Expr::from(Ball::exact(f)))
@@ -173,6 +179,9 @@ pub(super) fn arithmetic_range(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let (Some(start), Some(end), Some(step)) = (double(from), double(to), double(&by)) else {
         return refuse(ev, e, BAD);
     };
+    // giac's doubles come with their low bits cleared: its `range(0,1,1/3)`
+    // has 4 elements, `range(0,1,0.1)` 11.
+    let (start, end, step) = (roundoff(start), roundoff(end), roundoff(step));
     if !((start <= end && step > 0.0) || (start >= end && step < 0.0)) {
         return refuse(ev, e, BAD);
     }
@@ -528,8 +537,7 @@ pub(super) fn format_number(ev: &mut Eval<'_>, e: &Expr) -> Native {
     let Some(d) = double(&value).filter(|d| d.is_finite()) else {
         return Ok(None);
     };
-    // giac's roundoff: the five low bits of the mantissa cleared.
-    let d = f64::from_bits(d.to_bits() & !0x1f);
+    let d = roundoff(d);
     let upper = ch.is_ascii_uppercase();
     let text = match ch.to_ascii_lowercase() {
         'f' => format!("{d:.p$}"),

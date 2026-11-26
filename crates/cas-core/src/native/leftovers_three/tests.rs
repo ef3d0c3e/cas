@@ -52,7 +52,7 @@ fn lists() {
         ("ShiftList[List[0, 1, 2, 3]]", "List[0, 0, 1, 2]"),
         ("ShiftList[List[0, 1, 2, 3], -2]", "List[0, 0, 0, 1]"),
         ("ShiftList[List[0, 1, 2, 3], 5]", "List[0, 0, 0, 0]"),
-        ("ShiftList[List[1, 2, 3], Rational[3, 2]]", "List[0, 1, 2]"),
+        ("ShiftList[List[1, 2, 3], 3/2]", "List[0, 1, 2]"),
         ("ShiftList[5, 1]", "2"),
         ("ShiftList[5]", "10"),
         ("ShiftList[-5, 1]", "-3"),
@@ -72,7 +72,7 @@ fn lists() {
         ("ElementAt[List[List[1, 2], List[3, 4]], List[1, 0]]", "3"),
         ("ElementAt[List[List[1, 2], List[3, 4]], 1]", "List[3, 4]"),
         ("ElementAt[\"abc\", 1]", "\"b\""),
-        ("Divide[3, 5]", "Rational[3, 5]"),
+        ("Divide[3, 5]", "3/5"),
         ("Divide[x, y]", "Times[x, Power[y, -1]]"),
     ]);
     stay(&[
@@ -98,17 +98,17 @@ fn types_formats_and_dates() {
         ("GetType[List[List[1], List[2, 3]]]", "\"LIST\""),
         ("GetType[Plus[x, 1]]", "\"EXPR\""),
         ("GetType[3]", "\"NUM\""),
-        ("GetType[Rational[1, 2]]", "\"NUM\""),
+        ("GetType[1/2]", "\"NUM\""),
         ("GetType[True]", "\"NUM\""),
         ("GetType[Sin]", "\"OTHER\""),
         ("FormatNumber[3, \"f2\"]", "\"3.00\""),
-        ("FormatNumber[Rational[1, 3], \"f4\"]", "\"0.3333\""),
-        ("FormatNumber[Rational[-5, 2], \"f0\"]", "\"-2\""),
-        ("FormatNumber[Rational[5, 2], \"f0\"]", "\"2\""),
+        ("FormatNumber[1/3, \"f4\"]", "\"0.3333\""),
+        ("FormatNumber[-5/2, \"f0\"]", "\"-2\""),
+        ("FormatNumber[5/2, \"f0\"]", "\"2\""),
         ("FormatNumber[123456789, \"s3\"]", "\"1.23e+08\""),
         ("FormatNumber[100, \"s3\"]", "\"100\""),
         ("FormatNumber[2, \"e2\"]", "\"2.00e+00\""),
-        ("FormatNumber[Rational[1, 100000], \"s3\"]", "\"1e-05\""),
+        ("FormatNumber[1/100000, \"s3\"]", "\"1e-05\""),
         ("FormatNumber[5, \"f\"]", "\"invalid format\""),
         ("FormatNumber[5, \"x3\"]", "\"5\""),
         ("DayOfWeek[21, 4, 2014]", "1"),
@@ -121,7 +121,7 @@ fn types_formats_and_dates() {
     stay(&[
         "DayOfWeek[1, 13, 2000]",
         "DayOfWeek[32, 1, 2000]",
-        "DayOfWeek[Rational[3, 2], 1, 2000]",
+        "DayOfWeek[3/2, 1, 2000]",
         "DayOfWeek[1, 1]",
     ]);
 }
@@ -175,6 +175,6 @@ fn polynomials() {
     ]);
     stay(&[
         "TruncateDegree[Power[Plus[1, x], -1], 2]",
-        "TruncateDegree[Plus[Power[x, 2], 1], Rational[3, 2]]",
+        "TruncateDegree[Plus[1, Power[x, 2]], 3/2]",
     ]);
 }
