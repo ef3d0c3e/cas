@@ -943,3 +943,55 @@ ours is checked to be our `string(x)`, escaped (giac `x+1`, ours `1 + x`).
 caught.
 
 `scripts/giac_gap.sh <outdir>` lists giac's commands (`aide_cas`) with and without a name in `cas-lang`.
+
+Gap ledger (phase 1.8 T2, 2026-11-26; giac 1.9.0's `aide_cas`): every giac entry with no name in
+`cas-lang` is accounted for. Regenerate the list with `bash scripts/giac_gap.sh <dir>` and
+`python3 scripts/gap_describe.py missing <dir> > <dir>/missing_described.txt`. Then
+`python3 scripts/gap_ledger.py <dir>/missing_described.txt` re-tallies the buckets. It fails when an entry
+has no bucket, two buckets, or a named entry is gone. There are 1738 entries: 734 covered and 1004 missing,
+bucketed below. Build tasks: T3 Algebra, T4 Expressions/Calculus/Integers, T5
+Language/Polynomials/Statistics/Infrastructure, T6 Signal processing.
+- Out of scope, 913 entries. New module, 565 (units 216, geometry 128, graph theory 221): these
+  modules don't exist yet (gen 2). Plotting, 157 (turtle, graphics, plot display variants): we have no
+  graphics. Syntax, 103 (operators, keywords, French control words): another syntax, not part of the language
+  (CAS-DOC-7). I/O, 82 (files, TI screens and folders, GUI, debugger, sound and images): no I/O in a
+  library engine. ML/music/geodesy, 6 (`neural_network`, `train`, its options, `tonnetz`,
+  `geodetic2ecef`, `ecef2geodetic`): not a planned area.
+- Already a departure above, 12: `QR`, `LU`, `confrac`, `Factor`, `Gcd`, `Resultant`, `Quo`, `Rem`
+  (CAS-527), `xcas_mode`/`maple_mode`, `python_compat`, `gbasis_reinject`, `rur_gbasis`.
+- Alias, inert or option spellings, 29, each with the name it maps to:
+  - Already working: `besselY`, `besselJ` (`BesselY`, `BesselJ`); `parfrac`, `fullparfrac` and
+    `polynom` (`convert` options); `base` (`convert(p,base,b)`); `mod %` (`%`, Modular); `!` postfix
+    (`factorial`).
+  - Inert, held as an unknown call: `Int` (`integrate`), `Rref` (`rref`), `Nullspace` (`nullspace`),
+    `Fourier` (`fourier`), `Hilbert` (`hilbert(f,t)`). `Det` (`det`) and `Inverse` (`inv`) are our
+    builtins and evaluate where giac holds them: T3 pins them with an oracle row or a departure row.
+  - Operator syntax, not built: `'` (`diff`; the lexer rejects it), `|` (`subst`; the lexer rejects
+    it), `/%` and `%/` twice (`iquo`, `irem`), `div` (`iquo`), `!` prefix (`not`).
+  - Not handled yet, assigned: `rdiv` (`/`), `getType` (`type`), `at` (`At`) and `subs` (`subst`) to
+    T5; `maple_ifactors` (`ifactors`) to T4; `list` (`convert`) to T5; `expln` (`convert`, as trig2exp)
+    to T4; `array` (`convert`) and `fadeev` (`charpoly`, which currently reads `fadeev` as the
+    variable) to T3.
+- Computational in an existing module, 50: the 1.8 plan said 49, and `box_constraints` moved in from
+  ML. Each is marked with its task:
+  - Algebra (15): `REDIM`, `border`, `semi_augment`, `simult`, `newMat`, `Fill`, `upper`, `lower`
+    (matrix and string forms), `a2q`, `q2a`, `basis`, `changebase`, `moyal`, `trn` T3. `GF` is not
+    built: giac's Galois-field elements need a new value type (gen 2).
+  - Calculus (4): `envelope`, `avgRC`, `addtable` T4. `taux_accroissement` is not built: it is a
+    French spelling (CAS-DOC-7 §5).
+  - Expressions (11): `shift_phase`, `linabs`, `non_recursive_normal`, `root`, `additionally`,
+    `atan2`, `has`, `lin`, `fmod`, `modf`, `period` T4.
+  - Integers (2): `multinomial` T4; `order` T4 for the `(Z/nZ)^*` form (`order(3 % 7)` = 6). Its
+    finite-field form is not built: it needs `GF`.
+  - Numerical analysis (1): `box_constraints` T4 (`box_constraints([x,y],[[-2,2],[-5,5]])` =
+    `x=-2..2,y=-5..5`).
+  - Language (5): `back`, `range`, `shift`, `format`, `suppress` T5.
+  - Polynomials (3): `roots`, `truncate`, `divis` T5.
+  - Statistics (2): `choice` T5. `hasard` is not built: it is a French spelling, and `rand` is built.
+  - Infrastructure (1): `dayofweek` T5.
+  - Signal processing (6): `stft`, `istft`, `hht`, `boxcar`, `tri`, `sinc` T6.
+- Option-level items under covered names: `kmeans`/`cluster` `output=part`, `index=` and clustering
+  of strings T5; `hilbert(f,t)`, the transform form beside the list form, T6. `fitdistr` on
+  exponential data with a 0 already agrees: giac refuses `fitdistr([0,1,2,3,4],exponential)` with
+  "Expected a positive number" (caseval probe), and so does ours, because it requires data > 0
+  (`fitting.rs:645,666-668`). T5 adds the oracle row.
