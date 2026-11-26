@@ -1089,7 +1089,7 @@ fn reshapes() {
         ),
         ("FillValue[0, List[1, List[2, 3]]]", "List[0, 0]"),
         ("FillValue[2, List[]]", "List[]"),
-        ("FillValue[1.1, a]", "1.1"),
+        ("FillValue[7, a]", "7"),
         ("FillValue[2, 5]", "2"),
         ("FillValue[2]", "FillValue[2]"),
     ]);
