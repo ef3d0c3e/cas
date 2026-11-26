@@ -317,6 +317,9 @@ fn departures() {
             "[[0,1],1,[1,4]]",
             "[1,[1,4]]",
         ),
+        // With a root at 0 giac's VAS_positive sometimes loses the positive
+        // root (x*(x-2) keeps it); 1-x+x^2-2*x^3 has one in (0, 1).
+        ("VAS_positive(x-x^2+x^3-2*x^4)", "[]", "[[0,1]]"),
         // The sign of the primitive part goes on the factor of highest odd
         // multiplicity; giac, its square-free factorisation's way, keeps
         // it apart here when the highest multiplicity is even.
@@ -450,7 +453,9 @@ proptest! {
         let p = poly(&c);
         // giac's VAS_positive assumes a square-free polynomial (README
         // departure: its spurious [0,1] for a repeated root).
-        if positive && highest_multiplicity(giac, &p)? > 1 {
+        // Nor a root at 0: giac then sometimes finds none (README departure,
+        // VAS_positive(x-x^2+x^3-2*x^4), CI 45825184016).
+        if positive && (c[0] == 0 || highest_multiplicity(giac, &p)? > 1) {
             return Ok(());
         }
         let name = if positive { "VAS_positive" } else { "VAS" };

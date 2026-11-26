@@ -177,12 +177,15 @@ expression. A departure in form only: giac prints an interval, ours a ball.
 `complexroot` against closed forms within `10⁻¹⁰` (giac's `[a..b]`
 intervals do not read back) with giac's count of roots; and the
 departures, each with giac's answer: `VAS_positive` of a polynomial with a
-repeated root (giac's spurious `[0,1]`), the sign of a `sturmseq` factor
+repeated root (giac's spurious `[0,1]`), `VAS_positive` of a polynomial
+with a root at 0 (giac sometimes loses the positive roots:
+`VAS_positive(x-x^2+x^3-2*x^4)` gives `[]`, ours `[[0,1]]`), the sign of a `sturmseq` factor
 when the highest multiplicity is even, and the order of rational roots
 within a multiplicity. Random polynomials of degree at most 5, 128 cases a
 run, go to `VAS`, `VAS_positive`, `sturm` with integer bounds, `sturmseq`,
 `rationalroot` and `crationalroot`, roots compared as sets; the departures
-are excluded: `VAS_positive` sees square-free polynomials only and
+are excluded: `VAS_positive` sees square-free polynomials with a nonzero
+constant term only and
 `sturmseq` none whose highest multiplicity is even.
 
 `tests/polytools_three.rs`, polynomial tools III (CAS-540, CAS-543):
