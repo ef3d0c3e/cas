@@ -143,6 +143,23 @@ fn what_stays() {
     }
 }
 
+/// CAS-650: an end holding a held `NDSolve` 30 deep is refused at once,
+/// not approximated again at each level.
+#[test]
+fn nested_end() {
+    let mut text = String::from("x");
+    for _ in 0..30 {
+        text = format!("NDSolve[y, List[t, y], List[0, 1], {text}]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = eval(&ctx, &text);
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}
+
 /// Two-point boundary value problems by shooting (CAS-520): each value
 /// holds the closed form's, the abscissae exact, the ends the given
 /// values; resonance, giac's spline output and parameters stay.

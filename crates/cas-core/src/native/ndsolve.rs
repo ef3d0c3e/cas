@@ -13,7 +13,9 @@
 //! compiled ([`rhs`]) and integrated ([`taylor`]) at the working precision
 //! and 32 bits more, the answer kept to the working precision. A right side
 //! that does not compile, or an integration that fails, leaves the call,
-//! the latter with a warning.
+//! the latter with a warning. A `t0`, `t1` or `y0` not structurally
+//! numeric is refused before `approximation`, which would evaluate it again
+//! (CAS-650).
 //!
 //! [`bvp`]: two-point boundary value problems by shooting, `BVPSolve`
 //! (CAS-520).
@@ -117,6 +119,9 @@ fn problem(e: &Expr) -> Option<Problem> {
 fn real(ev: &Eval<'_>, e: &Expr, prec: u64) -> Option<Ball> {
     if let Some(q) = e.to_rational() {
         return Some(Ball::from_rational(&q, prec));
+    }
+    if !e.is_numeric() {
+        return None;
     }
     let value = approximation(ev.context(), e, prec).ok()?;
     match value.view() {
