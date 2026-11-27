@@ -100,3 +100,4 @@ Approved: 2026-11-27   Planner: claude-opus-5-5/medium   Plan-hash: 0f9b9f86179e
 - 2026-11-27 router: T3 next -> done
 - 2026-11-27 router: T4 next -> done
 - 2026-11-27 planner: added T12 — fix or record the random_sturmseq disagreement on sturmseq(-x^3) found on T5's head
+- 2026-11-27 router: T5 done-when clarified: green CI except random_sturmseq, which is a separate finding (sturmseq(-x^3), CI 46047327203) moved to its own new task; T5 counts done when its own rows pass on CI.
