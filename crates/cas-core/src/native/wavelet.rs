@@ -49,6 +49,8 @@
 //! - Limits: the padded size (`n`, or `n²`) times the filter length within
 //!   `Limits::terms`, checked before anything is built; beyond, the call
 //!   stays.
+//! - A data entry not structurally numeric is refused before
+//!   `approximation`, which would evaluate it again (CAS-650).
 
 #![allow(
     clippy::many_single_char_names,
@@ -390,6 +392,7 @@ fn ball(ev: &Eval<'_>, x: &Expr, prec: u64) -> Option<Ball> {
     }
     let b = match x.view() {
         View::Ball(b) => b.clone(),
+        _ if !x.is_numeric() => return None,
         _ => match approximation(ev.context(), x, prec).ok()?.view() {
             View::Ball(b) => b.clone(),
             _ => return None,

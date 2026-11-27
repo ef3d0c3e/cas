@@ -608,6 +608,44 @@ fn stays() {
     }
 }
 
+/// CAS-650: a data entry holding a held transform 30 deep is refused at
+/// once, not approximated again at each level; `Pi` is still read.
+#[test]
+fn nested_data() {
+    let ctx = Context::new();
+    for form in [dwt, idwt] {
+        let mut text = String::from("x");
+        for _ in 0..30 {
+            text = form(&format!("List[{text}, 1, 2, 3]"));
+        }
+        let e = read(&text);
+        let start = std::time::Instant::now();
+        let (found, _) = ctx.eval_with(&e, &EvalOptions::default());
+        let elapsed = start.elapsed();
+        assert_eq!(found.unwrap().head(), e.head(), "{text}");
+        assert!(elapsed.as_secs_f64() < 2.0, "{text}: {elapsed:?}");
+    }
+    let half_pi = 1.570_796_326_794_896_6;
+    near(
+        &ctx,
+        &[
+            (
+                dwt("List[Pi, 2, 3, 4], \"haar\""),
+                &[
+                    6.070_796_326_794_897,
+                    -0.929_203_673_205_103_4,
+                    0.807_227_906_706_087_9,
+                    -0.707_106_781_186_547_5,
+                ],
+            ),
+            (
+                idwt("List[Pi, 0, 0, 0], \"haar\""),
+                &[half_pi, half_pi, half_pi, half_pi],
+            ),
+        ],
+    );
+}
+
 /// Malformed calls stay without a warning.
 #[test]
 fn stays_silently() {
