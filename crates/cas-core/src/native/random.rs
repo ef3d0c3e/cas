@@ -26,7 +26,8 @@
 //! shuffle of the range, which a map keeps. A count past what the range or
 //! the list holds, or past `Limits::terms`, and an integer form given a
 //! number that is no integer, leave the call with a warning, where giac
-//! errs; a symbol leaves it without one.
+//! errs; a symbol leaves it without one. A bound not structurally numeric
+//! is refused before `approximation`, which would evaluate it again (CAS-650).
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -143,6 +144,9 @@ fn real(ev: &Eval<'_>, e: &Expr, wp: u64) -> Option<Ball> {
                 return Some(Ball::from_rational(&q, wp));
             }
         }
+    }
+    if !e.is_numeric() {
+        return None;
     }
     let value = approximation(ev.context(), e, wp).ok()?;
     match value.view() {

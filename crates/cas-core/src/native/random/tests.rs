@@ -486,3 +486,22 @@ fn what_stays() {
         assert_eq!(eval(&ctx, input).head(), e.head(), "{input}");
     }
 }
+
+/// CAS-650: a bound holding a held `Random` 30 deep is refused at once, not
+/// approximated again at each level; `Sqrt[2]` still draws.
+#[test]
+fn nested_bound() {
+    let mut text = String::from("x");
+    for _ in 0..30 {
+        text = format!("Random[0, {text}]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = eval(&ctx, &text);
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+    let drawn = value(&eval(&ctx, "Random[1, Sqrt[2]]"));
+    assert!(q(1, 1) <= drawn && drawn <= q(142, 100), "{drawn:?}");
+}
