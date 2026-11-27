@@ -36,3 +36,7 @@ M12 | Preserve the raw record | archive, raw-record | active | seed-2.0
 L1 | CAS features before kernel speedups; no new unsafe | priorities,unsafe,scope | active | gen3.2 memory focus-on-cas-features.md
 
 T9 | an expert's coder brief names logs/T<n>.c<k>.progress.md as the coder's handoff file, never TASK_PROGRESS.md. | - | active | phase 1.4 plan
+
+M13 | main (mod/partner) never Reads a project source file over 20k chars whole; it outlines it and reads by range, or briefs a retriever | - | active | phase 2.1 plan (audit: whole reads over 20.0k by main)
+
+M14 | the phase audit prints a timestamp and session id beside each flagged row so a row repeated from the previous phase can be told from a recurrence | - | active | phase 2.1 plan (audit: whole reads over 20.0k by main)

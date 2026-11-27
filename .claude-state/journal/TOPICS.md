@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-27T09:14:54.144Z
+# filed through: 2026-11-27T09:59:46.742Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
@@ -12,7 +12,7 @@ R8 | 2026-11-22 | open | superseded by R13 | Generation 1 start | the reorganiza
 R9 | 2026-11-22 | open | superseded by R11 | Generation 1 start | push timing; leaning: keep 1.1 as drafted, or pull the first area into 1.1 ahead of its push stop i… | .claude-state/journal/2026-11-22.md#090706-015r-claude-record
 R10 | 2026-11-22 | open | superseded by R11 | Generation 1 start | gen 1 plan presented with plan(kind: generation), waiting for the developer's decision -> on approv… | .claude-state/journal/2026-11-22.md#090706-015r-claude-record
 R11 | 2026-11-22 | decision | in force | Generation 1 start | Generation 1 roadmap installed (GENERATION_PLAN.md): 1.1 Green master, 1.2-1.7 area phases (algebra… | .claude-state/journal/2026-11-22.md#182814-042r-claude-record
-R12 | 2026-11-22 | decision | in force | Generation 1 start | Lific modules Numerical analysis and Signal processing are confirmed and listed on the card; the fi… | .claude-state/journal/2026-11-22.md#182814-042r-claude-record
+R12 | 2026-11-22 | decision | superseded by R135 | Generation 1 start | Lific modules Numerical analysis and Signal processing are confirmed and listed on the card; the fi… | .claude-state/journal/2026-11-22.md#182814-042r-claude-record
 R13 | 2026-11-22 | decision | in force | Generation 1 start | The developer's "changes to the project's organization" are taken to be the PA3 install; nothing el… | .claude-state/journal/2026-11-22.md#182814-042r-claude-record
 R14 | 2026-11-22 | finding | in force | Phase 1.1 Green master | The eval fuzz crash came from FromContinuedFraction (CAS-424), not from CAS-517..524: {-2,-1,0,1} =… | .claude-state/journal/2026-11-22.md#182814-042r-claude-record
 R15 | 2026-11-22 | finding | in force | Phase 1.1 Green master | Master was pushed 866047b..fa9ae22 to start CI on the T1-T4 work; T5 is done and T6 checks CI and F… | .claude-state/journal/2026-11-22.md#182814-042r-claude-record
@@ -127,8 +127,16 @@ R123 | 2026-11-27 | decision | in force | Phase 1.8 Validation | Phase 1.8 is cl
 R124 | 2026-11-27 | decision | in force | Phase 1.8 Validation | The 1.8 carry-overs wait in phase-ends/current/INBOX.md as a "-> Gen 2" line (commit fa7226b). | .claude-state/journal/2026-11-27/073600-091r-claude-record.md
 R125 | 2026-11-27 | finding | in force | Phase 1.8 Validation | commit_task.sh swept a file again: partner commit fa7226b also took .claude-state/journal/TOPICS.md… | .claude-state/journal/2026-11-27/073600-091r-claude-record.md
 R126 | 2026-11-27 | decision | in force | Generation 2 start (frontends) | Gen 2 gets two new Lific modules, "Language server" and "Desktop app" (the developer's pick from th… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
-R127 | 2026-11-27 | decision | in force | Generation 2 start (frontends) | The desktop app's toolkit and how the app is tested on CI (CI-only, R74) are researched by the gen… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
+R127 | 2026-11-27 | decision | superseded by R133 | Generation 2 start (frontends) | The desktop app's toolkit and how the app is tested on CI (CI-only, R74) are researched by the gen… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
 R128 | 2026-11-27 | decision | in force | Generation 2 start (frontends) | Deferred items triaged (commit f5d75bc): I1 (frontends) and I3 (1.8 carry-overs) go to deferred:gen… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
 R129 | 2026-11-27 | finding | in force | Generation 2 start (frontends) | The curator changed little: C0096 (the gen 1 gap-ledger tally) moved to cookbook/gen1/; memories, r… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
 R130 | 2026-11-27 | finding | in force | Generation 2 start (frontends) | The auditor's carry audit (committed 43dbe37) found a defect in PA3's packaged audit.py, so nothing… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
-R131 | 2026-11-27 | open | in force | Generation 2 start (frontends) | the gen 2 plan draft -> the pa-planner is writing .run/plans/gen-2.md; Claude presents it with plan… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
+R131 | 2026-11-27 | open | superseded by R132 | Generation 2 start (frontends) | the gen 2 plan draft -> the pa-planner is writing .run/plans/gen-2.md; Claude presents it with plan… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
+R132 | 2026-11-27 | decision | in force | Generation 2 start (frontends) | Gen 2 roadmap installed (GENERATION_PLAN.md): 2.1 Engine carry-overs (I3) first, then the language… | .claude-state/journal/2026-11-27/111514-121r-claude-record.md
+R133 | 2026-11-27 | decision | in force | Generation 2 start (frontends) | The desktop app uses Tauri 2 with a TypeScript interface; the alternative, egui, was rejected becau… | .claude-state/journal/2026-11-27/111514-121r-claude-record.md
+R134 | 2026-11-27 | decision | in force | Generation 2 start (frontends) | The app is tested on CI in three layers: vitest unit tests with the server link mocked; WebDriver e… | .claude-state/journal/2026-11-27/111514-121r-claude-record.md
+R135 | 2026-11-27 | decision | in force | Generation 2 start (frontends) | A third new Lific module, Plotting, is created in 2.6. | .claude-state/journal/2026-11-27/111514-121r-claude-record.md
+R136 | 2026-11-27 | decision | in force | Generation 2 start (frontends) | Phase 2.1 (the I3 carry-overs) runs before the language server, so CAS-650's 2^depth slowdown class… | .claude-state/journal/2026-11-27/111514-121r-claude-record.md
+R137 | 2026-11-27 | finding | in force | Generation 2 start (frontends) | Building the desktop app locally (cargo check) needs libwebkit2gtk-4.1-dev, which the dev machine l… | .claude-state/journal/2026-11-27/111514-121r-claude-record.md
+R138 | 2026-11-27 | open | in force | Generation 2 start (frontends) | install libwebkit2gtk-4.1-dev on the dev machine -> the developer's call, before the app phases if… | .claude-state/journal/2026-11-27/111514-121r-claude-record.md
+R139 | 2026-11-27 | open | in force | Generation 2 start (frontends) | the phase 2.1 plan (.run/plans/phase-2.1.md) is presented and awaiting the developer's decision. | .claude-state/journal/2026-11-27/111514-121r-claude-record.md
