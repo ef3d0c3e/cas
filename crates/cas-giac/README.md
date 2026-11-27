@@ -13,6 +13,13 @@ C entry points.
 
 - **Version.** Written against giac 1.9.0 (Debian's `libgiac0t64`
   1.9.0.93+dfsg2-5), `libgiac.so.0`.
+- **CI pin.** CI's `oracle` job installs `libgiac0t64` 2.0.0.21+dfsg2-3+b1 from
+  snapshot.debian.org by SHA-1 and fails if any other version ends up installed
+  (`.github/workflows/ci.yml`). This is the version the local `scripts/caseval.py`
+  probes use, so a probe and CI give the same answer. Unpinned, sid's
+  2.1.0.1+dfsg2-1 changed the answers in `mathml.rs` and `derivatives.rs`
+  (C0122). Moving to a new giac means changing the pin and the local package
+  together.
 - **Another library.** `CAS_GIAC_LIBRARY=/path/to/libgiac.so` loads another
   copy. A path that does not exist makes every check skip:
 

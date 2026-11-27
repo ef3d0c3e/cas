@@ -55,10 +55,23 @@ jobs:
     env:
       CAS_GIAC_REQUIRED: "1"
     steps:
-      - name: Install build dependencies and libgiac
-        run: >
-          apt-get update && apt-get install -y --no-install-recommends
-          ca-certificates curl git build-essential m4 libgiac0t64
+      # libgiac is pinned to 2.0.0.21+dfsg2-3+b1, the version the local caseval
+      # probes use (T13, C0122): sid's 2.1.0.1 changed answers under us. The .deb
+      # comes from snapshot.debian.org by SHA-1, so sid upgrades cannot move it;
+      # its library dependencies come from sid. Any mismatch fails the job.
+      - name: Install build dependencies and libgiac (pinned)
+        env:
+          GIAC_VERSION: 2.0.0.21+dfsg2-3+b1
+          GIAC_URL: https://snapshot.debian.org/archive/debian/20261026T142754Z/pool/main/g/giac/libgiac0t64_2.0.0.21+dfsg2-3+b1_amd64.deb
+          GIAC_SHA1: 110c5010e21f0a839174ef8629a7000f8a8462d5
+        run: |
+          set -eux
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates curl git build-essential m4
+          curl -fsSL --retry 5 --retry-all-errors -o /tmp/libgiac0t64.deb "$GIAC_URL"
+          echo "$GIAC_SHA1  /tmp/libgiac0t64.deb" | sha1sum -c -
+          apt-get install -y --no-install-recommends /tmp/libgiac0t64.deb
+          test "$(dpkg-query -W -f='${Version}' libgiac0t64)" = "$GIAC_VERSION"
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
