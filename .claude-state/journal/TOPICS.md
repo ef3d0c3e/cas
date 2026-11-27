@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-27T21:15:27.893Z
+# filed through: 2026-11-27T22:24:23.662Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
@@ -149,3 +149,7 @@ R145 | 2026-11-27 | finding | in force | Phase 2.1 Engine carry-overs | T5's res
 R146 | 2026-11-27 | finding | in force | Phase 2.1 Engine carry-overs | The 1.8 sweep random_sturmseq (crates/cas-giac/tests/real_roots.rs:440) found a real disagreement. | .claude-state/journal/2026-11-27/202110-143r-claude-record.md
 R147 | 2026-11-27 | decision | in force | Phase 2.1 Engine carry-overs | T5 counts done on its own rows. | .claude-state/journal/2026-11-27/202110-143r-claude-record.md
 R148 | 2026-11-27 | decision | in force | Phase 2.1 Engine carry-overs | The sample-point guard (T11: fsolve.rs:313/:487, fsolve/systems.rs:297/:309, nlpsolve.rs:1181/:1314… | .claude-state/journal/2026-11-27/223039-147r-claude-record.md
+R149 | 2026-11-27 | finding | in force | Phase 2.1 Engine carry-overs | T11's guard is in (commit 99abffd). | .claude-state/journal/2026-11-27/233944-151r-claude-record.md
+R150 | 2026-11-27 | finding | in force | Phase 2.1 Engine carry-overs | CI's oracle job installs libgiac0t64 unpinned in debian:sid (.github/workflows/ci.yml:58-61). | .claude-state/journal/2026-11-27/233944-151r-claude-record.md
+R151 | 2026-11-27 | decision | in force | Phase 2.1 Engine carry-overs | CI's oracle giac is pinned to 2.0.0.21+dfsg2-3+b1, the version local probes use, through a new task… | .claude-state/journal/2026-11-27/233944-151r-claude-record.md
+R152 | 2026-11-27 | open | in force | Phase 2.1 Engine carry-overs | moving the giac reference to 2.1 (update local giac, re-probe the recorded departures, fix mathml.r… | .claude-state/journal/2026-11-27/233944-151r-claude-record.md
