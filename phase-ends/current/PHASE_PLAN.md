@@ -110,3 +110,4 @@ Approved: 2026-11-27   Planner: claude-opus-5-5/medium   Plan-hash: 0f9b9f86179e
 - 2026-11-27 router: T10 next -> done
 - 2026-11-27 router: T11 done-when clarified: the sample-point guard refuses a user function that holds an own-head call whose arguments hold another own-head call (nesting depth >= 2); depth 1, such as FSolve[x - FSolve[y^2 - x, y], x], keeps answering. Tests: a 30-level nesting test per site (C0118) and a depth-1 held-call test.
 - 2026-11-27 planner: added T13 — pin CI's oracle giac to 2.0.0.21+dfsg2-3+b1, the version the dev machine's probes use (C0122)
+- 2026-11-27 router: T11 done-when clarified: green except the oracle rows broken by debian:sid's giac 2.1.0.1 upgrade (mathml.rs:377, derivatives.rs:227; CI 46069824120, C0122), which the new pin task fixes; T11 counts done with its own tests green. Moving the reference to giac 2.1 is the developer's call, parked in the inbox.
