@@ -41,3 +41,23 @@ fn a_symbolic_zero_between_the_bounds() {
         assert_eq!(ctx.eval(&difference).unwrap(), Expr::from(0), "{value:?}");
     });
 }
+
+/// CAS-650: an `Abs` integral whose upper bound holds the level below, 30
+/// deep, stays at once, not approximated again at each level (2^n). It
+/// reaches `sign` (piecewise.rs) through `order(0, inner)`, the sign of the
+/// held inner call; each level integrates in a variable of its own, so the
+/// inner call is never rewritten and stays held, as its bound does.
+#[test]
+fn nested_bound() {
+    let mut text = String::from("c");
+    for i in 0..30 {
+        text = format!("Integrate[Abs[x{i}], x{i}, 0, {text}]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = ctx.eval(&e).unwrap();
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}

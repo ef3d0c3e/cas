@@ -41,6 +41,8 @@
 //! signs the call stays with a warning, where giac answers the principal
 //! value, `∫_{−1}^{1} 1/x = 0`. What is not shown continuous stays, with a
 //! warning.
+//!
+//! CAS-650: `ball_ends` refuses what is not numeric before `approximation`.
 
 use cas_num::algebra::{EuclideanDomain, Rationals};
 use cas_num::ball::{Ball, Float, Mag, Round};
@@ -469,6 +471,9 @@ pub(super) fn infinite(e: &Expr) -> bool {
 
 /// The ends of the ball of a real number `e`, at [`BITS`] bits.
 pub(super) fn ball_ends(ev: &Eval<'_>, e: &Expr) -> Option<(Rational, Rational)> {
+    if !e.is_numeric() {
+        return None;
+    }
     let value = approximation(ev.context(), e, BITS).ok()?;
     let View::Ball(b) = value.view() else {
         return None;

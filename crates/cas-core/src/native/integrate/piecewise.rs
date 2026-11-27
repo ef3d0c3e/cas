@@ -22,6 +22,8 @@
 //! linear in their symbols: `(1 + c)/2 − c` is `1/2 − c/2`. Another argument, an
 //! order or a sign that none of these tells, or a piece that stays leaves
 //! the integral, the piece with its warning.
+//!
+//! CAS-650: `sign` refuses what is not numeric before `approximation`.
 
 use std::cmp::Ordering;
 
@@ -75,6 +77,9 @@ fn sign(ev: &Eval<'_>, v: &Expr) -> Option<Ordering> {
         Sign::Negative => return Some(Ordering::Less),
         Sign::Zero => return Some(Ordering::Equal),
         _ => {}
+    }
+    if !v.is_numeric() {
+        return None;
     }
     let value = approximation(ev.context(), v, BITS).ok()?;
     match value.view() {

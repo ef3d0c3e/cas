@@ -1051,3 +1051,24 @@ proptest! {
         prop_assert!(same(&ctx, &derivative, &p), "{derivative:?} against {p:?}");
     }
 }
+
+/// CAS-650: `∫ 1/x` from 1 to a bound holding the level below, 30 deep,
+/// stays at once, not approximated again at each level (2^n). It reaches
+/// `ball_ends` (definite.rs) through `region`'s `enclosure` of the held
+/// inner bound; that bound need not be real, so `1/x` is not shown
+/// continuous and the call stays. Each level integrates in a variable of
+/// its own, so the inner call is never rewritten and stays held.
+#[test]
+fn nested_bound() {
+    let mut text = String::from("c");
+    for i in 0..30 {
+        text = format!("Integrate[Power[x{i}, -1], x{i}, 1, {text}]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = ctx.eval(&e).unwrap();
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}
