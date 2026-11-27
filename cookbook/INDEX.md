@@ -117,3 +117,4 @@ C0115 | Sweeping an optimiser (tpsolve, lpsolve): compare the optimum, check our
 C0116 | Sweep skip guards test the drawn input, not the strategy flag; giac spaces .. in strings | proptest,oracle,sweep,giac,modgcd,strings,departure | 2026-11-26 | 1.8/T9 | CI 45831113300 random_modgcd, random_words
 C0117 | A native's nested Context::eval gets fresh limits: 2^depth on nested arguments | fuzz,eval,timeout,limits,native,approximation,nesting | 2026-11-26 | 1.8/T10 | Fuzz 45856971637, T10.c1, CAS-649
 gen1 | Generation 1 entries | see cookbook/gen1/INDEX.md
+C0096 | CoefficientList is highest degree first; blind tests read it backwards | coefficientlist,polynomial,test,r74,order | 2026-11-27 | 2.1/T2 | CI 45995577911, T2.c9 9317acb
