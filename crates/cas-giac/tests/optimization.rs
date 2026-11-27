@@ -753,6 +753,23 @@ fn feasible(
             == cost
 }
 
+/// `maximize` in three variables under a constraint (`random_lp_objectives`,
+/// CI 46030056576), where giac's optimum is short of the true one: giac `0`
+/// though `x = 1` is feasible; ours `1`.
+#[test]
+fn lp_maximize_departures() {
+    let input = "lpsolve(x,[-y+z<=0],x=0..1,y=0..1,z=0..1,maximize)[0]";
+    if let Some(giac) = giac() {
+        let printed = giac.eval(input).unwrap_or_default();
+        assert_eq!(printed, "0", "{input}: giac prints {printed}");
+    }
+    let found = ours(input);
+    assert!(
+        found.as_ref().ok() == ours("1").ok().as_ref(),
+        "{input}: ours {found:?}"
+    );
+}
+
 /// giac's answer to `input`, read back, is ours; else the failure names
 /// the input, giac's answer and ours.
 fn agree(giac: &Giac, input: &str) -> Result<(), TestCaseError> {
@@ -878,10 +895,13 @@ proptest! {
 
     /// `lpsolve(…)[0]`, the optimum, of a feasible bounded program
     /// (`programs`), continuous or `assume=integer`, minimized or with
-    /// `maximize`. Skipped by the drawn program (C0116) when a variable is
-    /// in neither the objective nor a constraint: giac's `Bad Argument
-    /// Type` (`lpsolve(x,[],x=0..2,y=0..3)`; exactly these draws in 6000 run
-    /// in one libgiac, T4.c1, about 1 in 20).
+    /// `maximize`. Skipped by the drawn program (C0116): a variable in
+    /// neither the objective nor a constraint, giac's `Bad Argument Type`
+    /// (`lpsolve(x,[],x=0..2,y=0..3)`; exactly these draws in 6000 run in
+    /// one libgiac, T4.c1, about 1 in 20); `maximize` in three variables
+    /// under a constraint, where giac's optimum is often short of the true
+    /// one (`lp_maximize_departures`; 67 of 723 such draws wrong against an
+    /// exact vertex or lattice search, none outside them, about 1 in 8).
     #[test]
     fn random_lp_objectives(
         (boxes, objective, constraints, maximize, integer) in programs(),
@@ -890,7 +910,7 @@ proptest! {
             return Ok(());
         };
         let used = |k: usize| objective[k] != 0 || constraints.iter().any(|(c, _)| c[k] != 0);
-        if !(0..boxes.len()).all(used) {
+        if !(0..boxes.len()).all(used) || maximize && boxes.len() == 3 && !constraints.is_empty() {
             return Ok(());
         }
         let rows: Vec<String> = constraints

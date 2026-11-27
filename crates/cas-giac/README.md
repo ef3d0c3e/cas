@@ -1082,7 +1082,9 @@ points.
 - Random programs (128 cases a run, 2.1 T4): `random_lp_objectives`, `lpsolve(…)[0]` of 1 to 3 variables in
   integer boxes in `-5..5`, 0 to 3 constraints `c·v<=c·p+s` through a point `p` of the box (feasible, `c` not all
   zero), objective in `-5..5`, continuous or `assume=integer`, minimized or `maximize`; excluded: a variable in
-  neither objective nor constraint (giac's Bad Argument Type, about 1 draw in 20).
+  neither objective nor constraint (giac's Bad Argument Type, about 1 draw in 20), and `maximize` in three
+  variables under a constraint, where giac's optimum is often short of the true one (departure:
+  `lpsolve(x,[-y+z<=0],x=0..1,y=0..1,z=0..1,maximize)[0]`, giac `0`, ours `1`; about 1 draw in 8).
 
 `tests/find_minimum.rs`, Xcas's `find_minimum` (CAS-608): giac's 7 probe rows that compile
 (`cosh`, with `eps=1e-5, maxiter=20` too, `x^2-2*x`, `(x-1/3)^2`, `x->x^4-3*x^2+x`, `sin`,
