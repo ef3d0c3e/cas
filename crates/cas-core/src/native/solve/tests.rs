@@ -1303,3 +1303,42 @@ fn newton_and_nsolve() {
         .unwrap();
     assert_eq!(flat_values(&within), Some(vec![1.5]), "{within:?}");
 }
+
+/// The time to evaluate `factor(xₖ, h)` nested 30 deep, `h` the level
+/// below, each level `Solve[Equation[factor × (x⁴ + x + c), 0], xₖ]` in its
+/// own unknown: the level below is a held call free of `xₖ`, so a
+/// parameter. The factors go by degree, `factor` first; the quartic with a
+/// parameter is not solved, so each call stays.
+fn nested_solve(factor: impl Fn(&str, &str) -> String) -> std::time::Duration {
+    let mut text = String::from("c");
+    for k in 0..30 {
+        let x = format!("x{k}");
+        let f = factor(&x, &text);
+        text = format!("Solve[Equation[Times[{f}, Plus[Power[{x}, 4], {x}, c]], 0], {x}]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let (found, _) = ctx.eval_with(&e, &EvalOptions::default());
+    let elapsed = start.elapsed();
+    assert_eq!(found.unwrap().head(), e.head());
+    elapsed
+}
+
+/// CAS-650: `x² + h` reaches `may_be_positive` with `Δ = −4h`, which the
+/// assumptions do not sign; the held `h` is not approximated again at each
+/// level (2^n).
+#[test]
+fn nested_discriminant() {
+    let elapsed = nested_solve(|x, h| format!("Plus[Power[{x}, 2], {h}]"));
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}
+
+/// CAS-650: the binomial `x³ + h` reaches `real_sign` with `−h`, which the
+/// assumptions do not sign; the held `h` is not approximated again at each
+/// level (2^n).
+#[test]
+fn nested_binomial() {
+    let elapsed = nested_solve(|x, h| format!("Plus[Power[{x}, 3], {h}]"));
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}

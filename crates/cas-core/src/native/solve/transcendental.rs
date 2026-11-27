@@ -563,6 +563,9 @@ pub(super) fn holds(ctx: &Context, f: &Expr, rules: &[(Expr, Expr)]) -> bool {
     if infinite {
         return false;
     }
+    if !value.is_numeric() {
+        return true;
+    }
     match approximation(ctx, &value, BITS).as_ref().map(Expr::view) {
         Ok(View::Ball(b)) => b.contains_rational(&Rational::ZERO),
         Ok(View::ComplexBall(z)) => z.may_be_zero(),

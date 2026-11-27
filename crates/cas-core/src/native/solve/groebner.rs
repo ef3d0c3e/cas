@@ -180,6 +180,9 @@ fn extend(
 /// all are real numbers; otherwise as they are.
 fn ordered(ctx: &Context, tuples: Vec<Vec<Expr>>) -> Vec<Vec<Expr>> {
     let mid = |e: &Expr| -> Option<Float> {
+        if !e.is_numeric() {
+            return None;
+        }
         match approximation(ctx, e, BITS).ok()?.view() {
             View::Ball(b) if b.is_finite() => Some(b.mid().clone()),
             _ => None,

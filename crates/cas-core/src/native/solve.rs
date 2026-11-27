@@ -52,6 +52,10 @@
 //! Each call that solves takes one step, `"Solve"` or `"CSolve"`, which the
 //! trace leaves unchecked: the roots' order follows the parameters' values.
 //!
+//! An expression is approximated for a sign, an order or a check only when
+//! it is numeric: a held call, as a held `Solve`, is not evaluated again at
+//! each level, 2^n deep (CAS-650).
+//!
 //! Xcas's `zeros` and `cZeros` are names of `Solve` and `CSolve` (CAS-536),
 //! in their orders. With Xcas's `complex_mode` on (CAS-617), `Solve` is
 //! `CSolve`: `solve(x^2+1=0,x)` is `[i,-i]`. `CFSolve`, `cfsolve`, finds
@@ -611,6 +615,7 @@ fn real_sign(ev: &mut Eval<'_>, c: &Expr) -> Result<Option<Ordering>, EvalError>
         Sign::Positive => Some(Ordering::Greater),
         Sign::Negative => Some(Ordering::Less),
         Sign::Zero => Some(Ordering::Equal),
+        _ if !c.is_numeric() => None,
         _ => match approximation(ev.context(), c, BITS)?.view() {
             View::Ball(b) => b.sign(),
             _ => None,
@@ -770,6 +775,9 @@ fn may_be_positive(ev: &mut Eval<'_>, delta: &Expr) -> Result<bool, EvalError> {
         Sign::Positive | Sign::NonNegative | Sign::Zero => return Ok(true),
         Sign::Nonzero | Sign::Unknown => {}
     }
+    if !delta.is_numeric() {
+        return Ok(true);
+    }
     let Ok(value) = approximation(ev.context(), &delta, BITS) else {
         return Ok(true);
     };
@@ -843,6 +851,9 @@ fn ordered(ctx: &Context, roots: Vec<Expr>) -> Vec<Expr> {
 /// The midpoints of the real and imaginary parts of a number's ball, the
 /// imaginary one 0 when its ball holds 0; `None` for no number.
 fn point(ctx: &Context, r: &Expr) -> Option<(Float, Float)> {
+    if !r.is_numeric() {
+        return None;
+    }
     let value = approximation(ctx, r, BITS).ok()?;
     match value.view() {
         View::Ball(b) if b.is_finite() => Some((b.mid().clone(), Float::ZERO)),

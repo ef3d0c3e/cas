@@ -142,6 +142,9 @@ fn y_roots(
 /// otherwise as they are.
 fn ordered(ctx: &Context, pairs: Vec<(Expr, Expr)>) -> Vec<(Expr, Expr)> {
     let mid = |e: &Expr| -> Option<Float> {
+        if !e.is_numeric() {
+            return None;
+        }
         match approximation(ctx, e, BITS).ok()?.view() {
             View::Ball(b) if b.is_finite() => Some(b.mid().clone()),
             _ => None,
