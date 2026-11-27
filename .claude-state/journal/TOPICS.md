@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-26T21:35:33.257Z
+# filed through: 2026-11-27T03:53:41.095Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
@@ -111,7 +111,7 @@ R107 | 2026-11-26 | decision | in force | Phase 1.7 Statistics III and signal pr
 R108 | 2026-11-26 | decision | in force | Phase 1.7 Statistics III and signal processing II | The 1.7 carry-overs are routed to 1.8 through the inbox (I2): the Weibull fix, the gap-check items… | .claude-state/journal/2026-11-26/014955-050r-claude-record.md
 R109 | 2026-11-26 | finding | superseded by R111 | Phase 1.8 Validation | The 1.8 draft (.run/plans/phase-1.8.md, lint OK, R1.8-001..004) has 12 tasks. | .claude-state/journal/2026-11-26/014955-050r-claude-record.md
 R110 | 2026-11-26 | open | superseded by R112 | Phase 1.8 Validation | the developer's decision on which missing entries may stay unbuilt. | .claude-state/journal/2026-11-26/014955-050r-claude-record.md
-R111 | 2026-11-26 | decision | in force | Phase 1.8 Validation | The phase 1.8 plan is installed and runs on its own; the developer's next touchpoint is the close q… | .claude-state/journal/2026-11-26/021750-057r-claude-record.md
+R111 | 2026-11-26 | decision | superseded by R123 | Phase 1.8 Validation | The phase 1.8 plan is installed and runs on its own; the developer's next touchpoint is the close q… | .claude-state/journal/2026-11-26/021750-057r-claude-record.md
 R112 | 2026-11-26 | decision | in force | Phase 1.8 Validation | Every missing computational giac entry in an existing module gets built; only French spellings, GF… | .claude-state/journal/2026-11-26/021750-057r-claude-record.md
 R113 | 2026-11-26 | finding | in force | Phase 1.8 Validation | Phase 1.8's final gate is green on the pushed head 615a65e: CI 45885347583, push Fuzz 45885347505,… | .claude-state/journal/2026-11-26/225103-084r-claude-record.md
 R114 | 2026-11-26 | finding | in force | Phase 1.8 Validation | The gap ledger (end of ## Tests in crates/cas-giac/README.md) puts each of the 1004 missing giac en… | .claude-state/journal/2026-11-26/225103-084r-claude-record.md
@@ -122,4 +122,5 @@ R118 | 2026-11-26 | finding | in force | Phase 1.8 Validation | fuzz.yml's job c
 R119 | 2026-11-26 | open | in force | Phase 1.8 Validation | CAS-650 (backlog, Infrastructure): eight more functions re-evaluate an argument under fresh limits… | .claude-state/journal/2026-11-26/225103-084r-claude-record.md
 R120 | 2026-11-26 | open | in force | Phase 1.8 Validation | markov and lpsolve suit random sweeps but no sweep group covers them; a residue rule for rational f… | .claude-state/journal/2026-11-26/225103-084r-claude-record.md
 R121 | 2026-11-26 | open | in force | Phase 1.8 Validation | small loose ends: Fill inside begin…end gives purge's misplaced-form error; euler_lagrange_assume.r… | .claude-state/journal/2026-11-26/225103-084r-claude-record.md
-R122 | 2026-11-26 | open | in force | Phase 1.8 Validation | the phase 1.8 close question is asked and awaiting the developer's answer -> release close on yes | .claude-state/journal/2026-11-26/225103-084r-claude-record.md
+R122 | 2026-11-26 | open | retired by .claude-state/journal/2026-11-27/050854-088r-claude-record.md (the developer answered the close question with yes, and the close was released) | Phase 1.8 Validation | the phase 1.8 close question is asked and awaiting the developer's answer -> release close on yes | .claude-state/journal/2026-11-26/225103-084r-claude-record.md
+R123 | 2026-11-27 | decision | in force | Phase 1.8 Validation | Phase 1.8 is closed, and with it generation 1. | .claude-state/journal/2026-11-27/050854-088r-claude-record.md
