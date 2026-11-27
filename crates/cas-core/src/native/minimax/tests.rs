@@ -92,6 +92,12 @@ fn closed_forms() {
             level,
             vec![1.0 - level, e - 1.0],
         ),
+        (
+            "MinimaxApproximation[Power[x, 3], \
+             Equation[x, Range[Times[-1, Power[2, 1/2]], Power[2, 1/2]]], 2]",
+            std::f64::consts::FRAC_1_SQRT_2,
+            vec![0.0, 1.5],
+        ),
     ] {
         let (mid, radius, found) = answer(&ctx, input);
         assert!(
@@ -209,6 +215,23 @@ fn options_and_what_stays() {
         assert_eq!(found.unwrap().head(), e.head(), "{input}");
         assert!(report.warnings.is_empty(), "{input}: {:?}", report.warnings);
     }
+}
+
+/// CAS-650: a range end holding a held `MinimaxApproximation` 30 deep is
+/// refused at once, not approximated again at each level.
+#[test]
+fn nested_range() {
+    let mut text = String::from("y");
+    for _ in 0..30 {
+        text = format!("MinimaxApproximation[Exp[x], Equation[x, Range[0, {text}]], 2]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let (found, _) = ctx.eval_with(&e, &EvalOptions::default());
+    let elapsed = start.elapsed();
+    assert_eq!(found.unwrap().head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
 }
 
 /// Not converged within `limit = 1`: a warning, and the call stays.

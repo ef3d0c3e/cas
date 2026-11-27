@@ -65,6 +65,9 @@
 //! - `rand` draws from the context's generator.
 //! - `Min[u, v]` and `Max[u, v]` in `f` are taken as `(u + v ∓ |u − v|)/2`
 //!   (more arguments folded), so that `f` compiles.
+//! - A range end not structurally numeric is refused before
+//!   `approximation`, which would evaluate it again (CAS-650); `ball`
+//!   serves `FindMinimum` too.
 
 #![allow(
     clippy::many_single_char_names,
@@ -549,6 +552,7 @@ pub(super) fn ball(ev: &Eval<'_>, e: &Expr, prec: u64) -> Option<Ball> {
     }
     let value = match e.view() {
         View::Ball(b) => return b.is_finite().then(|| b.clone()),
+        _ if !e.is_numeric() => return None,
         _ => approximation(ev.context(), e, prec).ok()?,
     };
     match value.view() {
