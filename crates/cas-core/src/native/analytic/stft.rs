@@ -25,7 +25,8 @@
 //! of the fifteen window functions, where giac takes any function (its
 //! `stft(x, 2, sin)` applies `sin` to the frame); a window of more than
 //! 2048 samples, and a padded list longer than `Limits::terms`, stay with a
-//! warning (C0019).
+//! warning (C0019). A window weight not structurally numeric is refused
+//! before `approximation`, which would evaluate it again (CAS-650).
 
 use cas_num::ball::{Ball, ComplexBall};
 use cas_num::{Integer, Rational};
@@ -115,6 +116,9 @@ fn weights(
     }
     let mut out = Vec::with_capacity(m);
     for w in found.args() {
+        if !w.is_numeric() {
+            return Ok(None);
+        }
         let Ok(n) = approximation(ev.context(), w, prec) else {
             return Ok(None);
         };

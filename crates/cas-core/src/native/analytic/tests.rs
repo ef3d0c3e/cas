@@ -473,6 +473,24 @@ fn short_time_fourier_transforms() {
     ]);
 }
 
+/// CAS-650: data holding a held `ShortTimeFourierTransform` 30 deep stays
+/// at once: samples are read structurally, never approximated, and the
+/// window is a builtin's name.
+#[test]
+fn short_time_fourier_transform_nested_data() {
+    let mut text = String::from("x");
+    for _ in 0..30 {
+        text = format!("ShortTimeFourierTransform[List[{text}, 1, 2, 3], 2]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = ctx.eval(&e).unwrap();
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}
+
 /// A matrix cell: row, column, value.
 type Cell = (usize, usize, f64);
 
