@@ -375,6 +375,10 @@ after giac's `restart`, ours in a new session, compared value by value:
   lies within a few units in the last place of 10⁻¹² (giac keeps fewer bits
   of its doubles: `0.5+1e-12` accepted, `0.5-1e-12` not), ours exactly
   10⁻¹² in `f64`; `randmarkov` with a plot argument (giac a graphic) stays.
+- Random chains (128 cases a run, 2.1 T4): `random_markov_chains`, 2 to 5 states, row weights 0 (half the
+  time) or 1 to 4 as exact `w/sum`; skipped by the drawn chain's graph, as the departures above: an absorbing
+  state (giac's `1.0`), or two or more recurrent classes with a transient state (giac's iterated absorption, or
+  no end where a transient state feeds a periodic class); about a third of draws skipped.
 
 `tests/kernel_density.rs`, Xcas's kernel density estimation `kernel_density`
 and `kde` (CAS-629):
@@ -1075,6 +1079,10 @@ points.
   `SimplexReduce[…]`.
 - Random problems (128 cases a run, 1.8 T8): `random_tpsolve`, 1 to 3 sources and sinks, supplies, demands and
   costs in `0..9`: giac's answer, or its optimal cost with another feasible allocation of ours (random costs tie).
+- Random programs (128 cases a run, 2.1 T4): `random_lp_objectives`, `lpsolve(…)[0]` of 1 to 3 variables in
+  integer boxes in `-5..5`, 0 to 3 constraints `c·v<=c·p+s` through a point `p` of the box (feasible, `c` not all
+  zero), objective in `-5..5`, continuous or `assume=integer`, minimized or `maximize`; excluded: a variable in
+  neither objective nor constraint (giac's Bad Argument Type, about 1 draw in 20).
 
 `tests/find_minimum.rs`, Xcas's `find_minimum` (CAS-608): giac's 7 probe rows that compile
 (`cosh`, with `eps=1e-5, maxiter=20` too, `x^2-2*x`, `(x-1/3)^2`, `x->x^4-3*x^2+x`, `sin`,

@@ -753,6 +753,79 @@ fn feasible(
             == cost
 }
 
+/// giac's answer to `input`, read back, is ours; else the failure names
+/// the input, giac's answer and ours.
+fn agree(giac: &Giac, input: &str) -> Result<(), TestCaseError> {
+    giac.agrees(input)
+        .map_err(|e| TestCaseError::fail(e.to_string()))
+}
+
+/// `c·v` over `x`, `y`, `z`: zero terms left out, `0` when all are.
+fn linear(c: &[i64]) -> String {
+    let mut text = String::new();
+    for (&a, v) in c.iter().zip(["x", "y", "z"]) {
+        if a == 0 {
+            continue;
+        }
+        text += if a < 0 {
+            "-"
+        } else if text.is_empty() {
+            ""
+        } else {
+            "+"
+        };
+        if a.abs() != 1 {
+            text += &a.abs().to_string();
+            text += "*";
+        }
+        text += v;
+    }
+    if text.is_empty() {
+        "0".to_owned()
+    } else {
+        text
+    }
+}
+
+/// A program of `programs`: each variable's box `lo..hi` and point in it,
+/// the objective, the constraints `(c, s)`, `maximize`, `assume=integer`.
+type Program = (
+    Vec<(i64, i64, i64)>,
+    Vec<i64>,
+    Vec<(Vec<i64>, i64)>,
+    bool,
+    bool,
+);
+
+/// A feasible program in 1 to 3 variables: integer boxes `lo..hi` with
+/// `lo < hi` in `-5..=5`, an integer point `p` in the box, 0 to 3
+/// constraints `c·v<=c·p+s` (`c` in `-4..=4`, not all zero: giac's `Bad
+/// Argument Type` on a constant one, `lpsolve(x,[0*x<=3],x=-2..3)`; `s` in
+/// `0..=3`), an objective in `-5..=5`.
+fn programs() -> impl Strategy<Value = Program> {
+    (1usize..=3).prop_flat_map(|n| {
+        (
+            prop::collection::vec(
+                (-5i64..=4)
+                    .prop_flat_map(|lo| (Just(lo), lo + 1..=5))
+                    .prop_flat_map(|(lo, hi)| (Just(lo), Just(hi), lo..=hi)),
+                n,
+            ),
+            prop::collection::vec(-5i64..=5, n),
+            prop::collection::vec(
+                (
+                    prop::collection::vec(-4i64..=4, n)
+                        .prop_filter("not all zero", |c| c.iter().any(|&a| a != 0)),
+                    0i64..=3,
+                ),
+                0..=3,
+            ),
+            any::<bool>(),
+            any::<bool>(),
+        )
+    })
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]
 
@@ -801,5 +874,50 @@ proptest! {
                 "{input}: giac {theirs:?}, ours {ours:?}"
             )));
         }
+    }
+
+    /// `lpsolve(…)[0]`, the optimum, of a feasible bounded program
+    /// (`programs`), continuous or `assume=integer`, minimized or with
+    /// `maximize`. Skipped by the drawn program (C0116) when a variable is
+    /// in neither the objective nor a constraint: giac's `Bad Argument
+    /// Type` (`lpsolve(x,[],x=0..2,y=0..3)`; exactly these draws in 6000 run
+    /// in one libgiac, T4.c1, about 1 in 20).
+    #[test]
+    fn random_lp_objectives(
+        (boxes, objective, constraints, maximize, integer) in programs(),
+    ) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        let used = |k: usize| objective[k] != 0 || constraints.iter().any(|(c, _)| c[k] != 0);
+        if !(0..boxes.len()).all(used) {
+            return Ok(());
+        }
+        let rows: Vec<String> = constraints
+            .iter()
+            .map(|(c, s)| {
+                let bound = c.iter().zip(&boxes).map(|(a, b)| a * b.2).sum::<i64>() + s;
+                format!("{}<={bound}", linear(c))
+            })
+            .collect();
+        let ranges: Vec<String> = boxes
+            .iter()
+            .zip(["x", "y", "z"])
+            .map(|((lo, hi, _), v)| format!("{v}={lo}..{hi}"))
+            .collect();
+        let mut input = format!(
+            "lpsolve({},[{}],{}",
+            linear(&objective),
+            rows.join(","),
+            ranges.join(",")
+        );
+        if integer {
+            input += ",assume=integer";
+        }
+        if maximize {
+            input += ",maximize";
+        }
+        input += ")[0]";
+        agree(giac, &input)?;
     }
 }
