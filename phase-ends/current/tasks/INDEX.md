@@ -5,3 +5,4 @@ T2 | done | is_numeric guard before approximation in the eight CAS-650 natives |
 T3 | done | classify the remaining approximation call sites and guard those that can nest | - | tasks/T3.md | logs/T3.md | R2.1-010,R2.1-011
 T4 | done | random oracle sweeps for markov (exact stochastic matrices) and lpsolve (objective value) (I3) | - | tasks/T4.md | logs/T4.md | -
 T5 | done | residue rule for rational Hilbert transforms, five departures to agreeing rows (I3) | - | tasks/T5.md | logs/T5.md | -
+T6 | done | drop the needless ,t,2) rewrite in euler_lagrange_assume.rs (I3) | - | tasks/T6.md | logs/T6.md | R2.1-008
