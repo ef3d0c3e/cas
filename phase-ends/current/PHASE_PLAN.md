@@ -95,3 +95,4 @@ Approved: 2026-11-27   Planner: claude-opus-5-5/medium   Plan-hash: 0f9b9f86179e
 - 2026-11-27 router: T2 next -> done
 - 2026-11-27 planner: added T10 — guard the numeric natives' endpoint, guess and constant-subtree sites with is_numeric (CAS-650 class)
 - 2026-11-27 planner: added T11 — guard the numeric natives' sample-point sites by refusing a function that holds a call of the native's own head (CAS-650 class)
+- 2026-11-27 router: T3 split at its own trigger (29 sites, ~15 families): T3 keeps the full classification in tasks/T3.md and guards the symbolic natives (Limit, Series, Sum, Solve/CSolve, JordanMatrix, the iterative solvers, PositiveDefiniteQ, LU/QR/Cholesky, definite Integrate: 17 sites); the numeric endpoint/guess sites and the sample-point sites go to two new tasks after it.
