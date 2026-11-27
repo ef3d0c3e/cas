@@ -13,6 +13,7 @@
 use cas_core::{Context, EvalOptions, Expr, Rational, Symbol, View, Warning};
 use cas_giac::{Giac, ours};
 use cas_lang::{Hook, Names, decimal_balls, lower, parse};
+use proptest::prelude::*;
 
 /// The shared library, or `None` with a note: the checks skip.
 fn giac() -> Option<&'static Giac> {
@@ -496,5 +497,90 @@ fn seeded_draws_repeat() {
     ] {
         let found = ours(input).unwrap_or_else(|e| panic!("{input}: {e}"));
         assert_eq!(found.args()[1], found.args()[3], "{input}");
+    }
+}
+
+/// giac's answer to `input`, read back, is ours; else the failure names
+/// the input, giac's answer and ours.
+fn agree(giac: &Giac, input: &str) -> Result<(), TestCaseError> {
+    giac.agrees(input)
+        .map_err(|e| TestCaseError::fail(e.to_string()))
+}
+
+/// Row weights of a chain of 2 to 5 states: each weight 0 half the time
+/// (so chains with transient states and several classes come up), else 1
+/// to 4; each row's sum positive.
+fn weights() -> impl Strategy<Value = Vec<Vec<u32>>> {
+    (2usize..=5).prop_flat_map(|n| {
+        prop::collection::vec(
+            prop::collection::vec(prop_oneof![Just(0u32), 1u32..=4], n)
+                .prop_filter("a row sums to more than 0", |r| r.iter().sum::<u32>() > 0),
+            n,
+        )
+    })
+}
+
+/// Whether giac answers the chain of row weights `w` exactly, read off its
+/// graph: no absorbing state, and one recurrent class or no transient
+/// state (see `random_markov_chains`).
+fn exact_in_giac(w: &[Vec<u32>]) -> bool {
+    let n = w.len();
+    let mut reach: Vec<Vec<bool>> = (0..n)
+        .map(|i| (0..n).map(|j| i == j || w[i][j] > 0).collect())
+        .collect();
+    for k in 0..n {
+        for i in 0..n {
+            for j in 0..n {
+                if reach[i][k] && reach[k][j] {
+                    reach[i][j] = true;
+                }
+            }
+        }
+    }
+    // A recurrent state reaches only its own class.
+    let recurrent: Vec<usize> = (0..n)
+        .filter(|&i| (0..n).all(|j| !reach[i][j] || reach[j][i]))
+        .collect();
+    let classes = recurrent
+        .iter()
+        .filter(|&&i| (0..i).all(|j| !(reach[i][j] && reach[j][i])))
+        .count();
+    recurrent
+        .iter()
+        .all(|&i| (0..n).filter(|&j| reach[i][j]).count() > 1)
+        && (classes == 1 || recurrent.len() == n)
+}
+
+proptest! {
+    #![proptest_config(ProptestConfig::with_cases(128))]
+
+    /// `markov` of a random chain (`weights`), entries `w/sum` exact,
+    /// bracketed (C0023). Skipped by the drawn chain's graph (C0116) where
+    /// giac departs (`departures`): an absorbing state (giac's invariant
+    /// vector `1.0`, `markov([[1,0],[1/2,1/2]])`); two or more recurrent
+    /// classes with a transient state (giac iterates the absorption: `0.0`,
+    /// `2199023255551/2199023255552`, `markov([[1/2,1/2,0],[0,1,0],[0,0,1]])`;
+    /// or never ends where a transient state feeds a periodic class,
+    /// `markov([[0,0,0,0,1],[0,1,0,0,0],[0,0,0,1,0],[0,0,1,0,0],
+    /// [2/11,0,4/11,1/11,4/11]])`, 15 s). In 7000 draws run in one libgiac
+    /// (T4.c1) exactly the skipped ones had floats in giac's answer; about
+    /// a third are skipped.
+    #[test]
+    fn random_markov_chains(w in weights()) {
+        let Some(giac) = giac() else {
+            return Ok(());
+        };
+        if !exact_in_giac(&w) {
+            return Ok(());
+        }
+        let rows: Vec<String> = w
+            .iter()
+            .map(|r| {
+                let sum: u32 = r.iter().sum();
+                let entries: Vec<String> = r.iter().map(|x| format!("{x}/{sum}")).collect();
+                format!("[{}]", entries.join(","))
+            })
+            .collect();
+        agree(giac, &format!("[markov([{}])]", rows.join(",")))?;
     }
 }
