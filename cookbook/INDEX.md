@@ -121,3 +121,4 @@ C0096 | CoefficientList is highest degree first; blind tests read it backwards |
 C0118 | Nesting tests for an approximation guard: keep the inner call held at every level | native,approximation,nesting,test,held,guard | 2026-11-27 | 2.1/T3 | T3.c3 3838e8c CAS-650
 C0119 | Pre-CI sweep batch: check giac against an exact reference; lpsolve maximize and markov exactness classes | giac,oracle,sweep,proptest,lpsolve,markov,departure,reference | 2026-11-27 | 2.1/T4 | T4.c1 CI 46030056576 random_lp_objectives
 C0120 | Exact poles and residue rules for rational functions (RootsWithMultiplicity, half-plane split) | residue,rational,poles,hilbert,radicals,clippy | 2026-11-27 | 2.1/T5 | T5.c1 CAS-654
+C0121 | Oracle sweep where giac is wrong: probe the class with caseval, then skip on an exact predicate | proptest,oracle,sweep,giac,departure,caseval | 2026-11-27 | 2.1/T7 | CI 46055615575 random_is_irreducible
