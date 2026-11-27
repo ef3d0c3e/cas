@@ -29,6 +29,8 @@
 //!      [`MAX_EVALUATIONS`] evaluations; past them the call stays, with a
 //!      warning.
 //! - The result is the sum of the segments' balls, real where each is.
+//! - A bound not structurally numeric is refused before `approximation`,
+//!   which would evaluate it again (CAS-650); `bound` serves `area` too.
 
 #![allow(
     clippy::many_single_char_names,
@@ -92,6 +94,7 @@ fn parts(e: &Expr) -> Option<(&Expr, &Expr, [&Expr; 2])> {
 fn bound(ev: &Eval<'_>, a: &Expr, prec: u64) -> Option<Ball> {
     let value = match a.view() {
         View::Ball(b) => return Some(b.clone()),
+        _ if !a.is_numeric() => return None,
         _ => approximation(ev.context(), a, prec).ok()?,
     };
     match value.view() {

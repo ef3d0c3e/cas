@@ -124,6 +124,23 @@ fn what_stays() {
     assert!(!report.warnings.is_empty());
 }
 
+/// CAS-650: a bound holding a held `NIntegrate` 30 deep is refused at once,
+/// not approximated again at each level.
+#[test]
+fn nested_bound() {
+    let mut text = String::from("y");
+    for _ in 0..30 {
+        text = format!("NIntegrate[x, x, 0, {text}]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let (found, _) = ctx.eval_with(&e, &EvalOptions::default());
+    let elapsed = start.elapsed();
+    assert_eq!(found.unwrap().head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}
+
 /// `N` of an integral that `Integrate` leaves (CAS-DOC-26 §5): 40 digits
 /// of `∫₀¹ sin(sin x)`, which has no elementary antiderivative.
 #[test]
