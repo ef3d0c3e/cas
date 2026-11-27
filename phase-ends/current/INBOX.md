@@ -11,3 +11,4 @@
      or an earlier phase, or an id not in GENERATION_PLAN.md, routes now. -->
 
 - <note, correction, priority change, or question>
+- giac 2.1 reference move -> Gen 2 later phase or developer's call: debian:sid moved libgiac0t64 to 2.1.0.1+dfsg2-1 (CI 46069824120, C0122); 2.1 T-pin keeps CI on 2.0.0.21 to match local caseval. Moving means updating local giac, re-probing departures, and fixing mathml.rs:377 (<mo>( for <mfenced>) and derivatives.rs:227.
