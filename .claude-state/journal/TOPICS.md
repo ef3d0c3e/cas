@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-27T08:42:07.516Z
+# filed through: 2026-11-27T09:14:54.144Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
@@ -95,7 +95,7 @@ R91 | 2026-11-25 | decision | in force | Phase 1.6 Strings, printers and session
 R92 | 2026-11-25 | open | superseded by R93 | Phase 1.7 Statistics III and signal processing II | phase 1.7 draft in progress by pa-planner -> present with plan(kind: phase) when its report arrives | .claude-state/journal/2026-11-25.md#070752-026r-claude-record
 R93 | 2026-11-25 | decision | superseded by R107 | Phase 1.7 Statistics III and signal processing II | The phase 1.7 plan is installed and runs on its own. | .claude-state/journal/2026-11-25.md#075453-037r-claude-record
 R94 | 2026-11-25 | decision | in force | Frontends (language server and desktop app) | The frontends are generation 2, starting right after 1.8: first the language server (completion, hi… | .claude-state/journal/2026-11-25.md#075453-037r-claude-record
-R95 | 2026-11-25 | open | in force | Frontends (language server and desktop app) | gen 2 frontend choices: the new Lific module(s), which need the developer's word; the desktop app's… | .claude-state/journal/2026-11-25.md#075453-037r-claude-record
+R95 | 2026-11-25 | open | superseded by R126 | Frontends (language server and desktop app) | gen 2 frontend choices: the new Lific module(s), which need the developer's word; the desktop app's… | .claude-state/journal/2026-11-25.md#075453-037r-claude-record
 R96 | 2026-11-25 | finding | in force | Frontends (language server and desktop app) | commit_task.sh swept unnamed files into a partner commit. | .claude-state/journal/2026-11-25.md#075453-037r-claude-record
 R97 | 2026-11-25 | finding | in force | Phase 1.7 Statistics III and signal processing II | Phase 1.7 built giac's 37 entries under CAS-DOC-59 (still a draft), and CAS-624..635 are done. | .claude-state/journal/2026-11-25.md#170032-042r-claude-record
 R98 | 2026-11-25 | finding | in force | Phase 1.7 Statistics III and signal processing II | Final gate green on 0e22fdf (CI 45637752766, Fuzz 45637752779). | .claude-state/journal/2026-11-25.md#170032-042r-claude-record
@@ -126,3 +126,9 @@ R122 | 2026-11-26 | open | retired by .claude-state/journal/2026-11-27/050854-08
 R123 | 2026-11-27 | decision | in force | Phase 1.8 Validation | Phase 1.8 is closed, and with it generation 1. | .claude-state/journal/2026-11-27/050854-088r-claude-record.md
 R124 | 2026-11-27 | decision | in force | Phase 1.8 Validation | The 1.8 carry-overs wait in phase-ends/current/INBOX.md as a "-> Gen 2" line (commit fa7226b). | .claude-state/journal/2026-11-27/073600-091r-claude-record.md
 R125 | 2026-11-27 | finding | in force | Phase 1.8 Validation | commit_task.sh swept a file again: partner commit fa7226b also took .claude-state/journal/TOPICS.md… | .claude-state/journal/2026-11-27/073600-091r-claude-record.md
+R126 | 2026-11-27 | decision | in force | Generation 2 start (frontends) | Gen 2 gets two new Lific modules, "Language server" and "Desktop app" (the developer's pick from th… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
+R127 | 2026-11-27 | decision | in force | Generation 2 start (frontends) | The desktop app's toolkit and how the app is tested on CI (CI-only, R74) are researched by the gen… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
+R128 | 2026-11-27 | decision | in force | Generation 2 start (frontends) | Deferred items triaged (commit f5d75bc): I1 (frontends) and I3 (1.8 carry-overs) go to deferred:gen… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
+R129 | 2026-11-27 | finding | in force | Generation 2 start (frontends) | The curator changed little: C0096 (the gen 1 gap-ledger tally) moved to cookbook/gen1/; memories, r… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
+R130 | 2026-11-27 | finding | in force | Generation 2 start (frontends) | The auditor's carry audit (committed 43dbe37) found a defect in PA3's packaged audit.py, so nothing… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
+R131 | 2026-11-27 | open | in force | Generation 2 start (frontends) | the gen 2 plan draft -> the pa-planner is writing .run/plans/gen-2.md; Claude presents it with plan… | .claude-state/journal/2026-11-27/103020-109r-claude-record.md
