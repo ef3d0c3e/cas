@@ -289,3 +289,22 @@ fn singular_values_and_conjugate_gradients() {
         "List[Power[Plus[15, Times[-1, Power[221, 1/2]]], 1/2], Power[Plus[15, Power[221, 1/2]], 1/2]]",
     )]);
 }
+
+/// CAS-650: a 1×1 matrix holding a held `PositiveDefiniteQ` 30 deep. Each
+/// level's only pivot is the held call, whose sign `sign` cannot decide, so
+/// the call stays; the pivot is refused at once, not approximated again at
+/// each level (2^n).
+#[test]
+fn nested_pivot() {
+    let mut text = String::from("c");
+    for _ in 0..30 {
+        text = format!("PositiveDefiniteQ[List[List[{text}]]]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = ctx.eval(&e).unwrap();
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}

@@ -44,7 +44,8 @@
 //!   above 0; a pivot shown 0 or below makes it `False`, as a matrix that is
 //!   not symmetric does; a pivot not decided leaves the call. giac's
 //!   `isposdef([[1,2],[2,1]])` is `true`, wrongly: its eigenvalues are 3
-//!   and −1.
+//!   and −1. A held pivot is not approximated: no 2^n re-evaluation when
+//!   nested (CAS-650).
 //! - **`Inertia[A]`**: `{positive, negative, zero}` eigenvalues of a real
 //!   symmetric `A`, by Descartes' rule of signs on its characteristic
 //!   polynomial, exact as every root is real: the zeros the trailing zero
@@ -502,6 +503,10 @@ pub(super) fn sign(ev: &mut Eval<'_>, x: &Expr) -> Result<Option<Ordering>, Eval
     }
     if is_zero(ev, x)? == Some(true) {
         return Ok(Some(Ordering::Equal));
+    }
+    // A held call: not evaluated again with fresh limits (CAS-650).
+    if !x.is_numeric() {
+        return Ok(None);
     }
     let value = crate::native::approximation(ev.context(), x, 128)?;
     Ok(match value.view() {

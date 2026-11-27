@@ -72,3 +72,22 @@ fn stays() {
         assert_eq!(found.head(), e.head(), "{input}: {found:?}");
     }
 }
+
+/// CAS-650: a matrix entry holding a held `JacobiLinearSolve` 30 deep. Each
+/// level reaches `ball` with the held call as its entry, which no ball
+/// gives, so the call stays; the entry is refused at once, not
+/// approximated again at each level (2^n).
+#[test]
+fn nested_entry() {
+    let mut text = String::from("c");
+    for _ in 0..30 {
+        text = format!("JacobiLinearSolve[List[List[{text}]], List[1], Power[10, -12]]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = ctx.eval(&e).unwrap();
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}

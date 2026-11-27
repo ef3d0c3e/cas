@@ -16,7 +16,8 @@
 //! of `A` and `b`. A matrix not shown dominant, or an iteration that does
 //! not settle, leaves the call with a warning; giac answers either way, and
 //! its `jacobi_linsolve([[4,1],[1,3]],[1,2],1e-12)` is `[0.1333,0.4667]`,
-//! where the solution is `[1/11, 7/11]`.
+//! where the solution is `[1/11, 7/11]`. A held entry is not approximated:
+//! no 2^n re-evaluation when nested (CAS-650).
 
 use std::cmp::Ordering;
 
@@ -39,6 +40,10 @@ const MAX_STEPS: u64 = 1_000_000;
 fn ball(ev: &mut Eval<'_>, x: &Expr, bits: u64) -> Result<Option<Ball>, EvalError> {
     if let Some(q) = x.to_rational() {
         return Ok(Some(Ball::from_rational(&q, bits)));
+    }
+    // A held call: not evaluated again with fresh limits (CAS-650).
+    if !x.is_numeric() {
+        return Ok(None);
     }
     let value = approximation(ev.context(), x, bits)?;
     Ok(match value.view() {

@@ -33,7 +33,8 @@
 //!   `JordanDecomposition` ([`super::decompose`]), its blocks in giac 2.0's
 //!   order: real part descending, then imaginary part ascending (by 64-bit
 //!   balls), each eigenvalue's longest block first. A matrix already in
-//!   Jordan form is its own `J`, as giac's.
+//!   Jordan form is its own `J`, as giac's. A held eigenvalue is not
+//!   approximated: no 2^n re-evaluation when nested (CAS-650).
 
 use std::cmp::Ordering;
 
@@ -209,8 +210,13 @@ fn in_jordan_form(a: &[Vec<Expr>]) -> bool {
 }
 
 /// The point of the complex plane `x` is near, from its 64-bit ball;
-/// `None` when it has no numeric value.
+/// `None` when it has no numeric value. One not structurally numeric (a
+/// held call) is `None` before `approximation`, which would evaluate it
+/// again with fresh limits, 2^n for a held call n deep (CAS-650).
 fn plane(ev: &Eval<'_>, x: &Expr) -> Result<Option<(f64, f64)>, EvalError> {
+    if !x.is_numeric() {
+        return Ok(None);
+    }
     let value = approximation(ev.context(), x, 64)?;
     let real = |q: &Rational| Float::from_rational(q, 64, Round::Nearest).0.to_f64();
     Ok(match value.view() {

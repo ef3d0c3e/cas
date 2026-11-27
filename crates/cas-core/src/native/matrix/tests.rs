@@ -1206,3 +1206,27 @@ fn triangles_and_forms() {
         ),
     ]);
 }
+
+/// CAS-650: `JordanMatrix` of `[[1, 0], [1, h]]`, `h` the level below,
+/// 30 deep. A `JordanMatrix` that reaches `plane` always answers, so the
+/// held call at each level is a `JacobiLinearSolve` around it, whose
+/// entry, a matrix holding `h`, has no ball. Each level's eigenvalue `h` is
+/// that held call, which `plane` takes; it is refused at once, not
+/// approximated again at each level (2^n).
+#[test]
+fn nested_eigenvalue() {
+    let mut text = String::from("c");
+    for _ in 0..30 {
+        text = format!(
+            "JacobiLinearSolve[List[List[JordanMatrix[List[List[1, 0], List[1, {text}]]]]], \
+             List[1], Power[10, -12]]"
+        );
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = ctx.eval(&e).unwrap();
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}

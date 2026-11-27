@@ -238,3 +238,38 @@ fn what_stays() {
         assert_eq!(eval(&ctx, &e).head(), e.head(), "{input}");
     }
 }
+
+/// The time to evaluate `CholeskyDecomposition` nested 30 deep, the inner
+/// call put in by `wrap`, and that the outer call stays.
+fn nested_cholesky(wrap: fn(&str) -> String) -> std::time::Duration {
+    let mut text = String::from("c");
+    for _ in 0..30 {
+        text = format!("CholeskyDecomposition[{}]", wrap(&text));
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = eval(&ctx, &e);
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    elapsed
+}
+
+/// CAS-650: the held call below the diagonal, 0 above it. Each level's
+/// symmetry test reaches `is_zero` with the held call, which it does not
+/// show 0, so the call stays; it is not approximated again at each level
+/// (2^n).
+#[test]
+fn nested_zero_test() {
+    let elapsed = nested_cholesky(|inner| format!("List[List[1, 0], List[{inner}, 1]]"));
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}
+
+/// CAS-650: the held call as a 1×1 matrix. Each level's pivot is the held
+/// call, which `positive` does not show positive, so the call stays; it is
+/// not approximated again at each level (2^n).
+#[test]
+fn nested_pivot() {
+    let elapsed = nested_cholesky(|inner| format!("List[List[{inner}]]"));
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}

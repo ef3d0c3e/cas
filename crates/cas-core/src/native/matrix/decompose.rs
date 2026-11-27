@@ -46,7 +46,8 @@
 //!   exponential is `expm`.
 //!
 //! Matrices larger than [`MAX_SIZE`] leave the call, as do eigenvalues
-//! without a closed form.
+//! without a closed form. A held entry is not approximated in a zero or
+//! positivity test: no 2^n re-evaluation when nested (CAS-650).
 
 #![allow(
     clippy::many_single_char_names,
@@ -154,7 +155,12 @@ fn is_zero(ev: &mut Eval<'_>, x: &Expr) -> Result<Option<bool>, EvalError> {
     if together == Expr::from(0) {
         return Ok(Some(true));
     }
-    // A numeric expression that Together leaves: its ball.
+    // A numeric expression that Together leaves: its ball. Another (a
+    // held call) is not evaluated again with fresh limits (CAS-650): not
+    // 0, as its approximation, left as it is, says.
+    if !together.is_numeric() {
+        return Ok(Some(false));
+    }
     let value = approximation(ev.context(), &together, 128)?;
     Ok(match value.view() {
         View::Ball(b) if b.contains_rational(&Rational::ZERO) => None,
@@ -308,6 +314,10 @@ fn positive(ev: &mut Eval<'_>, x: &Expr) -> Result<bool, EvalError> {
     let test = ev.eval(&Expr::call(Symbol::GREATER, [x.clone(), Expr::from(0)]))?;
     if test.as_symbol() == Some(Symbol::TRUE) {
         return Ok(true);
+    }
+    // A held call: not evaluated again with fresh limits (CAS-650).
+    if !x.is_numeric() {
+        return Ok(false);
     }
     let value = approximation(ev.context(), x, 128)?;
     Ok(matches!(value.view(), View::Ball(b) if b.sign() == Some(std::cmp::Ordering::Greater)))
