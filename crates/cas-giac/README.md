@@ -588,17 +588,18 @@ giac's answers in crates/cas-core/proto/wavelet/giac/p5.cas and p5.out):
   `hilbert(t^2,t)`, `hilbert(t,t)`, `hilbert(x)` giac's `undef` (C0081),
   `hilbert(exp(-t^2),t)` and `hilbert(f(t),t)` giac's inert
   `Hilbert(f,t)`;
-- 21 expression rows by `Simplify` of the difference (C0032), else values
+- 26 expression rows by `Simplify` of the difference (C0032), else values
   at two points: `sinc(x)`, its derivative, `tri(x)`, `tri(x-1)`, decimals
   within giac's 12 digits, `fourier(sinc(x),x,s)`, `hilbert` of cosines and
   sines (`hilbert(sin(t),t)` = `-cos(t)`, `hilbert(sin(a*t),t)` =
-  `-cos(t*a)*sign(a)`, values at `a = 7/10, 13/10`) and their sums;
+  `-cos(t*a)*sign(a)`, values at `a = 7/10, 13/10`) and their sums, and
+  of five rational functions by residues (CAS-654: `hilbert(1/(1+t^2),t)`
+  giac's `t/(t^2+1)`, `1/(4+t^2)`, `t/(1+t^2)`, `x/(1+x^2)`, `1/(1+t^4)`);
 - `boxcar(1,2)` and `boxcar(1,2,3,4)` stay with giac's "Bad Argument Type"
   as the warning;
-- departures: 10 `hilbert` rows giac closes where our Fourier transforms
-  leave a term, ours the inert `Hilbert(f,t)` (rational functions, whose
-  transform holds `e^(−|ω|)`, `hilbert(1/(1+t^2),t)` giac's `t/(t^2+1)`;
-  `sinc`; `boxcar(0,1,x)` and `rect(x)`, giac's
+- departures: 5 `hilbert` rows giac closes where our Fourier transforms
+  leave a term, ours the inert `Hilbert(f,t)` (`sinc`; `boxcar(0,1,x)` and
+  `rect(x)`, giac's
   logarithms); `sinc([0,pi,x])` (giac `[undef]`) and `tri([0,1/2])` (giac
   `poly1[1/2]`), ours mapped over the list.
 - `stft`, `istft` and `hht(…, output=matrix)` (CAS-648; giac's answers in

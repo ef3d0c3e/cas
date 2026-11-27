@@ -74,6 +74,43 @@ fn oscillations() {
     check_values("x", &[("HilbertMatrix[Sin[x]]", "Times[-1, Cos[x]]")]);
 }
 
+/// The residue rule (CAS-654); the forms from a sympy prototype.
+#[test]
+fn rational_functions() {
+    check(&[(
+        "HilbertMatrix[Power[Plus[1, Power[t, 2]], -1], t]",
+        "Times[t, Power[Plus[1, Power[t, 2]], -1]]",
+    )]);
+    check_values(
+        "t",
+        &[
+            (
+                "HilbertMatrix[Power[Plus[1, Power[t, 4]], -1], t]",
+                "Times[Power[2, 1/2], t, Plus[1, Power[t, 2]], Power[Times[2, Plus[1, Power[t, 4]]], -1]]",
+            ),
+            (
+                "HilbertMatrix[Power[Plus[1, Power[t, 2]], -2], t]",
+                "Times[t, Plus[3, Power[t, 2]], Power[Times[2, Power[Plus[1, Power[t, 2]], 2]], -1]]",
+            ),
+        ],
+    );
+    // Real poles, a polynomial part, a symbolic coefficient: not the rule's.
+    check(&[
+        (
+            "HilbertMatrix[Power[Plus[1, Times[-1, Power[t, 2]]], -1], t]",
+            "Hilbert[Power[Plus[1, Times[-1, Power[t, 2]]], -1], t]",
+        ),
+        (
+            "HilbertMatrix[Times[Power[t, 2], Power[Plus[1, Power[t, 2]], -1]], t]",
+            "Hilbert[Times[Power[t, 2], Power[Plus[1, Power[t, 2]], -1]], t]",
+        ),
+        (
+            "HilbertMatrix[Power[Plus[Power[a, 2], Power[t, 2]], -1], t]",
+            "Hilbert[Power[Plus[Power[a, 2], Power[t, 2]], -1], t]",
+        ),
+    ]);
+}
+
 #[test]
 fn constants_polynomials_and_inert() {
     check(&[

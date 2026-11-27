@@ -164,7 +164,8 @@ fn exact_rows() {
 }
 
 /// Expressions and decimals (p5.out): `Simplify` of the difference, else
-/// values at two points.
+/// values at two points; the `hilbert` of rational functions by residues
+/// (CAS-654).
 #[test]
 fn expression_rows() {
     let Some(giac) = giac() else {
@@ -196,6 +197,11 @@ fn expression_rows() {
         "hilbert(cos(t)+sin(2*t),t)",
         "hilbert(sin(a*t),t)",
         "hilbert(cos(a*t),t)",
+        "hilbert(1/(1+t^2),t)",
+        "hilbert(1/(4+t^2),t)",
+        "hilbert(t/(1+t^2),t)",
+        "hilbert(x/(1+x^2),x)",
+        "hilbert(1/(1+t^4),t)",
     ] {
         match (giac.value(input), ours(input)) {
             (Ok(theirs), Ok(mine)) if same_function(&ctx, &mine, &theirs) => {}
@@ -235,19 +241,13 @@ fn errors_stay() {
 }
 
 /// Departures (p5.out): giac closes the transform where our
-/// `FourierTransform` or `InverseFourierTransform` leaves a term (rational
-/// functions, whose transform holds `e^(−|ω|)`; `sinc`;
+/// `FourierTransform` or `InverseFourierTransform` leaves a term (`sinc`;
 /// the box); ours is the inert `Hilbert(f,t)`.
 #[test]
 fn hilbert_departures() {
     let giac = giac();
     let mut wrong = Vec::new();
     let rows = [
-        ("hilbert(1/(1+t^2),t)", "t/(t^2+1)"),
-        ("hilbert(1/(4+t^2),t)", "t/(2*t^2+8)"),
-        ("hilbert(t/(1+t^2),t)", "-1/(t^2+1)"),
-        ("hilbert(x/(1+x^2),x)", "-1/(x^2+1)"),
-        ("hilbert(1/(1+t^4),t)", "(t^3*sqrt(2)+t*sqrt(2))/(2*t^4+2)"),
         ("hilbert(sinc(x))", "(-cos(x)+1)/x"),
         ("hilbert(sinc(t),t)", "(-cos(t)+1)/t"),
         ("hilbert(sin(t)/t,t)", "(-cos(t)+1)/t"),
