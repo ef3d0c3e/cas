@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-27T09:59:46.742Z
+# filed through: 2026-11-27T11:52:50.055Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
@@ -139,4 +139,6 @@ R135 | 2026-11-27 | decision | in force | Generation 2 start (frontends) | A thi
 R136 | 2026-11-27 | decision | in force | Generation 2 start (frontends) | Phase 2.1 (the I3 carry-overs) runs before the language server, so CAS-650's 2^depth slowdown class… | .claude-state/journal/2026-11-27/111514-121r-claude-record.md
 R137 | 2026-11-27 | finding | in force | Generation 2 start (frontends) | Building the desktop app locally (cargo check) needs libwebkit2gtk-4.1-dev, which the dev machine l… | .claude-state/journal/2026-11-27/111514-121r-claude-record.md
 R138 | 2026-11-27 | open | in force | Generation 2 start (frontends) | install libwebkit2gtk-4.1-dev on the dev machine -> the developer's call, before the app phases if… | .claude-state/journal/2026-11-27/111514-121r-claude-record.md
-R139 | 2026-11-27 | open | in force | Generation 2 start (frontends) | the phase 2.1 plan (.run/plans/phase-2.1.md) is presented and awaiting the developer's decision. | .claude-state/journal/2026-11-27/111514-121r-claude-record.md
+R139 | 2026-11-27 | open | superseded by R140 | Generation 2 start (frontends) | the phase 2.1 plan (.run/plans/phase-2.1.md) is presented and awaiting the developer's decision. | .claude-state/journal/2026-11-27/111514-121r-claude-record.md
+R140 | 2026-11-27 | decision | in force | Phase 2.1 Engine carry-overs | Phase 2.1's plan is installed and runs. | .claude-state/journal/2026-11-27/130809-133r-claude-record.md
+R141 | 2026-11-27 | decision | in force | Phase 2.1 Engine carry-overs | The auditor's candidates were accepted. | .claude-state/journal/2026-11-27/130809-133r-claude-record.md
