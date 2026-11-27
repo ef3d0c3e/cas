@@ -107,3 +107,4 @@ Approved: 2026-11-27   Planner: claude-opus-5-5/medium   Plan-hash: 0f9b9f86179e
 - 2026-11-27 router: T8 next -> done
 - 2026-11-27 router: T9 next -> done
 - 2026-11-27 router: T10 next -> done
+- 2026-11-27 router: T11 done-when clarified: the sample-point guard refuses a user function that holds an own-head call whose arguments hold another own-head call (nesting depth >= 2); depth 1, such as FSolve[x - FSolve[y^2 - x, y], x], keeps answering. Tests: a 30-level nesting test per site (C0118) and a depth-1 held-call test.
