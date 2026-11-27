@@ -118,3 +118,4 @@ C0116 | Sweep skip guards test the drawn input, not the strategy flag; giac spac
 C0117 | A native's nested Context::eval gets fresh limits: 2^depth on nested arguments | fuzz,eval,timeout,limits,native,approximation,nesting | 2026-11-26 | 1.8/T10 | Fuzz 45856971637, T10.c1, CAS-649
 gen1 | Generation 1 entries | see cookbook/gen1/INDEX.md
 C0096 | CoefficientList is highest degree first; blind tests read it backwards | coefficientlist,polynomial,test,r74,order | 2026-11-27 | 2.1/T2 | CI 45995577911, T2.c9 9317acb
+C0118 | Nesting tests for an approximation guard: keep the inner call held at every level | native,approximation,nesting,test,held,guard | 2026-11-27 | 2.1/T3 | T3.c3 3838e8c CAS-650
