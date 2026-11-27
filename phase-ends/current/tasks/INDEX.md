@@ -9,3 +9,4 @@ T6 | done | drop the needless ,t,2) rewrite in euler_lagrange_assume.rs (I3) | -
 T7 | done | CI and Fuzz green on the pushed head, the phase's tickets done | - | tasks/T7.md | logs/T7.md | -
 T8 | done | phase cleanup | - | tasks/T8.md | logs/T8.md | -
 T9 | done | tool candidate audit_tool_source_prefix | - | tasks/T9.md | logs/T9.md | -
+T10 | done | guard the numeric natives' endpoint, guess and constant-subtree sites with is_numeric (CAS-650 class) | - | tasks/T10.md | logs/T10.md | -
