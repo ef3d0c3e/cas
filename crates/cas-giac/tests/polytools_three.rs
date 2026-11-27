@@ -189,6 +189,9 @@ fn departures() {
         // x y has two factors: giac's 1 is wrong.
         ("is_irreducible(x*y)", "1", "0"),
         ("is_irreducible(x*y+x)", "1", "0"),
+        // 2*(y+1)*(x^2*y-x^2-1), the sweep's shrunk input (2.1 T7): giac
+        // misses a factor in y alone.
+        ("is_irreducible((-2)+(-2)*y+(-2)*x^2+2*x^2*y^2)", "1", "0"),
     ];
     let mut wrong = Vec::new();
     for (input, answer, decided) in cases {
@@ -264,6 +267,63 @@ fn text(terms: &Terms) -> String {
     }
 }
 
+/// Whether the polynomial in `x`, `y` has `x` and, read as a polynomial in
+/// `x`, a content of positive degree in `y`: the gcd over ℚ[y] of its
+/// coefficients, by primitive pseudo-remainders on `i128`.
+fn y_content(p: &Terms) -> bool {
+    let mut rows: BTreeMap<u32, Vec<i128>> = BTreeMap::new();
+    for (e, &c) in p.iter().filter(|&(_, &c)| c != 0) {
+        rows.entry(e[0]).or_insert_with(|| vec![0; 3])[e[1] as usize] += i128::from(c);
+    }
+    if rows.keys().all(|&k| k == 0) {
+        return false;
+    }
+    let mut rows = rows.into_values();
+    let first = rows.next().unwrap_or_default();
+    let g = rows.fold(first, gcd_y);
+    g.iter().rposition(|&c| c != 0).is_some_and(|d| d > 0)
+}
+
+/// `a` with trailing zeros dropped and its integer content divided out.
+fn primitive(mut a: Vec<i128>) -> Vec<i128> {
+    while a.last() == Some(&0) {
+        a.pop();
+    }
+    let g = a.iter().fold(0i128, |g, &c| {
+        let (mut g, mut c) = (g, c.abs());
+        while c != 0 {
+            (g, c) = (c, g % c);
+        }
+        g
+    });
+    if g > 1 {
+        for c in &mut a {
+            *c /= g;
+        }
+    }
+    a
+}
+
+/// The gcd in ℚ[y] of `a` and `b`, up to a constant (empty for 0).
+fn gcd_y(a: Vec<i128>, b: Vec<i128>) -> Vec<i128> {
+    let (mut a, mut b) = (primitive(a), primitive(b));
+    while !b.is_empty() {
+        while a.len() >= b.len() && !a.is_empty() {
+            let (la, lb) = (a[a.len() - 1], b[b.len() - 1]);
+            let shift = a.len() - b.len();
+            for c in &mut a {
+                *c *= lb;
+            }
+            for (i, &c) in b.iter().enumerate() {
+                a[i + shift] -= la * c;
+            }
+            a = primitive(a);
+        }
+        (a, b) = (b, a);
+    }
+    a
+}
+
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]
 
@@ -313,10 +373,9 @@ proptest! {
         let Some(giac) = giac() else {
             return Ok(());
         };
-        // A monomial content, as in x*y and x*y+x: giac's 1 there is wrong
-        // (README departure).
-        let content = (0..2).any(|v| p.keys().all(|e| e[v] > 0));
-        if content {
+        // A factor in y alone, as in x*y, x*y+x and (y+1)*(x^2*y-x^2-1):
+        // giac's 1 there is wrong (README departure).
+        if y_content(&p) {
             return Ok(());
         }
         let input = format!("is_irreducible({})", text(&p));

@@ -200,12 +200,13 @@ list and one not monic left (giac errs on both); `factor_xn`,
 `total_degree` and `is_irreducible` leave a non-polynomial (giac's
 `1+x^-1`, `1`, an error); `factor_xn` with a second argument and
 `homogeneize` of a list stay (giac echoes them); `bezoutian` with a
-variable stays (giac errs); `is_irreducible(x*y)` and `(x*y+x)` are 0, where
-giac's 1 is wrong; and `is_irreducible(... mod 7)` is giac's 1, as the
+variable stays (giac errs); `is_irreducible(x*y)`, `(x*y+x)` and
+`(2*(y+1)*(x^2*y-x^2-1))` are 0, where giac's 1 is wrong (it misses a factor
+in `y` alone); and `is_irreducible(... mod 7)` is giac's 1, as the
 language does not read `mod`. Random inputs, 128 cases a run, go to
 `fcoeff`, `total_degree`, `homogeneize` and `is_irreducible`; the last skips
-polynomials with a monomial content, such as `x*y+x`, where giac's 1 is the
-departure above.
+polynomials in `x` whose content is a polynomial in `y` of positive degree,
+such as `x*y+x`, where giac's 1 is the departure above.
 
 `tests/groebner_two.rs`, Gröbner tools II (CAS-541, CAS-542): giac's
 `in_ideal` and `gbasis_vars` compared exactly, `syzygy`'s generators as
