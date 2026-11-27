@@ -11,8 +11,20 @@ Built by `tools/phaseend_index.py history` from the PhaseEnds and rebuilt at eac
 - 1.5 | 2026-11-24 | Optimization II | Phase 1.5 Optimization II: CAS-DOC-57 (still a draft in Lific) sorts 50 giac names; tickets CAS-600..610 are done.
 - 1.6 | 2026-11-25 | Strings, printers and session commands | Phase 1.6 Strings, printers and session commands: CAS-DOC-58 (still a draft in Lific) sorts 72 giac entries; tickets CAS-611..623 are done.
 - 1.7 | 2026-11-26 | Statistics III and signal processing II | Phase 1.7 Statistics III and signal processing II: CAS-DOC-59 (still a draft in Lific) covers 37 giac entries; tickets CAS-624..635 are done, and CAS-636 (diff(e,x,n) doesn't take the nth derivative)…
+- 1.8 | 2026-11-27 | Validation | Phase 1.8 Validation: final gate green on 615a65e (CI 45885347583, push Fuzz 45885347505, one-hour eval re-run 45891167338).
 
 ## This generation's recaps (1, newest first)
+
+### 1.8: Validation (2026-11-27)
+
+Phase 1.8 Validation: final gate green on 615a65e (CI 45885347583, push Fuzz 45885347505, one-hour eval re-run 45891167338). CAS-636..649 are done. Built and fixed:
+- Fixes: the Weibull moment fit uses the correct equation, with giac's as a departure row (CAS-637); diff(e,x,n) takes the nth derivative via rule D/nth (CAS-636); nested Together on a zero denominator ends (CAS-638); pivot leaves rows with 0 in the pivot column alone (CAS-528); period's recursion is bounded; MarkovChain refuses a non-numeric eps before re-evaluating it, which removes the 2^depth cost the campaign found (CAS-649).
+- Gap ledger (end of ## Tests in crates/cas-giac/README.md, scripts/gap_ledger.py, input kept in crates/cas-giac/gap/missing_described-2026-11-26.txt): each of the 1004 missing entries sits in exactly one bucket. 50 were computational. T3-T6 built 46 of them plus 15 alias spellings, so coverage went from 734 to 786 and 952 are still missing. Not built (R112): GF (with order in a finite field), hasard, taux_accroissement, moyal (a stub in giac 1.9). The rest are out of scope: new module, plotting, syntax, I/O.
+- Built under giac names: the T3 matrix commands, 19 T4 expression/calculus/integer entries, the T5 list/date/polynomial entries, choice, kmeans/cluster output=part, index= and string clustering, and the T6 sinc/tri/boxcar/stft/istft/hht and hilbert(f,t).
+- 57 random oracle sweeps (T7 16, T8 41), 128 cases each, on every CI run. About a dozen giac quirks are recorded as departures (one-variable modgcd drops content; ".." inside strings gets a space; mixdown on 8-bit clips; splice crossfade overrun).
+- One-hour campaign (Fuzz 45856971637 on 76c1018): 55 of 56 targets clean, peak rss 498 MB of 2048; the eval timeout became CAS-649. Every fuzz run after T4 had been cancelled before finishing, which hid a period crash; the replay mode -f replay=true now exists, and a fuzz run counts only if it completes. fuzz.yml's job cap is 120 min (was 60).
+- Cleanup: T4 prototypes are in crates/cas-core/proto/leftovers/; .run/logs/gen1-gap/ is deleted (R45). Cookbook C0094-C0117.
+Open: CAS-650 backlog (eight more functions re-evaluate an argument under fresh limits); for gen 2, markov/lpsolve sweeps and a residue rule for rational Hilbert transforms; Fill inside begin…end; euler_lagrange_assume.rs:45's needless rewrite; publish CAS-DOC-57/58/59; commit_task.sh still sweeps logs/; log-only commits unpushed.
 
 ### 1.7: Statistics III and signal processing II (2026-11-26)
 

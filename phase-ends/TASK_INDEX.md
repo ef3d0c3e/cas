@@ -75,3 +75,15 @@
 1.7 | T10 | done | push master for the phase's final CI and Fuzz runs | - | phase-1.7/tasks/T10.md | phase-1.7/logs/T10.md | -
 1.7 | T11 | done | CI and Fuzz check on the pushed head; tickets done, CAS-DOC-59 in step, the eval target's memory read | - | phase-1.7/tasks/T11.md | phase-1.7/logs/T11.md | -
 1.7 | T12 | done | phase cleanup | - | phase-1.7/tasks/T12.md | phase-1.7/logs/T12.md | -
+1.8 | T1 | done | correct Weibull moment fit with a departure row (I2) and diff(e,x,n) as the nth derivative (CAS-636) | - | phase-1.8/tasks/T1.md | phase-1.8/logs/T1.md | R1.8-002
+1.8 | T2 | done | gap ledger: every missing giac entry accounted for, the 49 split into build groups, tickets filed (I2, R44) | - | phase-1.8/tasks/T2.md | phase-1.8/logs/T2.md | R1.8-003
+1.8 | T3 | done | Algebra matrix leftovers (REDIM, border, semi_augment, simult, newMat, Fill, upper, lower, a2q, q2a, basis, changebase, moyal, trn) | - | phase-1.8/tasks/T3.md | phase-1.8/logs/T3.md | -
+1.8 | T4 | done | Expressions, Calculus, Integers and Numerical-analysis gap leftovers (CAS-640..643) | - | phase-1.8/tasks/T4.md | phase-1.8/logs/T4.md | R1.8-003
+1.8 | T5 | done | Language, Polynomials, Statistics and Infrastructure leftovers and kmeans/cluster options | - | phase-1.8/tasks/T5.md | phase-1.8/logs/T5.md | R1.8-003
+1.8 | T6 | done | Signal processing leftovers (stft, istft, hht, boxcar, tri, sinc) and hilbert(f,t) | - | phase-1.8/tasks/T6.md | phase-1.8/logs/T6.md | R1.8-003
+1.8 | T7 | done | random-input oracle sweeps: polynomial tools, real roots, gcd by name, partial fractions (G1, G2) | - | phase-1.8/tasks/T7.md | phase-1.8/logs/T7.md | R1.8-001,R1.8-004
+1.8 | T8 | done | random-input oracle sweeps: lists, sorts, matrices, integers, TI names, exact numerics, ASCII strings, sound codes (G3, G4, G5) | - | phase-1.8/tasks/T8.md | phase-1.8/logs/T8.md | R1.8-001,R1.8-004
+1.8 | T9 | done | raise fuzz.yml's job cap for one-hour targets and push the campaign head | - | phase-1.8/tasks/T9.md | phase-1.8/logs/T9.md | -
+1.8 | T10 | done | one-hour-per-target fuzz campaign on T9's head; findings triaged | - | phase-1.8/tasks/T10.md | phase-1.8/logs/T10.md | -
+1.8 | T11 | done | campaign findings fixed under regression tests; final gate green; tickets done | - | phase-1.8/tasks/T11.md | phase-1.8/logs/T11.md | -
+1.8 | T12 | done | phase cleanup | - | phase-1.8/tasks/T12.md | phase-1.8/logs/T12.md | -

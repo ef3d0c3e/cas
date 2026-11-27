@@ -1,6 +1,2 @@
 # Research reports -- this phase
 # id | task | title | tags | agent | date | lines
-R1.8-001 | phase 1.8 plan, random-input oracle sweeps over gen 1 builtins, following tests/polynomials.rs | giac oracle random sweep pattern (crates/cas-giac) for phase 1.8 | cas-giac, proptest, oracle, giac, ci, phase-1.8 | retriever-code | 2026-11-26 | 51 lines
-R1.8-002 | phase 1.8 plan lookups (Weibull equation fix, CAS-636, README ## Tests gap accounting) | Weibull moment fit, diff's order argument, cas-giac README Tests | weibull, randvar, diff, CAS-636, cas-giac, README | retriever-code | 2026-11-26 | 49 lines
-R1.8-003 | bucket every line of .run/1.8/gap/missing_described.txt (N, P, S, I, M, D, A, C) for the phase 1.8 gap-check plan; name the bucket of changebase, semi_augment, divis, hilbert, kmeans/cluster options | Gap buckets for the 1004 described giac entries (missing_described.txt) | giac, gen1, gap, buckets, validation-1.8 | retriever-digest | 2026-11-26 | 84 lines
-R1.8-004 | Phase 1.8 (Validation) plan. List the builtin families generation 1 added in phases 1.2 to 1.7, judge each for a random-input giac sweep, and propose 3-5 sweep groups. | Generation 1 builtin families: suitability for random-input oracle sweeps against giac (phases 1.2 to 1.7) | phase-1.8, validation, giac, oracle-sweep, departures, generation-1 | retriever-digest | 2026-11-26 | 69 lines
