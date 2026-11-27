@@ -656,6 +656,43 @@ fn polynomial_fit_function() {
     }
 }
 
+/// CAS-650: a range end holding a held `PolynomialFit` 30 deep is refused
+/// at once, not approximated again at each level; `Pi/4` still fits, `exp`
+/// at `1/2` within `10⁻²`.
+#[test]
+fn polynomial_fit_nested_range() {
+    use crate::expr::View;
+    let ctx = Context::new();
+    let mut text = String::from("y");
+    for _ in 0..30 {
+        text = format!("PolynomialFit[Exp[x], Equation[x, Range[0, {text}]]]");
+    }
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = ctx.eval(&e).unwrap();
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+    let found = ctx
+        .eval(&read(
+            "PolynomialFit[Exp[x], Equation[x, Range[0, Times[1/4, Pi]]]]",
+        ))
+        .unwrap();
+    let list = ctx
+        .eval(&Expr::call(
+            Symbol::COEFFICIENT_LIST,
+            [found.clone(), Expr::symbol("x")],
+        ))
+        .unwrap();
+    let value = list.args().iter().rev().fold(0.0, |s, c| {
+        let View::Ball(b) = c.view() else {
+            panic!("{c:?} is not a ball");
+        };
+        s * 0.5 + b.mid().to_f64()
+    });
+    assert!((value - 0.5_f64.exp()).abs() <= 1e-2, "{found:?}");
+}
+
 /// What stays: a repeated abscissa, lists of unequal lengths, abscissas
 /// not increasing, Thiele's differences vanishing at some points only, a
 /// degree 0.

@@ -46,7 +46,9 @@
 //! integral `NIntegrate` leaves, and any size past the caps: [`MAX_POINTS`]
 //! points, [`MAX_DEGREE`] for `limit` and `degree`, [`MAX_FIT_WORK`] for
 //! `m (n + 1)` of a data fit (`n` the most steps) and nodes `· (limit + 1)`.
-//! Each call that answers takes one step, its builtin's name.
+//! Each call that answers takes one step, its builtin's name. A range end
+//! not structurally numeric is refused before `approximation`, which would
+//! evaluate it again (CAS-650).
 
 use cas_num::ball::{Ball, ComplexBall, Float};
 use cas_num::{Integer, Rational};
@@ -274,6 +276,7 @@ fn ball(ev: &Eval<'_>, e: &Expr, prec: u64) -> Option<Ball> {
     }
     let value = match e.view() {
         View::Ball(b) => return b.is_finite().then(|| b.clone()),
+        _ if !e.is_numeric() => return None,
         _ => approximation(ev.context(), e, prec).ok()?,
     };
     match value.view() {
