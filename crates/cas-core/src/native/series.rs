@@ -33,6 +33,8 @@
 //! told from 0 by its ball at 128 bits, and one around 0 leaves the
 //! expansion undecided, with no series, rather than divided by
 //! (CAS-DOC-25 §3, CAS-314): `sin²1 + cos²1 − 1` is such a number.
+//! A coefficient not structurally numeric (a held call) is not approximated
+//! again with fresh limits, 2^n for a held `Series` n deep (CAS-650).
 
 #![allow(
     clippy::many_single_char_names,
@@ -189,11 +191,12 @@ impl<'a, 'e> Expander<'a, 'e> {
         if self.eval(&Expr::call(Symbol::TOGETHER, [c.clone()]))? == Expr::from(0) {
             return Ok(true);
         }
-        let around_zero = approximation(self.ev.context(), c, 128).is_ok_and(|v| match v.view() {
-            View::Ball(b) => b.contains_rational(&Rational::ZERO),
-            View::ComplexBall(z) => z.may_be_zero(),
-            _ => false,
-        });
+        let around_zero = c.is_numeric()
+            && approximation(self.ev.context(), c, 128).is_ok_and(|v| match v.view() {
+                View::Ball(b) => b.contains_rational(&Rational::ZERO),
+                View::ComplexBall(z) => z.may_be_zero(),
+                _ => false,
+            });
         if around_zero && self.undecided.is_none() {
             self.undecided = Some(c.clone());
         }
@@ -459,7 +462,7 @@ impl<'a, 'e> Expander<'a, 'e> {
             Sign::Zero => return Some(Ordering::Equal),
             _ => {}
         }
-        if c.contains(&log_t()) {
+        if c.contains(&log_t()) || !c.is_numeric() {
             return None;
         }
         let value = approximation(self.ev.context(), c, 128).ok()?;

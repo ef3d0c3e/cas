@@ -499,3 +499,23 @@ fn wz_certificates() {
         ),
     ]);
 }
+
+/// CAS-650: an infinite `Sum` 30 deep stays at once, not approximated again
+/// at each level (2^n). Each level sums `L` for `k` from 1 to ∞ in an index
+/// of its own, `L` the level below, held: a term without `k` is ±∞ by its
+/// sign, so `infinite::sign` is asked for the held call; with none known it
+/// stays.
+#[test]
+fn nested_infinite() {
+    let mut text = String::from("c");
+    for i in 0..30 {
+        text = format!("Sum[{text}, k{i}, 1, Infinity]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = ctx.eval(&e).unwrap();
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}

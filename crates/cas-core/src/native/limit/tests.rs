@@ -179,3 +179,23 @@ fn sums_term_by_term() {
         assert_eq!(found, want, "{input}");
     }
 }
+
+/// CAS-650: a `Limit` 30 deep stays at once, not approximated again at each
+/// level (2^n). Each level is `L x/|x|` at 0 in a variable of its own, `L`
+/// the level below, held: the leading coefficient is `L` from the right and
+/// `−L` from the left, so `decided` sees the held call on both sides; the
+/// sides differ and the product does not expand to a sum, so it stays.
+#[test]
+fn nested_coefficient() {
+    let mut text = String::from("c");
+    for i in 0..30 {
+        text = format!("Limit[Times[{text}, x{i}, Power[Abs[x{i}], -1]], x{i}, 0]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = ctx.eval(&e).unwrap();
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}

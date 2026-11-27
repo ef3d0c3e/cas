@@ -316,3 +316,23 @@ fn reversion() {
         assert_eq!(found.head(), Some(&Expr::from(Symbol::REVERT)), "{input}");
     }
 }
+
+/// CAS-650: a `Series` 30 deep stays at once, not approximated again at each
+/// level (2^n). Each level is `|L + x|` at 0 in a variable of its own, `L`
+/// the level below, held: `L` is the constant coefficient, which
+/// `Expander::is_zero` checks and `Expander::sign` is asked for `|·|`; with
+/// no sign known it has no series, so it stays.
+#[test]
+fn nested_coefficient() {
+    let mut text = String::from("c");
+    for i in 0..30 {
+        text = format!("Series[Abs[Plus[{text}, x{i}]], x{i}, 0, 2]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = ctx.eval(&e).unwrap();
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}

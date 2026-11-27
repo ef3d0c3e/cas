@@ -22,6 +22,9 @@
 //! `limit(f, x, a, dir)`), `Limit[f, x == a]` and `Limit[f, x == a, dir]`
 //! (giac's `limit(f, x=a, dir)`), and Mathematica's `Limit[f, x -> a]`;
 //! `dir` 1 from the right, -1 from the left, 0 for both sides.
+//!
+//! A coefficient not structurally numeric (a held call) is not approximated
+//! again with fresh limits, 2^n for a held `Limit` n deep (CAS-650).
 
 #![allow(
     clippy::many_single_char_names,
@@ -303,6 +306,9 @@ fn leading(
 /// its ball; any other, as one with parameters, is taken as it is.
 fn decided(ev: &Eval<'_>, c: &Expr) -> bool {
     if c.is_number() {
+        return true;
+    }
+    if !c.is_numeric() {
         return true;
     }
     let Ok(value) = approximation(ev.context(), c, 128) else {

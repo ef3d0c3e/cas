@@ -25,6 +25,10 @@
 //!   finite sums beside them, are that infinity.
 //! - `−Infinity` as the lower bound: `Σ_{k=−∞}^{b} f(k) =
 //!   Σ_{k=−b}^{∞} f(−k)`; both bounds infinite, the halves from 0 and 1.
+//!
+//! A term not structurally numeric (a held call) has its sign from the
+//! assumptions only, never approximated again with fresh limits, 2^n for a
+//! held `Sum` n deep (CAS-650).
 
 #![allow(
     clippy::many_single_char_names,
@@ -244,7 +248,7 @@ fn sign(ev: &Eval<'_>, x: &Expr) -> Option<bool> {
         Sign::Negative => return Some(false),
         _ => {}
     }
-    if undefined(x) {
+    if undefined(x) || !x.is_numeric() {
         return None;
     }
     let value = approximation(ev.context(), x, 128).ok()?;
