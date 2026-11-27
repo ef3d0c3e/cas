@@ -129,6 +129,10 @@ fn clips_and_channels() {
             "List[7301/32768, 0, 7301/8192]",
         ),
         (
+            cd(&s6, "Equation[range, Range[1, Times[1/2, Pi]]]"),
+            "List[7301/32768]",
+        ),
+        (
             cd(S6, "Equation[range, List[1, 3]]"),
             "List[-7301/16384, 7301/32768, 0]",
         ),
@@ -282,6 +286,10 @@ fn sound_seconds() {
             "SoundSeconds[2, 3]".to_owned(),
             "List[0, 1/3, 2/3, 1, 4/3, 5/3]",
         ),
+        (
+            "SoundSeconds[Times[1/1000, Pi], 1000]".to_owned(),
+            "List[0, 1/1000, 1/500, 3/1000]",
+        ),
     ];
     check(&ctx, &cases);
     for (input, first) in [
@@ -293,6 +301,32 @@ fn sound_seconds() {
     ] {
         let found = eval(&ctx, input);
         assert_eq!(&found.args()[..4], eval(&ctx, first).args(), "{input}");
+    }
+}
+
+/// CAS-650: channel data, a length and a range end holding a held call 30
+/// deep are refused at once, not approximated again at each level.
+#[test]
+fn nested_arguments() {
+    let ctx = Context::new();
+    let nest = |form: &dyn Fn(&str) -> String| {
+        let mut text = String::from("x");
+        for _ in 0..30 {
+            text = form(&text);
+        }
+        text
+    };
+    for text in [
+        nest(&|t| w(&format!("List[{t}]"))),
+        nest(&|t| format!("SoundSeconds[{t}]")),
+        nest(&|t| cd(A, &format!("Equation[range, Range[0, {t}]]"))),
+    ] {
+        let e = read(&text);
+        let start = std::time::Instant::now();
+        let (found, _) = ctx.eval_with(&e, &EvalOptions::default());
+        let elapsed = start.elapsed();
+        assert_eq!(found.unwrap().head(), e.head(), "{text}");
+        assert!(elapsed.as_secs_f64() < 2.0, "{text}: {elapsed:?}");
     }
 }
 

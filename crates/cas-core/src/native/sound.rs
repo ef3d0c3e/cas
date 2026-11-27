@@ -52,6 +52,8 @@
 //! :2554-2602), `Stereo2Mono` (`stereo2mono`, :2339), `Mixdown`
 //! (`mixdown`, :1791-1843) and `Splice` (`splice`, :1738-1773), live in
 //! [`edits`]; `Resample` (`resample`, CAS-633, :2859-2881) in [`resample`].
+//! A real argument not structurally numeric is refused before
+//! `approximation`, which would evaluate it again (CAS-650).
 
 use std::cmp::Ordering;
 
@@ -198,6 +200,9 @@ fn real(ev: &Eval<'_>, x: &Expr) -> Option<Real> {
         View::Ball(_) => from_ball(x),
         View::Complex(_) | View::ComplexBall(_) | View::String(_) => None,
         View::Symbol(_) | View::Apply { .. } => {
+            if !x.is_numeric() {
+                return None;
+            }
             let a = approximation(ev.context(), x, 128).ok()?;
             from_ball(&a)
         }
