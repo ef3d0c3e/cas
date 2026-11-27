@@ -1,0 +1,9 @@
+# Audit — 2026-11-27, phase 1.8 (previous 1.7)
+## Verdicts
+- tool-source reads (4, main/pa-coder/retriever-code) | script-fix | 3 of 4 rows are project code (`crates/cas-core/src/native/polytools/{roots,two}.rs`) matched by the bare substring `tools/` in `_TOOL_SOURCE_PREFIXES` (`~/.claude/pa3/pa/audit.py:1142`, test at `:222`); the 4th (main, `.claude/settings.local.json`, 61 chars) is a real but trivial read; packaged tool, so a candidate: 0.7k tokens of false rows × $0.20/Mtok × 0 + 0.7k × $7.95/Mtok write = $0.006 per audit, plus one auditor run spawned per phase on a false flag
+- whole reads over 20.0k by main (sparse.rs 20.1k ×2, builtin.rs 23.1k) | guard | main read project source whole past `guard.whole_read_chars` instead of outline then range; the rows are identical to 1.7's (same files, same chars), so these may be the same events counted in both open-ended windows: insufficient in the tables to tell; the next audit should print each flagged row's timestamp and session id
+## Tool candidates
+- Tool candidate: audit_tool_source_prefix | does: matches tool-source prefixes as path segments relative to the project root (`<root>/tools/`, `<root>/.claude/`, install dir) instead of bare substrings | replaces: auditor runs judging project files under `*tools/` dirs (`polytools/`) as tool-source reads | occurrences: 3 rows in 1.7 and 3 in 1.8 | saving: $0.006 per audit (0.7k tokens on vanilla-net-v4) plus the false-flag auditor spawn | build: S
+## Rule candidates
+- Rule candidate: main (mod/partner) never Reads a project source file over 20k chars whole; it outlines it and reads by range, or briefs a retriever | from: whole reads over 20.0k by main
+- Rule candidate: the phase audit prints a timestamp and session id beside each flagged row so a row repeated from the previous phase can be told from a recurrence | from: whole reads over 20.0k by main
