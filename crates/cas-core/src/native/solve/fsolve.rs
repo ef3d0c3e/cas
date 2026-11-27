@@ -39,6 +39,7 @@
 //!   `[x0, x1]`, which a bracketing method takes as a range.
 //!
 //! CAS-650: `point` refuses what is not numeric before `approximation`.
+//! CAS-650: a function holding a nested own-head call (depth >= 2) leaves the call.
 
 use std::cmp::Ordering;
 
@@ -47,7 +48,7 @@ use cas_num::ball::{Ball, ComplexBall, Float, Round, polynomial_roots};
 use cas_num::{Complex, Integer, Rational};
 use cas_poly::{Cancel, Sparse, SparseRing};
 
-use super::super::approximation;
+use super::super::{approximation, holds_nested};
 use super::{MAX_NUMERIC_DEGREE, MAX_ROOT_BITS, sides};
 use crate::context::{Context, EvalError};
 use crate::eval::Eval;
@@ -152,7 +153,7 @@ pub(in crate::native) fn fsolve(ev: &mut Eval<'_>, e: &Expr) -> Native {
         Some((l, r)) => ev.eval(&(l.clone() - r.clone()))?,
         None => eqn.clone(),
     };
-    if !f.contains(x) || !numeric(ev.context(), &f, x) {
+    if !f.contains(x) || holds_nested(&f, Symbol::FSOLVE) || !numeric(ev.context(), &f, x) {
         return Ok(None);
     }
     let bits = ev.context().working_precision();

@@ -101,6 +101,8 @@ use crate::context::Context;
 use crate::eval::NativeFn;
 use crate::expr::Expr;
 use crate::symbol::Symbol;
+use foldhash::fast::FixedState;
+use std::collections::HashSet;
 
 /// The native functions of the builtins, by id: dispatching to one is an
 /// array read (CAS-DOC-4 §6).
@@ -1434,6 +1436,47 @@ pub(crate) fn value(context: &Context, s: Symbol) -> Option<Expr> {
         // The settings (CAS-151, CAS-545, CAS-617, CAS-618).
         _ => settings::value(context, s),
     }
+}
+
+/// Whether `e` holds a call of `head` whose arguments hold another call of
+/// `head` (depth >= 2), by structure alone, without evaluating (CAS-650).
+/// A native whose function so holds its own head leaves the call: each
+/// `approximation` of it would solve the level below again, 2^n in all.
+pub(crate) fn holds_nested(e: &Expr, head: Symbol) -> bool {
+    let head = Expr::from(head);
+    if !e.contains(&head) {
+        return false;
+    }
+    let mut seen = HashSet::with_hasher(FixedState::default());
+    let mut stack = vec![e];
+    while let Some(n) = stack.pop() {
+        if !seen.insert(n) {
+            continue;
+        }
+        if n.head() == Some(&head) && n.args().iter().any(|a| holds_call(a, &head)) {
+            return true;
+        }
+        stack.extend(n.head());
+        stack.extend(n.args());
+    }
+    false
+}
+
+/// Whether `e` holds a call of `head`.
+fn holds_call(e: &Expr, head: &Expr) -> bool {
+    let mut seen = HashSet::with_hasher(FixedState::default());
+    let mut stack = vec![e];
+    while let Some(n) = stack.pop() {
+        if !seen.insert(n) {
+            continue;
+        }
+        if n.head() == Some(head) {
+            return true;
+        }
+        stack.extend(n.head());
+        stack.extend(n.args());
+    }
+    false
 }
 
 #[cfg(test)]

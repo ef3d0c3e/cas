@@ -77,6 +77,7 @@
 //!   no feasible point leaves the call with a warning.
 //!
 //! CAS-650: `double` refuses what is not numeric before `approximation`.
+//! CAS-650: a function holding a nested own-head call (depth >= 2) leaves the call.
 
 #![allow(
     clippy::many_single_char_names,
@@ -86,9 +87,9 @@
 use cas_num::Rational;
 use cas_num::ball::{Ball, Float};
 
-use super::super::approximation;
 use super::super::ndsolve::rhs::Node;
 use super::super::solve::fsolve::systems::certified_root_at;
+use super::super::{approximation, holds_nested};
 use super::lpsolve::{exact, linear, lp_solve, symbols_in_order};
 use super::nlpinteger::nlp_integer;
 use crate::context::{Context, EvalError};
@@ -199,6 +200,10 @@ enum Read {
 
 /// `NLPSolve[f, constraints, bounds…, options…]`.
 pub(in crate::native) fn nlp_solve(ev: &mut Eval<'_>, e: &Expr) -> Native {
+    // Before `program`, whose bounds already approximate.
+    if e.args().iter().any(|a| holds_nested(a, Symbol::NLP_SOLVE)) {
+        return Ok(None);
+    }
     let program = match program(ev, e)? {
         Read::Nonlinear(p) => p,
         Read::Linear(call, xs) => return linear_program(ev, &call, &xs),

@@ -24,11 +24,12 @@
 //!   distinct symbols leave the call.
 //!
 //! CAS-650: `point` refuses what is not numeric before `approximation`.
+//! CAS-650: a function holding a nested own-head call (depth >= 2) leaves the call.
 
 use cas_num::ball::ComplexBall;
 use cas_num::{Integer, Rational};
 
-use super::super::super::approximation;
+use super::super::super::{approximation, holds_nested};
 use super::super::sides;
 use super::systems::{MAX_UNKNOWNS, certified, complex, distinct_symbols, listed};
 use super::{list, polynomial};
@@ -79,7 +80,7 @@ pub(in crate::native) fn cfsolve(ev: &mut Eval<'_>, e: &Expr) -> Native {
             None => eqn.clone(),
         });
     }
-    if !numeric(ev.context(), &fs, &vars) {
+    if fs.iter().any(|f| holds_nested(f, Symbol::CFSOLVE)) || !numeric(ev.context(), &fs, &vars) {
         return Ok(None);
     }
     let bits = ev.context().working_precision();

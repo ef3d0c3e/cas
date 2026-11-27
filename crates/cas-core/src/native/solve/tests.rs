@@ -1383,3 +1383,90 @@ fn nested_cfsolve_start() {
     assert_eq!(found.unwrap().head(), e.head());
     assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
 }
+
+/// `text` evaluated, 30 deep as built by `level` from `"c"`: the call
+/// stays, at once.
+fn nested_own_head(level: impl Fn(usize, &str) -> String) {
+    let mut text = String::from("c");
+    for k in 0..30 {
+        text = level(k, &text);
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let (found, _) = ctx.eval_with(&e, &EvalOptions::default());
+    let elapsed = start.elapsed();
+    assert_eq!(found.unwrap().head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}
+
+/// CAS-650: `FSolve` of a function holding the level below, 30 deep,
+/// stays at once. It reaches the `holds_nested` guard in `fsolve`
+/// (fsolve.rs) before `numeric`; level 0 has the parameter `c`, so each
+/// inner call stays held, and each level solves in a variable of its own.
+#[test]
+fn nested_fsolve_function() {
+    nested_own_head(|k, text| format!("FSolve[Plus[x{k}, {text}], x{k}]"));
+}
+
+/// CAS-650: `FSolve` holding `FSolve` once still answers, the `fsolve`
+/// guard (fsolve.rs) passing depth 1: `x² − 2` by Newton from 1, the 2
+/// from the inner call; a held depth-1 function is not refused, depth 2 is.
+#[test]
+fn fsolve_in_fsolve() {
+    let (a, b) = bare_value("FSolve[Plus[Power[x, 2], Times[-1, FSolve[Plus[-2, y], y]]], x, 1]");
+    assert!(
+        (a - std::f64::consts::SQRT_2).abs() < 1e-9 && b == 0.0,
+        "{a} {b}"
+    );
+    let one = read("Plus[x1, FSolve[Plus[x0, c], x0]]");
+    assert!(!crate::native::holds_nested(&one, crate::Symbol::FSOLVE));
+    let two = read("Plus[x2, FSolve[Plus[x1, FSolve[Plus[x0, c], x0]], x1]]");
+    assert!(crate::native::holds_nested(&two, crate::Symbol::FSOLVE));
+}
+
+/// CAS-650: an `FSolve` system of a function holding the level below, 30
+/// deep, stays at once. It reaches the `holds_nested` guard in `system`
+/// (fsolve/systems.rs) before `numeric`; level 0 has the parameter `c`, so
+/// each inner call stays held, and each level solves in a variable of its
+/// own.
+#[test]
+fn nested_fsolve_system() {
+    nested_own_head(|k, text| format!("FSolve[List[Plus[x{k}, {text}]], List[x{k}]]"));
+}
+
+/// CAS-650: an `FSolve` system holding `FSolve` once still answers, the
+/// `system` guard (fsolve/systems.rs) passing depth 1: `{x² − 2}` from 1,
+/// the 2 from the inner call.
+#[test]
+fn fsolve_in_fsolve_system() {
+    let input =
+        "FSolve[List[Plus[Power[x, 2], Times[-1, FSolve[Plus[-2, y], y]]]], List[x], List[1]]";
+    let found = Context::new().eval(&read(input)).unwrap();
+    let values = flat_values(&found).unwrap_or_else(|| panic!("{found:?}"));
+    assert!(
+        values.len() == 1 && (values[0] - std::f64::consts::SQRT_2).abs() < 1e-9,
+        "{found:?}"
+    );
+}
+
+/// CAS-650: `CFSolve` of a function holding the level below, 30 deep,
+/// stays at once. It reaches the `holds_nested` guard in `cfsolve`
+/// (fsolve/complex.rs) before `numeric`; level 0 has the parameter `c`, so
+/// each inner call stays held, and each level solves in a variable of its
+/// own.
+#[test]
+fn nested_cfsolve_function() {
+    nested_own_head(|k, text| format!("CFSolve[Plus[x{k}, {text}], x{k}]"));
+}
+
+/// CAS-650: `CFSolve` holding `CFSolve` once still answers, the `cfsolve`
+/// guard (fsolve/complex.rs) passing depth 1: `x² + 1` from `1 + i`, root
+/// `i`, the 1 the inner call's one root.
+#[test]
+fn cfsolve_in_cfsolve() {
+    let (a, b) = bare_value(
+        "CFSolve[Plus[Power[x, 2], Part[CFSolve[Plus[-1, y], y], 1]], Equation[x, Complex[1, 1]]]",
+    );
+    assert!(a.abs() < 1e-9 && (b - 1.0).abs() < 1e-9, "{a} {b}");
+}

@@ -585,3 +585,38 @@ fn nested_nlp_bound() {
     assert_eq!(found.unwrap().head(), e.head());
     assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
 }
+
+/// CAS-650: `NLPSolve` of `x²` with a bound `x = h..1` holding the level
+/// below in its lower end, 30 deep, stays at once. It reaches the
+/// `holds_nested` guard in `nlp_solve` (nlpsolve.rs), before `program`'s
+/// bounds approximate; level 0's end `c` is no number, so each inner call
+/// stays held, and the bound's ends add no variable.
+#[test]
+fn nested_nlp_lower_bound() {
+    let mut text = String::from("c");
+    for k in 0..30 {
+        text = format!("NLPSolve[Power[x{k}, 2], Equation[x{k}, Range[{text}, 1]]]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let (found, _) = ctx.eval_with(&e, &EvalOptions::default());
+    let elapsed = start.elapsed();
+    assert_eq!(found.unwrap().head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}
+
+/// CAS-650: `NLPSolve` holding `NLPSolve` once still answers, the
+/// `nlp_solve` guard (nlpsolve.rs) passing depth 1: `x²` on `[2, 3]`, the
+/// 2 the inner minimum of `y² + 1` on `[1, 3]`, is 4 at `x = 2`.
+#[test]
+fn nlp_in_nlp() {
+    let inner = "Part[NLPSolve[Plus[Power[y, 2], 1], Equation[y, Range[1, 3]]], 1]";
+    let input = format!("NLPSolve[Power[x, 2], Equation[x, Range[{inner}, 3]]]");
+    let (value, point) = optimum(&input);
+    assert!((value - 4.0).abs() < 1e-6, "{value}");
+    assert!(
+        point.len() == 1 && point[0].0 == "x" && (point[0].1 - 2.0).abs() < 1e-6,
+        "{point:?}"
+    );
+}

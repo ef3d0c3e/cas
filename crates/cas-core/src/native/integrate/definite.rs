@@ -43,6 +43,7 @@
 //! warning.
 //!
 //! CAS-650: `ball_ends` refuses what is not numeric before `approximation`.
+//! CAS-650: a function holding a nested own-head call (depth >= 2) leaves the call.
 
 use cas_num::algebra::{EuclideanDomain, Rationals};
 use cas_num::ball::{Ball, Float, Mag, Round};
@@ -54,7 +55,7 @@ use crate::assume::{Sign, range, sign_of};
 use crate::context::EvalError;
 use crate::eval::Eval;
 use crate::expr::{Expr, View};
-use crate::native::approximation;
+use crate::native::{approximation, holds_nested};
 use crate::symbol::Symbol;
 use crate::trace::Warning;
 
@@ -156,7 +157,8 @@ pub(super) fn integral(
     antiderivative: &Expr,
     [a, b]: [&Expr; 2],
 ) -> Native {
-    if antiderivative.contains(&Expr::from(Symbol::INTEGRATE)) {
+    if antiderivative.contains(&Expr::from(Symbol::INTEGRATE)) || holds_nested(f, Symbol::INTEGRATE)
+    {
         return Ok(None);
     }
     // Evaluated first, so that no `x^0` meets `x = 0`.

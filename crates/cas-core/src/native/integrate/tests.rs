@@ -1072,3 +1072,39 @@ fn nested_bound() {
     assert_eq!(found.head(), e.head());
     assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
 }
+
+/// CAS-650: `∫ sin(x²) + h` from 0 to 1, `h` the level below, 30 deep,
+/// stays at once. It reaches the `holds_nested` guard in `integral`
+/// (definite.rs) before `continuity`'s `cleared`; `sin(x²)` has no
+/// antiderivative, so each inner call stays held, and each level
+/// integrates in a variable of its own.
+#[test]
+fn nested_integrand() {
+    let mut text = String::from("c");
+    for i in 0..30 {
+        text = format!("Integrate[Plus[Sin[Power[x{i}, 2]], {text}], x{i}, 0, 1]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = ctx.eval(&e).unwrap();
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}
+
+/// CAS-650: `Integrate` holding `Integrate` once still answers, the
+/// `integral` guard (definite.rs) passing depth 1: `∫ x + 1/2` from 0 to 1
+/// is 1; a held depth-1 integrand is not refused, depth 2 is.
+#[test]
+fn integrate_in_integrate() {
+    check_values(
+        &Context::new(),
+        &[("Integrate[Plus[x, Integrate[y, y, 0, 1]], x, 0, 1]", "1")],
+    );
+    let one = read("Plus[x1, Integrate[Sin[Power[x0, 2]], x0, 0, 1]]");
+    assert!(!crate::native::holds_nested(&one, Symbol::INTEGRATE));
+    let two =
+        read("Plus[x2, Integrate[Plus[x1, Integrate[Sin[Power[x0, 2]], x0, 0, 1]], x1, 0, 1]]");
+    assert!(crate::native::holds_nested(&two, Symbol::INTEGRATE));
+}

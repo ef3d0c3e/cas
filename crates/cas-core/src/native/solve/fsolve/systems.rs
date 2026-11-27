@@ -26,12 +26,14 @@
 //!   `[[Re J, −Im J], [Im J, Re J]]`: the same iteration and test.
 //! - Parameters, a system that is not square, or unknowns that are not
 //!   distinct symbols leave the call.
+//!
+//! CAS-650: a function holding a nested own-head call (depth >= 2) leaves the call.
 
 use cas_num::ball::Ball;
 use cas_num::{Complex, Integer, Rational};
 use cas_poly::Cancel;
 
-use super::super::super::approximation;
+use super::super::super::{approximation, holds_nested};
 use super::super::sides;
 use super::{MAX_NEWTON, list, point, rounded, settled};
 use crate::context::{Context, EvalError};
@@ -156,7 +158,7 @@ pub(in crate::native) fn system(ev: &mut Eval<'_>, e: &Expr) -> Native {
             None => eqn.clone(),
         });
     }
-    if !numeric(ev.context(), &fs, vars) {
+    if fs.iter().any(|f| holds_nested(f, Symbol::FSOLVE)) || !numeric(ev.context(), &fs, vars) {
         return Ok(None);
     }
     let start = match guess {
