@@ -40,9 +40,9 @@ fn under_an_assumption() {
         return;
     };
     let input = "[assume(y>=0),euler_lagrange(sqrt((1+y'^2)/y),t,y),purge(y)][1]";
-    // giac's second derivative diff(y(t),t,2) as ours; its one constant,
-    // numbered by a counter global to giac's session, as K_0.
-    let text = giac.eval(input).unwrap().replace(",t,2)", ",t,t)");
+    // giac's one constant, numbered by a counter global to giac's session,
+    // as K_0.
+    let text = giac.eval(input).unwrap();
     let at = text.find("=K_").expect("giac's constant") + 3;
     let digits = text[at..].find(|c: char| !c.is_ascii_digit()).unwrap_or(0);
     let text = format!("{}0{}", &text[..at], &text[at + digits..]);
