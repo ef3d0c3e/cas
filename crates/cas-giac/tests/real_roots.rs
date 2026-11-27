@@ -136,6 +136,20 @@ const SEQUENCES: &[&str] = &[
     "sturmseq(0)",
     "sturmseq(x)",
     "sturmseq(-3*x+6)",
+    // giac takes x^v out first (CAS-661): the sign goes on the rest.
+    "sturmseq(-x^3)",
+    "sturmseq(-2*x^5)",
+    "sturmseq(-x)",
+    "sturmseq(-x^2)",
+    "sturmseq(-x^3*(x-1))",
+    "sturmseq(-x^3*(x-1)^2)",
+    "sturmseq(-x^5*(x-1)^3)",
+    "sturmseq(-x^3*(x-1)^3)",
+    "sturmseq(-x*(x-1)^2)",
+    "sturmseq(-x*(x-1)^3)",
+    "sturmseq(-x*(x^2+1))",
+    "sturmseq(-x^3*(x^2+1))",
+    "sturmseq(-x^3/(x+1))",
 ];
 
 /// `sturm` with bounds: roots and poles in `(a, b]`, or the sign at `a`.

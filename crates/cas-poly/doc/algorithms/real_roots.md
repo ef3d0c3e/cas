@@ -47,7 +47,10 @@ constant followed by the sequence of each square-free factor of odd
 multiplicity (even ones change no sign). The factors are primitive with a
 positive leading coefficient; a negative primitive part puts its sign on
 the factor of highest odd multiplicity, or is a factor `−1` of its own when
-there is none; the constant is the leading coefficient over the factors'.
+there is none. As giac takes `x^v` out before its square-free
+factorisation (CAS-661), a factor that is `x` alone does not count: it
+takes the sign only when `v = 1` and no other factor of odd multiplicity is
+left (`sturmseq(-x^3)` keeps `−1` apart, `sturmseq(-x)` does not); the constant is the leading coefficient over the factors'.
 With bounds `a ≤ b` the count is `Σ V(a) − V(b)` over the sequences, the
 roots and poles in `(a, b]`; with none giac answers −1 when the product of
 the first signs at `a` (and the constants' signs) is negative, 0 otherwise.

@@ -347,6 +347,29 @@ fn isolation_and_sequences() {
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
 
+/// giac takes `x^v` out before placing the sign of a negative leading
+/// coefficient (CAS-661): `-1` apart beside `x^3`, on `x` alone for `-x`.
+#[test]
+fn sturm_sign_beside_a_power_of_x() {
+    let ctx = Context::new();
+    for (input, expected) in [
+        (
+            "SturmSequence[Times[-1, Power[x, 3]]]",
+            "List[1, List[-1, 0], List[List[1, 0], 1], 1]",
+        ),
+        (
+            "SturmSequence[Times[-1, Power[x, 3], Plus[x, -1]]]",
+            "List[1, List[List[-1, 1], -1], List[List[1, 0], 1], 1]",
+        ),
+        (
+            "SturmSequence[Times[-1, x]]",
+            "List[1, List[List[-1, 0], -1], 1]",
+        ),
+    ] {
+        assert_eq!(ctx.eval(&read(input)), Ok(read(expected)), "{input}");
+    }
+}
+
 /// giac's `complexroot`: every root with its multiplicity, a linear
 /// factor's exact, the others in balls; the rectangle keeps those in it.
 #[test]

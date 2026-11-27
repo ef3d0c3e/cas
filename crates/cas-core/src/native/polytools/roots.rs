@@ -17,7 +17,9 @@
 //!   the Sturm sequence (`sturm_sequence`, subresultant) of each square-free
 //!   factor of odd multiplicity, primitive, the sign of the primitive part
 //!   on the factor of highest odd multiplicity (a factor `-1` when there is
-//!   none), the constant being the leading coefficient over the factors':
+//!   none; `x^v` taken out first as giac does, so a factor that is `x`
+//!   alone takes it only when `v = 1` and no other is left, CAS-661), the
+//!   constant being the leading coefficient over the factors':
 //!   `{2, {{1, 0, -2}, {2, 0}, 8}, 1}` for `2x² − 4`. With bounds, giac's
 //!   `sturm(p, x, a, b)`: `Σ V(a) − V(b)` over the sequences, the roots and
 //!   poles in `(a, b]`; with none, 0 or −1 as the first signs at `a` give
@@ -218,10 +220,20 @@ fn parts(n: &Dense<Rational>) -> Vec<Part> {
         })
         .collect();
     found.sort_by_key(|(_, m)| *m);
+    // giac takes `x^v` out before its square-free factorisation (CAS-661):
+    // the sign goes on the rest's factor of highest odd multiplicity, so a
+    // factor that is `x` alone takes it only when `v = 1` and the rest has
+    // none; otherwise it stays apart, `-1` first.
+    // A factor that is `x` alone is the multiplicity-`v` one.
+    let x_alone = |f: &Dense<Rational>| f.coeffs() == [Rational::ZERO, Rational::ONE];
+    let target = found
+        .iter()
+        .rposition(|(f, _)| !x_alone(f))
+        .or_else(|| found.iter().position(|(f, m)| *m == 1 && x_alone(f)));
     let mut odd: Vec<Dense<Rational>> = found.into_iter().map(|(f, _)| f).collect();
     if primitive.lead().is_some_and(Rational::is_negative) {
-        match odd.last_mut() {
-            Some(f) => *f = qx.scale(f, &-Rational::ONE),
+        match target {
+            Some(i) => odd[i] = qx.scale(&odd[i], &-Rational::ONE),
             None => odd.insert(0, qx.constant(-Rational::ONE)),
         }
     }
