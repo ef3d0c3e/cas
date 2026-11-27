@@ -95,7 +95,6 @@ C0092 | Natives re-approximating symbolic arguments: is_numeric before numeric::
 C0093 | Decoding an old eval fuzz artifact with its run's harness; reseeding for draws | fuzz,eval,artifact,decode,replay,random,seed,harness | 2026-11-25 | 1.7/T11 | Fuzz 45608125834, 45601609896, T11.c1 951ab6a
 C0094 | A new rewrite rule breaks held-form pins in other crates' departure lists: grep first | rules,held,departures,tests,oracle,markup | 2026-11-26 | 1.8/T1 | T1.c1 CAS-636 D/nth
 C0095 | Reach-inside wrappers skip held parts of their own head: Together[Together[r]] nests to the recursion limit | fuzz,recursion-limit,together,expand,held,integrate,zero-denominator | 2026-11-26 | 1.8/T1 | Fuzz 45734501868, T1.c2 777f31e CAS-638
-C0096 | Gap ledger: tally giac-gap buckets by a failing script; verify alias claims in code | giac,gap,ledger,tally,alias,validation | 2026-11-26 | 1.8/T2 | R1.8-003 hand tally
 C0097 | Clippy on oracle departure tables (split + helper) and Option<Option> natives | clippy,oracle,departures,native,lint | 2026-11-26 | 1.8/T3 | T3.c1 CAS-639
 C0098 | Unit-test full forms: no decimals in parse_full_form; capital user names are $A | test,full-form,parse,lowering,cas-lang,ci | 2026-11-26 | 1.8/T3 | T3.c2 CAS-639
 C0099 | A new builtin captures a bare word natives match by name: grep it first | builtin,names,lowering,regression,en.txt | 2026-11-26 | 1.8/T4 | T4.c1 CAS-642
@@ -117,3 +116,4 @@ C0114 | Sweep inputs: run a generated batch in one giac process; caseval's per-l
 C0115 | Sweeping an optimiser (tpsolve, lpsolve): compare the optimum, check our point feasible; ties are common | giac,oracle,sweep,tpsolve,lpsolve,optimization,ties,proptest,linear_interpolate | 2026-11-26 | 1.8/T8 | T8.c4 random_tpsolve
 C0116 | Sweep skip guards test the drawn input, not the strategy flag; giac spaces .. in strings | proptest,oracle,sweep,giac,modgcd,strings,departure | 2026-11-26 | 1.8/T9 | CI 45831113300 random_modgcd, random_words
 C0117 | A native's nested Context::eval gets fresh limits: 2^depth on nested arguments | fuzz,eval,timeout,limits,native,approximation,nesting | 2026-11-26 | 1.8/T10 | Fuzz 45856971637, T10.c1, CAS-649
+gen1 | Generation 1 entries | see cookbook/gen1/INDEX.md
