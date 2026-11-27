@@ -1342,3 +1342,44 @@ fn nested_binomial() {
     let elapsed = nested_solve(|x, h| format!("Plus[Power[{x}, 3], {h}]"));
     assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
 }
+
+/// CAS-650: `FSolve` from a start point holding the level below, 30 deep,
+/// stays at once, not approximated again at each level (2^n). It reaches
+/// `point` (fsolve.rs) through `opened`'s start point, the held inner
+/// call; each level solves in a variable of its own, so the inner call is
+/// free of the outer variable, never rewritten, and stays held.
+#[test]
+fn nested_fsolve_guess() {
+    let mut text = String::from("c");
+    for k in 0..30 {
+        text = format!("FSolve[Plus[-1, x{k}], x{k}, {text}]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let (found, _) = ctx.eval_with(&e, &EvalOptions::default());
+    let elapsed = start.elapsed();
+    assert_eq!(found.unwrap().head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}
+
+/// CAS-650: `CFSolve` from a start point `x = h` holding the level below,
+/// 30 deep, stays at once, not approximated again at each level (2^n). It
+/// reaches `point` (fsolve/complex.rs) through `started`'s candidate from
+/// the held inner call; each level solves in a variable of its own, so the
+/// inner call is free of the outer variable, never rewritten, and stays
+/// held.
+#[test]
+fn nested_cfsolve_start() {
+    let mut text = String::from("c");
+    for k in 0..30 {
+        text = format!("CFSolve[Plus[-1, x{k}], Equation[x{k}, {text}]]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let (found, _) = ctx.eval_with(&e, &EvalOptions::default());
+    let elapsed = start.elapsed();
+    assert_eq!(found.unwrap().head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}

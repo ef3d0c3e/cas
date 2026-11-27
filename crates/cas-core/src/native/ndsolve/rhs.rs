@@ -10,6 +10,8 @@
 //! jet outside a function's domain, as the logarithm of a ball meeting 0,
 //! gives nothing, and the step that met it is shortened, or the call
 //! stays.
+//!
+//! CAS-650: `constant` refuses what is not numeric before `approximation`.
 
 use cas_num::ball::{Ball, Jet};
 use cas_num::{Integer, Rational};
@@ -119,6 +121,9 @@ pub(in crate::native) enum Node {
 
 /// The real ball of `f`, free of the variables, by `N`'s values.
 fn constant(ctx: &Context, f: &Expr, prec: u64) -> Option<Ball> {
+    if !f.is_numeric() {
+        return None;
+    }
     let value = approximation(ctx, f, prec).ok()?;
     match value.view() {
         View::Ball(b) if b.is_finite() => Some(b.clone()),

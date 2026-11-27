@@ -22,6 +22,8 @@
 //!   found none, else the call stays.
 //! - Parameters, a system that is not square, or unknowns that are not
 //!   distinct symbols leave the call.
+//!
+//! CAS-650: `point` refuses what is not numeric before `approximation`.
 
 use cas_num::ball::ComplexBall;
 use cas_num::{Integer, Rational};
@@ -208,6 +210,9 @@ fn start() -> Expr {
 
 /// A number's real and imaginary parts as rationals: its ball's midpoints.
 fn point(ctx: &Context, e: &Expr) -> Option<(Rational, Rational)> {
+    if !e.is_numeric() {
+        return None;
+    }
     match approximation(ctx, e, 128).ok()?.view() {
         View::Ball(b) if b.is_finite() => Some((b.mid().to_rational(), Rational::ZERO)),
         View::ComplexBall(z) if z.is_finite() => {

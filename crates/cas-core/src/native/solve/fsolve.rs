@@ -37,6 +37,8 @@
 //!   midpoint (a list, `[]` when the root is outside) or 0 for the whole
 //!   line; the secant from `x0` and `x0 + 1/16`, or from the two points of
 //!   `[x0, x1]`, which a bracketing method takes as a range.
+//!
+//! CAS-650: `point` refuses what is not numeric before `approximation`.
 
 use std::cmp::Ordering;
 
@@ -334,6 +336,9 @@ fn list(items: Vec<Expr>) -> Expr {
 pub(super) fn point(ctx: &Context, e: &Expr) -> Option<Rational> {
     if let Some(q) = e.to_rational() {
         return Some(q);
+    }
+    if !e.is_numeric() {
+        return None;
     }
     match approximation(ctx, e, 128).ok()?.view() {
         View::Ball(b) if b.is_finite() => Some(b.mid().to_rational()),

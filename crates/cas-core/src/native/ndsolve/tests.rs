@@ -225,3 +225,24 @@ fn boundary_value_problems() {
         );
     }
 }
+
+/// CAS-650: a right side `y + h` whose term `h` holds the level below, 30
+/// deep, stays at once, not approximated again at each level (2^n). It
+/// reaches `constant` (rhs.rs) through `Node::compile` of `h`, the part
+/// free of the variables; each level solves in `t` and `y` of its own, so
+/// the held inner call is free of the outer variables, never rewritten,
+/// and stays held.
+#[test]
+fn nested_rhs() {
+    let mut text = String::from("c");
+    for k in 0..30 {
+        text = format!("NDSolve[Plus[y{k}, {text}], List[t{k}, y{k}], List[0, 1], 1]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let found = eval(&ctx, &text);
+    let elapsed = start.elapsed();
+    assert_eq!(found.head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}

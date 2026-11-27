@@ -564,3 +564,24 @@ fn mixed_and_infeasible_integer_programs() {
         );
     }
 }
+
+/// CAS-650: `NLPSolve` of `x²` with a bound `x = 0..h` holding the level
+/// below, 30 deep, stays at once, not approximated again at each level
+/// (2^n). It reaches `double` (nlpsolve.rs) through `bounds`'s `end` of the
+/// held inner call; the bound's ends add no variable, and each level
+/// minimizes in a variable of its own, so the inner call is never
+/// rewritten and stays held.
+#[test]
+fn nested_nlp_bound() {
+    let mut text = String::from("c");
+    for k in 0..30 {
+        text = format!("NLPSolve[Power[x{k}, 2], Equation[x{k}, Range[0, {text}]]]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let (found, _) = ctx.eval_with(&e, &EvalOptions::default());
+    let elapsed = start.elapsed();
+    assert_eq!(found.unwrap().head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}

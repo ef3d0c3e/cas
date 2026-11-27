@@ -26,6 +26,8 @@
 //!     known.
 //!
 //! A ball that is not finite, as at a pole, gives nothing in either mode.
+//!
+//! CAS-650: `constant` refuses what is not numeric before `approximation`.
 
 #![allow(
     clippy::many_single_char_names,
@@ -121,6 +123,9 @@ pub(in crate::native) enum Node {
 /// The ball of `f`, free of the variable, by `N`'s values; `None` when it
 /// is no number.
 fn constant(ctx: &Context, f: &Expr, prec: u64) -> Option<ComplexBall> {
+    if !f.is_numeric() {
+        return None;
+    }
     let value = approximation(ctx, f, prec).ok()?;
     let ball = match value.view() {
         View::Ball(b) => ComplexBall::from_real(b.clone()),

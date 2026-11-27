@@ -75,6 +75,8 @@
 //! - The answer is giac's `{value, {x = …, …}}`, balls or exact ends, the
 //!   value `f`'s at the point. A search that runs off to infinity or finds
 //!   no feasible point leaves the call with a warning.
+//!
+//! CAS-650: `double` refuses what is not numeric before `approximation`.
 
 #![allow(
     clippy::many_single_char_names,
@@ -858,6 +860,9 @@ fn end(ctx: &Context, a: &Expr) -> Result<Option<End>, ()> {
 
 /// A real number's double, by its ball.
 pub(super) fn double(ctx: &Context, a: &Expr) -> Option<f64> {
+    if !a.is_numeric() {
+        return None;
+    }
     match approximation(ctx, a, SEARCH_BITS).ok()?.view() {
         View::Ball(b) if b.is_finite() => Some(b.mid().to_f64()).filter(|v| v.is_finite()),
         _ => None,

@@ -161,3 +161,24 @@ fn n_of_integrals() {
         .unwrap();
     assert!(matches!(list.view(), View::Ball(_)), "{list:?}");
 }
+
+/// CAS-650: an integrand `x h` whose factor `h` holds the level below, 30
+/// deep, stays at once, not approximated again at each level (2^n). It
+/// reaches `constant` (analytic.rs) through `Node::compile` of `h`, the
+/// part free of the variable; each level integrates in a variable of its
+/// own, so the held inner call is free of the outer variable, never
+/// rewritten, and stays held.
+#[test]
+fn nested_integrand() {
+    let mut text = String::from("c");
+    for k in 0..30 {
+        text = format!("NIntegrate[Times[x{k}, {text}], x{k}, 0, 1]");
+    }
+    let ctx = Context::new();
+    let e = read(&text);
+    let start = std::time::Instant::now();
+    let (found, _) = ctx.eval_with(&e, &EvalOptions::default());
+    let elapsed = start.elapsed();
+    assert_eq!(found.unwrap().head(), e.head());
+    assert!(elapsed.as_secs_f64() < 2.0, "{elapsed:?}");
+}
