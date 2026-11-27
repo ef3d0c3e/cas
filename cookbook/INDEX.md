@@ -123,3 +123,4 @@ C0119 | Pre-CI sweep batch: check giac against an exact reference; lpsolve maxim
 C0120 | Exact poles and residue rules for rational functions (RootsWithMultiplicity, half-plane split) | residue,rational,poles,hilbert,radicals,clippy | 2026-11-27 | 2.1/T5 | T5.c1 CAS-654
 C0121 | Oracle sweep where giac is wrong: probe the class with caseval, then skip on an exact predicate | proptest,oracle,sweep,giac,departure,caseval | 2026-11-27 | 2.1/T7 | CI 46055615575 random_is_irreducible
 C0122 | Oracle red with no related change: check the giac version (debian:sid, unpinned) | giac,oracle,ci,debian,version,pin | 2026-11-27 | 2.1/T11 | CI 46069824120, T11.c1 99abffd
+C0123 | giac sqff takes x^v out first: where the sign of a negative lead goes | giac,sqff,sturmseq,sign,caseval,factor | 2026-11-28 | 2.1/T12 | CAS-661 CI 46047327203

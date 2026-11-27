@@ -11,3 +11,4 @@ T8 | done | phase cleanup | - | tasks/T8.md | logs/T8.md | -
 T9 | done | tool candidate audit_tool_source_prefix | - | tasks/T9.md | logs/T9.md | -
 T10 | done | guard the numeric natives' endpoint, guess and constant-subtree sites with is_numeric (CAS-650 class) | - | tasks/T10.md | logs/T10.md | -
 T11 | done | guard the numeric natives' sample-point sites by refusing a function that holds a call of the native's own head (CAS-650 class) | - | tasks/T11.md | logs/T11.md | R2.1-011
+T12 | done | fix or record the random_sturmseq disagreement on sturmseq(-x^3) | - | tasks/T12.md | logs/T12.md | -
