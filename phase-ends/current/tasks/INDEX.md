@@ -7,3 +7,4 @@ T4 | done | random oracle sweeps for markov (exact stochastic matrices) and lpso
 T5 | done | residue rule for rational Hilbert transforms, five departures to agreeing rows (I3) | - | tasks/T5.md | logs/T5.md | -
 T6 | done | drop the needless ,t,2) rewrite in euler_lagrange_assume.rs (I3) | - | tasks/T6.md | logs/T6.md | R2.1-008
 T7 | done | CI and Fuzz green on the pushed head, the phase's tickets done | - | tasks/T7.md | logs/T7.md | -
+T8 | done | phase cleanup | - | tasks/T8.md | logs/T8.md | -
