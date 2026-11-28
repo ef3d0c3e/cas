@@ -127,3 +127,5 @@ C0123 | giac sqff takes x^v out first: where the sign of a negative lead goes | 
 C0124 | Pin a Debian package version in CI from snapshot.debian.org by sha1 | debian,apt,pin,snapshot,ci,giac,oracle | 2026-11-28 | 2.1/T13 | CI 46082504855, 5990fb7
 C0125 | Max(1,|b|) stays unevaluated on a ball straddling 1: split tolerance claims | giac,oracle,tolerance,ball,max,less,near | 2026-11-28 | 2.2/T1 | CAS-662 near
 C0126 | Never cargo fmt inside fuzz/: it reformats every target | fuzz,fmt,rustfmt,trap | 2026-11-28 | 2.2/T4 | T4.c1 CAS-666
+C0127 | rowan token lookup by offset: covering_element, not linear token_at_offset | rowan,cas-lang,performance,fuzz,offset | 2026-11-28 | 2.2/T5 | T5.c1 6bfb89b2 CAS-667
+C0128 | Seeded fuzz targets: libFuzzer's seed pass ignores max_total_time; budget seeds x cost | fuzz,libfuzzer,seed,corpus,timeout,ci | 2026-11-28 | 2.2/T5 | Fuzz 46127546893 lang_analysis
