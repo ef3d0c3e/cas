@@ -130,3 +130,4 @@ C0126 | Never cargo fmt inside fuzz/: it reformats every target | fuzz,fmt,rustf
 C0127 | rowan token lookup by offset: covering_element, not linear token_at_offset | rowan,cas-lang,performance,fuzz,offset | 2026-11-28 | 2.2/T5 | T5.c1 6bfb89b2 CAS-667
 C0128 | Seeded fuzz targets: libFuzzer's seed pass ignores max_total_time; budget seeds x cost | fuzz,libfuzzer,seed,corpus,timeout,ci | 2026-11-28 | 2.2/T5 | Fuzz 46127546893 lang_analysis
 C0129 | cas-lang node ranges can hold trailing trivia: expected ranges from the tree | cas-lang,rowan,syntax,range,test,trivia | 2026-11-28 | 2.2/T6 | T6.c1 CI 46145814818 rule_parameters
+C0130 | Workspace clippy pedantic: load checks as assert!, doc names in backticks | clippy,pedantic,lint,doc | 2026-11-28 | 2.2/T7 | T7.c1 CAS-669

@@ -6,3 +6,4 @@ T3 | done | line index from byte offsets to lines with UTF-8 and UTF-16 columns 
 T4 | done | half-typed trees pinned and recovery checked; fixes on lexer and parser errors | - | tasks/T4.md | logs/T4.md | R2.2-002,R2.2-004
 T5 | done | cursor query: the token and its context at an offset | - | tasks/T5.md | logs/T5.md | R2.2-002
 T6 | done | symbol index: definitions and uses with ranges, kinds and scopes | - | tasks/T6.md | logs/T6.md | R2.2-004,R2.2-002
+T7 | done | documentation table generated from giac's aide_cas, the overlay, lookup by builtin | - | tasks/T7.md | logs/T7.md | R2.2-001,R2.2-004,R0-004
