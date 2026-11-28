@@ -87,3 +87,16 @@
 1.8 | T10 | done | one-hour-per-target fuzz campaign on T9's head; findings triaged | - | phase-1.8/tasks/T10.md | phase-1.8/logs/T10.md | -
 1.8 | T11 | done | campaign findings fixed under regression tests; final gate green; tickets done | - | phase-1.8/tasks/T11.md | phase-1.8/logs/T11.md | -
 1.8 | T12 | done | phase cleanup | - | phase-1.8/tasks/T12.md | phase-1.8/logs/T12.md | -
+2.1 | T1 | done | Lific tickets and design notes for the phase, Fill backlog ticket in Language (I3) | - | phase-2.1/tasks/T1.md | phase-2.1/logs/T1.md | R0-003,R2.1-008
+2.1 | T2 | done | is_numeric guard before approximation in the eight CAS-650 natives | - | phase-2.1/tasks/T2.md | phase-2.1/logs/T2.md | R2.1-007,R2.1-009
+2.1 | T3 | done | classify the remaining approximation call sites and guard those that can nest | - | phase-2.1/tasks/T3.md | phase-2.1/logs/T3.md | R2.1-010,R2.1-011
+2.1 | T4 | done | random oracle sweeps for markov (exact stochastic matrices) and lpsolve (objective value) (I3) | - | phase-2.1/tasks/T4.md | phase-2.1/logs/T4.md | -
+2.1 | T5 | done | residue rule for rational Hilbert transforms, five departures to agreeing rows (I3) | - | phase-2.1/tasks/T5.md | phase-2.1/logs/T5.md | -
+2.1 | T6 | done | drop the needless ,t,2) rewrite in euler_lagrange_assume.rs (I3) | - | phase-2.1/tasks/T6.md | phase-2.1/logs/T6.md | R2.1-008
+2.1 | T7 | done | CI and Fuzz green on the pushed head, the phase's tickets done | - | phase-2.1/tasks/T7.md | phase-2.1/logs/T7.md | -
+2.1 | T8 | done | phase cleanup | - | phase-2.1/tasks/T8.md | phase-2.1/logs/T8.md | -
+2.1 | T9 | done | tool candidate audit_tool_source_prefix | - | phase-2.1/tasks/T9.md | phase-2.1/logs/T9.md | -
+2.1 | T10 | done | guard the numeric natives' endpoint, guess and constant-subtree sites with is_numeric (CAS-650 class) | - | phase-2.1/tasks/T10.md | phase-2.1/logs/T10.md | -
+2.1 | T11 | done | guard the numeric natives' sample-point sites by refusing a function that holds a call of the native's own head (CAS-650 class) | - | phase-2.1/tasks/T11.md | phase-2.1/logs/T11.md | R2.1-011
+2.1 | T12 | done | fix or record the random_sturmseq disagreement on sturmseq(-x^3) | - | phase-2.1/tasks/T12.md | phase-2.1/logs/T12.md | -
+2.1 | T13 | done | pin CI's oracle giac to 2.0.0.21+dfsg2-3+b1, the version the dev machine's probes use (C0122) | - | phase-2.1/tasks/T13.md | phase-2.1/logs/T13.md | -
