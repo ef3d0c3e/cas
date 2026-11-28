@@ -31,7 +31,11 @@
 //! - [`Session`]: a program run one statement at a time against a
 //!   `Context` (CAS-121): definitions, `assume` and `purge`, results in
 //!   input form, and [`Message`]s that point into the text.
+//! - [`analysis`]: queries for editors over the text and its tree, in byte
+//!   offsets (CAS-DOC-60): [`analysis::lines`] converts offsets to and from
+//!   lines and columns.
 
+pub mod analysis;
 mod hook;
 mod lexer;
 mod literal;
