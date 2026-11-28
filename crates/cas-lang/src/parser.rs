@@ -25,6 +25,7 @@ use rowan::{Checkpoint, GreenNode, GreenNodeBuilder};
 use crate::lexer::{LexErrorKind, Lexed, lex};
 use crate::syntax::{SyntaxKind, SyntaxNode};
 
+mod fix;
 mod grammar;
 
 /// How deeply expressions and blocks may nest: parentheses within
@@ -84,6 +85,18 @@ pub struct SyntaxError {
     pub range: Range<usize>,
     /// What is wrong.
     pub kind: SyntaxErrorKind,
+    /// A replacement that fixes it, when the intended text is plain
+    /// (CAS-DOC-60 §5).
+    pub fix: Option<Fix>,
+}
+
+/// A replacement of part of the text.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Fix {
+    /// The bytes to replace.
+    pub range: Range<usize>,
+    /// What to put instead.
+    pub replacement: String,
 }
 
 /// What is wrong in a [`SyntaxError`].
@@ -194,7 +207,8 @@ impl<'a> Parser<'a> {
         parser
     }
 
-    /// Adds the rest of the text, closes the root and collects the errors.
+    /// Adds the rest of the text, closes the root and collects the errors,
+    /// with their fixes.
     fn finish(mut self) -> Parse {
         self.add_tokens(self.lexed.len());
         self.builder.finish_node();
@@ -205,14 +219,14 @@ impl<'a> Parser<'a> {
             .map(|e| SyntaxError {
                 range: e.range.clone(),
                 kind: SyntaxErrorKind::Lex(e.kind),
+                fix: None,
             })
             .collect();
         errors.extend(self.errors);
         errors.sort_by_key(|e| e.range.start);
-        Parse {
-            green: self.builder.finish(),
-            errors,
-        }
+        let green = self.builder.finish();
+        fix::fill(self.lexed, &green, &mut errors);
+        Parse { green, errors }
     }
 
     /// Finds the next significant token after `pos`.
@@ -342,6 +356,7 @@ impl<'a> Parser<'a> {
         self.errors.push(SyntaxError {
             range,
             kind: SyntaxErrorKind::Parse(kind),
+            fix: None,
         });
     }
 
@@ -361,6 +376,7 @@ impl<'a> Parser<'a> {
         self.errors.push(SyntaxError {
             range: end..end,
             kind: SyntaxErrorKind::Parse(kind),
+            fix: None,
         });
     }
 

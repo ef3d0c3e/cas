@@ -4,7 +4,8 @@ use std::fmt::Write as _;
 use proptest::prelude::*;
 use rowan::NodeOrToken;
 
-use super::{MAX_DEPTH, ParseErrorKind as E, SyntaxErrorKind, parse};
+use super::{Fix, MAX_DEPTH, ParseErrorKind as E, SyntaxErrorKind, parse};
+use crate::lexer::LexErrorKind as L;
 use crate::syntax::{SyntaxKind as K, SyntaxNode};
 
 /// The tree without trivia: `(Kind child …)` for a node, the text of a
@@ -642,6 +643,229 @@ fn half_typed_input() {
   6..6 Parse(Expected(RParen))
 "#;
     assert_eq!(found, expected);
+}
+
+/// `text` with `fix` applied.
+fn apply(text: &str, fix: &Fix) -> String {
+    format!(
+        "{}{}{}",
+        &text[..fix.range.start],
+        fix.replacement,
+        &text[fix.range.end..]
+    )
+}
+
+/// Each kind of fix (CAS-DOC-60 §5) applied to the first error of its kind:
+/// the text it gives, and no error of that kind left where it was.
+#[test]
+fn fixes_remove_their_error() {
+    use SyntaxErrorKind::{Lex, Parse};
+    let cases: &[(&str, SyntaxErrorKind, &str)] = &[
+        ("|x| + 1", Lex(L::Bar), "abs(x) + 1"),
+        ("a & b", Lex(L::Ampersand), "a and b"),
+        ("a&&b", Lex(L::Ampersand), "a and b"),
+        ("f'(x)", Lex(L::Apostrophe), "diff(f(x), x)"),
+        ("f''(x)", Lex(L::Apostrophe), "diff(f(x), x, x)"),
+        ("x # note", Lex(L::Hash), "x // note"),
+        ("x : = 1", Lex(L::LoneColon), "x := 1"),
+        ("x := 1:\ny", Lex(L::LoneColon), "x := 1;\ny"),
+        ("x:", Lex(L::LoneColon), "x;"),
+        ("x :;", Lex(L::LoneColon), "x ;"),
+        (".5 + x", Lex(L::LeadingPoint), "0.5 + x"),
+        ("1__000_", Lex(L::MisplacedUnderscore), "1_000"),
+        (
+            "s := \"abc\nx := 1",
+            Lex(L::UnterminatedString),
+            "s := \"abc\"\nx := 1",
+        ),
+        (
+            "x /* a /* b */",
+            Lex(L::UnterminatedComment),
+            "x /* a /* b */*/",
+        ),
+        ("\"a\\qb\"", Lex(L::InvalidEscape), "\"a\\\\qb\""),
+        ("f(a b c", Parse(E::Expected(K::RParen)), "f(a b c)"),
+        (
+            "f(x, \ny := 1",
+            Parse(E::Expected(K::RParen)),
+            "f(x,)\ny := 1",
+        ),
+        ("[1, 2", Parse(E::Expected(K::RBracket)), "[1, 2]"),
+        ("{1, 2", Parse(E::Expected(K::RBrace)), "{1, 2}"),
+        (
+            "if a\n  b\nend",
+            Parse(E::Expected(K::ThenKw)),
+            "if a\n  then b\nend",
+        ),
+        (
+            "while a\n  b\nend",
+            Parse(E::Expected(K::DoKw)),
+            "while a\n  do b\nend",
+        ),
+        (
+            "for k s do end",
+            Parse(E::Expected(K::InKw)),
+            "for k in s do end",
+        ),
+        (
+            "if a then b",
+            Parse(E::Expected(K::EndKw)),
+            "if a then b end",
+        ),
+        (
+            "x := 1 for k in s do end",
+            Parse(E::ExpectedSeparator),
+            "x := 1\nfor k in s do end",
+        ),
+        (
+            "a\n  x := 1 local y",
+            Parse(E::ExpectedSeparator),
+            "a\n  x := 1\n  local y",
+        ),
+        ("x\n)", Parse(E::Unexpected(K::RParen)), "x\n"),
+        ("x\n]", Parse(E::Unexpected(K::RBracket)), "x\n"),
+        ("}", Parse(E::Unexpected(K::RBrace)), ""),
+        ("end", Parse(E::Unexpected(K::EndKw)), ""),
+        ("(a, b)", Parse(E::Tuple), "[a, b]"),
+        ("x 2", Parse(E::NumberInProduct), "x *2"),
+    ];
+    let mut wrong = Vec::new();
+    for &(text, kind, expected) in cases {
+        let Some(fix) = parse(text)
+            .errors()
+            .iter()
+            .find(|e| e.kind == kind)
+            .and_then(|e| e.fix.clone())
+        else {
+            wrong.push(format!("{text:?}: no fix for {kind:?}"));
+            continue;
+        };
+        let fixed = apply(text, &fix);
+        if fixed != expected {
+            wrong.push(format!("{text:?}: {fix:?} gives {fixed:?}"));
+        }
+        let place = fix.range.start..=fix.range.start + fix.replacement.len();
+        let left: Vec<_> = parse(&fixed)
+            .errors()
+            .iter()
+            .filter(|e| e.kind == kind && place.contains(&e.range.start))
+            .cloned()
+            .collect();
+        if !left.is_empty() {
+            wrong.push(format!("{fixed:?}: still {left:?}"));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// The errors that get no fix (CAS-DOC-60 §5), and the shapes of the ones
+/// that do that get none.
+#[test]
+fn errors_without_a_fix() {
+    use SyntaxErrorKind::{Lex, Parse};
+    let deep = "(".repeat(MAX_DEPTH + 10) + "x";
+    let cases: &[(&str, SyntaxErrorKind)] = &[
+        ("x @ y", Lex(L::UnexpectedChar('@'))),
+        ("g'", Lex(L::Apostrophe)),
+        ("f'(x + 1)", Lex(L::Apostrophe)),
+        ("f' (x)", Lex(L::Apostrophe)),
+        ("|x| + |y", Lex(L::Bar)),
+        ("a &&& b", Lex(L::Ampersand)),
+        ("x . y", Lex(L::LoneDot)),
+        ("x : y", Lex(L::LoneColon)),
+        ("0b102", Lex(L::InvalidDigit { radix: 2 })),
+        ("\"\\u{zz}\"", Lex(L::InvalidEscape)),
+        ("\"\\", Lex(L::InvalidEscape)),
+        ("x⁻", Lex(L::MissingSuperscriptDigits)),
+        ("a +", Parse(E::ExpectedExpression)),
+        ("for 1 in s do end", Parse(E::ExpectedName)),
+        ("a b c d e )", Parse(E::ExpectedSeparator)),
+        ("then", Parse(E::Unexpected(K::ThenKw))),
+        ("a = b = c", Parse(E::ChainedEquation)),
+        ("1..2..3", Parse(E::ChainedRange)),
+        ("(a, b", Parse(E::Tuple)),
+        (&deep, Parse(E::TooDeep)),
+    ];
+    let mut wrong = Vec::new();
+    for &(text, kind) in cases {
+        let parse = parse(text);
+        let errors: Vec<_> = parse.errors().iter().filter(|e| e.kind == kind).collect();
+        if errors.is_empty() || errors.iter().any(|e| e.fix.is_some()) {
+            wrong.push(format!("{:?}: {errors:?}", &text[..text.len().min(20)]));
+        }
+    }
+    assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+}
+
+/// Bars pair left to right within a line; both errors of a pair carry its
+/// fix, and a line whose bars do not all pair plainly gets none.
+#[test]
+fn bar_fixes() {
+    let fixes = |text: &str| -> Vec<Option<(String, String)>> {
+        parse(text)
+            .errors()
+            .iter()
+            .filter(|e| e.kind == SyntaxErrorKind::Lex(L::Bar))
+            .map(|e| {
+                e.fix
+                    .as_ref()
+                    .map(|f| (text[f.range.clone()].to_owned(), f.replacement.clone()))
+            })
+            .collect()
+    };
+    let pair = |from: &str, to: &str| Some((from.to_owned(), to.to_owned()));
+    assert_eq!(
+        fixes("|x| + |y - 1|"),
+        [
+            pair("|x|", "abs(x)"),
+            pair("|x|", "abs(x)"),
+            pair("|y - 1|", "abs(y - 1)"),
+            pair("|y - 1|", "abs(y - 1)"),
+        ]
+    );
+    assert_eq!(fixes("|x| + |y"), [None, None, None]);
+    assert_eq!(fixes("||x|-1|"), [None, None, None, None]);
+    assert_eq!(fixes("|f(x| + 1)"), [None, None]);
+    assert_eq!(
+        fixes("|x|\n|y"),
+        [pair("|x|", "abs(x)"), pair("|x|", "abs(x)"), None]
+    );
+}
+
+/// A run of one or two `&` becomes `and`, the same fix on each; three or
+/// more get none. The primes of `f''(x)` share their fix too.
+#[test]
+fn ampersand_and_prime_fixes() {
+    let fixes = |text: &str| -> Vec<Option<Fix>> {
+        parse(text)
+            .errors()
+            .iter()
+            .filter(|e| e.kind == SyntaxErrorKind::Lex(L::Ampersand))
+            .map(|e| e.fix.clone())
+            .collect()
+    };
+    let some = |range, replacement: &str| {
+        Some(Fix {
+            range,
+            replacement: replacement.to_owned(),
+        })
+    };
+    assert_eq!(fixes("a & b"), [some(2..3, "and")]);
+    assert_eq!(fixes("a&&b"), [some(1..3, " and "), some(1..3, " and ")]);
+    assert_eq!(fixes("a &&& b"), [None, None, None]);
+    // Every prime of `f''(x)` carries the same fix.
+    let primes: Vec<_> = parse("f''(x)")
+        .errors()
+        .iter()
+        .map(|e| e.fix.clone())
+        .collect();
+    assert_eq!(
+        primes,
+        [
+            some(0..6, "diff(f(x), x, x)"),
+            some(0..6, "diff(f(x), x, x)")
+        ]
+    );
 }
 
 #[test]

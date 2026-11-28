@@ -77,9 +77,9 @@ use cas_num::ball::{Ball, Float};
 
 use crate::hook::Hook;
 use crate::literal::decimal_balls;
-use crate::lower::{Fix, Severity, Statement, lower};
+use crate::lower::{Severity, Statement, lower};
 use crate::names::{Names, Target, unescape_name};
-use crate::parser::parse;
+use crate::parser::{Fix, parse};
 use crate::print::{Balls, PrintError, power_order, print_with};
 
 /// Messages write out an expression of at most this many parts, as
@@ -159,7 +159,7 @@ pub struct Message {
     pub range: Range<usize>,
     /// What it says.
     pub text: String,
-    /// A replacement that fixes it, from lowering.
+    /// A replacement that fixes it, from the parser or from lowering.
     pub fix: Option<Fix>,
 }
 
@@ -273,7 +273,7 @@ impl Session {
                 level: Level::Error,
                 range: e.range.clone(),
                 text: e.to_string(),
-                fix: None,
+                fix: e.fix.clone(),
             })
             .chain(lowered.diagnostics.iter().map(|d| Message {
                 level: match d.severity {

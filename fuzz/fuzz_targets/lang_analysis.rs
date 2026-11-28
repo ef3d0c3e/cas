@@ -1,11 +1,13 @@
 //! The cas-lang analysis queries (CAS-DOC-60 §7) on arbitrary text, parsed
 //! once, at most 1024 offsets per input. T3: the line index's round trips,
-//! monotonic positions, line count and clamping, in both encodings. T4-T6 add
-//! their properties (fixes, cursor, symbols).
+//! monotonic positions, line count and clamping, in both encodings. T4: every
+//! fix of a parse error or of a lowering diagnostic lies within the text on
+//! character boundaries, and the text it gives parses without a panic. T5-T6
+//! add their properties (cursor, symbols).
 #![no_main]
 
 use cas_lang::analysis::lines::{Encoding, LineIndex, Position};
-use cas_lang::parse;
+use cas_lang::{Names, lower, parse};
 use libfuzzer_sys::fuzz_target;
 
 /// The most offsets an input's queries run on.
@@ -31,10 +33,21 @@ fn floor(text: &str, mut offset: usize) -> usize {
 fuzz_target!(|data: &[u8]| {
     let text = String::from_utf8_lossy(data);
     let text: &str = &text;
-    let _parse = parse(text);
+    let parse = parse(text);
     let index = LineIndex::new(text);
     let bytes = text.as_bytes();
     let len = text.len();
+
+    // Fixes: within the text, on boundaries, and the fixed text parses.
+    let lowered = lower(&parse, Names::english());
+    let fixes = parse.errors().iter().filter_map(|e| e.fix.as_ref());
+    for fix in fixes.chain(lowered.diagnostics.iter().filter_map(|d| d.fix.as_ref())) {
+        let r = &fix.range;
+        let inside = r.start <= r.end && r.end <= len;
+        assert!(inside && text.is_char_boundary(r.start) && text.is_char_boundary(r.end), "{fix:?}");
+        let fixed = format!("{}{}{}", &text[..r.start], fix.replacement, &text[r.end..]);
+        let _ = cas_lang::parse(&fixed);
+    }
     assert_eq!(index.len(), len);
 
     // The sampled character boundaries, in order.

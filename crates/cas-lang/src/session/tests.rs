@@ -63,6 +63,25 @@ fn outputs_follow_the_statements() {
     assert!(session.run("").is_empty());
 }
 
+/// A parse error's fix reaches its message (CAS-666).
+#[test]
+fn parse_errors_carry_their_fixes() {
+    let mut session = Session::new();
+    let outputs = session.run("1 + (2");
+    let fixes: Vec<_> = outputs
+        .iter()
+        .flat_map(|o| &o.messages)
+        .map(|m| m.fix.clone())
+        .collect();
+    assert_eq!(
+        fixes,
+        [Some(Fix {
+            range: 6..6,
+            replacement: ")".to_owned(),
+        })]
+    );
+}
+
 /// What a statement defines or assumes stays for the next `run`.
 #[test]
 fn the_context_keeps_what_statements_did() {

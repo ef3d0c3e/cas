@@ -24,7 +24,7 @@ use rowan::NodeOrToken;
 
 use crate::literal::{Number, NumberError, name, number_value, string_value, superscript_value};
 use crate::names::{Names, SyntaxForm, Target, TypeName, escape_name};
-use crate::parser::Parse;
+use crate::parser::{Fix, Parse};
 use crate::syntax::{SyntaxKind as K, SyntaxNode, SyntaxToken};
 
 /// The statements of a text as expressions, and what lowering found.
@@ -137,15 +137,6 @@ pub enum Severity {
     Error,
     /// A remark: the statement is kept.
     Note,
-}
-
-/// A replacement of part of the text.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Fix {
-    /// The bytes to replace.
-    pub range: Range<usize>,
-    /// What to put instead.
-    pub replacement: String,
 }
 
 /// What a [`Diagnostic`] is about.

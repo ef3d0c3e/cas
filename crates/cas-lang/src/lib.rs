@@ -5,9 +5,9 @@
 //!   their [`LexError`]s. Lexing never fails, and the tokens' texts
 //!   concatenate back to the input, as the language server needs.
 //! - [`parse`]: text to a lossless syntax tree ([`SyntaxNode`], a `rowan`
-//!   tree) with its [`SyntaxError`]s. Parsing never fails either: what has no
-//!   place goes into error nodes, and recovery stays local to a line or a
-//!   bracket.
+//!   tree) with its [`SyntaxError`]s, some with a [`Fix`]. Parsing never
+//!   fails either: what has no place goes into error nodes, and recovery
+//!   stays local to a line or a bracket.
 //! - [`number_value`], [`string_value`], [`superscript_value`] and [`name`]:
 //!   the values of literal tokens. Numbers are exact (`0.1` is `1/10`), and
 //!   names are in Unicode normal form C.
@@ -54,13 +54,13 @@ pub use literal::{
     MAX_DECIMAL_EXPONENT, Number, NumberError, decimal_balls, name, number_value, string_value,
     superscript_value,
 };
-pub use lower::{Diagnostic, Fix, LowerErrorKind, Lowered, Severity, Spans, Statement, lower};
+pub use lower::{Diagnostic, LowerErrorKind, Lowered, Severity, Spans, Statement, lower};
 pub use markup::{MathmlKind, export_mathml, latex};
 pub use mathml::mathml;
 pub use names::{
     Names, NamesError, NamesErrorKind, SyntaxForm, Target, TypeName, escape_name, unescape_name,
 };
-pub use parser::{MAX_DEPTH, Parse, ParseErrorKind, SyntaxError, SyntaxErrorKind, parse};
+pub use parser::{Fix, MAX_DEPTH, Parse, ParseErrorKind, SyntaxError, SyntaxErrorKind, parse};
 #[doc(hidden)]
 pub use print::fold_arithmetic;
 pub use print::{
