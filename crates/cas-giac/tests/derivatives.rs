@@ -33,21 +33,35 @@ fn same(ctx: &Context, a: &Expr, b: &Expr) -> bool {
     ctx.eval(&difference) == Ok(Expr::from(0))
 }
 
-/// Whether `|a − b| < tolerance · max(1, |b|)`, numerically.
+/// Whether `|a − b| < tolerance · max(1, |b|)`, numerically: as
+/// `|a − b| < tolerance` or `|a − b| < tolerance · |b|`, the same bound, so
+/// each claim is decided when giac's value is a ball straddling 1, where
+/// `Max(1, |b|)` stays unevaluated (CAS-662).
 fn near(ctx: &Context, a: &Expr, b: &Expr, tolerance: Expr) -> bool {
     let gap = Expr::call(
         Symbol::ABS,
         [Expr::call(Symbol::N, [a.clone() - b.clone()])],
     );
-    let scale = Expr::call(
-        Symbol::MAX,
-        [
-            Expr::from(1),
-            Expr::call(Symbol::ABS, [Expr::call(Symbol::N, [b.clone()])]),
-        ],
-    );
-    let claim = Expr::call(Symbol::LESS, [gap, tolerance * scale]);
-    ctx.eval(&claim).ok().and_then(|e| e.as_symbol()) == Some(Symbol::TRUE)
+    let size = Expr::call(Symbol::ABS, [Expr::call(Symbol::N, [b.clone()])]);
+    let less = |bound: Expr| {
+        let claim = Expr::call(Symbol::LESS, [gap.clone(), bound]);
+        ctx.eval(&claim).ok().and_then(|e| e.as_symbol()) == Some(Symbol::TRUE)
+    };
+    less(tolerance.clone()) || less(tolerance * size)
+}
+
+/// `near` on giac's decimal `1.0` straddling 1 (CAS-662): inside its
+/// tolerance, past it, and far off.
+#[test]
+fn near_decides_around_one() {
+    let ctx = Context::new();
+    let one = ours("(0.1+0.2)/0.3").unwrap();
+    let tolerance = || Expr::from(10).pow(-10);
+    let off = |k: i64| Expr::from(1) + Expr::from(k) * Expr::from(10).pow(-11);
+    assert!(near(&ctx, &Expr::from(1), &one, tolerance()));
+    assert!(near(&ctx, &off(5), &one, tolerance()));
+    assert!(!near(&ctx, &off(20), &one, tolerance()));
+    assert!(!near(&ctx, &Expr::from(2), &one, tolerance()));
 }
 
 /// `numdiff` of exact and symbolic points: orders, several at once, an
@@ -118,6 +132,10 @@ fn n_deriv() {
         "nDeriv(x^2,x,0.1)",
         "nDeriv(x^3,x,0.5)",
         "nDeriv(sin(x),x,1/10)",
+        // random_n_deriv's draws on CI 46005114300 and 46037332695:
+        // exactly 1 at 3/10 (CAS-662).
+        "nDeriv((0)*x^0+(-2)*x^1+(5)*x^2,x,1)",
+        "nDeriv(((0)*x^0+(4)*x^1+(0)*x^2+(1)*x^3)/(x^2+4),x,1)",
     ] {
         let (Ok(theirs), Ok(ours)) = (giac.value(input), ours(input)) else {
             wrong.push(format!("{input}: no answer"));
