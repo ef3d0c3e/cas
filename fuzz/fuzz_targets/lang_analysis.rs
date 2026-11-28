@@ -8,12 +8,22 @@
 //! clamped one, its ranges lie within the text on character boundaries, a
 //! name's range holds the offset, a call's argument is at most the commas of
 //! its arguments, and there is a token iff the text is not empty, holding the
-//! offset. T6 adds its properties (symbols).
+//! offset. T6: the symbols are built once; their occurrences are sorted,
+//! disjoint `Name` nodes on boundaries, each in its symbol's definitions or
+//! uses (and nothing else is listed), its text keyed as `name` gives it: a
+//! user symbol's name, else the type or the reserved target (English names)
+//! of the symbol's kind; every definition, use and scope lies within the text
+//! on boundaries, the document is scope 0 and every other scope lies in its
+//! parent, after it, disjoint from its siblings; `at` at the sampled offsets
+//! is the occurrence whose range is the token's.
 #![no_main]
+
+use std::collections::HashMap;
 
 use cas_lang::analysis::cursor::{CursorKind, cursor, token_at};
 use cas_lang::analysis::lines::{Encoding, LineIndex, Position};
-use cas_lang::{Names, lower, parse};
+use cas_lang::analysis::symbols::{ScopeKind, SymbolKind, symbols};
+use cas_lang::{Names, SyntaxKind, Target, lower, parse};
 use libfuzzer_sys::fuzz_target;
 
 /// The most offsets an input's queries run on.
@@ -115,6 +125,77 @@ fuzz_target!(|data: &[u8]| {
         let inside = r.start <= r.end && r.end <= len;
         inside && text.is_char_boundary(r.start) && text.is_char_boundary(r.end)
     };
+
+    // Symbols, built once: occurrences are `Name` nodes, sorted, disjoint,
+    // each listed in its symbol and keyed by its text.
+    let names = Names::english();
+    let table = symbols(&parse, names);
+    let name_nodes: Vec<(usize, usize)> = parse
+        .syntax()
+        .descendants()
+        .filter(|n| n.kind() == SyntaxKind::Name)
+        .map(|n| (usize::from(n.text_range().start()), usize::from(n.text_range().end())))
+        .collect();
+    let occurrences = table.occurrences();
+    let by_range: HashMap<(usize, usize), usize> =
+        occurrences.iter().enumerate().map(|(k, o)| ((o.range.start, o.range.end), k)).collect();
+    for pair in occurrences.windows(2) {
+        assert!(pair[0].range.end <= pair[1].range.start, "{pair:?}");
+    }
+    for o in occurrences {
+        let r = (o.range.start, o.range.end);
+        assert!(on_text(&o.range) && name_nodes.binary_search(&r).is_ok(), "{o:?}");
+        let info = &table.symbols()[o.symbol.0];
+        let listed = if o.definition {
+            info.definitions.iter().any(|d| d.name == o.range)
+        } else {
+            info.uses.contains(&o.range)
+        };
+        assert!(listed, "{o:?} {info:?}");
+        let key = cas_lang::name(&text[o.range.clone()]);
+        let keyed = match (info.kind, names.target(&key)) {
+            (SymbolKind::Type(ty), _) => names.type_name(&key) == Some(ty),
+            (kind, None) => kind.is_user() && info.name == key,
+            (SymbolKind::Builtin(s), Some(Target::Builtin(t))) => s == *t,
+            (SymbolKind::Planned, Some(Target::Planned(_))) => true,
+            (SymbolKind::Imaginary, Some(Target::Imaginary)) => true,
+            (SymbolKind::Syntax(f), Some(Target::Syntax(g))) => f == *g,
+            _ => false,
+        };
+        assert!(keyed, "{o:?} {key} {info:?}");
+    }
+    // Each symbol lists only its occurrences, with their flags.
+    let mut count = 0;
+    for (id, info) in table.symbols().iter().enumerate() {
+        let definitions = info.definitions.iter().map(|d| (&d.name, true));
+        for (r, definition) in definitions.chain(info.uses.iter().map(|u| (u, false))) {
+            let o = by_range.get(&(r.start, r.end)).map(|&k| &occurrences[k]);
+            let same = o.is_some_and(|o| o.symbol.0 == id && o.definition == definition);
+            assert!(same, "{r:?} {info:?}");
+            count += 1;
+        }
+        assert!(info.definitions.iter().all(|d| on_text(&d.node)), "{info:?}");
+    }
+    assert_eq!(count, occurrences.len());
+    // Scopes nest: the document first, each other one in its parent, after
+    // it, and disjoint from its siblings.
+    let scopes = table.scopes();
+    let document = &scopes[0];
+    assert!(document.kind == ScopeKind::Document && document.parent.is_none());
+    assert_eq!(document.range, 0..len);
+    for (k, s) in scopes.iter().enumerate().skip(1) {
+        let p = s.parent.map_or(usize::MAX, |p| p.0);
+        assert!(p < k && on_text(&s.range), "{s:?}");
+        let outer = &scopes[p].range;
+        assert!(outer.start <= s.range.start && s.range.end <= outer.end, "{s:?}");
+    }
+    let mut siblings: Vec<usize> = (1..scopes.len()).collect();
+    siblings.sort_by_key(|&k| (scopes[k].parent.map(|p| p.0), scopes[k].range.start));
+    for pair in siblings.windows(2) {
+        let (a, b) = (&scopes[pair[0]], &scopes[pair[1]]);
+        assert!(a.parent != b.parent || a.range.end <= b.range.start, "{a:?} {b:?}");
+    }
+
     // Raw non-boundary offsets only inside the first 64 multi-byte characters.
     let inner = text.char_indices().filter(|(_, ch)| ch.len_utf8() > 1).take(64);
     let raw = inner.flat_map(|(i, ch)| i + 1..i + ch.len_utf8()).chain([len + 1, usize::MAX]);
@@ -132,6 +213,11 @@ fuzz_target!(|data: &[u8]| {
         }
         let token = token_at(&parse, o);
         assert_eq!(token.is_some(), len > 0, "{o}");
+        let covering = token.as_ref().and_then(|t| {
+            let r = t.text_range();
+            by_range.get(&(usize::from(r.start()), usize::from(r.end())))
+        });
+        assert_eq!(table.at(o), covering.map(|&k| &occurrences[k]), "{o}");
         if let Some(token) = token {
             let r = token.text_range();
             assert!(usize::from(r.start()) <= at && at <= usize::from(r.end()), "{o}: {token:?}");

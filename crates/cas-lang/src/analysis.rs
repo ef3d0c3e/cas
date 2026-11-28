@@ -11,6 +11,12 @@
 //!   ([`token_at`](cursor::token_at)), the kind of spot
 //!   ([`CursorKind`](cursor::CursorKind)) and the call around it
 //!   ([`Call`](cursor::Call)).
+//! - [`symbols`]: the names of a text ([`Symbols`](symbols::Symbols)), each
+//!   [`Occurrence`](symbols::Occurrence) resolved to a
+//!   [`SymbolInfo`](symbols::SymbolInfo) (a reserved target, a type, a
+//!   global, a parameter or a local) with its definitions and uses, and the
+//!   [`Scope`](symbols::Scope)s that bind them, without lowering.
 
 pub mod cursor;
 pub mod lines;
+pub mod symbols;

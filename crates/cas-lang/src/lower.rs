@@ -1786,19 +1786,19 @@ enum Defined {
 }
 
 /// The name a [`Name`](K::Name) node stands for, as [`name`] gives it.
-fn name_of(node: &SyntaxNode) -> String {
+pub(crate) fn name_of(node: &SyntaxNode) -> String {
     name(&node.text().to_string()).into_owned()
 }
 
 /// The arguments of an application or an index.
-fn arguments(node: &SyntaxNode) -> Vec<SyntaxNode> {
+pub(crate) fn arguments(node: &SyntaxNode) -> Vec<SyntaxNode> {
     node.children()
         .find(|c| c.kind() == K::ArgList)
         .map(|args| args.children().collect())
         .unwrap_or_default()
 }
 
-fn range(node: &SyntaxNode) -> Range<usize> {
+pub(crate) fn range(node: &SyntaxNode) -> Range<usize> {
     let r = node.text_range();
     usize::from(r.start())..usize::from(r.end())
 }
@@ -1931,7 +1931,7 @@ fn occurs_in(n: &str, arg: &SyntaxNode) -> bool {
 /// The names `node`, a statement, assigns to: the targets of assignments,
 /// `local` names and loop variables, in branches and loop bodies too, but
 /// not in nested blocks and lambdas, which are scopes of their own.
-fn assigned_names(node: &SyntaxNode, out: &mut Vec<String>) {
+pub(crate) fn assigned_names(node: &SyntaxNode, out: &mut Vec<String>) {
     let mut add = |name: &SyntaxNode| {
         let n = name_of(name);
         if !out.contains(&n) {
@@ -1986,7 +1986,7 @@ fn assigned_names(node: &SyntaxNode, out: &mut Vec<String>) {
 
 /// Whether an `if` has statements in a branch, rather than one expression
 /// each: then it is a statement.
-fn has_statements(node: &SyntaxNode) -> bool {
+pub(crate) fn has_statements(node: &SyntaxNode) -> bool {
     node.children().filter(|c| c.kind() == K::Body).any(|body| {
         let statements: Vec<SyntaxNode> = body.children().collect();
         match statements.as_slice() {
