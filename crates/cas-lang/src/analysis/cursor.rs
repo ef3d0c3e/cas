@@ -10,7 +10,7 @@
 
 use std::ops::Range;
 
-use rowan::{TextRange, TextSize, TokenAtOffset};
+use rowan::{NodeOrToken, TextRange, TextSize, TokenAtOffset};
 
 use crate::lexer::LexErrorKind;
 use crate::parser::{Parse, SyntaxErrorKind};
@@ -70,18 +70,15 @@ pub struct Call {
 /// text.
 #[must_use]
 pub fn token_at(parse: &Parse, offset: usize) -> Option<SyntaxToken> {
-    let root = parse.syntax();
-    let at = clamp(&root, offset);
-    pick(&root, at)
+    pick(locate(&parse.syntax(), offset).1)
 }
 
 /// What is at `offset` (CAS-DOC-60 §1).
 #[must_use]
 pub fn cursor(parse: &Parse, offset: usize) -> Cursor {
-    let root = parse.syntax();
-    let at = clamp(&root, offset);
+    let (at, around) = locate(&parse.syntax(), offset);
     let offset = usize::from(at);
-    let Some(token) = pick(&root, at) else {
+    let Some(token) = pick(around.clone()) else {
         return Cursor {
             offset,
             kind: CursorKind::Name {
@@ -94,34 +91,53 @@ pub fn cursor(parse: &Parse, offset: usize) -> Cursor {
     Cursor {
         offset,
         kind: kind_at(parse, &token, at, last.as_ref()),
-        call: call_at(&root, at, last.as_ref()),
+        call: call_at(around, at, last.as_ref()),
     }
 }
 
-/// `offset` within the text, rounded down to a character's start.
-fn clamp(root: &SyntaxNode, offset: usize) -> TextSize {
+/// `offset` within the text, rounded down to a character's start, and the
+/// tokens there: the one holding it strictly inside, or the ones that end
+/// and start there (only one at the text's start or end). Each level of the
+/// tree is binary-searched, as `token_at_offset` does not.
+fn locate(root: &SyntaxNode, offset: usize) -> (TextSize, TokenAtOffset<SyntaxToken>) {
     let len = root.text_range().end();
     let at = TextSize::try_from(offset).map_or(len, |o| o.min(len));
-    match root.token_at_offset(at) {
-        TokenAtOffset::Single(token) => {
-            let start = token.text_range().start();
-            let text = token.text();
-            let inside = usize::from(at - start);
-            let back = (0..=inside)
-                .rev()
-                .find(|&i| text.is_char_boundary(i))
-                .unwrap_or(0);
-            start + TextSize::of(&text[..back])
-        }
-        _ => at,
+    if at == len {
+        let last = at
+            .checked_sub(TextSize::from(1))
+            .and_then(|byte| holding(root, byte));
+        return (at, last.map_or(TokenAtOffset::None, TokenAtOffset::Single));
+    }
+    let Some(right) = holding(root, at) else {
+        return (at, TokenAtOffset::None);
+    };
+    let start = right.text_range().start();
+    let text = right.text();
+    let back = (0..=usize::from(at - start))
+        .rev()
+        .find(|&i| text.is_char_boundary(i))
+        .unwrap_or(0);
+    let at = start + TextSize::of(&text[..back]);
+    if at > start {
+        return (at, TokenAtOffset::Single(right));
+    }
+    match right.prev_token() {
+        Some(left) => (at, TokenAtOffset::Between(left, right)),
+        None => (at, TokenAtOffset::Single(right)),
     }
 }
 
-/// The token at `at`, a character boundary, by [`token_at`]'s rule. An
-/// unterminated string or comment runs to the text's end, so it is never the
-/// left token of a boundary inside the text.
-fn pick(root: &SyntaxNode, at: TextSize) -> Option<SyntaxToken> {
-    match root.token_at_offset(at) {
+/// The token holding the byte at `byte`, inside the text.
+fn holding(root: &SyntaxNode, byte: TextSize) -> Option<SyntaxToken> {
+    root.covering_element(TextRange::at(byte, TextSize::from(1)))
+        .into_token()
+}
+
+/// The token at a character boundary by [`token_at`]'s rule, from the
+/// tokens there. An unterminated string or comment runs to the text's end,
+/// so it is never the left token of a boundary inside the text.
+fn pick(around: TokenAtOffset<SyntaxToken>) -> Option<SyntaxToken> {
+    match around {
         TokenAtOffset::None => None,
         TokenAtOffset::Single(token) => Some(token),
         TokenAtOffset::Between(left, right) => {
@@ -249,8 +265,12 @@ fn empty(at: TextSize, last: Option<&SyntaxToken>) -> CursorKind {
 
 /// The innermost call whose arguments hold `at`, among the ancestors of the
 /// tokens on both sides of `at` and of `last`.
-fn call_at(root: &SyntaxNode, at: TextSize, last: Option<&SyntaxToken>) -> Option<Call> {
-    let (left, right) = match root.token_at_offset(at) {
+fn call_at(
+    around: TokenAtOffset<SyntaxToken>,
+    at: TextSize,
+    last: Option<&SyntaxToken>,
+) -> Option<Call> {
+    let (left, right) = match around {
         TokenAtOffset::None => (None, None),
         TokenAtOffset::Single(token) => (Some(token), None),
         TokenAtOffset::Between(left, right) => (Some(left), Some(right)),
@@ -271,16 +291,19 @@ fn call_at(root: &SyntaxNode, at: TextSize, last: Option<&SyntaxToken>) -> Optio
     let application = arguments.parent()?;
     let commas = |node: &SyntaxNode| {
         node.children_with_tokens()
-            .filter_map(rowan::NodeOrToken::into_token)
-            .filter(|t| t.kind() == SyntaxKind::Comma && t.text_range().start() < at)
-            .count()
+            .take_while(|e| e.text_range().start() < at)
+            .map(|e| match e {
+                NodeOrToken::Token(t) => usize::from(t.kind() == SyntaxKind::Comma),
+                NodeOrToken::Node(n) if n.kind() == SyntaxKind::ErrorNode => n
+                    .children_with_tokens()
+                    .take_while(|e| e.text_range().start() < at)
+                    .filter(|e| e.kind() == SyntaxKind::Comma)
+                    .count(),
+                NodeOrToken::Node(_) => 0,
+            })
+            .sum::<usize>()
     };
-    let argument = commas(&arguments)
-        + arguments
-            .children()
-            .filter(|n| n.kind() == SyntaxKind::ErrorNode)
-            .map(|n| commas(&n))
-            .sum::<usize>();
+    let argument = commas(&arguments);
     Some(Call {
         callee: span(application.first_child_or_token()?.text_range()),
         arguments: span(arguments.text_range()),
@@ -306,11 +329,11 @@ fn opener(node: &SyntaxNode, at: TextSize, last: Option<&SyntaxToken>) -> Option
         return None;
     }
     let range = node.text_range();
+    // The `)` is added last, right after the arguments.
     let close = node
-        .children_with_tokens()
-        .filter_map(rowan::NodeOrToken::into_token)
-        .filter(|t| t.kind() == SyntaxKind::RParen)
-        .last();
+        .last_child_or_token()
+        .and_then(NodeOrToken::into_token)
+        .filter(|t| t.kind() == SyntaxKind::RParen);
     let holds = match close {
         Some(close) => close.text_range().start() >= at,
         None => at <= range.end() || last.is_some_and(|t| range.contains_range(t.text_range())),
