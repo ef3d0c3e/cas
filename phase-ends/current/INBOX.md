@@ -12,3 +12,4 @@
 
 - <note, correction, priority change, or question>
 - giac 2.1 reference move -> Gen 2 later phase or developer's call: debian:sid moved libgiac0t64 to 2.1.0.1+dfsg2-1 (CI 46069824120, C0122); 2.1 T-pin keeps CI on 2.0.0.21 to match local caseval. Moving means updating local giac, re-probing departures, and fixing mathml.rs:377 (<mo>( for <mfenced>) and derivatives.rs:227.
+- -> 2.2: 2.1 closed with three loose ends: random_n_deriv (derivatives.rs:273) fails intermittently in its near check (derivatives.rs:37-51); pin nDeriv(-2x+5x^2,x,1)@3/10 and nDeriv((4x+x^3)/(x^2+4),x,1)@3/10 (seed cc a9ff39f6) as rows and fix the check. CAS-661 (sturmseq) still open in Lific: set done. Confirm Fuzz 46082504901 on 5990fb7 completed green (R117). Integrate's DiracDelta/piecewise paths (integrate.rs:108-125) have no CAS-650 guard -> 2.6.
