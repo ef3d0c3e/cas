@@ -1,11 +1,32 @@
 use super::{OVERLAY, Source, docs, kept, records};
 use crate::names::{Names, Target};
 
-/// The examples hidden at load, pinned from CI's first run.
-const HIDDEN: usize = 0;
+/// The examples hidden at load, pinned from CI's first run (CI 46158840992).
+const HIDDEN: usize = 135;
 
 /// The first 20 hidden examples, in the order of the files.
-const FIRST_HIDDEN: [&str; 0] = [];
+const FIRST_HIDDEN: [&str; 20] = [
+    "append(%{1,2,4%},6)",
+    "L:=[1,2,4];L.append(6)",
+    "S:=set[1,2,4];S.append(6)",
+    "L:=[j^2 for j in range(20) if isprime(j)]",
+    "chisquaret([1,1,1,1,1,0,0,1,0,0,1,1,1,0,1,1,0,1,1,0,0,0,0],[.4,.6])",
+    "chisquaret([57,30],[.6,.4])",
+    "chisquaret(ranv(1000,binomial,10,.5),binomial)",
+    "chisquaret(ranv(1000,binomial,10,.5),binomial,11,.5)",
+    "chisquaret(ranv(1000,normald,0,.2),normald)",
+    "chisquaret([11,16,17,22,14,10],[(1/6)$6])",
+    "contains(%{0,1,2,3%},2)",
+    "convert(sqrt(2),confrac,'dev');dev",
+    "convert(9976/6961,confrac,'l');l",
+    "convert(%%%{1,[2,0]%%%}+%%%{2,[1,1]%%%}+%%%{1,[0,2]%%%},list)",
+    "convert(9976/6961,confrac,'l');l",
+    "convert(sqrt(2),confrac,'dev');dev",
+    "convex(sqrt((1+(u')^2)/(2*g*u)),u(t),simplify)",
+    "count((x)->x>2 && x<4,[[3,9/2],[4,1]])",
+    "count((x)->x<2 || x>4,[[3,9/2],[4,1]])",
+    "t:=soundsec(3):;L,R:=sin(2*pi*440*t),sin(2*pi*445*t):;createwav([L,R])",
+];
 
 #[test]
 fn every_builtin_and_the_imaginary_unit_have_a_record() {

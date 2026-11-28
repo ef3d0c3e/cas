@@ -63,10 +63,7 @@ fuzz_target!(|data: &[u8]| {
     for fix in fixes.chain(lowered.diagnostics.iter().filter_map(|d| d.fix.as_ref())) {
         let r = &fix.range;
         let inside = r.start <= r.end && r.end <= len;
-        assert!(
-            inside && text.is_char_boundary(r.start) && text.is_char_boundary(r.end),
-            "{fix:?}"
-        );
+        assert!(inside && text.is_char_boundary(r.start) && text.is_char_boundary(r.end), "{fix:?}");
         let fixed = format!("{}{}{}", &text[..r.start], fix.replacement, &text[r.end..]);
         let _ = cas_lang::parse(&fixed);
     }
@@ -96,19 +93,13 @@ fuzz_target!(|data: &[u8]| {
     for encoding in [Encoding::Utf8, Encoding::Utf16] {
         // Every byte offset, and past the end, uses the character's start.
         for o in spaced(len) {
-            assert_eq!(
-                index.position(o, encoding),
-                index.position(floor(text, o), encoding)
-            );
+            assert_eq!(index.position(o, encoding), index.position(floor(text, o), encoding));
         }
         for o in [len + 1, usize::MAX] {
             assert_eq!(index.position(o, encoding), index.position(len, encoding));
         }
 
-        let mut last = Position {
-            line: 0,
-            character: 0,
-        };
+        let mut last = Position { line: 0, character: 0 };
         for &o in &boundaries {
             let p = index.position(o, encoding);
             assert!(last <= p, "position not monotonic at {o}");
@@ -118,33 +109,15 @@ fuzz_target!(|data: &[u8]| {
             assert_eq!(index.position(back, encoding), p);
 
             let near = [
-                Position {
-                    line: p.line,
-                    character: p.character.saturating_add(1),
-                },
-                Position {
-                    line: p.line,
-                    character: p.character.saturating_add(2),
-                },
-                Position {
-                    line: p.line,
-                    character: p.character.saturating_add(3),
-                },
-                Position {
-                    line: p.line.saturating_add(1),
-                    character: 0,
-                },
-                Position {
-                    line: line_count.saturating_add(1),
-                    character: 0,
-                },
+                Position { line: p.line, character: p.character.saturating_add(1) },
+                Position { line: p.line, character: p.character.saturating_add(2) },
+                Position { line: p.line, character: p.character.saturating_add(3) },
+                Position { line: p.line.saturating_add(1), character: 0 },
+                Position { line: line_count.saturating_add(1), character: 0 },
             ];
             for q in near {
                 let b = index.offset(q, encoding);
-                assert!(
-                    b <= len && text.is_char_boundary(b) && !in_crlf(b),
-                    "{q:?} -> {b}"
-                );
+                assert!(b <= len && text.is_char_boundary(b) && !in_crlf(b), "{q:?} -> {b}");
                 assert!(index.position(b, encoding) <= q, "{q:?} -> {b}");
             }
         }
@@ -164,28 +137,17 @@ fuzz_target!(|data: &[u8]| {
         .syntax()
         .descendants()
         .filter(|n| n.kind() == SyntaxKind::Name)
-        .map(|n| {
-            (
-                usize::from(n.text_range().start()),
-                usize::from(n.text_range().end()),
-            )
-        })
+        .map(|n| (usize::from(n.text_range().start()), usize::from(n.text_range().end())))
         .collect();
     let occurrences = table.occurrences();
-    let by_range: HashMap<(usize, usize), usize> = occurrences
-        .iter()
-        .enumerate()
-        .map(|(k, o)| ((o.range.start, o.range.end), k))
-        .collect();
+    let by_range: HashMap<(usize, usize), usize> =
+        occurrences.iter().enumerate().map(|(k, o)| ((o.range.start, o.range.end), k)).collect();
     for pair in occurrences.windows(2) {
         assert!(pair[0].range.end <= pair[1].range.start, "{pair:?}");
     }
     for o in occurrences {
         let r = (o.range.start, o.range.end);
-        assert!(
-            on_text(&o.range) && name_nodes.binary_search(&r).is_ok(),
-            "{o:?}"
-        );
+        assert!(on_text(&o.range) && name_nodes.binary_search(&r).is_ok(), "{o:?}");
         let info = &table.symbols()[o.symbol.0];
         let listed = if o.definition {
             info.definitions.iter().any(|d| d.name == o.range)
@@ -215,10 +177,7 @@ fuzz_target!(|data: &[u8]| {
             assert!(same, "{r:?} {info:?}");
             count += 1;
         }
-        assert!(
-            info.definitions.iter().all(|d| on_text(&d.node)),
-            "{info:?}"
-        );
+        assert!(info.definitions.iter().all(|d| on_text(&d.node)), "{info:?}");
     }
     assert_eq!(count, occurrences.len());
     // Scopes nest: the document first, each other one in its parent, after
@@ -231,39 +190,25 @@ fuzz_target!(|data: &[u8]| {
         let p = s.parent.map_or(usize::MAX, |p| p.0);
         assert!(p < k && on_text(&s.range), "{s:?}");
         let outer = &scopes[p].range;
-        assert!(
-            outer.start <= s.range.start && s.range.end <= outer.end,
-            "{s:?}"
-        );
+        assert!(outer.start <= s.range.start && s.range.end <= outer.end, "{s:?}");
     }
     let mut siblings: Vec<usize> = (1..scopes.len()).collect();
     siblings.sort_by_key(|&k| (scopes[k].parent.map(|p| p.0), scopes[k].range.start));
     for pair in siblings.windows(2) {
         let (a, b) = (&scopes[pair[0]], &scopes[pair[1]]);
-        assert!(
-            a.parent != b.parent || a.range.end <= b.range.start,
-            "{a:?} {b:?}"
-        );
+        assert!(a.parent != b.parent || a.range.end <= b.range.start, "{a:?} {b:?}");
     }
 
     // Raw non-boundary offsets only inside the first 64 multi-byte characters.
-    let inner = text
-        .char_indices()
-        .filter(|(_, ch)| ch.len_utf8() > 1)
-        .take(64);
-    let raw = inner
-        .flat_map(|(i, ch)| i + 1..i + ch.len_utf8())
-        .chain([len + 1, usize::MAX]);
+    let inner = text.char_indices().filter(|(_, ch)| ch.len_utf8() > 1).take(64);
+    let raw = inner.flat_map(|(i, ch)| i + 1..i + ch.len_utf8()).chain([len + 1, usize::MAX]);
     let docs = docs();
     for o in boundaries.iter().copied().chain(raw) {
         let c = cursor(&parse, o);
         let at = floor(text, o.min(len));
         assert_eq!(c.offset, at, "{o}");
         if let CursorKind::Name { range } | CursorKind::Type { range } = &c.kind {
-            assert!(
-                on_text(range) && range.start <= at && at <= range.end,
-                "{o}: {c:?}"
-            );
+            assert!(on_text(range) && range.start <= at && at <= range.end, "{o}: {c:?}");
         }
         if let CursorKind::Name { range } = &c.kind
             && !range.is_empty()
@@ -273,14 +218,8 @@ fuzz_target!(|data: &[u8]| {
             assert!(docs.get(t).is_some(), "{o}: {t:?}");
         }
         if let Some(call) = &c.call {
-            assert!(
-                on_text(&call.callee) && on_text(&call.arguments),
-                "{o}: {c:?}"
-            );
-            let commas = bytes[call.arguments.clone()]
-                .iter()
-                .filter(|&&b| b == b',')
-                .count();
+            assert!(on_text(&call.callee) && on_text(&call.arguments), "{o}: {c:?}");
+            let commas = bytes[call.arguments.clone()].iter().filter(|&&b| b == b',').count();
             assert!(call.argument <= commas, "{o}: {c:?}");
         }
         let token = token_at(&parse, o);
@@ -292,10 +231,7 @@ fuzz_target!(|data: &[u8]| {
         assert_eq!(table.at(o), covering.map(|&k| &occurrences[k]), "{o}");
         if let Some(token) = token {
             let r = token.text_range();
-            assert!(
-                usize::from(r.start()) <= at && at <= usize::from(r.end()),
-                "{o}: {token:?}"
-            );
+            assert!(usize::from(r.start()) <= at && at <= usize::from(r.end()), "{o}: {token:?}");
         }
     }
 });
