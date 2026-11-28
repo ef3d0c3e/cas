@@ -691,7 +691,7 @@ fn fixes_remove_their_error() {
         (
             "f(x, \ny := 1",
             Parse(E::Expected(K::RParen)),
-            "f(x,)\ny := 1",
+            "f(x,) \ny := 1",
         ),
         ("[1, 2", Parse(E::Expected(K::RBracket)), "[1, 2]"),
         ("{1, 2", Parse(E::Expected(K::RBrace)), "{1, 2}"),
