@@ -390,6 +390,11 @@ fn errors_leave_statements_out() {
             "f(n) := begin n := 1 end",
             &[("n", E::AssignedParameter("n".into()))],
         ),
+        // A curried rule's first argument list holds parameters too (CAS-670).
+        (
+            "f(a)(b) := begin a := 1; a end",
+            &[("a", E::AssignedParameter("a".into()))],
+        ),
         (
             "g() := begin h(y) := y end",
             &[("h(y) := y", E::DefinitionInBlock)],
@@ -539,6 +544,12 @@ fn procedures() {
             "f(x) := begin g := (x -> x^2); g(x) end",
             "SetDelayed[f[Pattern[x, Blank[]]], Block[List[g], \
              Set[g, Function[List[x], Power[x, 2]]], g[x]]]",
+        ),
+        // Both argument lists of a curried rule hold parameters (CAS-670).
+        (
+            "f(a)(b) := begin c := a; c end",
+            "SetDelayed[f[Pattern[a, Blank[]]][Pattern[b, Blank[]]], \
+             Block[List[c], Set[c, a], c]]",
         ),
     ]);
 }

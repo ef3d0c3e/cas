@@ -2000,10 +2000,14 @@ pub(crate) fn has_statements(node: &SyntaxNode) -> bool {
 }
 
 /// The names of the pattern variables in `e`, the parameters of a
-/// definition.
+/// definition; a compound head is searched too, so `f(a)(b)` has `a` and
+/// `b` (CAS-670).
 pub(crate) fn pattern_variables(e: &Expr, out: &mut Vec<Symbol>) {
     if e.head().and_then(Expr::as_symbol) == Some(Symbol::PATTERN) {
         out.extend(e.args().first().and_then(Expr::as_symbol));
+    }
+    if let Some(h) = e.head().filter(|h| h.as_symbol().is_none()) {
+        pattern_variables(h, out);
     }
     for a in e.args() {
         pattern_variables(a, out);
