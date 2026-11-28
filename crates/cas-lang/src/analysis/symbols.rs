@@ -646,4 +646,6 @@ fn push_new(keys: &mut Vec<String>, key: String) {
 }
 
 #[cfg(test)]
+mod props;
+#[cfg(test)]
 mod tests;

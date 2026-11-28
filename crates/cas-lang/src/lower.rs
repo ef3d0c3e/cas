@@ -2001,7 +2001,7 @@ pub(crate) fn has_statements(node: &SyntaxNode) -> bool {
 
 /// The names of the pattern variables in `e`, the parameters of a
 /// definition.
-fn pattern_variables(e: &Expr, out: &mut Vec<Symbol>) {
+pub(crate) fn pattern_variables(e: &Expr, out: &mut Vec<Symbol>) {
     if e.head().and_then(Expr::as_symbol) == Some(Symbol::PATTERN) {
         out.extend(e.args().first().and_then(Expr::as_symbol));
     }

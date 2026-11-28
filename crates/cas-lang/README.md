@@ -92,4 +92,11 @@ locals without the parameters around, nested scopes, an `if` body as a block, `F
 names in binding positions, one symbol per reserved target (`π`/`pi`, `ln`/`log`, `Digits`, `i`,
 the syntax forms), known and unknown types, globals, a local read before its assignment, syntax
 errors and error nodes, and `at` at boundaries; `lang_analysis` checks the occurrences, their
-symbols' lists and keys, the scopes' nesting and `at` on arbitrary bytes.
+symbols' lists and keys, the scopes' nesting and `at` on arbitrary bytes. `src/analysis/symbols/props.rs`
+has `agrees_with_lowering`, a differential test: on programs of every binding form without a
+diagnostic, each block's locals, rule's parameters and lambda's parameters are those of lowering's
+`Block`, pattern variables and `Function` at the same bytes; and the proptest
+`stable_under_an_edit_elsewhere` (CAS-DOC-60 §4): an insertion, deletion or replacement inside
+one statement that keeps the statement partition leaves every other statement's occurrences with
+the same shifted range, binding flag and meaning, and both texts, when they lower without a
+diagnostic, agree with lowering too.
