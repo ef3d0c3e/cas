@@ -152,6 +152,13 @@ doc = false
 bench = false
 
 [[bin]]
+name = "lang_analysis"
+path = "fuzz_targets/lang_analysis.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "eval"
 path = "fuzz_targets/eval.rs"
 test = false

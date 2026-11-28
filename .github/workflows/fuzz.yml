@@ -78,6 +78,7 @@ jobs:
           - lang_lower
           - lang_session
           - lang_print
+          - lang_analysis
           - ball_fns
           - special_fns
           - complex_fns
@@ -155,7 +156,7 @@ jobs:
               ;;
           esac
           case '${{ matrix.target }}' in
-            lang_lower|lang_print) echo "seed=lang_parse" >> "$GITHUB_OUTPUT" ;;
+            lang_lower|lang_print|lang_analysis) echo "seed=lang_parse" >> "$GITHUB_OUTPUT" ;;
             lang_session) echo "seed=lang_lower" >> "$GITHUB_OUTPUT" ;;
             *) echo "seed=" >> "$GITHUB_OUTPUT" ;;
           esac
