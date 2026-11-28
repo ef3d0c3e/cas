@@ -125,3 +125,4 @@ C0121 | Oracle sweep where giac is wrong: probe the class with caseval, then ski
 C0122 | Oracle red with no related change: check the giac version (debian:sid, unpinned) | giac,oracle,ci,debian,version,pin | 2026-11-27 | 2.1/T11 | CI 46069824120, T11.c1 99abffd
 C0123 | giac sqff takes x^v out first: where the sign of a negative lead goes | giac,sqff,sturmseq,sign,caseval,factor | 2026-11-28 | 2.1/T12 | CAS-661 CI 46047327203
 C0124 | Pin a Debian package version in CI from snapshot.debian.org by sha1 | debian,apt,pin,snapshot,ci,giac,oracle | 2026-11-28 | 2.1/T13 | CI 46082504855, 5990fb7
+C0125 | Max(1,|b|) stays unevaluated on a ball straddling 1: split tolerance claims | giac,oracle,tolerance,ball,max,less,near | 2026-11-28 | 2.2/T1 | CAS-662 near
