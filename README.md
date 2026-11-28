@@ -30,3 +30,5 @@ ticket: subject `CAS-N: …`, footer `Closes: CAS-N`.
 ## License
 
 GPL-3.0-only. See `LICENSE`.
+
+`crates/cas-lang/names/en_docs.txt` is extracted and modified from giac's help file `aide_cas`, GPL-3+, Copyright 2000-2017 Bernard Parisse, Renée de Graeve, Jose Manrique Lopez de la Fuente, X. Vidaux and Alkis Akritas.

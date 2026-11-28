@@ -1,0 +1,65 @@
+# Overlay of en_docs.txt (CAS-DOC-60 §6, CAS-669). Hand-edited; en_docs.txt
+# is generated and never hand-edited (H1).
+#
+# Same format as en_docs.txt, plus `note:` lines (one remark each). A record
+# for a target en_docs.txt lacks is new (ours); one for a target it has
+# replaces each field kind it holds (its `ex:` lines replace all the
+# examples) and its `note:` lines add. Every key is an en.txt [builtins] key
+# or `imaginary`, and every example here must parse and lower; tests check
+# both. Examples are inputs only, never answers.
+
+[InverseErf]
+sig: Real(x)
+doc: Returns the inverse of the error function erf at x, for x in [-1,1].
+see: Erf
+ex: erfinv(1/2)
+ex: erfinv(-1)
+
+[KroneckerDelta]
+sig: Real(n)
+doc: Returns 1 when n is 0 and 0 when n is another number (Kronecker's delta).
+ex: Kronecker(0)
+ex: Kronecker(3)
+
+[MatrixExp]
+sig: Mtrx(A)
+doc: Returns the exponential of the square matrix A.
+see: Exp
+ex: expm([[0,1],[0,0]])
+
+[Ball]
+sig: Real(c),Real(r)
+doc: Returns the ball of center c and radius r, the interval [c-r,c+r]; c is exact or a ball, r exact and not negative.
+ex: ball(1/10,0)
+ex: ball(3,1/1000)
+
+[BesselI]
+sig: Intg(n),Real(x)
+doc: Returns the modified Bessel function of the first kind I_n(x).
+see: BesselK BesselJ
+ex: BesselI(2,0)
+ex: BesselI(1,-1/2)
+
+[BesselK]
+sig: Intg(n),Real(x)
+doc: Returns the modified Bessel function of the second kind K_n(x).
+see: BesselI BesselY
+ex: BesselK(0,1/2)
+
+[AiryAiPrime]
+sig: Real(x)
+doc: Returns the derivative Ai'(x) of the Airy function Ai.
+see: AiryAi AiryBiPrime
+ex: Airy_Ai_prime(0)
+
+[AiryBiPrime]
+sig: Real(x)
+doc: Returns the derivative Bi'(x) of the Airy function Bi.
+see: AiryBi AiryAiPrime
+ex: Airy_Bi_prime(0)
+
+[SoundClip]
+sig: Intg(rate),Intg(depth),Lst(samples),[Lst(samples)...]
+doc: An audio clip: its sample rate, its bit depth (8, 16 or 24) and one list of integer sample codes per channel, all of one length.
+ex: soundclip(44100,16,[29204,-29204])
+ex: soundclip(8000,8,[1,-1],[2,-2])

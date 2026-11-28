@@ -16,7 +16,11 @@
 //!   [`SymbolInfo`](symbols::SymbolInfo) (a reserved target, a type, a
 //!   global, a parameter or a local) with its definitions and uses, and the
 //!   [`Scope`](symbols::Scope)s that bind them, without lowering.
+//! - [`docs`]: the documentation of the builtins by target
+//!   ([`Docs`](docs::Docs), [`Doc`](docs::Doc)), giac's `aide_cas` with an
+//!   overlay of ours, examples our parser rejects hidden.
 
 pub mod cursor;
+pub mod docs;
 pub mod lines;
 pub mod symbols;
