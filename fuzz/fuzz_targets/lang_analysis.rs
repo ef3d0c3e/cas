@@ -2,10 +2,15 @@
 //! once, at most 1024 offsets per input. T3: the line index's round trips,
 //! monotonic positions, line count and clamping, in both encodings. T4: every
 //! fix of a parse error or of a lowering diagnostic lies within the text on
-//! character boundaries, and the text it gives parses without a panic. T5-T6
-//! add their properties (cursor, symbols).
+//! character boundaries, and the text it gives parses without a panic. T5:
+//! at every sampled offset, boundaries or not and past the end, the cursor's
+//! offset is the clamped one, its ranges lie within the text on character
+//! boundaries, a name's range holds the offset, a call's argument is at most
+//! the commas of its arguments, and there is a token iff the text is not
+//! empty, holding the offset. T6 adds its properties (symbols).
 #![no_main]
 
+use cas_lang::analysis::cursor::{CursorKind, cursor, token_at};
 use cas_lang::analysis::lines::{Encoding, LineIndex, Position};
 use cas_lang::{Names, lower, parse};
 use libfuzzer_sys::fuzz_target;
@@ -101,6 +106,32 @@ fuzz_target!(|data: &[u8]| {
                 assert!(b <= len && text.is_char_boundary(b) && !in_crlf(b), "{q:?} -> {b}");
                 assert!(index.position(b, encoding) <= q, "{q:?} -> {b}");
             }
+        }
+    }
+
+    // The cursor and the token at sampled offsets, boundaries or not.
+    let on_text = |r: &std::ops::Range<usize>| {
+        let inside = r.start <= r.end && r.end <= len;
+        inside && text.is_char_boundary(r.start) && text.is_char_boundary(r.end)
+    };
+    let raw = spaced(len).into_iter().chain([len + 1, usize::MAX]);
+    for o in boundaries.iter().copied().chain(raw) {
+        let c = cursor(&parse, o);
+        let at = floor(text, o.min(len));
+        assert_eq!(c.offset, at, "{o}");
+        if let CursorKind::Name { range } | CursorKind::Type { range } = &c.kind {
+            assert!(on_text(range) && range.start <= at && at <= range.end, "{o}: {c:?}");
+        }
+        if let Some(call) = &c.call {
+            assert!(on_text(&call.callee) && on_text(&call.arguments), "{o}: {c:?}");
+            let commas = bytes[call.arguments.clone()].iter().filter(|&&b| b == b',').count();
+            assert!(call.argument <= commas, "{o}: {c:?}");
+        }
+        let token = token_at(&parse, o);
+        assert_eq!(token.is_some(), len > 0, "{o}");
+        if let Some(token) = token {
+            let r = token.text_range();
+            assert!(usize::from(r.start()) <= at && at <= usize::from(r.end()), "{o}: {token:?}");
         }
     }
 });
