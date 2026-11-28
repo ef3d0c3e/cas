@@ -85,7 +85,7 @@ fn rule_parameters() {
     assert_eq!(sites("f(x) := x", "x"), [(2, 3)]);
     assert_eq!(
         describe("f(x) := "),
-        ["f= Function Document 0..8", "x= Parameter Rule 0..7"]
+        ["f= Function Document 0..8", "x= Parameter Rule 0..8"]
     );
     // Half-typed, a call: its names are uses.
     assert_eq!(
