@@ -576,6 +576,8 @@ fn recovery_is_local() {
 /// Half-typed input, alone and with lines below it (CAS-665): a list or
 /// arguments left open stop at a line that starts `name :=`, with the closer
 /// missing at the end of the open line, and the lines below parse alone.
+/// Only before an item: in `f(g(x, ` the outer argument's product takes the
+/// next line's name first.
 #[test]
 fn half_typed_input() {
     let mut found = String::new();
@@ -604,7 +606,7 @@ fn half_typed_input() {
   (Root (ExprStmt (Application f (ArgList ( x ,))) (Definition y := 1) (Definition z := 2))
   4..4 Parse(Expected(RParen))
 "sin("
-  (Root (ExprStmt (Application sin (ArgList ()))))
+  (Root (ExprStmt (Application sin (ArgList ())))
   4..4 Parse(Expected(RParen))
 "sin(\ny := 1\nz := 2"
   (Root (ExprStmt (Application sin (ArgList ())) (Definition y := 1) (Definition z := 2))
@@ -634,13 +636,14 @@ fn half_typed_input() {
   (Root (Definition (Application f (ArgList ( x ))) := y) (ErrorNode := 1) (Definition z := 2))
   11..13 Parse(ExpectedSeparator)
 "f(g(x, "
-  (Root (ExprStmt (Application f (ArgList ( (Application g (ArgList ( x ,)))))))
+  (Root (ExprStmt (Application f (ArgList ( (Application g (ArgList ( x ,))))))
   7..7 Parse(Expected(RParen))
   7..7 Parse(Expected(RParen))
 "f(g(x, \ny := 1\nz := 2"
-  (Root (ExprStmt (Application f (ArgList ( (Application g (ArgList ( x ,)))))) (Definition y := 1) (Definition z := 2))
+  (Root (ExprStmt (Application f (ArgList ( (ImplicitProduct (Application g (ArgList ( x ,)) y) (ErrorNode := 1 z := 2)))))
   6..6 Parse(Expected(RParen))
-  6..6 Parse(Expected(RParen))
+  10..12 Parse(Expected(RParen))
+  21..21 Parse(Expected(RParen))
 "#;
     assert_eq!(found, expected);
 }

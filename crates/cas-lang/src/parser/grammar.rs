@@ -659,9 +659,6 @@ impl Parser<'_> {
             if starts_expression(self.peek()) {
                 self.expr();
                 if !self.at(K::Comma) && !self.at(closer) && !is_boundary(self.peek()) {
-                    if self.at_statement_line() {
-                        return true;
-                    }
                     self.error(E::Expected(closer));
                     self.skip_to(closer);
                 }
