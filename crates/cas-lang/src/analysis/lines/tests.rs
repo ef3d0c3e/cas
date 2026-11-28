@@ -122,7 +122,8 @@ fn empty_last_line() {
 #[test]
 fn past_end() {
     let index = LineIndex::new("ab\nc€");
-    check_position(&index, 6, 1, 4, 2);
+    check_position(&index, 6, 1, 1, 1);
+    check_position(&index, 7, 1, 4, 2);
     check_position(&index, 100, 1, 4, 2);
     check_position(&index, usize::MAX, 1, 4, 2);
     for e in [U8, U16] {
