@@ -5,3 +5,4 @@ T2 | done | design page CAS-DOC-60 and the phase's Language tickets | - | tasks/
 T3 | done | line index from byte offsets to lines with UTF-8 and UTF-16 columns and back; the lang_analysis fuzz target | - | tasks/T3.md | logs/T3.md | R2.2-006
 T4 | done | half-typed trees pinned and recovery checked; fixes on lexer and parser errors | - | tasks/T4.md | logs/T4.md | R2.2-002,R2.2-004
 T5 | done | cursor query: the token and its context at an offset | - | tasks/T5.md | logs/T5.md | R2.2-002
+T6 | done | symbol index: definitions and uses with ranges, kinds and scopes | - | tasks/T6.md | logs/T6.md | R2.2-004,R2.2-002
