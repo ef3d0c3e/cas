@@ -12,9 +12,10 @@
 //! [`ErrorNode`](SyntaxKind::ErrorNode), each problem is a [`SyntaxError`],
 //! and the lexer's problems come along. Recovery stays local: a statement
 //! that goes wrong is skipped to the end of its line, an argument to the next
-//! comma or the closing bracket. Text that nests beyond [`MAX_DEPTH`] goes
-//! whole into one error node, so that the parser's recursion stays within
-//! any thread's stack.
+//! comma or the closing bracket; brackets left open end at a line that
+//! starts `name :=` or a statement keyword. Text that nests beyond
+//! [`MAX_DEPTH`] goes whole into one error node, so that the parser's
+//! recursion stays within any thread's stack.
 
 use std::fmt;
 use std::ops::Range;
@@ -340,6 +341,25 @@ impl<'a> Parser<'a> {
         };
         self.errors.push(SyntaxError {
             range,
+            kind: SyntaxErrorKind::Parse(kind),
+        });
+    }
+
+    /// Reports `kind` at the empty range after the last significant token
+    /// before the next one: at the end of a line that a list leaves open.
+    fn error_before_break(&mut self, kind: ParseErrorKind) {
+        if self.stopped {
+            return;
+        }
+        let end = (0..self.next)
+            .rev()
+            .find(|&i| {
+                let kind = self.lexed.kind(i);
+                kind != SyntaxKind::Newline && !kind.is_trivia()
+            })
+            .map_or(0, |i| self.lexed.range(i).end);
+        self.errors.push(SyntaxError {
+            range: end..end,
             kind: SyntaxErrorKind::Parse(kind),
         });
     }

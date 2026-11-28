@@ -572,6 +572,78 @@ fn recovery_is_local() {
     );
 }
 
+/// Half-typed input, alone and with lines below it (CAS-665): a list or
+/// arguments left open stop at a line that starts `name :=`, with the closer
+/// missing at the end of the open line, and the lines below parse alone.
+#[test]
+fn half_typed_input() {
+    let mut found = String::new();
+    for start in [
+        "f(x, ",
+        "sin(",
+        "x := ",
+        "begin x := 1",
+        "[1, ",
+        "f(x) := ",
+        "f(g(x, ",
+    ] {
+        for text in [start.to_owned(), format!("{start}\ny := 1\nz := 2")] {
+            let parse = parse(&text);
+            assert_eq!(parse.syntax().text().to_string(), text);
+            writeln!(found, "{text:?}\n  {}", sexp(&parse.syntax())).unwrap();
+            for e in parse.errors() {
+                writeln!(found, "  {:?} {:?}", e.range, e.kind).unwrap();
+            }
+        }
+    }
+    let expected = r#""f(x, "
+  (Root (ExprStmt (Application f (ArgList ( x ,))))
+  5..5 Parse(Expected(RParen))
+"f(x, \ny := 1\nz := 2"
+  (Root (ExprStmt (Application f (ArgList ( x ,))) (Definition y := 1) (Definition z := 2))
+  4..4 Parse(Expected(RParen))
+"sin("
+  (Root (ExprStmt (Application sin (ArgList ()))))
+  4..4 Parse(Expected(RParen))
+"sin(\ny := 1\nz := 2"
+  (Root (ExprStmt (Application sin (ArgList ())) (Definition y := 1) (Definition z := 2))
+  4..4 Parse(Expected(RParen))
+"x := "
+  (Root (Definition x :=))
+  5..5 Parse(ExpectedExpression)
+"x := \ny := 1\nz := 2"
+  (Root (Definition x := y) (ErrorNode := 1) (Definition z := 2))
+  8..10 Parse(ExpectedSeparator)
+"begin x := 1"
+  (Root (ExprStmt (BlockExpr begin (Body (Definition x := 1)))))
+  12..12 Parse(Expected(EndKw))
+"begin x := 1\ny := 1\nz := 2"
+  (Root (ExprStmt (BlockExpr begin (Body (Definition x := 1) (Definition y := 1) (Definition z := 2)))))
+  26..26 Parse(Expected(EndKw))
+"[1, "
+  (Root (ExprStmt (ListExpr [ 1 ,)))
+  4..4 Parse(Expected(RBracket))
+"[1, \ny := 1\nz := 2"
+  (Root (ExprStmt (ListExpr [ 1 ,)) (Definition y := 1) (Definition z := 2))
+  3..3 Parse(Expected(RBracket))
+"f(x) := "
+  (Root (Definition (Application f (ArgList ( x ))) :=))
+  8..8 Parse(ExpectedExpression)
+"f(x) := \ny := 1\nz := 2"
+  (Root (Definition (Application f (ArgList ( x ))) := y) (ErrorNode := 1) (Definition z := 2))
+  11..13 Parse(ExpectedSeparator)
+"f(g(x, "
+  (Root (ExprStmt (Application f (ArgList ( (Application g (ArgList ( x ,)))))))
+  7..7 Parse(Expected(RParen))
+  7..7 Parse(Expected(RParen))
+"f(g(x, \ny := 1\nz := 2"
+  (Root (ExprStmt (Application f (ArgList ( (Application g (ArgList ( x ,)))))) (Definition y := 1) (Definition z := 2))
+  6..6 Parse(Expected(RParen))
+  6..6 Parse(Expected(RParen))
+"#;
+    assert_eq!(found, expected);
+}
+
 #[test]
 fn nesting_up_to_the_limit() {
     // The test threads have small stacks, and debug frames are large.

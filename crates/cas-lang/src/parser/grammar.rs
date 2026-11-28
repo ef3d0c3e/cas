@@ -624,8 +624,7 @@ impl Parser<'_> {
     fn delimited(&mut self, kind: K, closer: K) {
         self.start(kind);
         self.bump();
-        self.with_newlines(false, |p| p.items(closer));
-        self.expect(closer);
+        self.close_items(closer);
         self.finish_node();
     }
 
@@ -633,19 +632,36 @@ impl Parser<'_> {
     fn args(&mut self, closer: K) {
         self.start(K::ArgList);
         self.bump();
-        self.with_newlines(false, |p| p.items(closer));
-        self.expect(closer);
+        self.close_items(closer);
         self.finish_node();
+    }
+
+    /// The items up to `closer`, and `closer`. When they stop at a line
+    /// break, the closer is reported missing before the break.
+    fn close_items(&mut self, closer: K) {
+        if self.with_newlines(false, |p| p.items(closer)) {
+            self.error_before_break(E::Expected(closer));
+        } else {
+            self.expect(closer);
+        }
     }
 
     /// Expressions separated by commas up to `closer`, a trailing comma
     /// allowed. Junk is skipped to the next comma or the closer, with one
-    /// error.
-    fn items(&mut self, closer: K) {
+    /// error. A line that starts a statement no expression starts ends them
+    /// early, as half-typed brackets do not swallow the lines below
+    /// (CAS-665): returns whether they ended so.
+    fn items(&mut self, closer: K) -> bool {
         while !self.at(closer) && !is_boundary(self.peek()) {
+            if self.at_statement_line() {
+                return true;
+            }
             if starts_expression(self.peek()) {
                 self.expr();
                 if !self.at(K::Comma) && !self.at(closer) && !is_boundary(self.peek()) {
+                    if self.at_statement_line() {
+                        return true;
+                    }
                     self.error(E::Expected(closer));
                     self.skip_to(closer);
                 }
@@ -658,6 +674,23 @@ impl Parser<'_> {
             if self.at(K::Comma) {
                 self.bump();
             }
+        }
+        false
+    }
+
+    /// Whether a line break comes before the next token and the line after
+    /// it starts with `name :=` or a keyword that only starts a statement.
+    fn at_statement_line(&self) -> bool {
+        if !self.newline {
+            return false;
+        }
+        let mut ahead = self.lookahead();
+        match ahead.next() {
+            Some(K::Ident) => ahead.next() == Some(K::ColonEq),
+            Some(K::LocalKw | K::ForKw | K::WhileKw | K::ReturnKw | K::BreakKw | K::ContinueKw) => {
+                true
+            }
+            _ => false,
         }
     }
 
