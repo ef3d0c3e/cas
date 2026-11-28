@@ -1,5 +1,5 @@
 # Journal records -- rebuilt by tools/records.py index; one line per outcome
-# filed through: 2026-11-28T01:28:21.088Z
+# filed through: 2026-11-28T02:06:29.820Z
 # id | date | kind | status | topic | first sentence | entry
 R1 | 2026-11-22 | decision | in force | Generation 1 start | Gen 1 starts by fixing master's red CI (oracle boundary_values from CAS-520 BVPSolve; fuzz eval div… | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
 R2 | 2026-11-22 | decision | in force | Generation 1 start | External coders stay off; all coding on Claude. | .claude-state/journal/2026-11-22.md#084638-013r-claude-record
@@ -162,5 +162,6 @@ R158 | 2026-11-28 | decision | in force | Phase 2.1 Engine carry-overs | Phase 2
 R159 | 2026-11-28 | decision | in force | Phase 2.1 Engine carry-overs | 2.1's loose ends are routed to 2.2 (inbox I5, commit 6bbd13d): pin the two random_n_deriv inputs as… | .claude-state/journal/2026-11-28/022544-165r-claude-record.md
 R160 | 2026-11-28 | open | superseded by R163 | Phase 2.1 Engine carry-overs | giac 2.1 reference move (update local giac, re-probe the departures, fix mathml.rs:377 and derivati… | .claude-state/journal/2026-11-28/022544-165r-claude-record.md
 R161 | 2026-11-28 | finding | in force | Phase 2.2 Editor analysis in cas-lang | Phase 2.2 does not depend on I4, the giac 2.1 move. | .claude-state/journal/2026-11-28/024339-167r-claude-record.md
-R162 | 2026-11-28 | open | in force | Phase 2.2 Editor analysis in cas-lang | the phase 2.2 plan (.run/plans/phase-2.2.md) is presented with no decision, no rules and no tool ca… | .claude-state/journal/2026-11-28/024339-167r-claude-record.md
+R162 | 2026-11-28 | open | superseded by R164 | Phase 2.2 Editor analysis in cas-lang | the phase 2.2 plan (.run/plans/phase-2.2.md) is presented with no decision, no rules and no tool ca… | .claude-state/journal/2026-11-28/024339-167r-claude-record.md
 R163 | 2026-11-28 | open | in force | Phase 2.2 Editor analysis in cas-lang | giac 2.1 reference move -> ask the developer before 2.6's planning (plot oracles depend on the refe… | .claude-state/journal/2026-11-28/024339-167r-claude-record.md
+R164 | 2026-11-28 | decision | in force | Phase 2.2 Editor analysis in cas-lang | Phase 2.2's plan is installed and runs. | .claude-state/journal/2026-11-28/032138-172r-claude-record.md
