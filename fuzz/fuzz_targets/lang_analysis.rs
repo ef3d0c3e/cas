@@ -3,11 +3,12 @@
 //! monotonic positions, line count and clamping, in both encodings. T4: every
 //! fix of a parse error or of a lowering diagnostic lies within the text on
 //! character boundaries, and the text it gives parses without a panic. T5:
-//! at every sampled offset, boundaries or not and past the end, the cursor's
-//! offset is the clamped one, its ranges lie within the text on character
-//! boundaries, a name's range holds the offset, a call's argument is at most
-//! the commas of its arguments, and there is a token iff the text is not
-//! empty, holding the offset. T6 adds its properties (symbols).
+//! at the sampled boundaries, the inner bytes of the first 64 multi-byte
+//! characters, `len + 1` and `usize::MAX`, the cursor's offset is the
+//! clamped one, its ranges lie within the text on character boundaries, a
+//! name's range holds the offset, a call's argument is at most the commas of
+//! its arguments, and there is a token iff the text is not empty, holding the
+//! offset. T6 adds its properties (symbols).
 #![no_main]
 
 use cas_lang::analysis::cursor::{CursorKind, cursor, token_at};
@@ -114,7 +115,9 @@ fuzz_target!(|data: &[u8]| {
         let inside = r.start <= r.end && r.end <= len;
         inside && text.is_char_boundary(r.start) && text.is_char_boundary(r.end)
     };
-    let raw = spaced(len).into_iter().chain([len + 1, usize::MAX]);
+    // Raw non-boundary offsets only inside the first 64 multi-byte characters.
+    let inner = text.char_indices().filter(|(_, ch)| ch.len_utf8() > 1).take(64);
+    let raw = inner.flat_map(|(i, ch)| i + 1..i + ch.len_utf8()).chain([len + 1, usize::MAX]);
     for o in boundaries.iter().copied().chain(raw) {
         let c = cursor(&parse, o);
         let at = floor(text, o.min(len));

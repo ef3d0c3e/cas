@@ -143,8 +143,9 @@ jobs:
         id: cfg
         if: steps.want.outputs.run == 'true'
         run: |
+          # lang_analysis: no unsafe in our crates; ASan on rowan stays with lang_parse/lang_lower/lang_print; seed pass budget (C0128).
           case '${{ matrix.target }}' in
-            ball_fns|special_fns|complex_fns|machine_fns|ball_consts|eval|poly_factor|poly_sparse|poly_gcd|poly_groebner|poly_integrate|poly_roots|statistics|distributions|recurrences|fourier|nintegrate|interpolation|lists|polytools|matrices|special|sets|random|bessel_fns|bessel|jets|ndsolve|rewrite|vector_calculus|optimization|diophantine|integrate_two|fourier_transforms|integer_matrices|modular|modular_matrices|combinatorics|incomplete_fns|matrices_two|polytools_two|decompositions_three|hypothesis_tests)
+            ball_fns|special_fns|complex_fns|machine_fns|ball_consts|eval|poly_factor|poly_sparse|poly_gcd|poly_groebner|poly_integrate|poly_roots|statistics|distributions|recurrences|fourier|nintegrate|interpolation|lists|polytools|matrices|special|sets|random|bessel_fns|bessel|jets|ndsolve|rewrite|vector_calculus|optimization|diophantine|integrate_two|fourier_transforms|integer_matrices|modular|modular_matrices|combinatorics|incomplete_fns|matrices_two|polytools_two|decompositions_three|hypothesis_tests|lang_analysis)
               echo "group=assertions" >> "$GITHUB_OUTPUT"
               echo "flags=-O -a -s none" >> "$GITHUB_OUTPUT"
               echo "libfuzzer=-rss_limit_mb=2048 -malloc_limit_mb=1024 -timeout=60" >> "$GITHUB_OUTPUT"
